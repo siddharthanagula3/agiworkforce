@@ -59,6 +59,7 @@ import type {
   MemoryAddResponse,
   MemoryScope,
   PluginSummary,
+  SkillListResponse,
   SkillSummary,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
@@ -923,6 +924,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
   const outcome = turnOutcome(method);
   if (!outcome) return;
   const unsentSteers = readNumber(params, 'unsentSteers') ?? 0;
+  const contextTokens = readCursor(params, 'contextTokens');
   emit(server.root.id, {
     type: 'turn-finished',
     threadId,
@@ -933,6 +935,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     inputTokens: readNumber(params, 'inputTokens') ?? 0,
     outputTokens: readNumber(params, 'outputTokens') ?? 0,
     ...(unsentSteers > 0 ? { unsentSteers } : {}),
+    ...(contextTokens === undefined ? {} : { contextTokens }),
   });
 }
 
@@ -1048,7 +1051,8 @@ async function refreshOtherModels(source: RunningServer): Promise<void> {
  * The protocol's `account/logout` needs a running app-server, and an
  * app-server needs an approved folder, so a shell that has neither would leave
  * a credential behind for an account the user has signed out of. The CLI's own
- * `logout` needs neither.
+ * `logout --account-only` needs neither, and forgets only the account grant: the
+ * provider keys the user saved in the terminal stay.
  */
 async function runCliLogout(): Promise<void> {
   const { binary } = selectRuntimeBinary();
@@ -1056,7 +1060,7 @@ async function runCliLogout(): Promise<void> {
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawnRuntime(program, ['logout'], {
+      child = spawnRuntime(program, ['logout', '--account-only'], {
         env: runtimeEnvironment(),
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -1134,11 +1138,10 @@ function queueAccountSync(server: RunningServer): Promise<void> {
         (method, params, timeoutMs) => request(server, method, params, timeoutMs),
         bridge,
         shellSignedCliIn(),
+        rememberShellSignedCliIn,
       );
       accountSyncError = null;
       recordDesktopEvent({ domain: 'sync', outcome: 'ok' });
-      if (outcome === 'signed-in') rememberShellSignedCliIn(true);
-      if (outcome === 'signed-out') rememberShellSignedCliIn(false);
       if (outcome === 'signed-in' || outcome === 'signed-out') await refreshOtherModels(server);
     } catch (error) {
       // An app-server that stopped mid-sequence says nothing about the account.
@@ -2674,11 +2677,15 @@ function isPluginSummary(value: unknown): value is PluginSummary {
   );
 }
 
-export async function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
+export async function listDeveloperSkills(rootId: string): Promise<SkillListResponse> {
   const server = await readyServer(await resolveRoot(rootId));
   const result = await request(server, 'skills/list', {});
   const skills = isRecord(result) ? result['skills'] : null;
-  return Array.isArray(skills) ? skills.filter(isSkillSummary) : [];
+  const projectSkillsDigest = isRecord(result) ? readString(result, 'projectSkillsDigest') : null;
+  return {
+    skills: Array.isArray(skills) ? skills.filter(isSkillSummary) : [],
+    ...(projectSkillsDigest === null ? {} : { projectSkillsDigest }),
+  };
 }
 
 export async function setDeveloperSkillEnabled(
@@ -2691,9 +2698,17 @@ export async function setDeveloperSkillEnabled(
   return enabled;
 }
 
-export async function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
+export async function setDeveloperSkillConsent(
+  rootId: string,
+  granted: boolean,
+  digest?: string,
+): Promise<boolean> {
   const server = await readyServer(await resolveRoot(rootId));
-  const result = await request(server, 'skills/consent', { granted });
+  const result = await request(
+    server,
+    'skills/consent',
+    granted && digest !== undefined ? { granted, digest } : { granted },
+  );
   return isRecord(result) && result['consented'] === true;
 }
 

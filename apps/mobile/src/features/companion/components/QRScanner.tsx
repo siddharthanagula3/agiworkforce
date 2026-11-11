@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/src/ui/theme';
 import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { isValidPairingCode } from '@/services/companion';
+import { PAIRING_SECRET_REQUIRED_MESSAGE, parsePairingPayload } from '@/services/manualPairing';
 
 interface QRScannerProps {
   onScan: (code: string) => void;
@@ -68,11 +69,18 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   const handleManualSubmit = useCallback(() => {
     const trimmed = manualCode.trim();
     if (!trimmed) {
-      setManualError('Please enter a pairing code.');
+      setManualError('Paste the pairing link from Desktop.');
       return;
     }
     if (!isValidPairingCode(trimmed)) {
-      setManualError('Enter the 12-character code shown on Desktop, or scan the QR code.');
+      setManualError(
+        'That is not a pairing link from Desktop. Copy it again, or scan the QR code.',
+      );
+      return;
+    }
+    const parsed = parsePairingPayload(trimmed);
+    if (!parsed.pairingSecret && !parsed.legacyPayload) {
+      setManualError(PAIRING_SECRET_REQUIRED_MESSAGE);
       return;
     }
     setManualError(null);
@@ -83,13 +91,13 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     try {
       const pasted = (await Clipboard.getStringAsync()).trim();
       if (!pasted) {
-        setManualError('Clipboard is empty. Copy the pairing code from Desktop first.');
+        setManualError('Clipboard is empty. Copy the pairing link from Desktop first.');
         return;
       }
       setManualCode(pasted);
       setManualError(null);
     } catch {
-      setManualError('Could not read the clipboard. Enter the code manually.');
+      setManualError('Could not read the clipboard. Paste the link into the field instead.');
     }
   }, []);
 
@@ -120,7 +128,8 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           Camera access is required to scan QR codes
         </Text>
         <Text className="text-center text-sm" style={{ color: colors.textSecondary }}>
-          Enable camera access in your device settings, or enter the pairing code manually below.
+          Enable camera access in your device settings, or paste the pairing link from Desktop
+          below.
         </Text>
         <View className="gap-3 w-full">
           <Button title="Open Settings" variant="primary" onPress={() => Linking.openSettings()} />
@@ -140,7 +149,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     return (
       <View className="flex-1 px-6 pt-16 gap-6" style={{ backgroundColor: pageBackground }}>
         <View className="flex-row items-center justify-between">
-          <Text variant="subheading">Enter Pairing Code</Text>
+          <Text variant="subheading">Enter Pairing Link</Text>
           <PressableBox
             onPress={() => {
               setShowManualEntry(false);
@@ -156,8 +165,9 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
         </View>
 
         <Text className="text-sm" style={{ color: colors.textSecondary }}>
-          Open AGI Desktop, go to Settings → Capabilities → Remote Control, choose Pair a phone, and
-          enter the 12-character code shown below the QR code.
+          Open AGI Desktop, go to Settings → Capabilities → Remote Control, choose Pair a phone,
+          then copy the pairing link and paste it here. The 12-character code shown below the QR
+          code is only for checking that Desktop and this phone match; it cannot pair on its own.
         </Text>
 
         <View className="gap-3">
@@ -167,9 +177,9 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               setManualCode(text);
               setManualError(null);
             }}
-            placeholder="ABCD EFGH IJKL"
+            placeholder="Paste the pairing link"
             placeholderTextColor={colors.textMuted}
-            autoCapitalize="characters"
+            autoCapitalize="none"
             autoCorrect={false}
             autoFocus
             maxLength={96}
@@ -185,11 +195,9 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               color: colors.textPrimary,
               fontSize: typeScale.headline,
               fontFamily: 'Menlo',
-              letterSpacing: 2,
-              textAlign: 'center',
             }}
           />
-          <Button title="Paste code" variant="outline" onPress={handlePaste} />
+          <Button title="Paste pairing link" variant="outline" onPress={handlePaste} />
           {manualError && <Text className="text-red-400 text-sm text-center">{manualError}</Text>}
         </View>
 

@@ -44,6 +44,21 @@ describe('developer request logs', () => {
     expect(mapped.steps.map((step) => step.name)).toEqual(['received', 'provider_started']);
   });
 
+  it('records a billed milestone only for completed requests', () => {
+    const finalized = {
+      ...row(1),
+      actual_cost_microusd: '0',
+      finalized_at: '2026-10-19T10:00:01.300Z',
+    };
+    const stepNames = (status: string) =>
+      toDeveloperRequestLog({ ...finalized, status }).steps.map((step) => step.name);
+
+    expect(stepNames('completed')).toContain('settled');
+    expect(stepNames('released')).not.toContain('settled');
+    expect(stepNames('declined')).not.toContain('settled');
+    expect(stepNames('outcome_unknown')).not.toContain('settled');
+  });
+
   it('reads only the caller’s API-key requests and pages by time', async () => {
     const rows = Array.from({ length: DEVELOPER_REQUEST_LOGS_PAGE_SIZE + 1 }, (_, i) => row(i));
     const query = vi.fn(async () => rows);

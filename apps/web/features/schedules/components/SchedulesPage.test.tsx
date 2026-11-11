@@ -17,6 +17,9 @@ vi.mock('@/features/connectors/hooks/use-connectors', () => ({
 }));
 import type { ScheduleApi } from '../services/schedule-api';
 import type { ScheduleRun, ScheduleTask } from '../types';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 function SchedulesPage(
   props: Omit<ComponentProps<typeof ProductionSchedulesPage>, 'subscriptionTier'> & {
@@ -159,7 +162,7 @@ describe('SchedulesPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Scheduled' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New task' })).toBeInTheDocument();
-    expect(screen.queryByText('Managed Cloud')).not.toBeInTheDocument();
+    expect(screen.queryByText(`${CLOUD}`)).not.toBeInTheDocument();
     expect(screen.queryByText('Text Output')).not.toBeInTheDocument();
     expect(screen.queryByText('Managed Models')).not.toBeInTheDocument();
     expect(screen.queryByText('No Chat Memory')).not.toBeInTheDocument();
@@ -246,7 +249,7 @@ describe('SchedulesPage', () => {
     expect(within(dialog).queryByLabelText('Run as agent')).toBeNull();
   });
 
-  it('moves the Managed Cloud model constraint into the create dialog as helper text', async () => {
+  it(`moves the ${CLOUD} model constraint into the create dialog as helper text`, async () => {
     const api = createApi();
     const user = userEvent.setup();
     render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
@@ -255,7 +258,7 @@ describe('SchedulesPage', () => {
     await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
     const dialog = screen.getByRole('dialog', { name: 'Create Schedule' });
     expect(
-      within(dialog).getByText('Limited to the models Managed Cloud runs schedules on.'),
+      within(dialog).getByText(`Limited to the models ${CLOUD} runs schedules on.`),
     ).toBeInTheDocument();
   });
 

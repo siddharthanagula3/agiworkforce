@@ -131,7 +131,16 @@ const hostBridge: HostBridge = {
       }
     };
     ipcRenderer.on(DESKTOP_RUNTIME_EVENT_CHANNEL, listener);
+    let subscribed = true;
+    void Promise.resolve(ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.pendingUpdate))
+      .then((pending: unknown) => {
+        if (!subscribed || !pending || typeof pending !== 'object') return;
+        const version = (pending as { version?: unknown }).version;
+        if (typeof version === 'string') callback({ kind: 'update-ready', version });
+      })
+      .catch(() => undefined);
     return () => {
+      subscribed = false;
       ipcRenderer.removeListener(DESKTOP_RUNTIME_EVENT_CHANNEL, listener);
     };
   },

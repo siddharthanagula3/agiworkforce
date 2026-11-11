@@ -1108,6 +1108,24 @@ describe('the application menu', () => {
     expect(labels.filter((label) => label === SETTINGS_LABEL)).toHaveLength(1);
     expect(labels.filter((label) => label === UPDATES_LABEL)).toHaveLength(1);
   });
+
+  it('puts the Launch at Login box back when the choice could not be saved', async () => {
+    const { setLaunchAtLogin } = await import('../launchAtLogin');
+    vi.mocked(setLaunchAtLogin).mockImplementationOnce(() => {
+      throw new Error('The setting could not be saved on this computer, so it was not changed.');
+    });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { menu } = template();
+    const launchItem = item(menu, SETTINGS_MENU, 'Launch at Login');
+    const clicked = { checked: true };
+
+    expect(() =>
+      (launchItem.click as (menuItem: { checked: boolean }) => void)(clicked),
+    ).not.toThrow();
+
+    expect(setLaunchAtLogin).toHaveBeenCalledWith(true);
+    expect(clicked.checked).toBe(false);
+  });
 });
 
 describe('the dock menu', () => {

@@ -104,6 +104,7 @@ export interface LiveVoiceSessionOptions {
   voice: string | null;
   conversationId: string | null;
   language: string | null;
+  isMuted?: () => boolean;
   callbacks: LiveVoiceSessionCallbacks;
 }
 
@@ -324,6 +325,12 @@ export class LiveVoiceSession {
         else if (authority.isCurrent()) inbox.push(payload);
       });
       const activePeer = peer;
+      const mutedOnAcquire = options.isMuted?.() ?? false;
+      if (mutedOnAcquire) {
+        microphone.getAudioTracks().forEach((track) => {
+          track.enabled = false;
+        });
+      }
       microphone.getTracks().forEach((track) => activePeer.addTrack(track, microphone!));
       const offer = await peer.createOffer({});
       authority.assertCurrent();
@@ -365,6 +372,8 @@ export class LiveVoiceSession {
         authority.signal.removeEventListener('abort', abort);
         release();
       };
+      const mutedNow = options.isMuted?.() ?? false;
+      if (mutedNow || mutedOnAcquire) session.setMuted(mutedNow);
       session.watchConnection();
       for (const payload of inbox) session.handleMessage(payload);
       authority.assertCurrent();

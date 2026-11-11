@@ -2,7 +2,12 @@ import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import { modelDisplayLabel } from '../model-picker/modelConstants';
-import { submitAnswerRating, type AnswerRating, type FeedbackOutcome } from './submitFeedback';
+import {
+  removeAnswerRating,
+  submitAnswerRating,
+  type AnswerRating,
+  type FeedbackOutcome,
+} from './submitFeedback';
 
 const REMEMBERED_RATINGS_KEY = 'agiWorkforce.answerRatings';
 const REMEMBERED_RATINGS_LIMIT = 500;
@@ -49,7 +54,10 @@ async function rememberAnswerRating(
   );
 }
 
-async function reportRatingOutcome(outcome: FeedbackOutcome): Promise<void> {
+async function reportRatingOutcome(
+  outcome: FeedbackOutcome,
+  action: 'sent' | 'removed' = 'sent',
+): Promise<void> {
   if (outcome.status === 'sent') return;
   if (outcome.status === 'signed-out') {
     const choice = await vscode.window.showWarningMessage(
@@ -60,7 +68,7 @@ async function reportRatingOutcome(outcome: FeedbackOutcome): Promise<void> {
     return;
   }
   void vscode.window.showErrorMessage(
-    `${PRODUCT_NAMES.code}: your rating was not sent, ${outcome.reason}. Try again in a moment.`,
+    `${PRODUCT_NAMES.code}: your rating was not ${action}, ${outcome.reason}. Try again in a moment.`,
   );
 }
 
@@ -72,16 +80,15 @@ export async function applyAnswerRating(
 ): Promise<AnswerRating | null> {
   const previous = rememberedAnswerRating(state, answer.messageId) ?? null;
   if (rating === previous) return previous;
-  if (rating === null) {
-    await rememberAnswerRating(state, answer.messageId, null);
-    return null;
-  }
-  const outcome = await submitAnswerRating(secrets, rating, ratedAnswerFields(answer));
+  const outcome =
+    rating === null
+      ? await removeAnswerRating(secrets, answer.messageId)
+      : await submitAnswerRating(secrets, rating, ratedAnswerFields(answer));
   if (outcome.status === 'sent') {
     await rememberAnswerRating(state, answer.messageId, rating);
     return rating;
   }
-  await reportRatingOutcome(outcome);
+  await reportRatingOutcome(outcome, rating === null ? 'removed' : 'sent');
   return previous;
 }
 

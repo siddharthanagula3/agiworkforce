@@ -778,7 +778,7 @@ async function runClaimedAgentTurn(
 
   try {
     if (harness) {
-      const projectStep = createHarnessStepProjector();
+      const projectStep = createHarnessStepProjector(session.workspacePath);
       result = await runCloudCodeHarnessTurn({
         runner: harness,
         executor,
@@ -791,8 +791,7 @@ async function runClaimedAgentTurn(
         maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
         ...(stepBound !== null ? { maxTurns: stepBound } : {}),
         onEvent: async (event) => {
-          const step = projectStep(event);
-          if (step) await recordStep(step);
+          for (const step of projectStep(event)) await recordStep(step);
         },
       });
     } else {

@@ -101,7 +101,15 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
 
 import { DELETE, GET } from '../route';
 
-const db = { query: vi.fn(), execute: vi.fn() };
+const db: {
+  query: ReturnType<typeof vi.fn>;
+  execute: ReturnType<typeof vi.fn>;
+  transaction: (fn: (tx: typeof db) => unknown) => unknown;
+} = {
+  query: vi.fn(),
+  execute: vi.fn(),
+  transaction: (fn) => fn(db),
+};
 const context = () => ({ params: Promise.resolve({ id: 'p-1', fileId: 'f-1' }) });
 const file = {
   fileName: 'report "q3".pdf',
@@ -262,19 +270,47 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
     });
 
     it('keeps the stored object while a duplicated project still points at it', async () => {
-      db.query
-        .mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }])
-        .mockResolvedValueOnce([{ id: 'f-copy' }]);
+      db.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('select f.storage_uri')) return [{ storage_uri: 's3://b/k/report.pdf' }];
+        if (sql.includes('select id from project_knowledge_files')) return [{ id: 'f-copy' }];
+        return [];
+      });
       db.execute.mockResolvedValue(undefined);
 
       const response = await del();
 
       expect(response.status).toBe(200);
-      expect(db.query.mock.calls[1]?.[1]).toEqual(['s3://b/k/report.pdf']);
       expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
     });
 
-    it('restores the row when the stored object cannot be removed', async () => {
+    it('keeps the stored object while an active legal hold preserves it', async () => {
+      db.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('select f.storage_uri')) return [{ storage_uri: 's3://b/k/report.pdf' }];
+        if (sql.includes('public.legal_hold_preserves(')) {
+          return [{ storage_uri: 's3://b/k/report.pdf' }];
+        }
+        return [];
+      });
+      db.execute.mockResolvedValue(undefined);
+
+      const response = await del();
+
+      expect(response.status).toBe(200);
+      expect(db.execute.mock.calls[0]?.[0]).toContain('set deleted_at = now()');
+      expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
+    });
+
+    it('takes the legal-hold placement lock before it decides', async () => {
+      db.query.mockResolvedValue([]);
+      db.query.mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }]);
+      db.execute.mockResolvedValue(undefined);
+
+      await del();
+
+      expect(db.query.mock.calls[1]?.[0]).toContain('pg_advisory_xact_lock_shared');
+    });
+
+    it('rolls the tombstone back with its transaction when the stored object cannot be removed', async () => {
       db.query
         .mockResolvedValueOnce([{ storage_uri: 's3://b/k/report.pdf' }])
         .mockResolvedValue([]);
@@ -284,8 +320,7 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
       const response = await del();
 
       expect(response.status).toBe(500);
-      expect(db.execute).toHaveBeenCalledTimes(2);
-      expect(db.execute.mock.calls[1]?.[0]).toContain('set deleted_at = null');
+      expect(db.execute).toHaveBeenCalledTimes(1);
     });
   });
 });

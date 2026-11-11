@@ -1,5 +1,10 @@
 import type { CloudAgentRun, CloudAgentWorkMode } from '@agiworkforce/cloud-contracts';
-import { agentTaskStateLabel, creditsFromCents, formatCredits } from '@agiworkforce/types';
+import {
+  PRODUCT_NAMES,
+  agentTaskStateLabel,
+  creditsFromCents,
+  formatCredits,
+} from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 // The run-state enum isn't exported as a standalone type from cloud-contracts;
@@ -22,7 +27,7 @@ export interface AgiWorkRerunGoal {
 export function workModeLabel(mode: CloudAgentWorkMode): string {
   switch (mode) {
     case 'agiwork':
-      return 'Work';
+      return PRODUCT_NAMES.work;
     case 'research':
       return 'Research';
     case 'chat':

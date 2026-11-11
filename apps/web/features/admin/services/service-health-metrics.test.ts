@@ -63,7 +63,7 @@ describe('readServiceHealth', () => {
         ];
       }
       if (sql.includes('project_knowledge_files')) {
-        return [{ uploaded: '0', extracted: '0', extraction_p50_ms: null }];
+        return [{ uploaded: '0', extracted: '0' }];
       }
       return [];
     });
@@ -113,7 +113,6 @@ describe('readServiceHealth', () => {
       extracted: 0,
       withoutText: 0,
       extractionRate: null,
-      extractionP50Ms: null,
     });
 
     const remoteCall = query.mock.calls.find(([sql]) =>
@@ -123,6 +122,17 @@ describe('readServiceHealth', () => {
       new Date(NOW.getTime() - SERVICE_HEALTH_WINDOW_MS).toISOString(),
       new Date(NOW.getTime() - REMOTE_DEVICE_ONLINE_WINDOW_MS).toISOString(),
     ]);
+  });
+
+  it('does not derive an extraction duration from the row insertion timestamps', async () => {
+    const { db, query } = database(() => []);
+    await readServiceHealth(NOW, db);
+
+    const fileCall = query.mock.calls.find(([sql]) =>
+      String(sql).includes('project_knowledge_files'),
+    );
+    expect(String(fileCall?.[0])).not.toMatch(/extracted_at\s*-\s*added_at/u);
+    expect(String(fileCall?.[0])).not.toMatch(/percentile_cont/u);
   });
 
   it('reads only aggregates, never a user or row identifier', async () => {

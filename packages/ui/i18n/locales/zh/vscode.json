@@ -226,7 +226,7 @@
   "sessionHandoff.interrupted": "上一轮已中断，不会自动继续。",
   "sessionHandoff.continueQuestion": "要在此窗口中继续来自 {source} 的会话吗？",
   "sessionHandoff.startQuestion": "要基于 {source} 中的对话在此窗口中启动会话吗？",
-  "webview.contextUsedUnknownWindow_other": "上一轮使用了 {count} 个令牌。此处无法获知此模型的上下文窗口。",
+  "webview.contextUsedUnknownWindow_other": "上一轮后的上下文：{count} 个令牌。此处无法获知此模型的上下文窗口。",
   "webview.contextUsed_other": "上一轮后的上下文：已用 {used} / {count} 个令牌（{percent}%）",
   "webview.answerTokens_other": "{model} · {count} 个令牌（输入 {input}，输出 {output}）",
   "webview.moreLinesHidden_other": "另有 {count} 行未显示",

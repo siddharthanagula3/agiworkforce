@@ -378,6 +378,15 @@ export default function OnboardingScreen() {
     [recommendedModel, finishOnboarding],
   );
 
+  const canRetryDownload = Boolean(
+    recommendedModel.executorchPreset ||
+    (recommendedModel.downloadUrl && recommendedModel.checksum && recommendedModel.format),
+  );
+
+  const handleRetryDownload = useCallback(() => {
+    handleStartDownload(useModelInstallStore.getState().allowCellularDownloads);
+  }, [handleStartDownload]);
+
   const handleSkipToChat = useCallback(() => {
     if (tier2Loading) return;
     if (downloadTimerRef.current) {
@@ -424,10 +433,12 @@ export default function OnboardingScreen() {
         {screen === 'download' && (
           <DownloadScreen
             colors={colors}
+            primaryButtonTextColor={primaryButtonTextColor}
             progress={downloadProgress}
             speedMBs={downloadSpeedMBs}
             model={recommendedModel}
             onSkip={handleSkipToChat}
+            onRetry={canRetryDownload ? handleRetryDownload : undefined}
             error={downloadError}
             skipDisabled={tier2Loading}
           />
@@ -705,18 +716,22 @@ function DeviceTierScreen({
 
 function DownloadScreen({
   colors,
+  primaryButtonTextColor,
   progress,
   speedMBs,
   model,
   onSkip,
+  onRetry,
   error,
   skipDisabled = false,
 }: {
   colors: ColorScheme;
+  primaryButtonTextColor: string;
   progress: number;
   speedMBs: number;
   model: RecommendedModel;
   onSkip: () => void;
+  onRetry?: (() => void) | undefined;
   error?: string | null;
   skipDisabled?: boolean;
 }) {
@@ -782,6 +797,18 @@ function DownloadScreen({
         >
           {error}
         </Text>
+      )}
+
+      {error && onRetry && !skipDisabled && (
+        <PressableBox
+          testID="download-retry-btn"
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel="Try download again"
+          style={[styles.skipBtn, { backgroundColor: colors.teal }]}
+        >
+          <Text style={[styles.skipBtnText, { color: primaryButtonTextColor }]}>Try again</Text>
+        </PressableBox>
       )}
 
       <PressableBox

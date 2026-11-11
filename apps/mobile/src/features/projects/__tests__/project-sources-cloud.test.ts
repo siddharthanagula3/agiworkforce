@@ -61,6 +61,7 @@ import {
   writeAsStringAsync,
 } from 'expo-file-system/legacy';
 import { api } from '@/services/api';
+import { ownerHandler } from '@/test-utils/ownerProps';
 import { getAuthHeaders } from '@/services/authSession';
 import {
   activateCloudAccount,
@@ -159,15 +160,58 @@ beforeEach(() => {
   useCloudProjectStore.setState({ projects: [cloudProject()], activeProjectId: null });
 });
 
-function pressHandlerFor(view: ReturnType<typeof render>, label: string): () => void {
-  const owner = view
-    .UNSAFE_getAllByProps({ accessibilityLabel: label })
-    .find((node) => typeof node.props.onPress === 'function');
-  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
-  return owner.props.onPress as () => void;
-}
-
 describe('adding sources to a cloud project', () => {
+  it('sends the encryption headers the presign returned with the native upload', async () => {
+    primeHappyPath();
+    (api.post as jest.Mock).mockImplementation(async (path: string) =>
+      path === '/api/uploads/presign'
+        ? {
+            uploadUrl:
+              'https://storage.example.com/knowledge/notes.md?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption',
+            uploadMethod: 'PUT',
+            uploadHeaders: {
+              'Content-Type': 'text/markdown',
+              'x-amz-server-side-encryption': 'AES256',
+            },
+            storageKey: STORAGE_KEY,
+          }
+        : registeredFile(),
+    );
+
+    await useProjectStore.getState().addSource(CLOUD_PROJECT_ID, PICKED_SOURCE);
+
+    const options = (createUploadTask as jest.Mock).mock.calls[0]?.[2] as {
+      headers: Record<string, string>;
+    };
+    expect(options.headers).toEqual({
+      'content-type': 'text/markdown',
+      'x-amz-server-side-encryption': 'AES256',
+    });
+    expect(mockUploadAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not upload when the presigned url needs a header the presign did not return', async () => {
+    primeHappyPath();
+    (api.post as jest.Mock).mockImplementation(async (path: string) =>
+      path === '/api/uploads/presign'
+        ? {
+            uploadUrl:
+              'https://storage.example.com/knowledge/notes.md?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption',
+            uploadMethod: 'PUT',
+            uploadHeaders: { 'Content-Type': 'text/markdown' },
+            storageKey: STORAGE_KEY,
+          }
+        : registeredFile(),
+    );
+
+    await expect(
+      useProjectStore.getState().addSource(CLOUD_PROJECT_ID, PICKED_SOURCE),
+    ).rejects.toThrow(/x-amz-server-side-encryption/);
+    expect(createUploadTask).not.toHaveBeenCalled();
+    expect(mockUploadAsync).not.toHaveBeenCalled();
+    expect(knowledgeRegistrations()).toHaveLength(0);
+  });
+
   it('presigns, uploads the bytes, and registers the file instead of silently dropping it', async () => {
     primeHappyPath();
 
@@ -844,7 +888,7 @@ describe('retained source action callbacks', () => {
       screen.getByPlaceholderText('Paste or type the text this project should use'),
       'original private text',
     );
-    const oldSave = pressHandlerFor(screen, 'Add');
+    const oldSave = ownerHandler(screen.getByLabelText('Add'), 'onPress');
     await act(async () => {
       activateCloudAccount('user_2');
       activateCloudAccount('user_1');
@@ -863,7 +907,7 @@ describe('retained source action callbacks', () => {
     (api.get as jest.Mock).mockResolvedValue({ files: [] });
     const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
     await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
-    const oldPick = pressHandlerFor(screen, 'Add sources');
+    const oldPick = ownerHandler(screen.getByLabelText('Add sources'), 'onPress');
     screen.rerender(React.createElement(ProjectSourcesTab, { projectId: otherProjectId }));
     screen.rerender(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
     await act(async () => oldPick());
@@ -935,7 +979,7 @@ describe('text source editor revisions', () => {
     const upload = deferredSource<ReturnType<typeof registeredFile>['file']>();
     const uploadSource = jest.spyOn(cloudProjectSources, 'upload').mockReturnValue(upload.promise);
     const screen = await openDraft();
-    const reopen = pressHandlerFor(screen, 'Add text');
+    const reopen = ownerHandler(screen.getByLabelText('Add text'), 'onPress');
     try {
       fireEvent.press(screen.getByLabelText('Add'));
       await waitFor(() => expect(uploadSource).toHaveBeenCalledTimes(1));
@@ -957,7 +1001,7 @@ describe('text source editor revisions', () => {
   it('rejects a retained pre-edit save callback before writing its old text', async () => {
     const screen = await openDraft();
     try {
-      const oldSave = pressHandlerFor(screen, 'Add');
+      const oldSave = ownerHandler(screen.getByLabelText('Add'), 'onPress');
       const edit = screen.getByLabelText('Text source content').props.onChangeText as (
         text: string,
       ) => void;

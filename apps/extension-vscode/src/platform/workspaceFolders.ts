@@ -55,6 +55,16 @@ export function shellQuoteForCurrentPlatform(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
+const POWERSHELL_SHELL = /(?:^|[\\/])(?:pwsh|powershell)(?:\.exe)?$/iu;
+
+export function shellExecutableForCurrentPlatform(executable: string): string {
+  const quoted = shellQuoteForCurrentPlatform(executable);
+  if (process.platform === 'win32' && POWERSHELL_SHELL.test(vscode.env.shell ?? '')) {
+    return `& ${quoted}`;
+  }
+  return quoted;
+}
+
 export function getWorkspaceDisplayName(): string {
   const folders = vscode.workspace.workspaceFolders ?? [];
   if (folders.length === 0) return '<no workspace>';

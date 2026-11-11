@@ -22,7 +22,7 @@ pub use protocol::{
     TaskResponseStatus,
 };
 pub use registry::{discover_agents, format_agent_list, load_local_registry, save_local_registry};
-pub use security::{constant_time_eq_str, generate_random_token};
+pub use security::{constant_time_eq_str, generate_random_token, remember_peer_token};
 pub use server::{
     build_a2a_state, http_json_response, http_response, serve_a2a, DEFAULT_A2A_PORT,
     DEFAULT_TASK_TIMEOUT_SECONDS,
@@ -47,6 +47,22 @@ pub fn generate_agent_id() -> String {
 // ---------------------------------------------------------------------------
 // CLI Integration Helpers
 // ---------------------------------------------------------------------------
+
+async fn prompt_peer_token(endpoint: &str) -> Result<String> {
+    let prompt = format!("  Bearer token for {endpoint}");
+    let token = tokio::task::spawn_blocking(move || {
+        dialoguer::Password::new().with_prompt(prompt).interact()
+    })
+    .await
+    .context("Token prompt was interrupted")?
+    .context("Failed to read the bearer token")?;
+
+    let token = token.trim().to_string();
+    if token.is_empty() {
+        bail!("A bearer token cannot be empty");
+    }
+    Ok(token)
+}
 
 /// Handle `/a2a` slash commands from the REPL.
 ///
@@ -130,8 +146,9 @@ pub async fn handle_a2a_command(
 
             let auth_token = generate_random_token(32);
             eprintln!(
-                "  {} A2A auth token (use as Bearer token): {}",
+                "  {} A2A auth token (peers enter it with /a2a auth http://127.0.0.1:{}): {}",
                 ts::accent_header("[a2a]"),
+                port,
                 auth_token
             );
 
@@ -167,6 +184,36 @@ pub async fn handle_a2a_command(
             serve_a2a(state, port).await?;
 
             Ok("A2A server stopped.".to_string())
+        }
+        "auth" => {
+            if arg.is_empty() || arg.contains(char::is_whitespace) {
+                bail!(
+                    "Usage: /a2a auth <agent-name|endpoint-url> (the token is requested privately, never typed on this line)"
+                );
+            }
+
+            let endpoint = if arg.starts_with("http") {
+                arg.to_string()
+            } else {
+                let agents = load_local_registry();
+                match agents
+                    .iter()
+                    .find(|a| a.name == arg || a.agent_id == arg)
+                    .or_else(|| agents.iter().find(|a| a.endpoint.contains(arg)))
+                {
+                    Some(agent) => agent.endpoint.clone(),
+                    None => bail!(
+                        "Agent '{}' not found in registry. Use /a2a discover to list known agents, or provide a URL.",
+                        arg
+                    ),
+                }
+            };
+
+            let token = prompt_peer_token(&endpoint).await?;
+            remember_peer_token(&endpoint, &token)?;
+            Ok(format!(
+                "Bearer token remembered for {endpoint} until this session ends."
+            ))
         }
         "register" => {
             if arg.is_empty() {
@@ -208,7 +255,7 @@ pub async fn handle_a2a_command(
         }
         _ => {
             bail!(
-                "Unknown A2A subcommand: '{}'. Available: discover, delegate, serve, register, card",
+                "Unknown A2A subcommand: '{}'. Available: discover, delegate, serve, auth, register, card",
                 cmd
             );
         }

@@ -77,8 +77,11 @@ import {
   readHostClipboard,
   useDesktopHost,
   useDesktopVoiceHotkey,
+  useDesktopWindowHidden,
   useLocalModelSelection,
 } from '@/features/desktop-host';
+import { isQuickAskPath } from '@features/chat/lib/new-chat-entry';
+import { DICTATION_STATUS } from '@features/chat/lib/dictation-machine';
 import { useLeaveLocalModel } from '@features/chat/hooks/useLeaveLocalModel';
 import { AttachmentPreview, type AttachmentUploadVisualStatus } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
@@ -214,6 +217,7 @@ import {
   readPersistedDraft,
   writePersistedDraft,
 } from './composer-draft-storage';
+import { composerTextWithIncoming } from '@agiworkforce/utils/composer-incoming';
 import { useClipboardDraftLifetime } from './use-clipboard-draft-lifetime';
 import type { DraftReplacement } from '@features/chat/hooks/use-conversation-draft-sync';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
@@ -338,6 +342,8 @@ const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
  * send control is what says a message is waiting.
  */
 const TURN_ACTIVE_PLACEHOLDER = 'Follow up';
+const QUICK_ASK_HIDDEN_DICTATION_NOTE =
+  'Recording stopped and was discarded when this window closed. Try again.';
 const LOCAL_FOLDER_ATTACH_UNAVAILABLE_NOTICE =
   'Files cannot be attached with the current mode or model.';
 
@@ -863,9 +869,7 @@ const ChatComposerNewComponent = ({
   }, []);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
   const [statusLines, setStatusLines] = useState<readonly ChatStatusLine[] | null>(null);
-  const [pastedTextUndo, setPastedTextUndo] = useState<{ fileName: string; text: string } | null>(
-    null,
-  );
+  const [pastedTextUndo, setPastedTextUndo] = useState<{ file: File; text: string } | null>(null);
   const [pastedCodeUndo, setPastedCodeUndo] = useState<{ fenced: string; raw: string } | null>(
     null,
   );
@@ -929,6 +933,7 @@ const ChatComposerNewComponent = ({
     refused: refusedAttachments,
     preparing: preparingAttachments,
     addFiles,
+    admitFiles,
     removeFile,
     clearAll: clearAttachmentDraft,
   } = useAttachments({
@@ -2090,6 +2095,10 @@ const ChatComposerNewComponent = ({
     if (dictation.isActive) dictation.stop();
     else startDictation();
   });
+  useDesktopWindowHidden(() => {
+    if (!isQuickAskPath(window.location.pathname)) return;
+    dictation.interrupt(QUICK_ASK_HIDDEN_DICTATION_NOTE);
+  }, dictation.status === DICTATION_STATUS.recording);
 
   const takeIdleFocus = useCallback(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -2203,8 +2212,8 @@ const ChatComposerNewComponent = ({
   }, [clearComposerState, clearSignal, suppressAutoFocus, takeIdleFocus]);
 
   const addChatAttachments = useCallback(
-    (files: File[]) => {
-      if (files.length === 0) return;
+    (files: File[]): Promise<File[]> => {
+      if (files.length === 0) return Promise.resolve([]);
       if (videoMode && videoInputLimit === 0) {
         setLocalNotice(
           plural('counts.videoModeAttachments', files.length, {
@@ -2213,7 +2222,7 @@ const ChatComposerNewComponent = ({
               'Video generation works from your prompt only. Attached files are not sent to the video model. Leave video mode first if you want to send these files to the chat model.',
           }),
         );
-        return;
+        return Promise.resolve([]);
       }
       if (videoMode) {
         const images = files.filter(isVideoInputImage);
@@ -2221,7 +2230,7 @@ const ChatComposerNewComponent = ({
           setLocalNotice(
             'Video takes PNG, JPEG or WebP images only. Leave video mode to send this file to the chat model.',
           );
-          return;
+          return Promise.resolve([]);
         }
         const accepted = images.slice(0, Math.max(0, videoInputLimit - attachments.length));
         setLocalNotice(
@@ -2229,8 +2238,7 @@ const ChatComposerNewComponent = ({
             ? `Video takes up to ${videoInputLimit} PNG, JPEG or WebP images, so only ${accepted.length} of ${files.length} were attached.`
             : null,
         );
-        if (accepted.length > 0) addFiles(accepted);
-        return;
+        return accepted.length > 0 ? admitFiles(accepted) : Promise.resolve([]);
       }
       if (imageMode) {
         const images = files.filter((file) => isChatImageMimeType(file.type));
@@ -2238,41 +2246,39 @@ const ChatComposerNewComponent = ({
           setLocalNotice(
             'Image mode takes images only. Attach a picture to edit it, or leave image mode to send this file to the chat model.',
           );
-          return;
+          return Promise.resolve([]);
         }
         setLocalNotice(
           images.length < files.length
             ? 'Only the images were attached. Image mode edits pictures, so the other files were left out.'
             : null,
         );
-        addFiles(images);
-        return;
+        return admitFiles(images);
       }
       if (restrictedFreeChat) {
         if (!promotionalVisionChat) {
           setLocalNotice('This free model accepts text only. Choose Free Auto to attach files.');
-          return;
+          return Promise.resolve([]);
         }
         const images = files.filter((file) => isChatImageMimeType(file.type));
         if (images.length === 0) {
           setLocalNotice(
             'This free model accepts images, but not this file type. Choose Free Auto for other files.',
           );
-          return;
+          return Promise.resolve([]);
         }
         setLocalNotice(
           images.length < files.length
             ? 'Only images were attached. This free model cannot read the other file types.'
             : null,
         );
-        addFiles(images);
-        return;
+        return admitFiles(images);
       }
       setLocalNotice(null);
-      addFiles(files);
+      return admitFiles(files);
     },
     [
-      addFiles,
+      admitFiles,
       attachments.length,
       imageMode,
       plural,
@@ -2284,9 +2290,7 @@ const ChatComposerNewComponent = ({
   );
 
   const handleFileDrop = useCallback(
-    (files: File[]) => {
-      addChatAttachments(files);
-    },
+    (files: File[]) => addChatAttachments(files),
     [addChatAttachments],
   );
 
@@ -2309,6 +2313,11 @@ const ChatComposerNewComponent = ({
         return;
       }
       addClipboardAttachmentsRef.current(files);
+      if (snapshot.text && snapshot.textTruncated) {
+        setLocalNotice(
+          'The clipboard text was too long, so only the first part was attached. Attach the original file to include all of it.',
+        );
+      }
     } catch (cause) {
       if (!operation.isCurrent()) return;
       setLocalNotice(
@@ -2343,10 +2352,10 @@ const ChatComposerNewComponent = ({
       if (decision.kind !== 'attachment') return;
       const { file } = decision;
       if (plainText !== undefined) {
-        setPastedTextUndo({ fileName: file.name, text: plainText });
+        setPastedTextUndo({ file, text: plainText });
         return;
       }
-      void readPastedText(file).then((text) => setPastedTextUndo({ fileName: file.name, text }));
+      void readPastedText(file).then((text) => setPastedTextUndo({ file, text }));
     },
     [addChatAttachments],
   );
@@ -4180,7 +4189,7 @@ const ChatComposerNewComponent = ({
     }
     consumedPrefillRef.current = prefillText;
     retireClipboardDraft();
-    writeComposerMessage(prefillText);
+    writeComposerMessage(composerTextWithIncoming(messageRef.current, prefillText));
     onPrefillConsumed?.();
     setSendPendingFlag(false);
   }, [prefillText, onPrefillConsumed, writeComposerMessage, retireClipboardDraft]);
@@ -4561,7 +4570,7 @@ const ChatComposerNewComponent = ({
       const composing = isImeComposingKey(e.nativeEvent);
 
       // Forward navigation keys to SlashCommandMenu when open
-      if (showSlashMenu) {
+      if (showSlashMenu && !composing) {
         const consumed = slashMenuRef.current?.handleKey(e.key);
         if (consumed) {
           e.preventDefault();
@@ -4920,14 +4929,14 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {pastedTextUndo && (
+      {pastedTextUndo && attachments.includes(pastedTextUndo.file) && (
         <div
           role="status"
           data-testid="pasted-text-notice"
           className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
         >
           <span>
-            That paste was long, so it was attached as {pastedTextUndo.fileName} instead of filling
+            That paste was long, so it was attached as {pastedTextUndo.file.name} instead of filling
             the message box.
           </span>
           <button
@@ -4935,7 +4944,7 @@ const ChatComposerNewComponent = ({
             data-testid="pasted-text-undo"
             className="font-medium text-foreground underline underline-offset-2 transition-colors hover:no-underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {
-              const index = attachments.findIndex((file) => file.name === pastedTextUndo.fileName);
+              const index = attachments.indexOf(pastedTextUndo.file);
               if (index >= 0) removeFile(index);
               appendComposerMessage(pastedTextUndo.text);
               setPastedTextUndo(null);
@@ -5990,7 +5999,9 @@ const ChatComposerNewComponent = ({
                       fileInputRef.current?.click();
                       closeMenu();
                     }}
-                    onAttachLibraryFile={(file) => handleFileDrop([file])}
+                    onAttachLibraryFile={(file) =>
+                      handleFileDrop([file]).then((taken) => taken.length > 0)
+                    }
                     showLocalFolderRow={desktopHost !== null}
                     onAttachFromLocalFolder={() => {
                       setLocalFolderPickerOpen(true);

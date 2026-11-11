@@ -185,7 +185,7 @@ pub(crate) async fn install_dependencies(root: &str) -> DependencySetup {
             .ok()
             .and_then(|transport| PluginRegistryClient::new(url, transport).ok())
     });
-    let policy = plugins::PluginSignaturePolicy::configured(false).ok();
+    let policy = plugins::PluginSignaturePolicy::configured(false);
     for dependency in &manifest.dependencies {
         let reference = dependency.reference();
         let (name, marketplace) = match registry::parse_plugin_reference(&reference) {
@@ -220,6 +220,13 @@ pub(crate) async fn install_dependencies(root: &str) -> DependencySetup {
             ));
             continue;
         }
+        let policy = match dependency_policy(&policy, &name) {
+            Ok(policy) => policy,
+            Err(reason) => {
+                setup.missing.push(reason);
+                continue;
+            }
+        };
         let Some(client) = client.as_ref() else {
             setup.missing.push(format!(
                 "'{name}', which is not installed, and no plugin registry is configured to install it from (plugins.registry_url in config.toml or AGI_PLUGIN_REGISTRY_URL)"
@@ -247,7 +254,7 @@ pub(crate) async fn install_dependencies(root: &str) -> DependencySetup {
                     {
                         continue;
                     }
-                    match install_resolved(&manager, &plugin, policy.as_ref()) {
+                    match install_resolved(&manager, &plugin, policy) {
                         Ok(()) => setup.installed.push(plugin.name),
                         Err(error) => setup.missing.push(format!(
                             "'{}', which could not be installed: {error:#}",
@@ -262,6 +269,17 @@ pub(crate) async fn install_dependencies(root: &str) -> DependencySetup {
         }
     }
     setup
+}
+
+fn dependency_policy<'a>(
+    policy: &'a Result<plugins::PluginSignaturePolicy, String>,
+    name: &str,
+) -> Result<&'a plugins::PluginSignaturePolicy, String> {
+    policy.as_ref().map_err(|error| {
+        format!(
+            "'{name}', which was not installed because the plugin signature policy could not be read ({error})"
+        )
+    })
 }
 
 fn unmet_version(name: &str, range: Option<&str>, version: Option<&str>) -> Option<String> {
@@ -288,7 +306,7 @@ fn unmet_version(name: &str, range: Option<&str>, version: Option<&str>) -> Opti
 fn install_resolved(
     manager: &plugins::PluginsManager,
     plugin: &crate::features::plugins::registry::ResolvedPlugin,
-    policy: Option<&plugins::PluginSignaturePolicy>,
+    policy: &plugins::PluginSignaturePolicy,
 ) -> Result<()> {
     plugins::validate_plugin_name(&plugin.name).map_err(anyhow::Error::msg)?;
     plugins::check_plugin_compatibility(&plugin.manifest).map_err(anyhow::Error::msg)?;
@@ -298,12 +316,13 @@ fn install_resolved(
     if let Some(parent) = manifest_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(&manifest_path, &plugin.manifest_bytes)?;
-    if let Some(policy) = policy {
-        if let Err(error) = plugins::evaluate_plugin_signature(&target, policy) {
-            let _ = std::fs::remove_dir_all(&target);
-            anyhow::bail!(error);
-        }
+    if let Err(error) = std::fs::write(&manifest_path, &plugin.manifest_bytes) {
+        let _ = std::fs::remove_dir_all(&target);
+        return Err(error.into());
+    }
+    if let Err(error) = plugins::evaluate_plugin_signature(&target, policy) {
+        let _ = std::fs::remove_dir_all(&target);
+        anyhow::bail!(error);
     }
     Ok(())
 }
@@ -360,7 +379,8 @@ pub(crate) fn update_plugin(name: &str) -> Result<UpdatedPlugin> {
             plugins::load_manifest_for(&install_path).and_then(|(manifest, _)| manifest.version)
         });
     let policy = plugins::PluginSignaturePolicy::configured(false).map_err(anyhow::Error::msg)?;
-    let update = crate::marketplace::update_plugin_checkout(&install_path, &policy)
+    let marker = plugins::pending_update_marker(manager.global_dir(), name);
+    let update = crate::marketplace::update_plugin_checkout(&install_path, &marker, &policy)
         .map_err(anyhow::Error::msg)?;
     if let (
         Some(entry),
@@ -561,4 +581,25 @@ pub(crate) fn plugin_command(args: &str) -> Option<String> {
         _ => return None,
     };
     Some(outcome.unwrap_or_else(|error| format!("{error:#}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_dependency_is_not_installed_when_the_signature_policy_is_unknown() {
+        let unknown: Result<plugins::PluginSignaturePolicy, String> =
+            Err("failed to read config.toml: denied".to_string());
+        let reason = dependency_policy(&unknown, "helper").unwrap_err();
+        assert!(reason.contains("'helper'"), "{reason}");
+        assert!(reason.contains("not installed"), "{reason}");
+        assert!(reason.contains("failed to read config.toml"), "{reason}");
+
+        let known = Ok(plugins::PluginSignaturePolicy {
+            require_signed: true,
+            ..Default::default()
+        });
+        assert!(dependency_policy(&known, "helper").unwrap().require_signed);
+    }
 }

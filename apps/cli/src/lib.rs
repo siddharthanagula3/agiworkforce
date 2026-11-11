@@ -959,7 +959,11 @@ enum Command {
         provider: Option<String>,
     },
     /// Logout from AGI cloud.
-    Logout,
+    Logout {
+        /// Sign out of your AGI account only; provider API keys you saved stay.
+        #[arg(long)]
+        account_only: bool,
+    },
     /// Show authentication status for all configured providers.
     AuthStatus,
     /// Browse your Library: generated images and videos, uploaded and generated files.
@@ -972,9 +976,12 @@ enum Command {
         /// Only items whose name or prompt matches this text.
         #[arg(long)]
         search: Option<String>,
-        /// How many items to list.
+        /// How many items to list on one page.
         #[arg(long, default_value_t = 24)]
         limit: u32,
+        /// Skip this many items; a listing with more items names the next offset.
+        #[arg(long, default_value_t = 0)]
+        offset: u64,
     },
     /// List the conversation links you shared, or revoke one.
     Shares {
@@ -2516,7 +2523,7 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
     let local_id = code_teleport::local_session_id(&detail.session.id);
     let title = code_teleport::title(&detail.session);
     let conn = sessions::open_db()?;
-    sessions::import_hosted_session(
+    let imported = sessions::import_hosted_session(
         &conn,
         &local_id,
         &title,
@@ -2524,9 +2531,8 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         code_teleport::history(&detail),
         "the cloud Code session",
     )?;
-    eprintln!(
-        "{} `{}` from {} and loaded '{}' ({} turns). New work here stays on this computer; \
-         push the branch to share it.",
+    let checked_out = format!(
+        "{} `{}` from {}",
         if teleported.created_branch {
             "Checked out"
         } else {
@@ -2534,9 +2540,21 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         },
         teleported.branch,
         teleported.remote,
-        title,
-        detail.turns.len()
     );
+    let loaded = match &imported {
+        sessions::HostedImport::KeptLocal => format!(
+            "kept this computer's copy of '{title}', which already holds every cloud turn plus the work you did here"
+        ),
+        _ => format!("loaded '{title}' ({} turns)", detail.turns.len()),
+    };
+    eprintln!(
+        "{checked_out} and {loaded}. New work here stays on this computer; push the branch to share it."
+    );
+    if let sessions::HostedImport::PreservedLocal { local_copy } = &imported {
+        eprintln!(
+            "The turns you took here that the cloud session does not have are kept in session {local_copy}; `agi resume {local_copy}` opens them."
+        );
+    }
     Ok(local_id)
 }
 
@@ -3242,10 +3260,10 @@ async fn code_interrupt() {
 
 async fn handle_devices_command(json: bool, output: Option<OutputFormat>) -> Result<()> {
     let client = cloud::CloudClient::connect(account_privacy_mode())
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        .map_err(cloud::CloudError::into_anyhow)?;
     let devices = cloud::devices::list(&client)
         .await
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        .map_err(cloud::CloudError::into_anyhow)?;
     render_structured(
         serde_json::to_value(&devices)?,
         cloud::devices::render(&devices),
@@ -3632,11 +3650,7 @@ async fn handle_projects_command(
             if *json {
                 println!("{}", serde_json::to_string_pretty(&file)?);
             } else {
-                println!(
-                    "Added {} to '{}'. Chats in the project, and managed turns in a directory linked to it, can search it.",
-                    terminal_text::sanitize_terminal_text(&file.file_name),
-                    found.name
-                );
+                println!("{}", file.receipt(&found.name));
             }
             Ok(())
         }
@@ -3649,9 +3663,9 @@ async fn handle_projects_command(
                 .ok_or_else(|| anyhow::anyhow!("No project '{project}' in your AGI account"))?;
             let cwd = std::env::current_dir()?;
             let home = config::CliConfig::config_dir()?;
-            let mut registry = project_registry::ProjectRegistry::load(&home)?;
-            registry.link_cloud_project(&cwd, &found.id)?;
-            registry.save(&home)?;
+            project_registry::ProjectRegistry::update(&home, |registry| {
+                registry.link_cloud_project(&cwd, &found.id)
+            })?;
             println!(
                 "{} is linked to the account project '{}'. Managed turns here use its instructions and knowledge files, and their conversations are filed under it.",
                 cwd.display(),
@@ -3817,15 +3831,9 @@ async fn handle_artifacts_command(
             let block = artifacts::content(&client, &entry)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let mut published = artifacts::publish(&client, &entry, &block)
+            let published = artifacts::publish_for_audience(&client, &entry, &block, visibility)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            if published.visibility != visibility {
-                artifacts::set_audience(&client, &published.token, visibility)
-                    .await
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-                published.visibility = visibility.to_string();
-            }
             render_structured(
                 serde_json::to_value(&published)?,
                 format!(
@@ -4038,14 +4046,14 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 MemorySubcommand::Off => Some(false),
                 _ => None,
             };
-            let text = cloud::personalization::memory_switch(enabled)
+            let text = cloud::personalization::memory_switch(privacy, enabled)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             println!("{text}");
             Ok(())
         }
         MemorySubcommand::Never { add, remove } => {
-            let text = cloud::personalization::never_remember(add, remove)
+            let text = cloud::personalization::never_remember(privacy, add, remove)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             println!("{text}");
@@ -4157,7 +4165,7 @@ async fn handle_schedules_command(
     action: &SchedulesSubcommand,
     output: Option<OutputFormat>,
 ) -> Result<()> {
-    let client = match schedules::SchedulesClient::connect() {
+    let client = match schedules::SchedulesClient::connect(account_privacy_mode()) {
         Ok(client) => client,
         Err(error) => {
             eprintln!("{} {}", ts::error_label(), ts::danger(error.to_string()));
@@ -4383,9 +4391,6 @@ async fn handle_schedule_triggers_command(
         }
     };
     let failed = |error: schedules::ScheduleError| anyhow::anyhow!("{error}");
-    if account_privacy_mode() == platform::runtime::session::PrivacyMode::Local {
-        return Err(failed(schedules::ScheduleError::LocalPrivacy));
-    }
 
     match action {
         ScheduleTriggersSubcommand::List {
@@ -6417,7 +6422,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                 .skip_permissions,
                     ),
                 );
-                remote_control::run(host, &workspace_root).await
+                remote_control::run(host, &workspace_root, app_config.account_privacy_mode()).await
             }
             Command::AppServer {
                 workspace_consent: _,
@@ -6448,7 +6453,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 );
                 host.prepare().await;
                 let capabilities = host.capabilities();
-                let _heartbeat = device_registry::spawn_heartbeat_loop();
+                let _heartbeat =
+                    device_registry::spawn_heartbeat_loop(app_config.account_privacy_mode());
                 if listen == "stdio" {
                     return app_server::run_developer_session_stdio(host, capabilities).await;
                 }
@@ -7008,8 +7014,12 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Logout ---
-            Command::Logout => {
-                let signed_out = crate::app_server::account::sign_out_of_every_provider().await?;
+            Command::Logout { account_only } => {
+                let signed_out = if *account_only {
+                    crate::app_server::account::sign_out_of_account().await?
+                } else {
+                    crate::app_server::account::sign_out_of_every_provider().await?
+                };
                 println!("{}", signed_out.message());
                 Ok(())
             }
@@ -7020,6 +7030,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 kind,
                 search,
                 limit,
+                offset,
             } => {
                 let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -7030,10 +7041,11 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             kind.as_deref(),
                             search.as_deref(),
                             *limit,
+                            *offset,
                         )
                         .await
                         .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        println!("{}", cloud::library::render(&page));
+                        println!("{}", cloud::library::render(&page, *offset));
                     }
                     Some(LibrarySubcommand::Show { id }) => {
                         let preview = cloud::library::text(&client, id)
@@ -7119,16 +7131,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             println!("Left {connector} connected.");
                             return Ok(());
                         }
-                        cloud::connectors::disconnect(&client, connector)
+                        let receipt = cloud::connectors::disconnect(&client, connector)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        println!("Disconnected {connector} from your account.");
+                        println!("{}", receipt.message(connector));
                     }
                 }
                 Ok(())
             }
             Command::ExportData { out } => {
-                let client = cloud::CloudClient::connect_managed()
+                let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 let archive = cloud::data_export::current(&client)
                     .await
@@ -7197,9 +7209,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     return doctor::run_doctor(&app_config, *json);
                 }
                 let report = doctor::collect_doctor_report(&app_config);
-                let exported = diagnostics_bundle::export(&report)
-                    .await
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                let exported =
+                    diagnostics_bundle::export(&report, app_config.account_privacy_mode())
+                        .await
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
                 let path = std::env::current_dir()?.join(&exported.filename);
                 std::fs::write(&path, serde_json::to_string_pretty(&exported.diagnostics)?)?;
                 println!(
@@ -7388,25 +7401,25 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Init => {
                 let home = config::CliConfig::config_dir()?;
                 init::init_home_dir(&home)?;
-                println!("Initialized ~/.agiworkforce/ directory structure.");
+                println!("{}", init::home_receipt(&home));
 
-                // Register current directory as a project
                 let cwd = std::env::current_dir()?;
                 let project_root = project_scope::resolve_project_scope(&cwd);
-                let mut registry = project_registry::ProjectRegistry::load(&home)?;
-                registry.register_project(&project_root, "trusted")?;
-                registry.save(&home)?;
+                trust::grant(&cwd)?;
                 println!("Registered project: {}", project_root.display());
                 Ok(())
             }
 
             // --- Usage ---
             Command::Usage => {
-                println!("{}", usage_summary::account_lines().await.join("\n"));
+                let lines = usage_summary::account_lines(account_privacy_mode())
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                println!("{}", lines.join("\n"));
                 Ok(())
             }
             Command::Keys { action } => {
-                let client = cloud::CloudClient::connect_managed()
+                let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 match action
                     .as_ref()
@@ -7427,14 +7440,12 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         let keys = cloud::api_keys::list(&client)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let found = keys
-                            .iter()
-                            .find(|candidate| candidate.id == *key || candidate.name == *key)
-                            .with_context(|| format!("No active API key '{key}'"))?;
+                        let found =
+                            cloud::api_keys::select(&keys, key).map_err(anyhow::Error::msg)?;
+                        let described = cloud::api_keys::describe(found);
                         if !confirm_destructive(
                             &format!(
-                                "Revoke API key {} ({}…)? Anything still using it stops working, and this cannot be undone.",
-                                found.name, found.key_prefix
+                                "Revoke API key {described}? Anything still using it stops working, and this cannot be undone."
                             ),
                             *yes,
                         ) {
@@ -7444,7 +7455,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         cloud::api_keys::revoke(&client, &found.id)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        println!("Revoked API key {}.", found.name);
+                        println!("Revoked API key {described}.");
                         Ok(())
                     }
                     KeysSubcommand::Create => {
@@ -7469,7 +7480,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             Command::Invite { json } => {
-                let invite = cloud::referrals::invite()
+                let invite = cloud::referrals::invite(account_privacy_mode())
                     .await
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 render_structured(
@@ -7594,7 +7605,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 results.len().to_string().bold(),
                 ts::accent(query)
             );
-            for s in &results {
+            for s in results.iter().take(crate::sessions::SEARCH_DISPLAY_LIMIT) {
                 let title = s.display_title();
                 let short_id = &s.id[..s.id.len().min(8)];
                 println!(
@@ -7643,6 +7654,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                 }
                 println!();
+            }
+            if let Some(notice) = crate::sessions::search_overflow_notice(results.len()) {
+                println!("{}\n", notice.dimmed());
             }
             println!("{}", "Resume with: agi --resume <ID>".dimmed());
         }
@@ -8554,6 +8568,18 @@ fn sdk_tool_lifecycle_event(
     }
 }
 
+fn wire_session_id(
+    requested: Option<&str>,
+    resuming: bool,
+    managed: Option<&str>,
+) -> Option<String> {
+    requested
+        .filter(|_| !resuming)
+        .or(managed)
+        .or(requested)
+        .map(str::to_string)
+}
+
 /// Execute a single prompt and exit.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_oneshot(
@@ -8657,9 +8683,11 @@ pub async fn run_oneshot(
     // persistence would silently lose the id it correlates events by. When
     // persistence is on this is the same value `override_session_id` just
     // wrote, so the two paths agree.
-    let event_session_id = session_id_override
-        .clone()
-        .or_else(|| session.managed_session_id().map(str::to_string));
+    let event_session_id = wire_session_id(
+        session_id_override.as_deref(),
+        resuming,
+        session.managed_session_id(),
+    );
     // Thread json_events mode into the session so ALL turns (continuation,
     // retry, fallback) emit MessageDelta events instead of raw print!.
     if json_events && output_mode != OneShotOutputMode::JsonLine {
@@ -8695,9 +8723,8 @@ pub async fn run_oneshot(
 
     let sdk_stream_context = if output_mode == OneShotOutputMode::JsonLine {
         let context = agent::SdkStreamContext {
-            session_id: session
-                .managed_session_id()
-                .map(str::to_string)
+            session_id: event_session_id
+                .clone()
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             message_id: uuid::Uuid::new_v4().to_string(),
         };
@@ -8898,6 +8925,7 @@ pub async fn run_oneshot(
         let spinner = output::create_spinner("Thinking...");
         let md = std::sync::Arc::new(std::sync::Mutex::new(markdown::MarkdownRenderer::new()));
         let md_cb = std::sync::Arc::clone(&md);
+        session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
         let result = session
             .send(
@@ -8910,6 +8938,7 @@ pub async fn run_oneshot(
                 }),
             )
             .await;
+        session.transcript_renderer = None;
 
         spinner.finish_and_clear();
 
@@ -9095,6 +9124,56 @@ mod tests {
     fn the_yes_flag_is_how_a_script_answers_the_prompt() {
         assert!(confirm_destructive_when("Delete it?", true, false));
         assert!(confirm_destructive_when("Delete it?", true, true));
+    }
+
+    /// Desktop signs the machine out of its own account with `--account-only`;
+    /// a bare `logout` keeps forgetting every provider.
+    #[test]
+    fn logout_account_only_is_opt_in() {
+        let scoped = Cli::try_parse_from(["agi", "logout", "--account-only"])
+            .expect("logout --account-only parses");
+        assert!(matches!(
+            scoped.command,
+            Some(Command::Logout { account_only: true })
+        ));
+
+        let bare = Cli::try_parse_from(["agi", "logout"]).expect("logout parses");
+        assert!(matches!(
+            bare.command,
+            Some(Command::Logout {
+                account_only: false
+            })
+        ));
+    }
+
+    #[test]
+    fn an_embedders_session_id_survives_disabled_persistence_on_the_wire() {
+        let preallocated = "0b6f8d5e-6c1d-4a37-9a55-6f0f3f2d9c11";
+        assert_eq!(
+            wire_session_id(Some(preallocated), false, None).as_deref(),
+            Some(preallocated)
+        );
+        assert_eq!(
+            wire_session_id(Some(preallocated), false, Some("managed-id")).as_deref(),
+            Some(preallocated)
+        );
+        assert_eq!(wire_session_id(None, false, None), None);
+        assert_eq!(
+            wire_session_id(None, false, Some("managed-id")).as_deref(),
+            Some("managed-id")
+        );
+    }
+
+    #[test]
+    fn a_resumed_session_keeps_its_own_identity_on_the_wire() {
+        assert_eq!(
+            wire_session_id(Some("requested"), true, Some("resumed")).as_deref(),
+            Some("resumed")
+        );
+        assert_eq!(
+            wire_session_id(Some("requested"), true, None).as_deref(),
+            Some("requested")
+        );
     }
 
     /// `--repo`/`-C` moves the session; `--add-dir` only adds a second root.
@@ -9436,6 +9515,25 @@ mod tests {
     }
 
     #[test]
+    fn library_listing_accepts_the_next_page_offset() {
+        let cli =
+            Cli::try_parse_from(["agi", "library", "--limit", "100", "--offset", "100"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Library {
+                limit: 100,
+                offset: 100,
+                ..
+            })
+        ));
+        let default = Cli::try_parse_from(["agi", "library"]).unwrap();
+        assert!(matches!(
+            default.command,
+            Some(Command::Library { offset: 0, .. })
+        ));
+    }
+
+    #[test]
     fn dash_prompt_uses_stdin_content_as_the_prompt() {
         assert_eq!(
             build_final_prompt(Some("-"), Some("explain this diff"), ""),
@@ -9644,10 +9742,41 @@ mod tests {
 
         assert_eq!(resolved.mode, PermissionMode::Plan);
         assert!(!resolved.mode.auto_approves_edits());
+        assert!(!resolved.auto_approve_safe && !resolved.skip_permissions);
+
+        for args in [
+            [
+                "agiworkforce",
+                "--permission-mode",
+                "bypassPermissions",
+                "--mode",
+                "default",
+                "exec",
+                "go",
+            ],
+            [
+                "agiworkforce",
+                "--mode",
+                "default",
+                "--permission-mode",
+                "bypassPermissions",
+                "exec",
+                "go",
+            ],
+        ] {
+            let cli = Cli::try_parse_from(args).expect("both flags should parse");
+            let resolved =
+                CliOptions::from_cli(&cli).effective_permissions(cli.mode, false, false, None);
+            assert_eq!(resolved.mode, PermissionMode::Default, "{args:?}");
+            assert!(!resolved.skip_permissions, "{args:?}");
+            assert!(!resolved.auto_approve_safe, "{args:?}");
+        }
     }
 
     #[test]
     fn permission_mode_contributes_to_effective_permission_flags() {
+        use crate::cli_options::CliOptions;
+
         let bypass = Cli::try_parse_from([
             "agiworkforce",
             "--permission-mode",
@@ -9655,8 +9784,11 @@ mod tests {
             "fix bug",
         ])
         .expect("bypass permission mode should parse");
-        let bypass_options = crate::cli_options::CliOptions::from_cli(&bypass);
-        assert!(bypass_options.should_skip_permissions(false));
+        assert!(
+            CliOptions::from_cli(&bypass)
+                .effective_permissions(bypass.mode, false, false, None)
+                .skip_permissions
+        );
 
         let accept_edits = Cli::try_parse_from([
             "agiworkforce",
@@ -9665,8 +9797,11 @@ mod tests {
             "fix bug",
         ])
         .expect("accept edits permission mode should parse");
-        let accept_options = crate::cli_options::CliOptions::from_cli(&accept_edits);
-        assert!(accept_options.should_auto_approve_safe(false));
+        assert!(
+            CliOptions::from_cli(&accept_edits)
+                .effective_permissions(accept_edits.mode, false, false, None)
+                .auto_approve_safe
+        );
     }
 
     #[test]

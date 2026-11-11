@@ -9,7 +9,11 @@ import {
   captureCloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { beginCloudProjectFetch, useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import {
+  beginCloudProjectFetch,
+  useCloudProjectStore,
+  type CloudProjectDetails,
+} from '@/stores/projects/cloudProjectStore';
 import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 
 export async function loadMissingCloudProject(
@@ -68,6 +72,14 @@ export type CloudProjectDetailsPatch = Pick<
   'iconEmoji' | 'accentColor' | 'usesGlobalMemory' | 'usesAccountInstructions' | 'usesAccountStyle'
 >;
 
+interface ProjectDetailsEdits {
+  pending: Array<{ patch: CloudProjectDetailsPatch }>;
+  baseline: CloudProjectDetails | undefined;
+  tail: Promise<void>;
+}
+
+const projectDetailsEdits = new Map<string, ProjectDetailsEdits>();
+
 export async function updateCloudProjectDetails(
   projectId: string,
   patch: CloudProjectDetailsPatch,
@@ -75,14 +87,49 @@ export async function updateCloudProjectDetails(
   const account = captureCloudAccountEpoch();
   if (!account) throw new Error('Cloud account is unavailable');
   const store = useCloudProjectStore.getState();
-  const previous = store.details[projectId];
+  const edits = projectDetailsEdits.get(projectId) ?? {
+    pending: [],
+    baseline: undefined,
+    tail: Promise.resolve(),
+  };
+  projectDetailsEdits.set(projectId, edits);
+  const queued = edits.pending.length > 0;
+  if (!queued) edits.baseline = store.details[projectId];
+  const edit = { patch };
+  edits.pending.push(edit);
   store.patchCloudProjectDetails(projectId, patch);
-  try {
-    const project = await managedCloudProjects.updateProject(projectId, patch);
-    assertCloudAccountEpochCurrent(account);
-    useCloudProjectStore.getState().setCloudProjectDetails([project]);
-  } catch (error) {
-    if (previous) useCloudProjectStore.getState().patchCloudProjectDetails(projectId, previous);
-    throw error;
-  }
+
+  const send = async (): Promise<void> => {
+    try {
+      assertCloudAccountEpochCurrent(account);
+      const project = await managedCloudProjects.updateProject(projectId, patch);
+      assertCloudAccountEpochCurrent(account);
+      const current = useCloudProjectStore.getState();
+      current.setCloudProjectDetails([project]);
+      edits.baseline = useCloudProjectStore.getState().details[projectId];
+      edits.pending = edits.pending.filter((entry) => entry !== edit);
+      for (const later of edits.pending) current.patchCloudProjectDetails(projectId, later.patch);
+    } catch (error) {
+      edits.pending = edits.pending.filter((entry) => entry !== edit);
+      const claimed = new Set(edits.pending.flatMap((entry) => Object.keys(entry.patch)));
+      const restore = Object.fromEntries(
+        Object.keys(patch)
+          .filter((key) => !claimed.has(key))
+          .map((key) => [key, edits.baseline?.[key as keyof CloudProjectDetails]]),
+      ) as Partial<CloudProjectDetails>;
+      const current = useCloudProjectStore.getState();
+      if (edits.baseline && current.details[projectId]) {
+        current.patchCloudProjectDetails(projectId, restore);
+      }
+      throw error;
+    } finally {
+      if (edits.pending.length === 0 && projectDetailsEdits.get(projectId) === edits) {
+        projectDetailsEdits.delete(projectId);
+      }
+    }
+  };
+
+  const run = queued ? edits.tail.then(send) : send();
+  edits.tail = run.catch(() => undefined);
+  return run;
 }

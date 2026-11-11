@@ -61,6 +61,12 @@ async function readSettingsNamespace(
   }
 }
 
+function explicitTextOr(explicit: unknown, fallback: unknown, maxLength: number): string | null {
+  return typeof explicit === 'string'
+    ? normalizeText(explicit, maxLength)
+    : normalizeText(fallback, maxLength);
+}
+
 async function readIdentityNamespace(
   db: DatabaseAdapter,
   userId: string,
@@ -266,15 +272,15 @@ export async function buildCustomInstructionsPreamble(
     });
   }
   return formatPersonalizationBlock({
-    preferredName:
-      normalizeText(namespace['preferredName'], 60) ??
-      normalizeText(personalization['nickname'], 60),
+    preferredName: explicitTextOr(namespace['preferredName'], personalization['nickname'], 60),
     workDescription:
       normalizeText(namespace['workDescription'], 120) ??
       normalizeText(personalization['occupation'], 120),
-    aboutYou:
-      normalizeText(namespace['aboutYou'], MAX_ABOUT_YOU_LENGTH) ??
-      normalizeText(personalization['aboutYou'], MAX_ABOUT_YOU_LENGTH),
+    aboutYou: explicitTextOr(
+      namespace['aboutYou'],
+      personalization['aboutYou'],
+      MAX_ABOUT_YOU_LENGTH,
+    ),
     instructions: firstActiveInstruction(readAccountInstructionBlocks(namespace, personalization)),
     responseStyle: scope.responseStyle ? formatResponseStyleLines(personalization) : [],
   });

@@ -32,6 +32,9 @@ const STORAGE_KEY_DESKTOP_PAIRED = 'connectedToDesktop';
 // record holds only what the settings page shows (fingerprint and account), so
 // the paired state survives a restart without putting a credential on disk.
 const STORAGE_KEY_PAIRED_DESKTOP = 'agi_paired_desktop';
+export const STORAGE_KEY_PENDING_DESKTOP_REVOCATION = 'agi_pending_desktop_revocation';
+const PENDING_REVOCATION_NOTICE =
+  'Unpaired in this browser, but Desktop could not be reached to remove the pairing. Open Desktop and reconnect to finish, or remove the pairing from Desktop.';
 
 const PAIRING_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
 const PAIRING_FINGERPRINT_RE = /^[A-Za-z0-9_-]{4,32}$/;
@@ -220,6 +223,47 @@ async function releasePairedCredentials(): Promise<void> {
   }
 }
 
+function readLocal(key: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get([key], (r) => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve((r as Record<string, unknown>)[key]);
+    });
+  });
+}
+
+function writeLocal(items: Record<string, unknown>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.set(items, () => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve();
+    });
+  });
+}
+
+function removeLocal(keys: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.remove(keys, () => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve();
+    });
+  });
+}
+
+/** The id of the unpair Desktop never acknowledged, or `null` when none is owed. */
+export function parsePendingDesktopRevocation(stored: unknown): string | null {
+  const id = (stored as { id?: unknown } | null | undefined)?.id;
+  return typeof id === 'string' && id !== '' ? id : null;
+}
+
+export async function readPendingDesktopRevocation(): Promise<string | null> {
+  try {
+    return parsePendingDesktopRevocation(await readLocal(STORAGE_KEY_PENDING_DESKTOP_REVOCATION));
+  } catch {
+    return null;
+  }
+}
+
 export async function releaseStoredDesktopPairing(): Promise<void> {
   await releasePairedCredentials();
   _state = { ...IDLE_STATE };
@@ -312,7 +356,10 @@ export async function loadPairingState(): Promise<PairingState> {
           codeLength: pending.codeLength,
           expiresAt: pending.expiresAt,
         }
-      : { ...IDLE_STATE };
+      : {
+          ...IDLE_STATE,
+          error: (await readPendingDesktopRevocation()) ? PENDING_REVOCATION_NOTICE : null,
+        };
   } catch {
     _state = { ...IDLE_STATE };
   }
@@ -392,6 +439,7 @@ async function storeIssuedPairToken(data: Record<string, unknown>): Promise<Pair
       : {}),
   });
   await removeSession([STORAGE_KEY_PAIR_REQUEST]);
+  await removeLocal([STORAGE_KEY_PENDING_DESKTOP_REVOCATION]);
   await writePairedDesktopRecord(rawFingerprint, signedInAccountId);
 
   _state = { ...IDLE_STATE, phase: 'paired', fingerprint: rawFingerprint };
@@ -525,8 +573,23 @@ export async function unpair(): Promise<PairingState> {
   // message. Without this the two sides disagree: this extension forgets the
   // pairing and the desktop keeps its record, so every local client goes on
   // offering browser tools that can never answer.
-  if (typeof chrome.runtime?.sendMessage === 'function') {
-    await chrome.runtime.sendMessage({ type: 'UNPAIR_NATIVE' }).catch(() => undefined);
+  const receipt =
+    typeof chrome.runtime?.sendMessage === 'function'
+      ? ((await chrome.runtime.sendMessage({ type: 'UNPAIR_NATIVE' }).catch(() => undefined)) as
+          { success?: unknown } | undefined)
+      : undefined;
+
+  if (receipt?.success !== true) {
+    try {
+      await writeLocal({
+        [STORAGE_KEY_PENDING_DESKTOP_REVOCATION]: { id: crypto.randomUUID() },
+      });
+    } catch {
+      return {
+        ..._state,
+        error: 'Desktop could not be reached, so the pairing was kept. Try again.',
+      };
+    }
   }
 
   try {
@@ -535,6 +598,7 @@ export async function unpair(): Promise<PairingState> {
     // Storage removal failure should not block state reset
   }
   await releaseStoredDesktopPairing();
+  if (receipt?.success !== true) _state = { ...IDLE_STATE, error: PENDING_REVOCATION_NOTICE };
   return getPairingState();
 }
 

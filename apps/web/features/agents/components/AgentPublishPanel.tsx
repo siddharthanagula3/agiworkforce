@@ -42,12 +42,14 @@ export function AgentPublishPanel({
   agent,
   dirty,
   onAgentChange,
+  onVisibilityChange,
   onRestored,
 }: {
   api: AgentsApi;
   agent: ManagedCloudAgent;
   dirty: boolean;
   onAgentChange: (agent: ManagedCloudAgent) => void;
+  onVisibilityChange: (agentId: string, visibility: AgentVisibility) => void;
   onRestored: (agent: ManagedCloudAgent) => void;
 }) {
   const id = useId();
@@ -88,10 +90,16 @@ export function AgentPublishPanel({
       const next = await api.publish(agent.id, note.trim() || undefined);
       onAgentChange(next);
       setNote('');
-      setVersions(await api.versions(agent.id));
       toast.success(`Published version ${next.publishedVersion ?? ''}.`);
     } catch (reason) {
       toast.error(toUserMessage(reason, 'The agent could not be published.'));
+      setPublishing(false);
+      return;
+    }
+    try {
+      setVersions(await api.versions(agent.id));
+    } catch (reason) {
+      toast.error(toUserMessage(reason, 'Version history could not be refreshed.'));
     } finally {
       setPublishing(false);
     }
@@ -122,7 +130,7 @@ export function AgentPublishPanel({
         userIds: visibility === 'people' ? [...people] : [],
       });
       setShare(next);
-      onAgentChange({ ...agent, visibility: next.visibility });
+      onVisibilityChange(agent.id, next.visibility);
       toast.success('Sharing saved.');
     } catch (reason) {
       toast.error(toUserMessage(reason, 'Sharing could not be saved.'));

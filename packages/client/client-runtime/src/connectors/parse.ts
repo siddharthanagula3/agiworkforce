@@ -4,6 +4,7 @@ import {
   ConnectorPolicyResponseSchema,
   CreatedCustomConnectorSchema,
   CustomConnectorSchema,
+  DisconnectResponseSchema,
   ListConnectorToolPermissionsResponseSchema,
   ListConnectorsResponseSchema,
 } from '@agiworkforce/cloud-contracts';
@@ -11,6 +12,7 @@ import {
 import type {
   ConnectedConnector,
   ConnectorAccessPolicy,
+  ConnectorDisconnectResult,
   ConnectorOAuthStart,
   ConnectorToolPermission,
   CustomConnectorResult,
@@ -27,6 +29,8 @@ const INVALID_CONNECTORS = 'Invalid connectors response';
 const INVALID_PERMISSIONS = 'Invalid connector permissions response';
 const INVALID_AUTHORIZATION = 'Invalid connector authorization response';
 const INVALID_CUSTOM_CONNECTOR = 'Invalid custom connector response';
+const UNCONFIRMED_DISCONNECT =
+  'The disconnect was not confirmed, so the connector may still be connected';
 
 const ConnectorListSchema = ListConnectorsResponseSchema.pick({
   connectors: true,
@@ -106,4 +110,12 @@ export function parseCustomConnector(value: unknown): CustomConnectorResult {
   const parsed = CustomConnectorResponseSchema.safeParse(value);
   if (!parsed.success) throw new ConnectorResponseError(INVALID_CUSTOM_CONNECTOR);
   return parsed.data.connector;
+}
+
+export function parseConnectorDisconnect(value: unknown): ConnectorDisconnectResult {
+  const parsed = DisconnectResponseSchema.safeParse(value);
+  if (!parsed.success || parsed.data.success !== true) {
+    throw new ConnectorResponseError(UNCONFIRMED_DISCONNECT);
+  }
+  return { vendorNotice: parsed.data.vendorNotice ?? null };
 }

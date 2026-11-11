@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const root = process.cwd();
 
@@ -114,6 +115,7 @@ const TEST_CALL =
 function gitFiles(args) {
   try {
     return execSync(`git ${args}`, {
+      maxBuffer: GIT_MAX_BUFFER,
       cwd: root,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],

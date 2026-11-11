@@ -60,6 +60,13 @@ export class ThinkingTagSplitter {
     }
   }
 
+  discardPendingPublic(): number {
+    if (this.thinking) return 0;
+    const discarded = this.buffer.length;
+    this.buffer = '';
+    return discarded;
+  }
+
   closeThinking(): boolean {
     if (!this.thinking) return false;
     this.thinking = false;

@@ -92,7 +92,7 @@ export async function sendGuestTurn(
   let raw = '';
   let failure: string | null = null;
   for await (const event of readServerSentEvents(response.body)) {
-    if (event.data === SSE_DONE_DATA) continue;
+    if (event.data === SSE_DONE_DATA) break;
     const chunk = readChunk(event.data);
     if (chunk.failure) failure = chunk.failure;
     if (chunk.text) {

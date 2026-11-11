@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getRoutingSlotModel,
   NOTEBOOK_TEMPLATE_ID,
+  PRODUCT_NAMES,
   type CloudCodeSession,
 } from '@agiworkforce/types';
 import {
@@ -741,7 +742,7 @@ describe('CloudCodePage', () => {
     expect(screen.getByTestId('code-first-run')).toBeInTheDocument();
   });
 
-  it('shows an upgrade screen, not a composer, when the plan does not include AGI Code', async () => {
+  it('shows an upgrade screen, not a composer, when the plan does not include Code', async () => {
     const api = createApi({
       list: vi.fn(async () => ({
         availability: { ...availability, planEntitled: false, planTier: 'free', maxSessions: 1 },
@@ -752,7 +753,7 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     expect(
-      await screen.findByRole('heading', { name: 'AGI Code is on paid plans' }),
+      await screen.findByRole('heading', { name: `${PRODUCT_NAMES.code} is on paid plans` }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute('href', '/upgrade');
     expect(
@@ -761,7 +762,7 @@ describe('CloudCodePage', () => {
     expect(screen.queryByRole('heading', { name: /What's up next/ })).not.toBeInTheDocument();
   });
 
-  it('shows no upgrade screen to a plan that includes AGI Code', async () => {
+  it('shows no upgrade screen to a plan that includes Code', async () => {
     render(<CloudCodePage api={createApi()} />);
 
     await screen.findByRole('heading', { name: "What's up next, Ada?" });
@@ -939,7 +940,9 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     const wizard = await screen.findByTestId('code-first-run');
-    expect(within(wizard).getByRole('heading', { name: 'Set up AGI Code' })).toBeInTheDocument();
+    expect(
+      within(wizard).getByRole('heading', { name: `Set up ${PRODUCT_NAMES.code}` }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
     expect(api.list).toHaveBeenCalledWith('all', expect.anything());
 
@@ -1141,6 +1144,40 @@ describe('CloudCodePage', () => {
     await user.click(row);
     expect(screen.getByText('pnpm test')).toBeInTheDocument();
     expect(screen.getByText('all green')).toBeInTheDocument();
+  });
+
+  it('says earlier turns are missing only when the server returned the newest window', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      get: vi.fn(async () => ({
+        session,
+        terminalEntries: [],
+        turns: [],
+        turnsTruncated: true,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+
+    expect(
+      await screen.findByText('Earlier turns of this session are not shown here.'),
+    ).toBeTruthy();
+  });
+
+  it('shows no earlier-turns notice for a complete transcript', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      get: vi.fn(async () => ({ session, terminalEntries: [], turns: [], turnsTruncated: false })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(screen.queryByText('Earlier turns of this session are not shown here.')).toBeNull();
   });
 
   it('groups consecutive commands into one row', async () => {
@@ -1484,6 +1521,75 @@ describe('CloudCodePage', () => {
       }),
     );
     expect(await screen.findByText('Pushed to the repository.')).toBeInTheDocument();
+  });
+
+  it('names the missing GitHub write record on a refused push and offers the reconnect action', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/owner/repository',
+    };
+    const reconnectMessage =
+      'Reconnect GitHub to push or open pull requests. This connection was made before AGI recorded which repositories your GitHub account can write to.';
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
+      commit: vi.fn(async () => {
+        throw new CloudCodeApiError(reconnectMessage, 400, 'github_reconnect_required');
+      }),
+      changes: vi.fn(async () => ({
+        session: repoSession,
+        base: null,
+        workingBranch: null,
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, repoSession.title);
+    await user.click(screen.getByRole('button', { name: 'Changes' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Commit message' }), 'wire it');
+    await user.click(screen.getByRole('button', { name: 'Commit and push' }));
+
+    expect(await screen.findByText(reconnectMessage)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Reconnect GitHub' })).toHaveAttribute(
+      'href',
+      '/api/github/install/start?returnPath=%2Fcode',
+    );
+  });
+
+  it('offers no reconnect action when a push fails for another reason', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/owner/repository',
+    };
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
+      commit: vi.fn(async () => {
+        throw new CloudCodeApiError('Code session is busy; wait and try again', 409);
+      }),
+      changes: vi.fn(async () => ({
+        session: repoSession,
+        base: null,
+        workingBranch: null,
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, repoSession.title);
+    await user.click(screen.getByRole('button', { name: 'Changes' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Commit message' }), 'wire it');
+    await user.click(screen.getByRole('button', { name: 'Commit and push' }));
+
+    expect(await screen.findByText('Code session is busy; wait and try again')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Reconnect GitHub' })).not.toBeInTheDocument();
   });
 
   it('does not offer commit and push for a session with no repository', async () => {
@@ -3292,6 +3398,106 @@ describe('the environment the composer starts a session in', () => {
       ).toBeInTheDocument();
       expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
       expect(replace).not.toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('keeps a linked local session when its folder could not be read, and opens it on retry', async () => {
+    const user = userEvent.setup();
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    listDeveloperSessions.mockResolvedValueOnce({
+      groups: [
+        folder({
+          rootId: 'root-recent',
+          sessions: [],
+          unavailable: { message: 'The session list timed out.', hint: 'Try again.' },
+        }),
+      ],
+    });
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(await screen.findByText('The session list timed out. Try again.')).toBeInTheDocument();
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+
+      await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('The session list timed out. Try again.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('keeps a linked local session when the whole list read fails, then opens it on retry', async () => {
+    const user = userEvent.setup();
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    listDeveloperSessions.mockRejectedValueOnce(new Error('bridge closed'));
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByText(
+          'The coding sessions on this device could not be read, so that one is not open yet.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+
+      await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeInTheDocument();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('keeps a linked local session while its folder withholds sessions, without a retry button', async () => {
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [], sessionsWithheld: true })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByText(
+          'Allow running commands in this folder to open that coding session.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('says a linked local session is gone only after a complete list lacks it', async () => {
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [] })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByText('That coding session is not on this device any more.'),
+      ).toBeInTheDocument();
+      expect(replace).toHaveBeenCalledWith('/code');
     } finally {
       window.history.replaceState({}, '', '/');
     }

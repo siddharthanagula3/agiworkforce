@@ -262,6 +262,55 @@ describe('resume and retry', () => {
     expect(mockUploadFile).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a cancel pressed during backoff final and starts no further attempt', async () => {
+    jest.useFakeTimers();
+    mockUploadFile.mockRejectedValueOnce(new Error('Network request failed'));
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(entry(ROWS_CSV.id)?.phase).toBe('uploading');
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(5000);
+    const result = await pending;
+
+    expect(result).toBeNull();
+    expect(mockUploadFile).toHaveBeenCalledTimes(1);
+    expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
+  });
+
+  it('does not revive a file removed during backoff', async () => {
+    jest.useFakeTimers();
+    mockUploadFile.mockRejectedValueOnce(new Error('Network request failed'));
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(0);
+    useUploadLifecycleStore.getState().clear(ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(5000);
+    const result = await pending;
+
+    expect(result).toBeNull();
+    expect(mockUploadFile).toHaveBeenCalledTimes(1);
+    expect(entry(ROWS_CSV.id)).toBeUndefined();
+  });
+
+  it('lets a manual retry started during backoff own the upload alone', async () => {
+    jest.useFakeTimers();
+    mockUploadFile
+      .mockRejectedValueOnce(new Error('Network request failed'))
+      .mockResolvedValueOnce(uploadResultFor(ROWS_CSV));
+
+    const first = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(0);
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    const second = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(5000);
+
+    expect(await first).toBeNull();
+    expect(await second).toEqual(uploadResultFor(ROWS_CSV));
+    expect(mockUploadFile).toHaveBeenCalledTimes(2);
+    expect(entry(ROWS_CSV.id)?.phase).toBe('done');
+  });
+
   it('gives up after the retry budget and leaves the TXT resumable with the reason', async () => {
     jest.useFakeTimers();
     mockUploadFile.mockRejectedValue(new Error('Network request failed'));

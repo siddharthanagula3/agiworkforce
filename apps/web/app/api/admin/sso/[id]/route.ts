@@ -21,6 +21,7 @@ import {
 import {
   ClerkConnectionError,
   ClerkNotProvisionedError,
+  deleteConnection,
   provisionConnection,
   setConnectionActive,
   updateConnection,
@@ -119,6 +120,25 @@ function providerErrorResponse(error: unknown, context: Record<string, unknown>)
     );
   }
   return null;
+}
+
+async function withdrawProviderActivation(
+  provisioned: ProvisionedConnection,
+  createdHere: boolean,
+  context: Record<string, unknown>,
+): Promise<void> {
+  try {
+    if (createdHere) {
+      await deleteConnection(provisioned.clerkConnectionId);
+    } else {
+      await setConnectionActive(provisioned.clerkConnectionId, false);
+    }
+  } catch (error) {
+    logger.error(
+      { ...context, error, clerkConnectionId: provisioned.clerkConnectionId },
+      'Identity provider connection stayed active after the SSO record refused activation',
+    );
+  }
 }
 
 export async function GET(
@@ -324,47 +344,70 @@ export async function PATCH(
 
     const effectiveActive = provisioned ? provisioned.active : row.is_active;
 
-    const updated = await principal.db.query<SSOConnectionRow>(
-      `update sso_connections set
-         display_name = $2,
-         metadata_url = $3,
-         metadata_xml = $4,
-         oidc_discovery_url = $5,
-         oidc_client_id = $6,
-         attribute_mapping = $7,
-         clerk_connection_id = coalesce($8, clerk_connection_id),
-         acs_url = coalesce($9, acs_url),
-         sp_entity_id = coalesce($10, sp_entity_id),
-         sp_metadata_url = coalesce($11, sp_metadata_url),
-         is_active = $12,
-         jit_provisioning_enabled = coalesce($13, jit_provisioning_enabled),
-         jit_default_role = coalesce($14, jit_default_role)
-       where id = $1
-       returning ${SSO_CONNECTION_SELECT_COLUMNS}`,
-      [
-        id,
-        next.displayName,
-        next.metadataUrl,
-        next.metadataXml,
-        next.oidcDiscoveryUrl,
-        next.oidcClientId,
-        JSON.stringify(next.attributeMapping),
-        provisioned?.clerkConnectionId ?? null,
-        provisioned?.acsUrl ?? null,
-        provisioned?.spEntityId ?? null,
-        provisioned?.spMetadataUrl ?? null,
-        effectiveActive,
-        update.jit_provisioning_enabled ?? null,
-        update.jit_default_role ?? null,
-      ],
-    );
+    const withdrawProvisioned = async () => {
+      if (!provisioned) return;
+      const createdHere = row.clerk_connection_id === null;
+      if (createdHere || (provisioned.active && !row.is_active)) {
+        await withdrawProviderActivation(provisioned, createdHere, {
+          userId: principal.userId,
+          connectionId: id,
+        });
+      }
+    };
+
+    let updated: SSOConnectionRow[];
+    try {
+      updated = await principal.db.query<SSOConnectionRow>(
+        `update sso_connections set
+           display_name = $2,
+           metadata_url = $3,
+           metadata_xml = $4,
+           oidc_discovery_url = $5,
+           oidc_client_id = $6,
+           attribute_mapping = $7,
+           clerk_connection_id = coalesce($8, clerk_connection_id),
+           acs_url = coalesce($9, acs_url),
+           sp_entity_id = coalesce($10, sp_entity_id),
+           sp_metadata_url = coalesce($11, sp_metadata_url),
+           is_active = $12::boolean,
+           jit_provisioning_enabled = coalesce($13, jit_provisioning_enabled),
+           jit_default_role = coalesce($14, jit_default_role)
+         where id = $1
+           and (not $12::boolean or domain_verified_at is not null)
+         returning ${SSO_CONNECTION_SELECT_COLUMNS}`,
+        [
+          id,
+          next.displayName,
+          next.metadataUrl,
+          next.metadataXml,
+          next.oidcDiscoveryUrl,
+          next.oidcClientId,
+          JSON.stringify(next.attributeMapping),
+          provisioned?.clerkConnectionId ?? null,
+          provisioned?.acsUrl ?? null,
+          provisioned?.spEntityId ?? null,
+          provisioned?.spMetadataUrl ?? null,
+          effectiveActive,
+          update.jit_provisioning_enabled ?? null,
+          update.jit_default_role ?? null,
+        ],
+      );
+    } catch (error) {
+      await withdrawProvisioned();
+      throw error;
+    }
 
     const result = updated[0];
     if (!result) {
-      return ssoErrorResponse(new Error('update returned no row'), {
-        userId: principal.userId,
-        connectionId: id,
-      });
+      await withdrawProvisioned();
+      return NextResponse.json(
+        {
+          error:
+            'This connection changed while it was being updated, and its domain is no longer verified. Verify the domain again, then retry.',
+          code: 'CONNECTION_CHANGED',
+        },
+        { status: 409 },
+      );
     }
 
     logger.info(

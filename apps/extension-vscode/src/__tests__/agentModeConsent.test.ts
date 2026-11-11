@@ -13,6 +13,7 @@ import {
   setAgentEffortWithConsent,
   setAgentModeWithConsent,
 } from '../features/permissions/agentModeConsent';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 function configurationHarness(
   initialMode: 'ask' | 'auto' | 'plan' | 'bypass' = 'auto',
@@ -120,7 +121,7 @@ describe('agent-mode bypass consent', () => {
       vscode.ConfigurationTarget.Global,
     );
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Code kept Auto mode. Bypass Permissions was not enabled.',
+      `${PRODUCT_NAMES.code} kept Auto mode. Bypass Permissions was not enabled.`,
     );
   });
 
@@ -230,7 +231,7 @@ describe('agent-mode bypass consent', () => {
     await reconcileAgentEffortConsent(context);
     expect(config.effort()).toBe('high');
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Code kept High reasoning effort. Max with Bypass Permissions was not enabled.',
+      `${PRODUCT_NAMES.code} kept High reasoning effort. Max with Bypass Permissions was not enabled.`,
     );
 
     await config.update('agent.effort', 'max');

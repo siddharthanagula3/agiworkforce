@@ -263,7 +263,9 @@
       "implementation": [
         "scripts/check-rls-boundary.mjs",
         "scripts/check-db-isolation.mjs",
-        "scripts/config/rls-boundary-allowlist.json"
+        "scripts/config/rls-boundary-allowlist.json",
+        "scripts/check-migration-table-privileges.mjs",
+        "scripts/config/migration-table-privileges.json"
       ]
     },
     {

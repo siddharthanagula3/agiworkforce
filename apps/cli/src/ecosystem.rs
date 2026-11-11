@@ -44,6 +44,19 @@ pub struct ImportedMcpServer {
     pub env: HashMap<String, String>,
     /// URL for HTTP/SSE transport servers
     pub url: Option<String>,
+    /// How a `url` server is reached, as its source config declared it.
+    #[serde(default)]
+    pub remote_transport: Option<RemoteTransport>,
+    /// Static request headers a `url` server is sent, authentication included.
+    #[serde(default)]
+    pub headers: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RemoteTransport {
+    Sse,
+    Http,
 }
 
 /// Reference to an instruction file from another tool.
@@ -529,10 +542,17 @@ fn imported_mcp_server_to_json(server: &ImportedMcpServer) -> serde_json::Value 
     }
 
     if let Some(url) = &server.url {
-        return serde_json::json!({
-            "transport": "sse",
+        let mut value = serde_json::json!({
+            "transport": server
+                .remote_transport
+                .unwrap_or_else(|| inferred_remote_transport(url)),
             "url": url,
         });
+        if !server.headers.is_empty() {
+            value["headers"] =
+                serde_json::to_value(&server.headers).unwrap_or_else(|_| serde_json::json!({}));
+        }
+        return value;
     }
 
     serde_json::json!({})
@@ -566,7 +586,9 @@ pub fn migrate_claude_code_from_home(
 
     let global_memory = copy_if_missing(
         &claude_dir.join("CLAUDE.md"),
-        &home.join(".agiworkforce").join("CLAUDE.md"),
+        &agi_config_dir.join(crate::memory::global_instructions_file(
+            crate::agent::PrivacyMode::Local,
+        )),
         dry_run,
     )?;
 
@@ -980,6 +1002,58 @@ fn sanitize_imported_command(source: &str, name: &str, command: &str) -> Option<
     Some(String::from(command))
 }
 
+fn skip_remote_server<T>(source: &str, name: &str, reason: &str) -> Option<T> {
+    eprintln!("[ecosystem] Skipping imported MCP server '{source}:{name}': {reason}");
+    None
+}
+
+fn inferred_remote_transport(url: &str) -> RemoteTransport {
+    let path = url.split(['?', '#']).next().unwrap_or(url);
+    if path.trim_end_matches('/').ends_with("/sse") {
+        RemoteTransport::Sse
+    } else {
+        RemoteTransport::Http
+    }
+}
+
+fn imported_remote_transport(
+    source: &str,
+    name: &str,
+    declared: Option<&str>,
+    url: &str,
+) -> Option<RemoteTransport> {
+    match declared.map(|kind| kind.to_ascii_lowercase()).as_deref() {
+        None => Some(inferred_remote_transport(url)),
+        Some("sse") => Some(RemoteTransport::Sse),
+        Some("http" | "streamable-http" | "streamable_http" | "streamablehttp") => {
+            Some(RemoteTransport::Http)
+        }
+        Some(other) => skip_remote_server(
+            source,
+            name,
+            &format!("transport '{other}' with a URL is not supported"),
+        ),
+    }
+}
+
+fn imported_headers(
+    source: &str,
+    name: &str,
+    headers: HashMap<String, String>,
+) -> Option<HashMap<String, String>> {
+    if let Some(header) = headers
+        .iter()
+        .find_map(|(header, value)| value.contains("${").then_some(header))
+    {
+        return skip_remote_server(
+            source,
+            name,
+            &format!("header '{header}' uses ${{...}} expansion, which AGI does not perform"),
+        );
+    }
+    Some(headers)
+}
+
 /// Extract a single server entry from a JSON config value.
 fn json_server_entry(
     source: &str,
@@ -1018,6 +1092,38 @@ fn json_server_entry(
         return None;
     }
 
+    let (remote_transport, headers) = match (&command, &url) {
+        (None, Some(url)) => {
+            let declared = config
+                .get("type")
+                .or_else(|| config.get("transport"))
+                .and_then(|v| v.as_str());
+            let transport = imported_remote_transport(source, name, declared, url)?;
+            let headers = match config.get("headers") {
+                None => HashMap::new(),
+                Some(value) => {
+                    let Some(object) = value.as_object() else {
+                        return skip_remote_server(source, name, "headers is not an object");
+                    };
+                    let mut headers = HashMap::new();
+                    for (header, value) in object {
+                        let Some(value) = value.as_str() else {
+                            return skip_remote_server(
+                                source,
+                                name,
+                                &format!("header '{header}' is not a string"),
+                            );
+                        };
+                        headers.insert(header.clone(), value.to_string());
+                    }
+                    imported_headers(source, name, headers)?
+                }
+            };
+            (Some(transport), headers)
+        }
+        _ => (None, HashMap::new()),
+    };
+
     Some(ImportedMcpServer {
         name: format!("{}:{}", source, name),
         source: source.to_string(),
@@ -1025,6 +1131,8 @@ fn json_server_entry(
         command,
         args,
         env,
+        remote_transport,
+        headers,
         url,
     })
 }
@@ -1071,6 +1179,53 @@ fn parse_toml_mcp(source: &str, contents: &str) -> Vec<ImportedMcpServer> {
                 continue;
             }
 
+            let (remote_transport, headers) = if command.is_none() {
+                if let Some(setting) = ["bearer_token_env_var", "env_http_headers"]
+                    .into_iter()
+                    .find(|setting| config.get(setting).is_some())
+                {
+                    skip_remote_server::<()>(
+                        source,
+                        name,
+                        &format!("{setting} reads a credential from the environment, which AGI does not support for a remote server"),
+                    );
+                    continue;
+                }
+                let mut headers = HashMap::new();
+                if let Some(value) = config.get("http_headers") {
+                    let Some(table) = value.as_table() else {
+                        skip_remote_server::<()>(source, name, "http_headers is not a table");
+                        continue;
+                    };
+                    let mut malformed = None;
+                    for (header, value) in table {
+                        match value.as_str() {
+                            Some(value) => {
+                                headers.insert(header.clone(), value.to_string());
+                            }
+                            None => {
+                                malformed = Some(header.clone());
+                                break;
+                            }
+                        }
+                    }
+                    if let Some(header) = malformed {
+                        skip_remote_server::<()>(
+                            source,
+                            name,
+                            &format!("header '{header}' is not a string"),
+                        );
+                        continue;
+                    }
+                }
+                let Some(headers) = imported_headers(source, name, headers) else {
+                    continue;
+                };
+                (Some(RemoteTransport::Http), headers)
+            } else {
+                (None, HashMap::new())
+            };
+
             servers.push(ImportedMcpServer {
                 name: format!("{}:{}", source, name),
                 source: source.to_string(),
@@ -1079,6 +1234,8 @@ fn parse_toml_mcp(source: &str, contents: &str) -> Vec<ImportedMcpServer> {
                 args,
                 env,
                 url,
+                remote_transport,
+                headers,
             });
         }
     }
@@ -1254,8 +1411,10 @@ pub fn format_table(detected: &[DetectedTool]) -> String {
 
     for tool in detected {
         let path_str = tool.path.to_string_lossy();
-        let path_display = if path_str.len() > 42 {
-            format!("...{}", &path_str[path_str.len() - 39..])
+        let path_chars = path_str.chars().count();
+        let path_display = if path_chars > 42 {
+            let tail: String = path_str.chars().skip(path_chars - 39).collect();
+            format!("...{tail}")
         } else {
             path_str.to_string()
         };
@@ -1481,6 +1640,106 @@ args = ["mcp"]
     }
 
     #[test]
+    fn format_table_shortens_a_long_unicode_path_on_a_character_boundary() {
+        let tool_at = |path: String| DetectedTool {
+            name: "Claude Code".to_string(),
+            path: PathBuf::from(path),
+            has_mcp: false,
+            has_skills: false,
+            has_instructions: false,
+            has_settings: false,
+            mcp_config_path: None,
+            skills_paths: Vec::new(),
+            instructions_path: None,
+        };
+
+        let short = format!("/{}/.claude", "é".repeat(20));
+        assert!(short.len() > 42);
+        assert!(format_table(&[tool_at(short.clone())]).contains(&short));
+
+        let long = format!("/{}/.claude", "é".repeat(40));
+        let tail: String = long.chars().skip(long.chars().count() - 39).collect();
+        let table = format_table(&[tool_at(long)]);
+        assert!(table.contains(&format!("...{tail}")), "{table}");
+    }
+
+    #[test]
+    fn remote_import_keeps_the_declared_transport_and_headers_for_the_loader() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let source = tmp.path().join("mcp.json");
+        let path = tmp.path().join(".mcp.json");
+        let servers = parse_json_mcp(
+            "claude",
+            r#"{"mcpServers":{
+                "api":{"type":"http","url":"https://mcp.example.test/mcp","headers":{"Authorization":"Bearer synthetic"}},
+                "events":{"type":"sse","url":"https://mcp.example.test/events","headers":{"X-Key":"synthetic"}}
+            }}"#,
+            &source,
+        );
+        assert_eq!(servers.len(), 2);
+
+        merge_imported_mcp_servers_to_file(&servers, &path, false).unwrap();
+        let written: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let loaded = |name: &str| {
+            serde_json::from_value::<crate::mcp::McpServerConfig>(
+                written["mcpServers"][name].clone(),
+            )
+            .unwrap()
+            .into_transport()
+        };
+
+        match loaded("claude:api") {
+            crate::mcp::McpTransport::Http { url, headers, .. } => {
+                assert_eq!(url, "https://mcp.example.test/mcp");
+                assert_eq!(headers["Authorization"], "Bearer synthetic");
+            }
+            other => panic!("expected an HTTP server, got {other:?}"),
+        }
+        match loaded("claude:events") {
+            crate::mcp::McpTransport::Sse { headers, .. } => {
+                assert_eq!(headers["X-Key"], "synthetic");
+            }
+            other => panic!("expected an SSE server, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn remote_import_refuses_a_shape_it_cannot_reproduce() {
+        let source = Path::new("mcp.json");
+        let servers = parse_json_mcp(
+            "claude",
+            r#"{"mcpServers":{
+                "socket":{"type":"websocket","url":"wss://mcp.example.test"},
+                "templated":{"type":"http","url":"https://mcp.example.test/mcp","headers":{"Authorization":"Bearer ${TOKEN}"}},
+                "numeric":{"type":"http","url":"https://mcp.example.test/mcp","headers":{"X-Retries":3}},
+                "plain":{"url":"https://mcp.example.test/mcp"}
+            }}"#,
+            source,
+        );
+        let names: Vec<_> = servers.iter().map(|server| server.name.as_str()).collect();
+        assert_eq!(names, ["claude:plain"]);
+        assert_eq!(servers[0].remote_transport, Some(RemoteTransport::Http));
+
+        let codex = parse_toml_mcp(
+            "codex",
+            r#"
+            [mcp_servers.env_token]
+            url = "https://mcp.example.test/mcp"
+            bearer_token_env_var = "SYNTHETIC_TOKEN"
+
+            [mcp_servers.static]
+            url = "https://mcp.example.test/mcp"
+            http_headers = { "X-Key" = "synthetic" }
+            "#,
+        );
+        assert_eq!(codex.len(), 1);
+        assert_eq!(codex[0].name, "codex:static");
+        assert_eq!(codex[0].remote_transport, Some(RemoteTransport::Http));
+        assert_eq!(codex[0].headers["X-Key"], "synthetic");
+    }
+
+    #[test]
     fn test_json_server_entry_no_command_or_url() {
         let config = serde_json::json!({"description": "just metadata"});
         let srv = json_server_entry("test", "empty", &config);
@@ -1500,6 +1759,8 @@ args = ["mcp"]
                 args: vec!["-y".into(), "@stripe/mcp".into()],
                 env: HashMap::new(),
                 url: None,
+                remote_transport: None,
+                headers: HashMap::new(),
             },
             ImportedMcpServer {
                 name: "claude:remote".into(),
@@ -1509,6 +1770,8 @@ args = ["mcp"]
                 args: Vec::new(),
                 env: HashMap::new(),
                 url: Some("http://localhost:3000/sse".into()),
+                remote_transport: None,
+                headers: HashMap::new(),
             },
         ];
 
@@ -1556,7 +1819,17 @@ args = ["mcp"]
 
         assert_eq!(report.mcp.added, vec!["claude:docs"]);
         assert_eq!(report.global_memory.status, FileCopyStatus::Created);
-        assert!(home.path().join(".agiworkforce/CLAUDE.md").is_file());
+        assert!(agi.path().join("CLAUDE.md").is_file());
+        assert!(!home.path().join(".agiworkforce/CLAUDE.md").exists());
+        let loaded_global = crate::compaction::with_config_home(agi.path(), || {
+            crate::memory::MemoryManager::new(home.path(), crate::agent::PrivacyMode::Local)
+                .load_all()
+                .into_iter()
+                .find(|entry| entry.source == crate::memory::MemoryTier::Global)
+        })
+        .expect("the Local memory loader reads the migrated file");
+        assert_eq!(loaded_global.file_path, agi.path().join("CLAUDE.md"));
+        assert_eq!(loaded_global.content, "global instructions");
         assert!(agi.path().join("prompts/claude/review.md").is_file());
         assert!(agi.path().join("prompts/claude/nested/fix.md").is_file());
         assert!(agi.path().join("skills/claude/reviewer/SKILL.md").is_file());
@@ -1599,7 +1872,7 @@ args = ["mcp"]
         assert!(report.dry_run);
         assert_eq!(report.global_memory.status, FileCopyStatus::DryRunCreate);
         assert_eq!(report.hooks.status, FileCopyStatus::DryRunCreate);
-        assert!(!home.path().join(".agiworkforce/CLAUDE.md").exists());
+        assert!(!agi.path().join("CLAUDE.md").exists());
         assert!(!agi.path().join(".mcp.json").exists());
         assert!(!agi.path().join("prompts/claude/review.md").exists());
         assert!(!agi.path().join("skills/claude/reviewer/SKILL.md").exists());

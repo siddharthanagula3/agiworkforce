@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { createHash } from 'node:crypto';
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   ManagedCloudScheduleRunApprovalToolCallSchema,
@@ -326,9 +328,33 @@ export async function listPendingSlackApprovals(
   });
 }
 
+export function slackApprovalGeneration(
+  checkpoint: Pick<
+    ScheduledRunApprovalCheckpoint,
+    'turnId' | 'nextEventSequence' | 'completedSteps' | 'pendingToolCalls'
+  >,
+): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        checkpoint.turnId,
+        checkpoint.nextEventSequence,
+        checkpoint.completedSteps,
+        checkpoint.pendingToolCalls.map((call) => call.id).sort(),
+      ]),
+    )
+    .digest('hex')
+    .slice(0, 24);
+}
+
 export async function claimSlackRunApproval(
   scopedDb: DatabaseAdapter,
-  input: { userId: string; runId: string; approval: ManagedCloudScheduleRunApproval },
+  input: {
+    userId: string;
+    runId: string;
+    approval: ManagedCloudScheduleRunApproval;
+    generation?: string;
+  },
 ): Promise<{ run: SlackRun; checkpoint: ScheduledRunApprovalCheckpoint }> {
   const claimed = await scopedDb.transaction(async (tx) => {
     const [row] = await tx.query<
@@ -360,6 +386,15 @@ export async function claimSlackRunApproval(
     const checkpoint = checkpointOf(row.approval_checkpoint);
     if (!checkpoint) {
       throw new SlackRunApprovalError('This request can no longer be resumed', 'stale');
+    }
+    if (
+      input.generation !== undefined &&
+      input.generation !== slackApprovalGeneration(checkpoint)
+    ) {
+      throw new SlackRunApprovalError(
+        'This approval card is out of date. Review the current request in AGI.',
+        'stale',
+      );
     }
     const pending = checkpoint.pendingToolCalls.map((call) => call.id).sort();
     const decided = [...new Set(input.approval.toolCallIds)].sort();

@@ -3881,6 +3881,7 @@ export function getWebviewContent(
     let streaming = false;
     let mentionIndex = -1;
     let mentionStart = -1;
+    let mentionQuery = null;
     let pendingFileReferences = [];
     let activePlanCard = null;
     let currentAssistantEl = null;
@@ -5274,6 +5275,9 @@ export function getWebviewContent(
           return;
         }
       }
+      if (e.key === 'Escape' && mentionQuery !== null && !mentionDropdown.classList.contains('visible')) {
+        hideMentionDropdown();
+      }
       // @mention dropdown navigation
       if (mentionDropdown.classList.contains('visible')) {
         var items = mentionDropdown.querySelectorAll('.mention-item');
@@ -5925,7 +5929,7 @@ export function getWebviewContent(
             event.stopPropagation();
             return;
           }
-          if (event.key === 'Enter') {
+          if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
             event.preventDefault();
             var first = menuItemsOf(slashMenu)[0];
             if (first) first.click();
@@ -6368,7 +6372,8 @@ export function getWebviewContent(
       guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
       guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
       guidance.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!guidance.value.trim()) return;
         event.preventDefault();
         vscode.postMessage({
           type: 'respondToApproval',
@@ -6454,7 +6459,8 @@ export function getWebviewContent(
           : 'Type your answer, then press Enter';
       typed.setAttribute('aria-label', 'Your answer');
       typed.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !typed.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!typed.value.trim()) return;
         event.preventDefault();
         answer(typed.value.trim());
       });
@@ -7170,7 +7176,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'fileSearchResults') {
-        showMentionResults(msg.payload.files);
+        if (msg.payload.query === mentionQuery) showMentionResults(msg.payload.files);
       }
 
       else if (msg.type === 'composerDraft') {
@@ -7442,6 +7448,7 @@ export function getWebviewContent(
         var query = val.substring(i + 1, pos);
         if (query.length > 0 && !/\\s/.test(query)) {
           mentionStart = i;
+          mentionQuery = query;
           vscode.postMessage({ type: 'fileSearch', payload: { query: query } });
           return;
         }
@@ -7454,6 +7461,7 @@ export function getWebviewContent(
       mentionDropdown.innerHTML = '';
       mentionIndex = -1;
       mentionStart = -1;
+      mentionQuery = null;
       userInput.setAttribute('aria-expanded', 'false');
       userInput.removeAttribute('aria-activedescendant');
     }
@@ -7497,6 +7505,11 @@ export function getWebviewContent(
 
     function insertMention(file) {
       var val = userInput.value;
+      if (mentionStart < 0 || mentionQuery === null
+        || val.substring(mentionStart, userInput.selectionStart) !== '@' + mentionQuery) {
+        hideMentionDropdown();
+        return;
+      }
       var before = val.substring(0, mentionStart);
       var after = val.substring(userInput.selectionStart);
       var referencedEndLine = file.range && file.range.endCharacter === 0 && file.range.endLine > file.range.startLine

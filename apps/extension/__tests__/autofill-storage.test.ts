@@ -81,10 +81,20 @@ describe('clearAutofillProfile, SEC-49 erasure path', () => {
     expect(local.store['agi_autofill_profile']).toBeUndefined();
   });
 
-  it('resolves without throwing when storage is unavailable', async () => {
+  it('rejects and keeps the saved profile when the removal fails', async () => {
+    const { local } = installChromeStub();
+    await local.set({ agi_autofill_profile: { email: 'ada@example.test' } });
+    vi.spyOn(local, 'remove').mockRejectedValue(new Error('Storage unavailable'));
+    const { clearAutofillProfile, loadAutofillProfile } =
+      await import('../src/features/content/autofill/filler');
+    await expect(clearAutofillProfile()).rejects.toThrow('Storage unavailable');
+    expect(await loadAutofillProfile()).toEqual({ email: 'ada@example.test' });
+  });
+
+  it('rejects when storage is unavailable', async () => {
     (globalThis as { chrome?: unknown }).chrome = undefined;
     const { clearAutofillProfile } = await import('../src/features/content/autofill/filler');
-    await expect(clearAutofillProfile()).resolves.toBeUndefined();
+    await expect(clearAutofillProfile()).rejects.toThrow();
   });
 });
 

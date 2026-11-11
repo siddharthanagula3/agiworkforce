@@ -241,7 +241,7 @@ describe('GET /api/projects · conversation counts', () => {
       .map((call) => String(call[0]))
       .find((sql) => sql.includes('from user_projects'));
     expect(projectSql).toContain('conversation_count');
-    expect(projectSql).toContain('c.organization_id is not distinct from $5::uuid');
+    expect(projectSql).toContain('c.organization_id is not distinct from $4::uuid');
   });
 });
 

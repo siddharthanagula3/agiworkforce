@@ -35,7 +35,7 @@ import {
 } from './slack-installations';
 import {
   readSlackChannelSetting,
-  readSlackChannelToolsOrNone,
+  readSlackChannelSettingOrNoTools,
   slackRunModeFor,
 } from './slack-channel-policies';
 import { issueSlackLinkRequest, resolveSlackAccountLink } from './slack-links';
@@ -51,6 +51,7 @@ import {
   claimSlackRunApproval,
   parkSlackRunForApproval,
   settleSlackRun,
+  slackApprovalGeneration,
   startSlackRun,
   type SlackRun,
 } from './slack-runs';
@@ -184,7 +185,10 @@ async function publishOutcome(input: {
     const subject = run.mode === 'task' ? 'task' : 'answer';
     await sendPrivately(
       destination,
-      approvalMessage(outcome.approval.toolCalls, settingsUrl, subject, run.id),
+      approvalMessage(outcome.approval.toolCalls, settingsUrl, subject, {
+        runId: run.id,
+        generation: slackApprovalGeneration(outcome.approval.checkpoint),
+      }),
     );
     await recordNotification(scopedDb, {
       userId: run.userId,
@@ -457,6 +461,7 @@ export async function claimSlackApproval(input: {
   userId: string;
   runId: string;
   approval: ManagedCloudScheduleRunApproval;
+  generation?: string;
 }): Promise<() => Promise<void>> {
   const origin = slackAppOrigin();
   if (!origin) throw new SlackApprovalUnavailableError('AGI in Slack is not configured');
@@ -464,6 +469,7 @@ export async function claimSlackApproval(input: {
     userId: input.userId,
     runId: input.runId,
     approval: input.approval,
+    ...(input.generation === undefined ? {} : { generation: input.generation }),
   });
   const runScope = createClaimedUserScopedDb(input.serviceDb, {
     userId: run.userId,
@@ -479,14 +485,27 @@ export async function claimSlackApproval(input: {
       'This Slack workspace is no longer connected, so the answer cannot continue.',
     );
   }
-  const channelTools =
+  const channelSetting =
     run.surface === 'channel'
-      ? await readSlackChannelToolsOrNone(input.serviceDb, run.installationId, run.channelId)
+      ? await readSlackChannelSettingOrNoTools(input.serviceDb, run.installationId, run.channelId)
       : null;
+  const channelTools = channelSetting ? channelSetting.tools : null;
   const opened = run.mode === 'task' ? await findSlackTask(runScope, run) : null;
   const task: TaskHolder = {
     current: opened ? slackTask({ db: runScope, run, instruction: '', opened }) : null,
   };
+  if (channelSetting?.mode === 'off') {
+    await task.current?.settle({ kind: 'failed' }).catch((taskError: unknown) => {
+      logger.error({ error: taskError, runId: run.id }, 'Slack task could not be settled');
+    });
+    await settleSlackRun(runScope, run, {
+      status: 'failed',
+      error: 'slack_channel_off: the channel was turned off before approval',
+    });
+    throw new SlackApprovalUnavailableError(
+      'AGI in Slack was turned off for this channel, so the answer cannot continue.',
+    );
+  }
   return () =>
     answerSafely({
       scopedDb: runScope,

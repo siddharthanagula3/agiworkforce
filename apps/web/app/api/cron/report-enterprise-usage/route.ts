@@ -32,14 +32,21 @@ export async function GET(request: NextRequest) {
 
   const failed = results.filter((result) => result.status === 'failed').length;
   const reported = results.filter((result) => result.status === 'reported').length;
+  const closeouts = results.flatMap((result) => (result.closeout ? [result.closeout] : []));
+  const writtenOffCents = closeouts.reduce((sum, closeout) => sum + closeout.writtenOffCents, 0);
 
   logger.info(
-    { examined: results.length, reported, failed },
+    { examined: results.length, reported, failed, closedOut: closeouts.length, writtenOffCents },
     'Enterprise overage reporting completed',
   );
 
   return NextResponse.json(
-    { message: 'Enterprise overage reporting completed', results },
+    {
+      message: 'Enterprise overage reporting completed',
+      closedOut: closeouts.length,
+      writtenOffCents,
+      results,
+    },
     { status: failed > 0 && failed === results.length ? 500 : 200 },
   );
 }

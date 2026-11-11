@@ -21,12 +21,15 @@ after(() => {
 });
 
 /** The real gate and the real offboarding path, so a pass here is a real pass. */
-function sandbox({ gate = null, deprovision = null } = {}) {
+const REFRESH_FAMILY = 'apps/web/lib/server/refresh-token-family.ts';
+
+function sandbox({ gate = null, deprovision = null, refreshFamily = null } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'membership-revocation-'));
   sandboxes.push(dir);
   for (const [relativePath, edit] of [
     [ROUTE_GATE, gate],
     [DEPROVISION, deprovision],
+    [REFRESH_FAMILY, refreshFamily],
   ]) {
     const source = readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
     mkdirSync(path.join(dir, path.dirname(relativePath)), { recursive: true });
@@ -101,4 +104,43 @@ test('the credential classes come out of the gate', () => {
   const verifiers = credentialVerifiers(readFileSync(path.join(REPO_ROOT, ROUTE_GATE), 'utf8'));
   assert.ok(verifiers.includes('verifyKey'), verifiers.join(', '));
   assert.ok(verifiers.includes('getRequestIdentity'), verifiers.join(', '));
+});
+
+test('a device token revoked through the shared family helper counts for the workspace', () => {
+  const { failures, report } = run();
+  assert.deepEqual(failures, []);
+  assert.equal(report.revoked, report.credentials);
+});
+
+test('the family helper losing its workspace binding would reach another tenant', () => {
+  const { failures } = run({
+    refreshFamily: (source) =>
+      source.replace(/(const REVOKE_WORKSPACE = `[\s\S]*?)\n\s+and organization_id = \$2/, '$1'),
+  });
+  assert.ok(
+    mentions(failures, 'public.device_refresh_tokens names no workspace'),
+    failures.join('\n'),
+  );
+});
+
+test('a family helper that stops revoking leaves the device token alive', () => {
+  const { failures } = run({
+    refreshFamily: (source) =>
+      source.replace(
+        /(const REVOKE_WORKSPACE = `[\s\S]*?)set revoked_at = coalesce\(revoked_at, now\(\)\)/,
+        '$1set last_used_at = now()',
+      ),
+  });
+  assert.ok(mentions(failures, 'a device access token'), failures.join('\n'));
+});
+
+test('an account-wide statement beside the helper is not borrowed for the workspace', () => {
+  const { failures } = run({
+    deprovision: (source) =>
+      source.replace(
+        'revokeWorkspaceDeviceRefreshFamilies(db, {\n      userId,\n      organizationId,\n    })',
+        'revokeEveryDeviceRefreshFamily(db, userId)',
+      ),
+  });
+  assert.ok(mentions(failures, 'a device access token'), failures.join('\n'));
 });

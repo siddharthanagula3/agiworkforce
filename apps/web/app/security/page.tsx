@@ -54,7 +54,7 @@ const BOUNDARIES = [
   {
     meta: 'Local',
     title: 'Nothing we operate is in the path.',
-    body: `CLI Local mode runs the model on your own hardware through ${CLI_LOCAL_RUNTIMES.label}. The request stays between the CLI and the loopback runtime, with no AGI server or subprocessor in the path. The current public Desktop is cloud only.`,
+    body: `CLI Local mode runs the model on your own hardware through ${CLI_LOCAL_RUNTIMES.label}. The request stays between the CLI and the loopback runtime, with no AGI server or subprocessor in the path. Desktop chat uses Cloud; a Desktop local coding session runs the CLI and can use the same runtimes.`,
   },
   {
     meta: 'BYOK',
@@ -137,7 +137,7 @@ const AT_REST: { label: string; value: string }[] = [
   {
     label: 'Desktop account data',
     value:
-      'The current Electron Desktop is a cloud account shell. Conversations, projects, and account state use the same encrypted hosted stores as Web; this public Desktop does not keep a separate Local or BYOK chat database.',
+      'Desktop chat conversations, projects, and account state use the same encrypted hosted stores as Web, and Desktop keeps no chat database of its own. For a local coding session, Desktop signs the CLI in to your account, and the CLI keeps that sign-in in the operating system credential store.',
   },
   {
     label: 'CLI provider credentials',

@@ -1,20 +1,20 @@
 {
-  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "schemaVersion": 1,
   "generatedFrom": "git ls-files, pnpm-workspace.yaml, Cargo.toml members, package and crate manifests, tsconfig paths, docs/agent-context/repo-map.json, docs/agent-context/lanes.json, and the TypeScript and Rust dependency graphs",
-  "trackedFiles": 18127,
-  "fileNodes": 18127,
+  "trackedFiles": 19046,
+  "fileNodes": 19046,
   "units": 194,
-  "routes": 1027,
-  "migrations": 686,
-  "symbols": 42836,
-  "workspaceEdges": 216,
+  "routes": 1038,
+  "migrations": 740,
+  "symbols": 44142,
+  "workspaceEdges": 218,
   "generatorEdges": 15,
   "unparsed": {
-    "binary": 148,
-    "oversize": 15,
+    "binary": 155,
+    "oversize": 21,
     "lockfile": 2,
-    "notCode": 2406,
+    "notCode": 2475,
     "parseError": 0
   },
   "unmappedDependencies": [
@@ -35,6 +35,7 @@
   ],
   "limits": [
     "Every git-tracked path is a file node. Gitignored build output, dependencies, and the iOS prebuild tree are outside the graph.",
+    "A tracked path the renderer is told is opaque, such as a measurement file named after the model it measured, is folded into one record for its directory with a count, because the model registry owns every model id.",
     "Export and import names come from a scan of code tokens. A name built by concatenation is not expanded.",
     "export * and pub use glob re-exports keep an edge to the target module and do not copy that module's names.",
     "A call inside a function body is not an edge. Follow the import to the file and read it.",
@@ -58,6 +59,7 @@
     "migration",
     "stats"
   ],
+  "foldedFiles": 80,
   "shards": [
     "knowledge-graph/files/agents.jsonl",
     "knowledge-graph/files/apps__cli.jsonl",

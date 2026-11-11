@@ -1,6 +1,6 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useState } from 'react';
-import { View, Modal, StyleSheet } from 'react-native';
+import { Alert, View, Modal, StyleSheet } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -8,9 +8,10 @@ import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native'
 
 import { Text } from '@/components/ui/Text';
 import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
+import { preferredImpactHaptic, preferredNotificationHaptic } from '@/src/shared/utils/haptics';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { exportToPDF, exportToText, shareFile, type ExportResult } from '@/services/fileCreation';
+import { exportToPDF, exportToText, shareFile } from '@/services/fileCreation';
 
 interface FileExportButtonProps {
   content: string;
@@ -82,7 +83,7 @@ export function FileExportButton({
 
   const showSuccess = useCallback((action: ExportAction) => {
     setSuccess(action);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     setTimeout(() => {
       setSuccess(null);
     }, 1500);
@@ -92,35 +93,32 @@ export function FileExportButton({
     async (action: ExportAction) => {
       if (loading) return;
       setLoading(action);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      preferredImpactHaptic(Haptics.ImpactFeedbackStyle.Light);
 
       try {
-        let result: ExportResult | null = null;
-
         switch (action) {
           case 'pdf':
-            result = await exportToPDF(content, title);
-            showSuccess(action);
-            break;
-
-          case 'text':
-            result = await exportToText(content, title);
-            showSuccess(action);
-            break;
-
-          case 'copy':
-            if (await copy(content)) showSuccess(action);
-            break;
-
           case 'share': {
-            result = await exportToPDF(content, title);
+            const result = await exportToPDF(content, title);
             await shareFile(result.uri);
             showSuccess(action);
             break;
           }
+
+          case 'text': {
+            const result = await exportToText(content, title);
+            await shareFile(result.uri);
+            showSuccess(action);
+            break;
+          }
+
+          case 'copy':
+            if (await copy(content)) showSuccess(action);
+            break;
         }
-      } catch (err) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } catch {
+        preferredNotificationHaptic(Haptics.NotificationFeedbackType.Error);
+        Alert.alert('Export Failed', 'Could not export or share this message. Try again.');
         setLoading(null);
       } finally {
         setLoading(null);

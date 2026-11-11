@@ -6,6 +6,7 @@ import {
   resolveCliPath,
   type CliResolutionHost,
 } from '../platform/remoteEnvironment';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 function host(
   executables: string[],
@@ -73,7 +74,7 @@ describe('testing the CLI in the environment', () => {
     const result = await probeCli('/usr/bin/agi', async () => 'agi 1.4.0');
     expect(result).toEqual({ ok: true, cliPath: '/usr/bin/agi', version: 'agi 1.4.0' });
     expect(cliProbeMessage(result, describeRemoteEnvironment('wsl'))).toBe(
-      'AGI Code: agi 1.4.0 runs from /usr/bin/agi in WSL.',
+      `${PRODUCT_NAMES.code}: agi 1.4.0 runs from /usr/bin/agi in WSL.`,
     );
   });
 

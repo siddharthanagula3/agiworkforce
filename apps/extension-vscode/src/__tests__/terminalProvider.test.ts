@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   TerminalProvider,
   activateTerminal,
@@ -25,14 +26,14 @@ function token(): vscode.CancellationToken {
 }
 
 function spyTerminal(): { sendText: ReturnType<typeof vi.fn> } {
-  const terminal = { name: 'AGI Code', show: vi.fn(), sendText: vi.fn(), dispose: vi.fn() };
+  const terminal = { name: PRODUCT_NAMES.code, show: vi.fn(), sendText: vi.fn(), dispose: vi.fn() };
   vi.mocked(vscode.window.createTerminal).mockReturnValue(terminal as never);
   return terminal;
 }
 
 function openTerminalAt(cwd: string): { sendText: ReturnType<typeof vi.fn> } {
   const terminal = {
-    name: 'AGI Code',
+    name: PRODUCT_NAMES.code,
     show: vi.fn(),
     sendText: vi.fn(),
     dispose: vi.fn(),
@@ -361,7 +362,7 @@ describe('provider sign-in', () => {
 
       expect(terminal.sendText).not.toHaveBeenCalled();
       expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-        'AGI Code: no provider was named, so there is nothing to sign in to.',
+        `${PRODUCT_NAMES.code}: no provider was named, so there is nothing to sign in to.`,
       );
     },
   );

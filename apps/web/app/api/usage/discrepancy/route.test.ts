@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/logger');
 type ScanModule1 = typeof import('@/lib/api-auth');
 type ScanModule2 = typeof import('@/lib/csrf');
@@ -189,7 +190,7 @@ describe('POST /api/usage/discrepancy', () => {
       '  2026-08-22: 5 requests, 7.5 credits',
       '  model-a: 9 requests, 12.5 credits',
       '  chat: 9 requests, 12.5 credits',
-      '  Plan: Pro',
+      `  Plan: ${getBillingPlanPricing('pro').label}`,
       '  5-hour window: used 12.25 credits of 50 credits',
       '  Week: used 120 credits of 500 credits',
       '  Month: used 400 credits of 2,000 credits, resets 2026-09-01T00:00:00.000Z',

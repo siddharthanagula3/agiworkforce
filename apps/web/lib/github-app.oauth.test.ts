@@ -183,6 +183,7 @@ describe('GitHub App user authorization ownership proof', () => {
       accountLogin: 'verified-org',
       accountType: 'Organization',
       verifiedRepositories: ['verified-org/app'],
+      writableRepositories: [],
     });
     expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(mockFetch.mock.calls[0]?.[0]).toBe(
@@ -222,6 +223,59 @@ describe('GitHub App user authorization ownership proof', () => {
     expect(mockFetch.mock.calls[1]?.[0]).toBe(
       'https://api.github.com/user/installations/42/repositories?per_page=100&page=1',
     );
+  });
+
+  it('records only the repositories the account can push to, and none when permissions are absent', async () => {
+    // GITHUB-LINK-REPOSITORY-AUTHORITY-COLLAPSE-01: visibility is not write authority.
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            total_count: 1,
+            installations: [{ id: 42, account: { login: 'big-org', type: 'Organization' } }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            total_count: 6,
+            repositories: [
+              {
+                full_name: 'Big-Org/Reader',
+                permissions: { admin: false, push: false, pull: true },
+              },
+              {
+                full_name: 'Big-Org/Pusher',
+                permissions: { admin: false, push: true, pull: true },
+              },
+              { full_name: 'Big-Org/Maintainer', permissions: { admin: false, maintain: true } },
+              { full_name: 'Big-Org/Admin', permissions: { admin: true } },
+              { full_name: 'Big-Org/Triager', permissions: { triage: true, pull: true } },
+              { full_name: 'Big-Org/NoPermissions' },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    const github = await loadConfiguredGitHubApp();
+
+    const installation = await github.findGitHubInstallationForUser('ghu_ephemeral', 42);
+
+    expect(installation?.verifiedRepositories).toEqual([
+      'big-org/reader',
+      'big-org/pusher',
+      'big-org/maintainer',
+      'big-org/admin',
+      'big-org/triager',
+      'big-org/nopermissions',
+    ]);
+    expect(installation?.writableRepositories).toEqual([
+      'big-org/pusher',
+      'big-org/maintainer',
+      'big-org/admin',
+    ]);
   });
 
   it('refuses the link rather than recording a short repository set', async () => {

@@ -3,7 +3,7 @@ import { AgiMark } from '@agiworkforce/ui';
 
 import { useSession } from '@/lib/identity/client';
 import { AlertTriangle, Flag, RefreshCw } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   fetchContentReportQueue,
@@ -41,7 +41,14 @@ export default function ContentReportQueuePanel() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
 
+  const viewRef = useRef(view);
+  const loadGeneration = useRef(0);
+
   const loadQueue = useCallback(async () => {
+    const generation = ++loadGeneration.current;
+    const requestedView = viewRef.current;
+    const isCurrent = () =>
+      generation === loadGeneration.current && requestedView === viewRef.current;
     setLoading(true);
     setLoadError(null);
     try {
@@ -49,20 +56,23 @@ export default function ContentReportQueuePanel() {
       if (!token) throw new Error('Admin session token is unavailable');
       const data = await fetchContentReportQueue(
         token,
-        view === 'open' ? OPEN_STATUSES : RESOLVED_STATUSES,
+        requestedView === 'open' ? OPEN_STATUSES : RESOLVED_STATUSES,
       );
+      if (!isCurrent()) return;
       setReports(data.reports);
       setCounts(data.counts);
     } catch (error) {
+      if (!isCurrent()) return;
       setLoadError(toUserMessage(error, 'Unable to load content reports'));
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [getToken, view]);
+  }, [getToken]);
 
   useEffect(() => {
+    viewRef.current = view;
     void loadQueue();
-  }, [loadQueue]);
+  }, [loadQueue, view]);
 
   async function applyDisposition(report: AdminContentReport, status: ContentReportStatus) {
     if (pendingId) return;
@@ -189,6 +199,15 @@ export default function ContentReportQueuePanel() {
             {report.userNote ? (
               <p className="mt-2 whitespace-pre-wrap break-words text-sm text-muted-foreground">
                 Reporter note: {report.userNote}
+              </p>
+            ) : null}
+            {report.asset ? (
+              <p className="mt-2 break-all text-xs text-muted-foreground">
+                Reported {report.asset.kind} reference, as the reporter sent it and never opened
+                here: <code className="font-mono">{report.asset.reference}</code>
+                {report.asset.inlineHeaderOnly
+                  ? ' (inline data: only its header was sent, the bytes stayed on the reporter’s device)'
+                  : null}
               </p>
             ) : null}
             <p className="mt-2 font-mono text-xs text-muted-foreground">

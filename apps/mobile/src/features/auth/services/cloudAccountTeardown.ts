@@ -81,6 +81,11 @@ function clearLocalCloudAccountStateNow(): void {
     clearAccountScopedDrafts();
   });
 
+  runTeardownStep('composer handoff', () => {
+    const { clearComposerHandoff } = require('@/src/features/chat/composerHandoff');
+    clearComposerHandoff();
+  });
+
   runTeardownStep('memory cache', () => {
     const { useCloudMemoryStore } = require('@/stores/memory/cloudMemoryStore');
     useCloudMemoryStore.getState().clearCloudMemoryData();
@@ -161,6 +166,11 @@ function clearLocalCloudAccountStateNow(): void {
     useScheduleStore.getState().clearAccountSchedules();
   });
 
+  runTeardownStep('connector policy', () => {
+    const { invalidateConnectorPolicy } = require('@/services/connectors');
+    invalidateConnectorPolicy();
+  });
+
   runTeardownStep('API authentication work', () => {
     const { resetApiAccountState } = require('@/services/api');
     resetApiAccountState();
@@ -174,6 +184,11 @@ function clearLocalCloudAccountStateNow(): void {
   runTeardownStep('notification center', () => {
     const { notificationCenterStore } = require('@/services/notifications');
     notificationCenterStore.clear();
+  });
+
+  runTeardownStep('account notification feed', () => {
+    const { useAccountNotificationFeed } = require('@/src/features/notifications/accountFeed');
+    useAccountNotificationFeed.getState().reset();
   });
 
   runTeardownStep('background approval notifications', () => {

@@ -5,6 +5,7 @@ import { Button, Switch, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   BREAK_REMINDER_MINUTES,
   TIME_FOCUS_PREFERENCES_NAMESPACE,
+  clockTimeToMinutes,
   defaultTimeFocusPreferences,
   normalizeTimeFocusPreferences,
   type TimeFocusPreferences,
@@ -91,6 +92,14 @@ export function TimeFocusSection() {
   async function save() {
     if (draft.quietHours.enabled && draft.quietHours.days.length === 0) {
       setMessage({ text: 'Choose at least one quiet-hours day.', prefix: null });
+      return;
+    }
+    if (
+      draft.quietHours.enabled &&
+      (clockTimeToMinutes(draft.quietHours.startTime) === null ||
+        clockTimeToMinutes(draft.quietHours.endTime) === null)
+    ) {
+      setMessage({ text: 'Enter both a start and an end time.', prefix: null });
       return;
     }
     if (draft.quietHours.enabled && draft.quietHours.startTime === draft.quietHours.endTime) {

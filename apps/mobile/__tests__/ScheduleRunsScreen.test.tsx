@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -146,6 +146,75 @@ describe('Scheduled runs screen', () => {
     expect(mockApiGet).toHaveBeenLastCalledWith(expect.stringContaining('cursor=cursor-1'));
     expect(useScheduleStore.getState().recentRuns.map((run) => run.id)).toEqual(['run-3', 'run-2']);
     expect(useScheduleStore.getState().recentRunsCursor).toBeNull();
+  });
+
+  it('retries the newest page when a refresh of a fully loaded feed fails', async () => {
+    mockApiGet.mockResolvedValueOnce({
+      runs: [apiRun('run-1', 'Weekly review')],
+      nextCursor: null,
+    });
+    mockApiGet.mockRejectedValueOnce(new Error('503'));
+    mockApiGet.mockResolvedValueOnce({
+      runs: [apiRun('run-2', 'Daily digest'), apiRun('run-1', 'Weekly review')],
+      nextCursor: null,
+    });
+
+    const { getByText, getByLabelText, queryByText } = render(<ScheduledRunsScreen />);
+    await waitFor(() => expect(getByText('Weekly review')).toBeTruthy());
+    await act(() => useScheduleStore.getState().fetchRecentRuns());
+    expect(
+      getByText('Could not load scheduled runs. Check your connection and retry.'),
+    ).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Retry loading scheduled runs'));
+
+    await waitFor(() => expect(getByText('Daily digest')).toBeTruthy());
+    expect(mockApiGet).toHaveBeenCalledTimes(3);
+    expect(mockApiGet).toHaveBeenLastCalledWith(
+      expect.stringMatching(/^\/api\/schedules\/runs\?limit=\d+$/),
+    );
+    expect(
+      queryByText('Could not load scheduled runs. Check your connection and retry.'),
+    ).toBeNull();
+  });
+
+  it('does not treat an older page as recovery from a failed refresh', async () => {
+    mockApiGet.mockResolvedValueOnce({ runs: [apiRun('run-3', 'Third')], nextCursor: 'cursor-1' });
+    mockApiGet.mockRejectedValueOnce(new Error('503'));
+    mockApiGet.mockResolvedValueOnce({ runs: [apiRun('run-2', 'Second')], nextCursor: null });
+    mockApiGet.mockResolvedValueOnce({ runs: [apiRun('run-4', 'Fourth')], nextCursor: null });
+
+    const { getByText, getByLabelText } = render(<ScheduledRunsScreen />);
+    await waitFor(() => expect(getByText('Third')).toBeTruthy());
+    await act(() => useScheduleStore.getState().fetchRecentRuns());
+    await act(() => useScheduleStore.getState().fetchMoreRecentRuns());
+
+    expect(getByText('Second')).toBeTruthy();
+    expect(
+      getByText('Could not load scheduled runs. Check your connection and retry.'),
+    ).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Retry loading scheduled runs'));
+
+    await waitFor(() => expect(getByText('Fourth')).toBeTruthy());
+    expect(mockApiGet).toHaveBeenLastCalledWith(
+      expect.stringMatching(/^\/api\/schedules\/runs\?limit=\d+$/),
+    );
+  });
+
+  it('retries the same older page when loading more fails', async () => {
+    mockApiGet.mockResolvedValueOnce({ runs: [apiRun('run-3', 'Third')], nextCursor: 'cursor-1' });
+    mockApiGet.mockRejectedValueOnce(new Error('503'));
+    mockApiGet.mockResolvedValueOnce({ runs: [apiRun('run-2', 'Second')], nextCursor: null });
+
+    const { getByText, getByLabelText } = render(<ScheduledRunsScreen />);
+    await waitFor(() => expect(getByText('Third')).toBeTruthy());
+    await act(() => useScheduleStore.getState().fetchMoreRecentRuns());
+
+    fireEvent.press(getByLabelText('Retry loading more scheduled runs'));
+
+    await waitFor(() => expect(getByText('Second')).toBeTruthy());
+    expect(mockApiGet).toHaveBeenLastCalledWith(expect.stringContaining('cursor=cursor-1'));
   });
 
   it('does not contact Cloud in Local Mode', () => {

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import manifest from '../../package.json';
 
 const extensionRoot = path.resolve(__dirname, '../..');
@@ -45,6 +46,21 @@ describe('Marketplace README', () => {
 
     expect(documented.length).toBeGreaterThan(5);
     expect(documented.filter((key) => !contributed.has(key))).toEqual([]);
+  });
+
+  it('names every command exactly as the Command Palette shows it', () => {
+    const titles = new Set<string>(manifest.contributes.commands.map((entry) => entry.title));
+    const prefix = `${PRODUCT_NAMES.code}: `;
+    const named = [
+      ...new Set(
+        [...rendered.matchAll(/(?<=[`*|]\s?)([A-Z][A-Za-z]*: [^`*|\n]+?)(?=\s*[`*|])/gu)]
+          .map((match) => match[1] ?? '')
+          .filter((label) => label.startsWith(prefix)),
+      ),
+    ];
+
+    expect(named.length).toBeGreaterThan(5);
+    expect(named.filter((label) => !titles.has(label))).toEqual([]);
   });
 
   it('keeps the relocated contributor notes in the repository', () => {

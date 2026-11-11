@@ -888,6 +888,7 @@ pub struct CommandEvaluation {
     pub decision: Decision,
     pub matched_rule: bool,
     pub every_segment_matched_rule: bool,
+    pub explicit_prompt_rule: bool,
 }
 
 const SEGMENT_BREAKS: &[char] = &[';', '&', '|', '\n', '\r'];
@@ -1115,6 +1116,7 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
             decision: Decision::Prompt,
             matched_rule: true,
             every_segment_matched_rule: false,
+            explicit_prompt_rule: false,
         };
     };
     if segments.is_empty() {
@@ -1122,6 +1124,7 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
             decision: Decision::Allow,
             matched_rule: false,
             every_segment_matched_rule: false,
+            explicit_prompt_rule: false,
         };
     }
     let (segments, complete) = with_wrapped_commands(&segments, 0);
@@ -1134,6 +1137,7 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
     };
     let mut matched_rule = !complete;
     let mut every_segment_matched_rule = complete;
+    let mut explicit_prompt_rule = false;
 
     for segment in &segments {
         let Some(parsed) = parse_segment_argv(segment) else {
@@ -1160,6 +1164,7 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
         });
         if evaluation.is_match() {
             matched_rule = true;
+            explicit_prompt_rule |= evaluation.decision == Decision::Prompt;
         }
         if !evaluation.is_match() || allowed_past_its_rule || assignment_hides_the_program {
             every_segment_matched_rule = false;
@@ -1170,6 +1175,7 @@ pub fn evaluate_command(policy: &Policy, command: &str) -> CommandEvaluation {
         decision,
         matched_rule,
         every_segment_matched_rule,
+        explicit_prompt_rule,
     }
 }
 

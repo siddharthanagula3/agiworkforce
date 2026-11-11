@@ -67,6 +67,21 @@ export interface RunImageGenerationTurnInput {
   onUnexpectedError?: (error: unknown) => void;
 }
 
+export type ImageEditTurnRequest = Omit<
+  RunImageGenerationTurnInput,
+  'begin' | 'complete' | 'fail' | 'remove' | 'onPaywall' | 'onUnexpectedError' | 'onStarted'
+>;
+
+function imageEditOperation(
+  input: Pick<RunImageGenerationTurnInput, 'operation' | 'sourceImage' | 'sourceImageBase64'>,
+): ManagedMediaImageOperation | null {
+  return (input.sourceImage || input.sourceImageBase64) &&
+    input.operation &&
+    input.operation !== 'generate'
+    ? input.operation
+    : null;
+}
+
 export interface ImageGenerationTurnDependencies {
   generate: (
     request: ImageGenRequest,
@@ -105,8 +120,32 @@ export type ImageGenerationTurnOutcome = {
 
 let cloudImageGeneration = 0;
 
+const IMAGE_EDIT_RETRY_LIMIT = 3;
+const imageEditRetries = new Map<string, ImageEditTurnRequest>();
+
+function rememberImageEditRetry(assistantMessageId: string, input: ImageEditTurnRequest): void {
+  imageEditRetries.delete(assistantMessageId);
+  imageEditRetries.set(assistantMessageId, input);
+  while (imageEditRetries.size > IMAGE_EDIT_RETRY_LIMIT) {
+    const oldest = imageEditRetries.keys().next().value;
+    if (oldest === undefined) break;
+    imageEditRetries.delete(oldest);
+  }
+}
+
+export function takeImageEditRetry(
+  assistantMessageId: string,
+  ownerId: string,
+): ImageEditTurnRequest | null {
+  const request = imageEditRetries.get(assistantMessageId);
+  if (!request || request.ownerId !== ownerId) return null;
+  imageEditRetries.delete(assistantMessageId);
+  return request;
+}
+
 export function clearCloudImageGenerationState(): void {
   cloudImageGeneration += 1;
+  imageEditRetries.clear();
 }
 
 const defaultDependencies: ImageGenerationTurnDependencies = {
@@ -119,6 +158,31 @@ const defaultDependencies: ImageGenerationTurnDependencies = {
 export async function runImageGenerationTurn(
   input: RunImageGenerationTurnInput,
   dependencies: ImageGenerationTurnDependencies = defaultDependencies,
+): Promise<ImageGenerationTurnOutcome> {
+  const outcome = await executeImageGenerationTurn(input, dependencies);
+  const editOperation = imageEditOperation(input);
+  if (outcome.status === 'failed' && outcome.assistantMessageId && editOperation) {
+    rememberImageEditRetry(outcome.assistantMessageId, {
+      conversationId: input.conversationId,
+      displayText: input.displayText,
+      prompt: input.prompt,
+      model: input.model,
+      ownerId: input.ownerId,
+      operation: editOperation,
+      ...(input.aspectRatio ? { aspectRatio: input.aspectRatio } : {}),
+      ...(input.transparentBackground ? { transparentBackground: true } : {}),
+      ...(input.sourceImage ? { sourceImage: input.sourceImage } : {}),
+      ...(input.sourceImageBase64 ? { sourceImageBase64: input.sourceImageBase64 } : {}),
+      ...(input.maskImageBase64 ? { maskImageBase64: input.maskImageBase64 } : {}),
+      ...(input.referenceImages ? { referenceImages: input.referenceImages } : {}),
+    });
+  }
+  return outcome;
+}
+
+async function executeImageGenerationTurn(
+  input: RunImageGenerationTurnInput,
+  dependencies: ImageGenerationTurnDependencies,
 ): Promise<ImageGenerationTurnOutcome> {
   const accountEpoch = captureCloudAccountEpoch();
   if (!accountEpoch) {
@@ -154,12 +218,7 @@ export async function runImageGenerationTurn(
   input.onStarted?.();
 
   try {
-    const referenceOperation =
-      (input.sourceImage || input.sourceImageBase64) &&
-      input.operation &&
-      input.operation !== 'generate'
-        ? input.operation
-        : null;
+    const referenceOperation = imageEditOperation(input);
     let referenceBase64: string | null = input.sourceImageBase64 ?? null;
     let guideImagesBase64: string[] = [];
     if (referenceOperation && input.sourceImage) {

@@ -4,10 +4,12 @@ type ScanModule0 = typeof import('@/lib/device-steps/device-registry');
 type ScanModule1 = typeof import('../job-service');
 type ScheduleNotificationModule = typeof import('@/lib/services/schedule-notification-service');
 type QuietHoursModule = typeof import('@/lib/services/quiet-hours-service');
+type PushNotificationModule = typeof import('@/lib/services/push-notification-service');
 
 const mocks = vi.hoisted(() => ({
   loadSchedulePreferences: vi.fn(),
   quietHoursEndFor: vi.fn(),
+  resumeDeferredPush: vi.fn(),
   notifyScheduleCompleted: vi.fn(),
   sendScheduleCompletionEmail: vi.fn(),
   drainAuditDestination: vi.fn(),
@@ -38,6 +40,10 @@ vi.mock('@/lib/services/quiet-hours-service', async (importOriginal) => ({
   ...(await importOriginal<QuietHoursModule>()),
   quietHoursEndFor: mocks.quietHoursEndFor,
 }));
+vi.mock('@/lib/services/push-notification-service', async (importOriginal) => ({
+  ...(await importOriginal<PushNotificationModule>()),
+  resumeDeferredPush: mocks.resumeDeferredPush,
+}));
 vi.mock('@/lib/services/notification-email-service', () => ({
   sendScheduleCompletionEmail: mocks.sendScheduleCompletionEmail,
   sendDataExportReadyEmail: vi.fn(),
@@ -63,6 +69,7 @@ vi.mock('../job-service', async (importOriginal) => {
   return { ...actual, enqueueJob: mocks.enqueueJob };
 });
 
+import { QuietHoursUnreadableError } from '@/lib/services/quiet-hours-service';
 import { BACKGROUND_JOB_HANDLERS } from '../job-handlers';
 import { PermanentJobError, type BackgroundJob } from '../job-service';
 import type { JobHandlerContext } from '../job-drain';
@@ -143,7 +150,54 @@ describe('notifications.schedule-completed', () => {
     );
     expect(mocks.notifyScheduleCompleted).toHaveBeenCalledWith(db, expect.anything(), {
       email: false,
+      preferences: { push: true, email: true, email_address: 'user@example.test' },
     });
+  });
+
+  it('retries instead of settling when the preferences cannot be read', async () => {
+    mocks.loadSchedulePreferences.mockRejectedValue(new Error('db down'));
+
+    const failure = await handler(context(notice)).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(PermanentJobError);
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+    expect(mocks.notifyScheduleCompleted).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['awaiting_approval', 'agent_approval_needed'],
+    ['failed', 'agent_failed'],
+    ['success', undefined],
+  ] as const)('judges the %s email against quiet hours as %s', async (status, expected) => {
+    mocks.loadSchedulePreferences.mockResolvedValue({
+      push: true,
+      email: true,
+      email_address: 'user@example.test',
+    });
+
+    await handler(context({ ...notice, status }));
+
+    expect(mocks.quietHoursEndFor).toHaveBeenCalledWith(db, 'user-1', expect.any(Date), expected);
+  });
+
+  it('queues the email for its own quiet-hours check when the setting cannot be read', async () => {
+    mocks.loadSchedulePreferences.mockResolvedValue({
+      push: true,
+      email: true,
+      email_address: 'user@example.test',
+    });
+    mocks.quietHoursEndFor.mockRejectedValue(new QuietHoursUnreadableError());
+
+    await expect(handler(context(notice))).resolves.toEqual({ pushed: true, emailQueued: true });
+    expect(mocks.enqueueJob).toHaveBeenCalledExactlyOnceWith(
+      db,
+      expect.objectContaining({
+        kind: 'email.schedule-completed',
+        idempotencyKey: 'schedule-email:run-1',
+      }),
+    );
+    expect(mocks.enqueueJob.mock.calls[0]![1]).not.toHaveProperty('runAfter');
   });
 
   it('queues no email for an account that did not ask for one', async () => {
@@ -190,6 +244,16 @@ describe('email.schedule-completed', () => {
     expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
   });
 
+  it('retries instead of recording an opt-out when the preferences cannot be read', async () => {
+    mocks.loadSchedulePreferences.mockRejectedValue(new Error('db down'));
+
+    const failure = await handler(context(notice)).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(PermanentJobError);
+    expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
+  });
+
   it('defers again when quiet hours changed after the original email was queued', async () => {
     const until = new Date('2026-10-17T13:00:00.000Z');
     mocks.quietHoursEndFor.mockResolvedValue(until);
@@ -203,6 +267,68 @@ describe('email.schedule-completed', () => {
       }),
     );
     expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
+  });
+
+  it('retries instead of sending when quiet hours cannot be read, then sends once after recovery', async () => {
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: true,
+      providerMessageId: 'm',
+    });
+    mocks.quietHoursEndFor.mockRejectedValueOnce(new QuietHoursUnreadableError());
+
+    const failure = await handler(context(notice)).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(QuietHoursUnreadableError);
+    expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+
+    await expect(handler(context(notice))).resolves.toMatchObject({ delivered: true });
+    expect(mocks.sendScheduleCompletionEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('still sends an urgent failure email when the setting cannot be read', async () => {
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: true,
+      providerMessageId: 'm',
+    });
+    mocks.quietHoursEndFor.mockImplementation(
+      async (_db: unknown, _user: unknown, _now: unknown, type?: string) => {
+        if (type === undefined) throw new QuietHoursUnreadableError();
+        return null;
+      },
+    );
+
+    await expect(handler(context({ ...notice, status: 'failed' }))).resolves.toMatchObject({
+      delivered: true,
+    });
+    await expect(handler(context(notice)).catch((error: unknown) => error)).resolves.toBeInstanceOf(
+      QuietHoursUnreadableError,
+    );
+  });
+
+  it('stops retrying on the last attempt without sending, leaving the notice in the feed', async () => {
+    mocks.quietHoursEndFor.mockRejectedValue(new QuietHoursUnreadableError());
+
+    await expect(handler({ ...context(notice), isFinalAttempt: true })).resolves.toEqual({
+      skipped: 'quiet_hours_unreadable',
+    });
+    expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+
+  it('re-checks quiet hours at send time against the notice status', async () => {
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: true,
+      providerMessageId: 'm',
+    });
+
+    await handler(context({ ...notice, status: 'timeout' }));
+
+    expect(mocks.quietHoursEndFor).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      expect.any(Date),
+      'agent_failed',
+    );
   });
 
   it('keeps provider idempotency tied to the run, not the deferred queue attempt', async () => {
@@ -243,6 +369,39 @@ describe('email.schedule-completed', () => {
       delivered: false,
       reason: 'invalid_recipient',
       detail: 'not a mailbox',
+    });
+    await expect(handler(context(notice))).rejects.toBeInstanceOf(PermanentJobError);
+  });
+
+  it('keeps a rate-limited or unavailable provider response on the retry budget', async () => {
+    for (const status of [429, 503]) {
+      mocks.sendScheduleCompletionEmail.mockResolvedValue({
+        delivered: false,
+        reason: 'rejected',
+        detail: `${status} try later`,
+        status,
+        retryable: true,
+      });
+      const failure = await handler(context(notice)).catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure).not.toBeInstanceOf(PermanentJobError);
+    }
+  });
+
+  it('gives up on a provider refusal that no retry can change', async () => {
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: false,
+      reason: 'rejected',
+      detail: '422 invalid parameter',
+      status: 422,
+      retryable: false,
+    });
+    await expect(handler(context(notice))).rejects.toBeInstanceOf(PermanentJobError);
+
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: false,
+      reason: 'rejected',
+      detail: 'idempotency key must be 1-256 visible ASCII characters',
     });
     await expect(handler(context(notice))).rejects.toBeInstanceOf(PermanentJobError);
   });
@@ -408,12 +567,60 @@ describe('the registry', () => {
         'event-triggers.fire',
         'file-processing.purge-upload-object',
         'media-generation.image-attempt',
+        'notifications.deferred-push',
         'notifications.schedule-completed',
         'research.settle-report-cost',
         'webhooks.audit-stream-delivery',
         'webhooks.developer-delivery',
+        'webhooks.identity-account-status',
         'webhooks.signaling-device-revoke',
       ].sort(),
     );
+  });
+});
+
+describe('notifications.deferred-push', () => {
+  const handler = BACKGROUND_JOB_HANDLERS['notifications.deferred-push']!;
+  const payload = {
+    message: {
+      title: 'Done',
+      body: 'x',
+      data: { type: 'schedule_run' },
+      quietHoursType: 'agent_failed',
+    },
+    transports: { expo: true, web: false },
+  };
+
+  it('hands the stored notice to the quiet-hours check with the attempt position', async () => {
+    mocks.resumeDeferredPush.mockResolvedValue({ sent: 1 });
+
+    await expect(handler({ ...context(payload), isFinalAttempt: true })).resolves.toEqual({
+      sent: 1,
+    });
+    expect(mocks.resumeDeferredPush).toHaveBeenCalledExactlyOnceWith(
+      'user-1',
+      payload.message,
+      { expo: true, web: false },
+      true,
+    );
+  });
+
+  it('lets an unreadable setting retry on the job budget', async () => {
+    mocks.resumeDeferredPush.mockRejectedValue(new QuietHoursUnreadableError());
+
+    const failure = await handler(context(payload)).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(QuietHoursUnreadableError);
+    expect(failure).not.toBeInstanceOf(PermanentJobError);
+  });
+
+  it('refuses a payload that carries no notice instead of retrying it', async () => {
+    await expect(handler(context({ transports: payload.transports }))).rejects.toBeInstanceOf(
+      PermanentJobError,
+    );
+    await expect(
+      handler(context({ message: { title: 'Done' }, transports: payload.transports })),
+    ).rejects.toBeInstanceOf(PermanentJobError);
+    expect(mocks.resumeDeferredPush).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,7 @@
-import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
+import {
+  dispatchHandedOffSend,
+  resolveOnAcceptedSend,
+} from '@/src/features/chat/utils/sendDispatch';
 
 describe('resolveOnAcceptedSend', () => {
   it('resolves true as soon as onAccepted fires (before the send settles)', async () => {
@@ -39,5 +42,33 @@ describe('resolveOnAcceptedSend', () => {
     });
     await resolveOnAcceptedSend(send, () => {});
     expect(send).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('dispatchHandedOffSend', () => {
+  it('leaves the text alone once the send is accepted', async () => {
+    const restore = jest.fn();
+    await dispatchHandedOffSend('Also cover Q3', () => Promise.resolve(true), restore);
+    expect(restore).not.toHaveBeenCalled();
+  });
+
+  it('returns the text to the composer when the send is refused, as after declined consent', async () => {
+    const restore = jest.fn();
+    const send = jest.fn(() => Promise.resolve(false));
+    await dispatchHandedOffSend('Also cover Q3', send, restore);
+    expect(send).toHaveBeenCalledWith('Also cover Q3');
+    expect(restore).toHaveBeenCalledWith('Also cover Q3');
+  });
+
+  it('returns the text to the composer when the send throws', async () => {
+    const restore = jest.fn();
+    await dispatchHandedOffSend('Also cover Q3', () => Promise.reject(new Error('boom')), restore);
+    expect(restore).toHaveBeenCalledWith('Also cover Q3');
+  });
+
+  it('reads a synchronous refusal the same way', async () => {
+    const restore = jest.fn();
+    await dispatchHandedOffSend('Also cover Q3', () => false, restore);
+    expect(restore).toHaveBeenCalledWith('Also cover Q3');
   });
 });

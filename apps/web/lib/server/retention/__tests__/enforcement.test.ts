@@ -3,15 +3,34 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import {
-  MandatoryRetentionSkipped,
-  assertNoMandatoryWorkspaceDropped,
+  isRetentionSweepEnabled,
   listOrganizationsWithRetentionPolicy,
-  mandatoryRetentionWorkspaces,
   retentionEnforcement,
 } from '../enforcement';
 
+describe('isRetentionSweepEnabled', () => {
+  it('sweeps only a recorded window whose enforcement is on', () => {
+    expect(isRetentionSweepEnabled({ retentionDays: 30, retentionEnforced: true })).toBe(true);
+    expect(isRetentionSweepEnabled({ retentionDays: 30, retentionEnforced: false })).toBe(false);
+    expect(isRetentionSweepEnabled({ retentionDays: null, retentionEnforced: true })).toBe(false);
+    expect(isRetentionSweepEnabled({ retentionDays: null, retentionEnforced: false })).toBe(false);
+  });
+
+  it('agrees with the decision for every plan', () => {
+    for (const plan of ['enterprise', 'team', 'free', null]) {
+      for (const retentionDays of [30, null]) {
+        for (const retentionEnforced of [true, false]) {
+          expect(retentionEnforcement({ plan, retentionDays, retentionEnforced }).enforced).toBe(
+            isRetentionSweepEnabled({ retentionDays, retentionEnforced }),
+          );
+        }
+      }
+    }
+  });
+});
+
 describe('retentionEnforcement', () => {
-  it('marks an enterprise window required even when nobody opted in', () => {
+  it('reports an enterprise window as required but not enforced when nobody opted in', () => {
     expect(
       retentionEnforcement({ plan: 'enterprise', retentionDays: 30, retentionEnforced: false }),
     ).toEqual({ enforced: false, required: true, reason: 'required-not-yet-enforced' });
@@ -53,39 +72,5 @@ describe('listOrganizationsWithRetentionPolicy', () => {
       { organizationId: 'org-a', retentionDays: 30, retentionEnforced: false },
       { organizationId: 'org-b', retentionDays: 90, retentionEnforced: true },
     ]);
-  });
-});
-
-describe('assertNoMandatoryWorkspaceDropped', () => {
-  it('accepts a workspace deferred to the next run', () => {
-    expect(() =>
-      assertNoMandatoryWorkspaceDropped({
-        mandatory: ['org-a', 'org-b'],
-        swept: ['org-a'],
-        deferred: ['org-b'],
-      }),
-    ).not.toThrow();
-  });
-
-  it('refuses a run that dropped one', () => {
-    expect(() =>
-      assertNoMandatoryWorkspaceDropped({ mandatory: ['org-a'], swept: [], deferred: [] }),
-    ).toThrow(MandatoryRetentionSkipped);
-  });
-});
-
-describe('mandatoryRetentionWorkspaces', () => {
-  it('covers an enterprise workspace that never opted in and skips a team one', () => {
-    const plans: Record<string, string> = { 'org-a': 'enterprise', 'org-b': 'team' };
-    expect(
-      mandatoryRetentionWorkspaces(
-        [
-          { organizationId: 'org-a', retentionDays: 30, retentionEnforced: false },
-          { organizationId: 'org-b', retentionDays: 30, retentionEnforced: false },
-          { organizationId: 'org-c', retentionDays: null, retentionEnforced: true },
-        ],
-        (id) => plans[id] ?? null,
-      ),
-    ).toEqual(['org-a']);
   });
 });

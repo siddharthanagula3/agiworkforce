@@ -88,6 +88,7 @@ export const USER_OWNED_TABLES = new Set([
   'cloud_code_agent_turns',
   'device_authorization_codes',
   'device_refresh_tokens',
+  'device_refresh_token_families',
   'support_handoff_sessions',
   'organization_shared_projects',
   'organization_project_access',

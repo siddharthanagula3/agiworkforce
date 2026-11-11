@@ -667,8 +667,9 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 ? deleteCustomConnector(connection.id)
                 : disconnectConnector(connection.connectorId);
             operation
-              .then(() => {
+              .then(({ vendorNotice }) => {
                 if (!isActionCurrent(account)) return;
+                if (vendorNotice) Alert.alert(`${connectorName} disconnected`, vendorNotice);
                 router.replace('/(app)/connectors' as Parameters<typeof router.replace>[0]);
               })
               .catch(() => {

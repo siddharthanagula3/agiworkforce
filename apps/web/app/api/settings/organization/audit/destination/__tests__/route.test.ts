@@ -102,6 +102,12 @@ vi.mock('@/lib/server/organization-encryption-keys', async () => ({
   )),
 
   organizationKeyRing: vi.fn(async () => ({ ring: {} })),
+  withOrganizationKeyFence: async (
+    db: unknown,
+    _organizationId: string,
+    _mode: string,
+    run: (tx: unknown) => Promise<unknown>,
+  ) => run(db),
 }));
 vi.mock('@/lib/crypto/envelope', async () => ({
   ...(await vi.importActual<EnvelopeModule>('@/lib/crypto/envelope')),

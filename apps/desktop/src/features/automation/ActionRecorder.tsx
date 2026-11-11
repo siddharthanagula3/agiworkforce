@@ -312,7 +312,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
   };
 
   const describeCaptureInstead = () => {
-    useSharedChatStore.getState().setDraftContent('I was trying to demonstrate this workflow: ');
+    useSharedChatStore.getState().appendDraftContent('I was trying to demonstrate this workflow: ');
     onClose?.();
   };
 

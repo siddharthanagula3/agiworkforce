@@ -22,14 +22,24 @@ const LSP_SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(2
 /// backslashes to `/`, and emits the canonical `file:///C:/...` drive form on
 /// Windows.
 pub(crate) fn path_to_file_uri(path: &Path) -> String {
+    file_uri_for(&path.to_string_lossy(), cfg!(windows))
+}
+
+/// On Unix a backslash is an ordinary filename character, so it is
+/// percent-encoded instead of being read as a separator.
+fn file_uri_for(raw: &str, windows_separators: bool) -> String {
     // Normalize separators: on Windows a path may contain backslashes; LSP
     // file URIs always use forward slashes.
-    let raw = path.to_string_lossy();
-    let normalized = raw.replace('\\', "/");
+    let normalized = if windows_separators {
+        raw.replace('\\', "/")
+    } else {
+        raw.to_string()
+    };
 
     // Detect a Windows drive prefix like `C:` so we can emit `file:///C:/...`.
     let bytes = normalized.as_bytes();
-    let has_drive = bytes.len() >= 2
+    let has_drive = windows_separators
+        && bytes.len() >= 2
         && bytes[0].is_ascii_alphabetic()
         && bytes[1] == b':'
         && (bytes.len() == 2 || bytes[2] == b'/');
@@ -307,7 +317,7 @@ mod tests {
     use super::LSP_REQUEST_TIMEOUT;
     #[cfg(target_os = "linux")]
     use super::LSP_SHUTDOWN_GRACE;
-    use super::{path_to_file_uri, response_for, LspClient};
+    use super::{file_uri_for, path_to_file_uri, response_for, LspClient};
     use serde_json::json;
     use std::path::Path;
 
@@ -639,8 +649,33 @@ while True:
 
     #[test]
     fn handles_windows_drive_and_backslashes() {
-        let uri = path_to_file_uri(Path::new(r"C:\Users\me\my file.rs"));
+        let uri = file_uri_for(r"C:\Users\me\my file.rs", true);
         assert_eq!(uri, "file:///C:/Users/me/my%20file.rs");
+    }
+
+    #[test]
+    fn a_backslash_is_a_filename_character_off_windows() {
+        assert_eq!(
+            file_uri_for(r"/work/project/a\b.py", false),
+            "file:///work/project/a%5Cb.py"
+        );
+        assert_ne!(
+            file_uri_for(r"/work/project/a\b.py", false),
+            file_uri_for("/work/project/a/b.py", false)
+        );
+        assert_eq!(
+            file_uri_for(r"/work/project/a\b.py", true),
+            "file:///work/project/a/b.py"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_native_path_helper_keeps_a_unix_backslash() {
+        assert_eq!(
+            path_to_file_uri(Path::new(r"/work/project/a\b.py")),
+            "file:///work/project/a%5Cb.py"
+        );
     }
 
     #[test]

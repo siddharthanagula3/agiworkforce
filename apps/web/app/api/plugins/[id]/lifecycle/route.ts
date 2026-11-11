@@ -56,7 +56,11 @@ const ActionSchema = z.discriminatedUnion('action', [
     version: VersionSchema,
     reason: ReasonSchema,
   }),
-  z.object({ action: z.literal('rollback') }),
+  z.object({
+    action: z.literal('rollback'),
+    from: VersionSchema,
+    to: VersionSchema,
+  }),
 ]);
 
 // A catalogue action reaches every account that installed the pack, so it lands
@@ -210,7 +214,12 @@ async function handlePost(
       return NextResponse.json(result);
     }
     case 'rollback': {
-      const result = await rollbackPlugin(db, { pluginId, actorUserId });
+      const result = await rollbackPlugin(db, {
+        pluginId,
+        actorUserId,
+        from: parsed.data.from,
+        to: parsed.data.to,
+      });
       await auditLifecycleAction(request, {
         userId: actorUserId,
         pluginId,

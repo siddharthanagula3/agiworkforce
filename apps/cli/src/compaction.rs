@@ -107,6 +107,29 @@ pub async fn compact_after(
     }
 }
 
+pub fn compaction_receipt(
+    result: &agiworkforce_agent_core::context::ContextCompactionResult,
+) -> String {
+    let percent = (result.after.used_fraction * 100.0) as u32;
+    let sizes = format!(
+        "~{} -> ~{} tokens ({percent}% of limit)",
+        result.before.used_tokens, result.after.used_tokens
+    );
+    if !result.compacted {
+        format!(
+            "Nothing to compact: no earlier turn could be summarized, so the context stays at ~{} tokens ({percent}% of limit)",
+            result.after.used_tokens
+        )
+    } else if result.messages_compacted == 0 {
+        format!("Trimmed long tool output: {sizes}")
+    } else {
+        format!(
+            "Compacted {} earlier messages: {sizes}",
+            result.messages_compacted
+        )
+    }
+}
+
 /// Find the project root by walking upward to the first known root marker.
 pub fn find_project_root(start: &Path) -> Option<PathBuf> {
     let mut current = start.to_path_buf();
@@ -277,6 +300,66 @@ mod tests {
                 "user", "hello"
             ))
         );
+    }
+
+    fn receipt_fixture(
+        compacted: bool,
+        messages_compacted: usize,
+    ) -> agiworkforce_agent_core::context::ContextCompactionResult {
+        use agiworkforce_agent_core::context::{context_budget, SummarySource};
+
+        let messages = vec![Message::text("user", "x".repeat(8_000))];
+        let budget = context_budget(&messages, 10_000, 1_000, None);
+        agiworkforce_agent_core::context::ContextCompactionResult {
+            messages,
+            compacted,
+            messages_compacted,
+            before: budget.clone(),
+            after: budget,
+            summary_source: SummarySource::None,
+            stages: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_compaction_that_changed_nothing_says_so() {
+        let receipt = compaction_receipt(&receipt_fixture(false, 0));
+        assert!(receipt.starts_with("Nothing to compact"), "{receipt}");
+        assert!(!receipt.contains("->"), "{receipt}");
+    }
+
+    #[test]
+    fn a_compaction_that_only_pruned_tool_output_says_so() {
+        let receipt = compaction_receipt(&receipt_fixture(true, 0));
+        assert!(receipt.starts_with("Trimmed long tool output"), "{receipt}");
+    }
+
+    #[test]
+    fn a_compaction_that_summarized_reports_how_many_messages() {
+        let receipt = compaction_receipt(&receipt_fixture(true, 12));
+        assert!(
+            receipt.starts_with("Compacted 12 earlier messages"),
+            "{receipt}"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_engine_result_for_a_single_exchange_is_reported_as_nothing_to_compact() {
+        use agiworkforce_agent_core::context::{compact_context, ContextCompactionConfig};
+
+        let history = vec![
+            Message::text("system", "trusted system policy"),
+            Message::text("user", "a long ask ".repeat(400)),
+            Message::text("assistant", "a long answer ".repeat(400)),
+        ];
+        let config = ContextCompactionConfig {
+            compaction_fraction: 0.0,
+            ..ContextCompactionConfig::default()
+        };
+
+        let result = compact_context(&history, &config, None, None).await;
+
+        assert!(compaction_receipt(&result).starts_with("Nothing to compact"));
     }
 
     #[test]

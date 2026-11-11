@@ -7,7 +7,8 @@ vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({ getCachedHealthChecks: vi.fn() }));
 
-vi.mock('@/lib/server/health-check', () => ({
+vi.mock('@/lib/server/health-check', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   DEPENDENCY_LIVE_CHECKS: {},
   NOT_CONFIGURED: 'not configured',
   getCachedHealthChecks: mocks.getCachedHealthChecks,
@@ -64,3 +65,5 @@ describe('service notices in a production runtime without a shared store', () =>
     ]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/health-check');

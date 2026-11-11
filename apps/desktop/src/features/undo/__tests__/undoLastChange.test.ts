@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { undoLastChange } from '../undoLastChange';
@@ -59,6 +60,18 @@ describe('undoLastChange', () => {
     });
 
     await expect(undoLastChange()).resolves.toBe(false);
+  });
+
+  it('tells the user why the backend refused when the file changed after the agent wrote it', async () => {
+    const refusal = 'Cannot undo - a.txt was changed after the agent wrote it';
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === 'undo_can_undo') return Promise.resolve(true);
+      if (command === 'undo_last') return Promise.reject(refusal);
+      return Promise.reject(new Error(`Unexpected invoke: ${command}`));
+    });
+
+    await expect(undoLastChange()).resolves.toBe(false);
+    expect(toast.error).toHaveBeenCalledWith(refusal);
   });
 });
 

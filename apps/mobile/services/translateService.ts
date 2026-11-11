@@ -34,6 +34,17 @@ export const SUPPORTED_LANGUAGES: LanguagePair[] = [
   { code: 'pt', label: 'Portuguese', nativeLabel: 'Português' },
 ];
 
+export function findSupportedLanguage(name: string): LanguagePair | undefined {
+  const wanted = name.trim().toLocaleLowerCase();
+  if (!wanted) return undefined;
+  return SUPPORTED_LANGUAGES.find(
+    (language) =>
+      language.code === wanted ||
+      language.label.toLocaleLowerCase() === wanted ||
+      language.nativeLabel.toLocaleLowerCase() === wanted,
+  );
+}
+
 export const DEFAULT_SOURCE_LANG = 'en';
 export const DEFAULT_TARGET_LANG = 'hi';
 

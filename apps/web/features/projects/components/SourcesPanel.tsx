@@ -10,9 +10,16 @@ import { HardDrive, RefreshCw, Search, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
 import { FilePreviewModal } from './FilePreviewModal';
+import {
+  INDEX_POLL_INTERVAL_MS,
+  KnowledgeIndexStatus,
+  MAX_INDEX_POLLS,
+  isIndexInProgress,
+} from './KnowledgeIndexStatus';
 import { AddSourcesModal } from './AddSourcesModal';
 import {
   listProjectKnowledgeFiles,
+  reindexProjectKnowledgeFile,
   removeProjectKnowledgeFile,
   uploadProjectKnowledgeFile,
 } from '../services/project-knowledge-upload';
@@ -21,6 +28,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { beginActiveUpload } from '@/features/workspaces/lib/active-uploads';
 import { fetchGoogleDrivePickerConfig, pickGoogleDriveFiles } from '../lib/google-drive-picker';
+import { restoreRemovedFile } from '../lib/restore-removed-file';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -81,7 +89,16 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   const [query, setQuery] = useState('');
   const [refreshable, setRefreshable] = useState<ReadonlySet<string>>(() => new Set());
   const [refreshing, setRefreshing] = useState<string | null>(null);
+  const [retryingIndexFileId, setRetryingIndexFileId] = useState<string | null>(null);
+  const indexPollsRef = useRef(0);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+
+  const filesRef = useRef(files);
+  const projectIdRef = useRef(projectId);
+  useEffect(() => {
+    filesRef.current = files;
+    projectIdRef.current = projectId;
+  }, [files, projectId]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const citedPreviewOpened = useRef(false);
@@ -89,6 +106,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   useEffect(() => {
     let cancelled = false;
     setLoadState('loading');
+    indexPollsRef.current = 0;
     withTimeout(listProjectKnowledgeFiles(projectId), SOURCES_LOAD_TIMEOUT_MS)
       .then((loadedFiles) => {
         if (cancelled) return;
@@ -105,6 +123,32 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
       cancelled = true;
     };
   }, [projectId, retryToken]);
+
+  const indexingInProgress = files.some(isIndexInProgress);
+  useEffect(() => {
+    if (loadState !== 'loaded' || !indexingInProgress) return;
+    if (indexPollsRef.current >= MAX_INDEX_POLLS) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      indexPollsRef.current += 1;
+      listProjectKnowledgeFiles(projectId)
+        .then((latest) => {
+          if (cancelled) return;
+          const latestById = new Map(latest.map((entry) => [entry.id, entry]));
+          setFiles((current) =>
+            current.map((entry) => {
+              const fresh = latestById.get(entry.id);
+              return fresh ? { ...entry, indexing: fresh.indexing } : entry;
+            }),
+          );
+        })
+        .catch(() => undefined);
+    }, INDEX_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [indexingInProgress, files, loadState, projectId]);
 
   // A project-file citation chip in a chat links here with the file it cited and
   // the page it cited, read from the URL rather than through `useSearchParams`,
@@ -143,13 +187,32 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
     }
   }
 
+  async function handleRetryIndexing(file: ProjectKnowledgeFile) {
+    setRetryingIndexFileId(file.id);
+    try {
+      const indexing = await reindexProjectKnowledgeFile(projectId, file.id);
+      indexPollsRef.current = 0;
+      setFiles((current) =>
+        current.map((entry) =>
+          entry.id === file.id ? { ...entry, indexing: indexing ?? entry.indexing } : entry,
+        ),
+      );
+    } catch {
+      toast.error(`Couldn't restart indexing for ${file.fileName}. Try again.`);
+    } finally {
+      setRetryingIndexFileId(null);
+    }
+  }
+
   async function handleDelete(file: ProjectKnowledgeFile) {
-    const previous = files;
+    const index = filesRef.current.findIndex((f) => f.id === file.id);
     setFiles((current) => current.filter((f) => f.id !== file.id));
     try {
       await removeProjectKnowledgeFile(projectId, file.id);
     } catch {
-      setFiles(previous);
+      if (projectIdRef.current === projectId) {
+        setFiles((current) => restoreRemovedFile(current, file, index));
+      }
       toast.error(`Couldn't remove ${file.fileName}. Try again.`);
     }
   }
@@ -163,6 +226,7 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
         file,
         onProgress: (progress) =>
           setUploadState({ status: 'uploading', fileName: file.name, progress }),
+        onNotice: (notice) => toast.info(notice),
       });
       setUploadState({ status: 'idle' });
       setLoadState('loading');
@@ -650,15 +714,38 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
                   </span>
                   <span
                     style={{
-                      fontSize: 13,
-                      color: 'var(--agi-ink)',
                       flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
+                      minWidth: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 'var(--space-1)',
                     }}
                   >
-                    {file.fileName}
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: 'var(--agi-ink)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {file.fileName}
+                    </span>
+                    {file.summary ? (
+                      <span
+                        data-testid="sources-file-note"
+                        style={{ fontSize: 12, color: 'var(--agi-ink-2)', lineHeight: 1.4 }}
+                      >
+                        {file.summary}
+                      </span>
+                    ) : null}
+                    <KnowledgeIndexStatus
+                      indexing={file.indexing ?? null}
+                      retrying={retryingIndexFileId === file.id}
+                      canRetry={!readOnly}
+                      onRetry={() => void handleRetryIndexing(file)}
+                    />
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--agi-ink-2)', flexShrink: 0 }}>
                     {(file.byteCount / 1024).toFixed(1)} KB

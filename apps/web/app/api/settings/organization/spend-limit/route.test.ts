@@ -186,7 +186,7 @@ describe('spend-limit forwards the first resolved workspace', () => {
       expect(mocks.query).toHaveBeenCalledTimes(1);
       expect(mocks.savedSelection).not.toHaveBeenCalled();
       expect(mocks.teamAccess).toHaveBeenCalledExactlyOnceWith(db, USER, RESOLVED_B);
-      expect(mocks.read).toHaveBeenCalledExactlyOnceWith(db, RESOLVED_B);
+      expect(mocks.read).toHaveBeenCalledExactlyOnceWith(RESOLVED_B);
       if (method === 'GET') {
         expect(mocks.permissions).toHaveBeenCalledExactlyOnceWith(RESOLVED_B, USER);
         expect(mocks.permission).not.toHaveBeenCalled();
@@ -251,7 +251,7 @@ describe('spend-limit forwards the first resolved workspace', () => {
       await handlers[method](request(method, null));
       expect(mocks.scoped).toHaveBeenCalledTimes(1);
       expect(mocks.savedSelection).not.toHaveBeenCalled();
-      expect(mocks.read).toHaveBeenCalledExactlyOnceWith(db, RESOLVED_B);
+      expect(mocks.read).toHaveBeenCalledExactlyOnceWith(RESOLVED_B);
     },
   );
 

@@ -239,6 +239,10 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/platform/utils/src/displayName.ts',
         ),
+        '@agiworkforce/utils/composer-incoming': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/composerIncoming.ts',
+        ),
         '@agiworkforce/utils/composer-paste': path.resolve(
           __dirname,
           '../../packages/platform/utils/src/composerPaste.ts',

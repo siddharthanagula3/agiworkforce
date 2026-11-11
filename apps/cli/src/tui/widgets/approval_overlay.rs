@@ -215,6 +215,7 @@ pub struct ApprovalOverlayState {
     pub note_choice: Option<ApprovalChoice>,
     pub editing_note: bool,
     pub always_allow_unavailable: bool,
+    pub allow_session_unavailable: bool,
     /// What the request acts on. Drawn above the detail and never scrolled away.
     targets: Vec<String>,
     scroll: ScrollGate,
@@ -234,6 +235,7 @@ impl Default for ApprovalOverlayState {
             note_choice: None,
             editing_note: false,
             always_allow_unavailable: false,
+            allow_session_unavailable: false,
             targets: Vec::new(),
             scroll: ScrollGate::default(),
             refused_unread: false,
@@ -260,6 +262,7 @@ impl ApprovalOverlayState {
         self.note_choice = None;
         self.editing_note = false;
         self.always_allow_unavailable = false;
+        self.allow_session_unavailable = false;
         self.targets = Vec::new();
         self.scroll.reset();
         self.refused_unread = false;
@@ -290,7 +293,11 @@ impl ApprovalOverlayState {
     }
 
     fn offered(&self, index: usize) -> bool {
-        !(self.always_allow_unavailable && CHOICES[index] == ApprovalChoice::AlwaysAllow)
+        match CHOICES[index] {
+            ApprovalChoice::AlwaysAllow => !self.always_allow_unavailable,
+            ApprovalChoice::AllowSession => !self.allow_session_unavailable,
+            _ => true,
+        }
     }
 
     fn step(&mut self, forward: bool, wrap: bool) {
@@ -766,7 +773,7 @@ impl InteractiveView for ApprovalOverlayState {
             // y/n/s/a/d shortcuts
             KeyAction::Char('y') | KeyAction::Char('Y') => self.submit(ApprovalChoice::Yes),
             KeyAction::Char('n') | KeyAction::Char('N') => self.submit(ApprovalChoice::No),
-            KeyAction::Char('s') | KeyAction::Char('S') => {
+            KeyAction::Char('s') | KeyAction::Char('S') if !self.allow_session_unavailable => {
                 self.submit(ApprovalChoice::AllowSession)
             }
             KeyAction::Char('a') | KeyAction::Char('A') if !self.always_allow_unavailable => {

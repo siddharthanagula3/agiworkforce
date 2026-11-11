@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  familyLock: vi.fn(),
   execute: vi.fn(),
   transaction: vi.fn(),
   issueDeveloperToken: vi.fn(),
@@ -11,7 +12,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  withRateLimit: vi.fn(async () => null),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -62,12 +66,95 @@ describe('POST /api/auth/device/refresh', () => {
       accessToken: 'next-access-token',
       expiresIn: 604800,
     });
+    mocks.familyLock.mockResolvedValue([
+      { family_id: '22222222-2222-4222-8222-222222222222', revoked_at: null },
+    ]);
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
-        query: (...args: unknown[]) => mocks.query(...args),
+        query: (...args: unknown[]) =>
+          /^\s*insert into public\.device_refresh_token_families \(family_id, user_id\)\s/.test(
+            String(args[0]),
+          )
+            ? mocks.familyLock(...args)
+            : mocks.query(...args),
         execute: (...args: unknown[]) => mocks.execute(...args),
       }),
     );
+  });
+
+  function healthyRow() {
+    return {
+      id: '11111111-1111-4111-8111-111111111111',
+      family_id: '22222222-2222-4222-8222-222222222222',
+      user_id: 'user-1',
+      user_email: null,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      used_at: null,
+      revoked_at: null,
+      owner_missing: false,
+      owner_deletion_scheduled_for: null,
+      owner_terms_version: CURRENT_TERMS_VERSION,
+      owner_terms_accepted_at: new Date().toISOString(),
+    };
+  }
+
+  it('locks the family before it locks the presented token', async () => {
+    mocks.query
+      .mockResolvedValueOnce([healthyRow()])
+      .mockResolvedValueOnce([{ id: '33333333-3333-4333-8333-333333333333' }]);
+
+    await POST(request());
+
+    expect(mocks.familyLock).toHaveBeenCalledTimes(1);
+    expect(mocks.familyLock.mock.calls[0]?.[1]).toEqual([hashDeviceRefreshToken(CURRENT_TOKEN)]);
+    expect(mocks.familyLock.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.query.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('refuses to rotate a family that an unlink or sign-out has ended, and issues nothing', async () => {
+    mocks.familyLock.mockResolvedValueOnce([
+      { family_id: '22222222-2222-4222-8222-222222222222', revoked_at: new Date().toISOString() },
+    ]);
+    mocks.query.mockResolvedValueOnce([healthyRow()]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'invalid_grant' });
+    expect(mocks.issueDeveloperToken).not.toHaveBeenCalled();
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+    const tidy = mocks.execute.mock.calls[0];
+    expect(String(tidy?.[0])).toMatch(/SET revoked_at = COALESCE\(revoked_at, \$2\)/);
+    expect(tidy?.[1]).toEqual([
+      '22222222-2222-4222-8222-222222222222',
+      expect.any(String),
+      'user-1',
+    ]);
+  });
+
+  it('still records a replay into an ended family as a compromise', async () => {
+    mocks.familyLock.mockResolvedValueOnce([
+      { family_id: '22222222-2222-4222-8222-222222222222', revoked_at: new Date().toISOString() },
+    ]);
+    mocks.query
+      .mockResolvedValueOnce([{ ...healthyRow(), used_at: new Date().toISOString() }])
+      .mockResolvedValueOnce([]);
+
+    await POST(request());
+
+    expect(mocks.execute.mock.calls.some(([sql]) => /set compromised_at/.test(String(sql)))).toBe(
+      true,
+    );
+  });
+
+  it('treats a token with no row as invalid without reading further', async () => {
+    mocks.familyLock.mockResolvedValueOnce([]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(400);
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 
   it('rotates a valid token and stores only the next token hash', async () => {
@@ -241,3 +328,5 @@ describe('POST /api/auth/device/refresh', () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/rate-limit');

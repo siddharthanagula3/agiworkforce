@@ -11,7 +11,11 @@ const {
   mockDelete,
   mockGetSession,
   mockGetSubscription,
+  mockTerminalEntries,
+  mockTurnWindow,
 } = vi.hoisted(() => ({
+  mockTerminalEntries: vi.fn(),
+  mockTurnWindow: vi.fn(),
   mockGetUserScopedDb: vi.fn(),
   mockRateLimit: vi.fn(),
   mockCsrf: vi.fn(),
@@ -40,11 +44,13 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
     setCloudCodeSessionArchived: mockSetArchived,
     deleteCloudCodeSession: mockDelete,
     getCloudCodeSession: mockGetSession,
+    listCloudCodeTerminalEntries: mockTerminalEntries,
+    readCloudCodeAgentTurnWindow: mockTurnWindow,
   };
 });
 
 import { CloudCodeConflictError } from '@/lib/services/cloud-code-session-service';
-import { DELETE, PATCH } from './route';
+import { DELETE, GET, PATCH } from './route';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const context = { params: Promise.resolve({ sessionId: SESSION_ID }) };
@@ -68,6 +74,35 @@ beforeEach(() => {
   mockSetArchived.mockResolvedValue({ id: SESSION_ID, archivedAt: '2026-09-07T13:00:00.000Z' });
   mockGetSession.mockResolvedValue({ id: SESSION_ID, title: 'Workspace' });
   mockDelete.mockResolvedValue(undefined);
+  mockTerminalEntries.mockResolvedValue([]);
+  mockTurnWindow.mockResolvedValue({ turns: [], truncated: false });
+});
+
+describe('GET /api/code/sessions/[sessionId]', () => {
+  it('returns the turn window and says when older turns were left out', async () => {
+    const turns = [{ turnId: 'turn-51', goal: 'latest goal', finalMessage: 'latest answer' }];
+    mockTurnWindow.mockResolvedValue({ turns, truncated: true });
+
+    const response = await GET(sessionRequest('GET'), context);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      session: { id: SESSION_ID },
+      turns,
+      turnsTruncated: true,
+    });
+    expect(mockTurnWindow).toHaveBeenCalledWith(
+      {},
+      { userId: 'user-1', organizationId: null },
+      SESSION_ID,
+    );
+  });
+
+  it('says nothing was left out for a short session', async () => {
+    const response = await GET(sessionRequest('GET'), context);
+
+    await expect(response.json()).resolves.toMatchObject({ turns: [], turnsTruncated: false });
+  });
 });
 
 describe('PATCH /api/code/sessions/[sessionId]', () => {

@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ProjectsSyncPushRequestSchema, ServerVersionSchema } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+  ProjectsSyncPushRequestSchema,
+  ServerVersionSchema,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -49,7 +53,12 @@ async function handlePull(request: NextRequest, url: URL) {
 
     const saturated = projects.length >= MAX_PROJECTS_PULL;
     const cursor = computeProjectsPullCursor(since, projects);
-    return NextResponse.json({ projects, cursor, hasMore: saturated });
+    return NextResponse.json({
+      projects,
+      cursor,
+      hasMore: saturated,
+      workspaceScope: organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    });
   } catch (error) {
     logger.error({ error, userId }, 'Projects sync pull failed');
     throw createError.internal('Failed to pull project changes');
@@ -114,6 +123,13 @@ async function handlePost(request: NextRequest) {
                  (item ->> 'baseVersion')::bigint as base_version,
                  nullif(item ->> 'deletedAt', '') is not null as should_delete
             from jsonb_array_elements($2::jsonb) as source(item)
+        ), prior_tombstones as (
+          select stored.id
+            from user_projects as stored
+            join input as incoming on incoming.id = stored.id
+           where stored.user_id = $1
+             and stored.organization_id is not distinct from $4::uuid
+             and stored.deleted_at is not null
         ), updated as (
           update user_projects as existing
              set name = incoming.name,
@@ -129,7 +145,8 @@ async function handlePost(request: NextRequest) {
              and existing.user_id = $1
              and existing.organization_id is not distinct from $4::uuid
              and existing.server_version = incoming.base_version
-          returning existing.id, existing.server_version
+          returning existing.id, existing.server_version,
+                    incoming.should_delete as tombstoned
         ), inserted as (
           insert into user_projects
             (id, user_id, organization_id, name, description, instructions, color, is_archived, metadata,
@@ -149,9 +166,15 @@ async function handlePost(request: NextRequest) {
           select public.assert_user_resource_limit(
                  'projects',
                  $1,
-                   case when dependency.inserted_count > 0 then $3 else null end
+                   case when dependency.admitted_count > 0 then $3 else null end
                  )
-            from (select count(*) as inserted_count from inserted) as dependency
+            from (
+              select (select count(*) from inserted)
+                     + (select count(*)
+                          from updated
+                         where not updated.tombstoned
+                           and updated.id in (select id from prior_tombstones)) as admitted_count
+            ) as dependency
         ), conflict_rows as (
           select incoming.id,
                  case when current.id is null then null else jsonb_build_object(

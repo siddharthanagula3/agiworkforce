@@ -141,7 +141,7 @@ export function runObjectStoreContract(name: string, createStore: () => ObjectSt
 
     it('presigns an upload that names the key', async () => {
       const store = await seeded();
-      const url = await store.presignPut({
+      const { url, headers } = await store.presignPut({
         bucket: BUCKET,
         key: KEY,
         contentType: CONTENT_TYPE,
@@ -150,6 +150,7 @@ export function runObjectStoreContract(name: string, createStore: () => ObjectSt
       });
       expect(() => new URL(url)).not.toThrow();
       expect(url).toContain(KEY);
+      expect(headers).toEqual({});
     });
 
     it('refuses to presign an upload that binds neither a size nor a type', async () => {
@@ -198,7 +199,7 @@ export function runObjectStoreContract(name: string, createStore: () => ObjectSt
 
     it('issues a signed url that is expired once its lifetime has passed', async () => {
       const store = await seeded();
-      const url = await store.presignPut({
+      const { url } = await store.presignPut({
         bucket: BUCKET,
         key: KEY,
         contentType: CONTENT_TYPE,

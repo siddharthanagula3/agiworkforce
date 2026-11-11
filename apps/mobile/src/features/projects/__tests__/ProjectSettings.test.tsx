@@ -137,6 +137,43 @@ describe('ProjectSettingsScreen', () => {
     expect(useCloudProjectStore.getState().details[PROJECT_ID]?.usesAccountStyle).toBe(true);
   });
 
+  it('keeps a successful switch when an overlapping one is refused later', async () => {
+    let refuseStyle: (error: Error) => void = () => undefined;
+    const update = managedCloudProjects.updateProject as jest.Mock;
+    update
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            refuseStyle = reject;
+          }),
+      )
+      .mockResolvedValueOnce(managedProject({ usesGlobalMemory: false }));
+    render(<ProjectSettingsScreen projectId={PROJECT_ID} />);
+
+    fireEvent(screen.getByTestId('project-settings-account-style'), 'valueChange', false);
+    fireEvent(screen.getByTestId('project-settings-global-memory'), 'valueChange', false);
+
+    expect(useCloudProjectStore.getState().details[PROJECT_ID]).toMatchObject({
+      usesAccountStyle: false,
+      usesGlobalMemory: false,
+    });
+    expect(update).toHaveBeenCalledTimes(1);
+
+    refuseStyle(new Error('HTTP 429'));
+
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+    expect(update).toHaveBeenLastCalledWith(PROJECT_ID, { usesGlobalMemory: false });
+    await waitFor(() =>
+      expect(screen.getByTestId('project-settings-memory-scope')).toHaveTextContent(
+        PROJECT_MEMORY_SCOPE_COPY.projectOnly,
+      ),
+    );
+    expect(useCloudProjectStore.getState().details[PROJECT_ID]).toMatchObject({
+      usesAccountStyle: true,
+      usesGlobalMemory: false,
+    });
+  });
+
   it('lists only memories saved to this project', () => {
     useCloudMemoryStore.setState({
       entries: [

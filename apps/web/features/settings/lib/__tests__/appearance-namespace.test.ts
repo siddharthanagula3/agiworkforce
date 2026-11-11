@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  acknowledgedAppearance,
   appearanceDelta,
   fromAppearanceNamespace,
   readStoredLocale,
@@ -47,6 +48,21 @@ describe('the appearance namespace web and mobile share', () => {
 
   it('leaves the accent alone when the phone holds a value web cannot render', () => {
     expect(fromAppearanceNamespace({ accentColor: 'neutral' }).accentColor).toBeUndefined();
+  });
+
+  it('acknowledges the local projection for values web cannot render, so they are not a delta', () => {
+    const local = toAppearanceNamespace(WEB_DEFAULTS);
+    const acknowledged = acknowledgedAppearance(
+      { ...local, accentColor: 'neutral', theme: 'dark', futureKey: 'x' } as never,
+      local,
+    );
+
+    expect(acknowledged).toMatchObject({ accentColor: 'amber', theme: 'dark', futureKey: 'x' });
+    expect(appearanceDelta(acknowledged, local)).toEqual({ theme: 'system' });
+  });
+
+  it('passes an unreadable namespace through unchanged', () => {
+    expect(acknowledgedAppearance(null, toAppearanceNamespace(WEB_DEFAULTS))).toBeNull();
   });
 
   it('round-trips every web value through the shared keys', () => {

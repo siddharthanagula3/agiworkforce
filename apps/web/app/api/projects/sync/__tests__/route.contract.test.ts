@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
   ProjectsSyncPullResponseSchema,
   ProjectsSyncPushResponseSchema,
 } from '@agiworkforce/cloud-contracts';
@@ -36,6 +37,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { GET, POST } from '../route';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getProjectLimit } from '@/lib/services/free-plan-entitlements';
 
 const PROJ_ID = '018f6f2a-0000-7000-8000-000000000020';
@@ -77,10 +79,29 @@ describe('GET /api/projects/sync, shared cloud contract', () => {
     const parsed = ProjectsSyncPullResponseSchema.safeParse(await res.json());
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.cursor).toBe('4');
+    if (parsed.success) {
+      expect(parsed.data.cursor).toBe('4');
+      expect(parsed.data.workspaceScope).toBe(ORGANIZATION_ID);
+    }
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('organization_id is not distinct from $3::uuid');
     expect(params[2]).toBe(ORGANIZATION_ID);
+  });
+
+  it('names the personal workspace a pull was resolved for', async () => {
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockQuery(...args) },
+      userId: 'user_contract_1',
+      organizationId: null,
+    } as never);
+    mockQuery.mockResolvedValueOnce([]);
+    const res = await GET(
+      new Request('http://localhost:3000/api/projects/sync?since=0', { method: 'GET' }) as never,
+    );
+    const body = ProjectsSyncPullResponseSchema.parse(await res.json());
+    expect(body.workspaceScope).toBe(MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE);
+    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(params[2]).toBeNull();
   });
 
   it('empty pull page parses', async () => {
@@ -195,6 +216,33 @@ describe('POST /api/projects/sync, shared cloud contract', () => {
     const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(params[2]).toBe(getProjectLimit('pro'));
     expect(params[2]).not.toBe(getProjectLimit('free'));
+  });
+
+  it('holds a restore-only batch to the project limit instead of skipping the quota check', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '6', current: null },
+    ]);
+
+    const res = await POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projects: [{ id: PROJ_ID, name: 'Restored', baseVersion: '5', deletedAt: null }],
+        }),
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const compact = sql.replace(/\s+/g, ' ');
+    expect(compact).toContain('stored.deleted_at is not null');
+    expect(compact).toContain('incoming.should_delete as tombstoned');
+    expect(compact).toContain('where not updated.tombstoned');
+    expect(compact).toContain('updated.id in (select id from prior_tombstones)');
+    expect(compact).toContain('case when dependency.admitted_count > 0 then $3 else null end');
+    expect(compact).not.toContain('inserted_count');
+    expect(params[2]).toBe(getProjectLimit('free'));
   });
 
   it('returns the current server row when a stale baseVersion loses CAS', async () => {

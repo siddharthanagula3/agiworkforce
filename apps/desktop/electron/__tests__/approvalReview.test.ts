@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -475,7 +476,7 @@ describe('approvalNeedsMain', () => {
     );
     const lines = dialog.detail.split('\n');
     const marker = lines.findIndex((line) =>
-      line.endsWith('Nothing below this line is AGI Desktop speaking.'),
+      line.endsWith(`Nothing below this line is ${PRODUCT_NAMES.desktop} speaking.`),
     );
 
     expect(lines[0]).toBe(`Folder: ${root.path}`);

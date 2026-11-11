@@ -73,6 +73,21 @@ describe('ThinkingTagSplitter', () => {
     expect(privateSplitter.closeThinking()).toBe(false);
   });
 
+  it('discards a withheld public prefix once, so a replay of it cannot be followed by a second copy', () => {
+    const splitter = new ThinkingTagSplitter();
+    expect(textOf(splitter.push('x <'), 'text')).toBe('x ');
+    expect(splitter.discardPendingPublic()).toBe(1);
+    expect(splitter.retainedCharacters).toBe(0);
+    expect(splitter.flush(true)).toEqual([]);
+  });
+
+  it('never discards a private reasoning tail', () => {
+    const splitter = new ThinkingTagSplitter();
+    splitter.push('<thinking>private</think');
+    expect(splitter.discardPendingPublic()).toBe(0);
+    expect(textOf(splitter.flush(true), 'thinking')).toBe('</think');
+  });
+
   it('does not retain reasoning bodies and cannot leak a private suffix after closing', () => {
     const splitter = new ThinkingTagSplitter();
     splitter.push('<thinking>');

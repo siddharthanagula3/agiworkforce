@@ -167,7 +167,7 @@
     },
     {
       "doc": "voice",
-      "sha256": "ac1a896d88b238077b3f6cbabec163c61ad1e0a192282f32f09f527f8035694b"
+      "indexed": true
     },
     {
       "doc": "vscode-extension",
@@ -493,12 +493,17 @@
       "doc": "memory",
       "section": "Memory switches",
       "kind": "prose",
-      "sentence": "**Persistent memory**: \"Allow AGI to remember details across conversations.\" With it off, persistent remembered facts are not included in chat context.",
+      "sentence": "**Persistent memory**: \"Allow the assistant to remember details across conversations.\" With it off, persistent remembered facts are not included in chat context.",
       "implementation": [
         "apps/web/lib/services/managed-memory-context-service.ts",
         "apps/web/lib/services/turn-context-service.ts"
       ],
       "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/MemorySection.tsx",
+          "text": "Allow the assistant to remember details across conversations"
+        },
         {
           "kind": "test",
           "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
@@ -754,7 +759,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
-          "name": "retires the files a temporary chat received on the same clock as the chat"
+          "name": "hard-deletes the files a temporary chat received on the same clock as the chat"
         }
       ]
     },
@@ -1275,6 +1280,11 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.persistence.test.tsx",
+          "name": "blocks changes before a strict account read and supports legitimate first use"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/PrivacySection.persistence.test.tsx",
           "name": "sends one field once in StrictMode and grants only after a stored receipt"
         }
       ]
@@ -1305,7 +1315,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
-          "name": "retires the files a temporary chat received on the same clock as the chat"
+          "name": "hard-deletes the files a temporary chat received on the same clock as the chat"
         }
       ]
     },
@@ -1512,6 +1522,16 @@
           "kind": "copy",
           "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
           "text": "Delete all chats in this workspace?"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
+          "text": "Archive all chats in this workspace?"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/BulkConversationControls.test.tsx",
+          "name": "reserves one count and exact confirmation, including repeated confirm and cancel callbacks"
         }
       ]
     },
@@ -1592,7 +1612,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "revokes the chat\u2019s link from the result state"
+          "name": "revokes the chat’s link from the result state"
         },
         {
           "kind": "copy",
@@ -1678,7 +1698,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "updates the chat\u2019s link in place, keeping its address and expiry"
+          "name": "updates the chat’s link in place, keeping its address and expiry"
         },
         {
           "kind": "test",
@@ -2420,7 +2440,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/billing/components/UpgradeConfirmDialog.test.tsx",
-          "name": "quotes the published catalog amount for the requested interval"
+          "name": "quotes the renewal the preview returned for the requested interval"
         }
       ]
     },
@@ -2524,7 +2544,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
-          "name": "keeps a yearly Pro subscriber on what they bought and says nothing changes"
+          "name": "subscriber on what they bought and says nothing changes"
         }
       ]
     },
@@ -2565,7 +2585,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
-          "name": "switches a yearly Pro subscriber to monthly billing at renewal after confirming"
+          "name": "subscriber to monthly billing at renewal after confirming"
         },
         {
           "kind": "test",
@@ -3074,6 +3094,69 @@
       ]
     },
     {
+      "id": "voice-no-microphone-names-the-cause",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "\"No microphone is available in this browser.\" No input device was found.",
+      "implementation": ["apps/web/features/chat/lib/live-voice-session.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "No microphone is available in this browser."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (name === 'NotFoundError' || name === 'OverconstrainedError') {"
+        }
+      ]
+    },
+    {
+      "id": "voice-unsupported-browser-names-the-cause",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "\"This browser cannot open a voice connection.\" The browser does not support the connection voice mode needs.",
+      "implementation": ["apps/web/features/chat/lib/live-voice-session.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "This browser cannot open a voice connection."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {"
+        }
+      ]
+    },
+    {
+      "id": "voice-blocked-capture-is-unavailable-up-front",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "Some embedded surfaces cannot record audio at all because the host blocks microphone access, so dictation and voice mode are unavailable there rather than failing mid-session.",
+      "implementation": [
+        "apps/web/features/chat/components/Composer/VoiceInputButton.tsx#detectVoiceInputSupport",
+        "apps/web/features/chat/lib/live-voice-session.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/VoiceInputButton.test.tsx",
+          "name": "explains itself instead of opening when capture is unsupported"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {"
+        }
+      ]
+    },
+    {
       "id": "troubleshooting-conversation-search-failure",
       "doc": "troubleshooting",
       "section": "Search did not run",
@@ -3224,7 +3307,7 @@
       "doc": "chat-basics",
       "section": "Branch a conversation",
       "kind": "prose",
-      "sentence": "While a branch is being created the control reads \"Creating branch\u2026\" and cannot be pressed a second time.",
+      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/features/chat/hooks/use-conversation-branches.ts"
@@ -3294,7 +3377,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "Extension \u00b7 {SURFACE_STATUS.chrome}"
+          "text": "Extension · {SURFACE_STATUS.chrome}"
         },
         {
           "kind": "copy",
@@ -4184,6 +4267,11 @@
       "implementation": ["apps/web/app/api/settings/password/route.ts"],
       "proof": [
         {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/password/route.ts",
+          "text": "const signOut = await revokeEveryOtherSession("
+        },
+        {
           "kind": "test",
           "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
           "name": "changes the password, ends other sessions and announces it"
@@ -4205,7 +4293,7 @@
       "doc": "account-security",
       "section": "Email address",
       "kind": "prose",
-      "sentence": "The previous address is removed unless a sign-in method still uses it.",
+      "sentence": "The previous address is removed from the account; if the sign-in service keeps it, Settings says so and asks you to check your sign-in methods before removing it yourself.",
       "implementation": [
         "apps/web/app/api/settings/email/route.ts",
         "apps/web/features/settings/components/EmailAddressChange.tsx"
@@ -4217,9 +4305,19 @@
           "text": "await identity.removeEmailAddress(previousId);"
         },
         {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/email/__tests__/route.test.ts",
+          "name": "updates native identity and product profile, %s auth"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/email/__tests__/route.test.ts",
+          "name": "does not upgrade a repeat request to confirmed completion after %s"
+        },
+        {
           "kind": "copy",
           "file": "apps/web/features/settings/components/EmailAddressChange.tsx",
-          "text": "The server reported that your previous address was kept."
+          "text": "The server reported that your previous address was kept. Check your sign-in"
         }
       ]
     },
@@ -4291,6 +4389,11 @@
           "kind": "copy",
           "file": "apps/web/lib/server/step-up/actions.ts",
           "text": "freshnessSeconds: 300"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/hooks/useStepUp.tsx",
+          "text": ": requestStepUpGrant(challenge.action, challenge.resourceId)"
         },
         {
           "kind": "copy",
@@ -5408,17 +5511,19 @@
       "doc": "desktop-and-cli",
       "section": "The desktop app",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5427,17 +5532,19 @@
       "doc": "getting-started",
       "section": "Choose a model route",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5482,17 +5589,19 @@
       "doc": "install-desktop-and-mobile",
       "section": "What desktop provides",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5501,17 +5610,19 @@
       "doc": "local-mode",
       "section": "Running a local model",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5595,17 +5706,19 @@
       "doc": "providers-and-models",
       "section": "Choose a product surface first",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5687,21 +5800,21 @@
       "section": "Add sources",
       "kind": "prose",
       "sentence": "You may see **Indexing for search**, **Keyword search only** or **Not indexed** beside a file.",
-      "implementation": ["apps/web/features/projects/components/KnowledgeFilesPanel.tsx"],
+      "implementation": ["apps/web/features/projects/components/KnowledgeIndexStatus.tsx"],
       "proof": [
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Indexing for search"
         },
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Keyword search only"
         },
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Not indexed"
         },
         {
@@ -7089,7 +7202,7 @@
       "doc": "models-and-reasoning",
       "section": "What the badges mean",
       "kind": "prose",
-      "sentence": "**Auto (free) \u00b7 community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
+      "sentence": "**Auto (free) · community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
       "implementation": [
         "apps/web/features/chat/components/Composer/ComposerFooter.tsx#FREE_LANE_SLOT_TEXT"
       ],
@@ -7097,7 +7210,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) \u00b7 community models, capacity varies';"
+          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';"
         },
         {
           "kind": "test",

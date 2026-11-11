@@ -2,6 +2,8 @@
 const mockStorage = new Map<string, unknown>();
 const mockPost = jest.fn();
 const mockDelete = jest.fn();
+type MockAppModeState = { appMode: string };
+type MockAppModeListener = (next: MockAppModeState, previous: MockAppModeState) => void;
 
 jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
 jest.mock('expo-secure-store', () => ({
@@ -25,17 +27,17 @@ jest.mock('@/lib/constants', () => ({
 jest.mock('@/services/api', () => ({ api: { post: mockPost, delete: mockDelete } }));
 jest.mock('@/services/secureFetch', () => ({ secureFetch: jest.fn() }));
 jest.mock('@/src/features/chat/store/appModeStore', () => {
-  let state = { appMode: 'cloud' };
-  const listeners = new Set<(...args: unknown[]) => void>();
+  let state: MockAppModeState = { appMode: 'cloud' };
+  const listeners = new Set<MockAppModeListener>();
   return {
     useChatAppModeStore: {
       getState: () => state,
-      setState: (next: typeof state) => {
+      setState: (next: MockAppModeState) => {
         const previous = state;
         state = next;
         listeners.forEach((listener) => listener(state, previous));
       },
-      subscribe: (listener: (next: typeof state, previous: typeof state) => void) => {
+      subscribe: (listener: MockAppModeListener) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },

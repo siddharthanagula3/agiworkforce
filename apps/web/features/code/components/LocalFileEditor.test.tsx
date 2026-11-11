@@ -295,6 +295,75 @@ describe('a session step that touches the open file', () => {
   });
 });
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+async function reachCleanConflict(): Promise<HTMLElement> {
+  await replaceText('mine');
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await screen.findByRole('alert');
+  const field = screen.getByLabelText(PATH);
+  await userEvent.clear(field);
+  await userEvent.type(field, 'one');
+  return field;
+}
+
+describe('a reload that needed no confirmation', () => {
+  it('locks the draft while it reads, so nothing typed can be replaced', async () => {
+    const reading = deferred<FileTextContent>();
+    readWorkspaceText
+      .mockResolvedValueOnce(onDisk('one', OPENED))
+      .mockResolvedValueOnce(onDisk('agent', ON_DISK))
+      .mockReturnValueOnce(reading.promise);
+    writeWorkspaceText.mockRejectedValueOnce(changedOnDisk());
+    renderEditor();
+
+    const field = await reachCleanConflict();
+    await userEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    expect(field).toHaveAttribute('readonly');
+    fireEvent.change(field, { target: { value: 'typed while reading' } });
+    expect(field).toHaveValue('one');
+
+    reading.resolve(onDisk('agent', ON_DISK));
+    await waitFor(() => expect(field).toHaveValue('agent'));
+    expect(field).not.toHaveAttribute('readonly');
+  });
+
+  it('is dropped when the editor has moved to another file before it settles', async () => {
+    const reading = deferred<FileTextContent>();
+    const otherPath = 'src/other.ts';
+    readWorkspaceText
+      .mockResolvedValueOnce(onDisk('one', OPENED))
+      .mockResolvedValueOnce(onDisk('agent', ON_DISK))
+      .mockReturnValueOnce(reading.promise)
+      .mockResolvedValueOnce({ ...onDisk('other', OPENED), path: otherPath });
+    writeWorkspaceText.mockRejectedValueOnce(changedOnDisk());
+    const { props, rerender } = renderEditor();
+
+    await reachCleanConflict();
+    await userEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    rerender(<LocalFileEditor {...props} path={otherPath} />);
+
+    const otherField = await screen.findByLabelText(otherPath);
+    await waitFor(() => expect(otherField).toHaveValue('other'));
+    await userEvent.type(otherField, ' plus');
+
+    reading.resolve(onDisk('agent', ON_DISK));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(otherField).toHaveValue('other plus');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+});
+
 describe('preserving local file bytes', () => {
   it('restores CRLF after the textarea normalizes edited lines', async () => {
     readWorkspaceText.mockResolvedValueOnce({

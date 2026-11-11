@@ -10,6 +10,7 @@ import {
   UNUSED_REFUND_WINDOW_DAYS,
   type OperatorAccountBilling,
   type OperatorDisputeView,
+  type OperatorRefundDecision,
   type OperatorRefundRequestView,
   type OperatorRefundStripeReason,
   type RefundAssessment,
@@ -25,12 +26,16 @@ import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   CHARGE_REFUND_LEDGER_DESCRIPTION_PREFIX,
+  REFUND_REQUEST_METADATA_KEY,
   type NormalizedCharge,
   type NormalizedPeriod,
+  type NormalizedRefund,
+  type NormalizedRefundReason,
   type NormalizedSubscriptionPayment,
 } from '@/lib/server/payments/domain';
 import {
   cancelStripeSubscriptionNow,
+  findStripeRefundsForRequest,
   listStripeCustomerCharges,
   readStripeCustomerCountry,
   readStripePaymentCustomer,
@@ -39,7 +44,7 @@ import {
   retrieveStripeCharge,
 } from '@/lib/server/payments/stripe-provider';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
-import { recordNotification } from '@/lib/services/notification-service';
+import { insertNotification } from '@/lib/services/notification-service';
 
 const DAY_MS = 86_400_000;
 const CUSTOMER_CHARGE_LIMIT = 24;
@@ -543,22 +548,31 @@ async function recordRefundDecision(
   return row ?? null;
 }
 
-async function notifyRefundDecision(db: DatabaseAdapter, row: RefundRequestRow): Promise<void> {
+async function notifyRefundDecision(db: DatabaseAdapter, row: RefundRequestRow): Promise<boolean> {
   const refunded = row.status === 'refunded';
   const store = refundingStoreOf(row.charge_id);
-  await recordNotification(db, {
-    userId: row.user_id,
-    category: 'billing',
-    severity: refunded ? 'info' : 'warning',
-    title: refunded ? 'Your refund is on its way' : 'Your refund request was declined',
-    message: refunded
-      ? store
-        ? `${store} refunded this purchase to the payment method you used there. ${store} sets how long it takes to show.`
-        : 'We refunded your payment to the card you paid with. Your bank usually shows it within 5 to 10 business days.'
-      : `We could not refund this payment. ${row.decision_note ?? ''}`.trim(),
-    target: { kind: 'settings', id: 'billing' },
-    dedupeKey: `refund-request:${row.id}:${row.status}`,
-  });
+  try {
+    const write = await insertNotification(db, {
+      userId: row.user_id,
+      category: 'billing',
+      severity: refunded ? 'info' : 'warning',
+      title: refunded ? 'Your refund is on its way' : 'Your refund request was declined',
+      message: refunded
+        ? store
+          ? `${store} refunded this purchase to the payment method you used there. ${store} sets how long it takes to show.`
+          : 'We refunded your payment to the card you paid with. Your bank usually shows it within 5 to 10 business days.'
+        : `We could not refund this payment. ${row.decision_note ?? ''}`.trim(),
+      target: { kind: 'settings', id: 'billing' },
+      dedupeKey: `refund-request:${row.id}:${row.status}`,
+    });
+    return write === 'inserted' || write === 'duplicate';
+  } catch (error) {
+    logger.warn(
+      { error, requestId: row.id, status: row.status },
+      'Refund decision notification could not be recorded',
+    );
+    return false;
+  }
 }
 
 async function endPlanAfterRefund(
@@ -577,11 +591,83 @@ async function endPlanAfterRefund(
   }
 }
 
+interface PendingRequestSettlement {
+  requestId: string;
+  chargeId: string;
+  amountCents: number;
+  stripeReason: NormalizedRefundReason;
+  metadata: Readonly<Record<string, string>>;
+  decidedBy: 'automatic' | 'operator';
+  decidedByUserId: string | null;
+  note: string | null;
+  endPlan: () => Promise<boolean>;
+}
+
+type PendingRequestSettlementOutcome =
+  | { kind: 'decided'; row: RefundRequestRow; refund: NormalizedRefund }
+  | { kind: 'pending'; refund: NormalizedRefund }
+  | { kind: 'rejected'; code: string | null }
+  | { kind: 'not_pending'; row: RefundRequestRow | null };
+
+function refundAttemptKey(requestId: string, failedAttempts: number): string {
+  return failedAttempts === 0
+    ? `refund-request:${requestId}`
+    : `refund-request:${requestId}:${failedAttempts}`;
+}
+
+async function lockRefundRequest(
+  tx: DatabaseAdapter,
+  requestId: string,
+): Promise<RefundRequestRow | null> {
+  const [row] = await tx.query<RefundRequestRow>(
+    `select ${REQUEST_COLUMNS} from public.billing_refund_requests
+      where id = $1
+      for update`,
+    [requestId],
+  );
+  return row ?? null;
+}
+
+async function settlePendingRequest(
+  ownerDb: DatabaseAdapter,
+  input: PendingRequestSettlement,
+): Promise<PendingRequestSettlementOutcome> {
+  return ownerDb.transaction(async (tx) => {
+    const locked = await lockRefundRequest(tx, input.requestId);
+    if (!locked || locked.status !== 'pending') return { kind: 'not_pending', row: locked };
+
+    const prior = await findStripeRefundsForRequest(input.chargeId, input.requestId);
+    const result =
+      prior.active ??
+      (await refundStripeCharge({
+        chargeReference: input.chargeId,
+        amountMinorUnits: input.amountCents,
+        reason: input.stripeReason,
+        metadata: { ...input.metadata, [REFUND_REQUEST_METADATA_KEY]: input.requestId },
+        idempotencyKey: refundAttemptKey(input.requestId, prior.failedAttempts),
+      }));
+    if (result.outcome === 'rejected') return { kind: 'rejected', code: result.code };
+    if (result.outcome === 'pending') return { kind: 'pending', refund: result.refund };
+
+    await input.endPlan();
+    const decided = await recordRefundDecision(tx, {
+      requestId: input.requestId,
+      status: 'refunded',
+      decidedBy: input.decidedBy,
+      decidedByUserId: input.decidedByUserId,
+      refundAmountCents: result.refund.amount.minorUnits,
+      stripeRefundId: result.refund.reference,
+      note: input.note,
+    });
+    if (!decided) return { kind: 'not_pending', row: locked };
+    return { kind: 'decided', row: decided, refund: result.refund };
+  });
+}
+
 export interface FileRefundRequestInput {
   db: DatabaseAdapter;
   userId: string;
   customerId: string;
-  subscriptionId: string | null;
   chargeId: string;
   reason: RefundRequestReason;
   details: string | null;
@@ -631,54 +717,82 @@ async function settleAutomatically(
   const amountCents = numberOrNull(row.assessed_refund_cents);
   if (amountCents === null || amountCents <= 0) return row;
 
-  let result: Awaited<ReturnType<typeof refundStripeCharge>>;
+  const ownerDb = getNeonDb();
+  let outcome: PendingRequestSettlementOutcome;
   try {
-    result = await refundStripeCharge({
-      chargeReference: row.charge_id,
-      amountMinorUnits: amountCents,
-      reason: 'requested_by_customer',
-      metadata: { refund_request_id: row.id, assessment: row.assessment },
-      idempotencyKey: `refund-request:${row.id}`,
+    const subscriptionId =
+      row.charge_kind === 'plan' ? await subscriptionOfPlanCharge(row.charge_id) : null;
+    outcome = await settlePendingRequest(ownerDb, {
+      requestId: row.id,
+      chargeId: row.charge_id,
+      amountCents,
+      stripeReason: 'requested_by_customer',
+      metadata: { assessment: row.assessment },
+      decidedBy: 'automatic',
+      decidedByUserId: null,
+      note: null,
+      endPlan: async () => {
+        if (row.charge_kind !== 'plan') return false;
+        if (!isStripeSubscriptionId(subscriptionId)) {
+          logger.warn(
+            { requestId: row.id, chargeId: row.charge_id, userId: input.userId },
+            'A refunded plan payment could not be traced to its subscription, so no subscription was canceled',
+          );
+          return false;
+        }
+        return cancelStripeSubscriptionNow(subscriptionId);
+      },
     });
   } catch (error) {
     logger.error(
       { error, requestId: row.id, chargeId: row.charge_id, userId: input.userId },
-      'Automatic refund could not be issued; the request waits for an operator',
+      'Automatic refund could not be completed; the request stays pending and is retried when it is filed again or an operator completes it',
     );
     return row;
   }
-  if (result.outcome === 'rejected') {
+  if (outcome.kind === 'rejected') {
     logger.warn(
-      { requestId: row.id, chargeId: row.charge_id, code: result.code },
+      { requestId: row.id, chargeId: row.charge_id, code: outcome.code },
       'Stripe refused an automatic refund; the request waits for an operator',
     );
     return row;
   }
-
-  if (row.charge_kind === 'plan') {
-    await endPlanAfterRefund(input.subscriptionId, { requestId: row.id, userId: input.userId });
+  if (outcome.kind === 'pending') {
+    logger.info(
+      {
+        requestId: row.id,
+        chargeId: row.charge_id,
+        refundId: outcome.refund.reference,
+        refundStatus: outcome.refund.status,
+      },
+      'Stripe has not finished an automatic refund; the request stays pending until it succeeds',
+    );
+    return row;
   }
+  if (outcome.kind === 'not_pending') return outcome.row ?? row;
+  await notifyRefundDecision(ownerDb, outcome.row);
+  return outcome.row;
+}
 
-  const ownerDb = getNeonDb();
-  const decided = await recordRefundDecision(ownerDb, {
-    requestId: row.id,
-    status: 'refunded',
-    decidedBy: 'automatic',
-    decidedByUserId: null,
-    refundAmountCents: result.refund.amount.minorUnits,
-    stripeRefundId: result.refund.reference,
-    note: null,
-  });
-  if (!decided) return row;
-  await notifyRefundDecision(ownerDb, decided);
-  return decided;
+async function subscriptionOfPlanCharge(chargeId: string): Promise<string | null> {
+  const charge = await retrieveStripeCharge(chargeId);
+  const payment = charge ? await subscriptionPaymentOf(charge) : null;
+  return payment?.subscriptionReference ?? null;
 }
 
 export async function fileRefundRequest(
   input: FileRefundRequestInput,
 ): Promise<{ request: RefundRequestView; created: boolean }> {
   const existing = await findRequestForCharge(input.db, input.userId, input.chargeId);
-  if (existing) return { request: toRefundRequestView(existing), created: false };
+  if (existing) {
+    const settled =
+      existing.status === 'pending' &&
+      existing.assessment !== 'needs_review' &&
+      !refundingStoreOf(existing.charge_id)
+        ? await settleAutomatically(input, existing)
+        : existing;
+    return { request: toRefundRequestView(settled), created: false };
+  }
 
   const charge = await retrieveStripeCharge(input.chargeId);
   if (!charge || charge.customerReference !== input.customerId) {
@@ -880,32 +994,38 @@ export async function issueOperatorRefund(
 ): Promise<OperatorRefundResult> {
   const charge = await retrieveStripeCharge(input.chargeId);
   if (!charge) throw new RefundRequestRefusal('No payment has that charge id.', 404);
-  if (charge.disputed) {
-    throw new RefundRequestRefusal(
-      'This payment is disputed. Stripe does not allow a refund while the dispute is open; answer or accept the dispute instead.',
-      409,
-    );
-  }
-  const refundable = refundableCentsOf(charge);
-  const amountCents = input.amountCents ?? refundable;
-  if (refundable <= 0) throw new RefundRequestRefusal('This payment is already refunded.', 409);
-  if (!Number.isSafeInteger(amountCents) || amountCents <= 0 || amountCents > refundable) {
-    throw new RefundRequestRefusal(
-      `The refund must be between 1 and ${refundable} in the smallest currency unit.`,
-      400,
-    );
-  }
-
   const pending = input.requestId
     ? await readPendingRequest(db, input.requestId, charge.reference)
     : null;
-  const statutoryFloor =
-    pending?.assessment === 'statutory_withdrawal' ? (pending.assessedCents ?? 0) : 0;
-  if (amountCents < Math.min(statutoryFloor, refundable)) {
-    throw new RefundRequestRefusal(
-      `This is a statutory withdrawal, so the refund must be at least ${statutoryFloor} in the smallest currency unit.`,
-      400,
-    );
+  const requestRefunds =
+    input.requestId === null
+      ? null
+      : await findStripeRefundsForRequest(charge.reference, input.requestId);
+
+  const refundable = refundableCentsOf(charge);
+  const amountCents = input.amountCents ?? refundable;
+  if (!requestRefunds?.active) {
+    if (charge.disputed) {
+      throw new RefundRequestRefusal(
+        'This payment is disputed. Stripe does not allow a refund while the dispute is open; answer or accept the dispute instead.',
+        409,
+      );
+    }
+    if (refundable <= 0) throw new RefundRequestRefusal('This payment is already refunded.', 409);
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0 || amountCents > refundable) {
+      throw new RefundRequestRefusal(
+        `The refund must be between 1 and ${refundable} in the smallest currency unit.`,
+        400,
+      );
+    }
+    const statutoryFloor =
+      pending?.assessment === 'statutory_withdrawal' ? (pending.assessedCents ?? 0) : 0;
+    if (amountCents < Math.min(statutoryFloor, refundable)) {
+      throw new RefundRequestRefusal(
+        `This is a statutory withdrawal, so the refund must be at least ${statutoryFloor} in the smallest currency unit.`,
+        400,
+      );
+    }
   }
 
   const [owner] = charge.customerReference
@@ -919,55 +1039,26 @@ export async function issueOperatorRefund(
       )
     : [];
 
-  const result = await refundStripeCharge({
-    chargeReference: charge.reference,
-    amountMinorUnits: amountCents,
-    reason: input.stripeReason,
-    metadata: {
-      operator_user_id: input.operatorUserId,
-      ...(input.requestId ? { refund_request_id: input.requestId } : {}),
-    },
-    idempotencyKey: `operator-refund:${charge.reference}:${input.idempotencyKey}`,
-  });
-  if (result.outcome === 'rejected') {
-    logger.warn(
-      { chargeId: charge.reference, code: result.code },
-      'Stripe refused an operator refund',
-    );
-    throw new RefundRequestRefusal(
-      STRIPE_REFUND_REFUSALS[result.code ?? ''] ??
-        'Stripe refused the refund. Open the payment in the Stripe dashboard to see why.',
-      409,
-    );
-  }
-  const refund = result.refund;
-
-  const planEnded =
+  const endPlan = async (): Promise<boolean> =>
     input.endPlan && chargeKindOf(charge) === 'plan'
-      ? await endPlanAfterRefund(owner?.stripe_subscription_id ?? null, {
+      ? endPlanAfterRefund(owner?.stripe_subscription_id ?? null, {
           chargeId: charge.reference,
           operatorUserId: input.operatorUserId,
         })
       : false;
-
-  let request: OperatorRefundRequestView | null = null;
-  if (input.requestId) {
-    const decided = await recordRefundDecision(db, {
-      requestId: input.requestId,
-      status: 'refunded',
-      decidedBy: 'operator',
-      decidedByUserId: input.operatorUserId,
-      refundAmountCents: refund.amount.minorUnits,
-      stripeRefundId: refund.reference,
-      note: input.note,
-    });
-    if (decided) {
-      await notifyRefundDecision(db, decided);
-      request = toOperatorRequestView(decided);
-    }
-  }
-
-  return {
+  const refusal = (code: string | null) => {
+    logger.warn({ chargeId: charge.reference, code }, 'Stripe refused an operator refund');
+    return new RefundRequestRefusal(
+      STRIPE_REFUND_REFUSALS[code ?? ''] ??
+        'Stripe refused the refund. Open the payment in the Stripe dashboard to see why.',
+      409,
+    );
+  };
+  const receipt = (
+    refund: NormalizedRefund,
+    planEnded: boolean,
+    request: OperatorRefundRequestView | null,
+  ): OperatorRefundResult => ({
     refundId: refund.reference,
     refundStatus: refund.status,
     amountCents: refund.amount.minorUnits,
@@ -975,7 +1066,42 @@ export async function issueOperatorRefund(
     userId: owner?.user_id ?? null,
     planEnded,
     request,
-  };
+  });
+
+  if (input.requestId) {
+    let planEnded = false;
+    const outcome = await settlePendingRequest(db, {
+      requestId: input.requestId,
+      chargeId: charge.reference,
+      amountCents,
+      stripeReason: input.stripeReason,
+      metadata: { operator_user_id: input.operatorUserId },
+      decidedBy: 'operator',
+      decidedByUserId: input.operatorUserId,
+      note: input.note,
+      endPlan: async () => {
+        planEnded = await endPlan();
+        return planEnded;
+      },
+    });
+    if (outcome.kind === 'not_pending') {
+      throw new RefundRequestRefusal('That refund request is not pending for this payment.', 409);
+    }
+    if (outcome.kind === 'rejected') throw refusal(outcome.code);
+    if (outcome.kind === 'pending') return receipt(outcome.refund, false, null);
+    await notifyRefundDecision(db, outcome.row);
+    return receipt(outcome.refund, planEnded, toOperatorRequestView(outcome.row));
+  }
+
+  const result = await refundStripeCharge({
+    chargeReference: charge.reference,
+    amountMinorUnits: amountCents,
+    reason: input.stripeReason,
+    metadata: { operator_user_id: input.operatorUserId },
+    idempotencyKey: `operator-refund:${charge.reference}:${input.idempotencyKey}`,
+  });
+  if (result.outcome === 'rejected') throw refusal(result.code);
+  return receipt(result.refund, result.outcome === 'refunded' ? await endPlan() : false, null);
 }
 
 /**
@@ -986,7 +1112,7 @@ export async function issueOperatorRefund(
 export async function recordStoreRefund(
   db: DatabaseAdapter,
   input: { operatorUserId: string; requestId: string; amountCents: number | null; note: string },
-): Promise<OperatorRefundRequestView> {
+): Promise<OperatorRefundDecision> {
   const pending = await readPendingRequest(db, input.requestId);
   const [decided] = await db.query<RefundRequestRow>(
     `update public.billing_refund_requests
@@ -1019,24 +1145,37 @@ export async function recordStoreRefund(
       409,
     );
   }
-  await notifyRefundDecision(db, decided);
-  return toOperatorRequestView(decided);
+  const customerNotified = await notifyRefundDecision(db, decided);
+  return { request: toOperatorRequestView(decided), customerNotified };
 }
 
 export async function declineRefundRequest(
   db: DatabaseAdapter,
   input: { operatorUserId: string; requestId: string; note: string },
-): Promise<OperatorRefundRequestView> {
-  const decided = await recordRefundDecision(db, {
-    requestId: input.requestId,
-    status: 'declined',
-    decidedBy: 'operator',
-    decidedByUserId: input.operatorUserId,
-    refundAmountCents: null,
-    stripeRefundId: null,
-    note: input.note,
+): Promise<OperatorRefundDecision> {
+  const decided = await db.transaction(async (tx) => {
+    const locked = await lockRefundRequest(tx, input.requestId);
+    if (!locked || locked.status !== 'pending') return null;
+    if (!refundingStoreOf(locked.charge_id)) {
+      const { active } = await findStripeRefundsForRequest(locked.charge_id, locked.id);
+      if (active) {
+        throw new RefundRequestRefusal(
+          'Stripe already holds a refund for this request. Complete the refund instead of declining it.',
+          409,
+        );
+      }
+    }
+    return recordRefundDecision(tx, {
+      requestId: input.requestId,
+      status: 'declined',
+      decidedBy: 'operator',
+      decidedByUserId: input.operatorUserId,
+      refundAmountCents: null,
+      stripeRefundId: null,
+      note: input.note,
+    });
   });
   if (!decided) throw new RefundRequestRefusal('That refund request is no longer pending.', 409);
-  await notifyRefundDecision(db, decided);
-  return toOperatorRequestView(decided);
+  const customerNotified = await notifyRefundDecision(db, decided);
+  return { request: toOperatorRequestView(decided), customerNotified };
 }

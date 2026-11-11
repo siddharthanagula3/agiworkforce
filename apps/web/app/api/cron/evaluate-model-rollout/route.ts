@@ -39,12 +39,29 @@ function describeAlert(alert: RolloutAlert): string {
   return `- ${alert.kind} on slot ${alert.slotId}: ${alert.cohort} ${alert.candidateModelKey} against control ${alert.controlModelKey}, ${measure} over ${alert.samples} requests`;
 }
 
+function alertClaimKey(alert: RolloutAlert): string {
+  return `${ALERT_DEDUP_PREFIX}:${alert.slotId}:${alert.cohort}:${alert.candidateModelKey}:${alert.kind}`;
+}
+
+async function releaseAlertClaims(alerts: readonly RolloutAlert[]): Promise<void> {
+  const store = getKeyValueStore();
+  if (!store) return;
+  for (const alert of alerts) {
+    const key = alertClaimKey(alert);
+    try {
+      await store.delete(key);
+    } catch (error) {
+      logger.warn({ error, key }, '[model-rollout] alert claim could not be released');
+    }
+  }
+}
+
 async function claimNewAlerts(alerts: readonly RolloutAlert[]): Promise<RolloutAlert[]> {
   const store = getKeyValueStore();
   if (!store) return [...alerts];
   const fresh: RolloutAlert[] = [];
   for (const alert of alerts) {
-    const key = `${ALERT_DEDUP_PREFIX}:${alert.slotId}:${alert.cohort}:${alert.candidateModelKey}:${alert.kind}`;
+    const key = alertClaimKey(alert);
     try {
       const claimed = await store.set(key, Date.now(), {
         onlyIfAbsent: true,
@@ -122,17 +139,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       html: `<pre style="font-family:ui-monospace,monospace;white-space:pre-wrap">${escapeHtml(text)}</pre>`,
     }),
   ]);
+  const reached = paged === 'paged' || sent.delivered;
+  if (!reached) await releaseAlertClaims(fresh);
   logger.warn(
-    { alerts: fresh.length, paged, emailed: sent.delivered },
-    'Model rollout cohort alert dispatched',
+    { alerts: fresh.length, paged, emailed: sent.delivered, reached },
+    reached ? 'Model rollout cohort alert dispatched' : 'Model rollout cohort alert not delivered',
   );
 
-  return NextResponse.json({
-    benchmarks,
-    purged,
-    purgedDecisions,
-    alerts: alerts.length,
-    paged,
-    emailed: sent.delivered,
-  });
+  return NextResponse.json(
+    {
+      benchmarks,
+      purged,
+      purgedDecisions,
+      alerts: alerts.length,
+      paged,
+      emailed: sent.delivered,
+    },
+    { status: reached ? 200 : 500 },
+  );
 }

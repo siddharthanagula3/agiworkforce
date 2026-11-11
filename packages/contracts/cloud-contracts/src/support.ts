@@ -11,6 +11,7 @@ export const SUPPORT_HANDOFF_PATH = '/api/support/handoff';
 export const SUPPORT_HANDOFF_AVAILABILITY_PATH = '/api/support/handoff/availability';
 export const SUPPORT_AGENT_PRESENCE_PATH = '/api/support/handoff/agent/presence';
 export const SUPPORT_AGENT_QUEUE_PATH = '/api/support/handoff/agent/queue';
+export const SUPPORT_AGENT_ACTIVE_PATH = '/api/support/handoff/agent/active';
 export const SUPPORT_RECOVERY_PATH = '/api/support/recovery';
 export const SUPPORT_TICKETS_PATH = '/api/support/tickets';
 export const SUPPORT_STAFF_TICKETS_PATH = '/api/support/staff/tickets';
@@ -223,6 +224,18 @@ export interface SupportHandoffQueueEntryView {
   signedIn: boolean;
 }
 
+export interface SupportHandoffClaimedView {
+  sessionId: string;
+  referenceId: string;
+  summary: string;
+  contactEmail: string;
+  pollIntervalMs: number;
+  transcript: HandoffTranscriptTurn[];
+  attemptedActions: HandoffAttemptedAction[];
+  citations: HandoffCitation[];
+  accountContext: HandoffAccountContext | null;
+}
+
 export interface SupportUserTurn {
   id: string;
   role: 'user';
@@ -342,6 +355,13 @@ export const supportDiagnosticsSchema = z
 export const MAX_TICKET_SUBJECT_CHARS = 200;
 export const MAX_TICKET_MESSAGE_CHARS = 8_000;
 export const MAX_TICKETS_LISTED = 50;
+export const MAX_TICKET_LIST_OFFSET = 10_000;
+
+export const SupportTicketListQuerySchema = z
+  .object({
+    offset: z.coerce.number().int().min(0).max(MAX_TICKET_LIST_OFFSET).default(0),
+  })
+  .strict();
 
 export const APPEAL_TICKET_SUBJECT = 'Account suspension appeal';
 export const APPEAL_FOLLOW_PATH = '/login';
@@ -450,6 +470,7 @@ export interface SupportTicketThread {
 
 export interface SupportTicketListResponse {
   tickets: SupportTicket[];
+  nextOffset: number | null;
 }
 
 export interface OpenedSupportTicket {

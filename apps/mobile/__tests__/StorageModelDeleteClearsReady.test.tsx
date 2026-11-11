@@ -73,8 +73,9 @@ jest.mock('@/src/features/settings/StorageScopeNotice', () => ({
 }));
 
 import { listInstalledModels, deleteInstalledModel } from '@/storage/installedModels';
-import { deleteDownloadedModel } from '@/services/modelDownload';
+import { deleteDownloadedModel, getModelStorageBytes } from '@/services/modelDownload';
 import { wipeAllLocalData } from '@/services/dsarExport';
+import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
 import StorageManagerScreen from '@/app/(app)/settings/storage';
 
 function pressDestructiveAlertButton() {
@@ -177,6 +178,68 @@ describe('the download policy is visible and editable in Storage', () => {
   it('reports the free space the download check measures against', async () => {
     const { getByTestId } = render(<StorageManagerScreen />);
     await waitFor(() => expect(getByTestId('storage-free-space')).toBeTruthy());
+  });
+});
+
+describe('a failed storage read is never shown as an empty device', () => {
+  beforeEach(() => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    (listInstalledModels as jest.Mock).mockResolvedValue([INSTALLED]);
+    (getModelStorageBytes as jest.Mock).mockResolvedValue(2_000_000_000);
+    (getDirectorySizeBytes as jest.Mock).mockResolvedValue(3 * 1024 * 1024);
+    (deleteDownloadedModel as jest.Mock).mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('keeps the installed models and cache when only the model folder cannot be measured', async () => {
+    (getModelStorageBytes as jest.Mock).mockRejectedValueOnce(new Error('io'));
+    const { getByLabelText, getByTestId, queryByText } = render(<StorageManagerScreen />);
+
+    await waitFor(() => getByLabelText(`Delete ${INSTALLED.display_name}`));
+    expect(getByTestId('storage-model-bytes')).toHaveTextContent('Unavailable');
+    expect(getByTestId('storage-cache-bytes')).toHaveTextContent('3.0 MB');
+    expect(queryByText(/No models downloaded/)).toBeNull();
+    expect(getByLabelText('Try reading storage again')).toBeTruthy();
+  });
+
+  it('says the cache is unavailable instead of zero when it cannot be measured', async () => {
+    (getDirectorySizeBytes as jest.Mock).mockRejectedValueOnce(new Error('io'));
+    const { getByTestId, getByLabelText } = render(<StorageManagerScreen />);
+
+    await waitFor(() =>
+      expect(getByTestId('storage-cache-bytes')).toHaveTextContent('Unavailable'),
+    );
+    expect(getByTestId('storage-model-bytes')).toHaveTextContent('1.86 GB');
+    expect(getByLabelText(`Delete ${INSTALLED.display_name}`)).toBeTruthy();
+  });
+
+  it('reports an unreadable model list and recovers on retry', async () => {
+    (listInstalledModels as jest.Mock).mockRejectedValueOnce(new Error('sqlite'));
+    const { getByText, getByLabelText, queryByText } = render(<StorageManagerScreen />);
+
+    await waitFor(() => getByText('Could not read downloaded models.'));
+    expect(queryByText(/No models downloaded/)).toBeNull();
+
+    fireEvent.press(getByLabelText('Try reading storage again'));
+    await waitFor(() => getByLabelText(`Delete ${INSTALLED.display_name}`));
+    expect(queryByText('Could not read downloaded models.')).toBeNull();
+  });
+
+  it('still says the model was removed when only the refresh after removal fails', async () => {
+    const { getByLabelText } = render(<StorageManagerScreen />);
+    await waitFor(() => getByLabelText(`Delete ${INSTALLED.display_name}`));
+    (getModelStorageBytes as jest.Mock).mockRejectedValueOnce(new Error('io'));
+
+    fireEvent.press(getByLabelText(`Delete ${INSTALLED.display_name}`));
+    await act(async () => {
+      await pressDestructiveAlertButton();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith('Storage refresh failed', expect.any(String));
+    expect(Alert.alert).not.toHaveBeenCalledWith('Model removal failed', expect.any(String));
   });
 });
 

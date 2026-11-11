@@ -2,6 +2,7 @@
 
 import {
   useMenuKeyboard,
+  confirmNavigation,
   PROJECT_ICON_REGISTRY,
   PROJECT_ACCENT_REGISTRY,
   resolveProjectIcon,
@@ -1126,7 +1127,7 @@ export default function ProjectDetailPage() {
                 id={`project-detail-tab-${t}`}
                 aria-selected={tab === t}
                 aria-controls={`project-detail-panel-${t}`}
-                onClick={() => setTab(t)}
+                onClick={() => (t === tab ? undefined : confirmNavigation(() => setTab(t)))}
                 data-testid={`project-detail-tab-${t}`}
                 style={{
                   padding: 'var(--space-3) var(--space-4)',

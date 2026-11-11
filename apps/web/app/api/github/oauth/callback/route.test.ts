@@ -99,6 +99,7 @@ describe('GitHub OAuth callback ownership proof', () => {
       accountLogin: 'verified-org',
       accountType: 'Organization',
       verifiedRepositories: ['verified-org/app'],
+      writableRepositories: ['verified-org/app'],
     });
     mocks.query.mockResolvedValue([{ id: 'row-1' }]);
     mocks.appInstallOwner.mockResolvedValue(null);
@@ -178,6 +179,7 @@ describe('GitHub OAuth callback ownership proof', () => {
       'verified-org',
       'Organization',
       ['verified-org/app'],
+      ['verified-org/app'],
     ]);
   });
 
@@ -191,6 +193,15 @@ describe('GitHub OAuth callback ownership proof', () => {
     expect(sql).toMatch(/verified_repositories/);
     expect(sql).toMatch(/verified_repositories = excluded\.verified_repositories/);
     expect(params).toContainEqual(['verified-org/app']);
+  });
+
+  it('records the repositories the account can push to, and refreshes them on a relink', async () => {
+    // GITHUB-LINK-REPOSITORY-AUTHORITY-COLLAPSE-01
+    await GET(callbackRequest());
+
+    const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/writable_repositories = excluded\.writable_repositories/);
+    expect(params.at(-1)).toEqual(['verified-org/app']);
   });
 
   it('consumes the OAuth state and pending id so a successful callback cannot replay', async () => {

@@ -6,6 +6,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+use crate::background::process_is_alive;
+
 /// Mirror of four literals owned by
 /// `packages/contracts/types/src/browser-bridge.ts`. They cannot drift:
 /// `packages/contracts/types/src/__tests__/browser-bridge-rust-mirror.test.ts`
@@ -193,33 +195,6 @@ fn parse_bridge_file(contents: &str) -> Option<BridgeFile> {
 
 /// A shell killed with SIGKILL leaves its file behind and the port can be
 /// reused, so the file alone is not evidence that a shell is running.
-#[cfg(unix)]
-fn process_is_alive(pid: u32) -> bool {
-    use nix::errno::Errno;
-    use nix::sys::signal::kill;
-    use nix::unistd::Pid;
-
-    let Ok(pid) = i32::try_from(pid) else {
-        return false;
-    };
-    if pid <= 0 {
-        return false;
-    }
-    // Signal `None` runs the existence and permission checks without
-    // delivering anything. A process owned by another user answers EPERM,
-    // which still means it exists.
-    match kill(Pid::from_raw(pid), None) {
-        Ok(()) => true,
-        Err(Errno::EPERM) => true,
-        Err(_) => false,
-    }
-}
-
-#[cfg(not(unix))]
-fn process_is_alive(pid: u32) -> bool {
-    pid != 0
-}
-
 pub fn read_bridge_file() -> Option<BridgeFile> {
     let path = bridge_file_path()?;
     let contents = std::fs::read_to_string(path).ok()?;
@@ -401,6 +376,20 @@ mod tests {
         assert!(
             process_is_alive(std::process::id()),
             "this process is alive"
+        );
+        let mut exited = if cfg!(windows) {
+            std::process::Command::new("cmd")
+                .args(["/C", "exit"])
+                .spawn()
+        } else {
+            std::process::Command::new("true").spawn()
+        }
+        .expect("a short-lived process");
+        let pid = exited.id();
+        exited.wait().expect("the process exits");
+        assert!(
+            !process_is_alive(pid),
+            "a bridge file naming an exited shell was taken as live"
         );
     }
 

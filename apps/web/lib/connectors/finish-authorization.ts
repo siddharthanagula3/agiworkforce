@@ -105,6 +105,14 @@ export async function finishConnectorAuthorization(input: {
   if (pending.mcpUrl) {
     const completion = await completeMcpAuthorization({ pending, state, code, iss });
 
+    if (completion.status === 'superseded') {
+      return {
+        returnPath: pending.returnPath,
+        connectorId: pending.connectorId,
+        status: 'invalid_state',
+      };
+    }
+
     if (completion.status === 'error') {
       logger.warn(
         { connectorId: pending.connectorId, reason: completion.reason },
@@ -160,7 +168,7 @@ export async function finishConnectorAuthorization(input: {
       requestedScopes: pending.requestedScopes,
       resource,
     });
-    await upsertConnectorOAuthGrant(
+    const stored = await upsertConnectorOAuthGrant(
       userId,
       pending.connectorId,
       {
@@ -174,7 +182,19 @@ export async function finishConnectorAuthorization(input: {
         resourceUrl: resource,
       },
       { accountLabel: tokens.accountLabel },
+      pending.authorizationId,
     );
+    if (!stored) {
+      logger.warn(
+        { connectorId: pending.connectorId },
+        '[connector-oauth] authorization was replaced or cancelled before it was saved; nothing was stored',
+      );
+      return {
+        returnPath: pending.returnPath,
+        connectorId: pending.connectorId,
+        status: 'invalid_state',
+      };
+    }
     grantedScopes = tokens.grantedScopes;
   } catch (error) {
     logger.warn(

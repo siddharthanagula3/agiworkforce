@@ -9,6 +9,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { earliestPickerDateInZone } from '../timing';
 
 type ScheduleFieldMode = 'date' | 'time';
 
@@ -18,6 +19,7 @@ interface ScheduleDateTimeFieldProps {
   value: string;
   onChange: (value: string) => void;
   error?: string;
+  timezone?: string;
 }
 
 function pad(value: number): string {
@@ -63,12 +65,14 @@ export function ScheduleDateTimeField({
   value,
   onChange,
   error,
+  timezone,
 }: ScheduleDateTimeFieldProps) {
   const colors = useThemeColors();
   const [iosOpen, setIosOpen] = useState(false);
   const pickerValue = toPickerDate(mode, value);
   const shown = displayValue(mode, value);
   const Icon = mode === 'date' ? CalendarDays : Clock;
+  const minimumDate = timezone ? earliestPickerDateInZone(timezone) : new Date();
 
   const handleValueChange = (_event: DateTimePickerChangeEvent, date: Date) => {
     onChange(fromPickerDate(mode, date));
@@ -79,7 +83,7 @@ export function ScheduleDateTimeField({
       DateTimePickerAndroid.open({
         value: pickerValue,
         mode,
-        ...(mode === 'date' ? { minimumDate: new Date() } : {}),
+        ...(mode === 'date' ? { minimumDate } : {}),
         onValueChange: handleValueChange,
       });
       return;
@@ -120,7 +124,7 @@ export function ScheduleDateTimeField({
           value={pickerValue}
           mode={mode}
           display={mode === 'date' ? 'inline' : 'spinner'}
-          {...(mode === 'date' ? { minimumDate: new Date() } : {})}
+          {...(mode === 'date' ? { minimumDate } : {})}
           onValueChange={handleValueChange}
         />
       ) : null}

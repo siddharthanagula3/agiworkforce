@@ -15,7 +15,7 @@ export const undoLast = async (taskId?: string): Promise<UndoResult> => {
     });
   } catch (error) {
     console.error('Failed to undo last change:', error);
-    toast.error('Failed to undo last change');
+    toast.error(typeof error === 'string' ? error : 'Failed to undo last change');
     throw error;
   }
 };

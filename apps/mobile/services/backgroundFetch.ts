@@ -1,13 +1,12 @@
 import * as BackgroundTask from 'expo-background-task';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
 import { api } from './api';
 import { getAuthToken } from './authSession';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { notificationAllowed, vibrationAllowed } from './notificationGate';
 import {
-  androidChannelId,
+  immediateNotificationTrigger,
   registerAndroidChannels,
   type NotificationPriority,
 } from './notificationChannels';
@@ -111,13 +110,13 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
             categoryIdentifier: AGENT_APPROVAL_CATEGORY_IDENTIFIER,
             interruptionLevel: 'timeSensitive',
           };
-          if (Platform.OS === 'android') {
-            (content as Record<string, unknown>).channelId = androidChannelId(
+          await Notifications.scheduleNotificationAsync({
+            content,
+            trigger: immediateNotificationTrigger(
               APPROVAL_PRIORITY,
               vibrationAllowed(APPROVAL_PRIORITY),
-            );
-          }
-          await Notifications.scheduleNotificationAsync({ content, trigger: null });
+            ),
+          });
           lastApprovalNotificationKey = notificationKey;
           break;
         }

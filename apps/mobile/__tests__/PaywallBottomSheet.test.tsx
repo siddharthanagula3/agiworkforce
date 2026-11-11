@@ -6,6 +6,7 @@ jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
@@ -115,7 +116,11 @@ describe('PaywallBottomSheet rendering', () => {
       <PaywallBottomSheet {...defaultProps} feature="opus_5" requiredTier="pro" />,
     );
 
-    expect(getByText(/Opus access requires the Premium plan/i)).toBeTruthy();
+    expect(
+      getByText(
+        new RegExp(`Opus access requires the ${getBillingPlanPricing('pro').label} plan`, 'i'),
+      ),
+    ).toBeTruthy();
     expect(queryByText(/Opus \d/i)).toBeNull();
   });
 
@@ -141,11 +146,13 @@ describe('PaywallBottomSheet rendering', () => {
     expect(getAllByText('Upgrade to Basic').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders the canonical Max label for max-tier model access', () => {
+  it('renders the registry label for max-tier model access', () => {
     const { getAllByText } = render(
       <PaywallBottomSheet {...defaultProps} requiredTier="max" feature="model_access" />,
     );
-    expect(getAllByText('Upgrade to Max').length).toBeGreaterThanOrEqual(1);
+    expect(
+      getAllByText(`Upgrade to ${getBillingPlanPricing('max').label}`).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it('shows honest unavailable copy instead of a self-routing purchase CTA', () => {

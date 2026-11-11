@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState, useEffect, useRef } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import {
   Dialog,
   DialogContent,
@@ -276,7 +277,7 @@ function ProjectSettingsSession({
                     maxLength={100}
                     className="h-11 rounded-xl bg-muted/40 ps-10"
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') void handleSave();
+                      if (e.key === 'Enter' && !isImeComposingKey(e.nativeEvent)) void handleSave();
                     }}
                   />
                 </div>

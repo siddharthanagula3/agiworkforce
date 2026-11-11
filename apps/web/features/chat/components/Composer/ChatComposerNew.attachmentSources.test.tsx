@@ -380,6 +380,19 @@ describe('deferred clipboard ownership in the real composer', () => {
     expect(await screen.findByRole('button', { name: /^Remove clipboard-.*\.txt$/ })).toBeTruthy();
   });
 
+  it('tells the user when the clipboard text was cut short', async () => {
+    const pending = pendingClipboard();
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Attach clipboard' }));
+    await act(async () => pending.resolve({ text: 'long text', textTruncated: true }));
+    expect(await screen.findByRole('button', { name: /^Remove clipboard-.*\.txt$/ })).toBeTruthy();
+    expect(
+      screen.getByText(
+        'The clipboard text was too long, so only the first part was attached. Attach the original file to include all of it.',
+      ),
+    ).toBeTruthy();
+  });
+
   it('discards late data after the rendered draft changes', async () => {
     const pending = pendingClipboard();
     const { rerender } = render(<ChatComposerNew onSend={vi.fn()} />);

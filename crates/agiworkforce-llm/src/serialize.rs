@@ -421,21 +421,27 @@ pub fn convert_message_to_openai_responses(m: &Message) -> Vec<Value> {
     }
 }
 
-/// Build a `tool_use_id -> function name` map from all ToolUse blocks. Gemini's
+/// Convert the non-system messages to Gemini `contents`. Gemini's
 /// `functionResponse.name` must equal the originating `functionCall.name`, but a
-/// ToolResult only carries `tool_use_id`, so the name is resolved via this map.
-pub fn build_gemini_tool_name_map(messages: &[Message]) -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    for m in messages {
-        if let MessageContent::Blocks(blocks) = &m.content {
-            for b in blocks {
-                if let ContentBlock::ToolUse { id, name, .. } = b {
-                    map.insert(id.clone(), name.clone());
+/// ToolResult only carries `tool_use_id`, and Gemini call ids restart in every
+/// response, so each result takes the name of the nearest earlier call with
+/// that id rather than of any call in the conversation.
+pub fn convert_messages_to_gemini(messages: &[Message]) -> Vec<Value> {
+    let mut tool_names = HashMap::new();
+    messages
+        .iter()
+        .filter(|m| m.role != "system")
+        .map(|m| {
+            if let MessageContent::Blocks(blocks) = &m.content {
+                for b in blocks {
+                    if let ContentBlock::ToolUse { id, name, .. } = b {
+                        tool_names.insert(id.clone(), name.clone());
+                    }
                 }
             }
-        }
-    }
-    map
+            convert_message_to_gemini(m, &tool_names)
+        })
+        .collect()
 }
 
 pub const GEMINI_SKIP_THOUGHT_SIGNATURE: &str = "skip_thought_signature_validator";
@@ -813,24 +819,23 @@ pub fn compact_ollama_message_values(messages: &mut [Value], tools_available: bo
 /// rejected by Ollama's native API with a 400.
 pub fn ollama_nativize_message_values(messages: &mut [Value]) {
     // Ollama's native tool-result contract names the function with
-    // `tool_name`; `tool_call_id` is the OpenAI-compatible shape. Build the
-    // ID-to-name map before mutating the messages so parallel tool results are
-    // paired with the exact preceding assistant calls.
-    let tool_names_by_id: HashMap<String, String> = messages
-        .iter()
-        .filter_map(|message| message.get("tool_calls").and_then(Value::as_array))
-        .flatten()
-        .filter_map(|tool_call| {
-            let id = tool_call.get("id").and_then(Value::as_str)?;
-            let name = tool_call
-                .get("function")
-                .and_then(|function| function.get("name"))
-                .and_then(Value::as_str)?;
-            Some((id.to_string(), name.to_string()))
-        })
-        .collect();
-
+    // `tool_name`; `tool_call_id` is the OpenAI-compatible shape. Native call
+    // ids restart in every response, so a result takes the name of the nearest
+    // earlier call with its id.
+    let mut tool_names_by_id: HashMap<String, String> = HashMap::new();
     for message in messages.iter_mut() {
+        if let Some(tool_calls) = message.get("tool_calls").and_then(Value::as_array) {
+            for tool_call in tool_calls {
+                let id = tool_call.get("id").and_then(Value::as_str);
+                let name = tool_call
+                    .get("function")
+                    .and_then(|function| function.get("name"))
+                    .and_then(Value::as_str);
+                if let (Some(id), Some(name)) = (id, name) {
+                    tool_names_by_id.insert(id.to_string(), name.to_string());
+                }
+            }
+        }
         if message.get("role").and_then(Value::as_str) != Some("tool") {
             continue;
         }
@@ -1292,18 +1297,56 @@ mod tests {
         assert_eq!(parts[0]["functionResponse"]["name"], "read_file");
     }
 
+    fn tool_exchange(id: &str, name: &str, output: &str) -> [Message; 2] {
+        [
+            Message::blocks(
+                "assistant",
+                vec![ContentBlock::ToolUse {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    input: serde_json::json!({}),
+                }],
+            ),
+            Message::blocks(
+                "user",
+                vec![ContentBlock::ToolResult {
+                    tool_use_id: id.to_string(),
+                    content: output.to_string(),
+                    is_error: false,
+                }],
+            ),
+        ]
+    }
+
     #[test]
-    fn gemini_tool_name_map_collects_tool_use_ids() {
-        let msg = Message::blocks(
-            "assistant",
-            vec![ContentBlock::ToolUse {
-                id: "call_9".to_string(),
-                name: "grep_files".to_string(),
-                input: serde_json::json!({}),
-            }],
+    fn gemini_results_keep_their_own_call_name_when_a_later_response_reuses_the_id() {
+        let mut messages = vec![
+            Message::text("system", "be brief"),
+            Message::text("user", "go"),
+        ];
+        messages.extend(tool_exchange("call_0", "read_file", "A output"));
+        messages.extend(tool_exchange("call_0", "grep_files", "B output"));
+
+        let contents = convert_messages_to_gemini(&messages);
+
+        assert_eq!(contents.len(), 5);
+        assert_eq!(contents[1]["parts"][0]["functionCall"]["name"], "read_file");
+        assert_eq!(
+            contents[2]["parts"][0]["functionResponse"]["name"],
+            "read_file"
         );
-        let map = build_gemini_tool_name_map(std::slice::from_ref(&msg));
-        assert_eq!(map.get("call_9").map(String::as_str), Some("grep_files"));
+        assert_eq!(
+            contents[2]["parts"][0]["functionResponse"]["response"]["result"],
+            "A output"
+        );
+        assert_eq!(
+            contents[3]["parts"][0]["functionCall"]["name"],
+            "grep_files"
+        );
+        assert_eq!(
+            contents[4]["parts"][0]["functionResponse"]["name"],
+            "grep_files"
+        );
     }
 
     #[test]
@@ -1596,5 +1639,31 @@ mod tests {
         assert_eq!(msgs[2]["tool_name"], "get_status");
         assert!(msgs[1].get("tool_call_id").is_none());
         assert!(msgs[2].get("tool_call_id").is_none());
+    }
+
+    #[test]
+    fn ollama_nativize_names_each_result_after_its_own_response_when_ids_repeat() {
+        let call = |name: &str| {
+            serde_json::json!({
+                "role": "assistant",
+                "tool_calls": [{
+                    "id": "ollama_0",
+                    "type": "function",
+                    "function": { "name": name, "arguments": "{}" }
+                }]
+            })
+        };
+        let result = |content: &str| serde_json::json!({ "role": "tool", "tool_call_id": "ollama_0", "content": content });
+        let mut msgs = vec![
+            call("read_file"),
+            result("A output"),
+            call("grep_files"),
+            result("B output"),
+        ];
+
+        ollama_nativize_message_values(&mut msgs);
+
+        assert_eq!(msgs[1]["tool_name"], "read_file");
+        assert_eq!(msgs[3]["tool_name"], "grep_files");
     }
 }

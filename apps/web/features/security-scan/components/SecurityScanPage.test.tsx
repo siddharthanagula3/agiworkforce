@@ -217,6 +217,65 @@ describe('SecurityScanPage', () => {
     );
   });
 
+  it('shows a failed delivery recorded on an approved finding after a reload', async () => {
+    const user = userEvent.setup();
+    const reloaded = state({
+      ...REPORT,
+      findings: [
+        {
+          ...FINDING,
+          state: 'approved',
+          decidedAt: '2026-10-22T10:05:00.000Z',
+          delivery: {
+            status: 'failed',
+            pullRequestUrl: null,
+            error: 'No connected GitHub installation can push to this repository',
+          },
+        },
+      ],
+    });
+    render(
+      <SecurityScanPage
+        sessionId={SESSION_ID}
+        api={fakeApi({
+          ...reloaded,
+          session: { ...reloaded.session, pullRequestUrl: 'https://github.com/acme/app/pull/3' },
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: /SQL injection in handler/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No connected GitHub installation can push to this repository',
+    );
+    expect(screen.queryByRole('link', { name: 'View pull request' })).toBeNull();
+  });
+
+  it('says a delivery has not reported back when only the approval was recorded', async () => {
+    const user = userEvent.setup();
+    render(
+      <SecurityScanPage
+        sessionId={SESSION_ID}
+        api={fakeApi(
+          state({
+            ...REPORT,
+            findings: [
+              {
+                ...FINDING,
+                state: 'approved',
+                decidedAt: '2026-10-22T10:05:00.000Z',
+                delivery: { status: 'pending', pullRequestUrl: null, error: null },
+              },
+            ],
+          }),
+        )}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: /SQL injection in handler/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/has not reported back/);
+  });
+
   it('dismisses only after confirmation', async () => {
     const user = userEvent.setup();
     const api = fakeApi(state(REPORT));

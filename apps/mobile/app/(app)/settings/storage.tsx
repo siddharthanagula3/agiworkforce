@@ -1,6 +1,6 @@
 import { useLocalDataExport } from '@/src/features/settings/data-controls/useLocalDataExport';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -43,6 +43,22 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+type Reading<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'failed' };
+
+const LOADING = { status: 'loading' } as const;
+
+function readingOf<T>(result: PromiseSettledResult<T>): Reading<T> {
+  return result.status === 'fulfilled'
+    ? { status: 'ready', value: result.value }
+    : { status: 'failed' };
+}
+
+function formatReading(reading: Reading<number>): string {
+  if (reading.status === 'loading') return 'Measuring…';
+  if (reading.status === 'failed') return 'Unavailable';
+  return formatBytes(reading.value);
+}
+
 function exportStageLabel(stage: DsarExportProgress['stage']): string {
   switch (stage) {
     case 'conversations':
@@ -69,10 +85,11 @@ export default function StorageManagerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string }>();
 
-  const [models, setModels] = useState<InstalledModel[]>([]);
-  const [modelStorageBytes, setModelStorageBytes] = useState(0);
-  const [cacheBytes, setCacheBytes] = useState(0);
+  const [models, setModels] = useState<Reading<InstalledModel[]>>(LOADING);
+  const [modelStorageBytes, setModelStorageBytes] = useState<Reading<number>>(LOADING);
+  const [cacheBytes, setCacheBytes] = useState<Reading<number>>(LOADING);
   const [freeBytes, setFreeBytes] = useState<number | null>(null);
+  const latestLoad = useRef(0);
 
   const allowCellularDownloads = useModelInstallStore((s) => s.allowCellularDownloads);
   const setAllowCellularDownloads = useModelInstallStore((s) => s.setAllowCellularDownloads);
@@ -81,21 +98,32 @@ export default function StorageManagerScreen() {
   const { exporting: isExporting, progress: exportProgress, handleExport } = useLocalDataExport();
   const [isWiping, setIsWiping] = useState(false);
 
-  const loadStorageInfo = useCallback(async () => {
-    const [installed, modelBytes, cacheBytes, diskFreeBytes] = await Promise.all([
+  const loadStorageInfo = useCallback(async (): Promise<boolean> => {
+    const load = ++latestLoad.current;
+    const [installed, modelBytes, measuredCache, diskFreeBytes] = await Promise.allSettled([
       listInstalledModels(),
       getModelStorageBytes(),
       cacheDirectory ? getDirectorySizeBytes(cacheDirectory) : Promise.resolve(0),
-      getFreeDiskStorageAsync().catch(() => null),
+      getFreeDiskStorageAsync(),
     ]);
-    setModels(installed);
-    setModelStorageBytes(modelBytes);
-    setCacheBytes(cacheBytes);
-    setFreeBytes(diskFreeBytes);
+    if (load === latestLoad.current) {
+      setModels(readingOf(installed));
+      setModelStorageBytes(readingOf(modelBytes));
+      setCacheBytes(readingOf(measuredCache));
+      setFreeBytes(diskFreeBytes.status === 'fulfilled' ? diskFreeBytes.value : null);
+    }
+    return [installed, modelBytes, measuredCache].every((result) => result.status === 'fulfilled');
   }, []);
 
   useEffect(() => {
-    loadStorageInfo().catch(() => undefined);
+    void loadStorageInfo();
+  }, [loadStorageInfo]);
+
+  const retryStorageInfo = useCallback(() => {
+    setModels(LOADING);
+    setModelStorageBytes(LOADING);
+    setCacheBytes(LOADING);
+    void loadStorageInfo();
   }, [loadStorageInfo]);
 
   const backHref = isStorageReturnPath(params.returnTo)
@@ -122,7 +150,11 @@ export default function StorageManagerScreen() {
                 await deleteDownloadedModel(model);
                 await deleteInstalledModel(model.id);
                 forgetInstalledModel(model.id);
-                setModels((prev) => prev.filter((m) => m.id !== model.id));
+                setModels((prev) =>
+                  prev.status === 'ready'
+                    ? { status: 'ready', value: prev.value.filter((m) => m.id !== model.id) }
+                    : prev,
+                );
               } catch {
                 Alert.alert(
                   'Model removal failed',
@@ -130,12 +162,12 @@ export default function StorageManagerScreen() {
                 );
                 return;
               }
-              await loadStorageInfo().catch(() => {
+              if (!(await loadStorageInfo())) {
                 Alert.alert(
                   'Storage refresh failed',
                   'The model was removed, but storage totals could not be refreshed. Reopen Storage to refresh them.',
                 );
-              });
+              }
             },
           },
         ],
@@ -157,7 +189,7 @@ export default function StorageManagerScreen() {
             if (cacheDirectory) {
               await deleteAsync(cacheDirectory, { idempotent: true });
             }
-            setCacheBytes(0);
+            setCacheBytes({ status: 'ready', value: 0 });
           },
         },
       ],
@@ -201,8 +233,27 @@ export default function StorageManagerScreen() {
     );
   }, [router]);
 
-  const totalModelBytes = models.reduce((sum, m) => sum + (m.size_bytes ?? 0), 0);
-  const displayedModelStorageBytes = Math.max(modelStorageBytes, totalModelBytes);
+  const installedModels = models.status === 'ready' ? models.value : [];
+  const totalModelBytes = installedModels.reduce((sum, m) => sum + (m.size_bytes ?? 0), 0);
+  const displayedModelStorageBytes: Reading<number> =
+    modelStorageBytes.status === 'ready'
+      ? { status: 'ready', value: Math.max(modelStorageBytes.value, totalModelBytes) }
+      : modelStorageBytes;
+  const deviceReadFailed = modelStorageBytes.status === 'failed' || cacheBytes.status === 'failed';
+
+  const retryButton = (
+    <Pressable
+      onPress={retryStorageInfo}
+      className="self-start justify-center active:opacity-70"
+      style={{ minHeight: 44 }}
+      accessibilityLabel="Try reading storage again"
+      accessibilityRole="button"
+    >
+      <Text className="text-sm font-medium" style={{ color: c.teal }}>
+        Try again
+      </Text>
+    </Pressable>
+  );
 
   const wipeOverlay = isWiping ? (
     <View
@@ -234,16 +285,24 @@ export default function StorageManagerScreen() {
               <Text className="text-sm" style={{ color: c.textSecondary }}>
                 Downloaded models (estimated)
               </Text>
-              <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
-                {formatBytes(displayedModelStorageBytes)}
+              <Text
+                testID="storage-model-bytes"
+                className="text-sm font-medium"
+                style={{ color: c.textPrimary }}
+              >
+                {formatReading(displayedModelStorageBytes)}
               </Text>
             </View>
             <View className="flex-row justify-between">
               <Text className="text-sm" style={{ color: c.textSecondary }}>
                 Cache
               </Text>
-              <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
-                {formatBytes(cacheBytes)}
+              <Text
+                testID="storage-cache-bytes"
+                className="text-sm font-medium"
+                style={{ color: c.textPrimary }}
+              >
+                {formatReading(cacheBytes)}
               </Text>
             </View>
             {freeBytes !== null && (
@@ -260,6 +319,7 @@ export default function StorageManagerScreen() {
                 </Text>
               </View>
             )}
+            {deviceReadFailed ? retryButton : null}
           </View>
         </Card>
 
@@ -291,19 +351,28 @@ export default function StorageManagerScreen() {
                 Downloaded Models
               </Text>
             </View>
-            {models.length > 0 && (
+            {installedModels.length > 0 && (
               <Text className="text-sm" style={{ color: c.textMuted }}>
                 Estimated {formatBytes(totalModelBytes)}
               </Text>
             )}
           </View>
 
-          {models.length === 0 ? (
+          {models.status === 'loading' ? (
+            <LoadingIndicator size="small" />
+          ) : models.status === 'failed' ? (
+            <View>
+              <Text className="text-sm" style={{ color: c.textMuted }}>
+                Could not read downloaded models.
+              </Text>
+              {retryButton}
+            </View>
+          ) : installedModels.length === 0 ? (
             <Text className="text-sm" style={{ color: c.textMuted }}>
               No models downloaded. Download a model from Settings → General → Models.
             </Text>
           ) : (
-            models.map((model, idx) => (
+            installedModels.map((model, idx) => (
               <View key={model.id}>
                 {idx > 0 && <Separator />}
                 <View className="flex-row items-center justify-between py-3">
@@ -381,7 +450,7 @@ export default function StorageManagerScreen() {
                 Clear cache
               </Text>
               <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
-                Removes temp files · {formatBytes(cacheBytes)}
+                Removes temp files · {formatReading(cacheBytes)}
               </Text>
             </View>
           </Pressable>

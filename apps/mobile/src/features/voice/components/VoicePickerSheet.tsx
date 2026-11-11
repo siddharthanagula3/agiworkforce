@@ -20,6 +20,12 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { liveVoiceModeUnavailableReason } from '../services/liveVoiceAvailability';
 import { VOICE_PRESETS } from '../voicePresets';
+import { applyVoicePreset } from '@/src/features/voice/services/voicePresetSelection';
+import {
+  activeSpeechLanguage,
+  deviceSpeechLocale,
+} from '@/src/features/voice/services/speechSettings';
+import { getVoicesForLanguage, type VoiceInfo } from '@/src/features/voice/services/tts';
 import {
   loadVoiceSamples,
   playVoiceSample,
@@ -131,7 +137,6 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
   if (visible && !opened) setOpened(true);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
-  const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
   const liveVoice = useSettingsStore((s) => s.liveVoice);
   const setLiveVoice = useSettingsStore((s) => s.setLiveVoice);
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -143,6 +148,23 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
     }) === null;
   const choices: readonly VoiceChoice[] = live ? LIVE_CHOICES : VOICE_PRESETS;
   const selectedId = live ? liveVoice : selectedPresetId;
+
+  const [installedVoices, setInstalledVoices] = useState<VoiceInfo[] | null>(null);
+  useEffect(() => {
+    if (!visible || live) return undefined;
+    let cancelled = false;
+    const language = activeSpeechLanguage() ?? deviceSpeechLocale().split('-')[0] ?? '';
+    getVoicesForLanguage(language)
+      .then((voices) => {
+        if (!cancelled) setInstalledVoices(voices);
+      })
+      .catch(() => {
+        if (!cancelled) setInstalledVoices(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, live]);
 
   const initialIndex = Math.max(
     0,
@@ -198,13 +220,13 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
     const choice = choices[index];
     if (choice) {
       if (live) setLiveVoice(choice.id);
-      else setSelectedPresetId(choice.id);
+      else applyVoicePreset(choice.id, installedVoices);
     }
     if (hapticsEnabled) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     onStart();
-  }, [choices, index, live, setLiveVoice, setSelectedPresetId, hapticsEnabled, onStart]);
+  }, [choices, index, live, setLiveVoice, installedVoices, hapticsEnabled, onStart]);
 
   const active = choices[index];
 

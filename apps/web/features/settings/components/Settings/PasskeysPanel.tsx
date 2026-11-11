@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import {
   MAX_PASSKEY_NAME_CHARS,
   usePasskeys,
@@ -418,6 +419,7 @@ function OwnedPasskeysPanel({
                           setRenaming({ ...renaming, name: event.target.value });
                       }}
                       onKeyDown={(event) => {
+                        if (isImeComposingKey(event.nativeEvent)) return;
                         if (event.key === 'Enter') {
                           event.preventDefault();
                           void handleRename();

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { DEFAULT_DATA_REGION } from '@agiworkforce/compliance';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/logger';
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       handlers: BACKGROUND_JOB_HANDLERS,
       budgetMs: DRAIN_BUDGET_MS,
       maxInFlight: MAX_JOBS_IN_FLIGHT,
+      region: DEFAULT_DATA_REGION,
     });
     if (!summary.drained) {
       logger.warn(summary, 'Background job drain ended with work still queued');

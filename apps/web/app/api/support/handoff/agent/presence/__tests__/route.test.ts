@@ -49,7 +49,8 @@ vi.mock('@/lib/logger', () => ({
   shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/support/handoff/store', () => ({
+vi.mock('@/lib/support/handoff/store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   appendHandoffMessage: vi.fn(),
   cancelSessionForOwner: vi.fn(),
   claimExpiredWaitingBatch: vi.fn(),
@@ -189,3 +190,5 @@ describe('GET /api/support/handoff/agent/presence', () => {
     expect(await response.json()).toEqual({ availability: { live: true, reason: 'live' } });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/support/handoff/store');

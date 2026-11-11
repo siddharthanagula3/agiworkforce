@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-18
+Last updated: 2026-11-10
 
 ## Monorepo Shape
 
@@ -99,7 +99,8 @@ Local -> BYOK handoffs are preview-only transfers. A confirmed fork persists the
 
 The retained Tauri implementation contains the repository's first local
 heavy-compute paths, but D-2026-09-15-04 makes Electron the sole public Desktop
-and that shell is managed-cloud-only for inference. The Tauri details below are
+and its chat is managed-cloud-only for inference while its local coding
+sessions run the CLI. The Tauri details below are
 implementation inventory, not public release evidence. Web and Mobile should
 request, track, preview, download, and share generated files. Mobile should not
 be the first heavy local PDF/PPTX/DOCX compute surface. Generated-file status,

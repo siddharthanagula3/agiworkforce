@@ -48,7 +48,8 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/support/handoff/request-identity', () => ({
   resolveHandoffIdentity: mocks.resolveHandoffIdentity,
 }));
-vi.mock('@/lib/support/handoff/store', () => ({
+vi.mock('@/lib/support/handoff/store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   cancelSessionForOwner: vi.fn(),
   claimExpiredWaitingBatch: vi.fn(),
   claimExpiredWaitingSession: vi.fn(),
@@ -226,3 +227,5 @@ describe('POST /api/support/handoff/[sessionId]/messages', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/support/handoff/store');

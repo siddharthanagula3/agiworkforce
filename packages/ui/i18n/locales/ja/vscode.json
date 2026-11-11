@@ -226,7 +226,7 @@
   "sessionHandoff.interrupted": "最後のターンは中断されたため、自動的には続行されません。",
   "sessionHandoff.continueQuestion": "{source} のセッションをこのウィンドウで続行しますか？",
   "sessionHandoff.startQuestion": "{source} のスレッドから、このウィンドウでセッションを開始しますか？",
-  "webview.contextUsedUnknownWindow_other": "最後のターンで {count} 個のトークンを使用しました。このモデルのコンテキスト ウィンドウはここでは不明です。",
+  "webview.contextUsedUnknownWindow_other": "最後のターン後のコンテキスト: {count} 個のトークン。このモデルのコンテキスト ウィンドウはここでは不明です。",
   "webview.contextUsed_other": "最後のターン後のコンテキスト: {count} 個のトークン中 {used} 個を使用 ({percent}%)",
   "webview.answerTokens_other": "{model} · {count} 個のトークン (入力 {input}、出力 {output})",
   "webview.moreLinesHidden_other": "ほか {count} 行は非表示",

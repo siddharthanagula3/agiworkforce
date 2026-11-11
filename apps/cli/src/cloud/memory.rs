@@ -113,6 +113,8 @@ pub struct MemoryCache {
     pub entries: Vec<CachedMemory>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub account_memory_off: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synced_through: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -158,6 +160,14 @@ impl MemoryCache {
                 .cmp(&a.pinned)
                 .then_with(|| b.updated_at.cmp(&a.updated_at))
         });
+    }
+
+    pub fn adopt(&mut self, response: &MemoryPullResponse) {
+        self.apply(&response.memories);
+        if let Some(enabled) = response.memory_enabled {
+            self.account_memory_off = !enabled;
+        }
+        self.synced_through = Some(response.cursor.clone());
     }
 
     pub fn contains(&self, content: &str) -> bool {
@@ -597,5 +607,40 @@ mod tests {
         apply_pull_response(&response, &mut state);
         assert_eq!(state.memories.base_version("m1"), "8");
         assert_eq!(state.memories.cursor, "8");
+    }
+
+    #[test]
+    fn a_tombstone_the_cache_never_stored_is_pulled_again() {
+        let mut durable = MemoryCache::default();
+        durable.adopt(&MemoryPullResponse {
+            memories: vec![delta("m1", "live", "10", false)],
+            cursor: "10".to_string(),
+            has_more: false,
+            memory_enabled: None,
+        });
+        let mut state = SyncState::default();
+        state.memories.advance("10");
+
+        let tombstone = MemoryPullResponse {
+            memories: vec![delta("m1", "live", "11", true)],
+            cursor: "11".to_string(),
+            has_more: false,
+            memory_enabled: None,
+        };
+        let mut unsaved = durable.clone();
+        unsaved.adopt(&tombstone);
+        apply_pull_response(&tombstone, &mut state);
+        assert_eq!(state.memories.cursor, "11");
+
+        let since =
+            super::super::state::pull_frontier(&state.memories, durable.synced_through.as_deref());
+        assert_eq!(since, "10");
+        assert!(tombstone
+            .memories
+            .iter()
+            .any(|memory| super::super::state::version_greater(&memory.server_version, &since)));
+        durable.adopt(&tombstone);
+        assert!(durable.entries.is_empty());
+        assert_eq!(durable.synced_through.as_deref(), Some("11"));
     }
 }

@@ -140,6 +140,10 @@ jest.mock('@/stores/notificationPrefsStore', () => {
   return {
     useNotificationPrefsStore: {
       getState: jest.fn(() => notifState),
+      persist: {
+        hasHydrated: jest.fn(() => true),
+        onFinishHydration: jest.fn(() => () => undefined),
+      },
     },
     getCategoryForType: jest.requireActual('../stores/notificationPrefsStore').getCategoryForType,
     __notifState: notifState,

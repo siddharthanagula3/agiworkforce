@@ -1,4 +1,4 @@
-import { Menu, app, type MenuItemConstructorOptions } from 'electron';
+import { Menu, app, type MenuItem, type MenuItemConstructorOptions } from 'electron';
 import {
   COMPUTER_USE_STOP_SHORTCUT,
   HOST_MENU_SHORTCUTS,
@@ -24,6 +24,15 @@ import type { WindowArrangement, WindowTile } from './garnishCore';
  * the action twice or steal it from whoever had it. Those items show the chord
  * and stay clickable, which is what a menu is for.
  */
+
+function changeLaunchAtLogin(item: MenuItem): void {
+  try {
+    setLaunchAtLogin(item.checked);
+  } catch (error) {
+    item.checked = isLaunchAtLoginEnabled();
+    console.warn('[launch-at-login] the change was not saved:', error);
+  }
+}
 
 export interface AppMenuActions {
   newChat: () => void;
@@ -131,7 +140,7 @@ function appleMenu(actions: AppMenuActions): MenuItemConstructorOptions[] {
           label: 'Launch at Login',
           type: 'checkbox',
           checked: isLaunchAtLoginEnabled(),
-          click: (item) => setLaunchAtLogin(item.checked),
+          click: changeLaunchAtLogin,
         },
         { type: 'separator' },
         { role: 'services' },
@@ -211,7 +220,7 @@ function fileMenu(
         label: 'Launch at Login',
         type: 'checkbox',
         checked: isLaunchAtLoginEnabled(),
-        click: (item) => setLaunchAtLogin(item.checked),
+        click: changeLaunchAtLogin,
       },
       { type: 'separator' },
       { role: 'quit' },

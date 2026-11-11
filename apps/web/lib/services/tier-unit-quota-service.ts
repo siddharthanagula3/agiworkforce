@@ -74,8 +74,8 @@ export function getTierUnitAllowance(
 const NUMERIC_JSON_TEXT = String.raw`^[0-9]+(\.[0-9]+)?$`;
 
 const SECONDS_PER_MINUTE = 60;
-const TRANSCRIPTION_OPERATION = 'transcription';
-const LIVE_VOICE_SESSION_OPERATION = 'voice_live_session';
+export const TRANSCRIPTION_OPERATION = 'transcription';
+export const LIVE_VOICE_SESSION_OPERATION = 'voice_live_session';
 
 const BYTES_PER_GIBIBYTE = 1024 ** 3;
 const UTC_DAY_START = `date_trunc('day', now() at time zone 'utc') at time zone 'utc'`;

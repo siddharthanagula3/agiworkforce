@@ -106,9 +106,13 @@ export function ContextDetailsSheet({
                   lineHeight: 19,
                 }}
               >
-                {budget.status === 'compact'
-                  ? 'The oldest messages are summarized so the newest fit. A fresh chat keeps answers fast and complete.'
-                  : 'This chat is close to the point where the oldest messages get summarized.'}
+                {budget.runsOnDevice
+                  ? budget.status === 'compact'
+                    ? 'This chat has reached the limit of the on-device model. Start a new chat to keep answers complete.'
+                    : 'This chat is close to the limit of the on-device model. A new chat keeps answers complete.'
+                  : budget.status === 'compact'
+                    ? 'The oldest messages are summarized so the newest fit. A fresh chat keeps answers fast and complete.'
+                    : 'This chat is close to the point where the oldest messages get summarized.'}
               </Text>
             ) : null}
           </View>

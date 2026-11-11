@@ -68,8 +68,35 @@ impl ProjectRegistry {
         Ok(registry)
     }
 
-    /// Save the project registry to `~/.agiworkforce/projects.json`.
-    pub fn save(&self, config_dir: &Path) -> Result<()> {
+    // The change runs under the interprocess mutation lock and must not
+    // re-enter ProjectRegistry::update.
+    pub fn update<T>(config_dir: &Path, change: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        let _lock = Self::mutation_lock(config_dir)?;
+        let mut registry = Self::load(config_dir)?;
+        let result = change(&mut registry)?;
+        registry.save(config_dir)?;
+        Ok(result)
+    }
+
+    fn mutation_lock(config_dir: &Path) -> Result<std::fs::File> {
+        std::fs::create_dir_all(config_dir)
+            .context("Failed to create config directory for projects.json")?;
+        let mut options = std::fs::OpenOptions::new();
+        options.create(true).truncate(false).write(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let file = options
+            .open(config_dir.join("projects.lock"))
+            .context("Failed to open the projects.json mutation lock")?;
+        file.lock()
+            .context("Failed to lock projects.json mutations")?;
+        Ok(file)
+    }
+
+    fn save(&self, config_dir: &Path) -> Result<()> {
         let path = Self::registry_path(config_dir);
         if let Some(parent) = path.parent() {
             if !parent.exists() {
@@ -183,15 +210,34 @@ impl ProjectRegistry {
 
     /// Look up the entry that governs `path`: the identity-keyed grant first,
     /// then a legacy path-only entry. A path entry for another identity must
-    /// not survive a remote change.
+    /// not survive a remote change. Several checkouts can carry one identity;
+    /// the row for this very folder governs it, otherwise the most recent
+    /// decision does, and an undecided tie resolves to the untrusted row.
     pub fn entry_for(&self, path: &Path, identity: &str) -> Option<&ProjectEntry> {
         let path_key = Self::path_key(path);
         if !identity.is_empty() {
-            if let Some(entry) = self
+            let decided_at = |entry: &ProjectEntry| {
+                [entry.trusted_at.as_deref(), entry.revoked_at.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|stamp| chrono::DateTime::parse_from_rfc3339(stamp).ok())
+                    .max()
+            };
+            let governing = self
                 .projects
-                .values()
-                .find(|entry| entry.identity.as_deref() == Some(identity))
-            {
+                .iter()
+                .filter(|(_, entry)| entry.identity.as_deref() == Some(identity))
+                .max_by(|(left_key, left), (right_key, right)| {
+                    (**left_key == path_key)
+                        .cmp(&(**right_key == path_key))
+                        .then_with(|| decided_at(*left).cmp(&decided_at(*right)))
+                        .then_with(|| {
+                            (left.trust_level == "untrusted")
+                                .cmp(&(right.trust_level == "untrusted"))
+                        })
+                        .then_with(|| right_key.cmp(left_key))
+                });
+            if let Some((_, entry)) = governing {
                 return Some(entry);
             }
         }
@@ -686,5 +732,139 @@ mod tests {
                 .cloud_project_id,
             None
         );
+    }
+
+    #[test]
+    fn a_revocation_survives_a_link_that_loaded_the_registry_before_it() {
+        let config = tempfile::tempdir().unwrap();
+        let trusted = tempfile::tempdir().unwrap();
+        let linked = tempfile::tempdir().unwrap();
+        let identity = "git:example.invalid/owner/trusted";
+        ProjectRegistry::update(config.path(), |registry| {
+            registry.trust(trusted.path(), identity, "ada", "laptop")
+        })
+        .unwrap();
+
+        let (loaded_tx, loaded_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let link_config = config.path().to_path_buf();
+        let link_dir = linked.path().to_path_buf();
+        let link = std::thread::spawn(move || {
+            ProjectRegistry::update(&link_config, |registry| {
+                loaded_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                registry.link_cloud_project(&link_dir, "p-linked")
+            })
+        });
+        loaded_rx.recv().unwrap();
+
+        let (revoked_tx, revoked_rx) = std::sync::mpsc::channel();
+        let revoke_config = config.path().to_path_buf();
+        let revoke_dir = trusted.path().to_path_buf();
+        let revoke = std::thread::spawn(move || {
+            let revoked = ProjectRegistry::update(&revoke_config, |registry| {
+                Ok(registry.revoke(&revoke_dir, identity))
+            });
+            revoked_tx.send(()).unwrap();
+            revoked
+        });
+        assert!(
+            revoked_rx
+                .recv_timeout(std::time::Duration::from_millis(300))
+                .is_err(),
+            "a revocation must wait for a registry mutation that is already in flight"
+        );
+
+        release_tx.send(()).unwrap();
+        link.join().unwrap().unwrap();
+        assert_eq!(revoke.join().unwrap().unwrap(), 1);
+
+        let reloaded = ProjectRegistry::load(config.path()).unwrap();
+        let entry = reloaded.entry_for(trusted.path(), identity).unwrap();
+        assert_eq!(entry.trust_level, "untrusted");
+        assert!(entry.revoked_at.is_some());
+        assert!(entry.trusted_by.is_none());
+        assert_eq!(reloaded.cloud_project_for(linked.path()), Some("p-linked"));
+    }
+
+    #[test]
+    fn concurrent_mutations_of_different_projects_all_persist() {
+        let config = tempfile::tempdir().unwrap();
+        let projects: Vec<_> = (0..8).map(|_| tempfile::tempdir().unwrap()).collect();
+        let writers: Vec<_> = projects
+            .iter()
+            .enumerate()
+            .map(|(index, project)| {
+                let config = config.path().to_path_buf();
+                let project = project.path().to_path_buf();
+                std::thread::spawn(move || {
+                    ProjectRegistry::update(&config, |registry| {
+                        registry.link_cloud_project(&project, &format!("p-{index}"))
+                    })
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().unwrap().unwrap();
+        }
+
+        let reloaded = ProjectRegistry::load(config.path()).unwrap();
+        for (index, project) in projects.iter().enumerate() {
+            assert_eq!(
+                reloaded.cloud_project_for(project.path()),
+                Some(format!("p-{index}").as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn a_failed_mutation_leaves_the_registry_unchanged() {
+        let config = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        ProjectRegistry::update(config.path(), |registry| {
+            registry.link_cloud_project(project.path(), "p-kept")
+        })
+        .unwrap();
+
+        let failed = ProjectRegistry::update(config.path(), |registry| {
+            registry.link_cloud_project(project.path(), "p-replaced")?;
+            registry.link_cloud_project(project.path(), "   ")
+        });
+
+        assert!(failed.is_err());
+        let reloaded = ProjectRegistry::load(config.path()).unwrap();
+        assert_eq!(reloaded.cloud_project_for(project.path()), Some("p-kept"));
+    }
+
+    #[test]
+    fn a_later_grant_governs_its_checkout_over_an_older_revoked_row() {
+        let root = tempfile::tempdir().unwrap();
+        let checkout = |name: &str| {
+            let path = root.path().join(name);
+            fs::create_dir_all(&path).unwrap();
+            path
+        };
+        let (first, second, third) = (checkout("first"), checkout("second"), checkout("third"));
+        for _ in 0..32 {
+            let mut registry = ProjectRegistry::default();
+            registry
+                .trust(&first, "github.com/acme/app", "me", "laptop")
+                .unwrap();
+            registry
+                .trust(&second, "github.com/acme/app", "me", "laptop")
+                .unwrap();
+            assert_eq!(registry.revoke(&first, "github.com/acme/app"), 2);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            registry
+                .trust(&first, "github.com/acme/app", "me", "laptop")
+                .unwrap();
+
+            let granted = registry.entry_for(&first, "github.com/acme/app").unwrap();
+            assert_eq!(granted.trust_level, "trusted");
+            let revoked = registry.entry_for(&second, "github.com/acme/app").unwrap();
+            assert_eq!(revoked.trust_level, "untrusted");
+            let unseen = registry.entry_for(&third, "github.com/acme/app").unwrap();
+            assert_eq!(unseen.trust_level, "trusted");
+        }
     }
 }

@@ -1,6 +1,5 @@
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 import {
@@ -9,9 +8,9 @@ import {
   readProductLink,
 } from '@/src/features/notifications/productLinks';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
-import { notificationAllowed, vibrationAllowed } from './notificationGate';
+import { notificationAllowedOnceReadable, vibrationAllowed } from './notificationGate';
 import {
-  androidChannelId,
+  immediateNotificationTrigger,
   registerAndroidChannels,
   IOS_INTERRUPTION_LEVELS,
   type NotificationPriority,
@@ -45,7 +44,7 @@ Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
 
-    if (data?.type && !notificationAllowed(data.type)) {
+    if (data?.type && !(await notificationAllowedOnceReadable(data.type))) {
       return {
         shouldShowBanner: false,
         shouldShowList: false,
@@ -250,16 +249,9 @@ export async function scheduleLocalNotification(opts: {
     interruptionLevel: IOS_INTERRUPTION_LEVELS[priority],
   };
 
-  if (Platform.OS === 'android') {
-    (content as Record<string, unknown>).channelId = androidChannelId(
-      priority,
-      vibrationAllowed(priority),
-    );
-  }
-
   await Notifications.scheduleNotificationAsync({
     content,
-    trigger: null, // immediate
+    trigger: immediateNotificationTrigger(priority, vibrationAllowed(priority)),
   });
 }
 

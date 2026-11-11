@@ -53,7 +53,12 @@ export type RetryTelemetryEvent =
     };
 
 export type RetryStopReason =
-  'terminal' | 'not-idempotent' | 'attempts-exhausted' | 'budget-exhausted' | 'aborted';
+  | 'terminal'
+  | 'not-idempotent'
+  | 'attempts-exhausted'
+  | 'budget-exhausted'
+  | 'retry-after-exceeded'
+  | 'aborted';
 
 export class RetryStoppedError extends Error {
   constructor(
@@ -309,6 +314,12 @@ export async function runWithRetryPolicy<T>(
         stop('not-idempotent');
       }
       if (attempt >= maxAttempts) stop('attempts-exhausted');
+      if (
+        classification.retryAfterMs !== undefined &&
+        classification.retryAfterMs > maxRetryAfterMs
+      ) {
+        stop('retry-after-exceeded');
+      }
       if (policy.budget && !policy.budget.tryConsume()) stop('budget-exhausted');
 
       const delayMs = computeRetryDelayMs(

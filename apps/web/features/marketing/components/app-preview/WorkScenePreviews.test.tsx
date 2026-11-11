@@ -231,7 +231,10 @@ describe('Work run in the thread', () => {
       ),
     ).toEqual([null, null, null, 'running']);
     expect(text(tools[3] as HTMLElement, '.agi-work-tool-status')).toBe('Running');
-    expect(tools[3]?.querySelectorAll('.agi-work-tool-bar svg')).toHaveLength(1);
+    expect(tools[3]?.querySelectorAll('.agi-work-tool-bar svg:not(.agi-mark-ribbon)')).toHaveLength(
+      1,
+    );
+    expect(tools[3]?.querySelectorAll('.agi-work-tool-bar svg.agi-mark-ribbon')).toHaveLength(1);
     expect(tools[3]?.querySelectorAll('.agi-work-tool-bar img.agi-mark-spin')).toHaveLength(1);
     for (const done of tools.slice(0, 3))
       expect(done.querySelectorAll('.agi-work-tool-bar svg')).toHaveLength(1);

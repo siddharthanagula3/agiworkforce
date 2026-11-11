@@ -33,14 +33,13 @@ import {
 import {
   CLAUDE_PLUGIN_METADATA_PATH,
   GITHUB_API_USER_AGENT,
-  PLUGIN_DIRECTORY_FALLBACK_VERSION,
   PLUGIN_DIRECTORY_FETCH_TIMEOUT_MS,
-  PLUGIN_DIRECTORY_SHA_VERSION_PREFIX,
   RUNTIME_NOTE_NOT_INSPECTED,
   RUNTIME_NOTE_SOURCE_UNKNOWN,
   SOURCE_FACET_BUILTIN,
   shadowSourceName,
 } from './constants';
+import { declaredVersion, displayVersion, shaFromInstalledVersion } from './entries';
 import { rawFileUrl } from './inspection';
 import { DIRECTORY_MARKETPLACES, type DirectoryFetch } from './official-marketplace';
 import { releaseTagSatisfying } from './release-tags';
@@ -48,7 +47,6 @@ import { fetchPluginSkillFiles, pluginContentPaths } from './skill-files';
 import type { InstalledDirectorySkill, PluginDirectoryEntry, PluginSourceLocation } from './types';
 
 const HTTP_NOT_FOUND = 404;
-const UNDECLARED_VERSION_PREFIX = `${PLUGIN_DIRECTORY_FALLBACK_VERSION}+${PLUGIN_DIRECTORY_SHA_VERSION_PREFIX}`;
 const UNVERSIONED_COPY = 'a copy with no version';
 
 export interface InstallableSource {
@@ -91,7 +89,7 @@ export interface DependencyPlan {
     dependencies: readonly PluginDependencyRef[];
   }[];
   entries: { resolved: ResolvedDependency; found: MarketplaceSourceEntry }[];
-  enable: { resolved: ResolvedDependency; installationId: string }[];
+  enable: { resolved: ResolvedDependency; installationId: string; installedVersion: string }[];
 }
 
 export interface InstalledDependency extends PluginInstalledDependency {
@@ -217,10 +215,6 @@ async function enabledVersionInMarketplace(
     [userId, pluginKey, [marketplace, shadowSourceName(marketplace)]],
   );
   return rows[0]?.installed_version ?? null;
-}
-
-function declaredVersion(version: string): string | null {
-  return version.startsWith(UNDECLARED_VERSION_PREFIX) ? null : version;
 }
 
 function shownVersion(version: string): string {
@@ -448,7 +442,7 @@ async function assertVersionConstraints(
       conflictingConstraintsMessage(dependency.label, conflict, rootLabel),
     );
   }
-  if (existing?.enabled) {
+  if (existing) {
     const unmet = unmetConstraint(
       declaredVersion(existing.installed_version),
       dependency.constraints,
@@ -510,7 +504,11 @@ export async function planMarketplaceDependencies(
       );
     }
     if (existing) {
-      plan.enable.push({ resolved: dependency, installationId: existing.id });
+      plan.enable.push({
+        resolved: dependency,
+        installationId: existing.id,
+        installedVersion: existing.installed_version,
+      });
       continue;
     }
     if (plugin.kind === 'entry') {
@@ -554,6 +552,15 @@ export function dependencyAdmissions(
   }));
 }
 
+function installedReceiptVersion(plugin: DependencyPlugin, installed: string): string {
+  if (plugin.kind !== 'directory') return installed;
+  const declared = declaredVersion(installed);
+  return displayVersion(
+    declared === null ? null : valid(declared),
+    shaFromInstalledVersion(installed),
+  );
+}
+
 function describeDependency(
   plugin: DependencyPlugin,
 ): Omit<PluginInstalledDependency, 'requiredBy'> {
@@ -570,14 +577,22 @@ export function installedDependencies(
   installationIds: ReadonlyMap<string, string>,
 ): InstalledDependency[] {
   const changed = [...plan.entries, ...plan.directory, ...plan.enable].map((item) => item.resolved);
+  const retainedVersions = new Map(
+    plan.enable.map((item) => [item.resolved, item.installedVersion] as const),
+  );
   return plan.resolved
     .filter((dependency) => changed.includes(dependency))
     .flatMap((dependency) => {
       const installationId = installationIds.get(dependency.label);
       if (!installationId) return [];
+      const retained = retainedVersions.get(dependency);
+      const described = describeDependency(dependency.plugin);
       return [
         {
-          ...describeDependency(dependency.plugin),
+          ...described,
+          ...(retained === undefined
+            ? {}
+            : { version: installedReceiptVersion(dependency.plugin, retained) }),
           requiredBy: dependency.requiredBy,
           installationId,
         },

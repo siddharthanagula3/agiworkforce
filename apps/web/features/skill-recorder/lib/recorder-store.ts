@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import {
   SKILL_CAPTURE_LIMITS,
+  type SkillCaptureFrame,
   type SkillCaptureRecording,
   type SkillCaptureStatus,
 } from '@agiworkforce/local-runtime-contract';
@@ -158,6 +159,18 @@ export function setRecorderView(view: RecorderView): void {
 
 export function holdRecording(recording: SkillCaptureRecording | null): void {
   setState({ recording, view: recording ? 'review' : 'none' });
+}
+
+export function retainFrames(
+  held: SkillCaptureRecording,
+  frames: readonly SkillCaptureFrame[],
+): void {
+  if (state.recording !== held) return;
+  if (frames.length === 0) {
+    setState({ recording: null, view: 'none' });
+    return;
+  }
+  setState({ recording: { ...held, frames: [...frames] } });
 }
 
 export function resetRecorderForTests(): void {

@@ -5,6 +5,7 @@ import * as Clipboard from 'expo-clipboard';
 import type { ReactTestInstance } from 'react-test-renderer';
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { ownerHandler } from '@/test-utils/ownerProps';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import type { ChatMessage } from '@/types/chat';
 import type {
@@ -29,14 +30,6 @@ function render(ui: React.ReactElement) {
       </SafeAreaProvider>
     ),
   });
-}
-
-function pressHandlerFor(label: string): () => void {
-  const owner = screen
-    .UNSAFE_getAllByProps({ accessibilityLabel: label })
-    .find((node) => typeof node.props.onPress === 'function');
-  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
-  return owner.props.onPress as () => void;
 }
 
 function assistant(overrides: Partial<ChatMessage> = {}): ChatMessage {
@@ -151,7 +144,7 @@ describe('whole native message accessibility structure', () => {
     const rowA = assistant({ id: 'row-a', content: 'Response A.' });
     const rowB = assistant({ id: 'row-b', content: 'Response B.' });
     const view = render(<MessageBubble message={rowA} speechOwner={owner} />);
-    const retainedRowAPress = pressHandlerFor('Read aloud');
+    const retainedRowAPress = ownerHandler(screen.getByLabelText('Read aloud'), 'onPress');
     fireEvent.press(screen.getByLabelText('Read aloud'));
     expect(start).toHaveBeenCalledTimes(1);
 

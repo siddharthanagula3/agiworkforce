@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  sendBillingNotice: vi.fn(async () => undefined),
+  sendBillingNotice: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -38,6 +38,11 @@ function database(): DatabaseAdapter {
   return { query, execute: vi.fn(async () => undefined) } as unknown as DatabaseAdapter;
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.sendBillingNotice.mockResolvedValue({ recorded: true, emailed: true, settled: true });
+});
+
 describe('remindExpiringPurchasedCredits', () => {
   it('states the expiry period of the rule that matched the purchase', async () => {
     expect(PURCHASED_CREDIT_EXPIRY_RULES.find((rule) => rule.country === 'JP')?.months).toBe(6);
@@ -53,5 +58,25 @@ describe('remindExpiringPurchasedCredits', () => {
         ),
       }),
     );
+  });
+
+  it('marks the purchases reminded once the notice is settled', async () => {
+    const db = database();
+
+    const summary = await remindExpiringPurchasedCredits(db, 10);
+
+    expect(summary).toMatchObject({ reminded: 1, failed: 0 });
+    expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(db.execute).mock.calls[0]?.[0]).toContain('set reminded_at = now()');
+  });
+
+  it('leaves the purchases unreminded and counts the failure while a configured email can still be retried', async () => {
+    mocks.sendBillingNotice.mockResolvedValue({ recorded: true, emailed: false, settled: false });
+    const db = database();
+
+    const summary = await remindExpiringPurchasedCredits(db, 10);
+
+    expect(summary).toMatchObject({ reminded: 0, failed: 1 });
+    expect(db.execute).not.toHaveBeenCalled();
   });
 });

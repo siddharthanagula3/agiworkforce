@@ -61,7 +61,7 @@ const QUIET_HOURS_DAYS: ReadonlyArray<{ value: TimeFocusWeekday; label: string; 
 
 function breakReminderLabel(minutes: number | null): string {
   if (minutes === null) return 'Off';
-  return minutes < 60 ? `Every ${minutes} min` : `Every ${minutes / 60} hr`;
+  return minutes < 60 ? `After ${minutes} min today` : `After ${minutes / 60} hr today`;
 }
 
 interface CategoryMeta {
@@ -807,7 +807,7 @@ export default function NotificationPreferencesScreen() {
                 Break Reminder
               </Text>
               <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
-                Nudge to step away during long sessions
+                One nudge each day after this much time in AGI
               </Text>
             </View>
           </View>

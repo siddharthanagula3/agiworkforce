@@ -119,6 +119,15 @@ describe('subscription owner handoff', () => {
     ).toBe('stripe');
   });
 
+  it('locks the subscription row it decides on so a concurrent store grant cannot interleave', async () => {
+    const stub = stubDb(row({ apple_original_transaction_id: 'apple-tx-1', status: 'expired' }));
+
+    await applySubscriptionOwnerHandoff(stub.db, 'user-1', 'stripe');
+
+    const [sql] = stub.query.mock.calls[0] as unknown as [string];
+    expect(sql).toMatch(/from subscriptions[\s\S]*for update\s*$/i);
+  });
+
   it('writes nothing when the previous owner is still entitled', async () => {
     const stub = stubDb(row({ apple_original_transaction_id: 'apple-tx-1', status: 'active' }));
 

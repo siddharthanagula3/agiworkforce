@@ -14,11 +14,13 @@ import {
   num,
   toDays,
   toFreshness,
+  toOmitted,
   toRow,
   toTotals,
   type AggregateRow,
   type DayRow,
   type FreshnessRow,
+  type UsageBreakdownOmitted,
   type UsageBreakdownRow,
   type UsageDayRow,
   type UsageFreshness,
@@ -58,6 +60,14 @@ export interface OrganizationMemberActivity {
   seatsInUse: number | null;
 }
 
+export interface OrganizationUsageOmitted {
+  byMember: UsageBreakdownOmitted;
+  byModel: UsageBreakdownOmitted;
+  byProvider: UsageBreakdownOmitted;
+  byWorkload: UsageBreakdownOmitted;
+  byProject: UsageBreakdownOmitted;
+}
+
 export interface OrganizationUsage {
   organizationId: string;
   from: string;
@@ -69,6 +79,7 @@ export interface OrganizationUsage {
   byProvider: UsageBreakdownRow[];
   byWorkload: UsageBreakdownRow[];
   byProject: UsageBreakdownRow[];
+  omitted: OrganizationUsageOmitted;
   workSessions: WorkloadSessionUsage;
   codeSessions: WorkloadSessionUsage;
   daily: UsageDayRow[];
@@ -166,7 +177,7 @@ async function aggregateBy(
         and created_at >= $2
         and created_at < $3
       group by 1
-      order by cost_microusd desc, requests desc
+      order by cost_microusd desc, requests desc, 1 asc
       limit ${BREAKDOWN_LIMIT}`,
     [organizationId, from, to],
   );
@@ -213,7 +224,7 @@ export async function readOrganizationUsage(
     aggregateBy(db, organizationId, from, to, `usage->>'projectId'`),
     aggregateWorkloadSessions(db, organizationId, from, to),
     db.query<DayRow>(
-      `select date_trunc('day', created_at) as day,
+      `select to_char(date_trunc('day', created_at at time zone 'UTC'), 'YYYY-MM-DD') as day,
               count(*)::int as requests,
               ${COST_MICROUSD} as cost_microusd
          from public.managed_usage_requests
@@ -236,17 +247,26 @@ export async function readOrganizationUsage(
     ),
   ]);
 
+  const totals = toTotals(totalsRows[0]);
+
   return {
     organizationId,
     from,
     to,
-    totals: toTotals(totalsRows[0]),
+    totals,
     members: toMemberActivity(totalsRows[0]),
     byMember,
     byModel,
     byProvider,
     byWorkload,
     byProject,
+    omitted: {
+      byMember: toOmitted(totals, byMember),
+      byModel: toOmitted(totals, byModel),
+      byProvider: toOmitted(totals, byProvider),
+      byWorkload: toOmitted(totals, byWorkload),
+      byProject: toOmitted(totals, byProject),
+    },
     workSessions: workloadUsage(workloadSessions, 'work'),
     codeSessions: workloadUsage(workloadSessions, 'code'),
     daily: toDays(dailyRows),

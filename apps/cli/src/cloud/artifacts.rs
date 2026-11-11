@@ -28,6 +28,11 @@ pub const CONVERSATIONS_PATH: &str = "/api/chat/conversations";
 
 pub const DEFAULT_ARTIFACT_LIMIT: u32 = 50;
 
+const MAX_PUBLISHED_PAGES: usize = 200;
+
+const PUBLIC_VISIBILITY: &str = "public";
+const ORGANIZATION_VISIBILITY: &str = "organization";
+
 /// One page of a conversation's messages. The hosted route caps a page at 500.
 const MESSAGE_PAGE: u32 = 500;
 
@@ -98,9 +103,27 @@ pub struct PublishedArtifact {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PublishedListBody {
     #[serde(default)]
     artifacts: Vec<PublishedArtifact>,
+    #[serde(default)]
+    workspace: Option<serde_json::Value>,
+    #[serde(default)]
+    page_info: Option<PublishedPageInfo>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PublishedPageInfo {
+    #[serde(default)]
+    next_cursor: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct PublishedListing {
+    pub artifacts: Vec<PublishedArtifact>,
+    pub workspace_sharing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -139,6 +162,7 @@ struct HostedMessage {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ConversationPage {
     #[serde(default)]
     messages: Vec<HostedMessage>,
@@ -316,9 +340,45 @@ pub async fn list(
     Ok(body.artifacts)
 }
 
+pub async fn published_listing(client: &CloudClient) -> Result<PublishedListing, CloudError> {
+    let mut artifacts = Vec::new();
+    let mut workspace_sharing = false;
+    let mut seen_cursors = std::collections::HashSet::new();
+    let mut cursor: Option<String> = None;
+    for page_number in 0..MAX_PUBLISHED_PAGES {
+        let query: Vec<(&str, String)> = cursor
+            .iter()
+            .map(|cursor| ("cursor", cursor.clone()))
+            .collect();
+        let body: PublishedListBody = client.call(&published_route(), &query, None).await?;
+        if page_number == 0 {
+            workspace_sharing = body.workspace.is_some_and(|workspace| !workspace.is_null());
+        }
+        artifacts.extend(body.artifacts);
+        let next = body
+            .page_info
+            .and_then(|page_info| page_info.next_cursor)
+            .filter(|next| !next.is_empty());
+        let Some(next) = next else {
+            return Ok(PublishedListing {
+                artifacts,
+                workspace_sharing,
+            });
+        };
+        if !seen_cursors.insert(next.clone()) {
+            return Err(CloudError::Decode(
+                "the published artifact list repeated a page cursor".to_string(),
+            ));
+        }
+        cursor = Some(next);
+    }
+    Err(CloudError::Decode(format!(
+        "the published artifact list did not end within {MAX_PUBLISHED_PAGES} pages"
+    )))
+}
+
 pub async fn published(client: &CloudClient) -> Result<Vec<PublishedArtifact>, CloudError> {
-    let body: PublishedListBody = client.call(&published_route(), &[], None).await?;
-    Ok(body.artifacts)
+    Ok(published_listing(client).await?.artifacts)
 }
 
 /// The account's index entry for `artifact_id`, or a 404 naming it.
@@ -429,6 +489,55 @@ pub async fn publish(
         .await
 }
 
+/// Publishes for `visibility` without leaving a broader audience behind. A
+/// workspace audience is refused before anything is published when the account
+/// has no workspace that can share, and a publication this call created is
+/// withdrawn when narrowing it fails. A publication that already existed is
+/// never deleted here.
+pub async fn publish_for_audience(
+    client: &CloudClient,
+    entry: &ArtifactIndexEntry,
+    block: &CodeBlock,
+    visibility: &str,
+) -> Result<PublishResult, CloudError> {
+    let before = published_listing(client).await?;
+    if visibility == ORGANIZATION_VISIBILITY && !before.workspace_sharing {
+        return Err(CloudError::Api {
+            status: 403,
+            message: "Select a workspace that can share artifacts before publishing for a \
+                      workspace. Nothing was published."
+                .to_string(),
+        });
+    }
+    let existed = before
+        .artifacts
+        .iter()
+        .any(|artifact| artifact.artifact_id == entry.id);
+    let mut published = publish(client, entry, block).await?;
+    if published.visibility == visibility {
+        return Ok(published);
+    }
+    if let Err(error) = set_audience(client, &published.token, visibility).await {
+        let broader = published.visibility == PUBLIC_VISIBILITY && visibility != PUBLIC_VISIBILITY;
+        if !existed && broader {
+            return Err(match unpublish(client, &published.token).await {
+                Ok(()) => error,
+                Err(cleanup) => CloudError::Api {
+                    status: 500,
+                    message: format!(
+                        "{error}. The public link {} could not be withdrawn ({cleanup}); run \
+                         `agi artifacts unpublish {}`",
+                        published.share_url, entry.id
+                    ),
+                },
+            });
+        }
+        return Err(error);
+    }
+    published.visibility = visibility.to_string();
+    Ok(published)
+}
+
 /// The live publication of `artifact_id`, or `None` when it is not published.
 pub async fn published_for(
     client: &CloudClient,
@@ -450,8 +559,8 @@ pub fn audience_label(visibility: &str) -> &str {
 
 pub fn audience_visibility(audience: &str) -> Option<&'static str> {
     match audience {
-        "public" | "anyone" => Some("public"),
-        "workspace" | "organization" | "org" => Some("organization"),
+        "public" | "anyone" => Some(PUBLIC_VISIBILITY),
+        "workspace" | "organization" | "org" => Some(ORGANIZATION_VISIBILITY),
         _ => None,
     }
 }
@@ -830,6 +939,348 @@ mod tests {
             rendered.contains("3f1d2c4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f"),
             "{rendered}"
         );
+    }
+
+    #[test]
+    fn a_conversation_page_reads_the_continuation_flag_the_server_sends() {
+        let page: ConversationPage = serde_json::from_value(serde_json::json!({
+            "conversation": { "id": "c" },
+            "messages": [{ "id": "m", "content": "x" }],
+            "total": 502,
+            "hasMore": true
+        }))
+        .expect("decodes");
+        assert!(page.has_more);
+        assert_eq!(page.messages.len(), 1);
+    }
+
+    type RequestLog = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+
+    fn fixture_client(base: String) -> CloudClient {
+        use base64::Engine;
+        let claims =
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"sub":"fixture-owner"}"#);
+        CloudClient::from_managed_context(&crate::tier_cache::ManagedRequestContext {
+            jwt: Some(format!("e30.{claims}.fixture")),
+            base,
+            owner: Some("fixture-owner".to_string()),
+        })
+        .expect("a fixture account client")
+    }
+
+    async fn serve(router: axum::Router) -> (CloudClient, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = fixture_client(format!("http://{}", listener.local_addr().unwrap()));
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        (client, server)
+    }
+
+    fn conversation_router(source_html: &str) -> axum::Router {
+        use axum::extract::Query;
+        use axum::routing::get;
+        use axum::Json;
+        use std::collections::HashMap;
+
+        let source = source_html.to_string();
+        axum::Router::new().route(
+            "/api/chat/conversations/{id}",
+            get(move |Query(query): Query<HashMap<String, String>>| {
+                let source = source.clone();
+                async move {
+                    let offset: usize = query["offset"].parse().unwrap();
+                    let limit: usize = query["limit"].parse().unwrap();
+                    let total = 502usize;
+                    let end = (offset + limit).min(total);
+                    let messages: Vec<serde_json::Value> = (offset..end)
+                        .map(|index| {
+                            if index == 501 {
+                                serde_json::json!({ "id": "late-message", "content": source })
+                            } else {
+                                serde_json::json!({ "id": format!("m{index}"), "content": "" })
+                            }
+                        })
+                        .collect();
+                    Json(serde_json::json!({
+                        "conversation": { "id": "conversation-1" },
+                        "messages": messages,
+                        "total": total,
+                        "hasMore": end < total
+                    }))
+                }
+            }),
+        )
+    }
+
+    fn late_entry(message_id: &str) -> ArtifactIndexEntry {
+        ArtifactIndexEntry {
+            id: derived_artifact_id("conversation-1", message_id, 0),
+            conversation_id: "conversation-1".to_string(),
+            message_id: message_id.to_string(),
+            ..entry_fixture()
+        }
+    }
+
+    #[tokio::test]
+    async fn an_artifact_whose_message_follows_the_first_page_is_still_read() {
+        let (client, server) = serve(conversation_router("```html\n<h1>Late</h1>\n```\n")).await;
+        let block = content(&client, &late_entry("late-message")).await;
+        server.abort();
+        assert_eq!(block.expect("found on page two").content, "<h1>Late</h1>");
+    }
+
+    #[tokio::test]
+    async fn a_message_absent_from_an_exhausted_conversation_is_reported_missing() {
+        let (client, server) = serve(conversation_router("```html\n<h1>Late</h1>\n```\n")).await;
+        let error = content(&client, &late_entry("never-stored"))
+            .await
+            .expect_err("no such message");
+        server.abort();
+        assert!(
+            error.to_string().contains("no longer holds its message"),
+            "{error}"
+        );
+    }
+
+    fn publish_router(
+        log: RequestLog,
+        workspace: serde_json::Value,
+        pages: Vec<serde_json::Value>,
+        narrow_status: axum::http::StatusCode,
+    ) -> axum::Router {
+        use axum::extract::Query;
+        use axum::routing::{get, patch};
+        use axum::Json;
+        use std::collections::HashMap;
+
+        let list_log = log.clone();
+        let post_log = log.clone();
+        let patch_log = log.clone();
+        let delete_log = log;
+        axum::Router::new()
+            .route(
+                "/api/artifacts/publish",
+                get(move |Query(query): Query<HashMap<String, String>>| {
+                    let log = list_log.clone();
+                    let index: usize = query
+                        .get("cursor")
+                        .and_then(|cursor| cursor.strip_prefix("page-"))
+                        .map_or(0, |index| index.parse().unwrap());
+                    let next = (index + 1 < pages.len()).then(|| format!("page-{}", index + 1));
+                    let body = serde_json::json!({
+                        "artifacts": pages[index],
+                        "pageInfo": { "nextCursor": next },
+                        "workspace": workspace
+                    });
+                    async move {
+                        log.lock().unwrap().push("GET list".to_string());
+                        Json(body)
+                    }
+                })
+                .post(move || {
+                    let log = post_log.clone();
+                    async move {
+                        log.lock().unwrap().push("POST publish".to_string());
+                        (
+                            axum::http::StatusCode::CREATED,
+                            Json(serde_json::json!({
+                                "token": "tok",
+                                "shareUrl": "https://example.test/shared-artifact/tok",
+                                "kind": "html",
+                                "visibility": "public"
+                            })),
+                        )
+                    }
+                }),
+            )
+            .route(
+                "/api/artifacts/publish/{token}",
+                patch(move || {
+                    let log = patch_log.clone();
+                    async move {
+                        log.lock().unwrap().push("PATCH audience".to_string());
+                        (
+                            narrow_status,
+                            Json(serde_json::json!({ "error": "Select a workspace" })),
+                        )
+                    }
+                })
+                .delete(move || {
+                    let log = delete_log.clone();
+                    async move {
+                        log.lock().unwrap().push("DELETE unpublish".to_string());
+                        Json(serde_json::json!({ "success": true }))
+                    }
+                }),
+            )
+    }
+
+    fn html_block() -> CodeBlock {
+        CodeBlock {
+            language: "html".to_string(),
+            content: "<h1>Hi</h1>".to_string(),
+            ordinal: 0,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_workspace_audience_is_refused_before_anything_is_published() {
+        let log = RequestLog::default();
+        let (client, server) = serve(publish_router(
+            log.clone(),
+            serde_json::Value::Null,
+            vec![serde_json::json!([])],
+            axum::http::StatusCode::OK,
+        ))
+        .await;
+        let error = publish_for_audience(&client, &entry_fixture(), &html_block(), "organization")
+            .await
+            .expect_err("no workspace can share");
+        server.abort();
+        assert!(
+            error.to_string().contains("Nothing was published"),
+            "{error}"
+        );
+        assert_eq!(*log.lock().unwrap(), vec!["GET list".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn a_new_publication_is_withdrawn_when_narrowing_it_fails() {
+        let log = RequestLog::default();
+        let (client, server) = serve(publish_router(
+            log.clone(),
+            serde_json::json!({ "memberCount": 3 }),
+            vec![serde_json::json!([])],
+            axum::http::StatusCode::FORBIDDEN,
+        ))
+        .await;
+        let error = publish_for_audience(&client, &entry_fixture(), &html_block(), "organization")
+            .await
+            .expect_err("the audience change is refused");
+        server.abort();
+        assert!(error.to_string().contains("Select a workspace"), "{error}");
+        assert_eq!(
+            *log.lock().unwrap(),
+            vec![
+                "GET list".to_string(),
+                "POST publish".to_string(),
+                "PATCH audience".to_string(),
+                "DELETE unpublish".to_string(),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn an_existing_publication_beyond_the_first_page_is_kept_when_narrowing_it_fails() {
+        let log = RequestLog::default();
+        let published = |artifact_id: &str| {
+            serde_json::json!({
+                "token": "tok",
+                "artifactId": artifact_id,
+                "kind": "html",
+                "visibility": "public",
+                "createdAt": "2026-09-14T00:00:00.000Z",
+                "updatedAt": "2026-09-14T00:00:00.000Z"
+            })
+        };
+        let (client, server) = serve(publish_router(
+            log.clone(),
+            serde_json::json!({ "memberCount": 3 }),
+            vec![
+                serde_json::json!([published("someone-else")]),
+                serde_json::json!([published(&entry_fixture().id)]),
+            ],
+            axum::http::StatusCode::FORBIDDEN,
+        ))
+        .await;
+        publish_for_audience(&client, &entry_fixture(), &html_block(), "organization")
+            .await
+            .expect_err("the audience change is refused");
+        server.abort();
+        let log = log.lock().unwrap();
+        assert!(!log.contains(&"DELETE unpublish".to_string()), "{log:?}");
+        assert_eq!(log.iter().filter(|line| *line == "GET list").count(), 2);
+    }
+
+    #[tokio::test]
+    async fn the_published_listing_follows_every_page_cursor() {
+        let log = RequestLog::default();
+        let row = |artifact_id: &str| {
+            serde_json::json!({
+                "token": artifact_id,
+                "artifactId": artifact_id,
+                "kind": "html",
+                "visibility": "public",
+                "createdAt": "2026-09-14T00:00:00.000Z",
+                "updatedAt": "2026-09-14T00:00:00.000Z"
+            })
+        };
+        let (client, server) = serve(publish_router(
+            log,
+            serde_json::json!({ "memberCount": 1 }),
+            vec![
+                serde_json::json!([row("a")]),
+                serde_json::json!([row("b")]),
+                serde_json::json!([row("c")]),
+            ],
+            axum::http::StatusCode::OK,
+        ))
+        .await;
+        let listing = published_listing(&client).await.expect("every page reads");
+        server.abort();
+        let ids: Vec<&str> = listing
+            .artifacts
+            .iter()
+            .map(|artifact| artifact.artifact_id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["a", "b", "c"]);
+        assert!(listing.workspace_sharing);
+    }
+
+    fn stuck_cursor_router(log: RequestLog) -> axum::Router {
+        use axum::routing::get;
+        use axum::Json;
+
+        let list_log = log.clone();
+        let post_log = log;
+        axum::Router::new().route(
+            "/api/artifacts/publish",
+            get(move || {
+                let log = list_log.clone();
+                async move {
+                    log.lock().unwrap().push("GET list".to_string());
+                    Json(serde_json::json!({
+                        "artifacts": [],
+                        "pageInfo": { "nextCursor": "same" },
+                        "workspace": { "memberCount": 1 }
+                    }))
+                }
+            })
+            .post(move || {
+                let log = post_log.clone();
+                async move {
+                    log.lock().unwrap().push("POST publish".to_string());
+                    Json(serde_json::json!({}))
+                }
+            }),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_cursor_that_does_not_advance_fails_the_listing_and_publishes_nothing() {
+        let log = RequestLog::default();
+        let (client, server) = serve(stuck_cursor_router(log.clone())).await;
+        let error = published_listing(&client)
+            .await
+            .expect_err("a repeated cursor is not a complete list");
+        assert!(
+            error.to_string().contains("repeated a page cursor"),
+            "{error}"
+        );
+        publish_for_audience(&client, &entry_fixture(), &html_block(), "organization")
+            .await
+            .expect_err("an unreadable list blocks publication");
+        server.abort();
+        assert!(!log.lock().unwrap().contains(&"POST publish".to_string()));
     }
 
     fn entry_fixture() -> ArtifactIndexEntry {

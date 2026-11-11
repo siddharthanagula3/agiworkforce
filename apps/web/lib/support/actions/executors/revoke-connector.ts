@@ -4,6 +4,10 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { resolveSupportAccountContext } from '../../account/context-resolver';
 import { CUSTOM_SERVER_PREFIX } from '@/lib/connectors/custom-server-ids';
+import { clearConnectorToolPermissions } from '@/lib/connectors/mcp-custom-connections';
+import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
+import { deleteGitHubAppInstallation } from '@/lib/github-app';
+import { evictConnectorOAuthCaches } from '@/lib/user-connector-tools';
 import { SupportActionRefusal, type SupportActionResult } from '../types';
 
 export const CUSTOM_CONNECTOR_CONTROL = Object.freeze({
@@ -44,6 +48,27 @@ export async function assertConnectorRevocable(
   }
 }
 
+async function uninstallGitHubApp(db: DatabaseAdapter, userId: string): Promise<void> {
+  const installations = await db.query<{ installation_id: number }>(
+    'select installation_id from github_installations where user_id = $1',
+    [userId],
+  );
+  for (const { installation_id: installationId } of installations) {
+    const revocation = await deleteGitHubAppInstallation(installationId);
+    if (revocation.status !== 'failed' && revocation.status !== 'unavailable') continue;
+    logger.error(
+      { userId, installationId, reason: revocation.reason },
+      'Support action could not uninstall the GitHub App; connector left connected',
+    );
+    throw new SupportActionRefusal(
+      'SUPPORT_ACTION_UNAVAILABLE',
+      revocation.status === 'unavailable' ? 503 : 502,
+      'The GitHub App is still installed on your account, so nothing was disconnected. Remove it from GitHub under Settings then Applications, or try again.',
+    );
+  }
+  await db.execute(`delete from github_installations where user_id = $1`, [userId]);
+}
+
 export async function executeRevokeConnector(args: {
   db: DatabaseAdapter;
   userId: string;
@@ -53,8 +78,10 @@ export async function executeRevokeConnector(args: {
   if (connectorId.startsWith(CUSTOM_SERVER_PREFIX)) refuseCustomConnector();
 
   if (connectorId === 'github') {
-    await db.execute(`delete from github_installations where user_id = $1`, [userId]);
+    await uninstallGitHubApp(db, userId);
   } else {
+    await disconnectConnectorOAuthGrant(userId, connectorId);
+    await evictConnectorOAuthCaches(userId, connectorId);
     await db.execute(
       `update user_connectors
           set is_active = false, updated_at = $1
@@ -63,20 +90,12 @@ export async function executeRevokeConnector(args: {
     );
   }
 
-  try {
-    await db.execute(
-      `delete from public.connector_tool_permissions where user_id = $1 and connector_id = $2`,
-      [userId, connectorId],
-    );
-  } catch (error) {
-    logger.warn(
-      { userId, connectorId, error },
-      'Support action revoked a connector but could not clear its saved tool permissions',
-    );
-  }
+  const cleared = await clearConnectorToolPermissions(db, userId, connectorId);
 
   return {
     kind: 'completed',
-    message: `“${connectorId}” is disconnected. Its saved tool permissions were cleared, so reconnecting will ask you again.`,
+    message: cleared
+      ? `“${connectorId}” is disconnected. Its saved tool permissions were cleared, so reconnecting will ask you again.`
+      : `“${connectorId}” is disconnected, but its saved tool permissions could not be cleared, so reconnecting may reuse them. Reset them under Settings → Connections.`,
   };
 }

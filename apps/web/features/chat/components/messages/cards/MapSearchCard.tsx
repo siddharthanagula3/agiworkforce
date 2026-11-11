@@ -19,6 +19,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
   const { resolvedTheme } = useTheme();
   const dark = resolvedTheme === 'dark';
   const places = body.places ?? [];
+  const unresolvedStops = body.unresolvedStops ?? [];
   // A place that could not be tied to the rest of the request's geography may
   // still be shown, but routing to it is exactly the unsafe action.
   const hasUnconfirmedPlace = places.some((place) => place.confident === false);
@@ -169,6 +170,11 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
           </button>
         ))}
       </div>
+      {unresolvedStops.length > 0 ? (
+        <p role="status" className="px-4 pb-1 text-xs text-warning-text">
+          {`${places.length} of ${places.length + unresolvedStops.length} stops located. Not found: ${unresolvedStops.join(', ')}.`}
+        </p>
+      ) : null}
       <p className="px-4 pb-3 text-xs text-[color:var(--chat-text-muted)]">
         {hasUnconfirmedPlace
           ? 'One of these places could not be matched to the area the others are in, so no route is offered. Open each place to check it first.'

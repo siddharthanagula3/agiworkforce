@@ -117,7 +117,7 @@ function bind({
       throw new Error('Report query crossed the canonical workspace boundary');
     }
     if (/date_trunc\('day'/.test(text)) {
-      return [{ day: '2026-08-22T00:00:00.000Z', requests: 4, cost_microusd: '1200000' }];
+      return [{ day: '2026-08-22', requests: 4, cost_microusd: '1200000' }];
     }
     if (/unsettled_requests/.test(text)) {
       return [{ latest_activity_at: '2026-08-22T18:30:00.000Z', unsettled_requests: 2 }];
@@ -204,8 +204,8 @@ describe('GET /api/settings/organization/usage-analytics/export', () => {
     expect(body).toContain('# as_of');
     expect(body).toContain('# latest_activity_at,2026-08-22T18:30:00.000Z');
     expect(body).toContain('# unsettled_requests,2');
-    expect(body).toContain('day,requests,credits');
-    expect(body).toContain('2026-08-22T00:00:00.000Z,4,240');
+    expect(body).toContain('day_utc,requests,credits');
+    expect(body).toContain('\n2026-08-22,4,240');
     expect(body).not.toContain('cost_cents');
   });
 
@@ -218,12 +218,59 @@ describe('GET /api/settings/organization/usage-analytics/export', () => {
     expect(body).toContain('user-a,4,90,10,240');
   });
 
+  it('declares what a dimension export leaves out, and nothing on the daily sheet', async () => {
+    bind({ role: 'owner' });
+
+    const member = await (await GET(req('?dimension=member') as never)).text();
+    const daily = await (await GET(req('?dimension=daily') as never)).text();
+
+    expect(member).toContain('# breakdown_row_limit,50\n');
+    expect(member).toContain('# omitted_requests,0\n');
+    expect(member).toContain('# omitted_credits,0\n');
+    expect(daily).not.toContain('# omitted_requests');
+  });
+
+  it('reports the requests and credits a capped member list omits', async () => {
+    bind({ role: 'owner' });
+    const answer = mockQuery.getMockImplementation()!;
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      const text = String(sql);
+      if (/user_id as key/.test(text)) {
+        return Array.from({ length: 50 }, (_, index) => ({
+          key: `user-${index}`,
+          requests: 1,
+          input_tokens: '1',
+          output_tokens: '1',
+          cost_microusd: '1000000',
+        }));
+      }
+      if (/count\(distinct user_id\)/.test(text)) {
+        return [
+          {
+            key: null,
+            requests: 52,
+            input_tokens: '52',
+            output_tokens: '52',
+            cost_microusd: '52000000',
+          },
+        ];
+      }
+      return answer(sql, params);
+    });
+
+    const body = await (await GET(req('?dimension=member') as never)).text();
+
+    expect(body).toContain('# omitted_requests,2\n');
+    expect(body).toMatch(/# omitted_credits,\d/);
+    expect(body).not.toContain('# omitted_credits,0\n');
+  });
+
   it('falls back to the daily sheet for an unknown dimension', async () => {
     bind({ role: 'owner' });
 
     const body = await (await GET(req('?dimension=passwords') as never)).text();
 
-    expect(body).toContain('day,requests,credits');
+    expect(body).toContain('day_utc,requests,credits');
   });
 
   it('neutralises a key a spreadsheet would run as a formula', async () => {
@@ -288,7 +335,7 @@ describe('canonical workspace report isolation', () => {
     }
     const body = await response.text();
     expect(body).toContain(`# organization_id,${ORG}\n`);
-    expect(body).toContain('2026-08-22T00:00:00.000Z,4,240');
+    expect(body).toContain('\n2026-08-22,4,240');
     expect(body).not.toContain(SAVED_ORG);
     expect(response.headers.get('content-type')).toContain('text/csv');
     expect(response.headers.get('content-disposition')).toContain('attachment');

@@ -9,6 +9,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::fs;
 
+fn changed_since_recorded(path: &std::path::Path) -> String {
+    format!(
+        "Cannot undo - {} was changed after the agent wrote it, so its current contents were kept",
+        path.display()
+    )
+}
+
 /// Result of an undo operation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UndoResult {
@@ -268,6 +275,15 @@ impl UndoManager {
             .as_ref()
             .ok_or_else(|| "No path for file creation".to_string())?;
 
+        if let Some(recorded) = change.after_content.as_deref() {
+            match fs::read(path).await {
+                Ok(current) if current == recorded.as_bytes() => {}
+                Ok(_) => return Err(changed_since_recorded(path)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(format!("Failed to read file before undo: {}", e)),
+            }
+        }
+
         // Try to delete directly -- handle NotFound as success (already gone).
         // Avoids TOCTOU race between exists() and remove_file().
         match fs::remove_file(path).await {
@@ -299,6 +315,17 @@ impl UndoManager {
             .before_content
             .as_ref()
             .ok_or_else(|| "No before content stored for this change".to_string())?;
+
+        let recorded = change
+            .after_content
+            .as_ref()
+            .ok_or_else(|| "No final version was recorded for this change".to_string())?;
+        let current = fs::read(path)
+            .await
+            .map_err(|e| format!("Failed to read file before undo: {}", e))?;
+        if current != recorded.as_bytes() {
+            return Err(changed_since_recorded(path));
+        }
 
         // Restore previous content
         fs::write(path, before_content)

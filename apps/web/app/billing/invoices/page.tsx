@@ -6,7 +6,7 @@ import { InvoiceList } from './InvoiceList';
 
 export const metadata = buildMetadata({
   title: 'Invoices and receipts',
-  description: 'Every invoice and credit purchase on your account, with the receipt for each one.',
+  description: 'Your recent invoices and credit purchases, with the receipt for each one.',
   path: '/billing/invoices',
 });
 
@@ -15,9 +15,9 @@ export default function BillingInvoicesPage() {
     <main id="main-content" className="mx-auto w-full max-w-3xl px-4 py-10">
       <h1 className="text-h1">Invoices and receipts</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Every invoice raised against your account, newest first, with its receipt and its PDF.
-        Credit purchases are paid once and each has its own receipt below. Payment methods and the
-        plan itself live in{' '}
+        Your most recent card-billed invoices, newest first, with each receipt and PDF. Store and
+        organization invoices are not listed here. Credit purchases are paid once and each has its
+        own receipt below. Payment methods and the plan itself live in{' '}
         <Link href="/settings/billing" className="underline underline-offset-2">
           Settings, Billing
         </Link>

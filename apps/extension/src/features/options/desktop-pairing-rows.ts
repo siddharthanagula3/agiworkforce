@@ -1,3 +1,4 @@
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { t } from '../../i18n';
 import {
   beginPairing,
@@ -137,9 +138,7 @@ export function createDesktopPairingRows(api: PairingApi = browserPairing): Desk
         pair.textContent = t('spPairingRetry');
         break;
     }
-    if ((state.phase === 'error' || state.phase === 'awaiting-code') && state.error) {
-      error.textContent = state.error;
-    }
+    if (state.error) error.textContent = state.error;
   };
 
   pair.addEventListener('click', () => {
@@ -157,7 +156,7 @@ export function createDesktopPairingRows(api: PairingApi = browserPairing): Desk
     void api.submitPairingCode(code.value).then(apply);
   });
   code.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' || isImeComposingKey(event)) return;
     event.preventDefault();
     void api.submitPairingCode(code.value).then(apply);
   });

@@ -16,6 +16,7 @@ vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: () => mocks.authTok
 
 import { ProjectArtifactsPanel } from '../ProjectArtifactsPanel';
 import { ProjectWorkPanel } from '../ProjectWorkPanel';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const PROJECT = '44444444-4444-4444-8444-444444444444';
 
@@ -185,6 +186,8 @@ describe('ProjectWorkPanel', () => {
     render(<ProjectWorkPanel projectId={PROJECT} projectName="Launch" />);
 
     expect(await screen.findByText('No work yet')).toBeInTheDocument();
-    expect(screen.getByText(/chat in Launch to AGI Work/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(new RegExp(`chat in Launch to ${PRODUCT_NAMES.work}`, 'i')),
+    ).toBeInTheDocument();
   });
 });

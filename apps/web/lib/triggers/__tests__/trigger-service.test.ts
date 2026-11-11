@@ -341,6 +341,39 @@ describe('updating, deleting and reading deliveries', () => {
     expect(sql).toContain('where id = $1 and user_id = $2');
   });
 
+  it('writes only the fields the patch names so a conditions save cannot restore a disabled trigger', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('update event_triggers')) return [row({ is_enabled: false })];
+      return [row({ is_enabled: true })];
+    });
+
+    await updateTrigger(database(query), 'user-1', row().id as string, {
+      conditions: [{ field: 'repository.name', operator: 'equals', value: 'agi' }],
+    });
+
+    const [sql, params] = query.mock.calls[1] as unknown as [string, unknown[]];
+    expect(sql).toContain('is_enabled = coalesce($8, is_enabled)');
+    expect(params[7]).toBeNull();
+    expect(params[2]).toBeNull();
+    expect(params[3]).toBeNull();
+    expect(params[5]).toBeNull();
+    expect(params[6]).toBeNull();
+    expect(params[4]).not.toBeNull();
+  });
+
+  it('writes a disable as an explicit false', async () => {
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('update event_triggers')) return [row({ is_enabled: false })];
+      return [row()];
+    });
+
+    await updateTrigger(database(query), 'user-1', row().id as string, { isEnabled: false });
+
+    const [, params] = query.mock.calls[1] as unknown as [string, unknown[]];
+    expect(params[7]).toBe(false);
+    expect(params[4]).toBeNull();
+  });
+
   it('reports a delete that matched nothing as not found', async () => {
     await expect(
       deleteTrigger(

@@ -113,7 +113,12 @@ describe('Q-2 · "A Block is absolute" and does not hide the tool', () => {
   });
 
   it('leaves the blocked tool in the list handed to the model', () => {
-    expect(TOOL_LOOP).toContain('const stepMcpTools = offeredMcpToolDefs().map(toOpenAiToolDef);');
+    expect(TOOL_LOOP).toMatch(
+      /const stepMcpTools = offeredMcpToolDefs\(\)\s*\.filter\(\(tool\) => !callerOwnedTools\.has\(tool\.qualifiedName\)\)\s*\.map\(toOpenAiToolDef\);/,
+    );
+    expect(TOOL_LOOP).toMatch(
+      /const turnTools =\s*stepMcpTools\.length > 0 \? \[\.\.\.\(requestTools \?\? \[\]\), \.\.\.stepMcpTools\] : requestTools;/,
+    );
     // The gate decides one call at a time and can reach no catalog to filter.
     const imports = gateModuleImports();
     expect(imports.length).toBeGreaterThan(0);

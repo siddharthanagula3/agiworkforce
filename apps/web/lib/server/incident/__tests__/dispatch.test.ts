@@ -200,6 +200,32 @@ describe('incident dispatch', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['the incident channel', INCIDENT_CHANNEL_WEBHOOK_ENV],
+    ['the pager', PAGER_WEBHOOK_ENV],
+  ])('reports delivered when only %s accepted the alert', async (_label, variable) => {
+    mocks.sendSupportEmail.mockResolvedValue({ delivered: false, reason: 'no api key' });
+    process.env[variable] = 'https://hook.example.test/hook';
+    process.env[OUT_OF_BAND_WEBHOOK_ENV] = 'https://out-of-band.example.test/hook';
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) => new Response('', { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await notifyIncident(ALERT, NOW);
+
+    expect(result.delivery).toBe('delivered');
+    expect(result.outOfBand).toBe('unconfigured');
+    expect(result.reason).toBe('no api key');
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain(
+      'https://out-of-band.example.test/hook',
+    );
+    expect(mocks.error).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('no human has been told'),
+    );
+  });
+
   it('publishes the incident to an origin this deployment does not serve', async () => {
     mocks.sendSupportEmail.mockResolvedValue({ delivered: false, reason: 'resend unreachable' });
     process.env[STATUS_MIRROR_WRITE_URL_ENV] = 'https://mirror.example.test/status.json';

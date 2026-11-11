@@ -98,16 +98,19 @@ export function ComposerFeedbackDialog({
   const [message, setMessage] = useState('');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [screenshotDropped, setScreenshotDropped] = useState(false);
   const isSafetyAppeal = variant === 'safety-appeal';
   const isTaskFeedback = variant === 'task';
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
-    if (nextOpen) {
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
       setSubmitState('idle');
       setErrorMessage(null);
+      setScreenshotDropped(false);
     }
-  };
+  }
 
   const attachFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -147,7 +150,8 @@ export function ComposerFeedbackDialog({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedMessage = message.trim();
-    if (!trimmedMessage || submitState === 'submitting') return;
+    const submittedScreenshot = screenshot;
+    if (!trimmedMessage || submitState === 'submitting' || captureState === 'capturing') return;
 
     setSubmitState('submitting');
     setErrorMessage(null);
@@ -182,7 +186,9 @@ export function ComposerFeedbackDialog({
             ...((isSafetyAppeal || isTaskFeedback) && messageId ? { message_id: messageId } : {}),
             ...(isSafetyAppeal && finishReason ? { finish_reason: finishReason } : {}),
           },
-          ...(screenshot && !isSafetyAppeal ? { screenshot: { data_url: screenshot } } : {}),
+          ...(submittedScreenshot && !isSafetyAppeal
+            ? { screenshot: { data_url: submittedScreenshot } }
+            : {}),
         }),
       });
 
@@ -198,9 +204,13 @@ export function ComposerFeedbackDialog({
         throw new Error(serverMessage || 'Could not send feedback. Please try again.');
       }
 
+      const receipt = (await response.json().catch(() => null)) as {
+        screenshot_stored?: boolean;
+      } | null;
+      setScreenshotDropped(Boolean(submittedScreenshot) && receipt?.screenshot_stored === false);
       setSubmitState('success');
-      setMessage('');
-      setScreenshot(null);
+      setMessage((current) => (current.trim() === trimmedMessage ? '' : current));
+      setScreenshot((current) => (current === submittedScreenshot ? null : current));
     } catch (error) {
       setSubmitState('error');
       setErrorMessage(toUserMessage(error, 'Could not send feedback. Please try again.'));
@@ -230,7 +240,7 @@ export function ComposerFeedbackDialog({
         </button>
       )}
 
-      <Dialog open={open} onOpenChange={handleOpenChange}>
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           className="w-[min(94vw,30rem)] border-border/70 bg-background sm:rounded-2xl"
           closeLabel="Close feedback dialog"
@@ -259,6 +269,11 @@ export function ComposerFeedbackDialog({
                   ? 'Thanks, your report was recorded.'
                   : 'Thanks, your feedback was sent.'}
               </p>
+              {screenshotDropped ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Your note was sent, but your screenshot could not be stored and was not attached.
+                </p>
+              ) : null}
               <div className="flex justify-end">
                 <Button type="button" onClick={() => setOpen(false)}>
                   Done
@@ -267,126 +282,128 @@ export function ComposerFeedbackDialog({
             </div>
           ) : (
             <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
-              {!isSafetyAppeal ? (
-                <fieldset className="space-y-2">
-                  <legend className="text-sm font-medium text-foreground">Feedback type</legend>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {FEEDBACK_KINDS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        aria-pressed={kind === option.value}
-                        onClick={() => setKind(option.value)}
-                        className={
-                          kind === option.value
-                            ? 'rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-start text-xs font-medium text-foreground'
-                            : 'rounded-lg border border-border bg-muted/30 px-3 py-2 text-start text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground'
-                        }
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
-              ) : null}
-
-              {isSafetyAppeal ? (
-                <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                  We attach only technical identifiers for this refusal. Your prompt and response
-                  are not included.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <span className="text-sm font-medium text-foreground">Screenshot</span>
-                  {screenshot ? (
-                    <div className="relative overflow-hidden rounded-xl border border-border">
-                      <img
-                        src={screenshot}
-                        alt="Screenshot attached to this feedback"
-                        className="block max-h-48 w-full object-cover object-top"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setScreenshot(null)}
-                        aria-label="Remove screenshot"
-                        className="absolute end-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-foreground"
-                      >
-                        <X className="h-4 w-4" aria-hidden="true" />
-                      </button>
+              <fieldset disabled={submitState === 'submitting'} className="min-w-0 space-y-4">
+                {!isSafetyAppeal ? (
+                  <fieldset className="space-y-2">
+                    <legend className="text-sm font-medium text-foreground">Feedback type</legend>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {FEEDBACK_KINDS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          aria-pressed={kind === option.value}
+                          onClick={() => setKind(option.value)}
+                          className={
+                            kind === option.value
+                              ? 'rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-start text-xs font-medium text-foreground'
+                              : 'rounded-lg border border-border bg-muted/30 px-3 py-2 text-start text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground'
+                          }
+                        >
+                          {option.label}
+                        </button>
+                      ))}
                     </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {canCaptureScreen ? (
+                  </fieldset>
+                ) : null}
+
+                {isSafetyAppeal ? (
+                  <div className="rounded-lg border border-border/70 bg-muted/30 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                    We attach only technical identifiers for this refusal. Your prompt and response
+                    are not included.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-foreground">Screenshot</span>
+                    {screenshot ? (
+                      <div className="relative overflow-hidden rounded-xl border border-border">
+                        <img
+                          src={screenshot}
+                          alt="Screenshot attached to this feedback"
+                          className="block max-h-48 w-full object-cover object-top"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setScreenshot(null)}
+                          aria-label="Remove screenshot"
+                          className="absolute end-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background/90 text-foreground"
+                        >
+                          <X className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {canCaptureScreen ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void captureScreen()}
+                            isLoading={captureState === 'capturing'}
+                          >
+                            <Camera className="me-1.5 h-4 w-4" aria-hidden="true" />
+                            Capture screen
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => void captureScreen()}
-                          isLoading={captureState === 'capturing'}
+                          onClick={() => fileInputRef.current?.click()}
                         >
-                          <Camera className="me-1.5 h-4 w-4" aria-hidden="true" />
-                          Capture screen
+                          <ImagePlus className="me-1.5 h-4 w-4" aria-hidden="true" />
+                          Upload image
                         </Button>
-                      ) : null}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <ImagePlus className="me-1.5 h-4 w-4" aria-hidden="true" />
-                        Upload image
-                      </Button>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept={SCREENSHOT_TYPES.join(',')}
-                        className="sr-only"
-                        onChange={(event) => void attachFile(event)}
-                      />
-                    </div>
-                  )}
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept={SCREENSHOT_TYPES.join(',')}
+                          className="sr-only"
+                          onChange={(event) => void attachFile(event)}
+                        />
+                      </div>
+                    )}
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Optional. A screenshot goes to the AGI team with your note; blur anything
+                      private first.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label htmlFor={detailsId}>Details</Label>
+                  <textarea
+                    id={detailsId}
+                    value={message}
+                    onChange={(event) => {
+                      setMessage(event.target.value);
+                      if (errorMessage) setErrorMessage(null);
+                    }}
+                    required
+                    maxLength={10_000}
+                    rows={6}
+                    autoFocus
+                    placeholder={
+                      isSafetyAppeal
+                        ? 'Explain why this request was appropriate and what response you expected.'
+                        : 'What happened, what did you expect, or what should we build?'
+                    }
+                    className="w-full resize-y rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
+                  />
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    Optional. A screenshot goes to the AGI team with your note; blur anything
-                    private first.
+                    {isSafetyAppeal
+                      ? 'We include your app version, browser type, current AGI page, and refusal identifiers. Conversation content is not attached.'
+                      : isTaskFeedback
+                        ? 'We include your app version, browser type, current AGI page, and the identifiers for this task run so we can trace it. Your prompt and conversation content are not attached.'
+                        : 'We include your app version, browser type, and current AGI page so we can diagnose the report. Your prompt and conversation content are not attached.'}
                   </p>
                 </div>
-              )}
 
-              <div className="space-y-2">
-                <Label htmlFor={detailsId}>Details</Label>
-                <textarea
-                  id={detailsId}
-                  value={message}
-                  onChange={(event) => {
-                    setMessage(event.target.value);
-                    if (errorMessage) setErrorMessage(null);
-                  }}
-                  required
-                  maxLength={10_000}
-                  rows={6}
-                  autoFocus
-                  placeholder={
-                    isSafetyAppeal
-                      ? 'Explain why this request was appropriate and what response you expected.'
-                      : 'What happened, what did you expect, or what should we build?'
-                  }
-                  className="w-full resize-y rounded-xl border border-border bg-muted/30 px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25"
-                />
-                <p className="text-xs leading-relaxed text-muted-foreground">
-                  {isSafetyAppeal
-                    ? 'We include your app version, browser type, current AGI page, and refusal identifiers. Conversation content is not attached.'
-                    : isTaskFeedback
-                      ? 'We include your app version, browser type, current AGI page, and the identifiers for this task run so we can trace it. Your prompt and conversation content are not attached.'
-                      : 'We include your app version, browser type, and current AGI page so we can diagnose the report. Your prompt and conversation content are not attached.'}
-                </p>
-              </div>
-
-              {errorMessage ? (
-                <p role="alert" className="text-sm text-danger">
-                  {errorMessage}
-                </p>
-              ) : null}
+                {errorMessage ? (
+                  <p role="alert" className="text-sm text-danger">
+                    {errorMessage}
+                  </p>
+                ) : null}
+              </fieldset>
 
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setOpen(false)}>
@@ -394,7 +411,9 @@ export function ComposerFeedbackDialog({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!message.trim() || submitState === 'submitting'}
+                  disabled={
+                    !message.trim() || submitState === 'submitting' || captureState === 'capturing'
+                  }
                   isLoading={submitState === 'submitting'}
                 >
                   {isSafetyAppeal ? 'Submit report' : 'Send feedback'}

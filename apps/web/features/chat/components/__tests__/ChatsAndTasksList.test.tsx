@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ChatsAndTasksList, formatListTime } from '../ChatsAndTasksList';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const NOW = new Date('2026-10-22T12:00:00Z').getTime();
 const MINUTE = 60_000;
@@ -157,16 +158,16 @@ describe('Chats and tasks page', () => {
     render(<ChatsAndTasksList />);
 
     const recent = screen.getByRole('link', { name: /Compile vendor list/ });
-    expect(recent.textContent).toContain('AGI Work');
+    expect(recent.textContent).toContain(`${PRODUCT_NAMES.work}`);
     expect(recent.textContent).toContain('Needs you');
     expect(screen.getByTestId('chats-activity-task-recent')).toBeTruthy();
 
     const quiet = screen.getByRole('link', { name: /Draft launch email/ });
-    expect(quiet.textContent).toContain('AGI Work');
+    expect(quiet.textContent).toContain(`${PRODUCT_NAMES.work}`);
     expect(screen.queryByTestId('chats-activity-task-quiet')).toBeNull();
 
     const chat = screen.getByRole('link', { name: /Greeting/ });
-    expect(chat.textContent).not.toContain('AGI Work');
+    expect(chat.textContent).not.toContain(`${PRODUCT_NAMES.work}`);
     expect(chat.getAttribute('href')).toBe('/chat/chat-greeting');
   });
 
@@ -336,6 +337,40 @@ describe('Chats and tasks page', () => {
     expect(screen.getByText("Couldn't load your chats and tasks.")).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(state.fetchConversations).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Load more and does not claim an empty account when a page holds only archived chats', () => {
+    state.conversations = [
+      {
+        id: 'a1',
+        title: 'Old archived',
+        updatedAt: at(MINUTE),
+        createdAt: at(MINUTE),
+        isArchived: true,
+      },
+    ];
+    state.hasMore = true;
+    render(<ChatsAndTasksList />);
+    expect(screen.queryByText(/No chats or tasks yet/)).toBeNull();
+    expect(screen.getByText(/Older chats may be further back/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(state.loadMoreConversations).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing is left once an archived-only history has no further page', () => {
+    state.conversations = [
+      {
+        id: 'a1',
+        title: 'Old archived',
+        updatedAt: at(MINUTE),
+        createdAt: at(MINUTE),
+        isArchived: true,
+      },
+    ];
+    state.hasMore = false;
+    render(<ChatsAndTasksList />);
+    expect(screen.getByText('No chats or tasks yet. Start one with New.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
   });
 
   it('loads the next page when more history exists', () => {

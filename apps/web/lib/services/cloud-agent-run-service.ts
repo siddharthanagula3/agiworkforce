@@ -189,11 +189,17 @@ interface CloudAgentEventRow extends Record<string, unknown> {
   emitted_at: string | Date;
 }
 
-const CheckpointThinkingBlockSchema = z.object({
-  type: z.literal('thinking'),
-  thinking: z.string(),
-  signature: z.string().optional(),
-});
+const CheckpointThinkingBlockSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('thinking'),
+    thinking: z.string(),
+    signature: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('redacted_thinking'),
+    data: z.string(),
+  }),
+]);
 
 const CheckpointMessageSchema = z
   .object({
@@ -212,6 +218,10 @@ const PendingToolCallSchema = z.object({
   args: z.record(z.string(), z.unknown()),
   approvalScopes: ToolApprovalReviewWireSchema.shape.approval_scopes
     .refine((scopes) => scopes.includes('once') && new Set(scopes).size === scopes.length)
+    .optional(),
+  permissionGeneration: z
+    .string()
+    .regex(/^\d{1,19}$/)
     .optional(),
 });
 

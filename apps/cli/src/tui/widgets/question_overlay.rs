@@ -1,3 +1,6 @@
+use std::cell::Cell;
+use std::ops::Range;
+
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -5,6 +8,7 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::approval_overlay::wrap_cols;
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
+use super::scroll_gate::{draw_too_small, ScrollGate};
 use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
 use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light, ui_surface_elevated};
@@ -13,6 +17,45 @@ const OWN_ANSWER: &str = "Type your own answer";
 const MAX_BOX_WIDTH: u16 = 82;
 
 const AGENT_QUESTION_TITLE: &str = "Question from the agent";
+
+/// The blank row above the question, the gaps around the choices and the hint.
+const CHROME_ROWS: usize = 4;
+
+/// How many rows of the inner box the question and the choices each get. The
+/// choices and the answer being typed are kept in view first; a question
+/// longer than what is left scrolls in its own window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Arrangement {
+    question_view: usize,
+    question_scrolls: bool,
+    choice_view: usize,
+}
+
+fn arrange(question_lines: usize, choice_lines: usize, inner_rows: usize) -> Option<Arrangement> {
+    let budget = inner_rows.checked_sub(CHROME_ROWS)?;
+    if question_lines + choice_lines <= budget {
+        return Some(Arrangement {
+            question_view: question_lines,
+            question_scrolls: false,
+            choice_view: choice_lines,
+        });
+    }
+    if choice_lines + 2 <= budget {
+        return Some(Arrangement {
+            question_view: budget - choice_lines - 1,
+            question_scrolls: true,
+            choice_view: choice_lines,
+        });
+    }
+    let question_view = question_lines.min(1);
+    let question_scrolls = question_lines > question_view;
+    let choice_view = budget.checked_sub(question_view + usize::from(question_scrolls))?;
+    (choice_view > 0).then_some(Arrangement {
+        question_view,
+        question_scrolls,
+        choice_view,
+    })
+}
 
 /// A question whose answer completes a slash command: the picked option's
 /// argument, or the typed text, is appended to `command` and the command runs.
@@ -30,6 +73,11 @@ pub struct QuestionOverlayState {
     pub dismissed: bool,
     title: String,
     completes: Option<CommandAnswer>,
+    question_scroll: ScrollGate,
+    choice_scroll: ScrollGate,
+    /// The choice rows the latest `render_into` painted whole, as
+    /// `start..end`. `None` until it draws: the text render shows every row.
+    painted_rows: Cell<Option<(usize, usize)>>,
 }
 
 impl QuestionOverlayState {
@@ -46,7 +94,17 @@ impl QuestionOverlayState {
             dismissed: false,
             title: AGENT_QUESTION_TITLE.to_string(),
             completes: None,
+            question_scroll: ScrollGate::default(),
+            choice_scroll: ScrollGate::default(),
+            painted_rows: Cell::new(None),
         }
+    }
+
+    /// An answer is taken only from a row the person could read in full.
+    fn row_was_painted(&self, row: usize) -> bool {
+        self.painted_rows
+            .get()
+            .is_none_or(|(start, end)| (start..end).contains(&row))
     }
 
     /// Ask `question` before running `/command`; each choice pairs the label
@@ -124,11 +182,55 @@ impl QuestionOverlayState {
         let box_width = area.width.min(MAX_BOX_WIDTH);
         let text_cols = usize::from(box_width.saturating_sub(6)).max(8);
         let question = wrap_cols(&self.question, text_cols);
-        let rows: Vec<(usize, Vec<String>)> = (0..=self.own_row())
-            .map(|row| (row, wrap_cols(&self.row_text(row), text_cols)))
+        let mut choice_lines: Vec<(usize, bool, String)> = Vec::new();
+        let mut row_spans: Vec<Range<usize>> = Vec::new();
+        for row in 0..=self.own_row() {
+            let start = choice_lines.len();
+            for (index, text) in wrap_cols(&self.row_text(row), text_cols)
+                .into_iter()
+                .enumerate()
+            {
+                choice_lines.push((row, index == 0, text));
+            }
+            row_spans.push(start..choice_lines.len());
+        }
+
+        let inner_rows = usize::from(area.height.saturating_sub(2));
+        let Some(shape) = arrange(question.len(), choice_lines.len(), inner_rows) else {
+            self.question_scroll.nothing_drawn();
+            self.choice_scroll.nothing_drawn();
+            self.painted_rows.set(Some((0, 0)));
+            draw_too_small(frame, area, &self.title, "Esc to skip");
+            return;
+        };
+        let question_window = self
+            .question_scroll
+            .window(question.len(), shape.question_view);
+        if let Some(span) = row_spans.get(self.cursor) {
+            self.choice_scroll.reveal(span.clone(), shape.choice_view);
+        }
+        let choice_window = self
+            .choice_scroll
+            .window(choice_lines.len(), shape.choice_view);
+        let whole_rows: Vec<usize> = row_spans
+            .iter()
+            .enumerate()
+            .filter(|(_, span)| span.start >= choice_window.start && span.end <= choice_window.end)
+            .map(|(row, _)| row)
             .collect();
-        let row_lines: usize = rows.iter().map(|(_, lines)| lines.len()).sum();
-        let inner_height = 1 + question.len() + 1 + row_lines + 1 + 1 + 1;
+        self.painted_rows
+            .set(Some(match (whole_rows.first(), whole_rows.last()) {
+                (Some(first), Some(last)) => (*first, last + 1),
+                _ => (0, 0),
+            }));
+
+        let inner_height = 1
+            + shape.question_view
+            + usize::from(shape.question_scrolls)
+            + 1
+            + shape.choice_view
+            + 1
+            + 1;
         let box_height = (inner_height as u16 + 2).min(area.height);
 
         let vertical = Layout::default()
@@ -159,15 +261,23 @@ impl QuestionOverlayState {
         frame.render_widget(block, box_area);
 
         let mut lines: Vec<Line> = vec![Line::from("")];
-        for line in question {
+        for line in &question[question_window] {
             lines.push(Line::from(vec![
                 Span::raw("  "),
-                Span::styled(line, Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(line.clone(), Style::default().add_modifier(Modifier::BOLD)),
             ]));
         }
+        if shape.question_scrolls {
+            if let Some(position) = self.question_scroll.position_label() {
+                lines.push(Line::from(Span::styled(
+                    format!("  {position} \u{b7} PgUp/PgDn scroll the question"),
+                    Style::default().fg(ui_muted()),
+                )));
+            }
+        }
         lines.push(Line::from(""));
-        for (row, wrapped) in rows {
-            let selected = row == self.cursor;
+        for (row, first, text) in &choice_lines[choice_window] {
+            let selected = *row == self.cursor;
             let style = if selected {
                 Style::default()
                     .fg(ui_on_light())
@@ -176,17 +286,15 @@ impl QuestionOverlayState {
             } else {
                 Style::default()
             };
-            for (index, text) in wrapped.into_iter().enumerate() {
-                let marker = if selected && index == 0 {
-                    "\u{276f} "
-                } else {
-                    "  "
-                };
-                lines.push(Line::from(vec![
-                    Span::raw(format!("  {marker}")),
-                    Span::styled(text, style),
-                ]));
-            }
+            let marker = if selected && *first {
+                "\u{276f} "
+            } else {
+                "  "
+            };
+            lines.push(Line::from(vec![
+                Span::raw(format!("  {marker}")),
+                Span::styled(text.clone(), style),
+            ]));
         }
         lines.push(Line::from(""));
         lines.push(Line::from(vec![Span::styled(
@@ -231,15 +339,20 @@ impl InteractiveView for QuestionOverlayState {
                     self.cursor += 1;
                 }
             }
+            KeyAction::PageUp | KeyAction::PageDown | KeyAction::Home | KeyAction::End => {
+                self.question_scroll.scroll_key(key);
+            }
             KeyAction::Enter if own => {
                 let typed = self.typed.trim().to_string();
-                if !typed.is_empty() {
+                if !typed.is_empty() && self.row_was_painted(self.cursor) {
                     return self.answered(self.cursor, typed);
                 }
             }
             KeyAction::Enter => {
-                let chosen = self.options.get(self.cursor).cloned().unwrap_or_default();
-                return self.answered(self.cursor, chosen);
+                if self.row_was_painted(self.cursor) {
+                    let chosen = self.options.get(self.cursor).cloned().unwrap_or_default();
+                    return self.answered(self.cursor, chosen);
+                }
             }
             KeyAction::Backspace if own => {
                 self.typed.pop();
@@ -255,8 +368,10 @@ impl InteractiveView for QuestionOverlayState {
                 let picked = digit.to_digit(10).unwrap_or(0) as usize;
                 if picked >= 1 && picked <= self.options.len() {
                     self.cursor = picked - 1;
-                    let chosen = self.options.get(self.cursor).cloned().unwrap_or_default();
-                    return self.answered(self.cursor, chosen);
+                    if self.row_was_painted(self.cursor) {
+                        let chosen = self.options.get(self.cursor).cloned().unwrap_or_default();
+                        return self.answered(self.cursor, chosen);
+                    }
                 }
                 if picked == self.own_row() + 1 {
                     self.cursor = self.own_row();
@@ -357,5 +472,168 @@ mod tests {
         assert_eq!(skipped.handle_key(KeyAction::Esc), ViewAction::Close);
         assert!(skipped.dismissed);
         assert_eq!(skipped.answer, None);
+    }
+
+    fn painted(state: &QuestionOverlayState, width: u16, height: u16) -> String {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height))
+                .expect("terminal");
+        terminal
+            .draw(|frame| state.render_into(frame, Rect::new(0, 0, width, height)))
+            .expect("draw");
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    fn long_question() -> QuestionOverlayState {
+        QuestionOverlayState::new(
+            &"a".repeat(2_400),
+            &["alpha".to_string(), "beta".to_string()],
+        )
+    }
+
+    fn long_choices() -> QuestionOverlayState {
+        let options: Vec<String> = (1..=6)
+            .map(|n| format!("choice {n} {}", "z".repeat(150)))
+            .collect();
+        QuestionOverlayState::new("Pick one", &options)
+    }
+
+    #[test]
+    fn a_long_question_scrolls_while_the_choices_and_own_answer_stay_in_view() {
+        let overlay = long_question();
+        let text = painted(&overlay, 80, 20);
+        for label in ["1. alpha", "2. beta", "3. Type your own answer"] {
+            assert!(text.contains(label), "{label} is not drawn: {text}");
+        }
+        assert!(text.contains("lines 1-10 of 33"), "{text}");
+        assert!(text.contains("PgUp/PgDn scroll the question"), "{text}");
+    }
+
+    #[test]
+    fn page_keys_scroll_the_question_and_keep_the_choices() {
+        let mut overlay = long_question();
+        painted(&overlay, 80, 20);
+        assert_eq!(
+            overlay.handle_key(KeyAction::PageDown),
+            ViewAction::Continue
+        );
+        let text = painted(&overlay, 80, 20);
+        assert!(text.contains("lines 10-19 of 33"), "{text}");
+        assert!(text.contains("2. beta"), "{text}");
+
+        overlay.handle_key(KeyAction::End);
+        assert!(painted(&overlay, 80, 20).contains("lines 24-33 of 33"));
+        overlay.handle_key(KeyAction::PageUp);
+        assert!(painted(&overlay, 80, 20).contains("lines 15-24 of 33"));
+        overlay.handle_key(KeyAction::Home);
+        assert!(painted(&overlay, 80, 20).contains("lines 1-10 of 33"));
+        assert_eq!(overlay.answer, None);
+    }
+
+    #[test]
+    fn enter_and_digits_answer_with_the_choice_on_screen() {
+        let mut by_arrow = long_question();
+        painted(&by_arrow, 80, 20);
+        by_arrow.handle_key(KeyAction::Down);
+        assert!(painted(&by_arrow, 80, 20).contains("\u{276f} 2. beta"));
+        assert_eq!(by_arrow.handle_key(KeyAction::Enter), ViewAction::Submit(1));
+        assert_eq!(by_arrow.answer.as_deref(), Some("beta"));
+
+        let mut by_digit = long_question();
+        painted(&by_digit, 80, 20);
+        assert_eq!(
+            by_digit.handle_key(KeyAction::Char('2')),
+            ViewAction::Submit(1)
+        );
+        assert_eq!(by_digit.answer.as_deref(), Some("beta"));
+    }
+
+    #[test]
+    fn the_answer_being_typed_is_drawn_before_it_is_sent() {
+        let mut overlay = long_question();
+        painted(&overlay, 80, 20);
+        overlay.handle_key(KeyAction::Char('3'));
+        for character in "hello".chars() {
+            overlay.handle_key(KeyAction::Char(character));
+        }
+        let text = painted(&overlay, 80, 20);
+        assert!(text.contains("3. Type your own answer: hello"), "{text}");
+        assert_eq!(overlay.handle_key(KeyAction::Enter), ViewAction::Submit(2));
+        assert_eq!(overlay.answer.as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn a_digit_for_a_choice_off_screen_selects_it_before_it_can_answer() {
+        let mut overlay = long_choices();
+        let text = painted(&overlay, 80, 12);
+        assert!(text.contains("1. choice 1"), "{text}");
+        assert!(!text.contains("6. choice 6"), "{text}");
+
+        assert_eq!(
+            overlay.handle_key(KeyAction::Char('6')),
+            ViewAction::Continue
+        );
+        assert_eq!(overlay.cursor, 5);
+        assert_eq!(overlay.answer, None);
+
+        let text = painted(&overlay, 80, 12);
+        assert!(text.contains("\u{276f} 6. choice 6"), "{text}");
+        assert_eq!(overlay.handle_key(KeyAction::Enter), ViewAction::Submit(5));
+        assert_eq!(
+            overlay.answer.as_deref(),
+            Some(format!("choice 6 {}", "z".repeat(150)).as_str())
+        );
+    }
+
+    #[test]
+    fn a_window_too_small_for_any_choice_takes_no_answer_but_still_skips() {
+        let mut overlay = long_question();
+        let text = painted(&overlay, 80, 5);
+        assert!(text.contains("too small"), "{text}");
+        assert_eq!(overlay.handle_key(KeyAction::Enter), ViewAction::Continue);
+        assert_eq!(
+            overlay.handle_key(KeyAction::Char('1')),
+            ViewAction::Continue
+        );
+        assert_eq!(overlay.answer, None);
+        assert_eq!(overlay.handle_key(KeyAction::Esc), ViewAction::Close);
+    }
+
+    #[test]
+    fn the_choices_get_the_rows_first_and_the_question_keeps_at_least_one() {
+        assert_eq!(
+            arrange(3, 3, 20),
+            Some(Arrangement {
+                question_view: 3,
+                question_scrolls: false,
+                choice_view: 3,
+            })
+        );
+        assert_eq!(
+            arrange(33, 3, 18),
+            Some(Arrangement {
+                question_view: 10,
+                question_scrolls: true,
+                choice_view: 3,
+            })
+        );
+        assert_eq!(
+            arrange(1, 19, 10),
+            Some(Arrangement {
+                question_view: 1,
+                question_scrolls: false,
+                choice_view: 5,
+            })
+        );
+        assert_eq!(arrange(33, 3, 3), None);
+        assert_eq!(arrange(33, 3, 6), None);
     }
 }

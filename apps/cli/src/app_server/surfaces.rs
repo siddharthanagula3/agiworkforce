@@ -1472,9 +1472,6 @@ pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSess
     if !invocation.starts_with('/') {
         return Ok(None);
     }
-    if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(invocation) {
-        return Ok(Some(prompt));
-    }
     let (command, args) = invocation
         .split_once(char::is_whitespace)
         .unwrap_or((invocation, ""));
@@ -1484,7 +1481,9 @@ pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSess
     match skills::skill_command_prompt(command.trim_start_matches('/'), args) {
         Some(Ok(prompt)) => Ok(Some(prompt)),
         Some(Err(reason)) => Err(invalid(reason)),
-        None => Ok(None),
+        None => Ok(crate::custom_commands::expand_custom_slash_invocation(
+            invocation,
+        )),
     }
 }
 

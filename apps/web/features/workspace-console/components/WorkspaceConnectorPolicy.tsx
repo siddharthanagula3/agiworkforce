@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Ban, Check, PlugZap, X } from 'lucide-react';
 import {
   CONNECTOR_POLICY_MCP_HOST_PATTERN,
@@ -17,6 +17,7 @@ import {
   useUpdateConnectorPolicy,
   type ConnectorPolicyLists,
 } from '../hooks/use-connector-policy';
+import { useServerDraftSync } from '../hooks/use-server-draft-sync';
 import { toUserMessage } from '@/lib/user-error-message';
 import { ChipInput, useUnsavedChangesGuard } from '@agiworkforce/ui';
 
@@ -511,44 +512,53 @@ function toggle(list: string[], value: string): string[] {
     : [...list, lower];
 }
 
+function listsOf(source: ConnectorPolicyLists): ConnectorPolicyLists {
+  return {
+    allowedConnectors: [...source.allowedConnectors],
+    blockedConnectors: [...source.blockedConnectors],
+    allowCustomConnectors: source.allowCustomConnectors,
+    allowedPlugins: [...source.allowedPlugins],
+    blockedPlugins: [...source.blockedPlugins],
+    allowedMcpHosts: [...source.allowedMcpHosts],
+    allowedWebDomains: [...source.allowedWebDomains],
+    blockedWebDomains: [...source.blockedWebDomains],
+    toolRules: [...(source.toolRules ?? [])],
+  };
+}
+
+function sameLists(a: ConnectorPolicyLists, b: ConnectorPolicyLists): boolean {
+  const sorted = (list: string[]) => [...list].map((s) => s.toLowerCase()).sort();
+  const norm = (l: ConnectorPolicyLists) =>
+    JSON.stringify({
+      a: sorted(l.allowedConnectors),
+      b: sorted(l.blockedConnectors),
+      c: l.allowCustomConnectors,
+      p: sorted(l.allowedPlugins),
+      q: sorted(l.blockedPlugins),
+      h: sorted(l.allowedMcpHosts),
+      w: sorted(l.allowedWebDomains),
+      x: sorted(l.blockedWebDomains),
+      t: sorted(
+        (l.toolRules ?? []).map((rule) => `${rule.connectorId} ${rule.toolName} ${rule.level}`),
+      ),
+    });
+  return norm(a) === norm(b);
+}
+
 export function WorkspaceConnectorPolicy() {
   const { data, isPending, isError, error, refetch } = useConnectorPolicy();
   const update = useUpdateConnectorPolicy();
   const [draft, setDraft] = useState<ConnectorPolicyLists | null>(null);
 
-  useEffect(() => {
-    if (!data) return;
-    setDraft({
-      allowedConnectors: [...data.policy.allowedConnectors],
-      blockedConnectors: [...data.policy.blockedConnectors],
-      allowCustomConnectors: data.policy.allowCustomConnectors,
-      allowedPlugins: [...data.policy.allowedPlugins],
-      blockedPlugins: [...data.policy.blockedPlugins],
-      allowedMcpHosts: [...data.policy.allowedMcpHosts],
-      allowedWebDomains: [...data.policy.allowedWebDomains],
-      blockedWebDomains: [...data.policy.blockedWebDomains],
-      toolRules: [...data.policy.toolRules],
-    });
-  }, [data]);
+  useServerDraftSync(
+    data?.policy,
+    (acknowledged) => draft === null || sameLists(draft, acknowledged),
+    (policy) => setDraft(listsOf(policy)),
+  );
 
   const dirty = useMemo(() => {
     if (!data || !draft) return false;
-    const sorted = (list: string[]) => [...list].map((s) => s.toLowerCase()).sort();
-    const norm = (l: ConnectorPolicyLists) =>
-      JSON.stringify({
-        a: sorted(l.allowedConnectors),
-        b: sorted(l.blockedConnectors),
-        c: l.allowCustomConnectors,
-        p: sorted(l.allowedPlugins),
-        q: sorted(l.blockedPlugins),
-        h: sorted(l.allowedMcpHosts),
-        w: sorted(l.allowedWebDomains),
-        x: sorted(l.blockedWebDomains),
-        t: sorted(
-          (l.toolRules ?? []).map((rule) => `${rule.connectorId} ${rule.toolName} ${rule.level}`),
-        ),
-      });
-    return norm(data.policy) !== norm(draft);
+    return !sameLists(data.policy, draft);
   }, [data, draft]);
 
   const { dialog: discardDialog } = useUnsavedChangesGuard({

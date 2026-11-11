@@ -100,6 +100,51 @@ describe('mobile artifact store versioning', () => {
     expect(useArtifactStore.getState().artifacts).toHaveLength(1);
   });
 
+  it('keeps a saved edit current when the original source is derived again', () => {
+    const store = useArtifactStore.getState();
+    store.addArtifacts([storeArtifact(V1)]);
+    useArtifactStore.getState().saveArtifactEdit(storeArtifact(V2));
+    useArtifactStore.getState().addArtifacts([storeArtifact(V1)]);
+
+    expect(useArtifactStore.getState().artifacts[0]?.content).toBe(V2);
+    expect(
+      useArtifactStore
+        .getState()
+        .getArtifactVersions(viewerArtifact.id)
+        .map((version) => version.content),
+    ).toEqual([V1, V2]);
+  });
+
+  it('keeps a restored version current when its source is derived again', () => {
+    const store = useArtifactStore.getState();
+    store.addArtifacts([storeArtifact(V1)]);
+    useArtifactStore.getState().saveArtifactEdit(storeArtifact(V2));
+    useArtifactStore.getState().restoreArtifactVersion(viewerArtifact.id, 0);
+    useArtifactStore.getState().addArtifacts([storeArtifact(V1)]);
+
+    expect(useArtifactStore.getState().artifacts[0]?.content).toBe(V1);
+    expect(useArtifactStore.getState().getArtifactVersions(viewerArtifact.id)).toHaveLength(3);
+  });
+
+  it('saves an edit that returns to earlier text and never creates an artifact', () => {
+    const store = useArtifactStore.getState();
+    store.addArtifacts([storeArtifact(V1)]);
+    useArtifactStore.getState().saveArtifactEdit(storeArtifact(V2));
+    useArtifactStore.getState().saveArtifactEdit(storeArtifact(V1));
+
+    expect(useArtifactStore.getState().artifacts[0]?.content).toBe(V1);
+    expect(
+      useArtifactStore
+        .getState()
+        .getArtifactVersions(viewerArtifact.id)
+        .map((version) => version.content),
+    ).toEqual([V1, V2, V1]);
+
+    resetStore();
+    useArtifactStore.getState().saveArtifactEdit(storeArtifact(V2));
+    expect(useArtifactStore.getState().artifacts).toHaveLength(0);
+  });
+
   it('restores an older version by appending it as the newest', () => {
     const store = useArtifactStore.getState();
     store.addArtifacts([storeArtifact(V1)]);

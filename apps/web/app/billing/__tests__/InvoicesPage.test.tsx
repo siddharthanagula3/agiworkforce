@@ -80,4 +80,24 @@ describe('billing invoices page', () => {
     expect(alert).not.toHaveTextContent('500');
     expect(alert).toHaveTextContent(/billing portal/u);
   });
+
+  it('says when older invoices are not in the list instead of presenting it as complete', async () => {
+    mockInvoices({ invoices: [PAID_INVOICE], available: true, hasMore: true });
+
+    render(<InvoiceList />);
+
+    await waitFor(() => expect(screen.getByText('AGI-0001')).toBeInTheDocument());
+    expect(screen.getByRole('status')).toHaveTextContent(/1 most recent invoices/u);
+    expect(screen.getByRole('status')).toHaveTextContent(/billing portal/u);
+  });
+
+  it('does not call an unavailable invoice source an empty history', async () => {
+    mockInvoices({ invoices: [], available: false, hasMore: false });
+
+    render(<InvoiceList />);
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/cannot be shown/u));
+    expect(screen.queryByText(/No invoices yet/u)).toBeNull();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
 });

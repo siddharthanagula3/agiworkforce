@@ -10,6 +10,7 @@ import {
   DISPATCH_TASK_REPORT,
   DISPATCH_TASK_RUNNER_READY,
   DesktopRuntimeError,
+  MAX_CLIPBOARD_TEXT_LENGTH,
   assertLocalTurnCarriesNoAttachments,
   developerApprovalAllows,
   getHostBridge,
@@ -72,7 +73,7 @@ import type { BrowserPageSummary, BrowserTabSummary } from '@agiworkforce/types'
 import type {
   MemoryAddResponse,
   PluginSummary,
-  SkillSummary,
+  SkillListResponse,
   ThreadCompactResponse,
   ThreadDeleteResponse,
 } from '@agiworkforce/types/protocol';
@@ -301,25 +302,40 @@ export function startLocalCommand(
   return { runId, result };
 }
 
+export interface LocalBackgroundCommandStart {
+  runId: string;
+  started: Promise<BackgroundShellOutput>;
+}
+
 export function startBackgroundLocalCommand(input: {
   rootId: string;
   command: string;
   path?: string;
-}): Promise<BackgroundShellOutput> {
-  return invoke<BackgroundShellOutput>('shell_start', {
-    runId: crypto.randomUUID(),
-    rootId: input.rootId,
-    command: input.command,
-    ...(input.path ? { path: input.path } : {}),
-  });
+}): LocalBackgroundCommandStart {
+  const runId = crypto.randomUUID();
+  return {
+    runId,
+    started: invoke<BackgroundShellOutput>('shell_start', {
+      runId,
+      rootId: input.rootId,
+      command: input.command,
+      ...(input.path ? { path: input.path } : {}),
+    }),
+  };
 }
 
 export function openLocalPreview(url: string): Promise<{ url: string }> {
   return invoke<{ url: string }>('app_open_preview', { url });
 }
 
-export function readPreviewConsoleErrors(clear: boolean): Promise<PreviewConsoleReport> {
-  return invoke<PreviewConsoleReport>('app_preview_errors', { clear });
+export function readPreviewConsoleErrors(
+  clear: boolean,
+  url?: string,
+): Promise<PreviewConsoleReport> {
+  return invoke<PreviewConsoleReport>('app_preview_errors', {
+    clear,
+    ...(url ? { url } : {}),
+  });
 }
 
 export function openWorkspacePath(rootId: string, path: string): Promise<ApplicationOpenResult> {
@@ -339,7 +355,8 @@ export function readHostClipboard(): Promise<ClipboardSnapshot> {
  *
  * Text becomes a `.txt` file rather than composer text: the composer already
  * turns a long paste into an attachment, and a clipboard holding a whole file
- * should not silently replace what the user has typed.
+ * should not silently replace what the user has typed. Text the host cut short
+ * ends with a line saying so, because the file is all the model will see.
  */
 export function clipboardAttachments(snapshot: ClipboardSnapshot, nowMs: number): File[] {
   const files: File[] = [];
@@ -352,8 +369,11 @@ export function clipboardAttachments(snapshot: ClipboardSnapshot, nowMs: number)
     );
   }
   if (snapshot.text) {
+    const text = snapshot.textTruncated
+      ? `${snapshot.text}\n\n[Clipboard text cut off: only the first ${MAX_CLIPBOARD_TEXT_LENGTH.toLocaleString('en-US')} characters were attached.]`
+      : snapshot.text;
     files.push(
-      new File([snapshot.text], `clipboard-${nowMs}.txt`, {
+      new File([text], `clipboard-${nowMs}.txt`, {
         type: 'text/plain',
         lastModified: nowMs,
       }),
@@ -803,8 +823,8 @@ export function switchLocalBranch(rootId: string, branch: string): Promise<strin
   return invoke<string>('developer_branch_switch', { rootId, branch });
 }
 
-export function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
-  return invoke<SkillSummary[]>('developer_skills_list', { rootId });
+export function listDeveloperSkills(rootId: string): Promise<SkillListResponse> {
+  return invoke<SkillListResponse>('developer_skills_list', { rootId });
 }
 
 export function setDeveloperSkillEnabled(
@@ -815,8 +835,16 @@ export function setDeveloperSkillEnabled(
   return invoke<boolean>('developer_skill_set_enabled', { rootId, name, enabled });
 }
 
-export function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
-  return invoke<boolean>('developer_skill_consent', { rootId, granted });
+export function setDeveloperSkillConsent(
+  rootId: string,
+  granted: boolean,
+  digest?: string,
+): Promise<boolean> {
+  return invoke<boolean>('developer_skill_consent', {
+    rootId,
+    granted,
+    ...(granted && digest !== undefined ? { digest } : {}),
+  });
 }
 
 export function listDeveloperPlugins(rootId: string): Promise<PluginSummary[]> {

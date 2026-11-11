@@ -75,10 +75,31 @@ const MEDIA_FEATURES = RATE_CARD_FEATURES.filter(
 const SANDBOX_CAPABILITIES: readonly CogsCapability[] = ['sandbox'];
 const VOICE_CAPABILITIES: readonly CogsCapability[] = ['transcription'];
 const MEDIA_CAPABILITIES: readonly CogsCapability[] = ['image', 'video'];
+const INFRASTRUCTURE_CAPABILITIES: readonly CogsCapability[] = [
+  'hosting',
+  'database',
+  'storage',
+  'cache',
+  'auth',
+  'email',
+  'observability',
+  'vector',
+  'notification',
+  'egress',
+  'connector',
+  'artifact',
+];
 
 const PAYMENT_FEE_KINDS = ['stripe_fee'] as const;
 
-export const COGS_CLASSES = ['model', 'search', 'sandbox', 'voice', 'media'] as const;
+export const COGS_CLASSES = [
+  'model',
+  'search',
+  'sandbox',
+  'voice',
+  'media',
+  'infrastructure',
+] as const;
 export type CogsClass = (typeof COGS_CLASSES)[number];
 
 export const RECONCILIATION_STATUSES = ['estimated', 'provider_reported', 'reconciled'] as const;
@@ -165,6 +186,7 @@ interface CostRow {
   sandbox_microusd: string | number | null;
   voice_microusd: string | number | null;
   media_microusd: string | number | null;
+  infrastructure_microusd: string | number | null;
   rows_estimated: string | number | null;
   rows_provider_reported: string | number | null;
   rows_reconciled: string | number | null;
@@ -213,7 +235,7 @@ function emptyCogs(): EconomicsCogs {
     totalMicrousd: 0,
     estimatedMicrousd: 0,
     reportedMicrousd: 0,
-    byClassMicrousd: { model: 0, search: 0, sandbox: 0, voice: 0, media: 0 },
+    byClassMicrousd: { model: 0, search: 0, sandbox: 0, voice: 0, media: 0, infrastructure: 0 },
     rowsByStatus: { estimated: 0, provider_reported: 0, reconciled: 0 },
   };
 }
@@ -254,6 +276,7 @@ function costQuery(groupBy: EconomicsGrouping): string {
           when e.capability = any($5::text[]) or e.feature = any($6::text[]) then 'sandbox'
           when e.capability = any($7::text[]) or e.feature = any($8::text[]) then 'voice'
           when e.capability = any($9::text[]) or e.feature = any($10::text[]) then 'media'
+          when e.capability = any($11::text[]) then 'infrastructure'
           else 'model'
         end as cogs_class,
         coalesce(
@@ -292,6 +315,8 @@ function costQuery(groupBy: EconomicsGrouping): string {
         filter (where cogs_class = 'voice'), 0) as voice_microusd,
       coalesce(sum(coalesce(reported_microusd, estimated_microusd))
         filter (where cogs_class = 'media'), 0) as media_microusd,
+      coalesce(sum(coalesce(reported_microusd, estimated_microusd))
+        filter (where cogs_class = 'infrastructure'), 0) as infrastructure_microusd,
       count(*) filter (where reconciliation_status = 'estimated') as rows_estimated,
       count(*) filter (where reconciliation_status = 'provider_reported')
         as rows_provider_reported,
@@ -369,6 +394,7 @@ function costGroup(row: CostRow): EconomicsSummaryGroup {
     sandbox: toNumber(row.sandbox_microusd),
     voice: toNumber(row.voice_microusd),
     media: toNumber(row.media_microusd),
+    infrastructure: toNumber(row.infrastructure_microusd),
   };
   const canonicalValueMicrousd = toNumber(row.canonical_microusd);
   const totalMicrousd = estimated + reported;
@@ -473,6 +499,7 @@ export async function readEconomicsSummary(
     VOICE_FEATURES,
     MEDIA_CAPABILITIES,
     MEDIA_FEATURES,
+    INFRASTRUCTURE_CAPABILITIES,
   ]);
 
   const [subscriptionRows, topUpRows, feeRows] = await Promise.all([

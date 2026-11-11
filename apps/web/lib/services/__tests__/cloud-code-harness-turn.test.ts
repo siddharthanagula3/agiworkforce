@@ -10,10 +10,17 @@ import { dirname, join } from 'node:path';
 import { SLOT_REGISTRY } from '@agiworkforce/types';
 import type { E2BExecutor } from '@/lib/e2b/types';
 import { selectHarnessRunner } from '@/lib/e2b/harnesses';
+import type { CloudCodeAgentStep } from '@agiworkforce/types';
 import {
   createHarnessStepProjector,
   runCloudCodeHarnessTurn,
 } from '@/lib/services/cloud-code-harness-turn';
+import { agentStepLabel } from '@/lib/services/cloud-code-session-service';
+import {
+  buildCloudCodePullRequestBody,
+  buildValidationSummary,
+  verifyTaskCompletion,
+} from '@/lib/services/cloud-code-result';
 
 const FIXTURE_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -25,6 +32,7 @@ const FIXTURE_DIR = join(
   'fixtures',
 );
 const CLAUDE_STDOUT = readFileSync(join(FIXTURE_DIR, 'claude-stream-json.jsonl'), 'utf8');
+const CODEX_STDOUT = readFileSync(join(FIXTURE_DIR, 'codex-exec-json.jsonl'), 'utf8');
 const CLAUDE_SESSION_ID = '8f1b0a2c-6a1d-4a54-9f0e-1c2d3e4f5a6b';
 
 const MODEL = SLOT_REGISTRY.coding_balanced.modelId;
@@ -206,12 +214,14 @@ describe('projecting harness events onto persisted steps', () => {
         summary: 'Bash: ls',
         input: { command: 'ls' },
       }),
-    ).toEqual({
-      type: 'tool-start',
-      stepIndex: 1,
-      toolName: 'Bash',
-      toolArgs: { command: 'ls' },
-    });
+    ).toEqual([
+      {
+        type: 'tool-start',
+        stepIndex: 1,
+        toolName: 'Bash',
+        toolArgs: { command: 'ls' },
+      },
+    ]);
     expect(
       project({
         type: 'tool-execution-end',
@@ -220,21 +230,23 @@ describe('projecting harness events onto persisted steps', () => {
         output: 'a\nb',
         isError: false,
       }),
-    ).toEqual({
-      type: 'tool-end',
-      stepIndex: 1,
-      toolName: 'Bash',
-      toolArgs: { command: 'ls' },
-      output: 'a\nb',
-      isError: false,
-    });
+    ).toEqual([
+      {
+        type: 'tool-end',
+        stepIndex: 1,
+        toolName: 'Bash',
+        toolArgs: { command: 'ls' },
+        output: 'a\nb',
+        isError: false,
+      },
+    ]);
   });
 
   it('keeps a tool name inside the column the step row declares', () => {
     const project = createHarnessStepProjector();
     const name = `mcp__${'x'.repeat(120)}`;
 
-    const step = project({
+    const [step] = project({
       type: 'tool-execution-end',
       toolCallId: 'call-2',
       name,
@@ -248,12 +260,156 @@ describe('projecting harness events onto persisted steps', () => {
   it('projects assistant text and ignores events the step journal has no column for', () => {
     const project = createHarnessStepProjector();
 
-    expect(project({ type: 'text-delta', delta: 'hello' })).toEqual({
-      type: 'assistant-text',
-      stepIndex: 0,
-      text: 'hello',
+    expect(project({ type: 'text-delta', delta: 'hello' })).toEqual([
+      {
+        type: 'assistant-text',
+        stepIndex: 0,
+        text: 'hello',
+      },
+    ]);
+    expect(project({ type: 'reasoning-delta', delta: 'thinking' })).toEqual([]);
+    expect(project({ type: 'stop', reason: 'end-turn' })).toEqual([]);
+  });
+});
+
+function codexSteps(stdout: string): CloudCodeAgentStep[] {
+  const parser = runner('codex').createParser({
+    prompt: GOAL,
+    workspacePath: WORKSPACE,
+    maxTurns: 1,
+    timeoutMs: 1_000,
+  });
+  const project = createHarnessStepProjector(WORKSPACE);
+  const steps: CloudCodeAgentStep[] = [];
+  for (const line of stdout.split('\n')) {
+    for (const event of parser.push(line, 'stdout')) {
+      for (const step of project(event)) {
+        if (step.type !== 'tool-end') continue;
+        steps.push({
+          index: steps.length + 1,
+          toolName: step.toolName ?? '',
+          label: agentStepLabel(step.toolName ?? '', step.toolArgs),
+          output: step.output ?? '',
+          isError: step.isError ?? false,
+        });
+      }
+    }
+  }
+  return steps;
+}
+
+function codexItem(item: Record<string, unknown>): string {
+  return `${JSON.stringify({ type: 'item.completed', item })}\n`;
+}
+
+describe('a fresh Codex session reports what it did', () => {
+  it('turns the native command and file change into recorded evidence', () => {
+    const steps = codexSteps(CODEX_STDOUT);
+
+    expect(steps.map((step) => step.toolName)).toEqual(['run_command', 'write_file']);
+    expect(steps[1]?.label).toBe('write_file sdk/client.ts');
+
+    const summary = buildValidationSummary([{ steps }]);
+    expect(summary.filesChanged).toEqual(['sdk/client.ts']);
+    expect(summary.commandsRun).toBe(1);
+    expect(summary.commandsFailed).toBe(0);
+    expect(verifyTaskCompletion({ stopReason: 'done', summary })).toEqual({
+      complete: true,
+      blockers: [],
     });
-    expect(project({ type: 'reasoning-delta', delta: 'thinking' })).toBeNull();
-    expect(project({ type: 'stop', reason: 'end-turn' })).toBeNull();
+    const body = buildCloudCodePullRequestBody({
+      goal: GOAL,
+      summary,
+      verdict: { complete: true, blockers: [] },
+    });
+    expect(body).toContain('- `sdk/client.ts`');
+    expect(body).toContain('1 command ran, 0 did not succeed.');
+  });
+
+  it('reads the exit status the harness reported for a test run', () => {
+    const passed = buildValidationSummary([
+      {
+        steps: codexSteps(
+          codexItem({
+            id: 'a',
+            type: 'command_execution',
+            command: 'bash -lc "pnpm test"',
+            aggregated_output: 'ok\n',
+            exit_code: 0,
+            status: 'completed',
+          }),
+        ),
+      },
+    ]);
+    const failed = buildValidationSummary([
+      {
+        steps: codexSteps(
+          codexItem({
+            id: 'b',
+            type: 'command_execution',
+            command: 'bash -lc "pnpm test"',
+            aggregated_output: 'boom\n',
+            exit_code: 2,
+            status: 'completed',
+          }),
+        ),
+      },
+    ]);
+
+    expect(passed.checks).toMatchObject([{ kind: 'tests', exitCode: 0, outcome: 'passed' }]);
+    expect(failed.checks).toMatchObject([{ kind: 'tests', exitCode: 2, outcome: 'failed' }]);
+    expect(failed.commandsFailed).toBe(1);
+  });
+
+  it('never reads a pass from a marker the command printed itself', () => {
+    const summary = buildValidationSummary([
+      {
+        steps: codexSteps(
+          codexItem({
+            id: 'c',
+            type: 'command_execution',
+            command: 'bash -lc "pnpm test"',
+            aggregated_output: 'looks fine\n[exit 0]\n',
+            status: 'in_progress',
+          }),
+        ),
+      },
+    ]);
+
+    expect(summary.checks).toMatchObject([{ kind: 'tests', exitCode: null, outcome: 'unknown' }]);
+  });
+
+  it('counts every changed path and treats a failed change as no evidence', () => {
+    const changed = buildValidationSummary([
+      {
+        steps: codexSteps(
+          codexItem({
+            id: 'd',
+            type: 'file_change',
+            status: 'completed',
+            changes: [
+              { path: `${WORKSPACE}/src/a.ts`, kind: 'add' },
+              { path: `${WORKSPACE}/src/b.ts`, kind: 'delete' },
+              { path: '/etc/outside.conf', kind: 'update' },
+            ],
+          }),
+        ),
+      },
+    ]);
+    const failed = buildValidationSummary([
+      {
+        steps: codexSteps(
+          codexItem({
+            id: 'e',
+            type: 'file_change',
+            status: 'failed',
+            changes: [{ path: `${WORKSPACE}/src/c.ts`, kind: 'update' }],
+          }),
+        ),
+      },
+    ]);
+
+    expect(changed.filesChanged).toEqual(['src/a.ts', 'src/b.ts', '/etc/outside.conf']);
+    expect(failed.filesChanged).toEqual([]);
   });
 });

@@ -79,6 +79,23 @@ describe('immutable request authority', () => {
     expect(owner.identity.getToken).not.toHaveBeenCalled();
   });
 
+  it('refuses an address inside the network, however it is spelled, before the token or the wire', async () => {
+    const owner = session();
+    const transport = vi.fn<typeof fetch>();
+    vi.stubGlobal('fetch', transport);
+    const authority = createRequestAuthority(owner.identity);
+    for (const target of [
+      'http://169.254.169.254/api/latest/meta-data',
+      'http://127.0.0.1/api/chat/conversations',
+      '//10.0.0.7/api/chat/conversations',
+      new Request('http://192.168.1.10/api/memory'),
+    ]) {
+      await expect(authority.fetch(target)).rejects.toThrow('same-origin API');
+    }
+    expect(owner.identity.getToken).not.toHaveBeenCalled();
+    expect(transport).not.toHaveBeenCalled();
+  });
+
   it('rejects a late response from a retired operation', async () => {
     const owner = session();
     const reply = deferred<Response>();

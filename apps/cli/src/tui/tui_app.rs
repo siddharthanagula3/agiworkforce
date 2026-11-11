@@ -521,7 +521,8 @@ struct TuiApp {
     ),
     team_seen: u64,
     remote: Option<RemoteLink>,
-    remote_prompts: Vec<String>,
+    remote_prompts: Vec<crate::tui::remote_host::RemotePrompt>,
+    remote_turn_ids: Vec<String>,
     remote_label: Option<String>,
     browser: Arc<std::sync::Mutex<crate::browser_bridge::BrowserAvailability>>,
     start_panel: StartPanel,
@@ -713,6 +714,7 @@ impl TuiApp {
             team_seen: 0,
             remote: None,
             remote_prompts: Vec::new(),
+            remote_turn_ids: Vec::new(),
             remote_label: None,
             browser: Arc::new(std::sync::Mutex::new(
                 crate::browser_bridge::BrowserAvailability::ShellNotRunning,
@@ -880,6 +882,7 @@ impl TuiApp {
                             agent.name
                         ))
                     })
+                    .filter(|candidate| crate::mentions::mention_token(&candidate.path).is_some())
                     .collect();
             candidates.extend(crate::mentions::workspace_file_candidates(&root));
             self.mention_candidates = Some(candidates);
@@ -896,7 +899,10 @@ impl TuiApp {
         if anchor > self.input.len() || cursor > self.input.len() {
             return;
         }
-        let replacement = format!("@{path} ");
+        let Some(token) = crate::mentions::mention_token(path) else {
+            return;
+        };
+        let replacement = format!("{token} ");
         self.input.replace_range(anchor..cursor, &replacement);
         self.cursor = anchor + replacement.len();
     }
@@ -1117,11 +1123,8 @@ impl TuiApp {
                     });
                 }
             }
-            OverlayResult::SkillsDisabled(names) => {
-                // Persist the disabled set; discover_skills() then skips them for
-                // every consumer (prompt injection, registry, tools).
-                let set: std::collections::HashSet<String> = names.into_iter().collect();
-                if let Err(error) = crate::skills::save_disabled_skills(&set) {
+            OverlayResult::SkillChoices(choices) => {
+                if let Err(error) = crate::skills::set_skills_enabled(&choices) {
                     self.chat_messages.push(ChatMessage {
                         role: ChatRole::Error,
                         text: format!("The skill choices were not saved: {error}"),
@@ -1298,32 +1301,43 @@ impl TuiApp {
         if !super::tui_active() {
             return;
         }
-        if let Some(title) = self.terminal_title() {
-            set_terminal_title(title);
-        }
+        apply_terminal_title(
+            &mut io::stdout(),
+            self.terminal_title(),
+            &TERMINAL_TITLE_STACKED,
+        );
     }
 }
 
 static TERMINAL_TITLE_STACKED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
-fn set_terminal_title(title: String) {
-    let mut stdout = io::stdout();
-    #[cfg(unix)]
-    if !TERMINAL_TITLE_STACKED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-        use std::io::Write;
-        let _ = stdout.write_all(b"\x1b[22;0t");
+fn apply_terminal_title<W: std::io::Write>(
+    out: &mut W,
+    title: Option<String>,
+    stacked: &std::sync::atomic::AtomicBool,
+) {
+    match title {
+        Some(title) => {
+            #[cfg(unix)]
+            if !stacked.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                let _ = out.write_all(b"\x1b[22;0t");
+            }
+            let _ = out.execute(crossterm::terminal::SetTitle(title));
+        }
+        None => release_title_stack(out, stacked),
     }
-    let _ = stdout.execute(crossterm::terminal::SetTitle(title));
+}
+
+fn release_title_stack<W: std::io::Write>(out: &mut W, stacked: &std::sync::atomic::AtomicBool) {
+    if stacked.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        let _ = out.write_all(b"\x1b[23;0t");
+        let _ = out.flush();
+    }
 }
 
 fn release_terminal_title() {
-    if TERMINAL_TITLE_STACKED.swap(false, std::sync::atomic::Ordering::Relaxed) {
-        use std::io::Write;
-        let mut stdout = io::stdout();
-        let _ = stdout.write_all(b"\x1b[23;0t");
-        let _ = stdout.flush();
-    }
+    release_title_stack(&mut io::stdout(), &TERMINAL_TITLE_STACKED);
 }
 
 /// Build the OS window-title string from the enabled fields. `None` when no field
@@ -1433,6 +1447,7 @@ fn approval_overlay_for(
             .collect(),
     );
     overlay.always_allow_unavailable = !request.saves_always_allow;
+    overlay.allow_session_unavailable = request.requires_explicit_decision;
     overlay.set_targets(crate::tui::widgets::approval_overlay::targets_for(
         &request.kind,
     ));
@@ -1970,9 +1985,9 @@ struct FrameCtx<'a> {
     /// Which statusline fields the user has enabled (model/tokens/cost/branch/mode).
     statusline: &'a super::widgets::statusline_setup::StatusLineConfig,
     workspace_pane: Option<&'a [String]>,
-    /// The key bound to quit, as the keybinding config names it; `None` when
-    /// nothing is bound, so the footer offers no quit hint.
-    quit_key: Option<&'a str>,
+    /// The resolved bindings, so every on-screen shortcut hint names the chord
+    /// that actually fires; an unbound action offers no hint.
+    keybindings: &'a crate::keybindings::Keybindings,
 }
 
 /// How full the context window is: the percentage the meters draw and the
@@ -2154,9 +2169,7 @@ impl<'a> FrameCtx<'a> {
             effort_label: app.visible_effort_label(),
             cost_str: crate::output::format_session_credits(app.session.cost_ledger.total_usd),
             notice: app.live_notice(),
-            quit_key: app
-                .keybindings
-                .display(crate::keybindings::KeybindingAction::Quit),
+            keybindings: &app.keybindings,
         }
     }
 }
@@ -2448,6 +2461,29 @@ fn render_workspace_pane(frame: &mut ratatui::Frame, area: Rect, pane: &[String]
     frame.render_widget(pane, area);
 }
 
+fn start_view_key_hints(bindings: &crate::keybindings::Keybindings) -> Vec<String> {
+    use crate::keybindings::KeybindingAction;
+    let mut first = Vec::new();
+    if let Some(key) = bindings.hint(KeybindingAction::OpenPalette) {
+        let verb = if key.contains('+') { "Press" } else { "Type" };
+        first.push(format!("{verb} {key} for commands"));
+    }
+    if let Some(key) = bindings.hint(KeybindingAction::CycleMode) {
+        first.push(format!("{key} to change how much AGI does alone"));
+    }
+    let mut second = vec!["Esc clears".to_string()];
+    if let Some(key) = bindings.hint(KeybindingAction::Quit) {
+        second.push(format!("{key} twice to quit"));
+    }
+    second.push("/keys for all keys".to_string());
+    let mut lines = Vec::new();
+    if !first.is_empty() {
+        lines.push(format!("  {}.", first.join(" · ")));
+    }
+    lines.push(format!("  {}.", second.join(" · ")));
+    lines
+}
+
 fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     let area = match ctx.workspace_pane {
         Some(pane) if area.width >= WORKSPACE_PANE_MIN_WIDTH => {
@@ -2561,14 +2597,12 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "  Type / for commands · Shift+Tab to change how much AGI does alone.",
-            Style::default().fg(ui_muted()),
-        )));
-        lines.push(Line::from(Span::styled(
-            "  Esc clears · Ctrl+D twice to quit · /keys for all keys.",
-            Style::default().fg(ui_muted()),
-        )));
+        for hint_line in start_view_key_hints(ctx.keybindings) {
+            lines.push(Line::from(Span::styled(
+                hint_line,
+                Style::default().fg(ui_muted()),
+            )));
+        }
     } else {
         for msg in ctx.chat_messages {
             if msg.role == ChatRole::Detail {
@@ -3004,6 +3038,7 @@ static DISCOVERED_LOCAL_MODELS: std::sync::OnceLock<
 /// keyboard navigation cannot silently drop a dynamic source.
 fn available_picker_models() -> Vec<crate::model_catalog::Model> {
     let mut models = crate::model_catalog::catalog().all().to_vec();
+    crate::models::openrouter_models::refresh_cache_if_stale();
     models.extend(crate::models::openrouter_models::load_cached_models());
     models.extend(crate::models::gateway_models::cached_picker_models());
     if let Some(cache) = DISCOVERED_LOCAL_MODELS.get() {
@@ -3044,40 +3079,8 @@ fn discovered_local_to_catalog_model(
     }
 }
 
-/// Classify the active runtime provider into an access mode for the status
-/// chip. Presentation only, mirrors the model-picker grouping and never
-/// affects routing. A keyless OpenAI-compatible endpoint (e.g. LM Studio) and
-/// Ollama are Local; the AGI-managed endpoint is Cloud; anything with a key is
-/// BYOK.
 fn provider_access_mode(provider: &crate::models::Provider) -> crate::design_system::AccessMode {
-    use crate::design_system::AccessMode;
-    use crate::models::{OllamaMode, Provider};
-    match provider {
-        Provider::ManagedCloud => AccessMode::Cloud,
-        // Local Ollama is on-device; Ollama Cloud is a hosted service reached
-        // with the user's key, so it is BYOK (data leaves the device).
-        Provider::Ollama(OllamaMode::Local) => AccessMode::Local,
-        Provider::Ollama(OllamaMode::Cloud) => AccessMode::Byok,
-        Provider::Custom { api_key_env, .. } => {
-            if api_key_env.is_some() {
-                AccessMode::Byok
-            } else {
-                AccessMode::Local
-            }
-        }
-        Provider::OpenAICompatible {
-            name, api_key_env, ..
-        } => {
-            if name.eq_ignore_ascii_case("agi-cloud") || name.eq_ignore_ascii_case("agicloud") {
-                AccessMode::Cloud
-            } else if api_key_env.is_none() {
-                AccessMode::Local
-            } else {
-                AccessMode::Byok
-            }
-        }
-        Provider::Anthropic | Provider::Google => AccessMode::Byok,
-    }
+    crate::design_system::AccessMode::for_provider(provider)
 }
 
 /// Total terminal columns a row of spans occupies.
@@ -3263,17 +3266,37 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // Keyboard hints in descending usefulness. The slash hint is the one that
     // teaches the app, so it is the last to go; each has a compact form, since
     // a hint that only appears at 180 columns is a hint most users never see.
-    let quit_key = ctx.quit_key;
+    use crate::keybindings::KeybindingAction;
+    let bindings = ctx.keybindings;
+    let palette_key = bindings.hint(KeybindingAction::OpenPalette);
+    let quit_key = bindings.display(KeybindingAction::Quit);
+    let mode_key = bindings.hint(KeybindingAction::CycleMode);
     let hints = move |tier: usize| -> Vec<String> {
-        let (slash, quit, mode) = if tier == 0 {
-            ("/: commands", ": quit", "Shift+Tab: mode")
-        } else {
-            ("/ cmds", " quit", "⇧⇥ mode")
-        };
-        std::iter::once(slash.to_string())
-            .chain(quit_key.map(|key| format!("{key}{quit}")))
-            .chain(std::iter::once(mode.to_string()))
-            .collect()
+        let compact = tier != 0;
+        let slash = palette_key.as_ref().map(|key| {
+            if compact {
+                format!("{key} cmds")
+            } else {
+                format!("{key}: commands")
+            }
+        });
+        let quit = quit_key.map(|key| {
+            if compact {
+                format!("{key} quit")
+            } else {
+                format!("{key}: quit")
+            }
+        });
+        let mode = mode_key.as_ref().map(|key| {
+            if !compact {
+                format!("{key}: mode")
+            } else if key == "Shift+Tab" {
+                "⇧⇥ mode".to_string()
+            } else {
+                format!("{key} mode")
+            }
+        });
+        slash.into_iter().chain(quit).chain(mode).collect()
     };
 
     let avail = area.width as usize;
@@ -3394,7 +3417,12 @@ fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     if shown_at.elapsed() > MODE_BANNER_TTL {
         return;
     }
-    let text = format!("  Mode: {} (shift+tab to cycle)  ", app.mode.label());
+    let cycle_hint = app
+        .keybindings
+        .display(crate::keybindings::KeybindingAction::CycleMode)
+        .map(|key| format!(" ({key} to cycle)"))
+        .unwrap_or_default();
+    let text = format!("  Mode: {}{cycle_hint}  ", app.mode.label());
     let width = (display_width(&text) as u16).min(chat_area.width.saturating_sub(2));
     if width == 0 {
         return;
@@ -3589,7 +3617,8 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
     if key.code == KeyCode::Esc && key.modifiers.is_empty() {
         if !app.input.is_empty() {
-            app.prompt_history.record(&app.input);
+            let draft = app.pasted_texts.expand(&app.input);
+            app.prompt_history.record(&draft);
             app.input.clear();
             app.cursor = 0;
             app.rewind_armed_at = None;
@@ -3641,10 +3670,14 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                 return InputAction::Quit(QuitReason::Interrupt);
             }
             app.exit_armed_at = Some(Instant::now());
-            app.status_notice = Some((
-                "nothing to interrupt · Ctrl-C again to exit".to_string(),
-                Instant::now(),
-            ));
+            let notice = match app
+                .keybindings
+                .hint(crate::keybindings::KeybindingAction::ClearInput)
+            {
+                Some(key) => format!("nothing to interrupt · {key} again to exit"),
+                None => "nothing to interrupt".to_string(),
+            };
+            app.status_notice = Some((notice, Instant::now()));
             return InputAction::None;
         }
         app.input.clear();
@@ -4397,6 +4430,10 @@ fn start_remote_control(app: &mut TuiApp) -> String {
     if app.remote.is_some() {
         return "Remote Control is already on. /remote-control off stops it.".to_string();
     }
+    let privacy = app.session.privacy_mode;
+    if let Err(refused) = crate::cloud::CloudClient::admit(privacy) {
+        return refused.to_string();
+    }
     let Some(thread_id) = app.session.managed_session_id().map(str::to_string) else {
         return "Remote Control needs a saved session, and this one is not being saved."
             .to_string();
@@ -4436,6 +4473,7 @@ fn start_remote_control(app: &mut TuiApp) -> String {
         let result = crate::remote_control::run_with(
             relay_host,
             &workspace,
+            privacy,
             stopped,
             move |update: crate::remote_control::RemoteControlStatus| {
                 use crate::remote_control::RemoteControlStatus;
@@ -4502,9 +4540,7 @@ fn drain_remote_control(app: &mut TuiApp) {
         return;
     }
     while let Ok(input) = link.inbox.try_recv() {
-        if let crate::tui::remote_host::RemoteInput::Message(text) = input {
-            app.remote_prompts.push(text);
-        }
+        link.host.receive(&mut app.remote_prompts, input);
     }
     if let Some(label) = link
         .status
@@ -4590,10 +4626,10 @@ fn handle_agent_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.cursor = 0;
             InputAction::None
         }
-        AgentPickerAction::Invoke(agent_name) => {
+        AgentPickerAction::Invoke(agent_path) => {
             app.input.clear();
             app.cursor = 0;
-            match crate::agents::find_agent(&agent_name) {
+            match crate::agents::find_agent_at(&agent_path) {
                 Some(def) => {
                     def.apply_to_session(&mut app.session);
                     app.mode = InteractionMode::for_session(&app.session);
@@ -4605,13 +4641,16 @@ fn handle_agent_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     };
                     app.chat_messages.push(ChatMessage {
                         role: ChatRole::System,
-                        text: format!("Agent `{}` activated{}", agent_name, model_note),
+                        text: format!("Agent `{}` activated{}", def.name, model_note),
                     });
                 }
                 None => {
                     app.chat_messages.push(ChatMessage {
                         role: ChatRole::System,
-                        text: format!("Agent `{}` not found.", agent_name),
+                        text: format!(
+                            "The selected agent at {} is no longer available.",
+                            agent_path.display()
+                        ),
                     });
                 }
             }
@@ -4640,31 +4679,46 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         PickerAction::Select {
             model_id,
             provider_id,
-            effort: _effort,
+            effort,
             banner,
         } => {
             app.input.clear();
             app.cursor = 0;
-            let switched = if provider_id == crate::design_system::ProviderId::AGICloud {
-                app.session.switch_managed_model(&model_id)
-            } else {
-                app.session.switch_model(&model_id)
-            };
-            let text = match switched {
-                Ok(()) => banner,
-                Err(err) => format!(
-                    "Model switch failed: {}",
-                    crate::errors::terminal_text(&err)
-                ),
-            };
-            app.sync_stats();
-            app.chat_messages.push(ChatMessage {
-                role: ChatRole::System,
-                text,
-            });
+            finish_model_pick(app, &model_id, provider_id, effort, banner);
             InputAction::None
         }
     }
+}
+
+fn finish_model_pick(
+    app: &mut TuiApp,
+    model_id: &str,
+    provider_id: crate::design_system::ProviderId,
+    effort: Option<crate::design_system::Effort>,
+    banner: String,
+) {
+    let switched = if provider_id == crate::design_system::ProviderId::AGICloud {
+        app.session.switch_managed_model(model_id)
+    } else {
+        app.session.switch_model(model_id)
+    };
+    let text = match switched {
+        Ok(()) => {
+            if let Some(effort) = effort {
+                app.effort = effort;
+            }
+            banner
+        }
+        Err(err) => format!(
+            "Model switch failed: {}",
+            crate::errors::terminal_text(&err)
+        ),
+    };
+    app.sync_stats();
+    app.chat_messages.push(ChatMessage {
+        role: ChatRole::System,
+        text,
+    });
 }
 
 /// The model after `current` in `candidates`, wrapping, that `usable` accepts.
@@ -4846,19 +4900,20 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
     // Normalize to the bare command phrase: trim surrounding whitespace and a
     // single leading slash so both "/yolo" and "yolo mode" map to one trigger.
     let exact = lower.trim();
+    let slash_command = lower.trim_start().starts_with('/');
     let exact = exact.strip_prefix('/').unwrap_or(exact).trim();
 
     // Plan mode triggers, non-escalating (read-only), natural language allowed.
-    if lower == "/plan"
-        || lower.contains("go to plan mode")
-        || lower.contains("enter plan mode")
-        || lower.contains("switch to plan")
-        || lower.contains("plan mode")
-        || lower.contains("plan this first")
-        || lower.contains("plan first")
-        || lower.contains("plan before")
-        || lower.contains("plan properly")
-        || lower.contains("make a plan first")
+    if !slash_command
+        && (lower.contains("go to plan mode")
+            || lower.contains("enter plan mode")
+            || lower.contains("switch to plan")
+            || lower.contains("plan mode")
+            || lower.contains("plan this first")
+            || lower.contains("plan first")
+            || lower.contains("plan before")
+            || lower.contains("plan properly")
+            || lower.contains("make a plan first"))
     {
         return Some(InteractionMode::Plan);
     }
@@ -4903,10 +4958,11 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
     }
 
     // Back to chat mode, non-escalating (de-escalates), natural language allowed.
-    if lower.contains("normal mode")
-        || lower.contains("chat mode")
-        || lower.contains("exit plan")
-        || lower.contains("stop planning")
+    if !slash_command
+        && (lower.contains("normal mode")
+            || lower.contains("chat mode")
+            || lower.contains("exit plan")
+            || lower.contains("stop planning"))
     {
         return Some(InteractionMode::Chat);
     }
@@ -5020,6 +5076,7 @@ enum SlashResult {
     RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
+    RunLocalModelSwitch(String),
     RunAgentDraft(crate::agents::AgentRequest),
     RunRemoteControl(String),
     RunFeedback(crate::cloud::feedback::FeedbackKind, String),
@@ -5095,6 +5152,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 let all = available_picker_models();
                 let current = app.model_name.clone();
                 app.model_picker.open(&all, &current);
+                app.model_picker.effort = app.effort;
                 SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
             } else {
                 match app.session.switch_model_by_name(arg) {
@@ -5102,6 +5160,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         app.sync_stats();
                         let provider = crate::models::provider_name(&app.session.provider);
                         SlashResult::SystemMessage(format!("Switched to {} ({})", arg, provider))
+                    }
+                    Err(_) if app.session.privacy_mode == crate::agent::PrivacyMode::Local => {
+                        SlashResult::RunLocalModelSwitch(arg.to_string())
                     }
                     Err(err) => SlashResult::SystemMessage(format!("Model switch failed: {err}")),
                 }
@@ -5196,11 +5257,27 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             },
         ),
 
+        "/plan" if arg == "todos" => {
+            let workspace = app.workspace_root();
+            SlashResult::SystemMessage(
+                sanitize_terminal_text(
+                    &crate::plan_mode::TodoList::load_for_workspace(&workspace).render(),
+                )
+                .into_owned(),
+            )
+        }
+
         "/plan" => {
-            let new_mode = if app.mode == InteractionMode::Plan {
-                InteractionMode::Chat
-            } else {
-                InteractionMode::Plan
+            let new_mode = match arg {
+                "" if app.mode == InteractionMode::Plan => InteractionMode::Chat,
+                "" | "on" => InteractionMode::Plan,
+                "off" => InteractionMode::Chat,
+                unknown => {
+                    return SlashResult::SystemMessage(sanitize_terminal_text(&format!(
+                        "Unknown /plan subcommand: {unknown}. Use one of: on | off | accept | reject <feedback> | show | todos"
+                    ))
+                    .into_owned());
+                }
             };
             if !apply_mode(app, new_mode) {
                 return SlashResult::SystemMessage(pinned_mode_notice(app));
@@ -5215,7 +5292,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.session.cost_ledger.total_usd,
                 provider_access_mode(&app.session.provider),
             );
-            let mut lines = vec![format!("Turns: {} │ {}", app.session.turn_count, cost)];
+            let mut lines = vec![format!(
+                "Turns: {} │ {}",
+                app.session.cost_ledger.turns, cost
+            )];
             lines.extend(crate::usage_summary::session_model_lines(
                 &app.session.cost_ledger.model_breakdown(),
             ));
@@ -5238,19 +5318,21 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     ));
                 }
                 lines.push(String::new());
-                lines.push("Switch with: /output-style <name>".to_string());
+                lines.push(
+                    "Switch with: /output-style <name> (add --session to leave your default alone) · /output-style new <name> <instructions> · /output-style delete <name>"
+                        .to_string(),
+                );
                 SlashResult::SystemMessage(lines.join("\n"))
             } else {
-                app.session.apply_output_style(arg);
-                let mut message = format!(
-                    "Output style: {} (applies on next turn)",
-                    app.session.output_style
-                );
-                if let Err(err) = app
-                    .config
-                    .persist_output_style_project(&app.session.output_style)
-                {
-                    message.push_str(&format!("\nFailed to persist output style: {err}"));
+                let mut message =
+                    crate::claude_parity::handle_output_style(&mut app.session, arg);
+                if crate::claude_parity::output_style_arg_persists(arg) {
+                    if let Err(err) = app
+                        .config
+                        .persist_output_style_project(&app.session.output_style)
+                    {
+                        message.push_str(&format!("\nFailed to persist output style: {err}"));
+                    }
                 }
                 SlashResult::SystemMessage(message)
             }
@@ -5627,13 +5709,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/agents" => {
             // No arg → open interactive picker; simple name → quick-invoke;
             // management subcommands (list/show/create/validate/help) → text output.
-            let is_management_subcommand = matches!(
-                arg.split_whitespace().next().unwrap_or(""),
-                "" | "list" | "ls" | "show" | "view" | "inspect" | "path" | "where"
-                    | "new" | "create" | "init" | "validate" | "doctor" | "check"
-                    | "delete" | "remove" | "rm" | "rename" | "set"
-                    | "help" | "-h" | "--help"
-            );
+            let is_management_subcommand = crate::agents::is_management_subcommand(arg);
             if arg.is_empty() {
                 // Open interactive agent picker overlay
                 app.agent_picker.open();
@@ -6005,9 +6081,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 cache_write_tokens: app.session.total_cache_creation_tokens,
                 estimated_cost_usd: app.session.cost_ledger.total_usd,
                 by_model: app.session.cost_ledger.model_breakdown(),
-                turn_count: app.session.turn_count,
+                turn_count: app.session.cost_ledger.turns,
                 model: crate::model_catalog::display_name(&app.session.model),
-                account_lines: crate::usage_summary::account_lines_blocking(),
+                account_lines: crate::usage_summary::account_lines_blocking(
+                    app.session.privacy_mode,
+                ),
             };
             SlashResult::SystemMessage(render_usage(&usage))
         }
@@ -6079,7 +6157,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/diff-review" => {
-            use crate::tui::widgets::diff_review::{DiffReviewView, FileDiff};
+            use crate::tui::widgets::diff_review::DiffReviewView;
             // Gather changed files from `git status --porcelain` synchronously.
             let cwd = std::env::current_dir().unwrap_or_default();
             if let Err(error) = crate::platform::runtime::git::check_repository_config_blocking(
@@ -6149,41 +6227,13 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
                     .unwrap_or_default()
             };
-            let mut hunks_by_path: std::collections::HashMap<
-                std::path::PathBuf,
-                Vec<(Vec<String>, String, bool)>,
-            > = std::collections::HashMap::new();
-            for (text, staged) in [(read_diff(&["diff", "--cached"]), true), (read_diff(&["diff"]), false)] {
-                let model = crate::diff_model::Diff::parse(&text);
-                let patches = crate::diff_model::file_hunk_patches(&text);
-                if patches.len() != model.files.len() {
-                    continue;
-                }
-                for (file, patches) in model.files.iter().zip(patches) {
-                    if patches.len() != file.hunks.len() {
-                        continue;
-                    }
-                    let entry = hunks_by_path.entry(file.path().to_path_buf()).or_default();
-                    for (hunk, patch) in file.hunks.iter().zip(patches) {
-                        let mut preview = vec![hunk.header()];
-                        preview.extend(hunk.lines.iter().map(crate::diff_model::DiffLine::render));
-                        entry.push((preview, patch, staged));
-                    }
-                }
-            }
-            let mut files: Vec<FileDiff> = parsed
-                .files
-                .iter()
-                .map(|file| {
-                    let hunks = hunks_by_path.remove(file.path()).unwrap_or_default();
-                    FileDiff::from_model(file).with_hunks(hunks)
-                })
-                .collect();
-            files.extend(untracked.iter().map(|path| {
-                let mut file = FileDiff::new(path.as_str(), Vec::new(), 0, 0);
-                file.kind = crate::diff_model::FileChangeKind::Added;
-                file
-            }));
+            let staged_diff = read_diff(&["diff", "--cached"]);
+            let unstaged_diff = read_diff(&["diff"]);
+            let files = diff_review_files(
+                &parsed,
+                [(staged_diff.as_str(), true), (unstaged_diff.as_str(), false)],
+                &untracked,
+            );
             if files.is_empty() {
                 SlashResult::SystemMessage("No changed files (working tree clean).".into())
             } else {
@@ -6233,12 +6283,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         )),
 
         _ => {
-            if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
-                return SlashResult::SendPrompt(prompt);
-            }
-            if let Some(loaded) =
-                crate::skills::skill_command_prompt(cmd.trim_start_matches('/'), arg)
-            {
+            if let Some(loaded) = crate::command_registry::expand_dynamic_slash_invocation(
+                input,
+                cmd.trim_start_matches('/'),
+                arg,
+            ) {
                 return match loaded {
                     Ok(prompt) => SlashResult::SendPrompt(prompt),
                     Err(reason) => SlashResult::SystemMessage(reason),
@@ -6284,6 +6333,79 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
     }
 }
 
+fn diff_review_files(
+    tracked: &crate::diff_model::Diff,
+    side_diffs: [(&str, bool); 2],
+    untracked: &[String],
+) -> Vec<crate::tui::widgets::diff_review::FileDiff> {
+    use crate::diff_model::{file_hunk_patches, Diff, DiffLine, FileChangeKind};
+    use crate::tui::widgets::diff_review::FileDiff;
+
+    struct SideChanges {
+        kind: FileChangeKind,
+        additions: usize,
+        deletions: usize,
+        hunks: Vec<(Vec<String>, String, bool)>,
+    }
+
+    let mut by_path: std::collections::BTreeMap<std::path::PathBuf, SideChanges> =
+        std::collections::BTreeMap::new();
+    for (text, staged) in side_diffs {
+        let model = Diff::parse(text);
+        let patches = file_hunk_patches(text);
+        if patches.len() != model.files.len() {
+            continue;
+        }
+        for (file, patches) in model.files.iter().zip(patches) {
+            if patches.len() != file.hunks.len() {
+                continue;
+            }
+            let entry = by_path
+                .entry(file.path().to_path_buf())
+                .or_insert_with(|| SideChanges {
+                    kind: file.kind,
+                    additions: 0,
+                    deletions: 0,
+                    hunks: Vec::new(),
+                });
+            entry.additions += file.additions();
+            entry.deletions += file.deletions();
+            for (hunk, patch) in file.hunks.iter().zip(patches) {
+                let mut preview = vec![hunk.header()];
+                preview.extend(hunk.lines.iter().map(DiffLine::render));
+                entry.hunks.push((preview, patch, staged));
+            }
+        }
+    }
+    let mut files: Vec<FileDiff> = tracked
+        .files
+        .iter()
+        .map(|file| {
+            let hunks = by_path
+                .remove(file.path())
+                .map(|changes| changes.hunks)
+                .unwrap_or_default();
+            FileDiff::from_model(file).with_hunks(hunks)
+        })
+        .collect();
+    for (path, changes) in by_path {
+        let preview = changes
+            .hunks
+            .iter()
+            .flat_map(|(lines, _, _)| lines.iter().cloned())
+            .collect();
+        let mut file = FileDiff::new(path, preview, changes.additions, changes.deletions);
+        file.kind = changes.kind;
+        files.push(file.with_hunks(changes.hunks));
+    }
+    files.extend(untracked.iter().map(|path| {
+        let mut file = FileDiff::new(path.as_str(), Vec::new(), 0, 0);
+        file.kind = FileChangeKind::Added;
+        file
+    }));
+    files
+}
+
 fn format_advisor_tool_output(raw: &str) -> String {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else {
         return raw.to_string();
@@ -6298,11 +6420,6 @@ fn format_advisor_tool_output(raw: &str) -> String {
 
 fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
     match cmd {
-        "/output-style" if crate::claude_parity::output_style_arg_persists(arg) => {
-            let _ = app
-                .config
-                .persist_output_style_project(&app.session.output_style);
-        }
         "/privacy-mode" | "/trust-boundary" => {
             if crate::agent::PrivacyMode::from_arg(arg)
                 .is_some_and(|mode| mode == app.session.privacy_mode)
@@ -6487,20 +6604,7 @@ pub async fn run(
         }))
     };
 
-    // Populate the OpenRouter BYOK model cache in the background (public
-    // `/models` endpoint, no key needed) so the model picker can list current
-    // OpenRouter models without blocking startup. Skipped while the cache is
-    // fresh; the picker reads the cache directly, so this task just refreshes it.
-    if crate::models::openrouter_models::load_cached_models().is_empty() {
-        tokio::spawn(async move {
-            if let Ok(models) = crate::models::openrouter_models::fetch_openrouter_models().await {
-                crate::models::openrouter_models::save_cache(
-                    &models,
-                    &chrono::Utc::now().to_rfc3339(),
-                );
-            }
-        });
-    }
+    crate::models::openrouter_models::refresh_cache_if_stale();
 
     // Discover the account's managed-cloud roster without delaying terminal
     // startup. The trusted-host/JWT boundary lives in gateway_models; the
@@ -6627,7 +6731,7 @@ pub async fn run(
     crate::output::print_session_cost(
         app.session.total_input_tokens,
         app.session.total_output_tokens,
-        app.session.turn_count,
+        app.session.cost_ledger.turns,
         app.session.cost_ledger.total_usd,
         provider_access_mode(&app.session.provider),
     );
@@ -6695,7 +6799,16 @@ async fn run_event_loop(
         drain_side_answers(app);
         drain_remote_control(app);
         if !app.is_loading && !app.remote_prompts.is_empty() {
-            let text = std::mem::take(&mut app.remote_prompts).join("\n\n");
+            let prompts = std::mem::take(&mut app.remote_prompts);
+            app.remote_turn_ids = prompts
+                .iter()
+                .map(|prompt| prompt.turn_id.clone())
+                .collect();
+            let text = prompts
+                .into_iter()
+                .map(|prompt| prompt.text)
+                .collect::<Vec<_>>()
+                .join("\n\n");
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
                 text: "From your phone:".to_string(),
@@ -6769,7 +6882,16 @@ async fn run_event_loop(
                             msg.push_str(
                                 "\n  This means commands will execute without asking you first.",
                             );
-                            msg.push_str("\n  Press Shift+Tab again to advance to FullAuto, or cycle back to Default.");
+                            let again = app
+                                .keybindings
+                                .hint(crate::keybindings::KeybindingAction::CycleMode)
+                                .map_or_else(
+                                    || "Cycle the mode".to_string(),
+                                    |key| format!("Press {key} again"),
+                                );
+                            msg.push_str(&format!(
+                                "\n  {again} to advance to FullAuto, or cycle back to Default."
+                            ));
                         }
                         if new_mode == InteractionMode::FullAuto {
                             msg.push_str(
@@ -6879,6 +7001,7 @@ async fn run_event_loop(
                     // handled above; skip slash/prompt dispatch (the loop still
                     // renders below).
                     if !handled_as_mode_command {
+                        let mode_before_slash = app.mode;
                         match handle_slash(&text, app) {
                             SlashResult::Quit => {
                                 run_stop_hook(app, QuitReason::ExitCommand).await;
@@ -6890,6 +7013,26 @@ async fn run_event_loop(
                                         role: ChatRole::System,
                                         text: msg,
                                     });
+                                }
+                                if app.mode != mode_before_slash {
+                                    let hcfg = app.session.hooks_config().clone();
+                                    crate::hooks::run_hooks(
+                                        &hcfg,
+                                        crate::hooks::HookEvent::PlanModeChanged,
+                                        &crate::hooks::HookInput {
+                                            event: "PlanModeChanged".to_string(),
+                                            session_id: Some(
+                                                app.session.runtime_session_id.clone(),
+                                            ),
+                                            model: Some(app.session.model.clone()),
+                                            tool_name: None,
+                                            tool_args: None,
+                                            tool_output: None,
+                                            message: Some(app.mode.label().to_string()),
+                                            tool_execution: None,
+                                        },
+                                    )
+                                    .await;
                                 }
                             }
                             SlashResult::RunLogin(provider) => {
@@ -7065,8 +7208,34 @@ async fn run_event_loop(
                                     text,
                                 });
                             }
+                            SlashResult::RunLocalModelSwitch(model) => {
+                                let text = match app
+                                    .session
+                                    .switch_model_by_name_or_local(&app.config, &model)
+                                    .await
+                                {
+                                    Ok(()) => {
+                                        app.sync_stats();
+                                        let provider =
+                                            crate::models::provider_name(&app.session.provider);
+                                        format!("Switched to {} ({})", model, provider)
+                                    }
+                                    Err(err) => format!(
+                                        "Model switch failed: {}",
+                                        crate::errors::terminal_text(&err)
+                                    ),
+                                };
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: sanitize_terminal_text(&text).into_owned(),
+                                });
+                            }
                             SlashResult::RunPersonalize(argument) => {
-                                let text = match crate::cloud::personalization::run(&argument).await
+                                let text = match crate::cloud::personalization::run(
+                                    app.session.privacy_mode,
+                                    &argument,
+                                )
+                                .await
                                 {
                                     Ok(text) | Err(text) => text,
                                 };
@@ -7134,10 +7303,8 @@ async fn run_event_loop(
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: format!(
-                                        "Context compacted: ~{} -> ~{} tokens ({}% of limit).",
-                                        result.before.used_tokens,
-                                        result.after.used_tokens,
-                                        (result.after.used_fraction * 100.0) as u32
+                                        "{}.",
+                                        crate::compaction::compaction_receipt(&result)
                                     ),
                                 });
                             }
@@ -7152,7 +7319,12 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::RunFeedback(kind, message) => {
-                                let text = crate::cloud::send_feedback(kind, &message).await;
+                                let text = crate::cloud::send_feedback(
+                                    app.session.privacy_mode,
+                                    kind,
+                                    &message,
+                                )
+                                .await;
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
@@ -7173,8 +7345,10 @@ async fn run_event_loop(
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
                                 let prompt = resolve_composer_mentions(app, &text);
-                                let (prompt, notices) =
-                                    app.session.expand_mcp_resource_mentions(&prompt).await;
+                                let (prompt, notices) = app
+                                    .session
+                                    .expand_mcp_resource_mentions(&text, &prompt)
+                                    .await;
                                 for notice in notices {
                                     app.chat_messages.push(ChatMessage {
                                         role: ChatRole::System,
@@ -7211,7 +7385,7 @@ async fn run_event_loop(
                                 };
                                 let opts = crate::tools::ToolExecOptions {
                                     additional_workspace_roots: Vec::new(),
-                                    mcp_tool_definitions: None,
+                                    tool_search_catalog: None,
                                     require_confirmation: false,
                                     auto_approve_safe: true,
                                     auto_approve_edits: false,
@@ -7539,8 +7713,9 @@ async fn send_message_with_prompt(
         app.session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
     }
     let remote_host = app.remote.as_ref().map(|link| Arc::clone(&link.host));
+    let claimed_remote_turns = std::mem::take(&mut app.remote_turn_ids);
     if let Some(host) = &remote_host {
-        host.begin_turn(broker.clone());
+        host.begin_turn(broker.clone(), claimed_remote_turns);
     }
 
     // Tool lifecycle events are drained in the select! loop below into a local
@@ -7642,9 +7817,7 @@ async fn send_message_with_prompt(
                             effort_label: turn_effort_label,
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
-                            quit_key: app
-                                .keybindings
-                                .display(crate::keybindings::KeybindingAction::Quit),
+                            keybindings: &app.keybindings,
                         };
                         if let crate::tui::approval_broker::ApprovalRequestKind::Question {
                             question,
@@ -7788,13 +7961,10 @@ async fn send_message_with_prompt(
                             _ => {}
                         }
                     }
-                    if let Some(link) = app.remote.as_mut() {
+                    if let (Some(link), Some(host)) = (app.remote.as_mut(), &remote_host) {
                         while let Ok(input) = link.inbox.try_recv() {
-                            match input {
-                                crate::tui::remote_host::RemoteInput::Interrupt => cancelled = true,
-                                crate::tui::remote_host::RemoteInput::Message(text) => {
-                                    app.remote_prompts.push(text)
-                                }
+                            if host.receive(&mut app.remote_prompts, input) {
+                                cancelled = true;
                             }
                         }
                     }
@@ -7853,9 +8023,7 @@ async fn send_message_with_prompt(
                         effort_label: turn_effort_label,
                         cost_str: turn_cost_str.clone(),
                         notice: turn_notice.as_deref(),
-                        quit_key: app
-                            .keybindings
-                            .display(crate::keybindings::KeybindingAction::Quit),
+                        keybindings: &app.keybindings,
                     };
                     render_turn_frame(terminal, &ctx, &app.input, app.queued_prompts.len())?;
 
@@ -8097,6 +8265,46 @@ mod tests {
             recent: None,
             whats_new: None,
         }
+    }
+
+    const STAGED_A_TO_B: &str = "diff --git a/src/lib.rs b/src/lib.rs\nindex 1111111..2222222 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-A\n+B\n";
+    const UNSTAGED_B_TO_A: &str = "diff --git a/src/lib.rs b/src/lib.rs\nindex 2222222..1111111 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-B\n+A\n";
+
+    #[test]
+    fn diff_review_lists_a_file_whose_staged_edit_cancels_its_working_tree_edit() {
+        let tracked_against_head = crate::diff_model::Diff::parse("");
+        let files = diff_review_files(
+            &tracked_against_head,
+            [(STAGED_A_TO_B, true), (UNSTAGED_B_TO_A, false)],
+            &[],
+        );
+
+        assert_eq!(files.len(), 1);
+        let file = &files[0];
+        assert_eq!(file.path, std::path::PathBuf::from("src/lib.rs"));
+        assert_eq!(file.hunk_staged, vec![true, false]);
+        assert_eq!(file.hunk_patches.len(), 2);
+        assert_eq!((file.additions, file.deletions), (2, 2));
+    }
+
+    #[test]
+    fn diff_review_does_not_duplicate_a_file_the_head_comparison_already_lists() {
+        let against_head = crate::diff_model::Diff::parse(UNSTAGED_B_TO_A);
+        let files = diff_review_files(
+            &against_head,
+            [("", true), (UNSTAGED_B_TO_A, false)],
+            &["notes.txt".to_string()],
+        );
+
+        let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
+        assert_eq!(
+            paths,
+            vec![
+                std::path::PathBuf::from("src/lib.rs"),
+                std::path::PathBuf::from("notes.txt"),
+            ]
+        );
+        assert_eq!(files[0].hunk_staged, vec![false]);
     }
 
     // Minimal stub view that tracks how many times handle_key was called.
@@ -8366,6 +8574,77 @@ mod tests {
     }
 
     #[test]
+    fn a_slash_command_is_never_also_read_as_a_plan_or_chat_phrase() {
+        for command in [
+            "/plan",
+            "/plan reject plan first, then code",
+            "/rename plan mode work",
+            "/compact keep the chat mode notes",
+        ] {
+            assert_eq!(detect_mode_intent(command), None, "{command}");
+        }
+        assert_eq!(
+            detect_mode_intent("let's plan first"),
+            Some(InteractionMode::Plan)
+        );
+        assert_eq!(
+            detect_mode_intent("back to chat mode"),
+            Some(InteractionMode::Chat)
+        );
+    }
+
+    #[test]
+    fn one_bare_plan_command_enters_plan_mode() {
+        let mut app = minimal_app();
+        assert_ne!(app.mode, InteractionMode::Plan);
+        assert_eq!(detect_mode_intent("/plan"), None);
+
+        let SlashResult::SystemMessage(receipt) = handle_slash("/plan", &mut app) else {
+            panic!("/plan answers with a system message");
+        };
+
+        assert_eq!(app.mode, InteractionMode::Plan);
+        assert!(app.session.plan_mode);
+        assert!(
+            receipt.starts_with(InteractionMode::Plan.label()),
+            "{receipt}"
+        );
+    }
+
+    #[test]
+    fn plan_on_and_off_set_the_mode_instead_of_toggling_it() {
+        let mut app = minimal_app();
+
+        handle_slash("/plan on", &mut app);
+        assert_eq!(app.mode, InteractionMode::Plan);
+        handle_slash("/plan on", &mut app);
+        assert_eq!(app.mode, InteractionMode::Plan);
+        assert!(app.session.plan_mode);
+
+        handle_slash("/plan off", &mut app);
+        assert_eq!(app.mode, InteractionMode::Chat);
+        handle_slash("/plan off", &mut app);
+        assert_eq!(app.mode, InteractionMode::Chat);
+        assert!(!app.session.plan_mode);
+    }
+
+    #[test]
+    fn an_unknown_plan_subcommand_leaves_the_mode_alone() {
+        let mut app = minimal_app();
+        let before = app.mode;
+
+        let SlashResult::SystemMessage(notice) = handle_slash("/plan sideways", &mut app) else {
+            panic!("/plan answers with a system message");
+        };
+
+        assert_eq!(app.mode, before);
+        assert!(
+            notice.starts_with("Unknown /plan subcommand: sideways"),
+            "{notice}"
+        );
+    }
+
+    #[test]
     fn auto_mode_is_entered_only_by_the_bare_phrase() {
         for phrase in ["auto mode", "/auto-mode", "  Auto Mode  "] {
             assert_eq!(
@@ -8603,7 +8882,7 @@ mod tests {
             };
             let opts = crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -8665,7 +8944,7 @@ mod tests {
             };
             let opts = crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -8766,7 +9045,7 @@ mod tests {
             };
             let opts = crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -9011,6 +9290,55 @@ mod tests {
     }
 
     #[test]
+    fn a_model_picker_selection_applies_its_effort_only_when_the_switch_succeeds() {
+        use crate::design_system::{Effort, ProviderId};
+        let mut app = minimal_app();
+        let current = app.session.model.clone();
+
+        app.effort = Effort::Low;
+        finish_model_pick(
+            &mut app,
+            &current,
+            ProviderId::Anthropic,
+            Some(Effort::High),
+            "banner".to_string(),
+        );
+        assert_eq!(app.effort, Effort::High);
+
+        finish_model_pick(
+            &mut app,
+            &current,
+            ProviderId::Anthropic,
+            None,
+            "banner".to_string(),
+        );
+        assert_eq!(app.effort, Effort::High);
+
+        app.effort = Effort::Low;
+        finish_model_pick(
+            &mut app,
+            "fixture-unknown-model",
+            ProviderId::Anthropic,
+            Some(Effort::High),
+            "banner".to_string(),
+        );
+        assert_eq!(app.effort, Effort::Low);
+        assert!(app
+            .chat_messages
+            .last()
+            .is_some_and(|message| message.text.starts_with("Model switch failed")));
+    }
+
+    #[test]
+    fn opening_the_model_picker_starts_from_the_effort_in_force() {
+        let mut app = minimal_app();
+        app.effort = crate::design_system::Effort::High;
+        let _ = handle_slash("/model", &mut app);
+        assert!(app.model_picker.visible);
+        assert_eq!(app.model_picker.effort, crate::design_system::Effort::High);
+    }
+
+    #[test]
     fn review_uses_the_tui_effort_and_a_leading_level_overrides_it() {
         let mut app = minimal_app();
         app.effort = crate::design_system::Effort::Low;
@@ -9055,6 +9383,47 @@ mod tests {
             }
             _ => panic!("/effort extreme should explain itself"),
         }
+    }
+
+    #[test]
+    fn output_style_slash_uses_the_shared_grammar_and_persists_only_a_plain_selection() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join(".agiworkforce").join("config.toml");
+        let mut config = crate::config::CliConfig::default();
+        config.ui.output_style = Some("learning".to_string());
+        config.source.project_path = Some(project.clone());
+        let mut app = minimal_app_with(config);
+        app.session.apply_output_style("learning");
+
+        let SlashResult::SystemMessage(text) =
+            handle_slash("/output-style concise --session", &mut app)
+        else {
+            panic!("/output-style concise --session should answer in the transcript");
+        };
+        assert_eq!(app.session.output_style, "concise");
+        assert!(text.contains("for this session only"), "{text}");
+        assert_eq!(app.config.ui.output_style.as_deref(), Some("learning"));
+        assert!(!project.exists(), "a session-only style must not be saved");
+
+        for refused in [
+            "/output-style concise --bogus",
+            "/output-style no-such-style",
+            "/output-style delete",
+        ] {
+            let SlashResult::SystemMessage(text) = handle_slash(refused, &mut app) else {
+                panic!("{refused} should answer in the transcript");
+            };
+            assert_eq!(app.session.output_style, "concise", "{refused}: {text}");
+            assert!(!project.exists(), "{refused} must not write the project");
+        }
+
+        let SlashResult::SystemMessage(text) = handle_slash("/output-style concise", &mut app)
+        else {
+            panic!("/output-style concise should answer in the transcript");
+        };
+        assert!(!text.contains("Failed to persist"), "{text}");
+        let saved = std::fs::read_to_string(&project).unwrap();
+        assert!(saved.contains("output_style = \"concise\""), "{saved}");
     }
 
     /// Regression: `/voice` in the TUI printed "Voice mode requires the REPL
@@ -9177,6 +9546,52 @@ mod tests {
         app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Esc));
         assert!(app.active_overlay.is_none());
         assert_eq!(app.statusline_config, before, "Esc discards the toggle");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn disabling_every_title_field_releases_the_applied_title() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleConfig;
+        let stacked = std::sync::atomic::AtomicBool::new(false);
+        let mut out: Vec<u8> = Vec::new();
+        let enabled = TerminalTitleConfig {
+            show_session_id: false,
+            show_model: true,
+            show_cwd: false,
+            show_branch: false,
+        };
+        let all_off = TerminalTitleConfig {
+            show_session_id: false,
+            show_model: false,
+            show_cwd: false,
+            show_branch: false,
+        };
+        let title = |cfg: &TerminalTitleConfig| build_terminal_title(cfg, "id", "one", "dir", None);
+
+        apply_terminal_title(&mut out, title(&all_off), &stacked);
+        assert!(out.is_empty(), "nothing applied means nothing to release");
+
+        apply_terminal_title(&mut out, title(&enabled), &stacked);
+        apply_terminal_title(&mut out, title(&enabled), &stacked);
+        assert_eq!(
+            String::from_utf8(out.clone()).unwrap(),
+            "\x1b[22;0t\x1b]0;agi · one\x07\x1b]0;agi · one\x07"
+        );
+
+        out.clear();
+        apply_terminal_title(&mut out, title(&all_off), &stacked);
+        assert_eq!(String::from_utf8(out.clone()).unwrap(), "\x1b[23;0t");
+
+        out.clear();
+        apply_terminal_title(&mut out, title(&all_off), &stacked);
+        assert!(out.is_empty(), "a second release must not pop again");
+
+        apply_terminal_title(&mut out, title(&enabled), &stacked);
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "\x1b[22;0t\x1b]0;agi · one\x07",
+            "enabling again pushes the original title once more"
+        );
     }
 
     #[test]
@@ -9474,6 +9889,25 @@ mod tests {
     }
 
     #[test]
+    fn a_chosen_file_with_a_space_is_sent_as_that_file_not_its_prefix() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("report final.txt"), "chosen").expect("write");
+        std::fs::write(dir.path().join("report"), "prefix").expect("write");
+        let mut app = minimal_app();
+        app.input = "summarise @final".to_string();
+        app.cursor = app.input.len();
+        app.mention_anchor = Some(10);
+
+        app.insert_mention("report final.txt");
+
+        assert_eq!(app.input, "summarise @\"report final.txt\" ");
+        let expanded = crate::mentions::expand_mentions(&app.input, dir.path(), true);
+        assert_eq!(expanded.inlined, vec!["report final.txt".to_string()]);
+        assert!(expanded.prompt.contains("chosen"));
+        assert!(!expanded.prompt.contains("prefix"));
+    }
+
+    #[test]
     fn the_composer_shows_no_chip_row_until_something_is_staged() {
         let mut app = minimal_app();
         assert_eq!(attachment_chip_rows(&app.staged_images), 0);
@@ -9566,6 +10000,26 @@ mod tests {
             "Esc twice on an empty composer opens rewind, as in Claude Code, and never quits"
         );
         assert!(app.active_overlay.is_some(), "the rewind picker opened");
+    }
+
+    #[test]
+    fn a_cleared_paste_comes_back_as_its_text_after_another_send() {
+        use crossterm::event::KeyCode;
+
+        let mut app = minimal_app();
+        app.prompt_history = super::super::prompt_history::PromptHistory::in_memory();
+        let pasted = "one\ntwo\nthree\nfour\nfive";
+        handle_paste_text(&mut app, pasted);
+        assert_ne!(app.input, pasted, "a long paste shows as a marker");
+
+        handle_key_event(&mut app, make_key(KeyCode::Esc));
+        app.input = "something else".to_string();
+        app.cursor = app.input.len();
+        let sent = handle_key_event(&mut app, make_key(KeyCode::Enter));
+        assert!(matches!(sent, InputAction::SendMessage(_)));
+
+        handle_key_event(&mut app, make_key(KeyCode::Up));
+        assert_eq!(app.input, pasted);
     }
 
     /// Regression: Esc on the `/history` listing fell straight through to the
@@ -9711,6 +10165,21 @@ mod tests {
         app.discard_conversation();
         assert_eq!(app.session.turn_count, 0);
         assert!(app.chat_messages.is_empty());
+    }
+
+    #[test]
+    fn cost_counts_the_turns_its_tokens_belong_to() {
+        let mut app = minimal_app();
+        app.session.turn_count = 5;
+        app.session
+            .cost_ledger
+            .record_turn("fixture-model", 10, 5, 0, 0);
+
+        let SlashResult::SystemMessage(text) = handle_slash("/cost", &mut app) else {
+            panic!("/cost answers with a system message");
+        };
+
+        assert!(text.starts_with("Turns: 1 │"), "{text}");
     }
 
     #[test]
@@ -10394,7 +10863,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         };
 
         let mut overlay = ApprovalOverlayState::default();
@@ -10443,6 +10912,23 @@ mod tests {
     // border characters and the abbreviation tier, not just the field values.
     // -----------------------------------------------------------------------
 
+    fn default_keybindings() -> &'static crate::keybindings::Keybindings {
+        static DEFAULTS: std::sync::OnceLock<crate::keybindings::Keybindings> =
+            std::sync::OnceLock::new();
+        DEFAULTS.get_or_init(|| {
+            crate::keybindings::Keybindings::from_config(&std::collections::BTreeMap::new())
+        })
+    }
+
+    fn rebound_keybindings() -> crate::keybindings::Keybindings {
+        crate::keybindings::Keybindings::from_config(&std::collections::BTreeMap::from([
+            ("open_palette".to_string(), "ctrl+p".to_string()),
+            ("cycle_mode".to_string(), "ctrl+y".to_string()),
+            ("quit".to_string(), "ctrl+q".to_string()),
+            ("clear_input".to_string(), "ctrl+x".to_string()),
+        ]))
+    }
+
     fn layout_fixture_ctx<'a>(
         statusline: &'a crate::tui::widgets::statusline_setup::StatusLineConfig,
         chat_messages: &'a [ChatMessage],
@@ -10482,7 +10968,7 @@ mod tests {
             effort_label,
             cost_str: "Tokens: 1234 in / 567 out (billed by your provider)".to_string(),
             notice,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         }
     }
 
@@ -10752,9 +11238,73 @@ mod tests {
         assert!(matches!(action, InputAction::None));
         assert!(
             app.live_notice()
-                .is_some_and(|n| n.contains("Ctrl-C again to exit")),
+                .is_some_and(|n| n.contains("Ctrl+C again to exit")),
             "the first Ctrl-C must report what it did, got {:?}",
             app.live_notice()
+        );
+    }
+
+    #[test]
+    fn a_rebound_clear_input_chord_names_itself_and_its_repeat_exits() {
+        let mut config = crate::config::CliConfig::default();
+        config
+            .ui
+            .keybindings
+            .insert("clear_input".to_string(), "ctrl+x".to_string());
+        let mut app = minimal_app_with(config);
+        let ctrl_x = crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('x'),
+            crossterm::event::KeyModifiers::CONTROL,
+        );
+
+        assert!(matches!(
+            handle_key_event(&mut app, ctrl_x),
+            InputAction::None
+        ));
+        let notice = app.live_notice().map(str::to_owned).unwrap_or_default();
+        assert!(notice.contains("Ctrl+X again to exit"), "{notice}");
+        assert!(!notice.contains("Ctrl+C"), "{notice}");
+        assert!(matches!(
+            handle_key_event(&mut app, ctrl_x),
+            InputAction::Quit(QuitReason::Interrupt)
+        ));
+    }
+
+    #[test]
+    fn the_footer_and_start_view_name_rebound_chords() {
+        let bindings = rebound_keybindings();
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.keybindings = &bindings;
+        let footer = draw_footer_for(&ctx, 200);
+        assert!(footer.contains("Ctrl+P: commands"), "{footer}");
+        assert!(footer.contains("ctrl+q: quit"), "{footer}");
+        assert!(footer.contains("Ctrl+Y: mode"), "{footer}");
+        assert!(!footer.contains("Shift+Tab"), "{footer}");
+        assert!(!footer.contains("/: commands"), "{footer}");
+        assert!(!footer.contains("ctrl+d"), "{footer}");
+
+        let hints = start_view_key_hints(&bindings);
+        assert_eq!(
+            hints,
+            vec![
+                "  Press Ctrl+P for commands · Ctrl+Y to change how much AGI does alone."
+                    .to_string(),
+                "  Esc clears · Ctrl+Q twice to quit · /keys for all keys.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_default_start_view_hints_keep_their_wording() {
+        assert_eq!(
+            start_view_key_hints(default_keybindings()),
+            vec![
+                "  Type / for commands · Shift+Tab to change how much AGI does alone.".to_string(),
+                "  Esc clears · Ctrl+D twice to quit · /keys for all keys.".to_string(),
+            ]
         );
     }
 
@@ -10894,7 +11444,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         };
 
         let mut terminal = Terminal::new(TestBackend::new(120, 60)).expect("terminal");
@@ -10955,7 +11505,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         };
 
         let diff_review = DiffReviewView::new(vec![FileDiff::new(
@@ -11028,6 +11578,62 @@ mod tests {
         assert!(offers(ApprovalRequestKind::FileWrite {
             path: std::path::PathBuf::from("src/main.rs"),
         }));
+    }
+
+    #[test]
+    fn a_request_that_needs_a_decision_each_call_never_offers_allow_session() {
+        use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
+        use crate::tui::widgets::approval_overlay::ApprovalChoice;
+        use crate::tui::widgets::interactive::{InteractiveView, KeyAction};
+
+        let painted = |overlay: &crate::tui::widgets::approval_overlay::ApprovalOverlayState| {
+            let mut terminal =
+                Terminal::new(ratatui::backend::TestBackend::new(120, 30)).expect("terminal");
+            terminal
+                .draw(|frame| overlay.render_into(frame, frame.area()))
+                .expect("draw");
+            rendered_symbols(&terminal)
+        };
+
+        let policy_ask = ApprovalRequest::new(
+            ApprovalRequestKind::WorkspacePolicy {
+                tool_name: "read_file".to_string(),
+                primary_argument: "notes.txt".to_string(),
+            },
+            "Workspace policy requires approval for `read_file`",
+            vec!["argument: notes.txt".to_string()],
+        )
+        .requiring_explicit_decision();
+        let mut overlay = approval_overlay_for(&policy_ask);
+        let text = painted(&overlay);
+        assert!(!text.contains("Allow Session"), "{text}");
+        assert!(text.contains("Yes"), "{text}");
+
+        assert_eq!(
+            overlay.handle_key(KeyAction::Char('s')),
+            ViewAction::Continue
+        );
+        assert!(overlay.result.is_none(), "s must not answer for a session");
+        overlay.handle_key(KeyAction::Right);
+        assert_eq!(overlay.cursor, ApprovalChoice::No.index());
+        overlay.handle_key(KeyAction::Right);
+        assert_eq!(
+            overlay.cursor,
+            ApprovalChoice::DenyAll.index(),
+            "the cursor steps over the choices the gate cannot keep"
+        );
+
+        let ordinary = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: "cargo test".to_string(),
+            },
+            "Allow this command?",
+            vec!["cargo test".to_string()],
+        );
+        let mut overlay = approval_overlay_for(&ordinary);
+        assert!(painted(&overlay).contains("Allow Session"));
+        overlay.handle_key(KeyAction::Char('s'));
+        assert_eq!(overlay.result, Some(ApprovalChoice::AllowSession));
     }
 
     #[test]
@@ -11189,7 +11795,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         };
 
         let mut terminal = Terminal::new(TestBackend::new(200, 40)).expect("terminal");

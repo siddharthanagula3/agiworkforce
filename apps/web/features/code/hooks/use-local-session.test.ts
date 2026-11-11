@@ -16,7 +16,8 @@ const answerDeveloperUserInput = vi.fn();
 const takeOverDeveloperThread = vi.fn();
 let emit: ((rootId: string, event: DeveloperSessionEvent) => void) | null = null;
 
-vi.mock('@/features/desktop-host', () => ({
+vi.mock('@/features/desktop-host', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   readDeveloperSession,
   startDeveloperTurn,
   takeOverDeveloperThread,
@@ -211,7 +212,7 @@ describe('one local session', () => {
     expect(result.current.error).not.toBeNull();
   });
 
-  it('keeps the context the last turn used, and names the step bound on the next turn', async () => {
+  it('keeps the context the CLI measured, not the turn’s summed tokens, and names the step bound on the next turn', async () => {
     const { result } = renderHook(() => useLocalSession(session, { maxTurns: 25 }));
     await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
 
@@ -227,11 +228,47 @@ describe('one local session', () => {
       outcome: 'failed',
       response: '',
       failure: null,
-      inputTokens: 1200,
-      outputTokens: 300,
+      inputTokens: 20_100,
+      outputTokens: 200,
+      contextTokens: 10_200,
     });
 
-    expect(result.current.contextTokens).toBe(1500);
+    expect(result.current.contextTokens).toBe(10_200);
+  });
+
+  it('shows no context reading after a turn from a CLI that does not measure it', async () => {
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.send('first');
+    });
+    send({
+      type: 'turn-finished',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      outcome: 'failed',
+      response: '',
+      failure: null,
+      inputTokens: 900,
+      outputTokens: 100,
+      contextTokens: 1_000,
+    });
+    expect(result.current.contextTokens).toBe(1_000);
+
+    send({ type: 'turn-started', threadId: 'thread-1', turnId: 'turn-2' });
+    send({
+      type: 'turn-finished',
+      threadId: 'thread-1',
+      turnId: 'turn-2',
+      outcome: 'completed',
+      response: 'done',
+      failure: null,
+      inputTokens: 20_100,
+      outputTokens: 200,
+    });
+
+    expect(result.current.contextTokens).toBeNull();
   });
 
   it('carries an approval through and clears it once answered', async () => {
@@ -380,6 +417,39 @@ describe('one local session', () => {
     await waitFor(() =>
       expect(startDeveloperTurn).toHaveBeenCalledWith(
         expect.objectContaining({ text: 'first, edited' }),
+      ),
+    );
+    expect(result.current.queued.map((item) => item.text)).toEqual(['second']);
+  });
+
+  it('holds a queued message that is being edited out of the automatic send until it is saved', async () => {
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+    await startRunning(result);
+
+    act(() => {
+      result.current.enqueue({ text: 'first', images: [], contextFiles: [] });
+      result.current.enqueue({ text: 'second', images: [], contextFiles: [] });
+    });
+    const [first] = result.current.queued;
+    act(() => result.current.setQueuedEditing(first!.id, true));
+    startDeveloperTurn.mockClear();
+    finish('completed');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+    expect(result.current.queued.map((item) => item.text)).toEqual(['first', 'second']);
+
+    act(() => {
+      result.current.updateQueued(first!.id, 'first, rewritten');
+      result.current.setQueuedEditing(first!.id, false);
+    });
+
+    await waitFor(() =>
+      expect(startDeveloperTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'first, rewritten' }),
       ),
     );
     expect(result.current.queued.map((item) => item.text)).toEqual(['second']);
@@ -1166,3 +1236,5 @@ it('loads persisted child task identity and clears it when switching parent sess
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.childTasks).toEqual([]);
 });
+
+type ImportedModule0 = typeof import('@/features/desktop-host');

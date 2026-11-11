@@ -67,7 +67,8 @@ type AnthropicContentBlock =
       content: string | Array<{ type: 'text'; text: string }>;
       is_error?: boolean;
     }
-  | { type: 'thinking'; thinking: string; signature?: string };
+  | { type: 'thinking'; thinking: string; signature?: string }
+  | { type: 'redacted_thinking'; data: string };
 
 interface AnthropicSystemBlock {
   type: 'text';
@@ -168,6 +169,8 @@ function translateContentBlock(block: ContentBlock): AnthropicContentBlock {
         thinking: block.thinking,
         ...(block.signature ? { signature: block.signature } : {}),
       };
+    case 'redacted_thinking':
+      return { type: 'redacted_thinking', data: block.data };
   }
 }
 

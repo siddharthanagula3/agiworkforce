@@ -6,8 +6,10 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { invoke } from '@tauri-apps/api/core';
 import type { ReactElement } from 'react';
+import { toast } from 'sonner';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '../../../ui/Tooltip';
@@ -207,6 +209,38 @@ describe('SettingsPanel render stability', () => {
       expect(onModelCatalogChanged).toHaveBeenCalled();
     });
     unsubscribe();
+  });
+
+  it('does not call a downloaded model ready when Ollama cannot list its models afterwards', async () => {
+    const success = vi.spyOn(toast, 'success');
+    const warning = vi.spyOn(toast, 'warning');
+    const defaultInvoke = vi.mocked(invoke).getMockImplementation()!;
+    let pulled = false;
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === 'ollama_pull_model') {
+        pulled = true;
+        return 'completed';
+      }
+      if (command === 'ollama_list_models' && pulled) {
+        throw new Error('Ollama stopped answering');
+      }
+      return defaultInvoke(command, args);
+    });
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="models-keys" />);
+
+    const modelInput = await screen.findByRole('textbox', { name: 'Model to install' });
+    fireEvent.change(modelInput, { target: { value: 'fixture-local-model:install' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Install model' }));
+
+    await waitFor(() =>
+      expect(warning).toHaveBeenCalledWith(
+        'fixture-local-model:install was downloaded',
+        expect.anything(),
+      ),
+    );
+    expect(success).not.toHaveBeenCalledWith('fixture-local-model:install is ready to use');
+    success.mockRestore();
+    warning.mockRestore();
   });
 
   it('shows download progress and stops the download on request', async () => {
@@ -415,7 +449,7 @@ describe('SettingsPanel render stability', () => {
   it('shows the backend-owned account plan in the mode summary', async () => {
     useAuthStore.setState({
       plan: 'max',
-      planDisplayName: 'Max',
+      planDisplayName: BILLING_PLAN_PRICING.max.label,
       isAuthenticated: true,
       user: { id: 'user-desktop', email: '', name: 'demo' },
       accessToken: 'device-bearer',
@@ -424,7 +458,9 @@ describe('SettingsPanel render stability', () => {
 
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="general" />);
 
-    expect(await screen.findByText('Max 5x', { selector: 'span' })).toBeInTheDocument();
+    expect(
+      await screen.findByText(BILLING_PLAN_PRICING.max.label, { selector: 'span' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Free', { selector: 'span' })).not.toBeInTheDocument();
   });
 

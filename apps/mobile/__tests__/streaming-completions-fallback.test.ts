@@ -273,6 +273,82 @@ describe('completions stream fallback (RN null response.body)', () => {
     expect('thinking' in sentBody).toBe(false);
   });
 
+  it('sends the device time zone so a scheduled chat task defaults to the phone zone', async () => {
+    const { streamChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => 'data: [DONE]\n',
+    } as unknown as Response);
+    const resolvedOptions = jest
+      .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+      .mockReturnValue({ timeZone: 'Asia/Kolkata' } as Intl.ResolvedDateTimeFormatOptions);
+
+    try {
+      const { callbacks } = makeCallbacks();
+      await streamChat(
+        {
+          model: MODEL_ID,
+          messages: [],
+          stream: true,
+          operationId: '0190a000-0000-7000-8000-000000000041',
+        },
+        callbacks,
+      );
+      await streamChat(
+        {
+          model: MODEL_ID,
+          messages: [],
+          stream: true,
+          operationId: '0190a000-0000-7000-8000-000000000042',
+          client_timezone: 'Europe/Paris',
+        },
+        callbacks,
+      );
+    } finally {
+      resolvedOptions.mockRestore();
+    }
+
+    const first = JSON.parse((guardedFetchMock.mock.calls[0][1] as RequestInit).body as string);
+    const second = JSON.parse((guardedFetchMock.mock.calls[1][1] as RequestInit).body as string);
+    expect(first.client_timezone).toBe('Asia/Kolkata');
+    expect(second.client_timezone).toBe('Europe/Paris');
+  });
+
+  it('omits the time zone when the device cannot report one', async () => {
+    const { streamChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => 'data: [DONE]\n',
+    } as unknown as Response);
+    const resolvedOptions = jest
+      .spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+      .mockImplementation(() => {
+        throw new Error('Intl unavailable');
+      });
+
+    try {
+      const { callbacks } = makeCallbacks();
+      await streamChat(
+        {
+          model: MODEL_ID,
+          messages: [],
+          stream: true,
+          operationId: '0190a000-0000-7000-8000-000000000043',
+        },
+        callbacks,
+      );
+    } finally {
+      resolvedOptions.mockRestore();
+    }
+
+    const body = JSON.parse((guardedFetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect('client_timezone' in body).toBe(false);
+  });
+
   it('sends only the durable run id and decisions when resuming an approval', async () => {
     const { streamToolApprovalResume } = await loadStreamingService();
     guardedFetchMock.mockResolvedValue({

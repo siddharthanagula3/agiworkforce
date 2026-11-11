@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { hashSkillContent } from '@agiworkforce/skills';
 
 import { directoryEntry, SHA } from './fixtures';
@@ -58,8 +58,8 @@ const INSTALLATION = {
 };
 
 interface FakeDb {
-  query: ReturnType<typeof vi.fn>;
-  execute: ReturnType<typeof vi.fn>;
+  query: Mock<(text: string, params?: unknown[]) => Promise<unknown[]>>;
+  execute: Mock<(text: string) => Promise<number>>;
   transaction: <T>(work: (tx: DatabaseAdapter) => Promise<T>) => Promise<T>;
   sql: string[];
 }
@@ -230,6 +230,95 @@ describe('installDirectoryPlugin', () => {
       { key: 'helper-tools', dependencies: JSON.stringify([]) },
       { key: 'adobe-for-creativity', dependencies: JSON.stringify([helperReference]) },
     ]);
+  });
+
+  describe('re-enabling a disabled dependency', () => {
+    const helperReference = { name: 'helper-tools', marketplace: null, version: '^2.0.0' };
+    const OLD_SHA = 'b'.repeat(40);
+
+    function recordsListing(helperVersion: string) {
+      mocks.findRecord.mockImplementation(async (id: string) =>
+        id === 'helper-tools'
+          ? directoryEntry({ id: 'helper-tools', name: 'Helper Tools', version: helperVersion })
+          : directoryEntry({ dependencies: [helperReference] }),
+      );
+    }
+
+    function databaseWithDisabledHelper(installedVersion: string): FakeDb & DatabaseAdapter {
+      const db = database();
+      const base = db.query.getMockImplementation()!;
+      db.query.mockImplementation(async (text: string, params?: unknown[]) => {
+        if (text.includes('installation.installed_version, sources.repository_url')) {
+          db.sql.push(text);
+          return [
+            {
+              id: 'helper-installation',
+              enabled: false,
+              review_required: false,
+              installed_version: installedVersion,
+              repository_url: 'https://github.com/anthropics/claude-plugins-official',
+              plugin_key: 'helper-tools',
+            },
+          ];
+        }
+        return base(text, params);
+      });
+      return db;
+    }
+
+    it('refuses when the retained installed version is outside the range, even if the listing satisfies it', async () => {
+      recordsListing('2.0.0');
+      const db = databaseWithDisabledHelper(`1.0.0+sha.${OLD_SHA}`);
+
+      const result = await installDirectoryPlugin(db, 'user-1', 'adobe-for-creativity', {
+        fetchImpl: fetchSkill,
+      });
+
+      expect(result).toMatchObject({
+        status: 'blocked',
+        message: expect.stringContaining('1.0.0 is installed'),
+      });
+      expect(db.execute).not.toHaveBeenCalled();
+    });
+
+    it('enables a disabled dependency whose retained version satisfies the range and reports that version', async () => {
+      recordsListing('1.0.0');
+      const db = databaseWithDisabledHelper(`2.1.0+sha.${OLD_SHA}`);
+
+      const result = await installDirectoryPlugin(db, 'user-1', 'adobe-for-creativity', {
+        fetchImpl: fetchSkill,
+      });
+
+      expect(result).toMatchObject({
+        status: 'installed',
+        dependencies: [
+          expect.objectContaining({
+            pluginId: 'helper-tools',
+            version: '2.1.0',
+            installationId: 'helper-installation',
+          }),
+        ],
+      });
+      expect(
+        db.execute.mock.calls.filter(([text]) =>
+          (text as string).includes('set enabled = true, updated_at = now()'),
+        ),
+      ).toHaveLength(1);
+    });
+
+    it('reports the retained version rather than the listed one when the listing also satisfies the range', async () => {
+      recordsListing('2.5.0');
+      const db = databaseWithDisabledHelper(`2.0.0+sha.${OLD_SHA}`);
+
+      const result = await installDirectoryPlugin(db, 'user-1', 'adobe-for-creativity', {
+        fetchImpl: fetchSkill,
+      });
+
+      expect(result).toMatchObject({
+        status: 'installed',
+        dependencies: [expect.objectContaining({ version: '2.0.0' })],
+      });
+    });
   });
 
   it('reports an unknown id and a built-in pack without touching the database', async () => {

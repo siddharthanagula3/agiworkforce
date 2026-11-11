@@ -88,6 +88,8 @@ interface Listening {
  */
 export function createDictationElsewhere(deps: DictationElsewhereDeps) {
   let listening: Listening | null = null;
+  let generation = 0;
+  let admitting = false;
 
   const end = (): Listening | null => {
     const ended = listening;
@@ -120,7 +122,16 @@ export function createDictationElsewhere(deps: DictationElsewhereDeps) {
         listening.bar.toggle();
         return true;
       }
-      const target = await deps.frontApp();
+      if (admitting) return true;
+      const admitted = generation;
+      admitting = true;
+      let target: DictationApp | null;
+      try {
+        target = await deps.frontApp();
+      } finally {
+        admitting = false;
+      }
+      if (admitted !== generation) return true;
       if (!target || target.pid === deps.ownPid) return false;
       listening = { target, bar: deps.openBar(), startedAt: deps.now() };
       return true;
@@ -132,12 +143,14 @@ export function createDictationElsewhere(deps: DictationElsewhereDeps) {
       }
       const ended = end();
       if (!ended) throw new Error('No dictation is waiting for this text.');
+      const completing = generation;
       const text = dictationText(raw);
       if (text === null) throw new Error('There is no text to type.');
       if (deps.now() - ended.startedAt > DICTATION_SESSION_LIMIT_MS) {
         return copied(text, 'The dictation ran too long to type it for you.');
       }
       const front = await deps.frontApp().catch(() => null);
+      if (completing !== generation) throw new Error('Dictation was turned off.');
       if (!front || front.pid !== ended.target.pid) {
         return copied(text, `${ended.target.name} is no longer in front, so nothing was typed.`);
       }
@@ -147,6 +160,7 @@ export function createDictationElsewhere(deps: DictationElsewhereDeps) {
       try {
         await deps.typeText(text);
       } catch {
+        if (completing !== generation) throw new Error('Dictation was turned off.');
         return copied(text, `It could not be typed into ${front.name}.`);
       }
       return 'typed';
@@ -157,6 +171,7 @@ export function createDictationElsewhere(deps: DictationElsewhereDeps) {
     },
 
     closeAll(): void {
+      generation += 1;
       end();
     },
   };

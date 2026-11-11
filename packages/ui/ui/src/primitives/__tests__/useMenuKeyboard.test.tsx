@@ -37,7 +37,40 @@ function Menu({ disabledItemsFocusable }: { disabledItemsFocusable?: boolean }) 
   );
 }
 
+function ChoiceMenu() {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useMenuKeyboard({ open: true, onClose: vi.fn(), panelRef });
+  return (
+    <div role="menu" ref={panelRef}>
+      <button type="button" role="menuitemradio" aria-checked="true">
+        Alpha
+      </button>
+      <button type="button" role="menuitemcheckbox" aria-checked="false">
+        Beta
+      </button>
+      <button type="button" role="menuitem">
+        Gamma
+      </button>
+    </div>
+  );
+}
+
 describe('useMenuKeyboard', () => {
+  it('navigates radio and checkbox menu items without an itemSelector override', () => {
+    render(<ChoiceMenu />);
+    const alpha = screen.getByRole('menuitemradio', { name: 'Alpha' });
+    const beta = screen.getByRole('menuitemcheckbox', { name: 'Beta' });
+    const gamma = screen.getByRole('menuitem', { name: 'Gamma' });
+    expect(document.activeElement).toBe(alpha);
+
+    fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(beta);
+    fireEvent.keyDown(document.activeElement!, { key: 'End' });
+    expect(document.activeElement).toBe(gamma);
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' });
+    expect(document.activeElement).toBe(alpha);
+  });
+
   it('skips items marked unavailable by default', () => {
     render(<Menu />);
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'First' }));

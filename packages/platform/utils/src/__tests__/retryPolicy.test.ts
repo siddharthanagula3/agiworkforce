@@ -118,6 +118,48 @@ describe('runWithRetryPolicy', () => {
     expect(calls).toEqual([12_000]);
   });
 
+  it('stops instead of retrying early when Retry-After is above the ceiling', async () => {
+    const { calls, sleep } = recordingSleep();
+    const operation = vi.fn(async () => {
+      throw httpError(429, { retryAfterSeconds: 3600 });
+    });
+
+    await expect(
+      runWithRetryPolicy(operation, { maxAttempts: 3, maxRetryAfterMs: 120_000, sleep }),
+    ).rejects.toMatchObject({ reason: 'retry-after-exceeded' });
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual([]);
+  });
+
+  it('does not spend a retry budget token on a retry it refuses', async () => {
+    const budget = createRetryBudget({ capacity: 1, refillPerSecond: 0, now: () => 0 });
+    const { sleep } = recordingSleep();
+
+    await expect(
+      runWithRetryPolicy(
+        async () => {
+          throw httpError(503, { retryAfterSeconds: 3600 });
+        },
+        { maxAttempts: 3, maxRetryAfterMs: 120_000, budget, sleep },
+      ),
+    ).rejects.toMatchObject({ reason: 'retry-after-exceeded' });
+    expect(budget.tryConsume()).toBe(true);
+  });
+
+  it('still waits out a Retry-After exactly at the ceiling', async () => {
+    const { calls, sleep } = recordingSleep();
+    let attempts = 0;
+    await runWithRetryPolicy(
+      async () => {
+        attempts += 1;
+        if (attempts === 1) throw httpError(429, { retryAfterSeconds: 120 });
+        return 'ok';
+      },
+      { maxAttempts: 3, maxRetryAfterMs: 120_000, sleep },
+    );
+    expect(calls).toEqual([120_000]);
+  });
+
   it('degrades to a single attempt once the shared budget is spent', async () => {
     const budget = createRetryBudget({ capacity: 2, refillPerSecond: 0, now: () => 0 });
     const { sleep } = recordingSleep();

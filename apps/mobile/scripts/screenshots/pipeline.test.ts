@@ -276,6 +276,23 @@ describe('pipeline wiring', () => {
     }
   });
 
+  it('builds and installs the iOS project prebuild generates from the app config name', () => {
+    const { IOSConfig } = require('expo/config-plugins');
+    const { expo } = require('../../app.config.js');
+    const { IOS_PROJECT_NAME, IOS_APP_BINARY } = require('../../detox.env');
+    const { apps } = require('../../detox.config.js');
+    const generated = IOSConfig.XcodeUtils.sanitizedName(expo.name);
+
+    expect(IOS_PROJECT_NAME).toBe(generated);
+    for (const variant of ['ios.debug', 'ios.release']) {
+      expect(apps[variant].build).toContain(
+        `-workspace ios/${generated}.xcworkspace -scheme ${generated} `,
+      );
+    }
+    expect(IOS_APP_BINARY.debug).toMatch(new RegExp(`/${generated}\\.app$`, 'u'));
+    expect(IOS_APP_BINARY.release).toMatch(new RegExp(`/${generated}\\.app$`, 'u'));
+  });
+
   it('keeps the app identifier in detox.env equal to both native identifiers', () => {
     const { APP_BUNDLE_ID } = require('../../detox.env');
     const appConfig = readFileSync(join(MOBILE_ROOT, 'app.config.js'), 'utf8');

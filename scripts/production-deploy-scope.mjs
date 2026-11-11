@@ -8,6 +8,7 @@ import { setTimeout } from 'node:timers';
 import { URL, URLSearchParams, pathToFileURL } from 'node:url';
 
 import { readRelayRelease, verifyRelayCommit } from './verify-deployment.mjs';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 export const RELEASE_READINESS = JSON.parse(
   readFileSync(new URL('./config/deploy-gates.json', import.meta.url), 'utf8'),
@@ -567,6 +568,7 @@ function commitIsPresent(sha) {
 
 function changedFilesSince(baseline) {
   return execFileSync('git', ['diff', '--name-only', baseline, 'HEAD'], {
+    maxBuffer: GIT_MAX_BUFFER,
     encoding: 'utf8',
   }).split(/\r?\n/);
 }

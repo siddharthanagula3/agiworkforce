@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { MAX_CHAT_ATTACHMENT_MESSAGE_BYTES, chatAttachmentSizeLabel } from '../chat-attachments';
-import { createManagedCloudChatAttachmentsClient } from '../managed-cloud-chat-attachments-client';
+import {
+  ManagedCloudChatAttachmentHttpError,
+  createManagedCloudChatAttachmentsClient,
+  isRetryableAttachmentUploadError,
+} from '../managed-cloud-chat-attachments-client';
+import { ManagedCloudResumableUploadError } from '../managed-cloud-resumable-upload-client';
 
 describe('createManagedCloudChatAttachmentsClient', () => {
   it('accepts a HTTP upload proxy only on the exact configured loopback origin', async () => {
@@ -37,6 +42,66 @@ describe('createManagedCloudChatAttachmentsClient', () => {
       client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })]),
     ).resolves.toHaveLength(1);
     expect(uploadFetchImpl).toHaveBeenCalledOnce();
+  });
+
+  describe('a direct storage upload that carries required headers', () => {
+    const ENCRYPTION_HEADERS = {
+      'x-amz-server-side-encryption': 'aws:kms',
+      'x-amz-server-side-encryption-aws-kms-key-id': 'key-id',
+    };
+    const SIGNED_URL =
+      'https://storage.example.test/object?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption%3Bx-amz-server-side-encryption-aws-kms-key-id';
+    const ATTACHMENT = {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'fixture.txt',
+      mimeType: 'text/plain',
+      byteCount: 1,
+      type: 'file',
+      url: '/api/files/00000000-0000-4000-8000-000000000001',
+    };
+
+    function presignResponse(uploadHeaders: Record<string, string>) {
+      return Response.json({
+        storageKey: 'owned/fixture.txt',
+        uploadUrl: SIGNED_URL,
+        uploadMethod: 'PUT',
+        uploadHeaders,
+      });
+    }
+
+    it('sends every header the server returned, encryption included', async () => {
+      const uploadHeaders = { 'Content-Type': 'text/plain', ...ENCRYPTION_HEADERS };
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(presignResponse(uploadHeaders))
+        .mockResolvedValueOnce(Response.json({ attachment: ATTACHMENT }));
+      const uploadFetchImpl = vi.fn(async () => new Response(null, { status: 200 }));
+      const client = createManagedCloudChatAttachmentsClient({ fetchImpl, uploadFetchImpl });
+
+      await client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })]);
+
+      const sent = new Headers(
+        (uploadFetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].headers,
+      );
+      expect(Object.fromEntries(sent.entries())).toEqual({
+        'content-type': 'text/plain',
+        'x-amz-server-side-encryption': 'aws:kms',
+        'x-amz-server-side-encryption-aws-kms-key-id': 'key-id',
+      });
+    });
+
+    it('refuses to send an upload that omits a header the url was signed with', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(presignResponse({ 'Content-Type': 'text/plain' }));
+      const uploadFetchImpl = vi.fn();
+      const client = createManagedCloudChatAttachmentsClient({ fetchImpl, uploadFetchImpl });
+
+      await expect(
+        client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })]),
+      ).rejects.toThrow('x-amz-server-side-encryption');
+      expect(uploadFetchImpl).not.toHaveBeenCalled();
+    });
   });
 
   it('authenticates a configured API relay PUT using fresh account headers', async () => {
@@ -262,6 +327,38 @@ describe('attachment upload failure status', () => {
     const failed = await failedStatus(Response.json({ error: 'busy' }, { status: 503 }));
 
     expect(failed?.retryable).toBe(true);
+  });
+});
+
+describe('which attachment upload failures offer a manual retry', () => {
+  const interrupted = (status: number) =>
+    new ManagedCloudResumableUploadError('The upload was interrupted.', status);
+
+  it('offers it after the network failed on every automatic attempt of a part', () => {
+    expect(isRetryableAttachmentUploadError(interrupted(0))).toBe(true);
+  });
+
+  it('offers it for a busy or throttled server, and for a single-part network failure', () => {
+    for (const status of [408, 425, 429, 500, 503]) {
+      expect(isRetryableAttachmentUploadError(interrupted(status)), String(status)).toBe(true);
+      expect(
+        isRetryableAttachmentUploadError(new ManagedCloudChatAttachmentHttpError('busy', status)),
+        String(status),
+      ).toBe(true);
+    }
+    expect(isRetryableAttachmentUploadError(new TypeError('Failed to fetch'))).toBe(true);
+  });
+
+  it('withholds it from a refusal and from anything that is not an upload failure', () => {
+    for (const status of [400, 401, 403, 404, 413]) {
+      expect(isRetryableAttachmentUploadError(interrupted(status)), String(status)).toBe(false);
+      expect(
+        isRetryableAttachmentUploadError(new ManagedCloudChatAttachmentHttpError('no', status)),
+        String(status),
+      ).toBe(false);
+    }
+    expect(isRetryableAttachmentUploadError(new DOMException('stopped', 'AbortError'))).toBe(false);
+    expect(isRetryableAttachmentUploadError(new Error('other'))).toBe(false);
   });
 });
 

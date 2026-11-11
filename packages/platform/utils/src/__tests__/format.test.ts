@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { formatRelativeTime } from '../format';
+import { formatFileName, formatRelativeTime } from '../format';
 
 const originalRelativeTimeFormat = Intl.RelativeTimeFormat;
 
@@ -25,5 +25,25 @@ describe('formatRelativeTime', () => {
     expect(formatRelativeTime(now)).toBe('now');
     expect(formatRelativeTime(now - 5 * 60_000)).toBe('5 minutes ago');
     expect(formatRelativeTime(now + 3_600_000)).toBe('in 1 hour');
+  });
+});
+
+describe('formatFileName', () => {
+  it('returns a name that already fits', () => {
+    expect(formatFileName('notes.pdf', 20)).toBe('notes.pdf');
+  });
+
+  it('keeps both ends of the name when there is room for them', () => {
+    const formatted = formatFileName('very-long-document-name.pdf', 20);
+
+    expect(formatted).toBe('very-l...t-name.pdf');
+    expect(formatted.length).toBeLessThanOrEqual(20);
+  });
+
+  it('never exceeds the limit when only one character is left for the name', () => {
+    const formatted = formatFileName('abcdefghijkl.pdf', 8);
+
+    expect(formatted).toBe('....pdf');
+    expect(formatted.length).toBeLessThanOrEqual(8);
   });
 });

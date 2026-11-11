@@ -1,5 +1,5 @@
 import { app, type BrowserWindow } from 'electron';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   isDesktopCapability,
@@ -34,6 +34,7 @@ type StoredDecision = PermissionDecision & { label?: string };
 const persisted = new Map<string, StoredDecision>();
 const session = new Map<string, StoredDecision>();
 let loaded = false;
+let storeBehind = false;
 const revisions = new Map<string, number>();
 
 export function permissionRevision(capability: DesktopCapability, scope: PermissionScope): number {
@@ -84,14 +85,22 @@ function load(): void {
   }
 }
 
-function persist(): void {
+function persist(): boolean {
+  const target = storePath();
+  const staging = `${target}.tmp`;
   try {
-    writeFileSync(storePath(), `${JSON.stringify([...persisted.values()], null, 2)}\n`, {
+    writeFileSync(staging, `${JSON.stringify([...persisted.values()], null, 2)}\n`, {
       encoding: 'utf8',
       mode: 0o600,
     });
+    renameSync(staging, target);
+    storeBehind = false;
+    return true;
   } catch (error) {
+    rmSync(staging, { force: true });
+    storeBehind = true;
     console.warn('[permissions] could not persist decisions:', error);
+    return false;
   }
 }
 
@@ -156,12 +165,13 @@ export function consumeSingleUse(capability: DesktopCapability, scope: Permissio
  * again. Only a path the user confirmed in main may call this for a refusal;
  * everything else withdraws through `withdrawGrant`.
  */
-export function revokePermission(capability: DesktopCapability, scope: PermissionScope): void {
+export function revokePermission(capability: DesktopCapability, scope: PermissionScope): boolean {
   advanceRevision(capability, scope);
   load();
   const key = permissionKey(capability, scope);
   session.delete(key);
-  if (persisted.delete(key)) persist();
+  const changed = persisted.delete(key);
+  return changed || storeBehind ? persist() : true;
 }
 
 /**
@@ -170,15 +180,13 @@ export function revokePermission(capability: DesktopCapability, scope: Permissio
  * mind about a no, and a caller that could clear one this way could raise the
  * same prompt until it was allowed.
  */
-export function withdrawGrant(capability: DesktopCapability, scope: PermissionScope): void {
+export function withdrawGrant(capability: DesktopCapability, scope: PermissionScope): boolean {
   advanceRevision(capability, scope);
   load();
   const key = permissionKey(capability, scope);
   if (session.get(key)?.state === 'granted') session.delete(key);
-  if (persisted.get(key)?.state === 'granted') {
-    persisted.delete(key);
-    persist();
-  }
+  const changed = persisted.get(key)?.state === 'granted' && persisted.delete(key);
+  return changed || storeBehind ? persist() : true;
 }
 
 /**
@@ -203,7 +211,7 @@ export function revokeScope(scope: PermissionScope): number {
       if (store === persisted) persistedChanged = true;
     }
   }
-  if (persistedChanged) persist();
+  if (persistedChanged || storeBehind) persist();
   return removed;
 }
 
@@ -288,6 +296,7 @@ export function describePermissionDecision(decision: StoredDecision): string {
 }
 
 export function reviewPermissions(): DesktopPermissionsReview {
+  if (storeBehind) persist();
   const effective = new Map<string, PermissionDecision>();
   for (const decision of listPermissions()) {
     if (decision.duration === 'once') continue;

@@ -6,6 +6,7 @@ import { StudyModeIndicator } from '@/features/study/components/StudyModeIndicat
 import { useConversationStudySession } from '@/features/study/hooks/use-conversation-study-session';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
+import { isKeepableChatMessage } from '@/lib/chat-kept-messages';
 import { clientProvisionalTitle } from '@/lib/chat-title';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
@@ -98,6 +99,7 @@ import {
 } from '../lib/imageGenerationPersistence';
 import { runDurableImageGenerationTurn } from '../lib/durableImageGenerationTurn';
 import { startVideoAfterTranscriptCommit } from '../lib/durableVideoGenerationTurn';
+import { resolveVideoRetryInputs, videoInputKindOf } from '../lib/videoRetryInputs';
 import {
   useChatStore,
   selectActiveLeafId,
@@ -372,6 +374,7 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
+import { replayMcpContext } from '../lib/mcp-context-summary';
 import {
   approvedResearchSteps,
   completedResearchSteps,
@@ -1004,6 +1007,18 @@ function readVideoStartFailureProjection(value: unknown): VideoStartFailureProje
     ...(typeof metadata['videoRetryable'] === 'boolean'
       ? { videoRetryable: metadata['videoRetryable'] }
       : {}),
+    ...(typeof metadata['videoAspect'] === 'string'
+      ? { videoAspect: metadata['videoAspect'] }
+      : {}),
+    ...(typeof metadata['videoResolution'] === 'string'
+      ? { videoResolution: metadata['videoResolution'] }
+      : {}),
+    ...(typeof metadata['videoDurationSecs'] === 'number'
+      ? { videoDurationSecs: metadata['videoDurationSecs'] }
+      : {}),
+    ...(metadata['videoInputKind'] === 'first_frame' || metadata['videoInputKind'] === 'reference'
+      ? { videoInputKind: metadata['videoInputKind'] }
+      : {}),
   };
   return {
     applied: response['applied'],
@@ -1353,6 +1368,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // re-runs on every `conversations` change, including the one its own adoption
   // causes, so without this it would start a second read pass mid-flight.
   const autoTitledConversationsRef = useRef<Set<string>>(new Set());
+  const manualTitleEditsRef = useRef<Map<string, number>>(new Map());
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [restoredAttachments, setRestoredAttachments] = useState<File[] | null>(null);
@@ -2857,6 +2873,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         ...imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
           ...(paywall ? { paywall } : {}),
           ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
+          ...(apiError?.jobId ? { jobId: apiError.jobId } : {}),
         }),
         errorCode: paywall || cancelled ? undefined : IMAGE_GENERATION_FAILED_CODE,
       };
@@ -3201,6 +3218,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       );
 
       const previousMetadata = readMessageMetadata(ownerConversationId, messageId);
+      const resumeJobId =
+        previousMetadata?.imageJobId &&
+        !opts.edit &&
+        previousMetadata.imageGenPrompt === opts.prompt &&
+        previousMetadata.imageGenAspect === requestedAspect &&
+        (requestedModel === undefined || previousMetadata.imageGenModel === requestedModel)
+          ? previousMetadata.imageJobId
+          : undefined;
       if (!tryAcquireImageTranscriptMutation([messageId])) {
         throw new Error(
           'Wait for this image card to finish saving before generating a new version.',
@@ -3229,6 +3254,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             imageGenPrompt: opts.prompt,
             imageGenAspect: requestedAspect,
             imageRetryAt: undefined,
+            imageJobId: undefined,
             errorCode: undefined,
             ...((generatedImage?.model ?? requestedModel)
               ? { imageGenModel: generatedImage?.model ?? requestedModel }
@@ -3264,6 +3290,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               authority,
               cancelScope: ownerConversationId,
               conversationId: ownerConversationId,
+              ...(resumeJobId ? { resumeJobId } : {}),
             });
             return generatedImage.imageUrl;
           },
@@ -3726,6 +3753,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           );
           let assistantMessageId = crypto.randomUUID();
           videoMessageAuthoritiesRef.current.set(assistantMessageId, authority);
+          const videoInputKind = videoInputKindOf(videoOptions?.inputImages);
           const placeholderMetadata: MessageMetadata = {
             toolType: 'video-generation',
             videoStatus: 'queued',
@@ -3734,6 +3762,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
             ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
             ...(videoOptions?.durationSecs ? { videoDurationSecs: videoOptions.durationSecs } : {}),
+            ...(videoInputKind ? { videoInputKind } : {}),
           };
           addMessage(
             {
@@ -3840,6 +3869,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               ...(videoOptions?.durationSecs
                 ? { videoDurationSecs: videoOptions.durationSecs }
                 : {}),
+              ...(videoInputKind ? { videoInputKind } : {}),
             };
             updateOwnMessage(assistantMessageId, {
               content: '',
@@ -4041,7 +4071,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       const authority = videoMessageAuthoritiesRef.current.get(messageId);
       if (authority && !authority.isCurrent()) return;
       const failed = assistantMessage.metadata;
-      const inputImages = videoInputImagesRef.current.get(messageId);
+      const inputs = resolveVideoRetryInputs(
+        failed.videoInputKind,
+        videoInputImagesRef.current.get(messageId),
+      );
+      if (!inputs.ok) {
+        updateMessage(
+          messageId,
+          {
+            content: inputs.message,
+            metadata: { ...failed, videoRetryable: false, videoError: inputs.message },
+          },
+          displayedConversationId,
+        );
+        return;
+      }
+      const { inputImages } = inputs;
       videoInputImagesRef.current.delete(messageId);
       handleGenerateVideo(userMessage.content, {
         authority,
@@ -4063,6 +4108,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       handleOpenUpgradeDialog,
       isStreaming,
       isTrialExhausted,
+      updateMessage,
     ],
   );
 
@@ -4543,8 +4589,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   const handleRenameSession = useCallback(
-    (id: string, title: string) =>
-      runSessionRowAction('rename', () => updateConversation(id, { title })),
+    (id: string, title: string) => {
+      manualTitleEditsRef.current.set(id, (manualTitleEditsRef.current.get(id) ?? 0) + 1);
+      return runSessionRowAction('rename', () => updateConversation(id, { title }));
+    },
     [updateConversation],
   );
 
@@ -4675,7 +4723,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             (message) =>
               (message.role === 'user' || message.role === 'assistant') &&
               !message.isStreaming &&
-              message.content.trim().length > 0,
+              isKeepableChatMessage(message),
           );
       if (keptMessages.length === 0) {
         return updateConversation(conversationId, { isTemporary });
@@ -4735,6 +4783,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       localModelSelection !== null ||
       conversationHoldsLocalTurns(displayedMessages);
     autoTitledConversationsRef.current.add(conversationId);
+    const manualEditsAtStart = manualTitleEditsRef.current.get(conversationId) ?? 0;
+    const ownerRenamed = () =>
+      (manualTitleEditsRef.current.get(conversationId) ?? 0) !== manualEditsAtStart;
 
     void (async () => {
       let adopted: string | null = null;
@@ -4751,6 +4802,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           }
           if (!serverTitle || AUTO_TITLE_PLACEHOLDERS.has(serverTitle)) continue;
           if (serverTitle === adopted) continue;
+          if (ownerRenamed()) return;
           useChatStore.getState().updateConversation(conversationId, { title: serverTitle });
           // The first non-placeholder read is the stage-1 truncation; the next distinct
           // one is the generated title, and nothing follows it.
@@ -4760,12 +4812,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (adopted) return;
       }
       const fallback = clientFallbackTitle(firstUser.content);
-      if (!fallback || fallback === placeholderTitle) return;
+      if (!fallback || fallback === placeholderTitle || ownerRenamed()) return;
       if (titleStaysOnDevice) {
         useChatStore.getState().updateConversation(conversationId, { title: fallback });
         return;
       }
-      void updateConversation(conversationId, { title: fallback });
+      void updateConversation(conversationId, { title: fallback, expectedTitle: placeholderTitle });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -5250,9 +5302,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         setChatError(replayDecision.message, conversationId);
         return;
       }
+      const mcpReplay = replayMcpContext(planned.message.metadata?.mcpContext);
+      if (!mcpReplay.ok) {
+        setChatError(mcpReplay.message, conversationId);
+        return;
+      }
       const replayOptions = {
         ...replayToSendOptions(replayDecision.replay),
         ...freeModelHandoffReplay(planned.message.metadata),
+        ...(mcpReplay.mcpContext ? { mcpContext: mcpReplay.mcpContext } : {}),
       };
 
       if (variantsEnabled) {
@@ -5445,9 +5503,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return;
       }
 
+      const mcpReplay = replayMcpContext(userMsg.metadata?.mcpContext);
+      if (!mcpReplay.ok) {
+        setChatError(mcpReplay.message, displayedConversationId);
+        return;
+      }
       const replayOptions = {
         ...replayToSendOptions(replayDecision.replay),
         ...freeModelHandoffReplay(userMsg.metadata),
+        ...(mcpReplay.mcpContext ? { mcpContext: mcpReplay.mcpContext } : {}),
       };
 
       if (userRetryIndex >= 0 && !conversations.some((c) => c.id === displayedConversationId)) {

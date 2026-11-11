@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + commercial/platform lead
-Last updated: 2026-11-07
+Last updated: 2026-11-09
 
 ## Bootstrap Rule
 
@@ -287,7 +287,13 @@ Migration `0127_cogs_ledger.sql` adds the two tables that answer the margin ques
   discounts, support goodwill and tax. Stripe fees, refunds and chargebacks are imported
   from `balanceTransactions.list` by the daily `/api/cron/reconcile-credits` run over a
   three-day trailing window, which is wide enough for late settlement and idempotent
-  enough to overlap safely.
+  enough to overlap safely. `stripe_cogs_import_coverage` (0399) records how far the
+  import is complete: a run starts at the earlier of that point and its three-day
+  window, spans at most seven days, and advances it only after every read and ledger
+  write in the window succeeded, so a range a failed run missed is retried however old
+  it is. While coverage is behind the run's clock, the run reports
+  `cogs_import_coverage_behind` as a failure. One run holds the import at a time through
+  a ten-minute lease; an operator backfills by moving `covered_until` earlier.
 
 `cogs_summary(start, end)` is the only aggregation. `gross_margin_cents` is billed spend
 less provider cost and every adjustment in the window. Both tables keep a nullable

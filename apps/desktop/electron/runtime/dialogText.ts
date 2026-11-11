@@ -71,7 +71,8 @@ export function headAndTail(
 ): string {
   if (text.length <= shown.head + shown.tail) return text;
   const hidden = text.length - shown.head - shown.tail;
-  return `${text.slice(0, shown.head)}${missing(hidden)}${text.slice(-shown.tail)}`;
+  const tail = shown.tail > 0 ? text.slice(-shown.tail) : '';
+  return `${text.slice(0, shown.head)}${missing(hidden)}${tail}`;
 }
 
 /** One value from outside this app, on one line, with both ends kept when it is long. */

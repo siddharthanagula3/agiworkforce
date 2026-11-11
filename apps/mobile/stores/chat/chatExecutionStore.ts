@@ -13,7 +13,10 @@ import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
-import { buildAttachedDocumentContext } from '@/services/attachmentContext';
+import {
+  buildAttachedDocumentContext,
+  buildProjectSourceContext,
+} from '@/services/attachmentContext';
 import { getThermalState, recordPerfEvent } from '@/services/performanceMonitor';
 import { startPeakMemorySampler } from '@/services/processFootprint';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
@@ -194,6 +197,7 @@ import {
   unsentAttachmentMessage,
   uploadWithRetry,
 } from '@/src/features/chat/upload/uploadAttachment';
+import { isConversationTemporary } from '@/src/features/chat/upload/uploadContext';
 import { speedFirstSlots } from '@agiworkforce/routing';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
@@ -310,7 +314,7 @@ interface ExecutionState {
     steps?: ResearchStep[],
     choices?: ResearchPlanChoices,
   ) => Promise<void>;
-  editMessage: (conversationId: string, messageId: string, newContent: string) => void;
+  editMessage: (conversationId: string, messageId: string, newContent: string) => boolean;
   clearError: () => void;
   setSendError: (message: string) => void;
   clearPaywallError: () => void;
@@ -373,6 +377,7 @@ interface PendingApprovalTurn {
   resolving: boolean;
   deviceResults?: Map<string, PhoneStepOutcome>;
   deviceStarted?: Set<string>;
+  resultsUndelivered?: boolean;
   inputAnswers?: ManagedCloudAgentRunInputAnswer[];
   pausedInput?: PendingToolInput;
 }
@@ -590,7 +595,9 @@ async function settlePhoneDeviceSteps(
   assistantMessageId: string,
 ): Promise<void> {
   const turn = pendingApprovalTurns.get(assistantMessageId);
-  if (!turn?.deviceResults || !turn.deviceStarted || turn.resolving) return;
+  if (!turn?.deviceResults || !turn.deviceStarted || turn.resolving || turn.resultsUndelivered) {
+    return;
+  }
   for (const call of turn.calls) {
     if (!call.deviceStep || turn.deviceStarted.has(call.toolCallId)) continue;
     const decision = turn.decisions.get(call.toolCallId);
@@ -633,8 +640,18 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
           call.requiresApproval === true && typeof call.toolCallId === 'string',
       )
       .map((call) => ({ toolCallId: call.toolCallId, name: call.name }));
-    if (!runReference.success || calls.length === 0) return false;
     const phoneSteps = storedPhoneSteps(message.metadata);
+    const allPhoneStepsFinished =
+      phoneSteps.size > 0 &&
+      message.isStreaming !== true &&
+      [...phoneSteps.keys()].every((toolCallId) =>
+        (message.toolCalls ?? []).some(
+          (call) =>
+            call.toolCallId === toolCallId &&
+            (call.status === 'succeeded' || call.status === 'failed'),
+        ),
+      );
+    if (!runReference.success || (calls.length === 0 && !allPhoneStepsFinished)) return false;
     if (calls.some((call) => isPhoneStepTool(call.name) && !phoneSteps.has(call.toolCallId))) {
       return false;
     }
@@ -670,6 +687,7 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
           isError: call.status === 'failed',
         });
       }
+      turn.resultsUndelivered = turn.deviceResults?.size === turn.calls.length;
       pendingApprovalTurns.set(assistantMessageId, turn);
       return true;
     }
@@ -684,6 +702,12 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
     return true;
   }
   return false;
+}
+
+function undeliveredDeviceTurn(assistantMessageId: string): PendingApprovalTurn | null {
+  if (!isApprovalTurnLive(assistantMessageId)) return null;
+  const turn = pendingApprovalTurns.get(assistantMessageId);
+  return turn?.deviceResults && turn.resultsUndelivered && !turn.resolving ? turn : null;
 }
 
 export function __resetPendingApprovalTurnsForTests(): void {
@@ -1384,9 +1408,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     let uploadedAttachments: MessageAttachment[] | undefined;
     const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
-    const temporaryConversation = conversation
-      ? conversation.temporary === true
-      : useSettingsStore.getState().isTemporaryChat;
+    const temporaryConversation = isConversationTemporary(conversation);
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
     const requestedModel = model;
@@ -1777,6 +1799,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ? historyMessagesForConversation(conversationId, executionMode)
         : pathEndingAt(conversationId, branchFromId);
 
+    const earlierDocumentContext = new Map<string, string[]>();
+    if (executionMode !== 'cloud') {
+      for (const earlier of existingMessages) {
+        if (earlier.isStreaming || earlier.role !== 'user') continue;
+        const earlierDocuments = earlier.attachments?.filter(
+          (a) => !a.assetId && !a.mimeType.startsWith('image/'),
+        );
+        if (!earlierDocuments || earlierDocuments.length === 0) continue;
+        const documentContext = await buildAttachedDocumentContext(earlierDocuments);
+        if (!isTurnAccountCurrent()) return false;
+        earlierDocumentContext.set(earlier.id, documentContext);
+      }
+    }
+
     const historyMessages: Array<{
       role: string;
       content:
@@ -1796,6 +1832,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
               : null;
           const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
+          const documentContext = earlierDocumentContext.get(m.id);
+          const turnText = documentContext
+            ? [...documentContext, m.content].filter(Boolean).join('\n\n')
+            : m.content;
           const replayedAttachments = m.attachments?.filter((a) =>
             executionMode === 'cloud'
               ? Boolean(a.assetId) ||
@@ -1807,7 +1847,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               {
                 role: m.role,
                 content: [
-                  ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+                  ...(turnText ? [{ type: 'text' as const, text: turnText }] : []),
                   ...replayedAttachments.map((a) =>
                     a.assetId
                       ? { type: 'file' as const, file: { asset_id: a.assetId } }
@@ -1818,7 +1858,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ...settledTurn,
             ];
           }
-          return [{ role: m.role, content: m.content }, ...settledTurn];
+          return [{ role: m.role, content: turnText }, ...settledTurn];
         }),
     ];
 
@@ -1880,6 +1920,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const activeProject = useProjectStore
         .getState()
         .projects.find((p) => p.id === activeProjectId);
+      if (activeProject?.sources?.length) {
+        const sourceContext = await buildProjectSourceContext(activeProject.sources);
+        if (!isTurnAccountCurrent()) return false;
+        historyMessages.unshift({
+          role: 'system',
+          content: ['Project sources the user added to this project:', ...sourceContext].join(
+            '\n\n',
+          ),
+        });
+      }
       if (activeProject?.instructions?.trim()) {
         historyMessages.unshift({ role: 'system', content: activeProject.instructions.trim() });
       }
@@ -3321,6 +3371,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const approvalAccountEpoch = captureCloudAccountEpoch();
     if (approvalAccountEpoch === null) {
       turn.resolving = false;
+      if (turn.deviceResults) turn.resultsUndelivered = true;
       const pausedInput = turn.pausedInput;
       if (pausedInput) {
         pendingApprovalTurns.delete(assistantMessageId);
@@ -3598,7 +3649,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const inputTurn = turn.inputAnswers !== undefined;
             const terminal = !inputTurn && isTerminalResumeError(error);
             const inactiveReason = inputTurn ? inactiveInputReason(error) : null;
-            if (turn.deviceResults || terminal || inputTurn) {
+            const retainDeviceResults =
+              turn.deviceResults !== undefined && !terminal && !controller.signal.aborted;
+            if (retainDeviceResults) {
+              turn.resultsUndelivered = true;
+            } else if (turn.deviceResults || terminal || inputTurn) {
               pendingApprovalTurns.delete(assistantMessageId);
             }
             const checkpointIds = new Set(
@@ -3660,7 +3715,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const inputTurn = turn.inputAnswers !== undefined;
       const terminal = !inputTurn && isTerminalResumeError(caughtErr);
       const inactiveReason = inputTurn ? inactiveInputReason(caughtErr) : null;
-      if (turn.deviceResults || terminal || inputTurn) {
+      if (turn.deviceResults !== undefined && !terminal && !controller.signal.aborted) {
+        turn.resultsUndelivered = true;
+      } else if (turn.deviceResults || terminal || inputTurn) {
         pendingApprovalTurns.delete(assistantMessageId);
       }
       if (!controller.signal.aborted) {
@@ -3900,6 +3957,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const next = msgs[msgIndex + 1];
       assistantMsg = next && next.role === 'assistant' ? next : undefined;
     } else {
+      return;
+    }
+    const undeliveredTurn = assistantMsg ? undeliveredDeviceTurn(assistantMsg.id) : null;
+    if (assistantMsg && undeliveredTurn) {
+      undeliveredTurn.resultsUndelivered = false;
+      undeliveredTurn.resolving = true;
+      get()
+        .continuePausedCloudTurn(conversationId, assistantMsg.id)
+        .catch((err: unknown) => {
+          console.warn('[chatExecutionStore] Device result delivery failed:', err);
+          set({ error: 'Retry failed. Please try again.' });
+        });
       return;
     }
     if (!userMsg || userMsg.role !== 'user') return;
@@ -4351,10 +4420,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         'Please wait for the current response to finish before editing a message.',
         [{ text: 'OK' }],
       );
-      return;
+      return false;
     }
 
-    if (state.isEditing) return;
+    if (state.isEditing) return false;
 
     const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore
@@ -4370,13 +4439,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const msgs = branches
       ? ensureLocalThreadParents(conversationId)
       : msgStore.getState().messages[conversationId];
-    if (!msgs) return;
+    if (!msgs) return false;
 
     const msgIndex = msgs.findIndex((m) => m.id === messageId);
-    if (msgIndex < 0) return;
+    if (msgIndex < 0) return false;
 
     const targetMsg = msgs[msgIndex];
-    if (!targetMsg || targetMsg.role !== 'user') return;
+    if (!targetMsg || targetMsg.role !== 'user') return false;
 
     const userModel = targetMsg.model ?? DEFAULT_AUTO_MODE_ID;
     const editedParentId = targetMsg.parentId ?? null;
@@ -4386,7 +4455,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const accountEpoch = isCloudEdit ? captureCloudAccountEpoch() : null;
     const isEditCurrent = () => !isCloudEdit || isCloudAccountEpochCurrent(accountEpoch);
 
-    if (!isEditCurrent()) return;
+    if (!isEditCurrent()) return false;
 
     set({ isEditing: true });
 
@@ -4423,5 +4492,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       .finally(() => {
         if (isEditCurrent()) set({ isEditing: false });
       });
+    return true;
   },
 }));

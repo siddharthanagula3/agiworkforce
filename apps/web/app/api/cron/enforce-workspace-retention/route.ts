@@ -22,11 +22,11 @@ const MAX_ORGANIZATIONS_PER_RUN = 50;
 /**
  * Deletes workspace conversations past each organization's retention window.
  *
- * Only organizations that explicitly set `retention_enforced` are considered.
- * `listOrganizationsWithRetentionEnforced` filters on it, and
- * `sweepOrganizationRetention` re-checks rather than trusting the caller. An
- * organization that never opted in is never touched, whatever a bug upstream
- * decides.
+ * Only organizations that explicitly set `retention_enforced` are considered,
+ * whatever their plan. `listOrganizationsWithRetentionEnforced` and
+ * `sweepOrganizationRetention` both decide with `isRetentionSweepEnabled`, and
+ * the sweep re-checks rather than trusting the caller. An organization that
+ * never opted in is never touched, whatever a bug upstream decides.
  *
  * Runs on the privileged connection because it deletes across every member of
  * a workspace and writes the sweep record, which the application role is

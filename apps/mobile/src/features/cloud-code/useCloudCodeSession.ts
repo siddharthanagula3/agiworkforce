@@ -41,6 +41,7 @@ interface SessionDetail {
   session: CloudCodeSession;
   terminalEntries: CloudCodeTerminalEntry[];
   turns: CloudCodeAgentTurnRecord[];
+  turnsTruncated?: boolean;
 }
 
 export interface CloudCodeSessionView {
@@ -48,6 +49,7 @@ export interface CloudCodeSessionView {
   session: CloudCodeSession | null;
   terminalEntries: CloudCodeTerminalEntry[];
   transcript: CodeTranscriptItem[];
+  turnsTruncated: boolean;
   approvals: CloudCodeAgentApproval[];
   pendingGoal: string | null;
   turnRequest: CloudCodeTurnRequest | null;
@@ -287,6 +289,7 @@ export function useCloudCodeSession(
     session: detail?.session ?? null,
     terminalEntries: detail?.terminalEntries ?? EMPTY_TERMINAL_ENTRIES,
     transcript,
+    turnsTruncated: detail?.turnsTruncated === true,
     approvals: visibleApprovals,
     pendingGoal: turnRequest === 'send' && latestTurnId === sendBaseline ? pendingGoal : null,
     turnRequest,

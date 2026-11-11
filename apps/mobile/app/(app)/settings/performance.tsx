@@ -1089,7 +1089,7 @@ export default function PerformanceScreen() {
           <ToggleRow
             icon={BarChart2}
             label="Show performance chip in chat"
-            sublabel="Shows tok/s and TTFT under each assistant response"
+            sublabel="Shows tok/s under on-device replies with a measured speed"
             value={showPerfChip}
             onChange={handleChipToggle}
           />

@@ -6,6 +6,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { resourceDeletionPolicy } from '@/lib/resources/deletion-policies';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   HOLDABLE_RESOURCE_TYPES,
@@ -188,8 +189,40 @@ export function legalHoldPredicate(
     (parent
       ? qualify('hold_parent', organizationColumnOf(parent.table))
       : qualify(options.alias, resource?.organizationColumn ?? 'organization_id'));
+  const joinsParent = parent !== null && options.owner === undefined;
+
+  // RLS hides holds from ordinary members, so an inline read of legal_holds on
+  // a member's connection answers "not held". The definer function (0416) sees
+  // every hold and answers only for a row the caller may see.
+  if (options.holdId === undefined) {
+    const params: string[] = [];
+    let store = 'null::text';
+    if (options.coversParam !== undefined) {
+      store = `${options.coversParam}::text`;
+    } else if (resourceType !== null) {
+      params.push(resourceType);
+      store = `$${options.nextParamIndex}::text`;
+    }
+    const preserves = `public.legal_hold_preserves(${organization}::uuid, ${owner}::text, ${store})`;
+    return {
+      table: resource?.table ?? null,
+      params,
+      sql:
+        joinsParent && parent
+          ? `exists (
+          select 1
+            from public.${parent.table} hold_parent
+           where hold_parent.id = ${qualify(options.alias, parent.column)}
+             and ${preserves}
+        )`
+          : preserves,
+    };
+  }
+
+  // Asking about one named hold is an administrator's question, and the
+  // administrator's own connection can read every hold in the workspace.
   const join =
-    parent && options.owner === undefined
+    joinsParent && parent
       ? `\n            join public.${parent.table} hold_parent
               on hold_parent.id = ${qualify(options.alias, parent.column)}`
       : '';
@@ -207,11 +240,8 @@ export function legalHoldPredicate(
     covers = `\n             and (h.resource_types is null or $${index} = any(h.resource_types))`;
     index += 1;
   }
-  let only = '';
-  if (options.holdId !== undefined) {
-    params.push(options.holdId);
-    only = `\n             and h.id = $${index}::uuid`;
-  }
+  params.push(options.holdId);
+  const only = `\n             and h.id = $${index}::uuid`;
 
   return {
     table: resource?.table ?? null,
@@ -232,14 +262,95 @@ export function legalHoldPredicate(
   };
 }
 
+interface CascadeChild {
+  resourceType: LegalHoldResourceType;
+  table: string;
+  column: string;
+}
+
+function holdableCascadeChildren(table: string): CascadeChild[] {
+  const policy = resourceDeletionPolicy(table);
+  if (policy === null) return [];
+  const children: CascadeChild[] = [];
+  for (const child of policy.children) {
+    if (child.disposition !== 'cascade_delete') continue;
+    const resource = holdableResourceForTable(child.table);
+    if (resource !== null && isLegalHoldResourceType(resource.resourceType)) {
+      children.push({
+        resourceType: resource.resourceType,
+        table: resource.table,
+        column: child.column,
+      });
+    }
+  }
+  return children;
+}
+
+// A hard delete takes its cascading children with it, so a row is preserved
+// when it is held itself or when any held child would go with it.
+function legalHoldDeletionBranches(
+  resourceType: LegalHoldResourceType | null,
+  options: LegalHoldPredicateOptions,
+): { branches: string[]; params: string[]; table: string | null } {
+  const own = legalHoldPredicate(resourceType, options);
+  const policy = own.table === null ? null : resourceDeletionPolicy(own.table);
+  if (policy === null || options.holdId !== undefined || options.coversParam !== undefined) {
+    return { branches: [own.sql], params: own.params, table: own.table };
+  }
+
+  const params = [...own.params];
+  let nextIndex = options.nextParamIndex + own.params.length;
+  let aliasCount = 0;
+
+  const reach = (table: string, key: string, alias: string, path: ReadonlySet<string>): string[] =>
+    holdableCascadeChildren(table)
+      .filter((child) => !path.has(child.table))
+      .map((child) => {
+        aliasCount += 1;
+        const childAlias = `hold_cascade_${aliasCount}`;
+        const held = legalHoldPredicate(child.resourceType, {
+          alias: childAlias,
+          nextParamIndex: nextIndex,
+        });
+        params.push(...held.params);
+        nextIndex += held.params.length;
+        const childKey = resourceDeletionPolicy(child.table)?.keyColumn ?? 'id';
+        const nested = reach(child.table, childKey, childAlias, new Set(path).add(child.table));
+        return `exists (
+          select 1
+            from public.${child.table} ${childAlias}
+           where ${childAlias}.${child.column} = ${alias}.${key}
+             and (${[held.sql, ...nested].join('\n or ')})
+        )`;
+      });
+
+  const branches = [
+    own.sql,
+    ...reach(policy.table, policy.keyColumn, options.alias, new Set([policy.table])),
+  ];
+  return { branches, params, table: own.table };
+}
+
+function legalHoldDeletionReach(
+  resourceType: LegalHoldResourceType | null,
+  options: LegalHoldPredicateOptions,
+): LegalHoldPredicate {
+  const { branches, params, table } = legalHoldDeletionBranches(resourceType, options);
+  return {
+    table,
+    params,
+    sql: branches.length === 1 ? branches[0]! : `(${branches.join('\n or ')})`,
+  };
+}
+
 // ANDed into the destroying statement's own WHERE, so nothing can be placed
 // under hold between a read and the delete.
 export function legalHoldExclusion(
   resourceType: LegalHoldResourceType | null,
   options: LegalHoldPredicateOptions,
 ): LegalHoldPredicate {
-  const predicate = legalHoldPredicate(resourceType, options);
-  return { ...predicate, sql: `not ${predicate.sql}` };
+  const { branches, params, table } = legalHoldDeletionBranches(resourceType, options);
+  return { table, params, sql: branches.map((branch) => `not ${branch}`).join('\n and ') };
 }
 
 // `where` is the sweep's own condition over `alias`; the hold predicate takes
@@ -257,7 +368,7 @@ async function countRowsMatching(
   },
   held: boolean,
 ): Promise<number> {
-  const render = held ? legalHoldPredicate : legalHoldExclusion;
+  const render = held ? legalHoldDeletionReach : legalHoldExclusion;
   const predicate = render(resourceType, {
     alias: options.alias,
     nextParamIndex: options.params.length + 1,
@@ -391,6 +502,26 @@ function organizationColumnOf(table: string): string {
 export const HELD_DELETION_REFUSAL =
   'This is preserved by an active legal hold and cannot be deleted yet. It will be deleted once the hold is released.';
 
+// A refused message is not remembered as a deletion, so its refusal promises nothing later.
+export const HELD_MESSAGE_DELETION_REFUSAL =
+  'This message is preserved by an active legal hold and cannot be deleted while the hold is active.';
+
+export const HELD_UNDEFERRED_DELETION_REFUSAL =
+  'This is preserved by an active legal hold and cannot be deleted while the hold is active.';
+
+// Only these stores keep the refused item tombstoned for the purge cron that
+// finishes the deletion after release.
+const DEFERRED_HELD_DELETIONS: ReadonlySet<LegalHoldResourceType> = new Set([
+  'file',
+  'project_file',
+]);
+
+export function heldDeletionRefusal(resourceType: LegalHoldResourceType): string {
+  if (DEFERRED_HELD_DELETIONS.has(resourceType)) return HELD_DELETION_REFUSAL;
+  if (resourceType === 'message') return HELD_MESSAGE_DELETION_REFUSAL;
+  return HELD_UNDEFERRED_DELETION_REFUSAL;
+}
+
 // The record matters as much as the refusal: an opposing party asks whether
 // anybody tried to destroy the evidence.
 export async function refuseHeldDeletion(input: {
@@ -416,5 +547,5 @@ export async function refuseHeldDeletion(input: {
       '[legal-hold] refused deletion could not be audited',
     );
   });
-  throw createError.forbidden(HELD_DELETION_REFUSAL);
+  throw createError.forbidden(heldDeletionRefusal(input.resourceType));
 }

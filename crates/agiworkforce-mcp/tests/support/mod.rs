@@ -5,8 +5,8 @@
 //!   * hooks builders (`decline_hooks`, `hooks_with`) + a fixed test `ClientInfo`.
 //!   * `http_basic` / `http_oauth` / `http_stale` / `http_oversized`, scripted
 //!     Streamable-HTTP MCP servers.
-//!   * `sse_sim`: a scripted SSE MCP server (endpoint hint + inline POST
-//!     responses) with a transient-failure counter for the reconnect case.
+//!   * `sse_sim` / `sse_sim_with`: a scripted SSE MCP server (endpoint hint +
+//!     inline POST responses) with a scripted `tools/call` failure counter.
 //!
 //! These replay fixed transcripts so the tests are the frozen contract the
 //! desktop d2 swap must keep green.
@@ -512,20 +512,37 @@ pub struct SseRecord {
     pub call_attempts: AtomicUsize,
 }
 
+/// How a failing `tools/call` fails in the SSE sim.
+#[derive(Clone, Copy)]
+pub enum SseCallFault {
+    /// The POST answers 503, as a gateway does after it forwarded the call.
+    Unavailable,
+    /// The POST is accepted with an empty 202 and the event stream then ends
+    /// before the matching response is delivered.
+    AcceptedThenStreamEnds,
+}
+
 /// A scripted SSE MCP server.
 ///
 /// `GET /sse` emits an `event: endpoint` hint pointing at `/messages`, then
 /// holds the stream open. `POST /messages` answers inline. The first
-/// `tools/call` returns 503 (a transient drop that trips the client's
-/// connection-error reconnect); after `fail_calls` failures it returns the real
-/// result. `get_hits` counts stream (re)connections.
+/// `fail_calls` `tools/call` requests fail as `fault` describes; later ones
+/// return the real result. `call_attempts` counts every `tools/call` the
+/// server received (each one ran); `get_hits` counts stream (re)connections.
 pub fn sse_sim(fail_calls: usize) -> (Router, Arc<SseRecord>) {
+    sse_sim_with(fail_calls, SseCallFault::Unavailable)
+}
+
+pub fn sse_sim_with(fail_calls: usize, fault: SseCallFault) -> (Router, Arc<SseRecord>) {
     let rec = Arc::new(SseRecord::default());
     let rec_get = Arc::clone(&rec);
     let rec_post = Arc::clone(&rec);
+    let stream_end = Arc::new(tokio::sync::Notify::new());
+    let stream_end_get = Arc::clone(&stream_end);
 
     let sse_get = get(move |req: Request| {
         let rec = Arc::clone(&rec_get);
+        let stream_end = Arc::clone(&stream_end_get);
         async move {
             rec.get_hits.fetch_add(1, Ordering::SeqCst);
             let host = host_of(&req);
@@ -535,8 +552,10 @@ pub fn sse_sim(fail_calls: usize) -> (Router, Arc<SseRecord>) {
                     "event: endpoint\ndata: {endpoint}\n\n"
                 )))
             });
-            // Keep the stream open after the hint.
-            let body = Body::from_stream(first.chain(futures_util::stream::pending()));
+            // Hold the stream open until a scripted fault ends it.
+            let held = futures_util::stream::once(async move { stream_end.notified().await })
+                .filter_map(|()| async { None::<Result<axum::body::Bytes, std::io::Error>> });
+            let body = Body::from_stream(first.chain(held));
             Response::builder()
                 .status(StatusCode::OK)
                 .header("Content-Type", "text/event-stream")
@@ -547,6 +566,7 @@ pub fn sse_sim(fail_calls: usize) -> (Router, Arc<SseRecord>) {
 
     let messages = post(move |body: String| {
         let rec = Arc::clone(&rec_post);
+        let stream_end = Arc::clone(&stream_end);
         async move {
             let frame: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
             let method = frame
@@ -568,13 +588,17 @@ pub fn sse_sim(fail_calls: usize) -> (Router, Arc<SseRecord>) {
                 "tools/call" => {
                     let n = rec.call_attempts.fetch_add(1, Ordering::SeqCst);
                     if n < fail_calls {
-                        // Transient failure, trips is_connection_error via
-                        // "SSE: POST '...' returned 503".
-                        return json_response(
-                            StatusCode::SERVICE_UNAVAILABLE,
-                            None,
-                            "temporarily unavailable".to_string(),
-                        );
+                        return match fault {
+                            SseCallFault::Unavailable => json_response(
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                None,
+                                "temporarily unavailable".to_string(),
+                            ),
+                            SseCallFault::AcceptedThenStreamEnds => {
+                                stream_end.notify_one();
+                                json_response(StatusCode::ACCEPTED, None, String::new())
+                            }
+                        };
                     }
                     let args = frame
                         .get("params")

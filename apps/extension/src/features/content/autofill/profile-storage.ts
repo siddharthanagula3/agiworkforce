@@ -27,11 +27,7 @@ export async function saveAutofillProfile(profile: JobApplicationProfile): Promi
 }
 
 export async function clearAutofillProfile(): Promise<void> {
-  try {
-    await chrome.storage.local.remove([AUTOFILL_PROFILE_STORAGE_KEY]);
-  } catch {
-    // storage.local may not be available in all contexts
-  }
+  await chrome.storage.local.remove([AUTOFILL_PROFILE_STORAGE_KEY]);
 }
 
 export async function loadContactAutofillProfile(): Promise<ContactAutofillProfile | null> {

@@ -61,6 +61,7 @@ export interface DictationController {
   stop: () => void;
   send: () => void;
   cancel: () => void;
+  interrupt: (message: string) => void;
   retry: () => void;
 }
 
@@ -113,6 +114,16 @@ export function useDictation(options: UseDictationOptions): DictationController 
     }
     dispatch({ type: DICTATION_EVENT.cancel });
     setAnnouncement(owner ? ANNOUNCEMENT.cancelled : '');
+  }, []);
+
+  const interrupt = useCallback((message: string) => {
+    const owner = ownerRef.current;
+    if (!owner) return;
+    ownerRef.current = null;
+    useVoiceInputStore.getState().cancelListening(owner);
+    owner.retire();
+    finishing.current = false;
+    dispatch({ type: DICTATION_EVENT.fail, message });
   }, []);
 
   const start = useCallback(() => {
@@ -280,6 +291,7 @@ export function useDictation(options: UseDictationOptions): DictationController 
     stop,
     send,
     cancel,
+    interrupt,
     retry,
   };
 }

@@ -46,7 +46,16 @@ function CaseForm({
   const id = useId();
   const [draft, setDraft] = useState<DeveloperEvalCaseInput>(() => emptyCase(variables));
   const [saving, setSaving] = useState(false);
-  useEffect(() => setDraft(emptyCase(variables)), [variables]);
+  useEffect(
+    () =>
+      setDraft((current) => ({
+        ...current,
+        variables: Object.fromEntries(
+          variables.map((name) => [name, current.variables[name] ?? '']),
+        ),
+      })),
+    [variables],
+  );
   const add = async () => {
     setSaving(true);
     try {
@@ -108,15 +117,13 @@ function CaseForm({
 
 function ResultRow({
   result,
-  testCase,
   onGrade,
 }: {
   result: DeveloperEvalResult;
-  testCase: DeveloperEvalCase | undefined;
   onGrade: (grade: number | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const expected = testCase?.expectedOutput ?? null;
+  const expected = result.expectedOutput;
   const verdict = result.error
     ? 'Error'
     : result.passed === true
@@ -288,15 +295,23 @@ export function PromptEvaluations({
     if (!chosen || !cases || cases.length === 0) return;
     setError(null);
     let started: DeveloperEvalRun;
+    let manifest: DeveloperEvalCase[];
     try {
-      started = await api.startRun(prompt.id, chosen.version, checkKind);
+      const { cases: admitted, ...admittedRun } = await api.startRun(
+        prompt.id,
+        chosen.version,
+        checkKind,
+      );
+      started = admittedRun;
+      manifest = admitted;
     } catch (reason) {
       setError(toUserMessage(reason, 'The run could not be started.'));
       return;
     }
+    replaceCases(manifest);
     setRun(started);
-    setRunning({ done: 0, total: cases.length });
-    const queue = [...cases];
+    setRunning({ done: 0, total: manifest.length });
+    const queue = [...manifest];
     const worker = async () => {
       for (let next = queue.shift(); next; next = queue.shift()) {
         const renderedInput = renderPromptTemplate(chosen.template, next.variables);
@@ -369,8 +384,6 @@ export function PromptEvaluations({
       setError(toUserMessage(reason, 'The run could not be loaded.'));
     }
   };
-
-  const casesById = new Map((cases ?? []).map((entry) => [entry.id, entry]));
 
   return (
     <section aria-label="Test cases and runs" className="flex flex-col gap-3">
@@ -493,7 +506,6 @@ export function PromptEvaluations({
               <ResultRow
                 key={result.id}
                 result={result}
-                testCase={result.caseId ? casesById.get(result.caseId) : undefined}
                 onGrade={(value) => void grade(result, value)}
               />
             ))}

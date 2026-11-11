@@ -22,7 +22,11 @@ import {
   type TimeFocusPreferences,
 } from '@agiworkforce/types';
 import { Coffee, Moon } from 'lucide-react';
-import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
+import {
+  PREFERENCE_NAMESPACE_SAVED_EVENT,
+  fetchPreferenceNamespace,
+  type PreferenceNamespaceSavedDetail,
+} from '@/app/settings/_lib/preferences-client';
 
 const ACTIVITY_STORAGE_PREFIX = 'agi:time-focus:activity:v1:';
 const QUIET_DISMISSAL_PREFIX = 'agi:time-focus:quiet:v1:';
@@ -124,17 +128,28 @@ export function TimeFocusReminder({
       return;
     }
     let cancelled = false;
+    let savedDuringLoad = false;
     const timezone = browserTimezone();
     const defaults = defaultTimeFocusPreferences(timezone);
     fetchPreferenceNamespace<TimeFocusPreferences>(TIME_FOCUS_PREFERENCES_NAMESPACE, defaults)
       .then((value) => {
-        if (!cancelled) setPreferences(normalizeTimeFocusPreferences(value, timezone));
+        if (!cancelled && !savedDuringLoad) {
+          setPreferences(normalizeTimeFocusPreferences(value, timezone));
+        }
       })
       .catch(() => {
-        if (!cancelled) setPreferences(null);
+        if (!cancelled && !savedDuringLoad) setPreferences(null);
       });
+    const adoptSavedPreferences = (event: Event) => {
+      const detail = (event as CustomEvent<PreferenceNamespaceSavedDetail>).detail;
+      if (cancelled || detail?.namespace !== TIME_FOCUS_PREFERENCES_NAMESPACE) return;
+      savedDuringLoad = true;
+      setPreferences(normalizeTimeFocusPreferences(detail.value, timezone));
+    };
+    window.addEventListener(PREFERENCE_NAMESPACE_SAVED_EVENT, adoptSavedPreferences);
     return () => {
       cancelled = true;
+      window.removeEventListener(PREFERENCE_NAMESPACE_SAVED_EVENT, adoptSavedPreferences);
     };
   }, [userId]);
 

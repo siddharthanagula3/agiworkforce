@@ -42,8 +42,8 @@ interface MemoryState {
   searchQuery: string;
 
   fetchMemories: () => Promise<void>;
-  addMemory: (fact: string) => Promise<void>;
-  updateMemory: (id: string, fact: string) => Promise<void>;
+  addMemory: (fact: string) => Promise<string | null>;
+  updateMemory: (id: string, fact: string) => Promise<string | null>;
   deleteMemory: (id: string) => Promise<void>;
   resetMemories: () => Promise<boolean>;
   togglePin: (id: string) => Promise<void>;
@@ -60,6 +60,9 @@ interface MemoryState {
 const RESET_FAILED_MESSAGE = 'Could not reset memory, so nothing was deleted. Try again.';
 const MIN_IMPORTED_FACT_CHARS = 3;
 const ALREADY_SAVED_MESSAGE = 'That memory is already saved.';
+const SIGN_IN_REQUIRED_MESSAGE = 'Sign in to manage Cloud memories';
+const ADD_FAILED_MESSAGE = 'Could not add this memory. Try again.';
+const UPDATE_FAILED_MESSAGE = 'Could not update this memory. Try again.';
 
 function keptExistingMessage(keeper: string | undefined): string {
   return keeper
@@ -153,8 +156,8 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
   addMemory: async (fact) => {
     const operationScope = captureMemoryOperationScope();
     if (!operationScope) {
-      set({ error: 'Sign in to manage Cloud memories' });
-      return;
+      set({ error: SIGN_IN_REQUIRED_MESSAGE });
+      return SIGN_IN_REQUIRED_MESSAGE;
     }
     set({ error: null });
     try {
@@ -194,19 +197,20 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         });
       } else {
         const result = await writeLocalMemoryFact({ fact: fact.trim(), source: 'typed' });
-        if (!isMemoryOperationScopeCurrent(operationScope)) return;
+        if (!isMemoryOperationScopeCurrent(operationScope)) return null;
         if (result.refusedCategory) {
-          set({ error: prohibitedMemoryMessage(result.refusedCategory) });
-          return;
+          const refusal = prohibitedMemoryMessage(result.refusedCategory);
+          set({ error: refusal });
+          return refusal;
         }
         if (result.outcome === 'already_known' || !result.fact) {
           set({ error: ALREADY_SAVED_MESSAGE });
-          return;
+          return null;
         }
         if (result.outcome === 'kept_existing') {
           const keeper = get().entries.find((entry) => entry.id === result.fact?.superseded_by);
           set({ error: keptExistingMessage(keeper?.fact) });
-          return;
+          return null;
         }
         const entry = result.fact;
         const replaced = new Set(result.replacedIds);
@@ -224,17 +228,19 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         });
       }
     } catch (err) {
-      if (!isMemoryOperationScopeCurrent(operationScope)) return;
-      set({ error: 'Could not add this memory. Try again.' });
+      if (!isMemoryOperationScopeCurrent(operationScope)) return null;
+      set({ error: ADD_FAILED_MESSAGE });
+      return ADD_FAILED_MESSAGE;
     }
+    return null;
   },
 
   updateMemory: async (id, rawFact) => {
     const fact = rawFact.trim();
     const operationScope = captureMemoryOperationScope();
     if (!operationScope) {
-      set({ error: 'Sign in to manage Cloud memories' });
-      return;
+      set({ error: SIGN_IN_REQUIRED_MESSAGE });
+      return SIGN_IN_REQUIRED_MESSAGE;
     }
     set({ error: null });
     const isCloud = operationScope.scope === 'cloud';
@@ -242,8 +248,9 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     if (isCloud) {
       const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
       if (!existing) {
-        set({ error: 'Memory entry not found in cloud store' });
-        return;
+        const missing = 'Memory entry not found in cloud store';
+        set({ error: missing });
+        return missing;
       }
     }
 
@@ -270,11 +277,13 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         await updateMemoryFact(id, fact);
       }
     } catch (err) {
-      if (!isMemoryOperationScopeCurrent(operationScope)) return;
+      if (!isMemoryOperationScopeCurrent(operationScope)) return null;
       await get().fetchMemories();
-      if (!isMemoryOperationScopeCurrent(operationScope)) return;
-      set({ error: 'Could not update this memory. Try again.' });
+      if (!isMemoryOperationScopeCurrent(operationScope)) return null;
+      set({ error: UPDATE_FAILED_MESSAGE });
+      return UPDATE_FAILED_MESSAGE;
     }
+    return null;
   },
 
   deleteMemory: async (id) => {

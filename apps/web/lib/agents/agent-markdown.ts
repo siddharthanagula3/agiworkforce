@@ -15,6 +15,7 @@ import { agentSlug } from './agent-slug';
 export { agentSlug };
 
 const OUTPUT_EXAMPLES_HEADING = '## Output examples';
+const HEADING_LINE = /^(\\*)## Output examples[ \t\r]*$/;
 const INHERIT_MODEL = 'inherit';
 
 const ACCENT_TO_SUBAGENT_COLOR: Readonly<Record<string, string>> = {
@@ -43,6 +44,39 @@ export class AgentMarkdownError extends Error {
   }
 }
 
+function escapeHeadingLines(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => (HEADING_LINE.test(line) ? `\\${line}` : line))
+    .join('\n');
+}
+
+function unescapeHeadingLines(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => (HEADING_LINE.test(line) && line.startsWith('\\') ? line.slice(1) : line))
+    .join('\n');
+}
+
+function splitOutputExamples(body: string): { instructions: string; examples: string } {
+  const lines = body.split('\n');
+  const headings = lines.flatMap((line, index) =>
+    HEADING_LINE.exec(line)?.[1] === '' ? [index] : [],
+  );
+  if (headings.length > 1) {
+    throw new AgentMarkdownError(
+      `The file has ${headings.length} “${OUTPUT_EXAMPLES_HEADING}” headings. Keep one, and put a backslash before any that belongs in the text.`,
+    );
+  }
+  const at = headings[0];
+  const before = at === undefined ? lines : lines.slice(0, at);
+  const after = at === undefined ? [] : lines.slice(at + 1);
+  return {
+    instructions: unescapeHeadingLines(before.join('\n')),
+    examples: unescapeHeadingLines(after.join('\n')),
+  };
+}
+
 function yamlString(value: string): string {
   return JSON.stringify(value.replace(/\s+/g, ' ').trim());
 }
@@ -62,9 +96,9 @@ export function agentToSubagentMarkdown(config: AgentConfig): string {
     lines.push('skills:', ...config.skillNames.map((skill) => `  - ${skill}`));
   }
   lines.push('---', '');
-  const body = [config.instructions.trim()];
+  const body = [escapeHeadingLines(config.instructions.trim())];
   if (config.outputExamples.trim()) {
-    body.push('', OUTPUT_EXAMPLES_HEADING, '', config.outputExamples.trim());
+    body.push('', OUTPUT_EXAMPLES_HEADING, '', escapeHeadingLines(config.outputExamples.trim()));
   }
   return `${lines.join('\n')}\n${body.join('\n')}\n`;
 }
@@ -119,7 +153,7 @@ export function agentFromSubagentMarkdown(markdown: string): AgentCreateRequest 
       'The file needs a name in its frontmatter, as a Claude Code agent has.',
     );
   }
-  const [instructions = '', examples = ''] = parsed.body.split(OUTPUT_EXAMPLES_HEADING);
+  const { instructions, examples } = splitOutputExamples(parsed.body);
   const accent = SUBAGENT_COLOR_TO_ACCENT[stringField(parsed.data['color']) ?? ''];
   const effort = importedEffort(parsed.data['effort']);
   return {

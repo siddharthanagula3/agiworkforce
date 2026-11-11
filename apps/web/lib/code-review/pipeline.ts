@@ -44,8 +44,40 @@ const LEASE_SLACK_SECONDS = 60;
 
 export const CODE_REVIEW_QUOTA_FEATURE = 'code_review';
 
+export interface ReviewCoverage {
+  /** The fetched diff was cut at the fetch limit before review. */
+  diffTruncated: boolean;
+  /** Hunks with a part left out because the review's chunk ceiling was reached. */
+  omittedHunks: number;
+  /** Lines too long for one chunk, cut short. */
+  clippedLines: number;
+  /** Model answers that could not be read, so their pass added no findings for that part. */
+  failedCalls: number;
+  /** Fresh findings past the posting limit. */
+  omittedFindings: number;
+}
+
+export function reviewCoverageIsPartial(coverage: ReviewCoverage): boolean {
+  return (
+    coverage.diffTruncated ||
+    coverage.omittedHunks > 0 ||
+    coverage.clippedLines > 0 ||
+    coverage.failedCalls > 0 ||
+    coverage.omittedFindings > 0
+  );
+}
+
+const COMPLETE_COVERAGE: ReviewCoverage = {
+  diffTruncated: false,
+  omittedHunks: 0,
+  clippedLines: 0,
+  failedCalls: 0,
+  omittedFindings: 0,
+};
+
 export interface CodeReviewOutcome {
   status: 'posted' | 'no-findings' | 'no-diff' | 'unavailable';
+  coverage: ReviewCoverage;
   /** Findings that survived the anchor check and were not already posted. */
   posted: AnchoredFinding[];
   /** Anchored findings suppressed because the same claim is already on the PR. */
@@ -68,6 +100,8 @@ export interface CodeReviewModelCall {
 
 export interface CodeReviewInput {
   diff: string;
+  /** The diff was cut at the fetch limit before it reached the review. */
+  diffTruncated?: boolean;
   prNumber: number;
   planTier: string;
   /** Bodies of the line comments already on the pull request. */
@@ -258,6 +292,7 @@ async function callReviewModel(
 export async function reviewPullRequestDiff(input: CodeReviewInput): Promise<CodeReviewOutcome> {
   const empty: CodeReviewOutcome = {
     status: 'no-diff',
+    coverage: COMPLETE_COVERAGE,
     posted: [],
     duplicates: 0,
     fabricated: 0,
@@ -266,7 +301,10 @@ export async function reviewPullRequestDiff(input: CodeReviewInput): Promise<Cod
   };
 
   const files: ReviewDiffFile[] = parseUnifiedDiff(input.diff);
-  const chunks = chunkDiff(files, { maxBytes: CHUNK_MAX_BYTES, maxChunks: MAX_CHUNKS });
+  const { chunks, omittedHunks, clippedLines } = chunkDiff(files, {
+    maxBytes: CHUNK_MAX_BYTES,
+    maxChunks: MAX_CHUNKS,
+  });
   if (chunks.length === 0) return empty;
 
   const setAside = configuredModelSetAside(input);
@@ -371,6 +409,13 @@ export async function reviewPullRequestDiff(input: CodeReviewInput): Promise<Cod
 
   return {
     status: fresh.length > 0 ? 'posted' : 'no-findings',
+    coverage: {
+      diffTruncated: input.diffTruncated === true,
+      omittedHunks,
+      clippedLines,
+      failedCalls: unparsable,
+      omittedFindings: Math.max(0, fresh.length - MAX_POSTED_COMMENTS),
+    },
     posted: fresh.slice(0, MAX_POSTED_COMMENTS),
     duplicates,
     fabricated,
@@ -404,17 +449,62 @@ function setAsideNote(outcome: CodeReviewOutcome): string {
   return outcome.configuredModelSetAside ? `\n\n${CONFIGURED_MODEL_SET_ASIDE_NOTE}` : '';
 }
 
-export function reviewSummaryBody(outcome: CodeReviewOutcome): string {
+export interface ReviewedHead {
+  reviewedSha: string;
+  currentSha: string | null;
+}
+
+const SHORT_SHA_LENGTH = 7;
+
+function reviewedHeadNote(head: ReviewedHead | undefined): string {
+  if (!head) return '';
+  const reviewed = `Reviewed commit \`${head.reviewedSha.slice(0, SHORT_SHA_LENGTH)}\`.`;
+  if (head.currentSha && head.currentSha !== head.reviewedSha) {
+    return `\n\n${reviewed} The pull request has since moved to \`${head.currentSha.slice(0, SHORT_SHA_LENGTH)}\`, which this review does not cover.`;
+  }
+  return `\n\n${reviewed}`;
+}
+
+function coverageNote(coverage: ReviewCoverage): string {
+  const gaps: string[] = [];
+  if (coverage.diffTruncated) {
+    gaps.push('The diff was longer than the limit this review reads, so its end was not reviewed.');
+  }
+  if (coverage.omittedHunks > 0) {
+    gaps.push(
+      `${coverage.omittedHunks} hunk(s) were not reviewed in full because the diff is larger than one review covers.`,
+    );
+  }
+  if (coverage.clippedLines > 0) {
+    gaps.push(`${coverage.clippedLines} very long line(s) were cut short.`);
+  }
+  if (coverage.failedCalls > 0) {
+    gaps.push(
+      `${coverage.failedCalls} review step(s) returned an answer that could not be read, so what they would have found is missing.`,
+    );
+  }
+  if (coverage.omittedFindings > 0) {
+    gaps.push(
+      `${coverage.omittedFindings} more finding(s) were not posted because a review posts at most ${MAX_POSTED_COMMENTS} line comments.`,
+    );
+  }
+  return gaps.length > 0 ? `\n\n**Partial review.** ${gaps.join(' ')}` : '';
+}
+
+export function reviewSummaryBody(outcome: CodeReviewOutcome, head?: ReviewedHead): string {
+  const partial = reviewCoverageIsPartial(outcome.coverage);
+  const trailer = `${coverageNote(outcome.coverage)}${reviewedHeadNote(head)}${setAsideNote(outcome)}\n\n---\n${SIGNATURE}`;
   if (outcome.status === 'no-findings') {
     const scanned =
       outcome.chunks === 1 ? '1 part of the diff' : `${outcome.chunks} parts of the diff`;
+    const reviewed = partial ? `${scanned} it reviewed` : scanned;
     // A re-review that found only what is already commented has found nothing
     // new, which is not the same as having found nothing.
     const body =
       outcome.duplicates > 0
-        ? `Nothing new in ${scanned}. The ${outcome.duplicates} finding(s) it raised are already line comments on this pull request.`
-        : `No correctness or security defect found in ${scanned}.`;
-    return `## AGI Code Review\n\n${body}${setAsideNote(outcome)}\n\n---\n${SIGNATURE}`;
+        ? `Nothing new in ${reviewed}. The ${outcome.duplicates} finding(s) it raised are already line comments on this pull request.`
+        : `No correctness or security defect found in ${reviewed}.`;
+    return `## AGI Code Review\n\n${body}${trailer}`;
   }
   const counts = new Map<string, number>();
   for (const finding of outcome.posted) {
@@ -425,5 +515,5 @@ export function reviewSummaryBody(outcome: CodeReviewOutcome): string {
     outcome.duplicates > 0
       ? `\n\n${outcome.duplicates} finding(s) already commented on this pull request were not repeated.`
       : '';
-  return `## AGI Code Review\n\n${outcome.posted.length} finding(s) anchored to the diff: ${tally}. Each one is a line comment with the evidence it rests on.${suppressed}${setAsideNote(outcome)}\n\n---\n${SIGNATURE}`;
+  return `## AGI Code Review\n\n${outcome.posted.length} finding(s) anchored to the diff: ${tally}. Each one is a line comment with the evidence it rests on.${suppressed}${trailer}`;
 }

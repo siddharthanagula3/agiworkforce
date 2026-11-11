@@ -76,6 +76,11 @@ function scheduledContent(call = 0): Record<string, unknown> {
   return request.content;
 }
 
+function scheduledTrigger(call = 0): unknown {
+  const [request] = schedule.mock.calls[call] as [{ trigger: unknown }];
+  return request.trigger;
+}
+
 function accountContext() {
   return {
     ownerId: 'user-1',
@@ -121,7 +126,8 @@ describe('NEW-mqa-03, the vibration toggles drive real channels', () => {
       type: 'agent_approval_needed',
     });
 
-    expect(scheduledContent()['channelId']).toBe(androidChannelId('high', true));
+    expect(scheduledTrigger()).toEqual({ channelId: androidChannelId('high', true) });
+    expect(scheduledContent()).not.toHaveProperty('channelId');
   });
 
   it('posts on the silent channel when the toggle is off', async () => {
@@ -133,7 +139,8 @@ describe('NEW-mqa-03, the vibration toggles drive real channels', () => {
       type: 'agent_approval_needed',
     });
 
-    expect(scheduledContent()['channelId']).toBe(androidChannelId('high', false));
+    expect(scheduledTrigger()).toEqual({ channelId: androidChannelId('high', false) });
+    expect(scheduledContent()).not.toHaveProperty('channelId');
   });
 
   it('maps every priority to a distinct iOS interruption level band', async () => {

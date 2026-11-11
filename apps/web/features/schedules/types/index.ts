@@ -52,6 +52,8 @@ export const DAYPART_PRESETS: ReadonlyArray<{
   },
 ];
 
+export type DraftDaypartPreset = DaypartPreset | 'custom';
+
 export function daypartsForPreset(preset: DaypartPreset): ManagedCloudScheduleDaypart[] | null {
   const match = DAYPART_PRESETS.find((entry) => entry.value === preset);
   return match && match.windows.length > 0 ? match.windows : null;
@@ -59,13 +61,13 @@ export function daypartsForPreset(preset: DaypartPreset): ManagedCloudScheduleDa
 
 export function presetForDayparts(
   dayparts: readonly ManagedCloudScheduleDaypart[] | null | undefined,
-): DaypartPreset {
+): DraftDaypartPreset {
   if (!dayparts || dayparts.length === 0) return 'any';
   const encoded = JSON.stringify(dayparts);
   return (
     DAYPART_PRESETS.find(
       (entry) => entry.windows.length > 0 && JSON.stringify(entry.windows) === encoded,
-    )?.value ?? 'any'
+    )?.value ?? 'custom'
   );
 }
 
@@ -90,7 +92,8 @@ export interface ScheduleDraft {
   projectId: string | null;
   agentId: string | null;
   recurrenceRule: string;
-  daypartPreset: DaypartPreset;
+  daypartPreset: DraftDaypartPreset;
+  customDayparts: ManagedCloudScheduleDaypart[] | null;
   retryMaxAttempts: string;
   retryBackoffMinutes: string;
   missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicy;

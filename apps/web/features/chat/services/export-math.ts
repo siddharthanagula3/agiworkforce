@@ -71,6 +71,11 @@ function mathElement(tex: string, displayMode: boolean): Element | null {
   return semantics?.localName === 'semantics' ? semantics : (math ?? null);
 }
 
+function isBarless(element: Element): boolean {
+  const thickness = element.getAttribute('linethickness');
+  return thickness !== null && Number.parseFloat(thickness) === 0;
+}
+
 function childElements(element: Element): Element[] {
   return Array.from(element.children).filter(
     (child) => child.localName !== 'annotation' && child.localName !== 'annotation-xml',
@@ -94,7 +99,13 @@ function toDocx(element: Element): MathComponent[] {
     }
     case 'mfrac':
       return first && second
-        ? [new MathFraction({ numerator: toDocx(first), denominator: toDocx(second) })]
+        ? [
+            new MathFraction({
+              numerator: toDocx(first),
+              denominator: toDocx(second),
+              ...(isBarless(element) ? { type: 'noBar' as const } : {}),
+            }),
+          ]
         : children.flatMap(toDocx);
     case 'msqrt':
       return [new MathRadical({ children: children.flatMap(toDocx) })];
@@ -201,7 +212,7 @@ function toLinear(element: Element, context: LinearContext): LinearMathPiece[] {
       return first && second
         ? [
             ...grouped(toLinear(first, context), context),
-            piece('/', context),
+            piece(isBarless(element) ? ' choose ' : '/', context),
             ...grouped(toLinear(second, context), context),
           ]
         : children.flatMap((child) => toLinear(child, context));

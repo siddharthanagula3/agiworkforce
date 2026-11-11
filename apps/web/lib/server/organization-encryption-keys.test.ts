@@ -64,10 +64,21 @@ function row(over: Record<string, unknown> = {}) {
   };
 }
 
-function harness(rows: Record<string, unknown>[] = []) {
-  const query = vi.fn(async (_sql: string, _params?: unknown[]) => rows);
+const CHANGES_THE_RING =
+  /^\s*(update|insert into) public\.organization_encryption_keys[\s\S]*returning organization_id/i;
+
+function harness(rows: Record<string, unknown>[] = [], opts: { ringMoved?: boolean } = {}) {
+  const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+    if (CHANGES_THE_RING.test(String(sql))) return opts.ringMoved ? [] : [{ organization_id: ORG }];
+    return rows;
+  });
   const execute = vi.fn(async () => undefined);
-  return { db: { query, execute } as unknown as DatabaseAdapter, query, execute };
+  const db = {
+    query,
+    execute,
+    transaction: async <T>(fn: (tx: DatabaseAdapter) => Promise<T>) => fn(db),
+  } as unknown as DatabaseAdapter;
+  return { db, query, execute };
 }
 
 const EVERY_SEALED_STORE = WORKSPACE_SEALED_STORES.map((store) => `${store.table}.${store.column}`);
@@ -95,10 +106,20 @@ function routed(opts: {
   keyRow?: Record<string, unknown> | null;
   rewrap?: Record<string, unknown> | null;
   dataRegion?: string | null;
+  ringMoved?: boolean;
 }) {
   const executed: Array<{ sql: string; params: unknown[] }> = [];
-  const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+  const fenced: string[] = [];
+  const query = vi.fn(async (sql: string, params?: unknown[]) => {
     const text = String(sql);
+    if (/select id from public\.organizations where id = \$1 for/i.test(text)) {
+      fenced.push(text.replace(/\s+/g, ' ').trim());
+      return [];
+    }
+    if (CHANGES_THE_RING.test(text)) {
+      executed.push({ sql: text, params: params ?? [] });
+      return opts.ringMoved ? [] : [{ organization_id: ORG }];
+    }
     if (/from public\.organizations\b/i.test(text)) {
       return [
         {
@@ -119,7 +140,17 @@ function routed(opts: {
   const execute = vi.fn(async (sql: string, params?: unknown[]) => {
     executed.push({ sql: String(sql), params: params ?? [] });
   });
-  return { db: { query, execute } as unknown as DatabaseAdapter, query, execute, executed };
+  const db = {
+    query,
+    execute,
+    transaction: async <T>(fn: (tx: DatabaseAdapter) => Promise<T>) => {
+      fenced.push('begin');
+      const result = await fn(db);
+      fenced.push('commit');
+      return result;
+    },
+  } as unknown as DatabaseAdapter;
+  return { db, query, execute, executed, fenced };
 }
 
 beforeEach(() => {
@@ -235,7 +266,7 @@ describe('provisioning, rotation and revocation are audited', () => {
     const detail = event['detail'] as Record<string, unknown>;
     expect(detail['keyProvider']).toBe('local');
     expect(detail['keyVersion']).toBe('1');
-    const wrapped = (h.execute.mock.calls[0] as unknown as [string, unknown[]])[1][5];
+    const wrapped = h.executed[0]?.params[5];
     expect(JSON.stringify(event)).not.toContain(String(wrapped));
   });
 
@@ -250,7 +281,11 @@ describe('provisioning, rotation and revocation are audited', () => {
       return [];
     });
     const execute = vi.fn(async () => undefined);
-    const db = { query, execute } as unknown as DatabaseAdapter;
+    const db = {
+      query,
+      execute,
+      transaction: async <T>(fn: (tx: DatabaseAdapter) => Promise<T>) => fn(db),
+    } as unknown as DatabaseAdapter;
 
     await expect(
       provisionOrganizationKey({
@@ -263,7 +298,11 @@ describe('provisioning, rotation and revocation are audited', () => {
         env: REGION_ENV,
       }),
     ).rejects.toThrow(/3 row\(s\) in .* sealed under the platform key/);
-    expect(execute).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(([sql]) =>
+        /insert into public\.organization_encryption_keys/i.test(sql),
+      ),
+    ).toBe(false);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
@@ -320,7 +359,7 @@ describe('provisioning, rotation and revocation are audited', () => {
         },
       }),
     ).rejects.toThrow(/revoked/i);
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.query).not.toHaveBeenCalled();
   });
 
   it('records a revocation as critical, naming the version it ended', async () => {
@@ -384,7 +423,7 @@ describe('the key region a workspace admits', () => {
         env: REGION_ENV,
       }),
     ).rejects.toThrow(/eu-central-1|region/i);
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
@@ -403,7 +442,7 @@ describe('the key region a workspace admits', () => {
         env: { DATABASE_URL: REGION_ENV.DATABASE_URL },
       }),
     ).rejects.toThrow();
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
   });
 });
 
@@ -430,7 +469,7 @@ describe('validating a customer key before activation', () => {
     });
 
     expect(validation.ok).toBe(true);
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
   });
 
   it('fails on the region the workspace does not admit, and writes nothing', async () => {
@@ -467,7 +506,7 @@ describe('a key version cannot be dropped out of the ring on an assurance', () =
         reason: 'housekeeping',
       }),
     ).rejects.toThrow(/No rewrap has moved/i);
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
   });
 
   it('refuses while rows are still sealed under it', async () => {
@@ -485,7 +524,7 @@ describe('a key version cannot be dropped out of the ring on an assurance', () =
         reason: 'housekeeping',
       }),
     ).rejects.toThrow(/12 row\(s\)/);
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
   });
 
   it('refuses a rewrap that targeted a key version the workspace has since rotated off', async () => {
@@ -533,7 +572,7 @@ describe('a key version cannot be dropped out of the ring on an assurance', () =
     ).rejects.toThrow(
       new RegExp(`never walked ${EVERY_SEALED_STORE[0]?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
     );
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
   });
 
   it('refuses a run filed before the store it never knew about was declared', async () => {
@@ -548,7 +587,7 @@ describe('a key version cannot be dropped out of the ring on an assurance', () =
         reason: 'housekeeping',
       }),
     ).rejects.toThrow(/unreadable for good/);
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
   });
 
   it('drops it once a complete rewrap onto the current key says so, and records it as critical', async () => {
@@ -626,7 +665,7 @@ describe('running the rewrap', () => {
         registry: {},
       }),
     ).rejects.toThrow(/revoked/i);
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
   });
 
   it('reads back the run a retirement will be gated on', async () => {
@@ -666,7 +705,7 @@ describe('replacing the key resource, which rotation does not do', () => {
         env: REGION_ENV,
       }),
     ).rejects.toThrow(/Rotate it instead/i);
-    expect(h.execute).not.toHaveBeenCalled();
+    expect(h.executed).toEqual([]);
   });
 
   it('moves the association onto the new key and keeps the previous version readable', async () => {
@@ -689,9 +728,266 @@ describe('replacing the key resource, which rotation does not do', () => {
     const write = h.executed[0];
     expect(write?.sql).toMatch(/set\s+provider = \$2/i);
     expect(write?.params[2]).toBe('local://acme/kek-2');
-    expect(JSON.parse(String(write?.params[6]))).toEqual([{ version: '1', wrapped: 'AAAA' }]);
+    expect(JSON.parse(String(write?.params[6]))).toEqual([
+      { version: '1', wrapped: 'AAAA', descriptor: DESCRIPTOR },
+    ]);
     const [event] = mocks.recordAuditEvent.mock.calls[0] as unknown as [Record<string, unknown>];
     expect((event['detail'] as Record<string, unknown>)['status']).toBe('replaced');
+  });
+
+  it('keeps every older version addressed to the resource that wrapped it across replacements', async () => {
+    const provider = createLocalCmekProvider(randomBytes(32), { nodeEnv: 'test' });
+    const h = routed({});
+    const first = { ...DESCRIPTOR, keyUri: 'local://acme/kek-2' };
+    const second = { ...DESCRIPTOR, keyUri: 'local://acme/kek-3' };
+
+    await replaceOrganizationKey({
+      db: h.db,
+      organizationId: ORG,
+      actorUserId: ACTOR,
+      descriptor: second,
+      provider,
+      keyVersion: '3',
+      record: {
+        organizationId: ORG,
+        descriptor: first,
+        status: 'active',
+        active: { version: '2', wrapped: 'BBBB' },
+        retired: [{ version: '1', wrapped: 'AAAA', descriptor: DESCRIPTOR }],
+      },
+      env: REGION_ENV,
+    });
+
+    expect(JSON.parse(String(h.executed[0]?.params[6]))).toEqual([
+      { version: '2', wrapped: 'BBBB', descriptor: first },
+      { version: '1', wrapped: 'AAAA', descriptor: DESCRIPTOR },
+    ]);
+  });
+
+  it('writes only against the ring it read, and says so when the ring moved', async () => {
+    const provider = createLocalCmekProvider(randomBytes(32), { nodeEnv: 'test' });
+    const h = routed({ ringMoved: true });
+
+    await expect(
+      replaceOrganizationKey({
+        db: h.db,
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        descriptor: { ...DESCRIPTOR, keyUri: 'local://acme/kek-2' },
+        provider,
+        keyVersion: '2',
+        record,
+        env: REGION_ENV,
+      }),
+    ).rejects.toThrow(/ring changed while this request was running/i);
+    expect(h.executed[0]?.sql).toMatch(/and key_version = \$8\s+and wrapped_data_key = \$9/i);
+    expect(h.executed[0]?.params.slice(7)).toEqual(['1', 'AAAA']);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('ring changes are fenced against the writers that seal into the ring', () => {
+  const ring = {
+    organizationId: ORG,
+    descriptor: DESCRIPTOR,
+    status: 'active' as const,
+    active: { version: '2', wrapped: 'BBBB' },
+    retired: [{ version: '1', wrapped: 'AAAA' }],
+  };
+
+  it('rotates only the exact active key it read, under the exclusive fence', async () => {
+    const provider = createLocalCmekProvider(randomBytes(32), { nodeEnv: 'test' });
+    const h = routed({});
+
+    await rotateOrganizationKey({
+      db: h.db,
+      organizationId: ORG,
+      actorUserId: ACTOR,
+      descriptor: DESCRIPTOR,
+      provider,
+      keyVersion: '3',
+      record: ring,
+      env: REGION_ENV,
+    });
+
+    expect(h.fenced).toEqual([
+      'begin',
+      'select id from public.organizations where id = $1 for no key update',
+      'commit',
+    ]);
+    expect(h.executed[0]?.sql).toMatch(
+      /and key_version = \$5\s+and wrapped_data_key = \$6\s+and status <> 'revoked'/i,
+    );
+    expect(h.executed[0]?.params.slice(4)).toEqual(['2', 'BBBB']);
+  });
+
+  it('does not overwrite a key a concurrent rotation already installed', async () => {
+    const provider = createLocalCmekProvider(randomBytes(32), { nodeEnv: 'test' });
+    const h = routed({ ringMoved: true });
+
+    await expect(
+      rotateOrganizationKey({
+        db: h.db,
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        descriptor: DESCRIPTOR,
+        provider,
+        keyVersion: '3',
+        record: ring,
+        env: REGION_ENV,
+      }),
+    ).rejects.toThrow(/ring changed while this request was running/i);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('counts platform-sealed rows and enrols inside the same exclusive fence', async () => {
+    const provider = createLocalCmekProvider(randomBytes(32), { nodeEnv: 'test' });
+    const h = routed({ keyRow: null });
+
+    await provisionOrganizationKey({
+      db: h.db,
+      organizationId: ORG,
+      actorUserId: ACTOR,
+      descriptor: DESCRIPTOR,
+      provider,
+      keyVersion: '1',
+      env: REGION_ENV,
+    });
+
+    expect(h.fenced).toEqual([
+      'begin',
+      'select id from public.organizations where id = $1 for no key update',
+      'commit',
+    ]);
+    expect(h.executed[0]?.sql).toMatch(/on conflict \(organization_id\) do nothing/i);
+  });
+
+  it('refuses a second enrolment that lost the race instead of overwriting', async () => {
+    const provider = createLocalCmekProvider(randomBytes(32), { nodeEnv: 'test' });
+    const h = routed({ keyRow: null, ringMoved: true });
+
+    await expect(
+      provisionOrganizationKey({
+        db: h.db,
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        descriptor: DESCRIPTOR,
+        provider,
+        keyVersion: '1',
+        env: REGION_ENV,
+      }),
+    ).rejects.toThrow(/ring changed while this request was running/i);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('takes the shared fence for a writer and the exclusive one for a change', async () => {
+    const { withOrganizationKeyFence } = await import('./organization-encryption-keys');
+    const h = routed({});
+
+    await withOrganizationKeyFence(h.db, ORG, 'sealing', async () => undefined);
+    await withOrganizationKeyFence(h.db, ORG, 'changing', async () => undefined);
+
+    expect(h.fenced.filter((entry) => entry.startsWith('select'))).toEqual([
+      'select id from public.organizations where id = $1 for share',
+      'select id from public.organizations where id = $1 for no key update',
+    ]);
+  });
+
+  it('retires a version only from the exact ring the rewrap gate was read against', async () => {
+    const h = routed({
+      keyRow: row({ key_version: '2', wrapped_data_key: 'BBBB', retired_keys: ring.retired }),
+      rewrap: rewrapRow(),
+    });
+
+    await retireOrganizationKeyVersion({
+      db: h.db,
+      organizationId: ORG,
+      actorUserId: ACTOR,
+      keyVersion: '1',
+      reason: 'housekeeping',
+    });
+
+    const write = h.executed[0];
+    expect(write?.sql).toMatch(/jsonb_array_length\(retired_keys\) = \$5/i);
+    expect(write?.sql).toMatch(/retired_keys @> \$6::jsonb/i);
+    expect(write?.params.slice(2)).toEqual([
+      '2',
+      'BBBB',
+      1,
+      JSON.stringify([{ version: '1', wrapped: 'AAAA' }]),
+    ]);
+  });
+
+  it('does not drop a version when a concurrent change moved the ring after the gate passed', async () => {
+    const h = routed({
+      keyRow: row({ key_version: '2', wrapped_data_key: 'BBBB', retired_keys: ring.retired }),
+      rewrap: rewrapRow(),
+      ringMoved: true,
+    });
+
+    await expect(
+      retireOrganizationKeyVersion({
+        db: h.db,
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        keyVersion: '1',
+        reason: 'housekeeping',
+      }),
+    ).rejects.toThrow(/ring changed while this request was running/i);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('a retired version replaced away from its resource', () => {
+  it('reads the resource it was wrapped under back from the row', async () => {
+    const record = await readOrganizationKeyRecord(
+      harness([
+        row({
+          retired_keys: [
+            { version: '1', wrapped: 'CCCC', descriptor: { ...DESCRIPTOR, provider: 'aws_kms' } },
+          ],
+        }),
+      ]).db,
+      ORG,
+    );
+    expect(record?.retired).toEqual([
+      { version: '1', wrapped: 'CCCC', descriptor: { ...DESCRIPTOR, provider: 'aws_kms' } },
+    ]);
+  });
+
+  it('refuses a stored descriptor this build cannot resolve rather than guessing a resource', async () => {
+    await expect(
+      readOrganizationKeyRecord(
+        harness([
+          row({ retired_keys: [{ version: '1', wrapped: 'CCCC', descriptor: { provider: 'x' } }] }),
+        ]).db,
+        ORG,
+      ),
+    ).rejects.toThrow(/descriptor this build cannot resolve/);
+  });
+
+  it('reports the key unavailable when a retired version can no longer be opened at its resource', async () => {
+    const provider = createLocalCmekProvider(randomBytes(32), {
+      nodeEnv: 'test',
+      failFor: (keyUri) => (keyUri === 'local://acme/old-kek' ? new Error('AccessDenied') : null),
+    });
+    const { wrapped } = await provider.generateDataKey(DESCRIPTOR);
+    const h = routed({
+      keyRow: row({
+        wrapped_data_key: wrapped,
+        retired_keys: [
+          {
+            version: '0',
+            wrapped,
+            descriptor: { ...DESCRIPTOR, keyUri: 'local://acme/old-kek' },
+          },
+        ],
+      }),
+    });
+
+    const status = await readOrganizationKeyStatus(h.db, ORG, { registry: { local: provider } });
+
+    expect(status.availability.state).toBe('unavailable');
   });
 });
 

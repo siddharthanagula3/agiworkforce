@@ -116,6 +116,8 @@ jest.mock('react-native-reanimated', () => {
   return Reanimated;
 });
 
+jest.mock('./components/ui/AgiMark', () => require('./__mocks__/agi-mark.mock').agiMarkMock());
+
 jest.mock('expo-notifications', () =>
   require('./__mocks__/expo-notifications.mock').expoNotificationsMock(),
 );

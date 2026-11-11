@@ -61,32 +61,53 @@ export async function listArtifactComments(
     `select ${COLUMNS}
        from public.artifact_comments
       where user_id = $1 and artifact_id = $2
-      order by created_at asc
-      limit $3`,
-    [input.userId, input.artifactId, MAX_COMMENTS_PER_ARTIFACT],
+      order by created_at asc`,
+    [input.userId, input.artifactId],
   );
   return rows.map(toComment);
 }
 
+export interface CreateArtifactCommentInput {
+  userId: string;
+  artifactId: string;
+  body: string;
+  anchor: ArtifactCommentAnchor;
+  parentId?: string | null;
+  author: 'user' | 'assistant';
+}
+
 export async function createArtifactComment(
   db: DatabaseAdapter,
-  input: {
-    userId: string;
-    artifactId: string;
-    body: string;
-    anchor: ArtifactCommentAnchor;
-    parentId?: string | null;
-    author: 'user' | 'assistant';
-  },
+  input: CreateArtifactCommentInput,
 ): Promise<ArtifactComment | null> {
-  const [count] = await db.query<{ total: number | string }>(
+  return db.transaction((tx) => admitArtifactComment(tx, input));
+}
+
+async function admitArtifactComment(
+  tx: DatabaseAdapter,
+  input: CreateArtifactCommentInput,
+): Promise<ArtifactComment | null> {
+  const [isolation] = await tx.query<{ isolation: string }>(
+    `select current_setting('transaction_isolation') as isolation`,
+  );
+  if (isolation?.isolation !== 'read committed') {
+    throw new Error('Artifact comment admission requires read committed isolation');
+  }
+  const [lock] = await tx.query<{ locked: boolean }>(
+    `select pg_advisory_xact_lock(hashtextextended('agi:artifact-comments:' || $1 || ':' || $2, 0)),
+            true as locked`,
+    [input.userId, input.artifactId],
+  );
+  if (lock?.locked !== true) throw new Error('Artifact comment admission lock was not acquired');
+
+  const [count] = await tx.query<{ total: number | string }>(
     `select count(*) as total from public.artifact_comments where user_id = $1 and artifact_id = $2`,
     [input.userId, input.artifactId],
   );
   if (Number(count?.total ?? 0) >= MAX_COMMENTS_PER_ARTIFACT) throw new ArtifactCommentLimitError();
 
   if (input.parentId) {
-    const [parent] = await db.query<{ id: string; parent_id: string | null }>(
+    const [parent] = await tx.query<{ id: string; parent_id: string | null }>(
       `select id, parent_id from public.artifact_comments
         where id = $1 and user_id = $2 and artifact_id = $3`,
       [input.parentId, input.userId, input.artifactId],
@@ -95,7 +116,7 @@ export async function createArtifactComment(
     input = { ...input, parentId: parent.parent_id ?? parent.id };
   }
 
-  const [row] = await db.query<CommentRow>(
+  const [row] = await tx.query<CommentRow>(
     `insert into public.artifact_comments (user_id, artifact_id, parent_id, anchor, body, author)
      values ($1, $2, $3, $4::jsonb, $5, $6)
      returning ${COLUMNS}`,

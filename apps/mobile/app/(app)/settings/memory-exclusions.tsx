@@ -10,7 +10,7 @@ import {
   SettingsScreenShell,
   SettingsSwitchRow,
 } from '@/src/features/settings/Common';
-import { fetchPreferenceNamespace, savePreferenceNamespace } from '@/services/preferences';
+import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { toUserMessage } from '@/services/userMessage';
@@ -64,13 +64,17 @@ export default function MemoryExclusionsScreen() {
     suppressedSources: [],
   });
   const [draft, setDraft] = useState('');
-  const [loaded, setLoaded] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loaded = loadState === 'ready';
 
   useEffect(() => {
     let cancelled = false;
-    void fetchPreferenceNamespace(PREFERENCE_NAMESPACE)
+    setLoadState('loading');
+    setError(null);
+    void fetchPreferenceNamespace(PREFERENCE_NAMESPACE, { strictSettings: true })
       .then((stored) => {
         if (cancelled) return;
         const settings = stored as Record<string, unknown>;
@@ -78,25 +82,24 @@ export default function MemoryExclusionsScreen() {
           excludedTerms: normalizeTerms(settings['excludedTerms']),
           suppressedSources: normalizeSources(settings['suppressedSources']),
         });
-        setError(null);
+        setLoadState('ready');
       })
       .catch((cause: unknown) => {
-        if (!cancelled) {
-          setError(toUserMessage(cause, 'Could not load what memory leaves out.'));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
+        if (cancelled) return;
+        setError(toUserMessage(cause, 'Could not load what memory leaves out.'));
+        setLoadState('failed');
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
+
+  const retryLoad = useCallback(() => setLoadAttempt((attempt) => attempt + 1), []);
 
   const persist = useCallback(async (next: MemoryExclusions) => {
     setSaving(true);
     try {
-      await savePreferenceNamespace(PREFERENCE_NAMESPACE, next);
+      await patchPreferenceNamespace(PREFERENCE_NAMESPACE, next);
       setExclusions(next);
       setError(null);
     } catch (cause) {
@@ -223,10 +226,18 @@ export default function MemoryExclusionsScreen() {
         </Text>
       ) : null}
 
-      {!loaded ? (
+      {loadState === 'failed' ? (
+        <Pressable
+          onPress={retryLoad}
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading what memory leaves out"
+          style={{ minHeight: 44, justifyContent: 'center', marginBottom: 18 }}
+        >
+          <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>Retry</Text>
+        </Pressable>
+      ) : !loaded ? (
         <LoadingIndicator
           accessibilityLabel="Loading what memory leaves out"
-
           style={{ marginVertical: 16 }}
         />
       ) : exclusions.excludedTerms.length === 0 ? (
@@ -260,7 +271,7 @@ export default function MemoryExclusionsScreen() {
               </Text>
               <Pressable
                 onPress={() => removeTerm(term)}
-                disabled={saving}
+                disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel={`Stop excluding ${term}`}
                 style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
@@ -272,40 +283,44 @@ export default function MemoryExclusionsScreen() {
         </View>
       )}
 
-      <Text
-        style={{
-          color: colors.textMuted,
-          fontSize: typeScale.caption,
-          fontWeight: '700',
-          letterSpacing: 0.7,
-          marginBottom: 8,
-        }}
-      >
-        WHERE MEMORIES COME FROM
-      </Text>
-      <SettingsGroup>
-        {MEMORY_SOURCES.map((source, index) => (
-          <SettingsSwitchRow
-            key={source.id}
-            label={source.label}
-            icon={source.icon}
-            value={!exclusions.suppressedSources.includes(source.id)}
-            onValueChange={(used) => setSourceUsed(source.id, used)}
-            disabled={busy}
-            isLast={index === MEMORY_SOURCES.length - 1}
-          />
-        ))}
-      </SettingsGroup>
-      <Text
-        style={{
-          color: colors.textMuted,
-          fontSize: typeScale.caption,
-          lineHeight: 17,
-          marginBottom: 24,
-        }}
-      >
-        Turn a source off to keep its memories out of answers without deleting them.
-      </Text>
+      {loaded ? (
+        <>
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: typeScale.caption,
+              fontWeight: '700',
+              letterSpacing: 0.7,
+              marginBottom: 8,
+            }}
+          >
+            WHERE MEMORIES COME FROM
+          </Text>
+          <SettingsGroup>
+            {MEMORY_SOURCES.map((source, index) => (
+              <SettingsSwitchRow
+                key={source.id}
+                label={source.label}
+                icon={source.icon}
+                value={!exclusions.suppressedSources.includes(source.id)}
+                onValueChange={(used) => setSourceUsed(source.id, used)}
+                disabled={busy}
+                isLast={index === MEMORY_SOURCES.length - 1}
+              />
+            ))}
+          </SettingsGroup>
+          <Text
+            style={{
+              color: colors.textMuted,
+              fontSize: typeScale.caption,
+              lineHeight: 17,
+              marginBottom: 24,
+            }}
+          >
+            Turn a source off to keep its memories out of answers without deleting them.
+          </Text>
+        </>
+      ) : null}
     </SettingsScreenShell>
   );
 }

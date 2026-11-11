@@ -21,6 +21,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import {
+  clearConnectorToolPermissions,
   customConnectorId,
   McpProbeError,
   probeMcpServer,
@@ -140,5 +141,50 @@ describe('helpers', () => {
     expect(transportForUrl(new URL('https://mcp.example.com/sse'))).toBe('sse');
     expect(transportForUrl(new URL('https://mcp.example.com/mcp'))).toBe('streamable-http');
     expect(transportForUrl(new URL('https://mcp.example.com/mcp'), 'sse')).toBe('sse');
+  });
+});
+
+describe('clearConnectorToolPermissions', () => {
+  function transactionalDb(failure?: Error) {
+    const calls: Array<{ kind: 'query' | 'execute'; sql: string; params: unknown[] }> = [];
+    const transaction = {
+      query: vi.fn(async (sql: string, params: unknown[]) => {
+        calls.push({ kind: 'query', sql, params });
+        if (sql.includes('connector_permission_generations')) return [{ generation: '3' }];
+        return [{ removed: 2 }];
+      }),
+      execute: vi.fn(async (sql: string, params: unknown[]) => {
+        calls.push({ kind: 'execute', sql, params });
+        if (failure) throw failure;
+        return 1;
+      }),
+    };
+    const db = {
+      transaction: vi.fn(async (run: (tx: typeof transaction) => Promise<unknown>) =>
+        run(transaction),
+      ),
+    };
+    return { db: db as unknown as Parameters<typeof clearConnectorToolPermissions>[0], calls };
+  }
+
+  it('revokes the conversation grants and deletes the standing verdicts in one transaction', async () => {
+    const { db, calls } = transactionalDb();
+
+    await expect(clearConnectorToolPermissions(db, 'user-1', 'linear')).resolves.toBe(true);
+
+    expect(calls.map((call) => call.kind)).toEqual(['query', 'query', 'execute']);
+    expect(calls[0]?.sql).toContain('insert into public.connector_permission_generations');
+    expect(calls[0]?.sql).toContain('generation + 1');
+    expect(calls[0]?.params).toEqual(['user-1', 'linear']);
+    expect(calls[1]?.sql).toContain('revoke_connector_tool_session_grants');
+    expect(calls[1]?.params).toEqual(['linear', null]);
+    expect(calls[2]?.sql).toContain('delete from public.connector_tool_permissions');
+    expect(calls[2]?.params).toEqual(['user-1', 'linear']);
+  });
+
+  it('reports that nothing was cleared when the transaction fails', async () => {
+    const { db } = transactionalDb(new Error('connection lost'));
+
+    await expect(clearConnectorToolPermissions(db, 'user-1', 'linear')).resolves.toBe(false);
   });
 });

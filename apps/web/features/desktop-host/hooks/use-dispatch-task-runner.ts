@@ -8,6 +8,7 @@ import {
   type DispatchTaskPendingStep,
   type DispatchTaskReplyErrorCode,
   type DispatchTaskStepReply,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import {
   acceptConnectorInput,
@@ -61,8 +62,7 @@ const CREATE_FAILED = 'Desktop could not open a chat for this task.';
 const NOT_SENT = 'Desktop could not send this task to the model.';
 const NO_ANSWER = 'The chat ended without an answer.';
 const TURN_FAILED = 'The chat stopped with an error.';
-const PLAN_LIMIT =
-  "This account's plan stopped the task. Open chat Desktop on the computer to see why.";
+const PLAN_LIMIT = `This account's plan stopped the task. Open ${PRODUCT_NAMES.desktop} on the computer to see why.`;
 const WAITING_ON_ANSWER = 'Waiting for your answer in Desktop on the computer.';
 const WAITING_ON_PERMISSION = 'Waiting for a permission prompt in Desktop on the computer.';
 const CANCELLED = 'The task was stopped.';

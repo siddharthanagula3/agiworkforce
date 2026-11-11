@@ -11,6 +11,7 @@ import React, {
   memo,
 } from 'react';
 import { MessageSearch } from './MessageSearch';
+import { matchingGroupIndexes, type RenderedTextCache } from '../../lib/message-search';
 import { FREE_QUOTA_EXHAUSTED_CODE } from '@/features/models/lib/free-quota-types';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
@@ -1495,19 +1496,11 @@ const ChatMessageListComponent = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
-  const searchMatches = useMemo(() => {
-    const needle = searchQuery.trim().toLowerCase();
-    if (!needle) return [] as number[];
-    return groups.reduce<number[]>((acc, group, index) => {
-      const hit = group.messages.some((message) =>
-        typeof message.content === 'string'
-          ? message.content.toLowerCase().includes(needle)
-          : false,
-      );
-      if (hit) acc.push(index);
-      return acc;
-    }, []);
-  }, [groups, searchQuery]);
+  const renderedTextCache = useRef<RenderedTextCache>(new Map());
+  const searchMatches = useMemo(
+    () => matchingGroupIndexes(groups, searchQuery, renderedTextCache.current),
+    [groups, searchQuery],
+  );
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);

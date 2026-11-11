@@ -89,8 +89,10 @@ export default function SecurityOperationsPanel() {
           normalizedReason,
         );
         setActionResult(result.message);
-        setTargetUserId('');
-        setReason('');
+        if (result.complete) {
+          setTargetUserId('');
+          setReason('');
+        }
         await loadOperations();
       } catch (error) {
         setActionResult(toUserMessage(error, 'Account action failed'));

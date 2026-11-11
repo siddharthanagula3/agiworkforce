@@ -125,7 +125,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   if (action.action === 'decline') {
     try {
-      const declined = await declineRefundRequest(db, {
+      const { request: declined, customerNotified } = await declineRefundRequest(db, {
         operatorUserId,
         requestId: action.requestId,
         note: action.note,
@@ -138,9 +138,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
           targetUserId: declined.userId,
           chargeId: declined.chargeId,
           reason: action.note,
+          customerNotified,
         },
       });
-      return NextResponse.json({ request: declined }, { headers: NO_STORE });
+      return NextResponse.json({ request: declined, customerNotified }, { headers: NO_STORE });
     } catch (error) {
       rethrowRefusal(error);
     }
@@ -148,7 +149,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   if (action.action === 'store_refund') {
     try {
-      const recorded = await recordStoreRefund(db, {
+      const { request: recorded, customerNotified } = await recordStoreRefund(db, {
         operatorUserId,
         requestId: action.requestId,
         amountCents: action.amountCents,
@@ -163,9 +164,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
           chargeId: recorded.chargeId,
           amountCents: recorded.refundAmountCents,
           reason: action.note,
+          customerNotified,
         },
       });
-      return NextResponse.json({ request: recorded }, { headers: NO_STORE });
+      return NextResponse.json({ request: recorded, customerNotified }, { headers: NO_STORE });
     } catch (error) {
       rethrowRefusal(error);
     }

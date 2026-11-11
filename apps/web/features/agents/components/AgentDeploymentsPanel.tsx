@@ -25,7 +25,7 @@ interface Deployment {
 type DeploymentsState =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; deployments: Deployment[] };
+  | { status: 'ready'; deployments: Deployment[]; unloaded: number };
 
 function newScheduleHref(agentId: string): string {
   return `/chat/schedules?agent=${encodeURIComponent(agentId)}`;
@@ -249,7 +249,11 @@ export function AgentDeploymentsPanel({
         if (routines.length > 0 && deployments.length === 0) {
           throw new Error('Deployments could not be loaded.');
         }
-        setState({ status: 'ready', deployments });
+        setState({
+          status: 'ready',
+          deployments,
+          unloaded: routines.length - deployments.length,
+        });
       } catch (reason) {
         if (!cancelled) {
           setState({
@@ -268,7 +272,7 @@ export function AgentDeploymentsPanel({
     setState((current) =>
       current.status === 'ready'
         ? {
-            status: 'ready',
+            ...current,
             deployments: current.deployments.map((entry) =>
               entry.schedule.id === next.schedule.id ? next : entry,
             ),
@@ -329,21 +333,38 @@ export function AgentDeploymentsPanel({
             Try again
           </Button>
         </div>
-      ) : state.deployments.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No deployments yet.</p>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {state.deployments.map((deployment) => (
-            <DeploymentRow
-              key={deployment.schedule.id}
-              deployment={deployment}
-              version={version}
-              busy={busyId === deployment.schedule.id}
-              onRunNow={() => void runNow(deployment)}
-              onToggleEnabled={() => void toggleEnabled(deployment)}
-            />
-          ))}
-        </ul>
+        <>
+          {state.unloaded > 0 ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p role="alert" className="text-sm text-danger">
+                {state.unloaded === 1
+                  ? '1 deployment could not be loaded.'
+                  : `${state.unloaded} deployments could not be loaded.`}
+              </p>
+              <Button variant="outline" size="sm" onClick={() => setAttempt((value) => value + 1)}>
+                Try again
+              </Button>
+            </div>
+          ) : null}
+          {state.deployments.length === 0 ? null : (
+            <ul className="flex flex-col gap-2">
+              {state.deployments.map((deployment) => (
+                <DeploymentRow
+                  key={deployment.schedule.id}
+                  deployment={deployment}
+                  version={version}
+                  busy={busyId === deployment.schedule.id}
+                  onRunNow={() => void runNow(deployment)}
+                  onToggleEnabled={() => void toggleEnabled(deployment)}
+                />
+              ))}
+            </ul>
+          )}
+          {state.deployments.length === 0 && state.unloaded === 0 ? (
+            <p className="text-sm text-muted-foreground">No deployments yet.</p>
+          ) : null}
+        </>
       )}
     </section>
   );

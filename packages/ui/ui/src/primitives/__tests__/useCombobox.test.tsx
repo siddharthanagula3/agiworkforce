@@ -70,6 +70,26 @@ describe('useCombobox', () => {
     expect(onSelect).toHaveBeenCalledWith('gamma');
   });
 
+  it('ignores keys that belong to an input-method composition', () => {
+    const onSelect = vi.fn();
+    const onEscape = vi.fn();
+    render(<Harness onSelect={onSelect} onEscape={onEscape} />);
+    const input = screen.getByRole('combobox');
+
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    fireEvent.keyDown(input, { key: 'ArrowDown', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Escape', isComposing: true });
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(onEscape).not.toHaveBeenCalled();
+    expect(input.getAttribute('aria-activedescendant')).toBe('harness-alpha');
+
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('alpha');
+  });
+
   it('hands Escape to the caller', () => {
     const onEscape = vi.fn();
     render(<Harness onSelect={vi.fn()} onEscape={onEscape} />);

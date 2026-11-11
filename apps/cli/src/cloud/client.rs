@@ -48,9 +48,8 @@ impl std::fmt::Display for CloudError {
             }
             CloudError::NotManaged(mode) => write!(
                 f,
-                "{}: this conversation stays on this device and is not saved to your account. \
-                 Switch to Managed with /model to sync history, projects and memory across your \
-                 devices.",
+                "{}: nothing is sent to your AGI cloud account in this mode. Switch to Cloud mode \
+                 with /model to use this.",
                 mode.trust_word()
             ),
             CloudError::ApiBase(base) => write!(
@@ -93,6 +92,13 @@ impl CloudError {
             self,
             CloudError::SignedOut | CloudError::NotManaged(_) | CloudError::SessionExpired
         )
+    }
+
+    pub fn into_anyhow(self) -> anyhow::Error {
+        match self {
+            CloudError::UpgradeRequired(error) => anyhow::Error::new(*error),
+            other => anyhow::Error::new(other),
+        }
     }
 }
 
@@ -185,13 +191,20 @@ impl CloudClient {
     /// reach the account: Local and BYOK sessions are a different trust
     /// boundary and are refused here rather than at the call site.
     pub fn connect(privacy: PrivacyMode) -> Result<Self, CloudError> {
-        if privacy != PrivacyMode::Managed {
-            return Err(CloudError::NotManaged(privacy));
-        }
+        Self::admit(privacy)?;
         Self::connect_managed()
     }
 
-    pub fn connect_managed() -> Result<Self, CloudError> {
+    /// The same boundary for a transport that does not hold a `CloudClient`
+    /// (schedules, account usage): it must pass here before any request.
+    pub fn admit(privacy: PrivacyMode) -> Result<(), CloudError> {
+        if privacy != PrivacyMode::Managed {
+            return Err(CloudError::NotManaged(privacy));
+        }
+        Ok(())
+    }
+
+    fn connect_managed() -> Result<Self, CloudError> {
         let jwt = match tier_cache::load_jwt() {
             Some(jwt) if !jwt.trim().is_empty() => jwt,
             _ => return Err(CloudError::SignedOut),
@@ -276,6 +289,13 @@ impl CloudClient {
             return Err(CloudError::Transport(
                 "The upload destination is not secure.".to_string(),
             ));
+        }
+        let missing = unsent_signed_headers(&target, upload_headers);
+        if !missing.is_empty() {
+            return Err(CloudError::Transport(format!(
+                "Refusing an upload that storage would reject: it does not send {}.",
+                missing.join(", ")
+            )));
         }
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -547,6 +567,23 @@ impl CloudClient {
     }
 }
 
+const HEADERS_THE_TRANSPORT_SETS: [&str; 2] = ["host", "content-length"];
+
+fn unsent_signed_headers(target: &reqwest::Url, sent: &HashMap<String, String>) -> Vec<String> {
+    target
+        .query_pairs()
+        .filter(|(name, _)| name.eq_ignore_ascii_case("x-amz-signedheaders"))
+        .flat_map(|(_, value)| {
+            value
+                .split(';')
+                .map(|name| name.trim().to_ascii_lowercase())
+                .collect::<Vec<_>>()
+        })
+        .filter(|name| !name.is_empty() && !HEADERS_THE_TRANSPORT_SETS.contains(&name.as_str()))
+        .filter(|name| !sent.keys().any(|sent| sent.eq_ignore_ascii_case(name)))
+        .collect()
+}
+
 fn disposition_file_name(disposition: &str) -> Option<String> {
     let raw = disposition.split(';').map(str::trim).find_map(|part| {
         part.strip_prefix("filename=")
@@ -713,6 +750,42 @@ mod tests {
     }
 
     #[test]
+    fn an_upload_that_omits_a_signed_header_is_refused_before_it_is_sent() {
+        let client = CloudClient {
+            base: "https://cloud.example".to_string(),
+            jwt: "fixture-account-token".to_string(),
+            auth_base: "https://cloud.example".to_string(),
+            owner: "fixture-owner".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let destination = "https://storage.example/object?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption&X-Amz-Signature=fixture";
+        let mut headers = HashMap::from([("Content-Type".to_string(), "text/plain".to_string())]);
+        let refused = client
+            .upload_request(destination, &headers)
+            .expect_err("storage would reject a PUT without the signed encryption header");
+        assert!(
+            refused
+                .to_string()
+                .contains("does not send x-amz-server-side-encryption"),
+            "{refused}"
+        );
+        assert!(!refused.to_string().contains("content-length"));
+        assert!(!refused.to_string().contains("host"));
+
+        headers.insert(
+            "X-Amz-Server-Side-Encryption".to_string(),
+            "AES256".to_string(),
+        );
+        let request = client
+            .upload_request(destination, &headers)
+            .expect("every signed header is sent")
+            .build()
+            .expect("request builds");
+        assert_eq!(request.headers()["x-amz-server-side-encryption"], "AES256");
+        assert_eq!(request.headers()["content-type"], "text/plain");
+    }
+
+    #[test]
     fn upload_relay_accepts_only_the_configured_development_origin_over_http() {
         let client = CloudClient {
             base: "http://localhost:3000".to_string(),
@@ -738,7 +811,7 @@ mod tests {
             .err()
             .expect("a local session must be refused");
         assert!(matches!(error, CloudError::NotManaged(PrivacyMode::Local)));
-        assert!(error.to_string().contains("on this device"));
+        assert!(error.to_string().contains("Switch to Cloud mode"));
         assert!(error.is_boundary());
     }
 
@@ -749,6 +822,18 @@ mod tests {
             .expect("a byok session must be refused");
         assert!(matches!(error, CloudError::NotManaged(PrivacyMode::Byok)));
         assert!(error.is_boundary());
+    }
+
+    #[test]
+    fn account_commands_read_the_configured_mode_and_refuse_outside_cloud() {
+        for (configured, mode) in [("local", PrivacyMode::Local), ("byok", PrivacyMode::Byok)] {
+            let mut config = crate::config::CliConfig::default();
+            config.ui.privacy_mode = Some(configured.to_string());
+            let error = CloudClient::connect(config.account_privacy_mode())
+                .err()
+                .expect("keys, data export and invites must be refused before any request");
+            assert!(matches!(error, CloudError::NotManaged(seen) if seen == mode));
+        }
     }
 
     #[test]
@@ -764,9 +849,8 @@ mod tests {
         let byok = CloudError::NotManaged(PrivacyMode::Byok).to_string();
         assert_eq!(
             byok,
-            "Your key: this conversation stays on this device and is not saved to your \
-             account. Switch to Managed with /model to sync history, projects and memory \
-             across your devices."
+            "Your key: nothing is sent to your AGI cloud account in this mode. Switch to Cloud \
+             mode with /model to use this."
         );
         assert!(!byok.to_lowercase().contains("byok"));
 
@@ -798,6 +882,34 @@ mod tests {
         assert_eq!(
             found.exit_code(),
             crate::errors::ExitClass::ProtocolTooOld.code()
+        );
+    }
+
+    #[test]
+    fn an_upgrade_refusal_keeps_its_exit_class_and_reads_once() {
+        let refusal = crate::cloud::handshake::upgrade_required(
+            crate::cloud::handshake::CLIENT_UPDATE_REQUIRED_STATUS,
+            Some("2026-10-01".to_string()),
+            r#"{"error":{"message":"Contract 2026-09-17 was retired."}}"#,
+        )
+        .expect("a 426 answer is an upgrade refusal");
+        let shown = refusal.to_string();
+
+        let error = CloudError::UpgradeRequired(Box::new(refusal)).into_anyhow();
+
+        assert_eq!(
+            crate::exit_code_for(&error),
+            crate::errors::ExitClass::ProtocolTooOld.code()
+        );
+        assert_eq!(format!("{error:#}"), shown);
+
+        let transport = CloudError::Transport("refused".to_string());
+        let shown = transport.to_string();
+        let error = transport.into_anyhow();
+        assert_eq!(format!("{error:#}"), shown);
+        assert_eq!(
+            crate::exit_code_for(&error),
+            crate::errors::ExitClass::Failure.code()
         );
     }
 

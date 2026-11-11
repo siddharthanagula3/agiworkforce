@@ -6,12 +6,15 @@ import {
   isByokPlanTier,
   isLocalOnlyPlanTier,
   type BillingPlanTier,
+  PRODUCT_NAMES,
+  PRIVACY_MODE_DISPLAY,
 } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 import {
   canUseManagedCloudChatSurface,
   getCloudChatSurfaceCapability,
 } from '@/lib/free-chat-surface-policy';
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 /**
  * Claim guards for the surface and audience pages, written after the flagship
@@ -179,7 +182,9 @@ describe('/desktop separates what is built from what is published', () => {
       /fetch\('\/api\/releases\/desktop-cloud\/latest'/u,
     );
     const live = collapsed('app/download/DesktopDownloadAvailability.tsx');
-    expect(live).toMatch(/No signed Desktop installer is available right now/u);
+    expect(live).toMatch(
+      new RegExp(`No signed ${PRODUCT_NAMES.desktop} installer is available right now`, 'u'),
+    );
   });
 
   it('shows the registry label on the landing Desktop cards and types no publication state', () => {
@@ -260,24 +265,52 @@ describe('Desktop computer use is described by the prompts the runtime really sh
 });
 
 describe('public Local and BYOK claims follow the shipping Electron enforcement', () => {
-  it('anchors the claim to the cloud-only runtime gate, not to a shared premise in prose', () => {
+  it('anchors the claim to the Desktop chat gate and the CLI behind local coding sessions, not to a shared premise in prose', () => {
     const config = repoText('apps', 'desktop', 'electron', 'config.ts');
     const dispatcher = repoText('apps', 'desktop', 'electron', 'runtime', 'dispatcher.ts');
 
-    expect(config).toMatch(/This shell has no Local mode/u);
+    expect(config).toMatch(/Desktop chat has no Local mode/u);
     expect(dispatcher).toMatch(/localModels: false/u);
     expect(dispatcher).toMatch(/localMcp: false/u);
     expect(dispatcher).toMatch(
       /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
     );
+    expect(dispatcher).not.toContain('providers/setKey');
+
+    const sessions = repoText(
+      'apps',
+      'desktop',
+      'electron',
+      'runtime',
+      'developerSessionService.ts',
+    );
+    expect(sessions).toContain("'app-server'");
+    expect(sessions).toMatch(/requestOrNull\(server, 'model\/list'/u);
+    expect(repoText('apps', 'cli', 'src', 'model_reachability.rs')).toMatch(
+      /"ollama" \| "lmstudio" => DeveloperSessionTrustMode::Local/u,
+    );
+
+    expect(repoText('apps', 'desktop', 'electron', 'runtime', 'developerAccountSync.ts')).toContain(
+      "call('account/login', {})",
+    );
+    expect(repoText('apps', 'cli', 'src', 'app_server', 'account.rs')).toMatch(
+      /pub fn save_device_grant[\s\S]*AuthStore::transaction_with_commit/u,
+    );
+    expect(repoText('apps', 'desktop', 'electron', 'runtime', 'runtimeEnvironment.ts')).toContain(
+      "'AGIWORKFORCE_NO_KEYRING'",
+    );
+    expect(repoText('apps', 'cli', 'src', 'secure_store.rs')).toContain(
+      '!cfg!(test) && !cfg!(target_os = "linux") && !keyring_disabled()',
+    );
   });
 
   it('states the same contract on the Desktop, Local, and BYOK pages', () => {
     expect(collapsed('app/desktop/page.tsx')).toMatch(
-      /Desktop contract is cloud-only for inference/u,
+      /Desktop chat is cloud-only for inference, and Desktop takes no provider key/u,
     );
+    expect(collapsed('app/desktop/page.tsx')).toMatch(/A local coding session runs the CLI/u);
     expect(collapsed('app/local/page.tsx')).toMatch(
-      /The Electron Desktop contract does not accept local-inference commands or provider keys/u,
+      /Desktop chat takes no local-inference commands or provider keys/u,
     );
     for (const page of ['app/desktop/page.tsx', 'app/local/page.tsx']) {
       expect(collapsed(page), `${page} words Desktop as already released`).not.toMatch(
@@ -315,7 +348,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       /CLI implementation supports local inference through\s+Ollama and LM Studio/iu,
     );
     expect(help).not.toMatch(/released CLI/iu);
-    expect(help).toMatch(/current Desktop\s+application is managed-cloud-only/iu);
+    expect(help).toMatch(/Desktop chat uses Cloud and Desktop does not accept\s+provider keys/iu);
   });
 
   it('keeps public pricing copy on the two CLI local runtimes', () => {
@@ -360,7 +393,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
 
     expect(publicContract).toMatch(/from the CLI to Ollama or LM Studio on loopback/iu);
     expect(publicContract).not.toMatch(/released CLI/iu);
-    expect(publicContract).toMatch(/Desktop and web use Cloud/iu);
+    expect(publicContract).toMatch(new RegExp(`Desktop chat and the web app use ${CLOUD}`, 'iu'));
     expect(publicContract).toMatch(/operating system credential store/iu);
 
     for (const [label, pattern] of [
@@ -390,7 +423,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
     expect(localRuntimeCopy).toMatch(/\. Desktop reports no local MCP capability/u);
     expect(localRuntimeCopy).toMatch(/The web app and Desktop neither list nor run them/u);
     expect(localRuntimeCopy).not.toMatch(/current public Desktop/iu);
-    expect(localRuntimeCopy).toMatch(/Panel chat remains Cloud/u);
+    expect(localRuntimeCopy).toMatch(new RegExp(`Panel chat remains ${CLOUD}`, 'u'));
     expect(localRuntimeCopy).toMatch(/Connect it from the CLI instead/u);
     expect(localRuntimeCopy).not.toMatch(/released CLI/iu);
 
@@ -560,7 +593,7 @@ describe('unreleased surface pages take their status label from the registry', (
       /release\.state === 'published' \? RELEASE_PUBLISHED_LABEL : SURFACE_STATUS\.cli/u,
     );
     const page = collapsed('app/cli/page.tsx');
-    expect(page).toMatch(/CLI · <CliReleaseStatus \/>/u);
+    expect(page).toMatch(new RegExp(`${PRODUCT_NAMES.cli} · <CliReleaseStatus \\/>`, 'u'));
     expect(page).not.toMatch(/eyebrow">\{SURFACE_STATUS\.cli\}|eyebrow=\{SURFACE_STATUS\.cli\}/u);
   });
 
@@ -574,7 +607,7 @@ describe('unreleased surface pages take their status label from the registry', (
   });
 });
 
-describe('/cli and /agi-code, Managed Cloud on the developer surfaces is a paid-plan capability', () => {
+describe(`/cli and /agi-code, ${CLOUD} on the developer surfaces is a paid-plan capability`, () => {
   it('gates the CLI and VS Code on developer_surfaces, which Free and Basic do not hold', () => {
     for (const surface of ['cli', 'vscode'] as const) {
       expect(getCloudChatSurfaceCapability(surface)).toBe('developer_surfaces');
@@ -645,7 +678,9 @@ describe('/get-started, a bare agi login is the managed-cloud sign-in, not a BYO
       'saved to the OS credential store except on Linux or when AGIWORKFORCE_NO_KEYRING disables the keyring',
     );
     expect(page).toContain('files in the CLI configuration directory');
-    expect(page).toMatch(/bare(?:\{' '\})?\s+<code>agi login<\/code> signs into Cloud/iu);
+    expect(page).toMatch(
+      new RegExp(`bare(?:\\{' '\\})?\\s+<code>agi login<\\/code> signs into ${CLOUD}`, 'iu'),
+    );
     expect(page).toMatch(/agi login anthropic/u);
   });
 
@@ -724,13 +759,15 @@ describe('/get-started leads with the surface a visitor can use now', () => {
   const page = rendered('app/get-started/page.tsx');
   const nav = rendered('features/marketing/components/system/nav.ts');
 
-  it('offers Try AGI Chat as the first hero action, on the shared web entry', () => {
+  it('offers Try chat as the first hero action, on the shared web entry', () => {
     expect(nav).toMatch(/WEB_ENTRY_HREF = '\/login\?redirectTo=%2F'/u);
-    expect(page).toMatch(/ctas=\{\[\s*\{ href: WEB_ENTRY_HREF, label: 'Try chat' \}/u);
+    expect(page).toMatch(
+      new RegExp(`ctas=\\{\\[\\s*\\{ href: WEB_ENTRY_HREF, label: 'Try chat' \\}`, 'u'),
+    );
   });
 
   it('puts the Web action before any CLI link and before the CLI transcript', () => {
-    const webAction = page.indexOf("label: 'Try chat'");
+    const webAction = page.indexOf(`label: 'Try chat'`);
     const cliLinks = [...page.matchAll(/href[=:]\s*["']\/cli["']/gu)].map((m) => m.index ?? -1);
     const transcript = page.indexOf('lines={CLI_PREVIEW_TRANSCRIPT}');
 
@@ -768,15 +805,15 @@ describe('/get-started leads with the surface a visitor can use now', () => {
 });
 
 describe('/docs, the Chrome card names the route the panel actually answers on', () => {
-  it('agrees with /chrome-extension, which was corrected to name Managed Cloud', () => {
+  it(`agrees with /chrome-extension, which was corrected to name ${CLOUD}`, () => {
     const chrome = collapsed('app/chrome-extension/page.tsx');
-    expect(chrome).toMatch(/Chat answers come back from Cloud/iu);
+    expect(chrome).toMatch(new RegExp(`Chat answers come back from ${CLOUD}`, 'iu'));
     expect(chrome).toMatch(/the Desktop bridge is an optional local handoff/iu);
   });
 
-  it('says the panel answers from Managed Cloud and pairing is optional', () => {
+  it(`says the panel answers from ${CLOUD} and pairing is optional`, () => {
     const page = collapsed('app/docs/page.tsx');
-    expect(page).toMatch(/Answers come back from Cloud/iu);
+    expect(page).toMatch(new RegExp(`Answers come back from ${CLOUD}`, 'iu'));
     expect(page).toMatch(/pairing Desktop is an optional local road/iu);
   });
 
@@ -1041,7 +1078,7 @@ describe('/byok, custody names the store each runtime really writes to', () => {
     );
   });
 
-  it('keeps Managed Cloud account authentication separate without a blanket billing promise', () => {
+  it(`keeps ${CLOUD} account authentication separate without a blanket billing promise`, () => {
     const dispatch = repoText('apps', 'cli', 'src', 'models', 'provider_dispatch.rs');
     const resolver = dispatch.indexOf('fn resolve_key');
     const start = dispatch.indexOf('Provider::ManagedCloud => {', resolver);
@@ -1055,7 +1092,7 @@ describe('/byok, custody names the store each runtime really writes to', () => {
     expect(managed).not.toMatch(/resolve_config_env_auth_key|auth_store_api_key/u);
     const page = collapsed('app/byok/page.tsx');
     expect(page).toContain(
-      'CLI Cloud requests require an AGI account token rather than a saved provider API key',
+      `CLI ${CLOUD} requests require an AGI account token rather than a saved provider API key`,
     );
     expect(page).not.toMatch(/You pay the provider at its own rates/u);
   });
@@ -1078,7 +1115,7 @@ describe('/web, the browser surface has one route and it is managed cloud', () =
     );
     for (const count of routeCounts) expect(count).toBe('1');
     expect(page).not.toMatch(/\b(?:two|three|four|[2-9]|\d{2,}) routes\b/iu);
-    expect(page).toMatch(/Chat uses cloud/u);
+    expect(page).toMatch(new RegExp(`${PRODUCT_NAMES.chat} uses ${CLOUD.toLowerCase()}`, 'u'));
   });
 
   it('never offers Local or BYOK as a route of the browser surface', () => {
@@ -1187,7 +1224,7 @@ describe('/vscode-extension and /solutions keep VS Code unpublished', () => {
     ).toBe(false);
   });
 
-  it('keeps the solutions index on the registry for the release state of AGI Code', () => {
+  it(`keeps the solutions index on the registry for the release state of ${PRODUCT_NAMES.code}`, () => {
     const page = collapsed('app/solutions/page.tsx');
     expect(page).toMatch(/The agi binary, and the VS Code extension/u);
     expect(page).toMatch(/\$\{BYOK_SURFACES\.availability\}/u);

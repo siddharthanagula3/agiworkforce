@@ -29,6 +29,10 @@ describe('normalizeWebDomain', () => {
     ['example.com/path\n', 'example.com'],
     ['example.com/path with spaces', 'example.com'],
     ['localhost', null],
+    ['Nature.com.', 'nature.com'],
+    ['https://nature.com./x', 'nature.com'],
+    ['www.nature.com.:443', 'nature.com'],
+    ['nature.com..', null],
   ])('normalizes %j without changing its policy meaning', (raw, expected) => {
     expect(normalizeWebDomain(raw)).toBe(expected);
   });

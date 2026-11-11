@@ -19,9 +19,11 @@ const {
   pluginPolicyMock,
   marketplaceEntryMock,
   listMarketplaceDependentsMock,
+  listUnmetMarketplaceDependenciesMock,
   getMarketplaceInstallationMock,
   setPluginConnectorsEnabledMock,
 } = vi.hoisted(() => ({
+  listUnmetMarketplaceDependenciesMock: vi.fn(),
   setPluginConnectorsEnabledMock: vi.fn(),
   listMarketplaceDependentsMock: vi.fn(),
   getMarketplaceInstallationMock: vi.fn(),
@@ -89,6 +91,7 @@ type DependentsModule = typeof import('@/features/plugins/server/directory/insta
 vi.mock('@/features/plugins/server/directory/installed-dependents', async (importOriginal) => ({
   ...(await importOriginal<DependentsModule>()),
   listMarketplaceDependents: listMarketplaceDependentsMock,
+  listUnmetMarketplaceDependencies: listUnmetMarketplaceDependenciesMock,
 }));
 vi.mock('@/lib/services/plugin-marketplace-service', async () => ({
   ...(await vi.importActual<PluginMarketplaceServiceModule>(
@@ -196,6 +199,7 @@ function params(id: string) {
 beforeEach(() => {
   vi.clearAllMocks();
   listMarketplaceDependentsMock.mockResolvedValue([]);
+  listUnmetMarketplaceDependenciesMock.mockResolvedValue([]);
   getMarketplaceInstallationMock.mockResolvedValue(null);
   authUserMock.mockResolvedValue({ userId: 'user-1' });
   csrfMock.mockResolvedValue(null);
@@ -592,5 +596,48 @@ describe('marketplace plugins that another installed plugin needs', () => {
       'review-kit',
       'acme-support-bundle',
     ]);
+  });
+});
+
+describe('turning a marketplace plugin on when the plugins it needs are not ready', () => {
+  const UNMET = [{ name: 'Review Kit', problem: 'is not installed' }];
+  const path = `/api/plugins/marketplace-installations/${INSTALLATION_ID}`;
+
+  it('refuses, names the plugin and what is wrong with it, and changes nothing', async () => {
+    listUnmetMarketplaceDependenciesMock.mockResolvedValue(UNMET);
+    getMarketplaceInstallationMock.mockResolvedValue(INSTALLATION);
+    const response = await PATCH(patch(path, { enabled: true }), params(INSTALLATION_ID));
+    expect(response.status).toBe(409);
+    const { error } = await response.json();
+    expect(error.code).toBe('PLUGIN_DEPENDENCIES_UNAVAILABLE');
+    expect(error.message).toContain('Review Kit, which is not installed');
+    expect(error.dependencies).toEqual(UNMET);
+    expect(setMarketplaceInstallationEnabledMock).not.toHaveBeenCalled();
+    expect(setPluginConnectorsEnabledMock).not.toHaveBeenCalled();
+    expect(recordWorkspaceAuditEventMock).not.toHaveBeenCalled();
+  });
+
+  it('404s when the installation is gone', async () => {
+    listUnmetMarketplaceDependenciesMock.mockResolvedValue(UNMET);
+    const response = await PATCH(patch(path, { enabled: true }), params(INSTALLATION_ID));
+    expect(response.status).toBe(404);
+    expect(setMarketplaceInstallationEnabledMock).not.toHaveBeenCalled();
+  });
+
+  it('turns it on when every plugin it needs is ready', async () => {
+    setMarketplaceInstallationEnabledMock.mockResolvedValue({ ...INSTALLATION, enabled: true });
+    const response = await PATCH(patch(path, { enabled: true }), params(INSTALLATION_ID));
+    expect(response.status).toBe(200);
+    expect(listUnmetMarketplaceDependenciesMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      INSTALLATION_ID,
+    );
+  });
+
+  it('does not check dependencies when turning it off', async () => {
+    setMarketplaceInstallationEnabledMock.mockResolvedValue({ ...INSTALLATION, enabled: false });
+    await PATCH(patch(path, { enabled: false }), params(INSTALLATION_ID));
+    expect(listUnmetMarketplaceDependenciesMock).not.toHaveBeenCalled();
   });
 });

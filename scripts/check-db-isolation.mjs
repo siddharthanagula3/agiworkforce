@@ -88,10 +88,41 @@ const WORKSPACE_SCOPED_TABLES = new Set([
 const ORGANIZATION_SCOPE_TOKEN_RE = /\b(?:organization_id|org_id|current_app_org_id)\b/;
 
 // workspaceMemoryPredicate() in apps/web/lib/services/managed-memory-context-service.ts
-// renders `organization_id is not distinct from $n::uuid`, so a statement that
-// interpolates it carries the predicate even though the text sits behind `${}`.
-// The test suite reads the helper and fails if it stops rendering that predicate.
-const WORKSPACE_PREDICATE_HELPER_RE = /\$\{\s*workspaceMemoryPredicate\(/;
+// renders `organization_id is not distinct from $n::uuid`, and READABLE_PROJECT_SCOPE_SQL
+// in apps/web/lib/server/project-read-access.ts binds the project to the admitted
+// workspace $3, so a statement that interpolates either carries the predicate even
+// though the text sits behind `${}`. The credit goes to the symbol of that module
+// only: a file that defines a same-named local helper gets none. The test suite
+// reads both modules and fails if either stops rendering that predicate.
+const WORKSPACE_PREDICATE_HELPERS = [
+  {
+    symbol: 'workspaceMemoryPredicate',
+    interpolation: /\$\{\s*workspaceMemoryPredicate\(/,
+    module: '@/lib/services/managed-memory-context-service',
+    definedIn: 'apps/web/lib/services/managed-memory-context-service.ts',
+  },
+  {
+    symbol: 'READABLE_PROJECT_SCOPE_SQL',
+    interpolation: /\$\{\s*READABLE_PROJECT_SCOPE_SQL\s*\}/,
+    module: '@/lib/server/project-read-access',
+    definedIn: 'apps/web/lib/server/project-read-access.ts',
+  },
+];
+
+function importsSymbolFrom(source, symbol, moduleSpecifier) {
+  const escaped = moduleSpecifier.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  return new RegExp(
+    `import\\s+(?:type\\s+)?\\{[^}]*\\b${symbol}\\b[^}]*\\}\\s*from\\s*['"]${escaped}['"]`,
+  ).test(source);
+}
+
+function carriesWorkspacePredicateHelper(sql, source, rel) {
+  return WORKSPACE_PREDICATE_HELPERS.some(
+    (helper) =>
+      helper.interpolation.test(sql) &&
+      (rel === helper.definedIn || importsSymbolFrom(source, helper.symbol, helper.module)),
+  );
+}
 
 // Each entry names statements that read a workspace-scoped table WITHOUT the
 // workspace predicate, and why reading every workspace at once is correct there.
@@ -386,14 +417,17 @@ const ALLOWLIST = [
       'resolveOperatorQuery',
       'readPendingRequest',
       'issueOperatorRefund',
+      'lockRefundRequest',
     ],
     reason:
       'the operator refund console and the automatic refund decision. listPendingRefundRequests ' +
       'and resolveOperatorQuery serve api/admin/billing-refunds, which reads across accounts by ' +
       'design; readPendingRequest reads the request the operator named, and issueOperatorRefund ' +
       'the account a Stripe charge belongs to; recordRefundDecision writes the decision to the ' +
-      'one request id that was just resolved. A customer files and reads their own requests on ' +
-      'the caller connection',
+      'one request id that was just resolved, and lockRefundRequest takes the row lock on that ' +
+      'same id before the decision is settled: the automatic path passes the row it just filed ' +
+      'for the caller, the operator paths the request named on the requirePlatformAdmin ' +
+      'refund routes. A customer files and reads their own requests on the caller connection',
   },
   {
     match: /lib\/services\/schedule-service\.ts$/,
@@ -445,13 +479,16 @@ const ALLOWLIST = [
       'appendHandoffMessage',
       'closeIdleConnectedSessions',
       'purgeOldHandoffSessions',
+      'listConnectedSessionsForAgent',
     ],
     reason:
       'a handoff session is owned by an anonymous VISITOR, and the other side of the feature is ' +
       'staff: listFreshOnlineAgents (per-agent load count), getSessionById and listWaitingQueue ' +
       '(agent console), claimSessionForAgent (an agent taking any waiting visitor) all span ' +
       'visitors by design, their `agent_user_id` is a staff id and must NOT be read as an owner ' +
-      'predicate. claimExpiredWaitingSession / claimExpiredWaitingBatch / ' +
+      'predicate. listConnectedSessionsForAgent lists the visitors the calling agent took, keyed ' +
+      'by that staff id, and is reached only from api/support/handoff/agent/active after ' +
+      'requirePlatformAdmin. claimExpiredWaitingSession / claimExpiredWaitingBatch / ' +
       'closeIdleConnectedSessions / purgeOldHandoffSessions are time-based sweeps. ' +
       'recordEmailOutcome and appendHandoffMessage’s last-activity write are bookkeeping on a ' +
       'session id the caller already holds, they set status and timestamps and return no rows. ' +
@@ -737,12 +774,14 @@ const ALLOWLIST = [
   {
     match: /lib\/services\/referral-service\.ts$/,
     tables: ['referrals'],
-    functions: ['grantDueReferralRewards', 'settleDueReferral'],
+    functions: ['grantDueReferralRewards', 'settleDueReferral', 'issueReferralResets'],
     reason:
       'the daily referral reward sweep, reached only from api/cron/grant-referral-rewards: it ' +
       'selects converted referrals whose hold has passed by status and date alone, then settles ' +
       'each by the id it selected under a row lock that re-states the status it must still be ' +
-      'in. There is no request subject; the two accounts it acts for are read from the row.',
+      'in. issueReferralResets replays the limit resets of a rewarded referral the same sweep ' +
+      'selected, locking it by that id and re-stating that it is still rewarded and not clawed ' +
+      'back. There is no request subject; the two accounts it acts for are read from the row.',
   },
   {
     match: /lib\/services\/bonus-credit-service\.ts$/,
@@ -764,6 +803,17 @@ const ALLOWLIST = [
       'by date alone, then reminds or reconciles each account by its own id. It would otherwise ' +
       'pass on the user_id it groups or selects, which names the accounts it found rather than ' +
       'scoping the read to one of them.',
+  },
+  {
+    match: /lib\/server\/feedback-screenshot-cleanup\.ts$/,
+    tables: ['feedback_screenshot_cleanups'],
+    reason:
+      'the feedback screenshot cleanup records, swept only from api/cron/purge-deleted-media: ' +
+      'it lists records older than an hour across every account by date alone, then deletes ' +
+      'each by its own storage key, which names exactly one object and embeds the owning ' +
+      'account. The same delete statement is issued by the feedback route inside the ' +
+      'transaction that stores the report, under the caller-scoped connection, where the ' +
+      'owner-only policy of the table applies. There is no request subject on the sweep.',
   },
   {
     match: /lib\/services\/billing-reconciliation\.ts$/,
@@ -1043,11 +1093,11 @@ const ALLOWLIST = [
   {
     match: /lib\/server\/data-rights-requests\.ts$/,
     tables: ['data_rights_requests'],
-    functions: ['readOpenDataRightsRequests'],
+    functions: ['readOpenDataRightsRequests', 'countOpenDataRightsRequests'],
     reason:
       'the privacy review queue: reached only from api/admin/privacy/requests, gated by ' +
-      'requirePlatformAdmin(request) at route.ts:14 before the read runs; reading every open ' +
-      "request across all data subjects is the queue's purpose",
+      'requirePlatformAdmin(request) before either read runs; reading every open request across ' +
+      "all data subjects is the queue's purpose, and the count is the total that pages it",
   },
   {
     match: /api\/settings\/team\/route\.ts$/,
@@ -1075,6 +1125,44 @@ const ALLOWLIST = [
       'the background job worker claims, retries, reaps and prunes jobs across every tenant by ' +
       'design, fairness is the round-robin over tenant_key; it is reached only from the drain ' +
       'cron and the requirePlatformAdmin dead-letter routes, never with a request subject',
+  },
+  {
+    match: /lib\/feature-flags\/flag-store\.ts$/,
+    tables: ['feature_flags'],
+    functions: ['archiveStaleFlagDefinition'],
+    reason:
+      'stale flag cleanup, reached only from api/admin/feature-flags/stale after ' +
+      'requirePlatformAdmin: before archiving a fully rolled out flag it asks whether ANY live ' +
+      'override still holds a subject off the default, across every account and workspace, ' +
+      'because archiving would release all of them. It returns one boolean and no override row',
+  },
+  {
+    match: /lib\/server\/project-deletion\.ts$/,
+    tables: ['project_knowledge_files'],
+    functions: ['projectStorageUrisUnderHold'],
+    reason:
+      'a duplicated project copies storage_uri rather than the object, so whether a stored ' +
+      'object is under legal hold is a question about every row that names it, whichever ' +
+      'account owns that row. The input is the URIs of files the caller already resolved under ' +
+      'its own project, and the answer is the subset of those URIs a hold preserves, nothing else',
+  },
+  {
+    match: /lib\/server\/retention\/deleted-project-files\.ts$/,
+    tables: ['project_knowledge_files'],
+    functions: ['deleteUnreferencedObjects'],
+    reason:
+      'the purge of soft-deleted project files deletes a stored object only when no live row ' +
+      'anywhere still names it, because a duplicated project shares the object across accounts. ' +
+      'The input is the URIs of the rows this purge just confirmed, and the answer is the subset ' +
+      'still referenced, which only keeps objects and never exposes a row',
+  },
+  {
+    match: /lib\/services\/cogs-import-coverage\.ts$/,
+    tables: ['stripe_cogs_import_coverage'],
+    reason:
+      'single service-owned row keyed by source; it holds no user or workspace data, so there ' +
+      'is no owner to constrain by. 0399 enables RLS with no policy and revokes app_rls, so only ' +
+      'the owner connection the reconcile-credits cron uses can reach it',
   },
 ];
 
@@ -1391,7 +1479,7 @@ for (const file of files) {
     if (
       workspaceTables.length > 0 &&
       !ORGANIZATION_SCOPE_TOKEN_RE.test(lower) &&
-      !WORKSPACE_PREDICATE_HELPER_RE.test(sql) &&
+      !carriesWorkspacePredicateHelper(sql, source, rel) &&
       !workspaceScopeExempt(rel)
     ) {
       workspaceScoped += 1;

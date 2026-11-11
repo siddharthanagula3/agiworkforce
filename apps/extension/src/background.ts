@@ -31,7 +31,12 @@ import {
   type ScheduledTaskFetch,
 } from './features/background/scheduled-task-transport';
 import { renderShortcutPrompt } from './features/side-panel/pageCommands';
-import type { ChatChunkMessage, WebMCPToolInfo } from './types';
+import type {
+  BrowserContextTabReference,
+  ChatChunkMessage,
+  ChatToolHandoffMessage,
+  WebMCPToolInfo,
+} from './types';
 import type {
   ConnectionStatus,
   ExtensionMessage,
@@ -92,9 +97,11 @@ import {
 import { settleDetachedAssistantTurn } from './features/background/conversation-history';
 import { createMaintenanceAlarmController } from './features/background/maintenance-alarm';
 import {
+  captureAdmittedTab,
   deliverPageCapture,
   pageCaptureFailureMessage,
   PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE,
+  PAGE_CAPTURE_TAB_CHANGED_MESSAGE,
   PAGE_CAPTURE_UNAVAILABLE_MESSAGE,
   PAGE_CAPTURE_UNDELIVERED_TITLE,
 } from './features/background/page-capture';
@@ -117,6 +124,7 @@ import {
   ScheduledTaskCancellationAttemptCoordinator,
   selectScheduledTaskCancellationCredential,
 } from './features/background/scheduled-task-cancellation';
+import { readEnabledPreference } from './features/background/enabled-preference';
 import {
   publishAuthorizedScheduledTaskNotification,
   scheduledTaskNotificationAuthority,
@@ -151,6 +159,7 @@ import {
   type BrowserUploadBinding,
   type BrowserUploadedFileMetadata,
 } from './features/computer-use/userFileUpload';
+import { createRunInputWatch } from './features/computer-use/inputWatch';
 import {
   COMPUTER_USE_RUN_ID_PATTERN,
   ComputerUseRunCoordinator,
@@ -348,6 +357,8 @@ import {
 import {
   desktopPairingRejectsAccount,
   releaseStoredDesktopPairing,
+  parsePendingDesktopRevocation,
+  STORAGE_KEY_PENDING_DESKTOP_REVOCATION,
 } from './features/native-bridge/pairing';
 
 interface BackgroundState {
@@ -570,7 +581,7 @@ function requestChatToolHandoff(
   streamId: string,
   calls: ToolCall[],
   checkpoint?: import('./features/computer-use/toolHandoff').CallerToolContinuation,
-  recoveryContext?: import('./types').ChatToolHandoffMessage['recoveryContext'],
+  recoveryContext?: ChatToolHandoffMessage['recoveryContext'],
 ): Promise<ChromeManagedToolHandoffOutcome> {
   const callerCheckpoint = checkpoint
     ? {
@@ -1272,11 +1283,13 @@ function setDesktopPaired(paired: boolean): void {
  * throws is not a sign-out: the native session stays until the account is known.
  * Returns true when the pairing was released.
  */
-async function revokeMismatchedDesktopPairing(): Promise<boolean> {
+async function revokeMismatchedDesktopPairing(
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
+): Promise<boolean> {
   if (!isClerkExtensionAuthConfigured()) return false;
   let signedInAccountId: string | null;
   try {
-    const context = await getFreshClerkAuthContext();
+    const context = await (clerkRead ?? getFreshClerkAuthContext());
     signedInAccountId = context?.owner.accountId ?? null;
   } catch {
     return false;
@@ -1323,24 +1336,42 @@ async function disconnectPairedNativeHost(reason: string): Promise<boolean> {
         ).catch(() => null)
       : null
   ) as { success?: boolean } | null;
-  if (state.nativePort === port) {
-    if (port) rejectPendingNativeRequests(port, reason);
-    state.nativePort = null;
-    nativeSessionSecret = null;
-    state.isNativeConnected = false;
-    state.connectionStatus = 'disconnected';
-    _bgCtx.nativeHandshakeInFlight = false;
-    clearNativeReconnectTimer();
-    setNativeReconnectGaveUp(true);
-    setDesktopPaired(false);
-    try {
-      port?.disconnect();
-    } catch (error) {
-      logger.debug('Native disconnect after unpair failed', error);
-    }
-    void notifyConnectionStatusChange();
-  }
+  if (state.nativePort === port) dropNativeConnection(port, reason);
   return unpaired?.success === true;
+}
+
+function dropNativeConnection(port: chrome.runtime.Port | null, reason: string): void {
+  if (port) rejectPendingNativeRequests(port, reason);
+  state.nativePort = null;
+  nativeSessionSecret = null;
+  state.isNativeConnected = false;
+  state.connectionStatus = 'disconnected';
+  _bgCtx.nativeHandshakeInFlight = false;
+  clearNativeReconnectTimer();
+  setNativeReconnectGaveUp(true);
+  setDesktopPaired(false);
+  try {
+    port?.disconnect();
+  } catch (error) {
+    logger.debug('Native disconnect after unpair failed', error);
+  }
+  void notifyConnectionStatusChange();
+}
+
+async function settlePendingDesktopRevocation(
+  port: chrome.runtime.Port,
+  revocationId: string,
+): Promise<void> {
+  const receipt = (await sendNativeRequest({
+    type: NATIVE_BROWSER_UNPAIR_MESSAGE,
+  })) as unknown as { success?: boolean } | null;
+  if (state.nativePort !== port) return;
+  if (receipt?.success !== true) throw new Error('Desktop did not remove the pairing.');
+  const owed = parsePendingDesktopRevocation(
+    await storageUtils.getItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION),
+  );
+  if (owed === revocationId) await storageUtils.removeItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION);
+  dropNativeConnection(port, 'The browser was unpaired from Desktop.');
 }
 
 function resetNativeReconnectState(): void {
@@ -1596,6 +1627,15 @@ function connectToNativeHost(): void {
         if (state.nativePort !== port) return;
         if (!pingResult?.success) {
           throw new Error(pingResult?.error ?? 'Native ping failed');
+        }
+
+        const pendingRevocation = parsePendingDesktopRevocation(
+          await storageUtils.getItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION),
+        );
+        if (state.nativePort !== port) return;
+        if (pendingRevocation) {
+          await settlePendingDesktopRevocation(port, pendingRevocation);
+          return;
         }
 
         state.isNativeConnected = true;
@@ -2026,14 +2066,16 @@ function showNotification(
 }
 
 async function taskNotificationsEnabled(): Promise<boolean> {
-  try {
-    const { agi_task_notifications: enabled } = await chrome.storage.local.get({
-      agi_task_notifications: true,
-    });
-    return enabled !== false;
-  } catch {
-    return true;
-  }
+  return readEnabledPreference({
+    read: async () => {
+      const { agi_task_notifications: enabled } = await chrome.storage.local.get({
+        agi_task_notifications: true,
+      });
+      return enabled;
+    },
+    onUnreadable: (error) =>
+      logger.warn('Task notification setting could not be read; staying quiet', error),
+  });
 }
 
 const notifyBrowserTask = createTaskNotifier<ManagedCloudOwner>({
@@ -4508,8 +4550,9 @@ async function handleMessageAsync(
       );
     }
     case 'GET_CLOUD_AUTH_TOKEN': {
-      await revokeMismatchedDesktopPairing();
-      const candidate = await getManagedCloudAuthContext(message.refresh);
+      const clerkRead = getFreshClerkAuthContext(message.refresh);
+      await revokeMismatchedDesktopPairing(clerkRead);
+      const candidate = await getManagedCloudAuthContext(message.refresh, clerkRead);
       const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
       cancelComputerUseIfAuthChanged(context?.owner ?? null);
       observeMaintenanceOwner(context?.owner ?? null);
@@ -5731,7 +5774,7 @@ async function handleMessageAsync(
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
 
-      let selectedTabs: readonly import('./types').BrowserContextTabReference[];
+      let selectedTabs: readonly BrowserContextTabReference[];
       let restoredTaskTabs: TaskTabScope | undefined;
       const assertStartCurrent = async (): Promise<void> => {
         if (startWasCancelled())
@@ -5978,6 +6021,11 @@ async function handleMessageAsync(
         });
       };
 
+      const inputWatch = createRunInputWatch({
+        lease,
+        activeRun: () => computerUseRuns.getActive(),
+        send: watchComputerUseUserInput,
+      });
       const taskTabs =
         Number.isSafeInteger(lease.windowId) && lease.windowId !== undefined && lease.windowId >= 0
           ? new TaskTabs({
@@ -5990,8 +6038,11 @@ async function handleMessageAsync(
               assertCurrent: () => assertComputerUseOwnership(lease).then(() => undefined),
               beginTransition: (targetTabId) =>
                 computerUseRuns.beginTabTransition(lease, targetTabId),
-              commitTransition: (transition, url) =>
-                computerUseRuns.commitTabTransition(lease, transition, url),
+              commitTransition: (transition, url) => {
+                const previousTabId = lease.tabId;
+                computerUseRuns.commitTabTransition(lease, transition, url);
+                inputWatch.retarget(previousTabId);
+              },
               abortTransition: (transition) =>
                 computerUseRuns.abortTabTransition(lease, transition),
               transitionFailed: () => {
@@ -6087,10 +6138,10 @@ async function handleMessageAsync(
             pending.settle(false);
         })
         .catch(() => undefined);
-      watchComputerUseUserInput(cuTabId, true);
+      inputWatch.start();
       const unmarkTab = markComputerUseTab(cuTabId);
       const cleanupActions: Array<() => unknown> = [
-        () => watchComputerUseUserInput(cuTabId, false),
+        () => inputWatch.stop(cuTabId),
         () => flushAutomationAuditOutbox().catch(() => false),
         () => unmarkTab.then((unmark) => unmark()),
       ];
@@ -6911,9 +6962,18 @@ async function captureCurrentPage(): Promise<void> {
       return;
     }
 
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-
     const tabId = tab.id;
+    const dataUrl = await captureAdmittedTab(
+      { id: tabId, windowId: tab.windowId, url: tab.url },
+      {
+        visibleTab: async (windowId) => (await chrome.tabs.query({ active: true, windowId }))[0],
+        capture: (windowId) => chrome.tabs.captureVisibleTab(windowId, { format: 'png' }),
+      },
+    );
+    if (dataUrl === null) {
+      showNotification(PAGE_CAPTURE_UNDELIVERED_TITLE, PAGE_CAPTURE_TAB_CHANGED_MESSAGE);
+      return;
+    }
     await deliverPageCapture({
       send: () =>
         sendNativeRequest({

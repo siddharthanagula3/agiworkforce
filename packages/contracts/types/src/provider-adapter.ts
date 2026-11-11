@@ -107,8 +107,25 @@ export interface ThinkingBlock {
   signature?: string;
 }
 
+export interface RedactedThinkingBlock {
+  type: 'redacted_thinking';
+  data: string;
+}
+
+export type ReasoningReplayBlock = ThinkingBlock | RedactedThinkingBlock;
+
+export function isReplayableReasoningBlock(block: ReasoningReplayBlock): boolean {
+  return block.type === 'redacted_thinking' ? block.data.length > 0 : Boolean(block.signature);
+}
+
 export type ContentBlock =
-  TextBlock | ImageBlock | FileBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock;
+  | TextBlock
+  | ImageBlock
+  | FileBlock
+  | ToolUseBlock
+  | ToolResultBlock
+  | ThinkingBlock
+  | RedactedThinkingBlock;
 
 export interface ProviderMessage {
   role: 'user' | 'assistant' | 'system';
@@ -267,6 +284,7 @@ export interface StreamChunkCitation {
 export interface StreamChunkVendorRaw {
   type: 'vendor-raw';
   payload: unknown;
+  replay?: RedactedThinkingBlock;
 }
 
 export interface StreamChunkResponseMeta {

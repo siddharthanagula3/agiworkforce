@@ -109,20 +109,57 @@ export async function recordCopyrightNotice(
   return toRecord(row);
 }
 
+export type CopyrightNoticeFilter = CopyrightNoticeStatus | 'decided';
+
+export interface CopyrightNoticeCursor {
+  at: string;
+  id: string;
+}
+
+export interface CopyrightNoticePage {
+  notices: CopyrightNoticeRecord[];
+  nextCursor: string | null;
+}
+
+const CURSOR_PATTERN =
+  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+export function parseCopyrightNoticeCursor(raw: string): CopyrightNoticeCursor | null {
+  const match = CURSOR_PATTERN.exec(raw);
+  if (!match?.[1] || !match[2] || Number.isNaN(Date.parse(match[1]))) return null;
+  return { at: match[1], id: match[2].toLowerCase() };
+}
+
+interface CopyrightNoticePageRow extends CopyrightNoticeRow {
+  page_at: string | Date;
+}
+
 export async function listCopyrightNotices(
   db: DatabaseAdapter,
-  options: { status?: CopyrightNoticeStatus; limit?: number } = {},
-): Promise<CopyrightNoticeRecord[]> {
+  options: { filter?: CopyrightNoticeFilter; limit?: number; before?: CopyrightNoticeCursor } = {},
+): Promise<CopyrightNoticePage> {
   const limit = Math.min(Math.max(options.limit ?? 100, 1), 500);
-  const rows = options.status
-    ? ((await db.query(
-        `select * from public.copyright_notices where status = $1 order by created_at desc limit $2`,
-        [options.status, limit],
-      )) as CopyrightNoticeRow[])
-    : ((await db.query(`select * from public.copyright_notices order by created_at desc limit $1`, [
-        limit,
-      ])) as CopyrightNoticeRow[]);
-  return rows.map(toRecord);
+  const filter = options.filter ?? null;
+  const pageAt =
+    filter === 'decided'
+      ? `date_trunc('milliseconds', updated_at)`
+      : `date_trunc('milliseconds', created_at)`;
+  const rows = (await db.query(
+    `select *, ${pageAt} as page_at
+       from public.copyright_notices
+      where ($1::text is null
+             or ($1 = 'decided' and status <> 'received')
+             or status = $1)
+        and ($2::timestamptz is null or (${pageAt}, id) < ($2::timestamptz, $3::uuid))
+      order by ${pageAt} desc, id desc
+      limit $4`,
+    [filter, options.before?.at ?? null, options.before?.id ?? null, limit + 1],
+  )) as CopyrightNoticePageRow[];
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  const nextCursor =
+    rows.length > limit && last ? `${new Date(last.page_at).toISOString()}|${last.id}` : null;
+  return { notices: page.map(toRecord), nextCursor };
 }
 
 export async function setCopyrightNoticeDisposition(

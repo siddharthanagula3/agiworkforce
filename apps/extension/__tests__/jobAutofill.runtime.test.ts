@@ -29,6 +29,12 @@ beforeAll(() => {
     configurable: true,
     value: buildRect,
   });
+  Object.defineProperty(HTMLElement.prototype, 'innerText', {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.textContent ?? '';
+    },
+  });
 });
 
 afterAll(() => {
@@ -36,6 +42,7 @@ afterAll(() => {
     configurable: true,
     value: originalGetBoundingClientRect,
   });
+  Reflect.deleteProperty(HTMLElement.prototype, 'innerText');
 });
 
 beforeEach(() => {
@@ -397,5 +404,69 @@ describe('runPlatformJobAutofill runtime', () => {
     expect(result.submitted).toBe(true);
     expect(result.stepsAdvanced).toBeGreaterThanOrEqual(3);
     expect(result.missingRequiredFields).toEqual([]);
+  });
+
+  it('reports an attempted submit as unconfirmed until the page acknowledges it', async () => {
+    document.body.innerHTML = `
+      <form id="application_form">
+        <label for="first_name">First Name</label>
+        <input id="first_name" name="first_name" required />
+        <button type="submit">Submit Application</button>
+      </form>
+    `;
+    const clicked = vi.fn((event: Event) => event.preventDefault());
+    document.querySelector('button')!.addEventListener('click', clicked);
+
+    const result = await runPlatformJobAutofill(BASE_PROFILE, {
+      platform: 'greenhouse',
+      autoSubmit: true,
+      delayMs: 0,
+    });
+
+    expect(clicked).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+    expect(result.missingRequiredFields).toEqual([]);
+    expect(result.submissionAttempted).toBe(true);
+    expect(result.submitted).toBe(false);
+  });
+
+  it('does not click a generic submit button a second time after an unconfirmed submit', async () => {
+    document.body.innerHTML = `
+      <form id="application_form">
+        <label for="first_name">First Name</label>
+        <input id="first_name" name="first_name" required />
+        <button type="submit">Submit Application</button>
+      </form>
+    `;
+    const clicked = vi.fn((event: Event) => event.preventDefault());
+    document.querySelector('button')!.addEventListener('click', clicked);
+
+    const result = await runPlatformJobAutofill(BASE_PROFILE, {
+      platform: 'generic',
+      autoSubmit: true,
+      delayMs: 0,
+    });
+
+    expect(clicked).toHaveBeenCalledTimes(1);
+    expect(result.submissionAttempted).toBe(true);
+    expect(result.submitted).toBe(false);
+  });
+
+  it('does not report an attempt when autosubmit is off', async () => {
+    document.body.innerHTML = `
+      <form id="application_form">
+        <label for="first_name">First Name</label>
+        <input id="first_name" name="first_name" />
+        <button type="submit">Submit Application</button>
+      </form>
+    `;
+
+    const result = await runPlatformJobAutofill(BASE_PROFILE, {
+      platform: 'greenhouse',
+      delayMs: 0,
+    });
+
+    expect(result.submissionAttempted).toBe(false);
+    expect(result.submitted).toBe(false);
   });
 });

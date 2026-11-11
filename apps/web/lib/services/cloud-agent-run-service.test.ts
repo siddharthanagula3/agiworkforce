@@ -943,7 +943,7 @@ describe('cloud agent run service', () => {
           {
             role: 'assistant',
             content: '',
-            __canonicalThinking: [{ type: 'redacted_thinking', data: 'not-signed-thinking' }],
+            __canonicalThinking: [{ type: 'redacted_thinking', text: 'not-opaque-provider-data' }],
           },
         ],
         pendingToolCalls: CHECKPOINT_ROW.pending_tool_calls,

@@ -19,6 +19,8 @@ const TOKENS_PER_MILLION = 1_000_000;
  */
 export const LIVE_VOICE_BLOCK_SECONDS = SECONDS_PER_MINUTE;
 
+export const LIVE_VOICE_BLOCK_MINUTES = LIVE_VOICE_BLOCK_SECONDS / SECONDS_PER_MINUTE;
+
 /**
  * How long a session with no check-in still counts as running. Past it the
  * session is closed where its tab last renewed it and its reservation settled.

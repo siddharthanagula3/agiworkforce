@@ -1,4 +1,5 @@
 import { test, expect, type BrowserContext } from '@playwright/test';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { holdMockDevBrowser, mockAuthProvider } from './lib/mock-auth-provider';
 
 test.use({ trace: 'off', video: 'off' });
@@ -208,7 +209,9 @@ test('an older Desktop gets a clear update message and usable local sign-in', as
     page.getByRole('button', { name: 'Continue in your browser', exact: true }),
   ).toBeDisabled();
   await page.getByRole('button', { name: /Continue with Google/ }).click();
-  await expect(page.locator('form').getByRole('alert')).toContainText('Update AGI Desktop');
+  await expect(page.locator('form').getByRole('alert')).toContainText(
+    `Update ${PRODUCT_NAMES.desktop}`,
+  );
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('form button[type="submit"]')).toBeEnabled();
   expect(new URL(page.url()).origin).toBe(origin);

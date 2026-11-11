@@ -26,31 +26,25 @@ fn search_program(name: &str) -> std::io::Result<Command> {
         })
 }
 
-/// The file a `path:line:text` match came from, for a path that may itself
-/// carry a Windows drive prefix.
+const FILENAME_END: char = '\0';
+
+/// The file a match came from. Every search runs with `--with-filename` and
+/// `--null`, so the producer ends the name with a NUL byte that no path can
+/// contain; a name that holds `:1:` or `\n` cannot be mistaken for another.
 fn matched_file(line: &str) -> Option<&str> {
-    let mut from = 0;
-    while let Some(offset) = line[from..].find(':') {
-        let at = from + offset;
-        let rest = &line[at + 1..];
-        let digits = rest.chars().take_while(|c| c.is_ascii_digit()).count();
-        if digits > 0 && rest[digits..].starts_with(':') {
-            return Some(&line[..at]);
-        }
-        from = at + 1;
-    }
-    line.split_once(':').map(|(path, _)| path)
+    line.split_once(FILENAME_END).map(|(path, _)| path)
 }
 
 /// Matched lines that came out of a file the credential policy covers. A
 /// search reads the tree a line at a time, so the refusal `read_file` makes
-/// has to be made again on what a match would carry back.
+/// has to be made again on what a match would carry back. A line whose file
+/// cannot be named is withheld too.
 fn withhold_credential_matches(output: &str) -> (String, usize) {
-    let mut kept: Vec<&str> = Vec::new();
+    let mut kept: Vec<String> = Vec::new();
     let mut withheld = 0usize;
     let mut judged: HashMap<&str, bool> = HashMap::new();
     for line in output.lines() {
-        let covered = matched_file(line).is_some_and(|path| {
+        let covered = matched_file(line).is_none_or(|path| {
             *judged.entry(path).or_insert_with(|| {
                 crate::path_security::is_checkpoint_internal_path(std::path::Path::new(path))
                     || crate::path_security::reads_a_credential_file(path)
@@ -59,7 +53,7 @@ fn withhold_credential_matches(output: &str) -> (String, usize) {
         if covered {
             withheld += 1;
         } else {
-            kept.push(line);
+            kept.push(line.replacen(FILENAME_END, ":", 1));
         }
     }
     (kept.join("\n"), withheld)
@@ -67,9 +61,9 @@ fn withhold_credential_matches(output: &str) -> (String, usize) {
 
 fn withholding_note(withheld: usize) -> String {
     format!(
-        "\n[{withheld} match(es) withheld: they are in private checkpoint storage or files the credential-file policy covers, so \
-         their contents would reach the model and the session transcript. Open those files \
-         yourself, or pass the one value the task needs.]"
+        "\n[{withheld} match(es) withheld: they are in private checkpoint storage, in files the credential-file policy covers, \
+         or the search could not name the file they came from, so their contents would reach the model and the session \
+         transcript. Open those files yourself, or pass the one value the task needs.]"
     )
 }
 
@@ -116,7 +110,13 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
 
     let result = match search_program("grep") {
         Ok(mut command) => {
-            command.arg("-rn").arg("--include=*").arg("-m").arg("200");
+            command
+                .arg("-rn")
+                .arg("--with-filename")
+                .arg("--null")
+                .arg("--include=*")
+                .arg("-m")
+                .arg("200");
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 command.arg(format!("--exclude-dir={directory}"));
             }
@@ -308,6 +308,8 @@ pub(super) async fn execute_grep_files(
     let found = match search_program("rg") {
         Ok(mut cmd) => {
             cmd.arg("--line-number")
+                .arg("--with-filename")
+                .arg("--null")
                 .arg("--no-heading")
                 .arg("--color=never")
                 .arg("--max-count=100");
@@ -346,7 +348,10 @@ pub(super) async fn execute_grep_files(
                     })
                 }
             };
-            fb.arg("-rn").arg("--max-count=100");
+            fb.arg("-rn")
+                .arg("--with-filename")
+                .arg("--null")
+                .arg("--max-count=100");
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 fb.arg(format!("--exclude-dir={directory}"));
             }
@@ -494,12 +499,12 @@ mod tests {
     #[test]
     fn a_match_inside_a_credential_file_never_reaches_the_answer() {
         let raw = format!(
-            "src/billing.rs:12:const KEY_NAME: &str = \"STRIPE_KEY\";\n\
-             .env:3:STRIPE_SECRET_KEY={WITHHELD_VALUE}\n\
-             apps/web/.env.production:1:DATABASE_URL=postgres://user:pw@host/db\n\
-             deploy/id_rsa:1:OPENSSH_KEY_BODY_PLACEHOLDER\n\
-             certs/server.pem:1:PEM_KEY_BODY_PLACEHOLDER\n\
-             docs/development/README.md:9:copy .env.example to .env\n"
+            "src/billing.rs\x0012:const KEY_NAME: &str = \"STRIPE_KEY\";\n\
+             .env\x003:STRIPE_SECRET_KEY={WITHHELD_VALUE}\n\
+             apps/web/.env.production\x001:DATABASE_URL=postgres://user:pw@host/db\n\
+             deploy/id_rsa\x001:OPENSSH_KEY_BODY_PLACEHOLDER\n\
+             certs/server.pem\x001:PEM_KEY_BODY_PLACEHOLDER\n\
+             docs/development/README.md\x009:copy .env.example to .env\n"
         );
 
         let answer = searched("search_files", raw).output;
@@ -521,7 +526,7 @@ mod tests {
 
     #[test]
     fn nothing_is_withheld_and_nothing_is_said_when_no_credential_file_matched() {
-        let raw = "src/a.rs:1:fn main() {}\nsrc/b.rs:2:let key = 1;\n".to_string();
+        let raw = "src/a.rs\x001:fn main() {}\nsrc/b.rs\x002:let key = 1;\n".to_string();
 
         let answer = searched("grep_files", raw).output;
 
@@ -556,7 +561,7 @@ mod tests {
             "docs/security/security.md",
             "package.json",
         ] {
-            let line = format!("{path}:7:value");
+            let line = format!("{path}\x007:value");
             let (kept, withheld) = withhold_credential_matches(&line);
             let sensitive = crate::sensitive_files::is_sensitive_file(path);
             assert_eq!(
@@ -571,21 +576,91 @@ mod tests {
     #[test]
     fn a_path_that_carries_a_colon_is_still_attributed_to_its_file() {
         assert_eq!(
-            matched_file(r"C:\repo\apps\.env:4:TOKEN=x"),
+            matched_file("C:\\repo\\apps\\.env\x004:TOKEN=x"),
             Some(r"C:\repo\apps\.env")
         );
-        assert_eq!(matched_file("src/a.rs:12:let x = 1;"), Some("src/a.rs"));
+        assert_eq!(matched_file("src/a.rs\x0012:let x = 1;"), Some("src/a.rs"));
+        assert_eq!(
+            matched_file("/project/demo:1:copy/.env\x001:DEPLOY_PASS=sample-only-4837"),
+            Some("/project/demo:1:copy/.env")
+        );
         assert_eq!(matched_file("Binary file .env matches"), None);
 
-        let (kept, withheld) = withhold_credential_matches(r"C:\repo\apps\.env:4:TOKEN=x");
+        let (kept, withheld) = withhold_credential_matches("C:\\repo\\apps\\.env\x004:TOKEN=x");
         assert_eq!(withheld, 1, "a Windows path was not attributed: {kept}");
+
+        let (kept, withheld) = withhold_credential_matches(
+            "/project/demo:1:copy/.env\x001:DEPLOY_PASS=sample-only-4837",
+        );
+        assert_eq!(withheld, 1, "a name holding :1: was misattributed: {kept}");
+        assert!(!kept.contains("sample-only-4837"), "{kept}");
     }
 
     #[test]
-    fn a_line_with_no_line_number_is_attributed_by_its_leading_path() {
-        let (kept, withheld) = withhold_credential_matches(".env:TOKEN=x\nsrc/a.rs:fn main()");
-        assert_eq!(withheld, 1);
-        assert_eq!(kept, "src/a.rs:fn main()");
+    fn a_line_whose_file_cannot_be_named_is_withheld() {
+        let (kept, withheld) = withhold_credential_matches(
+            "1:DEPLOY_PASS=sample-only-4837\nsrc/a.rs\x003:fn main()\nBinary file .env matches",
+        );
+        assert_eq!(withheld, 2, "{kept}");
+        assert_eq!(kept, "src/a.rs:3:fn main()");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_credential_file_under_a_folder_named_like_a_match_stays_out_of_every_search() {
+        let workspace = tempfile::tempdir().unwrap();
+        let root = workspace.path().canonicalize().unwrap();
+        std::fs::create_dir(root.join("demo")).unwrap();
+        std::fs::create_dir(root.join("demo:1:copy")).unwrap();
+        let protected = root.join("demo:1:copy").join(".env");
+        std::fs::write(&protected, "DEPLOY_PASS=sample-only-4837\n").unwrap();
+        std::fs::write(root.join("demo").join("notes.txt"), "DEPLOY_PASS is set\n").unwrap();
+
+        let search = |tool: &'static str, path: String| {
+            let root = root.clone();
+            async move {
+                let args: HashMap<String, String> = [
+                    ("pattern".to_string(), "DEPLOY_PASS".to_string()),
+                    ("path".to_string(), path),
+                ]
+                .into_iter()
+                .collect();
+                crate::path_security::scope_workspace_paths(Some(root), Vec::new(), async {
+                    match tool {
+                        "search_files" => execute_search_files(&args).await,
+                        _ => execute_grep_files(&args, true).await,
+                    }
+                })
+                .await
+                .unwrap()
+            }
+        };
+
+        let whole_tree = search("search_files", root.to_string_lossy().into_owned()).await;
+        assert!(
+            !whole_tree.output.contains("sample-only-4837"),
+            "{}",
+            whole_tree.output
+        );
+        assert!(
+            whole_tree.output.contains("notes.txt:1:DEPLOY_PASS is set"),
+            "{}",
+            whole_tree.output
+        );
+        assert!(
+            whole_tree.output.contains("1 match(es) withheld"),
+            "{}",
+            whole_tree.output
+        );
+
+        for tool in ["search_files", "grep_files"] {
+            let one_file = search(tool, protected.to_string_lossy().into_owned()).await;
+            assert!(
+                !one_file.output.contains("sample-only-4837"),
+                "{tool}: {}",
+                one_file.output
+            );
+        }
     }
 
     #[test]

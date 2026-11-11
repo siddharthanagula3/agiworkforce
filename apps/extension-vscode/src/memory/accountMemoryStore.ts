@@ -98,6 +98,7 @@ function sortFacts(facts: MemoryFact[]): MemoryFact[] {
 export class AccountMemoryStore {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
+  private clearGeneration = 0;
 
   constructor(
     private readonly storage: Storage,
@@ -153,11 +154,13 @@ export class AccountMemoryStore {
       };
     }
 
+    const generation = this.clearGeneration;
     try {
       await this.discardAnotherAccountsCache();
       await this.discardAnotherWorkspacesCache(await this.client.readScope());
       const cursor = this.storage.get<string>(ACCOUNT_MEMORY_CURSOR_KEY) ?? INITIAL_CURSOR;
       const page = await this.client.pullAll(cursor);
+      if (generation !== this.clearGeneration) return await this.refresh();
       if (this.storage.get<boolean>(ACCOUNT_MEMORY_UNSCOPED_KEY)) {
         await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, []);
         await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, {});
@@ -227,6 +230,10 @@ export class AccountMemoryStore {
     } catch (error) {
       return { applied: false, refusals: [error instanceof Error ? error.message : String(error)] };
     }
+    this.clearGeneration += 1;
+    await this.storage.update(ACCOUNT_MEMORY_CACHE_KEY, []);
+    await this.storage.update(ACCOUNT_MEMORY_VERSIONS_KEY, {});
+    this.changed.fire();
     await this.refresh();
     return { applied: true, refusals: [] };
   }

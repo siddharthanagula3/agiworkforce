@@ -37,6 +37,33 @@ function renderDock(open = true) {
   return { ...view, onClose, onCommandFinished };
 }
 
+function backgroundReceipt(patch: Record<string, unknown> = {}) {
+  return {
+    runId: 'run-1',
+    command: 'pnpm dev',
+    program: 'pnpm',
+    output: 'ready on http://localhost:5173',
+    running: true,
+    exitCode: null,
+    truncated: false,
+    terminal: true,
+    ...patch,
+  };
+}
+
+function pendingBackgroundStart(runId: string) {
+  let settle: (value: ReturnType<typeof backgroundReceipt>) => void = () => undefined;
+  let fail: (reason: Error) => void = () => undefined;
+  startBackgroundLocalCommand.mockReturnValue({
+    runId,
+    started: new Promise((resolve, reject) => {
+      settle = resolve;
+      fail = reject;
+    }),
+  });
+  return { settle: (value: ReturnType<typeof backgroundReceipt>) => settle(value), fail };
+}
+
 function neverEndingRun(runId: string) {
   startLocalCommand.mockImplementation(() => ({
     runId,
@@ -46,15 +73,9 @@ function neverEndingRun(runId: string) {
 
 describe('the local terminal', () => {
   it('keeps a command such as a dev server running and hands it to the running list', async () => {
-    startBackgroundLocalCommand.mockResolvedValue({
+    startBackgroundLocalCommand.mockReturnValue({
       runId: 'run-1',
-      command: 'pnpm dev',
-      program: 'pnpm',
-      output: 'ready on http://localhost:5173',
-      running: true,
-      exitCode: null,
-      truncated: false,
-      terminal: true,
+      started: Promise.resolve(backgroundReceipt()),
     });
     const onBackgroundStarted = vi.fn();
     render(
@@ -77,6 +98,95 @@ describe('the local terminal', () => {
     expect(screen.getByText(/Running in the background/)).toBeInTheDocument();
     await waitFor(() => expect(onBackgroundStarted).toHaveBeenCalledOnce());
     expect(screen.getByLabelText('Command')).toHaveValue('');
+  });
+
+  it('does not say a background command that already exited is still running', async () => {
+    startBackgroundLocalCommand.mockReturnValue({
+      runId: 'run-1',
+      started: Promise.resolve(backgroundReceipt({ output: 'done', running: false, exitCode: 0 })),
+    });
+    render(<LocalTerminal rootId="root-1" folder="agiworkforce" onCommandFinished={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Command'), 'echo done');
+    await userEvent.click(screen.getByRole('button', { name: 'Keep running' }));
+
+    expect(await screen.findByText('exit 0')).toBeInTheDocument();
+    expect(screen.queryByText(/Running in the background/)).not.toBeInTheDocument();
+  });
+
+  it('does not label a live background command as stopped', async () => {
+    startBackgroundLocalCommand.mockReturnValue({
+      runId: 'run-1',
+      started: Promise.resolve(backgroundReceipt()),
+    });
+    render(<LocalTerminal rootId="root-1" folder="agiworkforce" onCommandFinished={vi.fn()} />);
+
+    await userEvent.type(screen.getByLabelText('Command'), 'pnpm dev');
+    await userEvent.click(screen.getByRole('button', { name: 'Keep running' }));
+
+    expect(await screen.findByText(/Running in the background/)).toBeInTheDocument();
+    expect(screen.queryByText('stopped')).not.toBeInTheDocument();
+  });
+
+  it('cancels the exact background start that Stop names while it is still starting', async () => {
+    const start = pendingBackgroundStart('run-bg-1');
+    const onBackgroundStarted = vi.fn();
+    render(
+      <LocalTerminal
+        rootId="root-1"
+        folder="agiworkforce"
+        onCommandFinished={vi.fn()}
+        onBackgroundStarted={onBackgroundStarted}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText('Command'), 'pnpm dev');
+    await userEvent.click(screen.getByRole('button', { name: 'Keep running' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Stop' }));
+
+    expect(cancelLocalCommand).toHaveBeenCalledOnce();
+    expect(cancelLocalCommand).toHaveBeenCalledWith('run-bg-1');
+
+    start.settle(backgroundReceipt({ runId: 'run-bg-1' }));
+    expect(await screen.findByText('stopped')).toBeInTheDocument();
+    expect(screen.queryByText(/Running in the background/)).not.toBeInTheDocument();
+    expect(onBackgroundStarted).not.toHaveBeenCalled();
+  });
+
+  it('keeps a background command that was handed off when the terminal closes', async () => {
+    startBackgroundLocalCommand.mockReturnValue({
+      runId: 'run-bg-2',
+      started: Promise.resolve(backgroundReceipt({ runId: 'run-bg-2' })),
+    });
+    const view = render(
+      <LocalTerminal rootId="root-1" folder="agiworkforce" onCommandFinished={vi.fn()} />,
+    );
+
+    await userEvent.type(screen.getByLabelText('Command'), 'pnpm dev');
+    await userEvent.click(screen.getByRole('button', { name: 'Keep running' }));
+    await screen.findByText(/Running in the background/);
+    view.unmount();
+
+    expect(cancelLocalCommand).not.toHaveBeenCalled();
+  });
+
+  it('cancels a background start that is still starting when its tab is closed', async () => {
+    pendingBackgroundStart('run-bg-3');
+    renderDock();
+
+    await userEvent.click(screen.getByRole('button', { name: 'New terminal' }));
+    await userEvent.type(
+      within(screen.getByRole('tabpanel')).getByLabelText('Command'),
+      'pnpm dev',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Keep running' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close agiworkforce (2)' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Stop and close' }));
+
+    await waitFor(() => expect(screen.getAllByRole('tab')).toHaveLength(1));
+    expect(cancelLocalCommand).toHaveBeenCalledWith('run-bg-3');
   });
 
   it('prompts with the folder name and runs a command on Enter', async () => {

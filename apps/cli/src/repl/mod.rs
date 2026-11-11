@@ -729,7 +729,7 @@ pub async fn run_repl(
     output::print_session_cost(
         session.total_input_tokens,
         session.total_output_tokens,
-        session.turn_count,
+        session.cost_ledger.turns,
         session.cost_ledger.total_usd,
         crate::design_system::AccessMode::for_provider(&session.provider),
     );
@@ -793,6 +793,7 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
     let spinner = output::create_spinner("Thinking...");
     let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
     let md_cb = std::sync::Arc::clone(&md);
+    session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
     let result = session
         .send(
@@ -805,6 +806,7 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
             }),
         )
         .await;
+    session.transcript_renderer = None;
 
     spinner.finish_and_clear();
 
@@ -915,7 +917,7 @@ pub async fn attach_url_context(url: &str, session: &mut AgentSession) -> Result
     };
     let opts = crate::tools::ToolExecOptions {
         additional_workspace_roots: session.additional_context_dirs(),
-        mcp_tool_definitions: None,
+        tool_search_catalog: None,
         require_confirmation: false,
         auto_approve_safe: session.auto_approve_safe,
         auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
@@ -951,7 +953,7 @@ pub async fn run_user_shell_command(
     };
     let opts = crate::tools::ToolExecOptions {
         additional_workspace_roots: session.additional_context_dirs(),
-        mcp_tool_definitions: None,
+        tool_search_catalog: None,
         require_confirmation,
         auto_approve_safe: session.auto_approve_safe,
         auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
@@ -983,7 +985,7 @@ async fn run_advisor_question(
     };
     let opts = crate::tools::ToolExecOptions {
         additional_workspace_roots: Vec::new(),
-        mcp_tool_definitions: None,
+        tool_search_catalog: None,
         require_confirmation: false,
         auto_approve_safe: true,
         auto_approve_edits: false,

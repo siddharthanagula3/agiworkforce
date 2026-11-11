@@ -35,6 +35,7 @@ import {
   DEFAULT_CALLER_TOOL_MAX_STEPS,
   MANAGED_OFFICE_FILE_TOOL_NAME,
   ManagedCloudMessageMetadataSchema,
+  WEB_DOMAIN_RULE_MESSAGE,
 } from '@agiworkforce/cloud-contracts';
 import type {
   ManagedMemoryCitation,
@@ -274,8 +275,8 @@ import type {
   ModelCapabilities,
   ProjectFileCitation,
   PromptCacheScope,
+  ReasoningReplayBlock,
   RoutingSlot,
-  ThinkingBlock,
   ToolApprovalPolicy,
 } from '@agiworkforce/types';
 import {
@@ -419,7 +420,9 @@ import {
 import {
   createResearchDomainPolicy,
   MAX_RESEARCH_CONNECTOR_SOURCES,
+  MAX_RESEARCH_DOMAIN_RULES,
   narrowResearchDomainPolicy,
+  normalizeResearchDomain,
   type ResearchDomainPolicy,
 } from './research-sources';
 import {
@@ -465,6 +468,7 @@ import {
   memoizeAsync,
   selectedSkillRequirementFailure,
   SkillCatalogUnavailableError,
+  type SkillInstallOverrides,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
@@ -530,6 +534,23 @@ import {
   resolveTurnToolProhibition,
   type TurnToolProhibition,
 } from './turn-tool-prohibition';
+
+const ResearchDomainRulesSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .min(1)
+      .max(253)
+      .transform((value, context) => {
+        const rule = normalizeResearchDomain(value);
+        if (rule) return rule;
+        context.addIssue({ code: 'custom', message: WEB_DOMAIN_RULE_MESSAGE });
+        return z.NEVER;
+      }),
+  )
+  .max(MAX_RESEARCH_DOMAIN_RULES)
+  .transform((rules) => Array.from(new Set(rules)));
 
 export const ChatCompletionRequestSchema = z
   .object({
@@ -672,8 +693,8 @@ export const ChatCompletionRequestSchema = z
     research_sources: z
       .object({
         files: z.boolean().optional(),
-        allow_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
-        deny_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
+        allow_domains: ResearchDomainRulesSchema.optional(),
+        deny_domains: ResearchDomainRulesSchema.optional(),
         connectors: z
           .array(z.string().trim().min(1).max(200))
           .max(MAX_RESEARCH_CONNECTOR_SOURCES)
@@ -1604,7 +1625,7 @@ export type ProcessedRequest = {
         multimodal_content?: unknown[];
         tool_calls?: unknown[];
         tool_call_id?: string;
-        __canonicalThinking?: ThinkingBlock[];
+        __canonicalThinking?: ReasoningReplayBlock[];
         __retainedToolResultReference?: string;
       }
     >;
@@ -3730,11 +3751,11 @@ async function processAdmittedRequest(
       ),
     };
   }
-  const skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> = scopedDbPromise
+  const skillInstallOverridesPromise: Promise<SkillInstallOverrides> = scopedDbPromise
     .then((scoped) => getSkillInstallOverrides(scoped.db, userId))
     .catch((error: unknown) => {
-      logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
-      return new Map<string, boolean>();
+      logger.warn({ error, userId }, 'Skill install overrides read failed; withholding skills');
+      return null;
     });
   skillInstallOverridesPromise.catch(() => {});
   const pluginsAllowed = !workspaceControls || workspaceControls.featureAccess.plugins;
@@ -5330,7 +5351,7 @@ async function processAdmittedRequest(
 
   const preSkillMessageCount = chatRequest.messages.length;
   let selectedSkill: Skill | null = null;
-  const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> =>
+  const loadSkillInstallOverrides = (): Promise<SkillInstallOverrides> =>
     skillInstallOverridesPromise;
   const loadSkillCatalog = async (
     options: { includeNetworkBackedDirectorySkills?: boolean } = {},

@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/features/notifications/components/NotificationBell', () => ({
@@ -11,7 +12,7 @@ describe('SidebarBrandRow', () => {
   it('is the container the wordmark measures, so the name steps aside before it reaches the bell', () => {
     render(<SidebarBrandRow />);
 
-    const row = screen.getByRole('link', { name: 'AGI home' }).parentElement;
+    const row = screen.getByRole('link', { name: `${PRODUCT_BRAND} home` }).parentElement;
     expect(row).toHaveClass('@container', 'justify-between');
     expect(row).toContainElement(screen.getByRole('button', { name: 'bell' }));
   });

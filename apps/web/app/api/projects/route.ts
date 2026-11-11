@@ -53,7 +53,12 @@ async function handleGetProjects(request: NextRequest) {
   const sharedProjectIds =
     sharedScope?.organizationId === organizationId ? sharedScope.projectIds : [];
 
-  const params: unknown[] = [userId, limit + 1, offset, sharedProjectIds, organizationId];
+  const params: unknown[] = [userId, limit + 1, sharedProjectIds, organizationId];
+  let offsetClause = '';
+  if (!cursor) {
+    params.push(offset);
+    offsetClause = `offset $${params.length}`;
+  }
   const keyset = keysetSql({
     sortColumn: PAGE_SORT_COLUMN,
     idColumn: 'id',
@@ -78,17 +83,17 @@ async function handleGetProjects(request: NextRequest) {
                    from web_conversations c
                   where c.project_id = p.id::text
                     and c.user_id = $1
-                    and c.organization_id is not distinct from $5::uuid
+                    and c.organization_id is not distinct from $4::uuid
                     and c.deleted_at is null
                     and coalesce(c.is_temporary, false) = false) as conversation_count
            from user_projects p
           where p.deleted_at is null
-             and p.organization_id is not distinct from $5::uuid
-             and (p.user_id = $1 or p.id = any($4::uuid[]))
+             and p.organization_id is not distinct from $4::uuid
+             and (p.user_id = $1 or p.id = any($3::uuid[]))
        ) projects
        ${keyset.where ? `where ${keyset.where}` : ''}
        ${keyset.orderBy}
-       limit $2 ${cursor ? '' : 'offset $3'}`,
+       limit $2 ${offsetClause}`,
       params,
     );
   } catch (error) {

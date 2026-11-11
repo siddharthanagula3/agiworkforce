@@ -10,6 +10,7 @@ export const GUEST_CHAT_ERROR_CODES = {
   unavailable: 'guest_chat_unavailable',
   limitReached: 'guest_limit_reached',
   capacityReached: 'guest_capacity_reached',
+  admissionUnavailable: 'guest_admission_unavailable',
   textOnly: 'guest_text_only',
   contentPolicy: 'content_policy_violation',
   upstream: 'guest_upstream_error',

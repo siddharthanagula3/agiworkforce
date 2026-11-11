@@ -49,6 +49,9 @@ export const useCloudTaskBadgeStore = create<CloudTaskBadgeState>()((set) => ({
       generation === refreshGeneration &&
       sessionEpoch === useUnifiedAuthStore.getState().cloudSessionEpoch &&
       canReadCloudRuns();
+    const settleAbandoned = () => {
+      if (generation === refreshGeneration) set({ ...EMPTY, status: 'idle' });
+    };
     if (!canReadCloudRuns()) {
       set({ ...EMPTY, status: 'idle' });
       return;
@@ -61,7 +64,10 @@ export const useCloudTaskBadgeStore = create<CloudTaskBadgeState>()((set) => ({
         limit: PAGE_LIMIT,
       });
 
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        settleAbandoned();
+        return;
+      }
 
       const needsUserCount = page.runs.filter((run) =>
         NEEDS_USER_STATES.includes(run.state),
@@ -75,7 +81,10 @@ export const useCloudTaskBadgeStore = create<CloudTaskBadgeState>()((set) => ({
         error: null,
       });
     } catch (error) {
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        settleAbandoned();
+        return;
+      }
       set({
         ...EMPTY,
         status: 'error',

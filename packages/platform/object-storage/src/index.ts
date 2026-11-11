@@ -12,6 +12,7 @@ export type {
   PresignGetInput,
   PresignPutInput,
   PresignUploadPartInput,
+  PresignedPutRequest,
   PutObjectInput,
   StoredObjectBytes,
   StoredObjectHead,
@@ -28,6 +29,13 @@ export {
 } from './types';
 
 export { objectChecksum } from './checksum';
+
+export {
+  ENCRYPTION_ALGORITHM_HEADER,
+  ENCRYPTION_KEY_ID_HEADER,
+  ENCRYPTION_UPLOAD_HEADER_NAMES,
+  encryptionUploadHeaders,
+} from './upload-headers';
 
 export {
   abortOrphanedMultipartUploads,

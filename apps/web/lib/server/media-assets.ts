@@ -8,6 +8,7 @@ import {
   legalHoldPredicate,
   refuseHeldDeletion,
 } from '@/lib/services/legal-hold-gate';
+import { serializeDestructionWithHolds } from '@/lib/services/legal-hold-placement';
 import { recordGeneratedArtifactBytes } from '@/lib/services/infrastructure-cost';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
@@ -642,6 +643,7 @@ export async function permanentlyDeleteMediaAsset(
   const exclusion = legalHoldExclusion('file', { alias: 'asset', nextParamIndex: 4 });
   const removed = await db.transaction(async (tx) => {
     const organizationId = await resolveActiveOrganizationId(tx, userId);
+    await serializeDestructionWithHolds(tx, organizationId);
     const scope = `asset.id = $1 and asset.user_id = $2
           and asset.organization_id is not distinct from $3::uuid
           and asset.deleted_at is not null`;

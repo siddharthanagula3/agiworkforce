@@ -74,6 +74,11 @@ export const TOOL_COPY: Readonly<Record<string, { label: string; description: st
     description:
       'Edits a file already in that sandbox workspace. Classified as an irreversible write, so no account default runs it on its own.',
   },
+  delete_file: {
+    label: 'Delete a file',
+    description:
+      'Deletes a file from that sandbox workspace. Classified as an irreversible delete, so no account default runs it on its own.',
+  },
   create_office_file: {
     label: 'Create a document file',
     description:
@@ -366,6 +371,11 @@ export const TOOL_COPY: Readonly<Record<string, { label: string; description: st
     label: 'Go back or forward in Chrome',
     description:
       'Moves the active tab of your paired Chrome back or forward in its history, on sites you approved in the extension.',
+  },
+  browser_stop: {
+    label: 'Stop loading in Chrome',
+    description:
+      'Stops the active tab of your paired Chrome from loading the page it is on, on sites you approved in the extension.',
   },
 };
 

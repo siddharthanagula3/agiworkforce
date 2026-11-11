@@ -47,11 +47,23 @@ export function composeSurfaceSections(
     };
   }[],
 ): Pick<vscode.TreeDataProvider<vscode.TreeItem>, 'getChildren'> {
+  const owners = new WeakMap<
+    vscode.TreeItem,
+    Pick<vscode.TreeDataProvider<vscode.TreeItem>, 'getChildren'>
+  >();
   return {
-    async getChildren(): Promise<vscode.TreeItem[]> {
+    async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+      if (element !== undefined) {
+        const owner = owners.get(element);
+        if (owner === undefined) return [];
+        const children = (await owner.getChildren(element)) ?? [];
+        for (const child of children) owners.set(child, owner);
+        return children;
+      }
       const groups = await Promise.all(
         sections.map(async (section) => {
           const children = (await section.provider.getChildren()) ?? [];
+          for (const child of children) owners.set(child, section.provider);
           return [surfaceSectionItem(section.label), ...children];
         }),
       );

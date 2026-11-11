@@ -53,3 +53,16 @@ export async function recordDeliveryOnce(
     return 'unavailable';
   }
 }
+
+export async function releaseDelivery(db: DeliveryDedupDb, deliveryId: string | null) {
+  const id = deliveryId?.trim() ?? '';
+  if (id === '' || id.length > MAX_DELIVERY_ID_LENGTH) return;
+  try {
+    await db.query('delete from github_webhook_deliveries where delivery_id = $1', [id]);
+  } catch (error) {
+    logger.warn(
+      { error, deliveryId: id },
+      'GitHub webhook receipt could not be released · a redelivery will be acknowledged as a duplicate',
+    );
+  }
+}

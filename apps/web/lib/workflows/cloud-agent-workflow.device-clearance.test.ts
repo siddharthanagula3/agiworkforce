@@ -141,7 +141,7 @@ function servedInput(call = 0): CloudAgentWorkflowInput {
 describe('a durable run consults the device registry before offering device tools', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    executeInvocation.mockResolvedValue({ kind: 'done' });
+    executeInvocation.mockResolvedValue({ kind: 'terminal', outcome: 'completed' });
   });
 
   it('serves the device host through when the paired device is online and authenticated', async () => {
@@ -172,6 +172,35 @@ describe('a durable run consults the device registry before offering device tool
     expect(mocks.ensurePlan).toHaveBeenCalledWith(input);
     expect(mocks.settlePlan).toHaveBeenCalledWith(input, 'completed');
     expect(mocks.closeStream).toHaveBeenCalledWith(RUN_ID);
+  });
+
+  it.each(['completed', 'failed', 'cancelled', 'awaiting_input', 'paused'] as const)(
+    'hands the plan the %s outcome the invocation actually reached',
+    async (outcome) => {
+      const input = makeInput(false);
+      input.processed.chatRequest.work_mode = 'agiwork';
+      executeInvocation.mockResolvedValueOnce({ kind: 'terminal', outcome });
+
+      await cloudAgentWorkflow(input);
+
+      expect(mocks.settlePlan).toHaveBeenCalledTimes(1);
+      expect(mocks.settlePlan).toHaveBeenCalledWith(input, outcome);
+      expect(mocks.closeStream).toHaveBeenCalledWith(RUN_ID);
+    },
+  );
+
+  it('settles the plan once, with the outcome of the last invocation of a continued run', async () => {
+    const input = makeInput(false);
+    input.processed.chatRequest.work_mode = 'agiwork';
+    executeInvocation
+      .mockResolvedValueOnce({ kind: 'continue', input })
+      .mockResolvedValueOnce({ kind: 'terminal', outcome: 'cancelled' });
+
+    await cloudAgentWorkflow(input);
+
+    expect(executeInvocation).toHaveBeenCalledTimes(2);
+    expect(mocks.settlePlan).toHaveBeenCalledTimes(1);
+    expect(mocks.settlePlan).toHaveBeenCalledWith(input, 'cancelled');
   });
 
   it.each(['chat', 'agiwork'] as const)(

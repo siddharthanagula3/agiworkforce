@@ -115,7 +115,7 @@ test('graph indexes every tracked file, route, import, and migration', () => {
     'crates/demo/src/foo.rs': 'pub struct Bar {}\npub fn local_item() {}\n',
     'scripts/check-demo.mjs': 'export const guard = true;\n',
     'scripts/check-demo.test.mjs': 'export const notAGuard = true;\n',
-    '.agents/skills/demo/SKILL.md': '---\nname: demo\ndescription: A demo skill\n---\n',
+    '.agents/skills/demo/SKILL.md': `---\nname: demo\ndescription: A demo skill ${String.fromCharCode(0x2014)} with a clause\n---\n`,
     'docs/agent-context/lanes.json': JSON.stringify({
       lanes: [
         {
@@ -211,6 +211,7 @@ test('graph indexes every tracked file, route, import, and migration', () => {
     false,
   );
   assert.equal(graph.skills[0].name, 'demo');
+  assert.equal(graph.skills[0].description, 'A demo skill: with a clause');
 
   const rendered = renderKnowledgeGraph(graph);
   for (const [rel, content] of Object.entries(rendered)) {
@@ -225,6 +226,40 @@ test('graph indexes every tracked file, route, import, and migration', () => {
   const file = queryKnowledgeGraph(root, 'file', 'apps/web/proxy.ts');
   assert.match(file, /agents doc: apps\/web\/AGENTS.md/);
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('rendering folds opaque paths into one record per directory and keeps the rest', () => {
+  const graph = {
+    manifest: { schemaVersion: 1 },
+    units: [],
+    routes: [],
+    migrations: [],
+    symbols: {},
+    edges: [],
+    skills: [],
+    guards: [],
+    slashCommands: [],
+    agentsDocs: [],
+    files: [
+      { path: 'tools/evals/runs/model-a.chat.json', unit: 'tools/evals', role: 'config' },
+      { path: 'tools/evals/runs/model-b.chat.json', unit: 'tools/evals', role: 'config' },
+      { path: 'tools/evals/src/live.ts', unit: 'tools/evals', role: 'source' },
+    ],
+  };
+  const rendered = renderKnowledgeGraph(graph, {
+    isOpaquePath: (filePath) => filePath.includes('/runs/'),
+  });
+  const records = rendered['knowledge-graph/files/tools.jsonl']
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .filter((record) => record.path);
+  assert.deepEqual(records, [
+    { path: 'tools/evals/runs/', unit: 'tools/evals', role: 'config', folded: 2 },
+    { path: 'tools/evals/src/live.ts', unit: 'tools/evals', role: 'source' },
+  ]);
+  assert.equal(JSON.parse(rendered['knowledge-graph/manifest.json']).foldedFiles, 2);
+  assert.doesNotMatch(rendered['knowledge-graph/files/tools.jsonl'], /model-a/);
 });
 
 test('live proxy module exports the names the web app publishes', () => {

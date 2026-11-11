@@ -117,6 +117,21 @@ describe('parseCloudAgentProviderStepResult', () => {
     expect(() => parseCloudAgentProviderStepResult(fullStepResult())).not.toThrow();
   });
 
+  it('keeps a redacted thinking block in order across the durable step boundary', () => {
+    const thinkingBlocks: ToolLoopProviderStepResult['thinkingBlocks'] = [
+      { type: 'thinking', thinking: 'reasoning...', signature: 'sig' },
+      { type: 'redacted_thinking', data: 'opaque-provider-data' },
+    ];
+    const parsed = parseCloudAgentProviderStepResult({ ...fullStepResult(), thinkingBlocks });
+    expect(parsed.thinkingBlocks).toEqual(thinkingBlocks);
+    expect(() =>
+      parseCloudAgentProviderStepResult({
+        ...fullStepResult(),
+        thinkingBlocks: [{ type: 'redacted_thinking', data: 'x', thinking: 'leak' }],
+      } as unknown as ToolLoopProviderStepResult),
+    ).toThrow();
+  });
+
   it('rejects a routeId that is neither a string nor null', () => {
     const result = fullStepResult();
     const observation = result.usage.providerCallObservations?.[0];

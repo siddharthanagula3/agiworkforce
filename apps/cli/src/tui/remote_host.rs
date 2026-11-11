@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use agiworkforce_app_server::{
@@ -24,15 +24,19 @@ use crate::tui::approval_broker::{
     ApprovalBroker, ApprovalDecision, ApprovalRequest, ApprovalRequestKind,
 };
 
+pub struct RemotePrompt {
+    pub turn_id: String,
+    pub text: String,
+}
+
 pub enum RemoteInput {
-    Message(String),
-    Interrupt,
+    Message(RemotePrompt),
+    Interrupt { turn_id: String },
 }
 
 #[derive(Default)]
 struct Live {
     turn_ids: Vec<String>,
-    reserved: VecDeque<String>,
     partial: String,
     delta_index: u64,
     event_sequence: u64,
@@ -47,6 +51,7 @@ pub struct TuiRemoteHost {
     events: broadcast::Sender<AppServerNotification>,
     inbox: mpsc::UnboundedSender<RemoteInput>,
     live: Mutex<Live>,
+    queued: Mutex<Vec<String>>,
 }
 
 fn refusal(message: &str) -> DeveloperSessionHostError {
@@ -78,6 +83,7 @@ impl TuiRemoteHost {
                 events,
                 inbox,
                 live: Mutex::new(Live::default()),
+                queued: Mutex::new(Vec::new()),
             }),
             received,
         )
@@ -85,6 +91,12 @@ impl TuiRemoteHost {
 
     fn live(&self) -> std::sync::MutexGuard<'_, Live> {
         self.live
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn queued(&self) -> std::sync::MutexGuard<'_, Vec<String>> {
+        self.queued
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -110,32 +122,84 @@ impl TuiRemoteHost {
             return Err(refusal("The message is empty."));
         }
         let turn_id = Uuid::new_v4().to_string();
-        self.live().reserved.push_back(turn_id.clone());
-        self.inbox.send(RemoteInput::Message(text)).map_err(|_| {
-            DeveloperSessionHostError::unavailable("The terminal session has closed.")
-        })?;
+        self.queued().push(turn_id.clone());
+        let sent = self.inbox.send(RemoteInput::Message(RemotePrompt {
+            turn_id: turn_id.clone(),
+            text,
+        }));
+        if sent.is_err() {
+            self.queued().retain(|queued| *queued != turn_id);
+            return Err(DeveloperSessionHostError::unavailable(
+                "The terminal session has closed.",
+            ));
+        }
         Ok(turn_id)
     }
 
-    pub fn begin_turn(&self, broker: ApprovalBroker) {
-        let turn_ids = {
-            let mut live = self.live();
-            let mut turn_ids: Vec<String> = live.reserved.drain(..).collect();
-            if turn_ids.is_empty() {
-                turn_ids.push(Uuid::new_v4().to_string());
+    pub fn begin_turn(&self, broker: ApprovalBroker, claimed: Vec<String>) {
+        let mut turn_ids: Vec<String> = Vec::new();
+        {
+            let mut queued = self.queued();
+            for id in claimed {
+                if let Some(at) = queued.iter().position(|waiting| *waiting == id) {
+                    turn_ids.push(queued.remove(at));
+                }
             }
-            *live = Live {
-                turn_ids: turn_ids.clone(),
-                broker: Some(broker),
-                ..Live::default()
-            };
-            turn_ids
+        }
+        if turn_ids.is_empty() {
+            turn_ids.push(Uuid::new_v4().to_string());
+        }
+        *self.live() = Live {
+            turn_ids: turn_ids.clone(),
+            broker: Some(broker),
+            ..Live::default()
         };
         for turn_id in turn_ids {
             self.emit(
                 "turn/started",
                 json!({ "threadId": self.thread_id, "turnId": turn_id }),
             );
+        }
+    }
+
+    fn is_running(&self, turn_id: &str) -> bool {
+        self.live()
+            .turn_ids
+            .iter()
+            .any(|running| running == turn_id)
+    }
+
+    fn cancel_queued(&self, turn_id: &str) {
+        let removed = {
+            let mut queued = self.queued();
+            let before = queued.len();
+            queued.retain(|waiting| waiting != turn_id);
+            queued.len() != before
+        };
+        if removed {
+            self.emit(
+                "turn/interrupted",
+                json!({ "threadId": self.thread_id, "turnId": turn_id, "response": "" }),
+            );
+        }
+    }
+
+    pub fn receive(&self, prompts: &mut Vec<RemotePrompt>, input: RemoteInput) -> bool {
+        match input {
+            RemoteInput::Message(prompt) => {
+                prompts.push(prompt);
+                false
+            }
+            RemoteInput::Interrupt { turn_id } => {
+                if self.is_running(&turn_id) {
+                    return true;
+                }
+                if let Some(at) = prompts.iter().position(|prompt| prompt.turn_id == turn_id) {
+                    prompts.remove(at);
+                    self.cancel_queued(&turn_id);
+                }
+                false
+            }
         }
     }
 
@@ -401,8 +465,15 @@ impl DeveloperSessionHost for TuiRemoteHost {
         params: TurnInterruptParams,
     ) -> Result<(), DeveloperSessionHostError> {
         self.own(&params.thread_id)?;
+        if !self.is_running(&params.turn_id) && !self.queued().contains(&params.turn_id) {
+            return Err(DeveloperSessionHostError::not_found(
+                "That task is no longer waiting or running.",
+            ));
+        }
         self.inbox
-            .send(RemoteInput::Interrupt)
+            .send(RemoteInput::Interrupt {
+                turn_id: params.turn_id,
+            })
             .map_err(|_| DeveloperSessionHostError::unavailable("The terminal session has closed."))
     }
 
@@ -449,5 +520,163 @@ impl DeveloperSessionHost for TuiRemoteHost {
 
     fn subscribe(&self) -> broadcast::Receiver<AppServerNotification> {
         self.events.subscribe()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const THREAD: &str = "thread-shared";
+
+    struct Fixture {
+        host: Arc<TuiRemoteHost>,
+        inbox: mpsc::UnboundedReceiver<RemoteInput>,
+        _workspace: tempfile::TempDir,
+        _store: tempfile::TempDir,
+    }
+
+    fn fixture() -> Fixture {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        let inner = CliDeveloperSessionHost::new_with_store(
+            crate::config::CliConfig::default(),
+            workspace.path().to_path_buf(),
+            crate::runtime::session_control::ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let (host, inbox) = TuiRemoteHost::new(inner, THREAD.to_string());
+        Fixture {
+            host,
+            inbox,
+            _workspace: workspace,
+            _store: store,
+        }
+    }
+
+    fn turn_params(text: &str) -> TurnStartParams {
+        serde_json::from_value(json!({
+            "threadId": THREAD,
+            "input": [{ "type": "text", "text": text }],
+        }))
+        .expect("turn params")
+    }
+
+    fn interrupt_params(turn_id: &str) -> TurnInterruptParams {
+        serde_json::from_value(json!({ "threadId": THREAD, "turnId": turn_id }))
+            .expect("interrupt params")
+    }
+
+    fn next_prompt(inbox: &mut mpsc::UnboundedReceiver<RemoteInput>) -> RemotePrompt {
+        match inbox.try_recv() {
+            Ok(RemoteInput::Message(prompt)) => prompt,
+            _ => panic!("expected a queued message"),
+        }
+    }
+
+    fn settled(events: &mut broadcast::Receiver<AppServerNotification>) -> Vec<(String, String)> {
+        let mut seen = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            let turn_id = event.params["turnId"].as_str().unwrap_or_default();
+            seen.push((event.method.clone(), turn_id.to_string()));
+        }
+        seen
+    }
+
+    #[tokio::test]
+    async fn a_task_queued_during_a_turn_keeps_its_turn_id_when_that_turn_ends() {
+        let mut fixture = fixture();
+        let host = &fixture.host;
+        host.begin_turn(ApprovalBroker::new(), Vec::new());
+        let queued = host.start_turn(turn_params("next")).await.unwrap();
+        host.end_turn(TurnStatus::Completed, "done");
+
+        let prompt = next_prompt(&mut fixture.inbox);
+        assert_eq!(prompt.turn_id, queued.id);
+
+        let mut events = host.subscribe();
+        host.begin_turn(ApprovalBroker::new(), vec![prompt.turn_id.clone()]);
+        host.end_turn(TurnStatus::Completed, "finished");
+
+        let seen = settled(&mut events);
+        assert!(seen.contains(&("turn/started".to_string(), queued.id.clone())));
+        assert!(seen.contains(&("turn/completed".to_string(), queued.id)));
+    }
+
+    #[tokio::test]
+    async fn a_turn_only_claims_the_queued_tasks_it_was_given() {
+        let mut fixture = fixture();
+        let host = &fixture.host;
+        let first = host.start_turn(turn_params("one")).await.unwrap();
+        let second = host.start_turn(turn_params("two")).await.unwrap();
+        let first_prompt = next_prompt(&mut fixture.inbox);
+        let _ = next_prompt(&mut fixture.inbox);
+
+        host.begin_turn(ApprovalBroker::new(), vec![first_prompt.turn_id]);
+
+        assert!(host.is_running(&first.id));
+        assert!(!host.is_running(&second.id));
+        assert!(host.queued().contains(&second.id));
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_queued_task_leaves_the_running_turn_alone_and_drops_the_task() {
+        let mut fixture = fixture();
+        let host = &fixture.host;
+        host.begin_turn(ApprovalBroker::new(), Vec::new());
+        let running = host.turn_id().expect("running turn");
+        let queued = host.start_turn(turn_params("later")).await.unwrap();
+        let mut prompts = vec![next_prompt(&mut fixture.inbox)];
+        let mut events = host.subscribe();
+
+        host.interrupt_turn(interrupt_params(&queued.id))
+            .await
+            .unwrap();
+        let input = fixture.inbox.try_recv().ok().expect("interrupt input");
+        let stops_running_turn = host.receive(&mut prompts, input);
+
+        assert!(!stops_running_turn);
+        assert!(prompts.is_empty());
+        assert!(host.is_running(&running));
+        assert!(!host.queued().contains(&queued.id));
+        assert_eq!(
+            settled(&mut events),
+            vec![("turn/interrupted".to_string(), queued.id)]
+        );
+    }
+
+    #[tokio::test]
+    async fn cancelling_the_running_turn_stops_it_and_keeps_queued_tasks() {
+        let mut fixture = fixture();
+        let host = &fixture.host;
+        host.begin_turn(ApprovalBroker::new(), Vec::new());
+        let running = host.turn_id().expect("running turn");
+        let queued = host.start_turn(turn_params("later")).await.unwrap();
+        let mut prompts = vec![next_prompt(&mut fixture.inbox)];
+
+        host.interrupt_turn(interrupt_params(&running))
+            .await
+            .unwrap();
+        let input = fixture.inbox.try_recv().ok().expect("interrupt input");
+        let stops_running_turn = host.receive(&mut prompts, input);
+
+        assert!(stops_running_turn);
+        assert_eq!(prompts.len(), 1);
+        assert_eq!(prompts[0].turn_id, queued.id);
+        assert!(host.queued().contains(&queued.id));
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_task_that_is_neither_running_nor_queued_is_refused() {
+        let fixture = fixture();
+        let host = &fixture.host;
+        host.begin_turn(ApprovalBroker::new(), Vec::new());
+
+        let refused = host
+            .interrupt_turn(interrupt_params("never-admitted"))
+            .await;
+
+        assert!(refused.is_err());
     }
 }

@@ -86,7 +86,8 @@ impl AgentDefinition {
     ///
     /// The following fields are applied when set:
     /// - `model`: calls `session.switch_model()`
-    /// - `tools`: sets `session.allowed_tools` (whitelist)
+    /// - `tools`: sets `session.allowed_tools`, kept within any allowlist the
+    ///   caller passed on the command line
     /// - `disallowed_tools`: appends to `session.disallowed_tools`
     /// - `max_turns`: sets `session.max_turns`
     /// - `permission_mode`: keeps or narrows the session's mode, never widens it
@@ -108,7 +109,10 @@ impl AgentDefinition {
         }
         if let Some(ref tools) = self.tools {
             if !tools.is_empty() {
-                session.allowed_tools = Some(tools.clone());
+                session.allowed_tools = Some(match session.caller_allowed_tools.as_deref() {
+                    Some(cap) => crate::tool_filters::intersect_allowlists(cap, tools),
+                    None => tools.clone(),
+                });
             }
         }
         if let Some(ref disallowed) = self.disallowed_tools {
@@ -399,6 +403,16 @@ fn load_agent(path: &Path) -> Result<AgentDefinition> {
     })
 }
 
+/// Reload the definition a picker row showed, by the file it came from, so a
+/// same-named definition elsewhere cannot stand in for it.
+pub fn find_agent_at(path: &Path) -> Option<AgentDefinition> {
+    agent_at(discover_agents(), path)
+}
+
+fn agent_at(agents: Vec<AgentDefinition>, path: &Path) -> Option<AgentDefinition> {
+    agents.into_iter().find(|agent| agent.path == path)
+}
+
 /// Find an agent definition by name (case-insensitive match).
 pub fn find_agent(name: &str) -> Option<AgentDefinition> {
     let agents = discover_agents();
@@ -480,6 +494,21 @@ impl AgentScope {
             Self::Global => "global",
         }
     }
+}
+
+const MANAGEMENT_SUBCOMMANDS: &[&str] = &[
+    "list", "ls", "show", "view", "inspect", "path", "where", "new", "create", "init", "validate",
+    "doctor", "check", "history", "activity", "log", "delete", "remove", "rm", "rename", "set",
+    "help", "-h", "--help",
+];
+
+pub fn is_management_subcommand(arg: &str) -> bool {
+    let first = arg
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    first.is_empty() || MANAGEMENT_SUBCOMMANDS.contains(&first.as_str())
 }
 
 /// Render the `/agents` management command.
@@ -1609,6 +1638,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn every_management_verb_is_routed_to_the_renderer_not_to_activation() {
+        for verb in [
+            "history", "activity", "log", "delete", "remove", "rm", "rename", "set", "validate",
+            "list", "help", "--help",
+        ] {
+            assert!(is_management_subcommand(verb), "{verb}");
+            assert!(
+                is_management_subcommand(&format!("{verb} reviewer")),
+                "{verb}"
+            );
+        }
+        assert!(is_management_subcommand("HISTORY reviewer"));
+        assert!(is_management_subcommand(""));
+        assert!(!is_management_subcommand("reviewer"));
+        assert!(!is_management_subcommand("reviewer history"));
+    }
+
+    #[test]
     fn format_subagents_renders_model_tools_and_when_to_use() {
         let agents = vec![
             AgentDefinition {
@@ -2074,6 +2121,43 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             mcp_servers: None,
         };
         assert_eq!(agent_scope_label(&agent), "project");
+    }
+
+    #[test]
+    fn a_selected_path_resolves_to_that_file_and_never_a_namesake() {
+        let project = AgentDefinition {
+            name: "reviewer".to_string(),
+            description: "Project editor".to_string(),
+            model: None,
+            tools: Some(vec!["write_file".to_string()]),
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
+            system_prompt: "Project instructions".to_string(),
+            path: PathBuf::from("/repo/.agiworkforce/agents/reviewer.md"),
+            mcp_servers: None,
+        };
+        let global = AgentDefinition {
+            description: "Global reader".to_string(),
+            tools: Some(vec!["read_file".to_string()]),
+            system_prompt: "Global instructions".to_string(),
+            path: PathBuf::from("/home/me/.agiworkforce/agents/reviewer.md"),
+            ..project.clone()
+        };
+        let agents = vec![project.clone(), global.clone()];
+
+        let selected = agent_at(agents.clone(), &global.path).expect("global row");
+        assert_eq!(selected.system_prompt, "Global instructions");
+        assert_eq!(selected.tools, Some(vec!["read_file".to_string()]));
+
+        assert!(agent_at(
+            vec![project],
+            Path::new("/home/me/.agiworkforce/agents/reviewer.md")
+        )
+        .is_none());
     }
 
     fn make_test_context() -> crate::context::SystemContext {

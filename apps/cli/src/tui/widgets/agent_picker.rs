@@ -366,8 +366,8 @@ pub enum AgentPickerAction {
     Nothing,
     /// Close without selecting.
     Close,
-    /// User confirmed selection, host should invoke the agent.
-    Invoke(String),
+    /// User confirmed selection, host should invoke the definition at this path.
+    Invoke(std::path::PathBuf),
 }
 
 /// Handle a crossterm `KeyEvent` while the picker is open.
@@ -402,9 +402,9 @@ pub fn handle_key(
 
         KeyCode::Enter => {
             if let Some(agent) = state.selected_agent() {
-                let name = agent.name.clone();
+                let path = agent.path.clone();
                 state.close();
-                AgentPickerAction::Invoke(name)
+                AgentPickerAction::Invoke(path)
             } else {
                 AgentPickerAction::Nothing
             }
@@ -629,7 +629,30 @@ mod tests {
         let mut s = picker_with_agents(agents);
         let action = handle_key(&mut s, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(!s.visible);
-        assert!(matches!(action, AgentPickerAction::Invoke(ref n) if n == "planner"));
+        assert!(
+            matches!(action, AgentPickerAction::Invoke(ref path) if path == &PathBuf::from("/tmp/.agiworkforce/agents/planner.md"))
+        );
+    }
+
+    #[test]
+    fn enter_on_a_same_named_global_row_invokes_that_file() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let project = make_agent("reviewer", "Project editor");
+        let global = AgentDefinition {
+            description: "Global reader".to_string(),
+            path: PathBuf::from("/home/me/.agiworkforce/agents/reviewer.md"),
+            ..make_agent("reviewer", "Global reader")
+        };
+        let mut s = picker_with_agents(vec![project, global]);
+        s.move_down();
+        assert_eq!(
+            s.selected_agent().map(|a| a.description.as_str()),
+            Some("Global reader")
+        );
+        let action = handle_key(&mut s, KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(
+            matches!(action, AgentPickerAction::Invoke(ref path) if path == &PathBuf::from("/home/me/.agiworkforce/agents/reviewer.md"))
+        );
     }
 
     #[test]

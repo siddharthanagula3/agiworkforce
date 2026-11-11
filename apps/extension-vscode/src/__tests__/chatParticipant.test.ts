@@ -31,6 +31,8 @@ import {
   type AccountMemoryStore,
 } from '../memory/accountMemoryStore';
 import { HOST_CUSTOM_INSTRUCTIONS_KEY } from '../features/instructions';
+import { setActiveCloudProject } from '../features/projects/activeProject';
+import { getTokenCounter } from '../data/tokenCounter';
 
 const editorContext: EditorContext = {
   fileName: '/workspace/src/app.ts',
@@ -710,6 +712,70 @@ describe('chat participant approval lifecycle', () => {
         ]),
       }),
     );
+    for (const listener of listeners) {
+      listener({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+    }
+    await response;
+  });
+
+  it('keeps one project snapshot for a turn when the selection changes during thread start', async () => {
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const context = new vscode.ExtensionContext();
+    const runtime = {
+      startThread: vi.fn(async () => {
+        await setActiveCloudProject(context.workspaceState, {
+          id: 'project-b',
+          name: 'Late project',
+          instructions: 'Instructions that arrived mid-start.',
+        });
+        return threadSummary({ trustMode: 'managed' });
+      }),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const handler = createChatHandler(
+      context.secrets,
+      undefined,
+      context.globalState,
+      pool,
+      context.workspaceState,
+    );
+    const response = handler(
+      request(undefined, 'Implement the CLI command'),
+      { history: [] } as vscode.ChatContext,
+      {
+        progress: vi.fn(),
+        markdown: vi.fn(),
+        button: vi.fn(),
+      } as unknown as vscode.ChatResponseStream,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as vscode.CancellationToken,
+    );
+
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    const turn = runtime.startTurn.mock.calls[0]![0] as {
+      input: Array<{ text?: string }>;
+      cloudProjectId?: string;
+    };
+    expect(turn.cloudProjectId).toBeUndefined();
+    expect(turn.input.map((item) => item.text ?? '').join('\n')).not.toContain('Late project');
     for (const listener of listeners) {
       listener({
         type: 'turn_completed',
@@ -1481,5 +1547,131 @@ describe('chat participant approval lifecycle', () => {
     expect(runtime.startTurn).toHaveBeenCalledWith(
       expect.objectContaining({ threadId: 'thread-new' }),
     );
+  });
+});
+
+describe('chat participant session usage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockConfiguredModel('auto');
+    vscode.workspace.isTrusted = true;
+    vscode.workspace.workspaceFolders = [
+      { name: 'workspace', index: 0, uri: vscode.Uri.file('/workspace') },
+    ];
+    getTokenCounter().reset();
+  });
+
+  async function completeTurn(terminal: { managedRequestIds?: string[] }): Promise<void> {
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const runtime = {
+      startThread: vi.fn().mockResolvedValue(threadSummary()),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const context = new vscode.ExtensionContext();
+    const handler = createChatHandler(context.secrets, undefined, context.globalState, pool);
+    const response = handler(
+      request(undefined, 'Explain this module'),
+      { history: [] } as vscode.ChatContext,
+      {
+        progress: vi.fn(),
+        markdown: vi.fn(),
+        button: vi.fn(),
+      } as unknown as vscode.ChatResponseStream,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as vscode.CancellationToken,
+    );
+
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    for (const listener of listeners) {
+      listener({
+        type: 'turn_model',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        model: 'served-model',
+        provider: 'anthropic',
+      });
+      listener({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 120,
+        outputTokens: 30,
+        ...terminal,
+      });
+    }
+    await response;
+  }
+
+  it('counts the measured tokens of a completed native turn in the session total', async () => {
+    await completeTurn({});
+
+    expect(getTokenCounter().promptTokens).toBe(120);
+    expect(getTokenCounter().completionTokens).toBe(30);
+    expect(getTokenCounter().requestCount).toBe(1);
+  });
+
+  it('settles the managed requests of a completed native turn', async () => {
+    const settle = vi.spyOn(getTokenCounter(), 'settleBillingRequests').mockResolvedValue([2.5]);
+
+    await completeTurn({ managedRequestIds: ['req-1'] });
+
+    expect(settle).toHaveBeenCalledWith(expect.anything(), ['req-1']);
+    settle.mockRestore();
+  });
+
+  it('counts nothing for a turn that did not complete', async () => {
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const runtime = {
+      startThread: vi.fn().mockResolvedValue(threadSummary()),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const context = new vscode.ExtensionContext();
+    const handler = createChatHandler(context.secrets, undefined, context.globalState, pool);
+    const response = handler(
+      request(undefined, 'Explain this module'),
+      { history: [] } as vscode.ChatContext,
+      {
+        progress: vi.fn(),
+        markdown: vi.fn(),
+        button: vi.fn(),
+      } as unknown as vscode.ChatResponseStream,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as vscode.CancellationToken,
+    );
+
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    for (const listener of listeners) {
+      listener({
+        type: 'turn_interrupted',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'interrupted',
+      });
+    }
+    await response;
+
+    expect(getTokenCounter().requestCount).toBe(0);
   });
 });

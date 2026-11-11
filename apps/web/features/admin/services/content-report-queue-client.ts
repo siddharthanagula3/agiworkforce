@@ -12,6 +12,7 @@ export interface AdminContentReport {
   category: string;
   contentExcerpt: string;
   userNote: string;
+  asset: { kind: 'image' | 'video'; reference: string; inlineHeaderOnly: boolean } | null;
   status: ContentReportStatus;
   reviewerId: string | null;
   reviewerNote: string | null;

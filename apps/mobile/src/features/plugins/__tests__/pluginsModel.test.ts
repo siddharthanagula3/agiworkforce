@@ -12,6 +12,7 @@ import {
   pluginStateLabel,
   pluginWorksWith,
   recommendedPlugins,
+  versionMoveSummary,
   versionSwitchSummary,
 } from '../pluginsModel';
 import { pluginDirectoryHref } from '../service';
@@ -159,6 +160,13 @@ describe('plugins model', () => {
         },
       }),
     ).toBe('Moves from 1.0.0 to 1.1.0. It also asks for: send mail. It adds these skills: reply.');
+  });
+
+  it('names the permissions a chosen version adds, and none when it adds none', () => {
+    expect(versionMoveSummary('3.0.0', '2.0.0', ['send mail', 'read files'])).toBe(
+      'Moves from 3.0.0 to 2.0.0. It also asks for: send mail, read files.',
+    );
+    expect(versionMoveSummary('3.0.0', '2.0.0', [])).toBe('Moves from 3.0.0 to 2.0.0.');
   });
 
   it('builds the directory query the web route validates', () => {

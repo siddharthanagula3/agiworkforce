@@ -574,7 +574,7 @@ test('the workspace memory predicate helper satisfies the workspace rule through
     [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
     'apps/web/lib/chats.ts': [
       "import type { DatabaseAdapter } from '@agiworkforce/data-layer';",
-      "import { workspaceMemoryPredicate } from './memory';",
+      "import { workspaceMemoryPredicate } from '@/lib/services/managed-memory-context-service';",
       'export async function listChats(db: DatabaseAdapter, userId: string, organizationId: string | null) {',
       '  return db.query(',
       '    `select id from web_conversations where user_id = $1 and ${workspaceMemoryPredicate(2)}`,',
@@ -594,8 +594,90 @@ test('workspaceMemoryPredicate still renders the organization predicate the guar
   const body = /export function workspaceMemoryPredicate\([^)]*\)[^{]*\{([\s\S]*?)\n\}/.exec(
     source,
   );
-  assert.ok(body, 'workspaceMemoryPredicate is gone; drop WORKSPACE_PREDICATE_HELPER_RE with it');
+  assert.ok(body, 'workspaceMemoryPredicate is gone; drop it from WORKSPACE_PREDICATE_HELPERS');
   assert.match(body[1], /organization_id is not distinct from \$\$\{paramIndex\}::uuid/);
+});
+
+function projectScopeSandbox(constantName, declaration) {
+  return runOnSandbox({
+    [`${NEON}/0001_projects.sql`]: [
+      'create table if not exists public.user_projects (',
+      '  id uuid primary key,',
+      '  user_id text not null,',
+      '  organization_id uuid',
+      ');',
+    ].join('\n'),
+    'apps/web/lib/projects.ts': [
+      "import type { DatabaseAdapter } from '@agiworkforce/data-layer';",
+      declaration,
+      'export async function readProject(db: DatabaseAdapter, id: string, userId: string) {',
+      '  return db.query(',
+      `    \`select p.id from user_projects p where p.user_id = $2 and \${${constantName}} limit 1\`,`,
+      '    [id, userId],',
+      '  );',
+      '}',
+    ].join('\n'),
+  });
+}
+
+const LOCAL_PROJECT_SCOPE = (name) => `export const ${name} = \`p.id = $1 and p.user_id = $2\`;`;
+
+test('the readable project scope satisfies the workspace rule through its interpolation', () => {
+  const credited = projectScopeSandbox(
+    'READABLE_PROJECT_SCOPE_SQL',
+    "import { READABLE_PROJECT_SCOPE_SQL } from '@/lib/server/project-read-access';",
+  );
+  assert.equal(credited.status, 0, `expected pass, got:\n${credited.stderr}`);
+
+  const other = projectScopeSandbox('OWNED_PROJECT_SQL', LOCAL_PROJECT_SCOPE('OWNED_PROJECT_SQL'));
+  assert.equal(other.status, 1, 'an uncredited interpolation must not satisfy the workspace rule');
+  assert.match(other.stderr, /workspace scope ratchet/);
+});
+
+test('a local constant that borrows the readable project scope name gets no credit', () => {
+  const local = projectScopeSandbox(
+    'READABLE_PROJECT_SCOPE_SQL',
+    LOCAL_PROJECT_SCOPE('READABLE_PROJECT_SCOPE_SQL'),
+  );
+  assert.equal(local.status, 1, 'a same-named local constant must not satisfy the workspace rule');
+  assert.match(local.stderr, /workspace scope ratchet/);
+
+  const elsewhere = projectScopeSandbox(
+    'READABLE_PROJECT_SCOPE_SQL',
+    "import { READABLE_PROJECT_SCOPE_SQL } from './my-project-scope';",
+  );
+  assert.equal(elsewhere.status, 1, 'an import from another module must not satisfy the rule');
+  assert.match(elsewhere.stderr, /workspace scope ratchet/);
+});
+
+test('a local workspaceMemoryPredicate gets no credit', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+    'apps/web/lib/chats.ts': [
+      "import type { DatabaseAdapter } from '@agiworkforce/data-layer';",
+      "import { workspaceMemoryPredicate } from './memory';",
+      'export async function listChats(db: DatabaseAdapter, userId: string, organizationId: string | null) {',
+      '  return db.query(',
+      '    `select id from web_conversations where user_id = $1 and ${workspaceMemoryPredicate(2)}`,',
+      '    [userId, organizationId],',
+      '  );',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 1, 'an import from another module must not satisfy the rule');
+  assert.match(result.stderr, /workspace scope ratchet/);
+});
+
+test('READABLE_PROJECT_SCOPE_SQL still binds every branch to the admitted workspace', () => {
+  const source = readFileSync(
+    join(REPO_ROOT, 'apps/web/lib/server/project-read-access.ts'),
+    'utf8',
+  );
+  const body = /export const READABLE_PROJECT_SCOPE_SQL = `([\s\S]*?)`;/.exec(source);
+  assert.ok(body, 'READABLE_PROJECT_SCOPE_SQL is gone; drop it from WORKSPACE_PREDICATE_HELPERS');
+  assert.match(body[1], /p\.user_id = \$2 and p\.organization_id is not distinct from \$3::uuid/);
+  assert.match(body[1], /\$3::uuid is not null/);
+  assert.match(body[1], /s\.organization_id = \$3::uuid/);
 });
 
 test('a cron sweep is exempt from the workspace rule, a settings route is not', () => {

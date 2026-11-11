@@ -88,7 +88,8 @@ vi.mock('@/lib/services/identity-events', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   emitIdentitySecurityEvent: mocks.emitIdentitySecurityEvent,
 }));
-vi.mock('@/lib/support/tickets/service', () => ({
+vi.mock('@/lib/support/tickets/service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   EmptyEscalationSummaryError: class EmptyEscalationSummaryError extends Error {},
   InvalidTicketTransitionError: class InvalidTicketTransitionError extends Error {},
   MAX_ESCALATION_SUMMARY_CHARS: vi.fn(),
@@ -394,3 +395,5 @@ describe('POST /api/support/staff/tickets/[ticketId]/recovery', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/support/tickets/service');

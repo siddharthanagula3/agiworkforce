@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BUILT_IN_ORGANIZATION_ROLES,
@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   createRole: vi.fn(),
   deleteRole: vi.fn(),
   setMemberRoles: vi.fn(),
+  updateRole: vi.fn(),
+  setGroupRoles: vi.fn(),
 }));
 
 function mutation(mutate: (...args: unknown[]) => unknown) {
@@ -26,10 +28,10 @@ vi.mock('../../hooks/use-workspace-roles', () => ({
   useWorkspaceRoles: () => mocks.roles(),
   useWorkspaceGroups: () => mocks.groups(),
   useCreateWorkspaceRole: () => mutation(mocks.createRole),
-  useUpdateWorkspaceRole: () => mutation(vi.fn()),
+  useUpdateWorkspaceRole: () => mutation(mocks.updateRole),
   useDeleteWorkspaceRole: () => mutation(mocks.deleteRole),
   useSetMemberRoles: () => mutation(mocks.setMemberRoles),
-  useSetGroupRoles: () => mutation(vi.fn()),
+  useSetGroupRoles: () => mutation(mocks.setGroupRoles),
   useSetGroupManagers: () => mutation(vi.fn()),
   useCreateWorkspaceGroup: () => mutation(vi.fn()),
   useRenameWorkspaceGroup: () => mutation(vi.fn()),
@@ -252,5 +254,171 @@ describe('WorkspaceRoles', () => {
     expect(within(row).queryByRole('button')).toBeNull();
     expect(screen.queryByRole('button', { name: 'New role' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+  describe('drafts', () => {
+    const ops = {
+      id: 'role-ops',
+      key: 'custom_ops',
+      name: 'Ops',
+      description: 'Runs the workspace',
+      builtIn: false,
+      assignable: true,
+      permissions: ['feature.content.view', 'admin.audit.view'],
+      memberCount: 0,
+      groupCount: 0,
+      version: 5,
+    };
+    const legacy = {
+      ...ops,
+      id: 'role-legacy',
+      key: 'custom_legacy',
+      name: 'Legacy',
+      description: null,
+      permissions: ['content.read', 'roles.manage'],
+      version: 2,
+    };
+
+    function roleRow(name: string): HTMLElement {
+      return screen.getAllByText(name)[0]!.closest('li') as HTMLElement;
+    }
+
+    it('does not carry one role’s draft into the editor of another role', () => {
+      withRoles({ roles: [...builtIn, auditor, ops] });
+      render(<WorkspaceRoles />);
+
+      fireEvent.click(within(roleRow('Auditor')).getByRole('button', { name: 'Edit' }));
+      fireEvent.change(screen.getByLabelText('Role name'), { target: { value: 'Renamed' } });
+      fireEvent.click(within(roleRow('Ops')).getByRole('button', { name: 'Edit' }));
+
+      expect(screen.getByLabelText('Role name')).toHaveValue('Ops');
+      fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+      expect(mocks.updateRole).toHaveBeenCalledWith({
+        roleId: 'role-ops',
+        draft: {
+          name: 'Ops',
+          description: 'Runs the workspace',
+          permissions: ['feature.content.view', 'admin.audit.view'],
+          version: 5,
+        },
+      });
+    });
+
+    it('keeps a finished save of one role from closing the editor of another', async () => {
+      let finish: () => void = () => undefined;
+      mocks.updateRole.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)));
+      withRoles({ roles: [...builtIn, auditor, ops] });
+      render(<WorkspaceRoles />);
+
+      fireEvent.click(within(roleRow('Auditor')).getByRole('button', { name: 'Edit' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+      fireEvent.click(within(roleRow('Ops')).getByRole('button', { name: 'Edit' }));
+      await act(async () => finish());
+
+      expect(screen.getByLabelText('Role name')).toHaveValue('Ops');
+    });
+
+    it('shows a role stored under legacy keys as checked and removes every spelling when unchecked', () => {
+      withRoles({ roles: [...builtIn, legacy] });
+      render(<WorkspaceRoles />);
+
+      fireEvent.click(within(roleRow('Legacy')).getByRole('button', { name: 'Edit' }));
+      expect(screen.getByLabelText('Create roles and assign them')).toBeChecked();
+      expect(screen.getByLabelText('Open what the workspace shares')).toBeChecked();
+
+      fireEvent.click(screen.getByLabelText('Create roles and assign them'));
+      fireEvent.click(screen.getByRole('button', { name: 'Save role' }));
+      expect(mocks.updateRole).toHaveBeenCalledWith({
+        roleId: 'role-legacy',
+        draft: {
+          name: 'Legacy',
+          description: null,
+          permissions: ['feature.content.view'],
+          version: 2,
+        },
+      });
+    });
+
+    it('lets an untouched member row follow the server and blocks a stale edited one', () => {
+      withRoles({
+        roles: [...builtIn, auditor, ops],
+        memberRoleGrants: { 'viewer-1': ['role-ops'] },
+      });
+      const view = render(<WorkspaceRoles />);
+      const row = () => screen.getByText('Vera Viewer').closest('li') as HTMLElement;
+      expect(within(row()).getByLabelText('Ops')).toBeChecked();
+
+      withRoles({ roles: [...builtIn, auditor, ops], memberRoleGrants: {} });
+      view.rerender(<WorkspaceRoles />);
+      expect(within(row()).getByLabelText('Ops')).not.toBeChecked();
+      expect(within(row()).queryByRole('button', { name: 'Save roles' })).toBeNull();
+
+      withRoles({
+        roles: [...builtIn, auditor, ops],
+        memberRoleGrants: { 'viewer-1': ['role-ops'] },
+      });
+      view.rerender(<WorkspaceRoles />);
+      fireEvent.click(within(row()).getByLabelText('Auditor'));
+      withRoles({ roles: [...builtIn, auditor, ops], memberRoleGrants: {} });
+      view.rerender(<WorkspaceRoles />);
+
+      expect(within(row()).getByRole('status')).toHaveTextContent('changed elsewhere');
+      expect(within(row()).getByRole('button', { name: 'Save roles' })).toBeDisabled();
+      expect(mocks.setMemberRoles).not.toHaveBeenCalled();
+
+      fireEvent.click(within(row()).getByRole('button', { name: 'Discard changes' }));
+      expect(within(row()).getByLabelText('Auditor')).not.toBeChecked();
+      expect(within(row()).getByLabelText('Ops')).not.toBeChecked();
+      expect(within(row()).queryByRole('button', { name: 'Save roles' })).toBeNull();
+    });
+
+    it('does not mistake its own saved roles for another administrator’s change', () => {
+      withRoles({ roles: [...builtIn, auditor, ops] });
+      const view = render(<WorkspaceRoles />);
+      const row = () => screen.getByText('Vera Viewer').closest('li') as HTMLElement;
+
+      fireEvent.click(within(row()).getByLabelText('Auditor'));
+      withRoles({
+        roles: [...builtIn, auditor, ops],
+        memberRoleGrants: { 'viewer-1': ['role-auditor'] },
+      });
+      view.rerender(<WorkspaceRoles />);
+      expect(within(row()).queryByRole('button', { name: 'Save roles' })).toBeNull();
+
+      withRoles({ roles: [...builtIn, auditor, ops], memberRoleGrants: {} });
+      view.rerender(<WorkspaceRoles />);
+      expect(within(row()).getByLabelText('Auditor')).not.toBeChecked();
+      expect(within(row()).queryByRole('status')).toBeNull();
+    });
+
+    it('rebases an untouched group and blocks a stale edited one', () => {
+      const group = (roleIds: string[]) => ({
+        id: 'group-1',
+        displayName: 'Engineering',
+        memberCount: 12,
+        roleIds,
+        managerUserIds: [],
+        source: { kind: 'directory', connectionName: 'Okta' },
+      });
+      withRoles({ roles: [...builtIn, auditor, ops] });
+      withGroups([group(['role-ops'])]);
+      const view = render(<WorkspaceRoles />);
+      const row = () => screen.getByText('Engineering').closest('li') as HTMLElement;
+      expect(within(row()).getByLabelText('Ops')).toBeChecked();
+
+      withGroups([group([])]);
+      view.rerender(<WorkspaceRoles />);
+      expect(within(row()).getByLabelText('Ops')).not.toBeChecked();
+      expect(within(row()).queryByRole('button', { name: 'Save group' })).toBeNull();
+
+      withGroups([group(['role-ops'])]);
+      view.rerender(<WorkspaceRoles />);
+      fireEvent.click(within(row()).getByLabelText('Auditor'));
+      withGroups([group([])]);
+      view.rerender(<WorkspaceRoles />);
+
+      expect(within(row()).getByRole('status')).toHaveTextContent('changed elsewhere');
+      expect(within(row()).getByRole('button', { name: 'Save group' })).toBeDisabled();
+      expect(mocks.setGroupRoles).not.toHaveBeenCalled();
+    });
   });
 });

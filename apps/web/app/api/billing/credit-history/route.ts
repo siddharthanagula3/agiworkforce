@@ -55,6 +55,15 @@ function labelForRow(row: CreditHistoryRow): string | null {
   return `${USAGE_LABEL_PREFIX}${getModelMetadataById(modelId)?.name ?? modelId}`;
 }
 
+/**
+ * A deduction's stored amount is the change to used credit, so a positive one
+ * is spending and a negative one is a release that gives credit back. Every
+ * other type already stores the change to the balance.
+ */
+function balanceEffectCents(row: CreditHistoryRow): number {
+  return row.transaction_type === 'deduction' ? -row.amount_cents : row.amount_cents;
+}
+
 function readMetadataString(row: CreditHistoryRow, key: string): string | null {
   const value = row.metadata?.[key];
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -104,17 +113,21 @@ async function handleGetCreditHistory(request: NextRequest) {
     // A projection, never a spread of the row. `metadata` is the settlement
     // blob: it carries the served provider, the served route and the operands
     // the company was charged, none of which is the user's ledger.
-    const transactions = rows.map((row) => ({
-      id: row.id,
-      transaction_type: row.transaction_type,
-      amount_cents: row.amount_cents,
-      description: row.description,
-      created_at: row.created_at,
-      label: labelForRow(row),
-      credits: creditsFromCents(row.amount_cents),
-      feature: readMetadataString(row, 'quotaFeature'),
-      model: modelLabelForRow(row),
-    }));
+    const transactions = rows.map((row) => {
+      const balanceEffect = balanceEffectCents(row);
+      return {
+        id: row.id,
+        transaction_type: row.transaction_type,
+        amount_cents: row.amount_cents,
+        balance_effect_cents: balanceEffect,
+        description: row.description,
+        created_at: row.created_at,
+        label: labelForRow(row),
+        credits: creditsFromCents(balanceEffect),
+        feature: readMetadataString(row, 'quotaFeature'),
+        model: modelLabelForRow(row),
+      };
+    });
     return NextResponse.json({ transactions, has_more: rows.length === limit });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch credit history');

@@ -37,11 +37,11 @@ import { LIVE_VOICE_REASONING, type LiveVoiceReasoning } from '@features/chat/li
 const LABEL = {
   title: 'Voice settings',
   description:
-    'Choose the spoken voice, how much intelligence a voice turn gets, its language and its speaking pace.',
+    'Choose the spoken voice, the intelligence this chat uses for typed replies, how much the voice reasons, its language and its speaking pace.',
   voice: 'Voice',
   previous: 'Previous voice',
   next: 'Next voice',
-  intelligence: 'Intelligence',
+  intelligence: 'Chat intelligence',
   reasoning: 'Voice reasoning',
   language: 'Language',
   pace: 'Speaking pace',

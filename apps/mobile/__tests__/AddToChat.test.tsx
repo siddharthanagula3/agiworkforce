@@ -3,17 +3,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
-function pressHandlerFor(
-  view: Pick<ReturnType<typeof render>, 'UNSAFE_getAllByProps'>,
-  label: string,
-): () => void {
-  const owner = view
-    .UNSAFE_getAllByProps({ accessibilityLabel: label })
-    .find((node) => typeof node.props.onPress === 'function');
-  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
-  return owner.props.onPress as () => void;
-}
-
 const mockVideoSlot: { modelId: string | undefined } = { modelId: undefined };
 
 jest.mock('@agiworkforce/types', () =>
@@ -155,6 +144,7 @@ import { useChatViewStore } from '../stores/chat/chatViewStore';
 import * as Clipboard from 'expo-clipboard';
 import { listMediaModels } from '../src/features/chat/actions/mediaMode';
 import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
+import { ownerHandler } from '../test-utils/ownerProps';
 import {
   SYNTHETIC_RETIRED_VIDEO_MODEL_ID,
   requireLiveVideoModelId,
@@ -244,8 +234,8 @@ describe('AddToChatSheet', () => {
     const onAttachFromLibrary = jest.fn();
     const view = renderSheet({ destinationKey: 'first', onAttachFromLibrary });
     fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
-    await view.findByLabelText('Attach old.pdf from Library');
-    const stalePress = pressHandlerFor(view, 'Attach old.pdf from Library');
+    const row = await view.findByLabelText('Attach old.pdf from Library');
+    const stalePress = ownerHandler(row, 'onPress');
     view.rerender(
       <AddToChatSheet
         {...defaultProps}
@@ -312,8 +302,10 @@ describe('AddToChatSheet', () => {
     const onAttachFromLibrary = jest.fn();
     const view = renderSheet({ onAttachFromLibrary });
     fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
-    await view.findByLabelText('Attach old.pdf from Library');
-    const stalePress = pressHandlerFor(view, 'Attach old.pdf from Library');
+    const stalePress = ownerHandler(
+      await view.findByLabelText('Attach old.pdf from Library'),
+      'onPress',
+    );
     fireEvent(view.getByTestId('bottom-sheet'), 'change', -1);
     act(() => stalePress());
     expect(onAttachFromLibrary).not.toHaveBeenCalled();

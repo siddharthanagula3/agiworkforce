@@ -338,6 +338,41 @@ describe('settings webview', () => {
     expect(contextLines.disabled).toBe(true);
   });
 
+  it('keeps invalid numeric and text edits editable with a field message instead of posting them', () => {
+    const postMessage = boot();
+    const status = document.getElementById('status') as HTMLElement;
+    const contextLines = document.getElementById('setting-context-lines') as HTMLInputElement;
+    const cliPath = document.getElementById('setting-cli-path') as HTMLInputElement;
+
+    for (const invalid of ['501', '-1', '1.5', '']) {
+      contextLines.value = invalid;
+      contextLines.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(contextLines.disabled).toBe(false);
+      expect(contextLines.value).toBe(invalid);
+      expect(contextLines.getAttribute('aria-invalid')).toBe('true');
+      expect(status.dataset.kind).toBe('error');
+      expect(status.textContent).toContain('Context lines');
+    }
+
+    cliPath.value = '   ';
+    cliPath.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(cliPath.disabled).toBe(false);
+    expect(cliPath.value).toBe('   ');
+    expect(status.textContent).toContain('CLI path cannot be empty');
+    expect(postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'settings.update' }),
+    );
+
+    contextLines.value = '120';
+    contextLines.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(contextLines.getAttribute('aria-invalid')).toBeNull();
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'settings.update',
+      key: 'contextLines',
+      value: 120,
+    });
+  });
+
   it('offers Use terminal beside the CLI path, off until the snapshot says otherwise', () => {
     const postMessage = boot();
     const toggle = document.getElementById('setting-use-terminal') as HTMLInputElement;

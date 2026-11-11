@@ -96,7 +96,8 @@ vi.mock('@/lib/slack/slack-assistant', () => ({
   SlackApprovalUnavailableError: mocks.SlackApprovalUnavailableError,
   claimSlackApproval: mocks.claimSlackApproval,
 }));
-vi.mock('@/lib/slack/slack-runs', () => ({
+vi.mock('@/lib/slack/slack-runs', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   SLACK_TASK_STOPPED_ERROR: 'task_stopped: the task was stopped in AGI Workforce',
   claimSlackRunApproval: vi.fn(),
   listPendingSlackApprovals: vi.fn(),
@@ -217,3 +218,5 @@ describe('POST /api/slack/runs/[runId]/approval', () => {
     expect(mocks.after).toHaveBeenCalledWith(resume);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/slack/slack-runs');

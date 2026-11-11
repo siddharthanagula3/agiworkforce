@@ -652,22 +652,6 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   color: var(--chat-text-primary);
 }
 
-[data-design='agi'] .agi-app-panel-suggestions {
-  display: grid;
-  gap: calc(var(--u) * 6);
-  inline-size: 100%;
-}
-
-[data-design='agi'] .agi-app-panel-suggestion {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--u) * 10);
-  padding: calc(var(--u) * 10) calc(var(--u) * 12);
-  border: 1px solid var(--chat-border);
-  border-radius: calc(var(--u) * 10);
-  color: var(--chat-text-secondary);
-}
-
 [data-design='agi'] .agi-app-panel-composer {
   display: flex;
   flex: none;

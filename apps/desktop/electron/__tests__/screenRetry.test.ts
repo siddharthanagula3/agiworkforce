@@ -133,6 +133,58 @@ describe('leaving the unreachable screen without being asked', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('tells an attempt already waiting on the app that its screen was left', async () => {
+    const { retry, resume } = harness(true);
+    let finish: () => void = () => undefined;
+    let stillCurrent: () => boolean = () => false;
+    retry.watch(
+      1,
+      (isCurrent) =>
+        new Promise<void>((resolve) => {
+          stillCurrent = isCurrent;
+          finish = resolve;
+        }),
+    );
+
+    resume();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(stillCurrent()).toBe(true);
+
+    retry.release(1);
+    expect(stillCurrent()).toBe(false);
+
+    finish();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('retires an attempt in flight when the screen is drawn again for another page', async () => {
+    const { retry, resume } = harness(true);
+    const flags: Array<() => boolean> = [];
+    let finish: () => void = () => undefined;
+    retry.watch(
+      1,
+      (isCurrent) =>
+        new Promise<void>((resolve) => {
+          flags.push(isCurrent);
+          finish = resolve;
+        }),
+    );
+    resume();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const next = vi.fn(async (isCurrent: () => boolean) => {
+      flags.push(isCurrent);
+    });
+    retry.watch(1, next);
+    expect(flags[0]!()).toBe(false);
+
+    finish();
+    await vi.advanceTimersByTimeAsync(RETRY_BACKOFF_MS[1]!);
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(flags[1]!()).toBe(true);
+  });
+
   it('watches each window on its own', async () => {
     const { retry } = harness(true);
     const first = vi.fn(async () => undefined);

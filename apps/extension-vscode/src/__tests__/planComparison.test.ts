@@ -11,6 +11,9 @@ import {
   planUsagePhrase,
 } from '../features/account-auth/planComparison';
 
+const PRO = BILLING_PLAN_PRICING.pro.label;
+const ULTRA = BILLING_PLAN_PRICING.max_15x.label;
+
 function labelsOf(capabilities: readonly (keyof typeof BILLING_PLAN_CAPABILITY_LABELS)[]): string {
   return capabilities.map((capability) => BILLING_PLAN_CAPABILITY_LABELS[capability]).join(', ');
 }
@@ -29,17 +32,15 @@ describe('plan comparison', () => {
     expect(planComparisonRows(null).map((row) => row.label)).toEqual(
       COMPARED_PLANS.map((plan) => BILLING_PLAN_PRICING[plan].label),
     );
-    expect(planComparisonRows(null).find((row) => row.plan === 'max_15x')?.label).toBe('Max 20x');
+    expect(planComparisonRows(null).find((row) => row.plan === 'max_15x')?.label).toBe(ULTRA);
   });
 
   it('states each plan relative to the plan below it, never in credits or dollars', () => {
     expect(planUsagePhrase('basic')).toBe('5x more usage per session than Free');
     expect(planUsagePhrase('pro')).toBe('5x more usage than Basic');
-    expect(planUsagePhrase('max')).toBe('5x more usage than Pro');
-    expect(planUsagePhrase('max_15x')).toBe(
-      '20x more usage per session than Pro, 10x more weekly usage than Pro',
-    );
-    expect(planUsagePhrase('team')).toBe('Same usage as Pro for every seat');
+    expect(planUsagePhrase('max')).toBe(`5x more usage than ${PRO}`);
+    expect(planUsagePhrase('max_15x')).toBe(`10x more weekly usage than ${PRO}`);
+    expect(planUsagePhrase('team')).toBe(`Same usage as ${PRO} for every seat`);
     expect(planUsagePhrase('free')).toBe('A small allowance, free models only');
     expect(planUsagePhrase('enterprise')).toBe('Usage set by your contract');
     for (const plan of COMPARED_PLANS) expect(planUsagePhrase(plan)).not.toMatch(/\$|credits/);
@@ -63,15 +64,15 @@ describe('plan comparison', () => {
       `Includes: ${labelsOf(billingPlanCapabilities('pro'))}`,
     );
     expect(byPlan.get('max_15x')?.features).toBe(
-      `Adds over Pro: ${BILLING_PLAN_CAPABILITY_LABELS.video_generation}`,
+      `Adds over ${PRO}: ${BILLING_PLAN_CAPABILITY_LABELS.video_generation}`,
     );
     expect(byPlan.get('team')?.features).toBe(
-      `Adds over Pro: ${BILLING_PLAN_CAPABILITY_LABELS.team_admin}`,
+      `Adds over ${PRO}: ${BILLING_PLAN_CAPABILITY_LABELS.team_admin}`,
     );
-    expect(byPlan.get('basic')?.features).toBe('No features beyond Pro');
-    expect(byPlan.get('free')?.features).toBe('No features beyond Pro');
+    expect(byPlan.get('basic')?.features).toBe(`No features beyond ${PRO}`);
+    expect(byPlan.get('free')?.features).toBe(`No features beyond ${PRO}`);
     expect(byPlan.get('enterprise')?.features).toBe(
-      `Adds over Pro: ${labelsOf(billingPlanCapabilitiesAddedOver('enterprise', 'pro'))}`,
+      `Adds over ${PRO}: ${labelsOf(billingPlanCapabilitiesAddedOver('enterprise', 'pro'))}`,
     );
   });
 
@@ -79,9 +80,9 @@ describe('plan comparison', () => {
     const rows = planComparisonRows('max_15x');
 
     expect(rows.find((row) => row.plan === 'enterprise')?.features).toMatch(
-      /^Adds over Max 20x: /u,
+      new RegExp(`^Adds over ${ULTRA}: `, 'u'),
     );
-    expect(rows.find((row) => row.plan === 'max')?.features).toBe('No features beyond Max 20x');
+    expect(rows.find((row) => row.plan === 'max')?.features).toBe(`No features beyond ${ULTRA}`);
   });
 
   it('ignores a tier the comparison does not list rather than marking the wrong row', () => {

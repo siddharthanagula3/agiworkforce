@@ -205,14 +205,20 @@ async function assertAccountSecurityUnlessVerifying(
 export async function assertAccountActive(
   userId: string,
   request?: NextRequest,
-  options: AuthOptions = {},
+  options: Pick<AuthOptions, 'mfaGateExemptForOwner'> = {},
 ): Promise<AuthResult['organizationScope']> {
   await assertAccountLifecycleActive(userId);
   if (!options.mfaGateExemptForOwner) {
     await assertWorkspaceNotLockedDown(userId, request);
     return undefined;
   }
+  return bindOrganizationScope(userId, request);
+}
 
+async function bindOrganizationScope(
+  userId: string,
+  request?: NextRequest,
+): Promise<AuthResult['organizationScope']> {
   if (!request) throw createError.unauthorized();
   let organizationId: string | null;
   try {

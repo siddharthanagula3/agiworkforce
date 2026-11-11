@@ -44,6 +44,7 @@ export interface PlaceRecord {
   priceLevel?: PlacePriceLevel;
   openNow?: boolean;
   hours?: string[];
+  hoursKind?: 'current' | 'regular';
   phone?: string;
   website?: string;
   mapsUrl?: string;

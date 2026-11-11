@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SkillDraft } from '@agiworkforce/skills/validation';
 import {
   loadSkillsCatalog,
@@ -135,24 +135,39 @@ export function useSkillsSettingsAdapter({
     }
   }, [authedHeaders, editingSkillName]);
 
+  const editorGeneration = useRef(0);
+
+  useEffect(
+    () => () => {
+      editorGeneration.current += 1;
+    },
+    [],
+  );
+
   const closeSkillEditor = useCallback(() => {
+    editorGeneration.current += 1;
     setSkillEditorMode(null);
     setEditingSkillName(null);
     setEditingSkillBody(null);
+    setEditingSkillBodyLoading(false);
     setEditingSkillBodyError(null);
     setSkillSubmitError(null);
   }, []);
 
   const onCreateSkill = useCallback(() => {
+    editorGeneration.current += 1;
     setSkillSubmitError(null);
     setEditingSkillName(null);
     setEditingSkillBody(null);
+    setEditingSkillBodyLoading(false);
     setEditingSkillBodyError(null);
     setSkillEditorMode('create');
   }, []);
 
   const editSkill = useCallback(
     (name: string) => {
+      const generation = ++editorGeneration.current;
+      const isCurrent = () => editorGeneration.current === generation;
       setSkillSubmitError(null);
       setEditingSkillName(name);
       setEditingSkillBody(null);
@@ -167,11 +182,11 @@ export function useSkillsSettingsAdapter({
           });
           if (!res.ok) throw new Error(SKILL_LOAD_FAILURE);
           const body = (await res.json()) as { body: string };
-          setEditingSkillBody(body.body);
+          if (isCurrent()) setEditingSkillBody(body.body);
         } catch (error) {
-          setEditingSkillBodyError(toUserMessage(error, SKILL_LOAD_FAILURE));
+          if (isCurrent()) setEditingSkillBodyError(toUserMessage(error, SKILL_LOAD_FAILURE));
         } finally {
-          setEditingSkillBodyLoading(false);
+          if (isCurrent()) setEditingSkillBodyLoading(false);
         }
       })();
     },

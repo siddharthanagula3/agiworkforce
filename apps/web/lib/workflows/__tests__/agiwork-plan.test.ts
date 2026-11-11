@@ -328,6 +328,47 @@ describe('the cloud agent workflow hook', () => {
     expect(plans.get(created!.id)?.status).toBe('completed');
   });
 
+  it.each(['paused', 'awaiting_input'] as const)(
+    'leaves the plan open while the run is %s, so a later failure can still close it',
+    async (outcome) => {
+      const { db, plans } = fakeDb();
+      mockGetNeonDb.mockReturnValue(db);
+      const input = workflowInput({ goal: { goal: 'Ship the pricing page' } });
+
+      await ensureWorkPlanForRun(input);
+      const [created] = [...plans.values()];
+      await settleWorkPlanForRun(input, outcome);
+      expect(plans.get(created!.id)?.status).toBe('draft');
+
+      await settleWorkPlanForRun(input, 'failed');
+      expect(plans.get(created!.id)?.status).toBe('failed');
+    },
+  );
+
+  it('records a cancelled run as a cancelled plan, not a completed one', async () => {
+    const { db, plans } = fakeDb();
+    mockGetNeonDb.mockReturnValue(db);
+    const input = workflowInput({ goal: { goal: 'Ship the pricing page' } });
+
+    await ensureWorkPlanForRun(input);
+    const [created] = [...plans.values()];
+    await settleWorkPlanForRun(input, 'cancelled');
+
+    expect(plans.get(created!.id)?.status).toBe('cancelled');
+  });
+
+  it('records a reported failure as a failed plan', async () => {
+    const { db, plans } = fakeDb();
+    mockGetNeonDb.mockReturnValue(db);
+    const input = workflowInput({ goal: { goal: 'Ship the pricing page' } });
+
+    await ensureWorkPlanForRun(input);
+    const [created] = [...plans.values()];
+    await settleWorkPlanForRun(input, 'failed');
+
+    expect(plans.get(created!.id)?.status).toBe('failed');
+  });
+
   it('never lets a plan write end the run', async () => {
     mockGetNeonDb.mockImplementation(() => {
       throw new Error('no database');

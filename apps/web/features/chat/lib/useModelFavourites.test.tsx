@@ -53,6 +53,39 @@ describe('model favourites cache isolation', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps a saved favourite and saves both after a slower initial read arrives', async () => {
+    let releaseRead!: (value: unknown) => void;
+    const readBody = new Promise((resolve) => {
+      releaseRead = resolve;
+    });
+    const putBodies: unknown[] = [];
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        putBodies.push(JSON.parse(String(init.body)));
+        return { ok: true, json: async () => ({}) };
+      }
+      return { ok: true, json: () => readBody };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useModelFavourites());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    act(() => result.current.toggleFavourite('model-a'));
+    await waitFor(() => expect(putBodies).toHaveLength(1));
+
+    await act(async () => {
+      releaseRead({ settings: { favouriteModelIds: [] } });
+      await readBody;
+    });
+    expect(result.current.favouriteModelIds).toEqual(['model-a']);
+
+    act(() => result.current.toggleFavourite('model-b'));
+    await waitFor(() => expect(putBodies).toHaveLength(2));
+    expect(putBodies[1]).toMatchObject({ value: { favouriteModelIds: ['model-a', 'model-b'] } });
+    expect(localStorage.getItem('agi-model-picker-favourites')).toBe('["model-a","model-b"]');
+  });
+
   it('puts a toggle back and says so when the server does not save it', async () => {
     const fetchMock = vi
       .fn()

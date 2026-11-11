@@ -152,6 +152,14 @@ describe('conversation branch service', () => {
 
     const [copySql, copyParams] = query.mock.calls[5]!;
     expect(copySql).toContain('row_number() over');
+    expect(copySql).toContain('with recursive lineage');
+    expect(copySql).toContain('ancestor.id = lineage.parent_id');
+    expect(copySql).toMatch(
+      /not thread_state\.has_variants\s+or source_message\.id in \(select id from lineage\)/,
+    );
+    expect(copySql).toMatch(
+      /insert into public\.web_messages\s+\(id,\s+conversation_id,\s+role,\s+content,\s+model,\s+provider,\s+input_tokens,\s+output_tokens,\s+cost_cents,\s+metadata,\s+created_at\)/,
+    );
     expect(copySql).toContain('insert into public.web_messages');
     expect(copySql).toContain('cost_cents');
     expect(copySql).not.toContain('insert into public.conversation_branch_messages');
@@ -204,6 +212,7 @@ describe('conversation branch service', () => {
     const [insertSql, insertParams] = query.mock.calls[4]!;
     expect(insertSql).toContain('insert into public.web_conversations');
     expect(insertSql).toContain('google_user_data_at');
+    expect(insertSql).toMatch(/activated_at\)\s+values \(.*, now\(\)\)/);
     expect(insertParams).toEqual([
       targetConversation.id,
       'user-1',

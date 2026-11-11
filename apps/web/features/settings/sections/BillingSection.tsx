@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Switch, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -76,6 +76,7 @@ interface CreditHistoryEntry {
   id: string;
   transaction_type: CreditTransactionType | string;
   amount_cents: number;
+  balance_effect_cents: number;
   description: string | null;
   label?: string | null;
   credits?: number;
@@ -91,12 +92,6 @@ const CREDIT_TRANSACTION_LABELS: Record<string, string> = {
   bonus: 'Bonus credit',
   adjustment: 'Adjustment',
 };
-
-function signedCreditCents(entry: CreditHistoryEntry): number {
-  return entry.transaction_type === 'deduction'
-    ? -Math.abs(entry.amount_cents)
-    : entry.amount_cents;
-}
 
 const CREDIT_FRACTION_DIGITS = 2;
 
@@ -282,6 +277,12 @@ export function BillingSection() {
   const [planActionError, setPlanActionError] = useState<string | null>(null);
   const [downgradeOpen, setDowngradeOpen] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const planStateRevision = useRef(0);
+
+  function adoptPlanState(state: PlanChangeState) {
+    planStateRevision.current += 1;
+    setPlanState(state);
+  }
 
   async function setOverage(next: boolean) {
     if (overagePending) return;
@@ -326,7 +327,7 @@ export function BillingSection() {
     setPlanActionPending(true);
     setPlanActionError(null);
     try {
-      setPlanState(await keepCurrentPlan());
+      adoptPlanState(await keepCurrentPlan());
     } catch (error) {
       setPlanActionError(
         toUserMessage(error, 'Your plan could not be resumed. Nothing was changed.'),
@@ -355,7 +356,7 @@ export function BillingSection() {
         setPlanActionPending(true);
         setPlanActionError(null);
         try {
-          setPlanState(await scheduleDowngrade(target.plan));
+          adoptPlanState(await scheduleDowngrade(target.plan));
         } catch (error) {
           setPlanActionError(
             toUserMessage(error, 'The switch to monthly billing could not be scheduled.'),
@@ -509,6 +510,7 @@ export function BillingSection() {
 
   useEffect(() => {
     let cancelled = false;
+    const revision = ++planStateRevision.current;
     setPlanStateError(null);
     if (!readsPlanState || billingLoading) {
       setPlanState(null);
@@ -516,10 +518,10 @@ export function BillingSection() {
     }
     fetchPlanChangeState()
       .then((state) => {
-        if (!cancelled) setPlanState(state);
+        if (!cancelled && revision === planStateRevision.current) setPlanState(state);
       })
       .catch((error: unknown) => {
-        if (cancelled) return;
+        if (cancelled || revision !== planStateRevision.current) return;
         setPlanState(null);
         setPlanStateError(
           toUserMessage(error, 'Your trial, renewal and plan change details could not be loaded.'),
@@ -1236,7 +1238,7 @@ export function BillingSection() {
               </thead>
               <tbody>
                 {creditHistory.items.map((entry, idx) => {
-                  const cents = signedCreditCents(entry);
+                  const cents = entry.balance_effect_cents;
                   return (
                     <tr
                       key={entry.id}
@@ -1312,7 +1314,7 @@ export function BillingSection() {
         open={downgradeOpen}
         onClose={() => setDowngradeOpen(false)}
         onScheduled={(state) => {
-          setPlanState(state);
+          adoptPlanState(state);
           setDowngradeOpen(false);
         }}
       />

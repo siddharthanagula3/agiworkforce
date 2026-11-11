@@ -11,7 +11,11 @@ import {
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 
 import { claimSlackApproval } from './slack-assistant';
-import { SLACK_APPROVE_ACTION_ID, SLACK_DENY_ACTION_ID } from './slack-messages';
+import {
+  SLACK_APPROVE_ACTION_ID,
+  SLACK_DENY_ACTION_ID,
+  parseSlackApprovalButtonValue,
+} from './slack-messages';
 
 const SLACK_RESPONSE_URL_HOST = 'hooks.slack.com';
 
@@ -27,6 +31,7 @@ export interface SlackApprovalClick {
   teamId: string;
   slackUserId: string;
   runId: string;
+  generation: string | null;
   decision: ManagedCloudScheduleRunApproval['decision'];
   responseUrl: string | null;
 }
@@ -61,12 +66,14 @@ export function readSlackApprovalClick(payload: unknown): SlackApprovalClick | n
     (entry) =>
       entry.action_id === SLACK_APPROVE_ACTION_ID || entry.action_id === SLACK_DENY_ACTION_ID,
   );
-  const runId = z.string().uuid().safeParse(action?.value);
-  if (!action || !runId.success) return null;
+  const target = parseSlackApprovalButtonValue(action?.value);
+  const runId = z.string().uuid().safeParse(target?.runId);
+  if (!action || !target || !runId.success) return null;
   return {
     teamId: parsed.data.team.id,
     slackUserId: parsed.data.user.id,
     runId: runId.data,
+    generation: target.generation,
     decision: action.action_id === SLACK_APPROVE_ACTION_ID ? 'approved' : 'rejected',
     responseUrl: slackResponseUrl(parsed.data.response_url),
   };
@@ -75,6 +82,8 @@ export function readSlackApprovalClick(payload: unknown): SlackApprovalClick | n
 const PendingRequestSchema = z.object({
   toolCalls: z.array(ManagedCloudScheduleRunApprovalToolCallSchema).min(1),
 });
+
+const OUT_OF_DATE = 'This approval card is out of date. Review the current request in AGI.';
 
 const NOT_YOURS =
   'Only the person who asked can approve this, from the Slack account linked to their AGI account.';
@@ -109,6 +118,9 @@ export async function decideSlackApprovalFromSlack(
   if (row.slack_user_id !== click.slackUserId || row.linked_user_id !== row.user_id) {
     return { kind: 'refused', message: NOT_YOURS };
   }
+  if (click.generation === null) {
+    return { kind: 'refused', message: OUT_OF_DATE };
+  }
   const pending = PendingRequestSchema.safeParse(row.approval_request);
   if (!pending.success) {
     return { kind: 'refused', message: 'This request can no longer be resumed.' };
@@ -122,6 +134,7 @@ export async function decideSlackApprovalFromSlack(
       }),
       userId: row.user_id,
       runId: click.runId,
+      generation: click.generation,
       approval: {
         decision: click.decision,
         toolCallIds: pending.data.toolCalls.map((call) => call.id),

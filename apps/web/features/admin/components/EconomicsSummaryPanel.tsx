@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 import { MICROUSD_PER_USD } from '@agiworkforce/types';
 
@@ -45,6 +45,7 @@ const COGS_CLASS_LABEL: Record<CogsClass, string> = {
   sandbox: 'Sandbox',
   voice: 'Voice',
   media: 'Image and video',
+  infrastructure: 'Infrastructure',
 };
 
 const GROUPINGS = Object.keys(GROUPING_LABEL) as EconomicsGrouping[];
@@ -52,6 +53,19 @@ const COGS_CLASSES = Object.keys(COGS_CLASS_LABEL) as CogsClass[];
 
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function summaryMatchesSelection(
+  summary: EconomicsSummary,
+  from: string,
+  to: string,
+  groupBy: EconomicsGrouping,
+): boolean {
+  return (
+    summary.groupBy === groupBy &&
+    (from === '' || summary.from.slice(0, 10) === from) &&
+    (to === '' || summary.to.slice(0, 10) === to)
+  );
 }
 
 function formatUsd(microusd: number | null): string {
@@ -109,22 +123,35 @@ export default function EconomicsSummaryPanel() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ from, to, group_by: groupBy });
-      setSummary(await requestJson<EconomicsSummary>(`${ECONOMICS_ENDPOINT}?${params.toString()}`));
-    } catch (loadError) {
-      setError(toUserMessage(loadError, 'Could not read the economics summary.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [from, to, groupBy]);
-
   useEffect(() => {
+    let current = true;
+    async function load() {
+      setError(null);
+      setSummary(null);
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ from, to, group_by: groupBy });
+        const body = await requestJson<EconomicsSummary>(
+          `${ECONOMICS_ENDPOINT}?${params.toString()}`,
+        );
+        if (!current) return;
+        if (!summaryMatchesSelection(body, from, to, groupBy)) {
+          setError('The economics summary came back for a different period. Reload it.');
+          return;
+        }
+        setSummary(body);
+      } catch (loadError) {
+        if (!current) return;
+        setError(toUserMessage(loadError, 'Could not read the economics summary.'));
+      } finally {
+        if (current) setLoading(false);
+      }
+    }
     void load();
-  }, [load]);
+    return () => {
+      current = false;
+    };
+  }, [from, to, groupBy]);
 
   const groups = summary?.groups ?? [];
   const reconciliation = summary?.reconciliation;

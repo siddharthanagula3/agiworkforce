@@ -951,10 +951,14 @@ pub(super) fn handle_sessions(arg: &str) {
                         "{}",
                         ts::accent_header(format!("Search results for '{}':", sub_arg))
                     );
+                    let shown = results.len().min(sessions::SEARCH_DISPLAY_LIMIT);
                     eprintln!(
                         "{}",
-                        sanitize_terminal_text(&sessions::format_session_list(&results))
+                        sanitize_terminal_text(&sessions::format_session_list(&results[..shown]))
                     );
+                    if let Some(notice) = sessions::search_overflow_notice(results.len()) {
+                        eprintln!("{notice}");
+                    }
                 }
                 Err(e) => output::print_error(&format!("Search failed: {:#}", e)),
             }
@@ -1085,11 +1089,9 @@ pub async fn handle_compact(arg: &str, session: &mut AgentSession, config: &CliC
     let focus = if arg.is_empty() { None } else { Some(arg) };
     let result = session.compact_now(config, focus).await;
     output::print_info(&format!(
-        "Compacted: ~{} -> ~{} tokens ({}% of limit){}",
-        before_tokens,
-        result.after.used_tokens,
-        (result.after.used_fraction * 100.0) as u32,
-        if focus.is_some() {
+        "{}{}",
+        crate::compaction::compaction_receipt(&result),
+        if focus.is_some() && result.compacted {
             format!(" [focus: {}]", arg)
         } else {
             String::new()
@@ -1232,6 +1234,12 @@ fn describe_rewind(steps: usize, outcome: &crate::agent::RewindOutcome, messages
         for (path, reason) in &files.skipped {
             lines.push(format!("Skipped {} ({reason})", path.display()));
         }
+        if files.retryable {
+            lines.push(
+                "Some files could not be restored, so the conversation and the saved copies were kept. Fix the cause and rewind again, or rewind the conversation alone to give the copies up."
+                    .to_string(),
+            );
+        }
         lines.push(
             "Changes made by shell commands or outside the agent are not tracked; use git for those."
                 .to_string(),
@@ -1282,6 +1290,34 @@ mod rewind_tests {
             }
             other => panic!("one checkpoint was available: {other:?}"),
         }
+    }
+
+    #[test]
+    fn keeps_the_conversation_and_checkpoint_when_a_file_could_not_be_restored() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().canonicalize().unwrap();
+        let file = root.join("kept.txt");
+        std::fs::write(&file, b"before").unwrap();
+        let authority = crate::path_security::WorkspaceFileAuthority::new(&root).unwrap();
+        let mut session = test_session(true);
+        session.messages.push(Message::text("user", "first"));
+        session.save_checkpoint();
+        session.messages.push(Message::text("user", "second"));
+        crate::path_security::scope_workspace_paths_sync(root.clone(), Vec::new(), || {
+            assert!(session.checkpoint_log.capture(&file, Some(&authority)));
+        });
+        let messages_before = session.messages.len();
+
+        match rewind_session_for_display("1", &mut session) {
+            CommandOutcome::Info(message) => {
+                assert!(message.contains("Skipped"), "{message}");
+                assert!(message.contains("rewind again"), "{message}");
+                assert!(!message.contains("Rewound 1 checkpoint"), "{message}");
+            }
+            other => panic!("the rewind reports what it skipped: {other:?}"),
+        }
+        assert_eq!(session.messages.len(), messages_before);
+        assert_eq!(session.checkpoint_log.len(), 1);
     }
 }
 

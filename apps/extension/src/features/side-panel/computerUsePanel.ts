@@ -20,6 +20,7 @@ import {
   BROWSER_CONTROL_CONSENT_HEADLINE,
 } from '../computer-use/browserControlConsent';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { t } from '../../i18n';
 import { buildImageViewerButton } from './mediaViewer';
 import {
@@ -1620,7 +1621,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     submitTask();
   });
   goalInput.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    if (event.key !== 'Enter' || event.shiftKey || isImeComposingKey(event)) return;
     event.preventDefault();
     submitTask();
   });
@@ -1769,7 +1770,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     else renderGuidance();
   });
   guidanceInput.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    if (event.key !== 'Enter' || event.shiftKey || isImeComposingKey(event)) return;
     event.preventDefault();
     void submitGuidance();
   });

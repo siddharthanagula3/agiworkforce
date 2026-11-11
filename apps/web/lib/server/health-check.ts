@@ -36,6 +36,7 @@ import { readJobQueueStats } from '@/lib/jobs/job-service';
 import { evaluateJobHealth } from '@/lib/server/slo/job-health';
 import {
   cachedRenderInput,
+  LIVE_SIGNAL_STALE_AFTER_SECONDS,
   RENDER_CACHE_SECONDS,
   RENDER_CACHE_TAGS,
 } from '@/lib/server/render-cache';
@@ -526,3 +527,64 @@ export const getCachedHealthChecks = cachedRenderInput(runHealthChecks, {
   tags: [RENDER_CACHE_TAGS.statusHealth],
   revalidate: RENDER_CACHE_SECONDS.liveSignal,
 });
+
+/**
+ * Bounded well inside the public route's `maxDuration`, so a hanging
+ * dependency answers as not ready instead of as a platform timeout.
+ */
+export const READINESS_REFRESH_TIMEOUT_MS = 8_000;
+
+const MS_PER_SECOND = 1_000;
+
+export interface ReadinessHealthChecks {
+  result: HealthCheckResult;
+  current: boolean;
+}
+
+export function isHealthResultCurrent(result: HealthCheckResult, nowMs: number): boolean {
+  const observedAtMs = Date.parse(result.timestamp);
+  return (
+    Number.isFinite(observedAtMs) &&
+    nowMs - observedAtMs <= LIVE_SIGNAL_STALE_AFTER_SECONDS * MS_PER_SECOND
+  );
+}
+
+let sharedReadinessRefresh: Promise<HealthCheckResult> | null = null;
+
+function refreshForReadiness(): Promise<HealthCheckResult> {
+  sharedReadinessRefresh ??= runHealthChecks().finally(() => {
+    sharedReadinessRefresh = null;
+  });
+  return sharedReadinessRefresh;
+}
+
+/**
+ * The cached checks, admitted only while they are current. An expired result
+ * waits on one refresh shared by every concurrent caller in this instance; if
+ * that refresh fails or misses its budget, the older result is returned marked
+ * not current so the caller can refuse to call it ready.
+ */
+export async function readReadinessHealthChecks(): Promise<ReadinessHealthChecks> {
+  const cached = await getCachedHealthChecks();
+  if (isHealthResultCurrent(cached, Date.now())) {
+    return { result: cached, current: true };
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const refreshed = await Promise.race([
+      refreshForReadiness(),
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), READINESS_REFRESH_TIMEOUT_MS);
+      }),
+    ]);
+    if (refreshed && isHealthResultCurrent(refreshed, Date.now())) {
+      return { result: refreshed, current: true };
+    }
+  } catch (error) {
+    logger.error({ error }, 'Health readiness refresh failed');
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+  return { result: cached, current: false };
+}

@@ -304,7 +304,9 @@ describe('ImageFullScreen action ownership', () => {
       });
       expect(view.getByLabelText('Image copied')).toBeTruthy();
       view.rerender(<ImageFullScreen imageUrl={durablePath} visible={false} onClose={onClose} />);
-      jest.advanceTimersByTime(0);
+      act(() => {
+        jest.advanceTimersByTime(1);
+      });
       expect(jest.getTimerCount()).toBe(0);
     } finally {
       jest.useRealTimers();

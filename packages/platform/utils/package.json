@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./async": "./src/async.ts",
     "./circuit-breaker": "./src/circuitBreaker.ts",
+    "./composer-incoming": "./src/composerIncoming.ts",
     "./composer-paste": "./src/composerPaste.ts",
     "./control-receipts": "./src/remoteControl/controlReceipts.ts",
     "./cron": "./src/cron.ts",
@@ -59,6 +60,9 @@
       ],
       "circuit-breaker": [
         "./src/circuitBreaker.ts"
+      ],
+      "composer-incoming": [
+        "./src/composerIncoming.ts"
       ],
       "composer-paste": [
         "./src/composerPaste.ts"

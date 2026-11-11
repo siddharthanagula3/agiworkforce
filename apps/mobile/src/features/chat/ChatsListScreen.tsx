@@ -29,6 +29,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react-native';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -298,11 +299,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         artifacts,
         remoteChats: remoteSearchChats,
         remoteProjects: remoteSearchProjects,
+        remoteChatsOnlyFromConversations: filter !== 'all',
       }),
     [
       artifacts,
       contentMatchIds,
       files,
+      filter,
       filteredHistory,
       libraryImages,
       projects,
@@ -368,7 +371,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
       if (item.kind === 'library') {
         router.push({
           pathname: '/(app)/library',
-          params: { imageId: item.id },
+          params: { imageId: item.targetId ?? item.id },
         });
         return;
       }
@@ -384,11 +387,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
     ({ item }: { item: ChatsListItem }) => (
       <PressableBox
         onPress={() => openItem(item)}
-        onLongPress={
-          item.kind === 'chat'
-            ? () => openActions(item.id, item.title, item.pinned === true)
-            : undefined
-        }
+        onLongPress={item.kind === 'chat' ? () => openActions(item.id, item.title) : undefined}
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.kind}: ${item.title}${item.unread ? ', unread' : ''}`}
         accessibilityHint={item.kind === 'chat' ? 'Long press for more actions' : undefined}
@@ -444,7 +443,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           <ChevronRight size={16} color={colors.textMuted} />
         ) : item.kind === 'chat' ? (
           <PressableBox
-            onPress={() => openActions(item.id, item.title, item.pinned === true)}
+            onPress={() => openActions(item.id, item.title)}
             accessibilityRole="button"
             accessibilityLabel={`More actions for ${item.title}`}
             hitSlop={8}
@@ -507,7 +506,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             maxFontSizeMultiplier={2}
             style={{ color: colors.textMuted, fontSize: typeScale.caption }}
           >
-            {appMode === 'cloud' ? 'Managed Cloud' : 'Local on this device'}
+            {appMode === 'cloud' ? PRIVACY_MODE_DISPLAY.managed.label : 'Local on this device'}
           </Text>
         </View>
         {!searchOnly && (
@@ -688,7 +687,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                   {searchOnly && !isSearching
                     ? 'Find chats, projects, files, library images, and artifacts in this mode.'
                     : isSearching
-                      ? `Nothing in ${appMode === 'cloud' ? 'Managed Cloud' : 'Local Mode'} matches “${query.trim()}”.`
+                      ? `Nothing in ${appMode === 'cloud' ? PRIVACY_MODE_DISPLAY.managed.label : 'Local Mode'} matches “${query.trim()}”.`
                       : filter === 'all'
                         ? 'Start a new chat to begin your history.'
                         : `No ${FILTER_LABELS[filter].toLocaleLowerCase()} are available in this mode.`}

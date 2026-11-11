@@ -24,20 +24,42 @@ describe('memory object store', () => {
 
   it('binds the key, the type, the size and an expiry into the upload url', async () => {
     const now = 1_700_000_000_000;
-    const url = new URL(
-      await createMemoryObjectStore({ uploadBaseUrl: UPLOAD_BASE_URL, now: () => now }).presignPut({
-        bucket: 'bucket',
-        key: 'object.png',
-        contentType: 'image/png',
-        contentLength: PRESIGN_CONTENT_LENGTH,
-        expiresInSeconds: PRESIGN_TTL_SECONDS,
-      }),
-    );
+    const presigned = await createMemoryObjectStore({
+      uploadBaseUrl: UPLOAD_BASE_URL,
+      now: () => now,
+    }).presignPut({
+      bucket: 'bucket',
+      key: 'object.png',
+      contentType: 'image/png',
+      contentLength: PRESIGN_CONTENT_LENGTH,
+      expiresInSeconds: PRESIGN_TTL_SECONDS,
+    });
+    const url = new URL(presigned.url);
 
     expect(url.searchParams.get('key')).toBe('object.png');
     expect(url.searchParams.get('contentType')).toBe('image/png');
     expect(url.searchParams.get('contentLength')).toBe(String(PRESIGN_CONTENT_LENGTH));
     expect(Number(url.searchParams.get('expiresAt'))).toBeGreaterThan(now);
+  });
+
+  it('returns the configured encryption as the headers an upload must send', async () => {
+    const store = createMemoryObjectStore({
+      uploadBaseUrl: UPLOAD_BASE_URL,
+      encryption: { algorithm: 'aws:kms', keyId: 'key-id' },
+    });
+
+    const { headers } = await store.presignPut({
+      bucket: 'bucket',
+      key: 'object.png',
+      contentType: 'image/png',
+      contentLength: PRESIGN_CONTENT_LENGTH,
+      expiresInSeconds: PRESIGN_TTL_SECONDS,
+    });
+
+    expect(headers).toEqual({
+      'x-amz-server-side-encryption': 'aws:kms',
+      'x-amz-server-side-encryption-aws-kms-key-id': 'key-id',
+    });
   });
 
   it('keeps buckets separate', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findLocalPreviewUrl, localPreviewUrl } from '../apps';
+import { findLocalPreviewUrl, localPreviewOrigin, localPreviewUrl } from '../apps';
 
 describe('the address a preview may open', () => {
   it('opens only pages served on this computer', () => {
@@ -18,6 +18,16 @@ describe('the address a preview may open', () => {
     ]) {
       expect(localPreviewUrl(refused), String(refused)).toBeNull();
     }
+  });
+
+  it('names the server a page belongs to, whichever page is open', () => {
+    expect(localPreviewOrigin('http://localhost:5173/a?b=1')).toBe('http://localhost:5173');
+    expect(localPreviewOrigin('http://0.0.0.0:5173/')).toBe('http://localhost:5173');
+    expect(localPreviewOrigin('http://localhost:5174/')).not.toBe(
+      localPreviewOrigin('http://localhost:5173/'),
+    );
+    expect(localPreviewOrigin('https://agiworkforce.com')).toBeNull();
+    expect(localPreviewOrigin(null)).toBeNull();
   });
 
   it('finds the last address a dev server printed, through its colour codes', () => {

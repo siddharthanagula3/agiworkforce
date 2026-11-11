@@ -22,6 +22,11 @@ function isMobilePermissionKind(value: string | undefined): value is MobilePermi
   return typeof value === 'string' && value in PERMISSION_REGISTRY;
 }
 
+const PERMISSION_READ_FAILURE =
+  'Could not read this permission from your device. The status shown may be out of date.';
+const PERMISSION_REQUEST_FAILURE =
+  'Your device could not process the request. Try again, or open Settings.';
+
 function openAppSettings() {
   Linking.openSettings().catch(() => {
     Alert.alert('Could not open Settings', 'Please open your device Settings app manually.');
@@ -44,6 +49,7 @@ export default function PermissionDetailScreen() {
     permState?.lastObservedStatus ?? 'undetermined',
   );
   const [requesting, setRequesting] = useState(false);
+  const [failureMessage, setFailureMessage] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -52,13 +58,17 @@ export default function PermissionDetailScreen() {
       const readStatus = registryEntry.getStatus;
       let cancelled = false;
       async function poll() {
-        const status = await readStatus();
-        if (!cancelled) {
+        try {
+          const status = await readStatus();
+          if (cancelled) return;
           setOsStatus(status);
           setObservedStatus(kind, status);
+          setFailureMessage(null);
+        } catch {
+          if (!cancelled) setFailureMessage(PERMISSION_READ_FAILURE);
         }
       }
-      poll();
+      void poll();
       return () => {
         cancelled = true;
       };
@@ -76,10 +86,13 @@ export default function PermissionDetailScreen() {
   const handleRequest = useCallback(async () => {
     if (!entry || requesting) return;
     setRequesting(true);
+    setFailureMessage(null);
     try {
       const newStatus = await entry.requestPermission();
       setOsStatus(newStatus);
       setObservedStatus(kind, newStatus);
+    } catch {
+      setFailureMessage(PERMISSION_REQUEST_FAILURE);
     } finally {
       setRequesting(false);
     }
@@ -231,6 +244,21 @@ export default function PermissionDetailScreen() {
         >
           {STATUS_EXPLANATIONS[osStatus]}
         </Text>
+
+        {failureMessage ? (
+          <Text
+            accessibilityRole="alert"
+            style={{
+              color: c.agentError,
+              fontSize: typeScale.footnote,
+              lineHeight: 18,
+              marginTop: 10,
+              paddingHorizontal: 2,
+            }}
+          >
+            {failureMessage}
+          </Text>
+        ) : null}
 
         <Pressable
           onPress={canRequest ? handleRequest : openAppSettings}

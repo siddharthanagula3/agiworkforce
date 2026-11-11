@@ -187,4 +187,24 @@ describe('the attachment total for one message', () => {
     act(() => result.current.addFiles([file('third.pdf', 'application/pdf', overHalf)]));
     expect(result.current.attachments.map((item) => item.name)).toEqual(['third.pdf']);
   });
+
+  it('tells the caller which incoming files the draft took, so a full draft takes none', async () => {
+    const { result } = renderHook(() => useAttachments({ maxFiles: 1 }));
+    const first = file('first.txt', 'text/plain');
+    const second = file('second.txt', 'text/plain');
+    const third = file('third.txt', 'text/plain');
+    let taken: File[] = [];
+    let refusedWhenFull: File[] = [file('unset.txt', 'text/plain')];
+
+    await act(async () => {
+      taken = await result.current.admitFiles([first, second]);
+    });
+    expect(taken).toEqual([first]);
+
+    await act(async () => {
+      refusedWhenFull = await result.current.admitFiles([third]);
+    });
+    expect(refusedWhenFull).toEqual([]);
+    expect(result.current.attachments.map((item) => item.name)).toEqual(['first.txt']);
+  });
 });

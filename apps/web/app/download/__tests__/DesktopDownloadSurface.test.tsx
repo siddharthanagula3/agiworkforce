@@ -23,6 +23,7 @@ import { DesktopDownloadAvailability } from '../DesktopDownloadAvailability';
 import DesktopPage from '../../desktop/page';
 import DownloadLoading from '../loading';
 import DownloadError from '../error';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const DESKTOP_RELEASE_PATH = '/api/releases/desktop-cloud/latest';
 const CHECKSUM_PATH = '/api/download/checksums';
@@ -38,9 +39,9 @@ function desktopManifest(architectures = { arm64: true, x64: true }) {
   };
 }
 
-function checksumManifest() {
+function checksumManifest(version = '1.2.0') {
   return {
-    version: '1.2.0',
+    version,
     algorithm: 'sha256',
     installers: [
       { name: 'agiworkforce_1.2.0_aarch64.dmg', architecture: 'arm64', sha256: ARM64_SHA },
@@ -83,10 +84,10 @@ describe('the Desktop installer section on /desktop', () => {
     const region = await screen.findByRole('region', { name: 'Desktop installer availability' });
     expect(
       await within(region).findByRole('link', { name: 'Download for Apple silicon' }),
-    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64');
+    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64&version=1.2.0');
     expect(within(region).getByRole('link', { name: 'Download for Intel Mac' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=x64',
+      '/api/download?platform=mac&arch=x64&version=1.2.0',
     );
     expect(within(region).queryByRole('link', { name: /Linux|Windows/i })).not.toBeInTheDocument();
     const desktopRequests = fetchMock.mock.calls
@@ -128,11 +129,51 @@ describe('the Desktop installer section on /desktop', () => {
     expect(within(checksums).getByText(ARM64_SHA)).toBeInTheDocument();
     expect(within(checksums).getByText(X64_SHA)).toBeInTheDocument();
 
-    const steps = screen.getByRole('list', { name: 'Install AGI Desktop on macOS' });
+    const steps = screen.getByRole('list', { name: `Install ${PRODUCT_NAMES.desktop} on macOS` });
     expect(steps.tagName).toBe('OL');
     expect(within(steps).getAllByRole('listitem').length).toBeGreaterThanOrEqual(4);
     expect(steps).toHaveTextContent('shasum -a 256');
     expect(steps).toHaveTextContent('Applications');
+  });
+
+  it('never shows checksums published for a different release than the one offered', async () => {
+    respondWith(desktopManifest(), checksumManifest('1.1.0'));
+    render(<DesktopDownloadAvailability />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Download for Apple silicon' }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          requestPath(input as RequestInfo).includes(CHECKSUM_PATH),
+        ),
+      ).toBe(true),
+    );
+    expect(screen.queryByRole('list', { name: 'Installer checksums' })).not.toBeInTheDocument();
+  });
+
+  it('refreshes the published checksums together with the release on retry', async () => {
+    let releaseRequests = 0;
+    let checksumRequests = 0;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (requestPath(input).includes(CHECKSUM_PATH)) {
+        checksumRequests += 1;
+        return Promise.resolve(Response.json(checksumManifest()));
+      }
+      releaseRequests += 1;
+      return releaseRequests === 1
+        ? Promise.reject(new Error('network unavailable'))
+        : Promise.resolve(Response.json(desktopManifest()));
+    });
+    render(<DesktopDownloadAvailability />);
+
+    const alert = await screen.findByRole('alert');
+    expect(checksumRequests).toBe(1);
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry release check' }));
+
+    expect(await screen.findByRole('list', { name: 'Installer checksums' })).toBeInTheDocument();
+    expect(checksumRequests).toBe(2);
   });
 
   it('shows no checksum block when the release publishes none', async () => {
@@ -159,12 +200,16 @@ describe('the Desktop installer section on /desktop', () => {
     respondWith(null, null);
     render(<DesktopDownloadAvailability />);
 
-    const status = await screen.findByRole('status', { name: 'AGI Desktop downloads unavailable' });
-    expect(status).toHaveTextContent('No signed AGI Desktop installer is available right now.');
+    const status = await screen.findByRole('status', {
+      name: `${PRODUCT_NAMES.desktop} downloads unavailable`,
+    });
+    expect(status).toHaveTextContent(
+      `No signed ${PRODUCT_NAMES.desktop} installer is available right now.`,
+    );
     expect(
       screen.getByRole('region', { name: 'Desktop installer availability' }),
-    ).not.toHaveTextContent('AGI Desktop ships for macOS');
-    expect(within(status).getByRole('link', { name: 'Use AGI Chat' })).toHaveAttribute(
+    ).not.toHaveTextContent(`${PRODUCT_NAMES.desktop} ships for macOS`);
+    expect(within(status).getByRole('link', { name: `Use ${PRODUCT_NAMES.chat}` })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );
@@ -189,7 +234,7 @@ describe('the Desktop installer section on /desktop', () => {
     render(<DesktopDownloadAvailability />);
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('We could not verify the AGI Desktop installer.');
+    expect(alert).toHaveTextContent(`We could not verify the ${PRODUCT_NAMES.desktop} installer.`);
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry release check' }));
 
     await waitFor(() => {
@@ -201,7 +246,9 @@ describe('the Desktop installer section on /desktop', () => {
     fetchMock.mockReturnValueOnce(new Promise(() => {}));
     render(<DesktopDownloadAvailability />);
 
-    const status = screen.getByRole('status', { name: 'Checking AGI Desktop downloads' });
+    const status = screen.getByRole('status', {
+      name: `Checking ${PRODUCT_NAMES.desktop} downloads`,
+    });
     expect(status).toHaveAttribute('aria-live', 'polite');
     expect(status.closest('.agi-ds-ledger')).not.toBeNull();
     expect(status).not.toHaveClass('bg-black', 'text-white');
@@ -212,7 +259,7 @@ describe('the Desktop installer section on /desktop', () => {
 
     expect(await screen.findByRole('link', { name: 'Download for Apple silicon' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=arm64',
+      '/api/download?platform=mac&arch=arm64&version=1.2.0',
     );
     expect(screen.queryByText(/AppImage|Tauri|Linux x64/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Public launch ·/i)).not.toBeInTheDocument();
@@ -234,7 +281,7 @@ describe('the Desktop installer section on /desktop', () => {
     expect(screen.getByRole('heading', { name: 'Unable to load downloads' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(reset).toHaveBeenCalledOnce();
-    expect(screen.getByRole('link', { name: 'Use AGI Chat' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: `Use ${PRODUCT_NAMES.chat}` })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );

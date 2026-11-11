@@ -134,7 +134,12 @@ async function incrementWithin(
   ttlSeconds: number,
 ): Promise<boolean> {
   const total = toCount(await store.increment(key, amount));
-  await store.expire(key, ttlSeconds);
+  try {
+    await store.expire(key, ttlSeconds);
+  } catch (error) {
+    await store.increment(key, -amount).catch(() => undefined);
+    throw error;
+  }
   if (total <= limit) return true;
   await store.increment(key, -amount);
   return false;
@@ -177,7 +182,17 @@ export async function reserveFreeModelPromotionTurn(input: {
         return null;
       }
       const credentialKey = credentialSpendKey(promotion.promotionId, credential.id);
-      if (!(await incrementWithin(ledger.store, credentialKey, amount, allowance, ttlSeconds))) {
+      const credentialHeld = await incrementWithin(
+        ledger.store,
+        credentialKey,
+        amount,
+        allowance,
+        ttlSeconds,
+      ).catch(async (error: unknown) => {
+        await ledger.store.increment(globalKey, -amount).catch(() => undefined);
+        throw error;
+      });
+      if (!credentialHeld) {
         await ledger.store.increment(globalKey, -amount);
         continue;
       }
@@ -187,10 +202,15 @@ export async function reserveFreeModelPromotionTurn(input: {
         isolated: credential.isolated,
         reservedMicrousd: amount,
       };
-      const verdict = await ledger.limiter.limit(messageNamespace(promotion.promotionId), userId, {
-        limit: promotion.perUserMessages.limit,
-        window: promotion.perUserMessages.window,
-      });
+      const verdict = await ledger.limiter
+        .limit(messageNamespace(promotion.promotionId), userId, {
+          limit: promotion.perUserMessages.limit,
+          window: promotion.perUserMessages.window,
+        })
+        .catch(async (error: unknown) => {
+          await settleFreeModelPromotionTurn(reservation, 0, ledger.store);
+          throw error;
+        });
       if (!verdict.success) {
         await settleFreeModelPromotionTurn(reservation, 0, ledger.store);
         return null;

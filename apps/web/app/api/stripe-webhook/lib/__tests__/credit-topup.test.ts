@@ -261,4 +261,65 @@ describe('credit top-up settlement', () => {
       expect.anything(),
     );
   });
+
+  it('revokes only the cumulative refunded share when two partial refund events overlap', async () => {
+    let committedRevoked = 0;
+    const lockQueues = new Map<string, Promise<void>>();
+
+    async function deliver(eventId: string, amountRefunded: number) {
+      let releaseLock: () => void = () => undefined;
+      let pendingDebit = 0;
+      const tx = {
+        query: vi.fn(async (sql: string): Promise<Array<Record<string, unknown>>> => {
+          if (sql.includes('from profiles')) return [{ id: 'user_123' }];
+          if (sql.includes('sum(-amount_microusd)')) {
+            const revoked = committedRevoked;
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            return [{ revoked }];
+          }
+          return [];
+        }),
+        execute: vi.fn(async (sql: string, params: unknown[] = []) => {
+          if (sql.includes('pg_advisory_xact_lock')) {
+            const key = params.join('|');
+            const previous = lockQueues.get(key) ?? Promise.resolve();
+            const held = new Promise<void>((resolve) => {
+              releaseLock = resolve;
+            });
+            lockQueues.set(
+              key,
+              previous.then(() => held),
+            );
+            await previous;
+          }
+          if (sql.includes('handle_top_up_refund_microusd')) pendingDebit += Number(params[1]);
+          return 1;
+        }),
+      };
+      await dispatchStripeEvent(
+        tx as unknown as DatabaseAdapter,
+        stripe() as unknown as Stripe,
+        {
+          id: eventId,
+          type: 'charge.refunded',
+          data: {
+            object: {
+              id: 'ch_topup_partial',
+              customer: 'cus_123',
+              amount: 2_000,
+              amount_refunded: amountRefunded,
+              refunded: false,
+              metadata: PACK_METADATA,
+            },
+          },
+        } as unknown as Stripe.Event,
+      );
+      committedRevoked += pendingDebit;
+      releaseLock();
+    }
+
+    await Promise.all([deliver('evt_refund_quarter', 500), deliver('evt_refund_half', 1_000)]);
+
+    expect(committedRevoked).toBe(2_500_000);
+  });
 });

@@ -44,10 +44,12 @@ jest.mock('../stores/settingsStore', () => ({
   },
 }));
 
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { api } from '../services/api';
 import { GATEWAY_URL } from '@/lib/constants';
 import { resetBackgroundFetchAccountState } from '../services/backgroundFetch';
+import { androidChannelId } from '../services/notificationChannels';
 
 const mockApiGet = api.get as jest.Mock;
 const mockScheduleNotificationAsync = Notifications.scheduleNotificationAsync as jest.Mock;
@@ -101,6 +103,27 @@ describe('backgroundFetch agent-status polling', () => {
     expect(request.content.data['approvalId']).toBe('checkpoint-1');
     expect(request.content.data['runId']).toBe('0190a000-0000-7000-8000-000000000001');
     expect(request.content.body).toBe('1 agent action is waiting on you');
+  });
+
+  it('sends the approval notice on its priority channel, not on the fallback channel', async () => {
+    const original = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
+    try {
+      mockApiGet.mockResolvedValue({
+        pendingApprovals: [pause('checkpoint-1', 'approval')],
+        runningAgents: 1,
+      });
+
+      await mockDefinedTask!();
+
+      const [request] = mockScheduleNotificationAsync.mock.calls[0] as [
+        { content: Record<string, unknown>; trigger: unknown },
+      ];
+      expect(request.trigger).toEqual({ channelId: androidChannelId('high', true) });
+      expect(request.content).not.toHaveProperty('channelId');
+    } finally {
+      Object.defineProperty(Platform, 'OS', { get: () => original, configurable: true });
+    }
   });
 
   it('counts every open pause in the body', async () => {

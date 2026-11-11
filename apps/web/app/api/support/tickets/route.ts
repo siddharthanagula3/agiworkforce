@@ -11,9 +11,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { readJsonBody } from '@/lib/read-json-body';
 import { normalizeDiagnostics } from '@/lib/support/diagnostics/schema';
 import { deployEnvironment, releaseSha } from '@/lib/server/hosting';
-import { listTickets, openTicket } from '@/lib/support/tickets/service';
+import { listTicketsPage, openTicket } from '@/lib/support/tickets/service';
 import {
   SupportTicketCreateRequestSchema,
+  SupportTicketListQuerySchema,
   type OpenedSupportTicket,
   type SupportTicketListResponse,
 } from '@agiworkforce/cloud-contracts/support';
@@ -26,10 +27,17 @@ async function handleList(request: NextRequest) {
   const limited = await withRateLimit(request, 'support-tickets-read', `user:${userId}`);
   if (limited) return limited;
 
-  const tickets = await listTickets(userId);
+  const query = SupportTicketListQuerySchema.safeParse(
+    Object.fromEntries(new URL(request.url).searchParams),
+  );
+  if (!query.success) {
+    throw createError.validation('Invalid support ticket query', query.error);
+  }
+
+  const { tickets, nextOffset } = await listTicketsPage(userId, query.data.offset);
   logger.info({ userId, count: tickets.length }, '[support-ticket] listed');
 
-  const body: SupportTicketListResponse = { tickets };
+  const body: SupportTicketListResponse = { tickets, nextOffset };
   return NextResponse.json(body, { headers: { 'cache-control': 'no-store' } });
 }
 

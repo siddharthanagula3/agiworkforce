@@ -82,6 +82,81 @@ function statementsIn(source) {
   return statements;
 }
 
+const REVOKES_NOW = /\brevoked_at\s*=\s*(?:coalesce\(\s*revoked_at\s*,\s*)?now\(\)/i;
+const NAMED_IMPORT = /import\s+\{([^}]*)\}\s*from\s*'@\/([^']+)'/g;
+const MODULE_CONSTANT = /\bconst\s+([A-Z][A-Z0-9_]*)\s*=\s*`/g;
+
+function functionSource(source, name) {
+  const signature = new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\s*\\(`).exec(
+    source,
+  );
+  if (signature === null) return null;
+  let parameters = 1;
+  let cursor = signature.index + signature[0].length;
+  while (cursor < source.length && parameters > 0) {
+    if (source[cursor] === '(') parameters += 1;
+    else if (source[cursor] === ')') parameters -= 1;
+    cursor += 1;
+  }
+  const open = source.indexOf('{', cursor);
+  if (open < 0) return null;
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    else if (source[index] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open, index + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * What one exported helper actually executes: its body, the local functions it
+ * calls, and the statement constants any of them name. Nothing else in the
+ * module counts, so a helper that revokes by account alone cannot borrow a
+ * workspace-scoped statement that sits beside it.
+ */
+function reachableStatementSource(source, name, seen = new Set()) {
+  if (seen.has(name)) return '';
+  seen.add(name);
+  const body = functionSource(source, name);
+  if (body === null) return '';
+  let reached = body;
+  for (const match of body.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) {
+    reached += reachableStatementSource(source, match[1], seen);
+  }
+  const constants = new Map();
+  for (const match of source.matchAll(MODULE_CONSTANT)) {
+    const start = match.index + match[0].length;
+    constants.set(match[1], `\`${source.slice(start, source.indexOf('`', start))}\``);
+  }
+  for (const [constant, template] of constants) {
+    if (new RegExp(`\\b${constant}\\b`).test(reached)) reached += `\n${template}`;
+  }
+  return reached;
+}
+
+/** The offboarding path's own statements and those of the helpers it calls. */
+function offboardingStatements(repoRoot, deprovision) {
+  const statements = statementsIn(deprovision);
+  for (const match of deprovision.matchAll(NAMED_IMPORT)) {
+    const names = match[1]
+      .split(',')
+      .map((specifier) => specifier.trim().split(/\s+as\s+/))
+      .filter(([imported]) => imported && !imported.startsWith('type '));
+    const modulePath = `apps/web/${match[2]}.ts`;
+    const moduleSource = read(repoRoot, modulePath);
+    if (moduleSource === null) continue;
+    const stripped = stripComments(moduleSource);
+    for (const [imported, local = imported] of names) {
+      if (!new RegExp(`\\b${local}\\s*\\(`).test(deprovision)) continue;
+      statements.push(...statementsIn(reachableStatementSource(stripped, imported)));
+    }
+  }
+  return statements;
+}
+
 export function credentialVerifiers(gateSource) {
   const declaredHere = new Set();
   for (const match of gateSource.matchAll(LOCAL_DECLARATION)) {
@@ -117,7 +192,7 @@ export function checkMembershipRevocation(repoRoot = REPO_ROOT) {
     failures.push(`${ROUTE_GATE}: no credential verifier found, so this sweep proves nothing.`);
   }
   const classified = new Map(CREDENTIAL_CLASSES.map((entry) => [entry.verifier, entry]));
-  const statements = statementsIn(stripComments(deprovision));
+  const statements = offboardingStatements(repoRoot, stripComments(deprovision));
 
   for (const verifier of verifiers) {
     const entry = classified.get(verifier);
@@ -142,7 +217,7 @@ export function checkMembershipRevocation(repoRoot = REPO_ROOT) {
     const revocation = statements.find(
       (statement) =>
         new RegExp(`\\b(?:public\\.)?${entry.table}\\b`).test(statement) &&
-        /revoked_at\s*=\s*now\(\)/i.test(statement),
+        REVOKES_NOW.test(statement),
     );
     if (!revocation) {
       failures.push(

@@ -20,12 +20,17 @@ export interface RetentionPolicyRow {
   retentionEnforced: boolean;
 }
 
+export function isRetentionSweepEnabled(input: {
+  retentionDays: number | null;
+  retentionEnforced: boolean;
+}): boolean {
+  return input.retentionDays !== null && input.retentionEnforced;
+}
+
 /**
- * A workspace on a plan that sells enterprise controls has a contractual
- * retention commitment, so its recorded window is not an owner's preference.
- * `required` is that commitment and `enforced` is what the sweep does, and the
- * two are reported separately because a gap between them is the thing an
- * auditor is entitled to see rather than have smoothed over.
+ * `required` is what a plan that sells enterprise controls commits to and
+ * `enforced` is what the nightly sweep deletes against. The sweep acts on
+ * `enforced` alone, so a gap between them is reported rather than swept.
  */
 export function retentionEnforcement(input: {
   plan: string | null | undefined;
@@ -35,41 +40,22 @@ export function retentionEnforcement(input: {
   if (input.retentionDays === null) {
     return { enforced: false, required: false, reason: 'no-policy' };
   }
+  const enforced = isRetentionSweepEnabled(input);
   const required = canUseBillingPlanCapability(input.plan, 'enterprise_controls');
   if (required) {
-    return input.retentionEnforced
-      ? { enforced: true, required: true, reason: 'required-and-enforced' }
-      : { enforced: false, required: true, reason: 'required-not-yet-enforced' };
+    return enforced
+      ? { enforced, required, reason: 'required-and-enforced' }
+      : { enforced, required, reason: 'required-not-yet-enforced' };
   }
-  return input.retentionEnforced
-    ? { enforced: true, required: false, reason: 'opted-in' }
-    : { enforced: false, required: false, reason: 'not-required' };
+  return enforced
+    ? { enforced, required, reason: 'opted-in' }
+    : { enforced, required, reason: 'not-required' };
 }
 
 /**
- * The workspaces a run must cover: every one that recorded a window and either
- * opted in or is required to enforce by its plan.
- */
-export function mandatoryRetentionWorkspaces(
-  rows: readonly RetentionPolicyRow[],
-  planOf: (organizationId: string) => string | null | undefined,
-): string[] {
-  return rows
-    .filter((row) => {
-      const decision = retentionEnforcement({
-        plan: planOf(row.organizationId),
-        retentionDays: row.retentionDays,
-        retentionEnforced: row.retentionEnforced,
-      });
-      return decision.enforced || decision.required;
-    })
-    .map((row) => row.organizationId);
-}
-
-/**
- * Every workspace that recorded a retention window, opted in or not. The job
- * decides per organization with `retentionEnforcement`, so a workspace that
- * must be swept cannot be missed by a query that only looks at the flag.
+ * Every workspace that recorded a retention window, enforced or not. Callers
+ * select the ones to sweep with `isRetentionSweepEnabled`, never with a filter
+ * of their own.
  */
 export async function listOrganizationsWithRetentionPolicy(
   db: DatabaseAdapter,
@@ -101,31 +87,4 @@ export async function listOrganizationsWithRetentionPolicy(
           : row.retention_days,
     retentionEnforced: row.retention_enforced,
   }));
-}
-
-export class MandatoryRetentionSkipped extends Error {
-  readonly organizationIds: string[];
-
-  constructor(organizationIds: string[]) {
-    super(
-      `Retention is mandatory for ${organizationIds.length} workspace(s) that this run did not sweep.`,
-    );
-    this.name = 'MandatoryRetentionSkipped';
-    this.organizationIds = organizationIds;
-  }
-}
-
-/**
- * A run that leaves a mandatory workspace unswept is a failed run, not a
- * shorter one. Deferring it to the next run is fine, silently dropping it is
- * the failure the commitment is written against.
- */
-export function assertNoMandatoryWorkspaceDropped(input: {
-  mandatory: readonly string[];
-  swept: readonly string[];
-  deferred: readonly string[];
-}): void {
-  const accounted = new Set([...input.swept, ...input.deferred]);
-  const dropped = input.mandatory.filter((id) => !accounted.has(id));
-  if (dropped.length > 0) throw new MandatoryRetentionSkipped(dropped);
 }

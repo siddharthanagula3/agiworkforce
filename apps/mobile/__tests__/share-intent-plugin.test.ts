@@ -81,9 +81,18 @@ describe('withAGIShareIntent patchMainActivity', () => {
     expect(out).toContain('appendQueryParameter("files", files.toString())');
     expect(out).toContain('MAX_SHARED_FILE_BYTES = 12L * 1024 * 1024');
     expect(out).toContain('MAX_SHARED_FILES = 5');
-    expect(out.indexOf('copySharedStreams(intent)')).toBeLessThan(
+    expect(out.indexOf('copySharedStreams(streams)')).toBeLessThan(
       out.indexOf('appendQueryParameter("files"'),
     );
+  });
+
+  it('reports the shared streams it could not copy instead of dropping them silently', () => {
+    const out = patchMainActivity(STOCK_MAIN_ACTIVITY);
+    expect(out).toContain('val streams = sharedStreamUris(intent)');
+    expect(out).toContain('val omitted = streams.size - files.length()');
+    expect(out).toContain('if (text.isNullOrBlank() && files.length() == 0 && omitted == 0)');
+    expect(out).toContain('appendQueryParameter("omitted", omitted.toString())');
+    expect(out).toContain('val uris = streams.take(MAX_SHARED_FILES)');
   });
 
   it('reads the display name and mime type from the content provider', () => {

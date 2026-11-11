@@ -366,8 +366,8 @@ export function AccountSection({
   const deleteAccountMutation = useDeleteAccount();
 
   const handleDeleteAccount = useCallback(() => {
-    if (!permitsDeletionAction(deleteStatusSnapshot, 'schedule')) return;
-    deleteAccountMutation.mutate();
+    if (!deleteStatusSnapshot || !permitsDeletionAction(deleteStatusSnapshot, 'schedule')) return;
+    deleteAccountMutation.mutate(deleteStatusSnapshot);
   }, [deleteAccountMutation, deleteStatusSnapshot]);
 
   const handleDeleteSuccessContinue = useCallback(() => {

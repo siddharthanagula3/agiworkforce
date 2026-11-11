@@ -211,6 +211,7 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
   const [tabsError, setTabsError] = useState<string | null>(null);
   const [listingTabs, setListingTabs] = useState(false);
   const [tabId, setTabId] = useState<number | null>(null);
+  const view = useRef(0);
 
   const refreshActivity = useCallback(() => {
     readBrowserActivity()
@@ -219,6 +220,7 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
   }, []);
 
   useEffect(() => {
+    view.current += 1;
     if (!open) return;
     setResult(null);
     setError(null);
@@ -258,14 +260,19 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
   const ready = selected.fields.every((field) => values[field].trim() !== '');
 
   const onRun = useCallback(async () => {
+    view.current += 1;
+    const owned = view.current;
     setRunning(true);
     setError(null);
     setResult(null);
     try {
-      setResult(await runAction(action, values, tabId));
-      setPairing(await readBrowserPairing());
+      const outcome = await runAction(action, values, tabId);
+      if (view.current !== owned) return;
+      setResult(outcome);
+      const current = await readBrowserPairing();
+      if (view.current === owned) setPairing(current);
     } catch (cause) {
-      setError(messageFor(cause));
+      if (view.current === owned) setError(messageFor(cause));
     } finally {
       setRunning(false);
       refreshActivity();
@@ -321,6 +328,7 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
               aria-pressed={entry.command === action}
               className={BUTTON_CLASS}
               onClick={() => {
+                view.current += 1;
                 setAction(entry.command);
                 setResult(null);
               }}
@@ -353,6 +361,7 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
               className={FIELD_CLASS}
               value={tabId === null ? '' : String(tabId)}
               onChange={(event) => {
+                view.current += 1;
                 setTabId(event.target.value === '' ? null : Number(event.target.value));
                 setResult(null);
               }}

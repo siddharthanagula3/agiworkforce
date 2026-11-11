@@ -91,6 +91,7 @@ pub struct RestoreReport {
     pub restored: Vec<PathBuf>,
     pub removed: Vec<PathBuf>,
     pub skipped: Vec<(PathBuf, String)>,
+    pub retryable: bool,
 }
 
 #[derive(Debug)]
@@ -362,20 +363,25 @@ impl CheckpointLog {
             .skip(from)
             .flat_map(|checkpoint| checkpoint.files.iter())
         {
-            if !seen.insert(snapshot.path.clone()) {
+            let path = &snapshot.path;
+            let resolved = authority
+                .context("the session workspace file authority is unavailable")
+                .and_then(|authority| authority.resolve(path));
+            let destination = match &resolved {
+                Ok((root, relative)) => (root.path().to_path_buf(), relative.clone()),
+                Err(_) => (PathBuf::new(), path.clone()),
+            };
+            if !seen.insert(destination) {
                 continue;
             }
-            let path = &snapshot.path;
             if let FileState::Untracked(reason) = &snapshot.before {
                 report.skipped.push((path.clone(), reason.clone()));
                 continue;
             }
-            let resolved = authority
-                .context("the session workspace file authority is unavailable")
-                .and_then(|authority| authority.resolve(path));
             let (root, relative) = match resolved {
                 Ok(resolved) => resolved,
                 Err(error) => {
+                    report.retryable = true;
                     report.skipped.push((path.clone(), format!("{error:#}")));
                     continue;
                 }
@@ -384,7 +390,10 @@ impl CheckpointLog {
                 FileState::Absent => match root.remove_file(&relative) {
                     Ok(true) => report.removed.push(path.clone()),
                     Ok(false) => {}
-                    Err(error) => report.skipped.push((path.clone(), format!("{error:#}"))),
+                    Err(error) => {
+                        report.retryable = true;
+                        report.skipped.push((path.clone(), format!("{error:#}")));
+                    }
                 },
                 FileState::Contents(digest) => {
                     let written = self.read_blob(digest).and_then(|bytes| {
@@ -393,10 +402,13 @@ impl CheckpointLog {
                     match written {
                         Ok(true) => report.restored.push(path.clone()),
                         Ok(false) => {}
-                        Err(error) => report.skipped.push((
-                            path.clone(),
-                            format!("its saved copy could not be restored: {error:#}"),
-                        )),
+                        Err(error) => {
+                            report.retryable = true;
+                            report.skipped.push((
+                                path.clone(),
+                                format!("its saved copy could not be restored: {error:#}"),
+                            ));
+                        }
                     }
                 }
                 FileState::Untracked(_) => unreachable!(),

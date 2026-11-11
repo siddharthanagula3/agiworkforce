@@ -442,6 +442,8 @@ impl CliConfig {
     fn with_builtin_defaults(loaded: CliConfig) -> Self {
         let mut config = Self::default();
         config.merge_from(&loaded);
+        config.telemetry = loaded.telemetry;
+        config.updates = loaded.updates;
         config
     }
 
@@ -2825,5 +2827,64 @@ mod reasoning_effort_tests {
             assert_eq!(Effort::from_config_value(written), Some(expected));
         }
         assert_eq!(Effort::from_config_value("nonsense"), None);
+    }
+}
+
+#[cfg(test)]
+mod global_opt_out_tests {
+    use super::CliConfig;
+
+    fn load_global(text: &str) -> CliConfig {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, text).expect("write config");
+        CliConfig::load_from(&path).expect("load config")
+    }
+
+    #[test]
+    fn saved_analytics_opt_out_and_crash_report_opt_in_survive_a_reload() {
+        let mut chosen = CliConfig::default();
+        chosen.telemetry.product_analytics = false;
+        chosen.telemetry.crash_reports = true;
+        let saved = chosen.written_toml().expect("serialise");
+
+        let reloaded = load_global(&saved);
+
+        assert!(!reloaded.telemetry.product_analytics);
+        assert!(reloaded.telemetry.crash_reports);
+    }
+
+    #[test]
+    fn a_global_startup_update_opt_out_survives_a_reload() {
+        let reloaded = load_global("[updates]\ncheck_on_startup = false\n");
+
+        assert!(!reloaded.updates.check_on_startup);
+    }
+
+    #[test]
+    fn a_global_file_without_those_sections_keeps_the_defaults() {
+        let reloaded = load_global("[default]\nstream = false\n");
+
+        assert!(reloaded.telemetry.product_analytics);
+        assert!(!reloaded.telemetry.crash_reports);
+        assert!(reloaded.updates.check_on_startup);
+    }
+
+    #[test]
+    fn a_repository_layer_cannot_change_the_user_telemetry_or_update_choices() {
+        let mut user = CliConfig::default();
+        user.telemetry.product_analytics = false;
+        user.updates.check_on_startup = false;
+        let repository: CliConfig = toml::from_str(
+            "[telemetry]\nproduct_analytics = true\ncrash_reports = true\n[updates]\ncheck_on_startup = true\n",
+        )
+        .expect("parse repository config");
+
+        let mut merged = user;
+        merged.merge_from(&repository);
+
+        assert!(!merged.telemetry.product_analytics);
+        assert!(!merged.telemetry.crash_reports);
+        assert!(!merged.updates.check_on_startup);
     }
 }

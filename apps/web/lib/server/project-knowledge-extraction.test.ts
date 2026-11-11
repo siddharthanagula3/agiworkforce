@@ -353,7 +353,7 @@ describe('extractProjectKnowledgeFile', () => {
   describe('a scanned PDF', () => {
     const SCAN_PIXELS = new Uint8Array(4 * 3).fill(200);
 
-    function scannedDocument(): void {
+    function scannedDocument(numPages = 1): void {
       const data = Buffer.from('%PDF-1.7\nscan');
       storageMocks.objectKeyFromStorageUri.mockReturnValue(
         'knowledge-files/projects/project-1/scan.pdf',
@@ -375,7 +375,7 @@ describe('extractProjectKnowledgeFile', () => {
       };
       pdfMocks.getDocument.mockReturnValue({
         destroy: vi.fn().mockResolvedValue(undefined),
-        promise: Promise.resolve({ numPages: 1, getPage: vi.fn().mockResolvedValue(page) }),
+        promise: Promise.resolve({ numPages, getPage: vi.fn().mockResolvedValue(page) }),
       });
     }
 
@@ -487,6 +487,45 @@ describe('extractProjectKnowledgeFile', () => {
 
       expect(result.extractedText).toBeNull();
       expect(result.scannedTextWithheld).toBe('training_opt_out');
+    });
+
+    it('refuses a wholly scanned PDF with more pages than the image budget reads', async () => {
+      scannedDocument(31);
+      transcribeMocks.transcribeScannedPages.mockResolvedValue('Page one to thirty');
+
+      await expect(
+        extractProjectKnowledgeFile(
+          scanInput({
+            transcribeScans: {
+              db: {},
+              userId: 'user-1',
+              organizationId: null,
+              planTier: 'pro',
+              documentId: 'project-1:scan',
+            },
+          }),
+        ),
+      ).rejects.toMatchObject({ code: 'document_too_complex' });
+      expect(transcribeMocks.transcribeScannedPages).not.toHaveBeenCalled();
+    });
+
+    it('still reads a wholly scanned PDF at exactly the image budget', async () => {
+      scannedDocument(30);
+      transcribeMocks.transcribeScannedPages.mockResolvedValue('Pages one to thirty');
+
+      const result = await extractProjectKnowledgeFile(
+        scanInput({
+          transcribeScans: {
+            db: {},
+            userId: 'user-1',
+            organizationId: null,
+            planTier: 'pro',
+            documentId: 'project-1:scan',
+          },
+        }),
+      );
+
+      expect(result.extractedText).toContain('Pages one to thirty');
     });
 
     it('does not read the pictures for a caller that cannot pay for it', async () => {

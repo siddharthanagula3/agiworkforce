@@ -205,6 +205,14 @@ export const ROUTE_HANDLER_DELEGATES: readonly RouteHandlerDelegate[] = [
     route: 'artifacts/runtime/live/[artifactId]/complete/route.ts',
     handler: 'app/api/artifacts/runtime/artifact-completion.ts',
   },
+  {
+    route: 'llm/v1/chat/completions/resume-caller/route.ts',
+    handler: 'app/api/llm/v1/chat/completions/lib/tool-result-resume.ts',
+  },
+  {
+    route: 'llm/v1/chat/completions/resume-device/route.ts',
+    handler: 'app/api/llm/v1/chat/completions/lib/tool-result-resume.ts',
+  },
   { route: 'models/free-quota/completions/route.ts', handler: 'lib/server/free-quota-turn.ts' },
   {
     route: 'voice/live/sessions/[sessionId]/close/route.ts',

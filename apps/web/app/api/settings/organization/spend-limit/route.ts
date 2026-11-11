@@ -23,6 +23,12 @@ import {
 } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
+  MAX_ALERT_THRESHOLD_PCT,
+  MAX_MONTHLY_CAP_CREDITS,
+  MIN_ALERT_THRESHOLD_PCT,
+  MIN_MONTHLY_CAP_CREDITS,
+} from '@/lib/spend-limit-bounds';
+import {
   deleteSpendLimit,
   readSpendState,
   upsertSpendLimit,
@@ -31,13 +37,11 @@ import {
 
 export const runtime = 'nodejs';
 
-const MAX_MONTHLY_CAP_CENTS = 100_000_000;
-
 const PutSchema = z
   .object({
-    monthlyCapCredits: z.number().int().min(1).max(creditsFromCents(MAX_MONTHLY_CAP_CENTS)),
+    monthlyCapCredits: z.number().int().min(MIN_MONTHLY_CAP_CREDITS).max(MAX_MONTHLY_CAP_CREDITS),
     enforcement: z.enum(['off', 'notify', 'block']),
-    alertThresholdPct: z.number().int().min(1).max(100),
+    alertThresholdPct: z.number().int().min(MIN_ALERT_THRESHOLD_PCT).max(MAX_ALERT_THRESHOLD_PCT),
   })
   .strict();
 
@@ -65,7 +69,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       'policy.manage',
     ),
     currentUserRole: membership.role,
-    state: await readSpendState(db, membership.organizationId),
+    state: await readSpendState(membership.organizationId),
   };
   return NextResponse.json(payload);
 }
@@ -82,7 +86,7 @@ async function requireAdmin(request: NextRequest) {
     'policy.manage',
     'Your workspace role does not allow changing this workspace spend limit.',
   );
-  return { db, userId, membership };
+  return { userId, membership };
 }
 
 async function handlePut(request: NextRequest): Promise<NextResponse | Response> {
@@ -92,7 +96,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, membership } = await requireAdmin(request);
+  const { userId, membership } = await requireAdmin(request);
 
   const body = await readValidatedJsonBody(request, PutSchema, 'Invalid spend limit');
 
@@ -129,7 +133,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     organizationId: membership.organizationId,
     canManageLimit: true,
     currentUserRole: membership.role,
-    state: await readSpendState(db, membership.organizationId),
+    state: await readSpendState(membership.organizationId),
   };
   return NextResponse.json(payload);
 }
@@ -141,7 +145,7 @@ async function handleDelete(request: NextRequest): Promise<NextResponse | Respon
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, membership } = await requireAdmin(request);
+  const { userId, membership } = await requireAdmin(request);
   const removed = await deleteSpendLimit(getNeonDb(), membership.organizationId);
 
   if (removed) {
@@ -165,7 +169,7 @@ async function handleDelete(request: NextRequest): Promise<NextResponse | Respon
     organizationId: membership.organizationId,
     canManageLimit: true,
     currentUserRole: membership.role,
-    state: await readSpendState(db, membership.organizationId),
+    state: await readSpendState(membership.organizationId),
   };
   return NextResponse.json(payload);
 }

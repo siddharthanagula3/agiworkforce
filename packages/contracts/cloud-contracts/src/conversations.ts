@@ -139,6 +139,7 @@ export type ManagedCloudCreateConversationRequest = z.input<
 
 export const ManagedCloudUpdateConversationRequestSchema = z.object({
   title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH).optional(),
+  expectedTitle: z.string().max(CONVERSATION_TITLE_MAX_LENGTH).optional(),
   model: z.string().min(1).optional(),
   selectedRouteId: z.string().min(1).max(256).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),

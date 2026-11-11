@@ -202,8 +202,22 @@ export function exportSourceTable(type: LegalHoldResourceType): string | null {
   return SOURCE_BY_TYPE.get(type)?.table ?? null;
 }
 
-function toCursorValue(value: unknown): string {
-  return value instanceof Date ? value.toISOString() : String(value);
+const CURSOR_COLUMN = 'cursor_created_at';
+
+// The driver parses created_at to a millisecond Date; the page boundary must
+// keep the microseconds the database orders by, so it travels as text.
+function pagedSql(sql: string): string {
+  return `select q.*,
+                 to_char(q.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+                   as ${CURSOR_COLUMN}
+            from (${sql}) q
+           order by q.created_at, q.id`;
+}
+
+function withoutCursor(row: Record<string, unknown>): Record<string, unknown> {
+  const data = { ...row };
+  delete data[CURSOR_COLUMN];
+  return data;
 }
 
 /**
@@ -267,9 +281,10 @@ export async function* iterateLegalHoldExport(
 
   for (const source of SOURCES) {
     if (!types.has(source.type)) continue;
+    const sql = pagedSql(source.sql);
     let cursor = START_CURSOR;
     for (;;) {
-      const rows = await db.query<Record<string, unknown>>(source.sql, [
+      const rows = await db.query<Record<string, unknown>>(sql, [
         hold.organizationId,
         custodians,
         cursor.createdAt,
@@ -281,12 +296,22 @@ export async function* iterateLegalHoldExport(
       if (rows.length === 0) break;
       yield {
         resourceType: source.type,
-        records: rows.map((data) => ({ type: source.type, data })),
+        records: rows.map((row) => ({ type: source.type, data: withoutCursor(row) })),
         referenceOnly: rows.filter((row) => row['content_preserved'] === false).length,
       };
-      const last = rows[rows.length - 1] as Record<string, unknown>;
-      cursor = { createdAt: toCursorValue(last['created_at']), id: String(last['id']) };
       if (rows.length < EDISCOVERY_PAGE_SIZE) break;
+      const last = rows[rows.length - 1] as Record<string, unknown>;
+      const createdAt = last[CURSOR_COLUMN];
+      if (typeof createdAt !== 'string') {
+        throw new Error(
+          `The ${source.type} export page carries no exact position to continue from.`,
+        );
+      }
+      const id = String(last['id']);
+      if (createdAt === cursor.createdAt && id === cursor.id) {
+        throw new Error(`The ${source.type} export made no progress past ${createdAt}.`);
+      }
+      cursor = { createdAt, id };
     }
   }
 }
@@ -421,22 +446,28 @@ export interface EdiscoveryCustodyRecord extends EdiscoveryCustodyInput {
  */
 export async function recordEdiscoveryExport(
   db: DatabaseAdapter,
-  input: EdiscoveryCustodyInput,
+  request: EdiscoveryCustodyInput,
 ): Promise<EdiscoveryCustodyRecord> {
   return db.transaction(async (tx) => {
     // Two exports that read the same tail would both link to it and fork the chain.
     await tx.query(
       `select pg_advisory_xact_lock(hashtextextended('agi:ediscovery-custody:' || $1, 0))`,
-      [input.organizationId],
+      [request.organizationId],
     );
-    const [previous] = await tx.query<{ entry_hash: string }>(
-      `select entry_hash from public.ediscovery_exports
+    const [previous] = await tx.query<{ entry_hash: string; completed_at: Date | string }>(
+      `select entry_hash, completed_at from public.ediscovery_exports
         where organization_id = $1
         order by completed_at desc, id desc
         limit 1`,
-      [input.organizationId],
+      [request.organizationId],
     );
     const previousHash = previous?.entry_hash ?? EDISCOVERY_GENESIS_HASH;
+    // The tail is chosen by completed_at, so a row appended later must sort after it.
+    const tailAt = previous ? new Date(previous.completed_at).getTime() : Number.NaN;
+    const input =
+      tailAt >= Date.parse(request.completedAt)
+        ? { ...request, completedAt: new Date(tailAt + 1).toISOString() }
+        : request;
     const entryHash = ediscoveryCustodyHash(previousHash, input);
 
     const [row] = await tx.query<{ id: string }>(

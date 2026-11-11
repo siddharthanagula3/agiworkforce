@@ -125,7 +125,10 @@ function EnhancedExportDialogImpl({
 
       switch (selectedFormat) {
         case 'markdown': {
-          const content = exportService.exportAsMarkdown(session, messages, contentOptions);
+          const content = exportService.exportAsMarkdown(session, messages, {
+            ...contentOptions,
+            includeMetadata,
+          });
           await downloadAsMarkdown(content, filename, options);
           break;
         }

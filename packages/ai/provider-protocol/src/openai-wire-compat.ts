@@ -1,11 +1,15 @@
-import { WEB_SEARCH_CITATION_DELTA_KEY, WEB_SEARCH_CITATION_KIND } from '@agiworkforce/types';
+import {
+  WEB_SEARCH_CITATION_DELTA_KEY,
+  WEB_SEARCH_CITATION_KIND,
+  isReplayableReasoningBlock,
+} from '@agiworkforce/types';
 import type {
   ChatRequest,
   ContentBlock,
   ProviderMessage,
+  ReasoningReplayBlock,
   StreamChunk,
   TextBlock,
-  ThinkingBlock,
   ToolChoice,
   ToolDef,
   ToolResultBlock,
@@ -61,7 +65,7 @@ export interface OpenAIWireMessage {
   name?: string;
   tool_call_id?: string;
   tool_calls?: OpenAIWireToolCall[];
-  __canonicalThinking?: ThinkingBlock[];
+  __canonicalThinking?: ReasoningReplayBlock[];
 }
 
 export interface OpenAIWireToolDefinition {
@@ -202,12 +206,16 @@ export function openAIWireRequestToChatRequest(body: OpenAIWireChatRequest): Cha
     if (msg.role === 'assistant') {
       const blocks: ContentBlock[] = [];
       for (const thinkingBlock of msg.__canonicalThinking ?? []) {
-        if (!thinkingBlock.signature) continue;
-        blocks.push({
-          type: 'thinking',
-          thinking: thinkingBlock.thinking,
-          signature: thinkingBlock.signature,
-        });
+        if (!isReplayableReasoningBlock(thinkingBlock)) continue;
+        blocks.push(
+          thinkingBlock.type === 'redacted_thinking'
+            ? { type: 'redacted_thinking', data: thinkingBlock.data }
+            : {
+                type: 'thinking',
+                thinking: thinkingBlock.thinking,
+                signature: thinkingBlock.signature,
+              },
+        );
       }
       const text = typeof msg.content === 'string' ? msg.content : wireContentToText(msg.content);
       if (text) {
@@ -393,7 +401,7 @@ export class OpenAIWireAssembler {
   private lastTextDelta = '';
   private toolStepSinceText = false;
   private reasoning = '';
-  private readonly thinkingBlocks: ThinkingBlock[] = [];
+  private readonly thinkingBlocks: ReasoningReplayBlock[] = [];
   private openThinkingBlock: { thinking: string; signature?: string } | null = null;
   private usage: { input?: number; output?: number; cacheRead?: number; reasoning?: number } = {};
   private finishReason: OpenAIWireFinishReason | null = null;
@@ -602,6 +610,7 @@ export class OpenAIWireAssembler {
         }
         return;
       case 'vendor-raw':
+        if (chunk.replay) this.thinkingBlocks.push({ ...chunk.replay });
         return;
       case 'response-meta':
         if (chunk.id !== undefined) this.realId = chunk.id;
@@ -875,7 +884,7 @@ export class OpenAIWireAssembler {
     return out;
   }
 
-  canonicalThinkingBlocks(): ThinkingBlock[] {
+  canonicalThinkingBlocks(): ReasoningReplayBlock[] {
     return this.thinkingBlocks.map((block) => ({ ...block }));
   }
 

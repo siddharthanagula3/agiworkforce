@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 const billingMocks = vi.hoisted(() => ({
   openBillingPortal: vi.fn(),
@@ -39,9 +40,14 @@ interface MockSubscription {
   cancel_at_period_end?: boolean;
 }
 
+const PLAN_LABEL = {
+  max: getBillingPlanPricing('max').label,
+  pro: getBillingPlanPricing('pro').label,
+} as const;
+
 let mockSubscription: MockSubscription = {
   tier: 'pro',
-  display_name: 'Pro',
+  display_name: `${PLAN_LABEL.pro}`,
   status: 'active',
   current_period_end: 1_800_000_000,
 };
@@ -65,14 +71,13 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 import { BillingSection } from '../BillingSection';
-
 const originalFetch = global.fetch;
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockSubscription = {
     tier: 'pro',
-    display_name: 'Pro',
+    display_name: `${PLAN_LABEL.pro}`,
     status: 'active',
     current_period_end: 1_800_000_000,
     subscription_source: 'stripe',
@@ -301,7 +306,7 @@ describe('BillingSection', () => {
     );
   }
 
-  it('keeps a yearly Pro subscriber on what they bought and says nothing changes', async () => {
+  it(`keeps a yearly ${PLAN_LABEL.pro} subscriber on what they bought and says nothing changes`, async () => {
     global.fetch = planStateFetch();
 
     render(<BillingSection />);
@@ -310,12 +315,12 @@ describe('BillingSection', () => {
     expect(screen.queryByText('$20/mo')).toBeNull();
     expect(
       screen.getByText(
-        'If you already pay yearly for Pro, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.',
+        `If you already pay yearly for ${PLAN_LABEL.pro}, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.`,
       ),
     ).toBeTruthy();
   });
 
-  it('switches a yearly Pro subscriber to monthly billing at renewal after confirming', async () => {
+  it(`switches a yearly ${PLAN_LABEL.pro} subscriber to monthly billing at renewal after confirming`, async () => {
     const fetchMock = planStateFetch(() => ({
       ...YEARLY_PRO_STATE,
       scheduledChange: {
@@ -330,15 +335,55 @@ describe('BillingSection', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Switch to monthly billing' }));
     const confirmation = await screen.findByRole('alertdialog');
-    expect(confirmation).toHaveTextContent(/yearly billing is no longer available for Pro/);
+    expect(confirmation).toHaveTextContent(
+      new RegExp(`yearly billing is no longer available for ${PLAN_LABEL.pro}`),
+    );
     fireEvent.click(within(confirmation).getByRole('button', { name: 'Switch to monthly' }));
 
-    expect(await screen.findByText(/Your Pro plan switches to monthly billing on/)).toBeTruthy();
+    expect(
+      await screen.findByText(
+        new RegExp(`Your ${PLAN_LABEL.pro} plan switches to monthly billing on`),
+      ),
+    ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Keep yearly billing' })).toBeTruthy();
     const post = fetchMock.mock.calls.find(
       ([url, init]) => String(url).includes('downgrade-preview') && init?.method === 'POST',
     );
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ plan: 'pro' });
+  });
+
+  it('keeps a successful resume when an older plan read settles afterwards', async () => {
+    const proLabel = getBillingPlanPricing('pro').label;
+    mockSubscription.cancel_at_period_end = true;
+    let settleRead: (state: unknown) => void = () => undefined;
+    const pendingRead = new Promise<unknown>((resolve) => {
+      settleRead = resolve;
+    });
+    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).includes('/api/billing')) {
+        return { ok: true, json: async () => ({}) } as Response;
+      }
+      if (String(input).includes('resume-cancellation')) {
+        return { ok: true, json: async () => YEARLY_PRO_STATE } as Response;
+      }
+      if (String(input).includes('downgrade-preview') && init?.method !== 'POST') {
+        return { ok: true, json: async () => pendingRead } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    });
+
+    render(<BillingSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: `Resume ${proLabel}` }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: `Resume ${proLabel}` })).toBeNull(),
+    );
+
+    settleRead({ ...YEARLY_PRO_STATE, cancelAt: '2027-01-15T00:00:00.000Z' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(screen.queryByRole('button', { name: `Resume ${proLabel}` })).toBeNull();
+    expect(screen.queryByText(new RegExp(`Your ${proLabel} plan ends on`))).toBeNull();
   });
 
   it('labels an operator-provisioned plan without inventing Stripe controls', () => {
@@ -430,15 +475,18 @@ describe('BillingSection', () => {
     await waitFor(() => expect(billingMocks.startTopUpCheckout).toHaveBeenCalledWith(60));
   });
 
-  it('tells a Pro subscriber which plan gives more credits per dollar than a pack', () => {
+  it(`tells a ${PLAN_LABEL.pro} subscriber which plan gives more credits per dollar than a pack`, () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
     render(<BillingSection />);
 
     const block = within(screen.getByRole('region', { name: 'Buy credits' }));
     expect(
-      block.getByText('Max 5x gives you 2x more credits per dollar than this pack.'),
+      block.getByText(`${PLAN_LABEL.max} gives you 2x more credits per dollar than this pack.`),
     ).toBeTruthy();
-    expect(block.getByRole('link', { name: 'See Max 5x' })).toHaveAttribute('href', '/upgrade/max');
+    expect(block.getByRole('link', { name: `See ${PLAN_LABEL.max}` })).toHaveAttribute(
+      'href',
+      '/upgrade/max',
+    );
   });
 
   it('keeps packs off sale for a Free account and points it at the plans instead', () => {
@@ -455,7 +503,7 @@ describe('BillingSection', () => {
     expect(block.getByText('Credit packs are available on paid plans.')).toBeTruthy();
     expect(block.queryByRole('radio')).toBeNull();
     expect(
-      block.getByText('Pro gives you 2x more credits per dollar than a credit pack.'),
+      block.getByText(`${PLAN_LABEL.pro} gives you 2x more credits per dollar than a credit pack.`),
     ).toBeTruthy();
     expect(block.getByRole('link', { name: 'Compare plans' })).toHaveAttribute('href', '/pricing');
   });
@@ -654,6 +702,44 @@ describe('BillingSection saved cards and plan comparison', () => {
   });
 });
 
+describe('BillingSection credit history', () => {
+  it('shows a released reservation as credit given back, not as a second debit', async () => {
+    const history = {
+      transactions: [
+        {
+          id: 'tx-release',
+          transaction_type: 'deduction',
+          amount_cents: -10,
+          balance_effect_cents: 10,
+          description: 'Managed usage reservation release',
+          label: null,
+          created_at: '2026-11-10T00:00:01.000Z',
+        },
+        {
+          id: 'tx-reserve',
+          transaction_type: 'deduction',
+          amount_cents: 10,
+          balance_effect_cents: -10,
+          description: 'Managed usage reservation: provider/model',
+          label: 'Usage: A model',
+          created_at: '2026-11-10T00:00:00.000Z',
+        },
+      ],
+    };
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => (String(url).includes('credit-history') ? history : {}),
+    })) as unknown as typeof fetch;
+
+    render(<BillingSection />);
+
+    const release = (await screen.findByText('Managed usage reservation release')).closest('tr');
+    const reserve = screen.getByText('Usage: A model').closest('tr');
+    expect(release).toHaveTextContent('+20 credits');
+    expect(reserve).toHaveTextContent('-20 credits');
+  });
+});
+
 describe('past-due payment notice', () => {
   // invoice.payment_failed sets the subscription to past_due server-side, but
   // this panel rendered nothing about it, so a user whose card was declined
@@ -697,7 +783,7 @@ describe('past-due payment notice', () => {
   it('stays silent on a healthy subscription', async () => {
     mockSubscription = { ...mockSubscription, status: 'active' };
     render(<BillingSection />);
-    await waitFor(() => expect(screen.getByText(/Pro/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(new RegExp(PLAN_LABEL.pro))).toBeTruthy());
     expect(screen.queryByText(/did not go through/)).toBeNull();
   });
 });

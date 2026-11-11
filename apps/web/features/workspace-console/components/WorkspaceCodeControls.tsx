@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { Spinner, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
@@ -15,6 +15,7 @@ import {
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useServerDraftSync } from '../hooks/use-server-draft-sync';
 
 export const CODE_POLICY_QUERY_KEY = ['workspace', 'code-policy'] as const;
 
@@ -86,7 +87,8 @@ export function useUpdateCodePolicy() {
       if (!res.ok) throw new Error(await readApiError(res));
       return (await res.json()) as WorkspaceCodePolicyResponse;
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      queryClient.setQueryData(CODE_POLICY_QUERY_KEY, saved);
       void queryClient.invalidateQueries({ queryKey: CODE_POLICY_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: ['workspace', 'posture'] });
     },
@@ -132,12 +134,21 @@ export function WorkspaceCodeControls() {
   const [mcpServers, setMcpServers] = useState('');
   const [egressHosts, setEgressHosts] = useState('');
 
-  useEffect(() => {
-    if (!saved) return;
-    setDraft(saved);
-    setMcpServers(saved.allowedMcpServers.join(', '));
-    setEgressHosts(saved.allowedEgressHosts.join(', '));
-  }, [saved]);
+  useServerDraftSync(
+    saved,
+    (acknowledged) =>
+      draft === null ||
+      JSON.stringify({
+        ...draft,
+        allowedMcpServers: parseHosts(mcpServers),
+        allowedEgressHosts: parseHosts(egressHosts),
+      }) === JSON.stringify(acknowledged),
+    (controls) => {
+      setDraft(controls);
+      setMcpServers(controls.allowedMcpServers.join(', '));
+      setEgressHosts(controls.allowedEgressHosts.join(', '));
+    },
+  );
 
   const edited =
     saved !== null &&

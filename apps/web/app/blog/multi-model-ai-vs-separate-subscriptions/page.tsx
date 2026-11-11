@@ -6,7 +6,6 @@ import {
 } from '@agiworkforce/types';
 import { formatCurrency } from '@agiworkforce/utils';
 import { Header } from '@shared/components/layout/Header';
-import { JsonLd } from '@shared/components/seo/JsonLd';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Breadcrumb, Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
@@ -14,7 +13,6 @@ import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
 import { SUBSCRIPTION_GUIDE } from '@/lib/blog-posts';
 import { MANAGED_CLOUD_STATUS, LEGAL_ENTITY } from '@/lib/legal-constants';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { articleSchema, breadcrumbSchema } from '@/lib/seo/structured-data';
 import { surfaceAvailabilitySummary } from '@/lib/surface-status';
 import '@/features/marketing/components/pages/company/company.css';
 
@@ -38,16 +36,6 @@ export default function SubscriptionGuidePage() {
     <div data-design="agi" data-public-reference="article" className="agi-ds-page agi-co">
       <Header />
       <main id="main-content" tabIndex={-1}>
-        <JsonLd
-          data={[
-            articleSchema(SUBSCRIPTION_GUIDE),
-            breadcrumbSchema([
-              { name: 'Home', path: '/' },
-              { name: 'Blog', path: '/blog' },
-              { name: SUBSCRIPTION_GUIDE.title, path: SUBSCRIPTION_GUIDE.path },
-            ]),
-          ]}
-        />
         <article aria-labelledby="subscription-guide-title">
           <Section>
             <Stack>
@@ -222,7 +210,7 @@ export default function SubscriptionGuidePage() {
                 send to the selected service. The following is a method you can reproduce, not a
                 report of tests we have already run on these products.
               </Prose>
-              <ol className="list-decimal pl-[var(--space-5)]">
+              <ol className="list-decimal ps-[var(--space-5)]">
                 <li>
                   <Prose>
                     <strong>Document task:</strong> ask for a summary with specified facts. Keep a

@@ -52,12 +52,18 @@ fi
 # before a prebuild still points at the previous codegen output, and the build
 # fails resolving inputs that no longer exist. The reset must run AFTER prebuild
 # regenerates ios/ and BEFORE run:ios starts Xcode, that order is the fix.
-derived_data_dir="${AGI_IOS_DERIVED_DATA_DIR:-$HOME/Library/Developer/Xcode/DerivedData}"
-if [[ "${AGI_IOS_SKIP_DERIVED_DATA_RESET:-0}" != "1" && -d "$derived_data_dir" ]]; then
-  rm -rf "$derived_data_dir"/AGIMobile-*
+ios_project_name="$(node -p "require('./native/ios/iosProjectName.cjs').appIosProjectName()")"
+if [[ -z "$ios_project_name" ]]; then
+  echo "Could not derive the iOS project name from app.config.js." >&2
+  exit 1
 fi
 
-project_file="ios/AGIMobile.xcodeproj/project.pbxproj"
+derived_data_dir="${AGI_IOS_DERIVED_DATA_DIR:-$HOME/Library/Developer/Xcode/DerivedData}"
+if [[ "${AGI_IOS_SKIP_DERIVED_DATA_RESET:-0}" != "1" && -d "$derived_data_dir" ]]; then
+  rm -rf "$derived_data_dir"/"$ios_project_name"-*
+fi
+
+project_file="ios/$ios_project_name.xcodeproj/project.pbxproj"
 if [[ -f "$project_file" ]]; then
   AGI_IOS_DEVELOPMENT_TEAM="$AGI_IOS_DEVELOPMENT_TEAM" perl -0pi -e '
     s/DEVELOPMENT_TEAM = "?[A-Z0-9]+"?;/DEVELOPMENT_TEAM = "$ENV{AGI_IOS_DEVELOPMENT_TEAM}";/g;

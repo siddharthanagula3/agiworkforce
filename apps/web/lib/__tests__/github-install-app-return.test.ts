@@ -31,6 +31,7 @@ import {
   appInstallReturnUrl,
   maskEmail,
   consumeAppInstall,
+  linkVerifiedGitHubInstallation,
   pendingAppInstallation,
   recordAppInstallation,
   startAppInstall,
@@ -55,6 +56,31 @@ describe('GitHub app install state', () => {
     expect(sql).toMatch(/insert into public\.github_install_authorizations/);
     expect(params).toEqual(['user-1', sha256(state), 10]);
     expect(params).not.toContain(state);
+  });
+
+  it('stores the writable set beside the reachable one and replaces both on a relink', async () => {
+    mocks.query.mockResolvedValueOnce([{ id: 'row-1' }]);
+
+    const linked = await linkVerifiedGitHubInstallation('user-1', {
+      installationId: 42,
+      accountLogin: 'acme',
+      accountType: 'Organization',
+      verifiedRepositories: ['acme/app', 'acme/docs'],
+      writableRepositories: ['acme/app'],
+    });
+
+    expect(linked).toBe(true);
+    const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/writable_repositories,\s+ownership_verified_at/);
+    expect(sql).toMatch(/writable_repositories = excluded\.writable_repositories/);
+    expect(params).toEqual([
+      'user-1',
+      42,
+      'acme',
+      'Organization',
+      ['acme/app', 'acme/docs'],
+      ['acme/app'],
+    ]);
   });
 
   it('records an installation only once, on an open row', async () => {

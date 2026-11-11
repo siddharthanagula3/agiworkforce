@@ -3,6 +3,14 @@ import { getDeviceId } from '@/lib/deviceId';
 import { secureFetch } from '@/services/secureFetch';
 
 const PUSH_TOKEN_PATH = '/api/mobile/push-token';
+const CREDENTIAL_REJECTED_STATUS = 401;
+
+export class PushTokenCleanupCredentialRejectedError extends Error {
+  constructor(readonly status: number) {
+    super(`Push-token sign-out cleanup credential was rejected with HTTP ${status}`);
+    this.name = 'PushTokenCleanupCredentialRejectedError';
+  }
+}
 
 export async function unregisterPushTokenForSignOut(capturedClerkToken: string): Promise<void> {
   const token = capturedClerkToken.trim();
@@ -45,6 +53,9 @@ export async function unregisterPushTokenForSignOut(capturedClerkToken: string):
           },
           signal: controller.signal,
         });
+        if (response.status === CREDENTIAL_REJECTED_STATUS) {
+          throw new PushTokenCleanupCredentialRejectedError(response.status);
+        }
         if (!response.ok) {
           throw new Error(`Push-token sign-out cleanup failed with HTTP ${response.status}`);
         }

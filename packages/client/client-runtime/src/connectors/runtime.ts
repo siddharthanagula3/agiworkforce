@@ -14,6 +14,7 @@ import {
   resolveConnectorHealth,
 } from './policy';
 import {
+  parseConnectorDisconnect,
   parseConnectorList,
   parseConnectorOAuthStart,
   parseConnectorPolicy,
@@ -28,6 +29,7 @@ import type {
   ConnectorAccessPolicy,
   ConnectorDirectory,
   ConnectorDirectoryEntry,
+  ConnectorDisconnectResult,
   ConnectorOAuthStart,
   ConnectorSurface,
   ConnectorToolPermission,
@@ -88,6 +90,10 @@ export interface ConnectorHttpClient {
   delete(path: string): Promise<unknown>;
 }
 
+export interface ConnectorOperationScope {
+  assertCurrent(): void;
+}
+
 export interface ConnectorLocalBridge {
   list(): Promise<string[]>;
   connect(connectorId: string, authType: string): Promise<void>;
@@ -120,9 +126,13 @@ export interface ConnectorRuntime {
   checkMcpHost(url: string): Promise<ConnectorAccessDecision>;
   loadDirectory(): Promise<ConnectorDirectory>;
   listConnected(): Promise<ConnectedConnector[]>;
-  connect(connectorId: string, authType?: string): Promise<ConnectResult>;
-  disconnect(connectorId: string): Promise<void>;
-  startOAuth(connectorId: string): Promise<ConnectorOAuthStart>;
+  connect(
+    connectorId: string,
+    authType?: string,
+    scope?: ConnectorOperationScope,
+  ): Promise<ConnectResult>;
+  disconnect(connectorId: string): Promise<ConnectorDisconnectResult>;
+  startOAuth(connectorId: string, scope?: ConnectorOperationScope): Promise<ConnectorOAuthStart>;
   listToolPermissions(): Promise<ConnectorToolPermission[]>;
   setToolPermission(
     connectorId: string,
@@ -130,8 +140,11 @@ export interface ConnectorRuntime {
     level: ConnectorToolPermissionLevel,
   ): Promise<void>;
   resetToolPermission(connectorId: string, toolName: string): Promise<void>;
-  addCustomConnector(input: AddCustomConnectorInput): Promise<CustomConnectorResult>;
-  deleteCustomConnector(id: string): Promise<void>;
+  addCustomConnector(
+    input: AddCustomConnectorInput,
+    scope?: ConnectorOperationScope,
+  ): Promise<CustomConnectorResult>;
+  deleteCustomConnector(id: string): Promise<ConnectorDisconnectResult>;
 }
 
 function statusOf(error: unknown): number | null {
@@ -164,6 +177,7 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
 
   let cached: { policy: ConnectorAccessPolicy | null; at: number } | null = null;
   let inFlight: Promise<ConnectorAccessPolicy | null> | null = null;
+  let policyGeneration = 0;
 
   // Fail open: the server gate is authoritative, and an unreachable policy
   // endpoint must not strand a member whose workspace permits everything.
@@ -178,8 +192,9 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
   async function loadPolicy(opts?: { force?: boolean }): Promise<ConnectorAccessPolicy | null> {
     if (!opts?.force && cached && now() - cached.at < ttl) return cached.policy;
     if (!opts?.force && inFlight) return inFlight;
+    const generation = policyGeneration;
     const request = readPolicy().then((policy) => {
-      cached = { policy, at: now() };
+      if (generation === policyGeneration) cached = { policy, at: now() };
       return policy;
     });
     inFlight = request;
@@ -204,8 +219,11 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
   async function requireConnector(
     connectorId: string,
     ask?: { isCustom?: boolean; url?: string | null },
+    scope?: ConnectorOperationScope,
   ): Promise<void> {
+    scope?.assertCurrent();
     const decision = await checkConnector(connectorId, ask);
+    scope?.assertCurrent();
     if (!decision.allowed) throw new ConnectorPolicyError(decision, connectorId);
   }
 
@@ -251,17 +269,23 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
     return { connectors: listed.connectors, available: listed.available, entries, policy };
   }
 
-  async function startOAuth(connectorId: string): Promise<ConnectorOAuthStart> {
-    await requireConnector(connectorId);
+  async function startOAuth(
+    connectorId: string,
+    scope?: ConnectorOperationScope,
+  ): Promise<ConnectorOAuthStart> {
+    await requireConnector(connectorId, undefined, scope);
     const appReturn = surface === 'mobile' ? `&${CONNECTOR_OAUTH_APP_RETURN_PARAM}=1` : '';
     const path = `${endpoints.oauthStart}?connectorId=${encodeURIComponent(connectorId)}&mode=json${appReturn}`;
-    return parseConnectorOAuthStart(connectorId, await http.get(path));
+    const started = await http.get(path);
+    scope?.assertCurrent();
+    return parseConnectorOAuthStart(connectorId, started);
   }
 
   return {
     surface,
     loadPolicy,
     invalidatePolicy() {
+      policyGeneration += 1;
       cached = null;
       inFlight = null;
     },
@@ -276,8 +300,12 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
     async listConnected() {
       return (await loadDirectory()).connectors;
     },
-    async connect(connectorId: string, authType?: string): Promise<ConnectResult> {
-      await requireConnector(connectorId);
+    async connect(
+      connectorId: string,
+      authType?: string,
+      scope?: ConnectorOperationScope,
+    ): Promise<ConnectResult> {
+      await requireConnector(connectorId, undefined, scope);
       if (local) {
         await local.connect(connectorId, authType ?? 'oauth');
         return { kind: 'connected' };
@@ -289,6 +317,7 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
         } satisfies ConnectRequest);
         return { kind: 'connected' };
       } catch (error) {
+        scope?.assertCurrent();
         if (statusOf(error) !== 409) throw error;
         const conflict = conflictPathsOf(error);
         if (conflict.credentialsPath) {
@@ -301,7 +330,7 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
         if (conflict.installStartPath && !conflict.oauthStartPath) {
           return { kind: 'install-required', connectorId, installUrl: conflict.installStartPath };
         }
-        const start = await startOAuth(connectorId);
+        const start = await startOAuth(connectorId, scope);
         return {
           kind: 'oauth-required',
           connectorId: start.connectorId,
@@ -313,9 +342,11 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
     async disconnect(connectorId: string) {
       if (local) {
         await local.disconnect(connectorId);
-        return;
+        return { vendorNotice: null };
       }
-      await http.delete(`${endpoints.connectors}?connectorId=${encodeURIComponent(connectorId)}`);
+      return parseConnectorDisconnect(
+        await http.delete(`${endpoints.connectors}?connectorId=${encodeURIComponent(connectorId)}`),
+      );
     },
     startOAuth,
     async listToolPermissions() {
@@ -333,20 +364,22 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
         `${endpoints.permissions}?connectorId=${encodeURIComponent(connectorId)}&toolName=${encodeURIComponent(toolName)}`,
       );
     },
-    async addCustomConnector(input) {
+    async addCustomConnector(input, scope) {
       const url = input.url.trim();
-      await requireConnector(input.name.trim(), { isCustom: true, url });
-      return parseCustomConnector(
-        await http.post(endpoints.custom, {
-          name: input.name.trim(),
-          url,
-          ...(input.transport ? { transport: input.transport } : {}),
-          ...(input.authToken?.trim() ? { authToken: input.authToken.trim() } : {}),
-        } satisfies CreateCustomConnectorRequest),
-      );
+      await requireConnector(input.name.trim(), { isCustom: true, url }, scope);
+      const created = await http.post(endpoints.custom, {
+        name: input.name.trim(),
+        url,
+        ...(input.transport ? { transport: input.transport } : {}),
+        ...(input.authToken?.trim() ? { authToken: input.authToken.trim() } : {}),
+      } satisfies CreateCustomConnectorRequest);
+      scope?.assertCurrent();
+      return parseCustomConnector(created);
     },
     async deleteCustomConnector(id: string) {
-      await http.delete(`${endpoints.custom}?id=${encodeURIComponent(id)}`);
+      return parseConnectorDisconnect(
+        await http.delete(`${endpoints.custom}?id=${encodeURIComponent(id)}`),
+      );
     },
   };
 }

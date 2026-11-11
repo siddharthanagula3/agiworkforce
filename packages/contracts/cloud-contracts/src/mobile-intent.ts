@@ -30,7 +30,7 @@ export const MobileIntentAskRequestSchema = z
 
 export const MobileIntentAskResponseSchema = z.object({
   text: z.string(),
-  conversationId: z.string().uuid(),
+  conversationId: z.string().uuid().nullable(),
 });
 
 export type MobileIntentTokenIssueResponse = z.infer<typeof MobileIntentTokenIssueResponseSchema>;

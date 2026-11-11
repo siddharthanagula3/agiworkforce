@@ -23,7 +23,9 @@ pub struct Usage {
     pub output_tokens: u32,
     /// Tokens read from prompt cache. Anthropic reports
     /// `cache_read_input_tokens`; OpenAI Responses reports
-    /// `input_tokens_details.cached_tokens`. 0 when unavailable.
+    /// `input_tokens_details.cached_tokens`; Gemini reports
+    /// `cachedContentTokenCount`, a subset of `promptTokenCount`. 0 when
+    /// unavailable.
     pub cache_read_input_tokens: u32,
     /// Tokens written to prompt cache (Anthropic only).
     pub cache_creation_input_tokens: u32,

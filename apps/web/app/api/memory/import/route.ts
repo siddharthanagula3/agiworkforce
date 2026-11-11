@@ -17,9 +17,14 @@ import {
   type ManagedMemoryImportCommitResponse,
   type ManagedMemoryImportPreviewResponse,
 } from '@agiworkforce/types';
-import { persistImportedMemories, type ImportMemoryDb } from '@/lib/memory/import-store';
+import {
+  persistImportedMemories,
+  type ImportedMemoryCandidate,
+  type ImportMemoryDb,
+} from '@/lib/memory/import-store';
 import { partitionMemoryWrites } from '@/lib/services/memory-write-service';
 import {
+  activeMemoryPredicate,
   loadMemoryWritePolicies,
   memoryWriteAdmission,
   workspaceMemoryPredicate,
@@ -41,7 +46,7 @@ async function loadExistingNormalizedKeys(
 ): Promise<Set<string>> {
   const rows = await db.query<{ content: string }>(
     `select content from user_memories
-      where user_id = $1 and is_deleted = false and ${workspaceMemoryPredicate(2)}`,
+      where user_id = $1 and ${activeMemoryPredicate()} and ${workspaceMemoryPredicate(2)}`,
     [userId, organizationId],
   );
   return new Set(rows.map((row) => normalizeImportedMemoryKey(row.content)));
@@ -115,7 +120,7 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
   });
 
   const policies = await loadMemoryWritePolicies(db, { userId, organizationId });
-  const admitted: string[] = [];
+  const admitted: ImportedMemoryCandidate[] = [];
   let blockedCount = 0;
   for (const item of allowed) {
     const decision = await memoryWriteAdmission(
@@ -130,7 +135,7 @@ async function handleCommit(request: NextRequest, body: ImportRequestBody) {
       },
       { policies },
     );
-    if (decision.eligible) admitted.push(item);
+    if (decision.eligible) admitted.push({ content: item, expiresAt: decision.expiresAt ?? null });
     else blockedCount += 1;
   }
 

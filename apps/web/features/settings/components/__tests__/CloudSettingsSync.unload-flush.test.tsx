@@ -135,6 +135,30 @@ describe('a pending appearance write and a page unload', () => {
     expect(preferences.savePreferenceNamespace).not.toHaveBeenCalled();
   });
 
+  it('sends nothing on pagehide after the choice returns to the account value before the debounce', async () => {
+    render(<CloudSettingsSync />);
+    await settle();
+
+    act(() => {
+      useSettingsStore.getState().setAccentColor('blue');
+    });
+    await settle();
+    act(() => {
+      useSettingsStore.getState().setAccentColor('default');
+    });
+    await settle();
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    expect(preferences.savePreferenceNamespace).not.toHaveBeenCalled();
+  });
+
   it('does not double-send once the debounce itself has already fired', async () => {
     render(<CloudSettingsSync />);
     await settle();

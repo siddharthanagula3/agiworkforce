@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { LANE_NAMES } from '../features/marketing/components/system/lanes';
+
 const HEADER = 'main > section.agi-ds-pagehead';
 const LABEL_MIN_PX = 14;
 const LEDE_MIN_PX = 17;
@@ -44,7 +46,7 @@ const PAGES = [
   { route: '/partners', layout: 'company', label: 'Partners' },
   { route: '/trust', layout: 'company', label: 'Trust' },
   { route: '/community', layout: 'company', label: 'Community' },
-  { route: '/waitlist', layout: 'company', label: 'AGI Cloud' },
+  { route: '/waitlist', layout: 'company', label: LANE_NAMES.cloud },
 ] as const;
 
 function firstFamily(fontFamily: string): string {

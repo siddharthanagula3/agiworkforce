@@ -13,6 +13,7 @@ import {
   UI_GAP_TYPES,
   unresolvedSeverityTally,
 } from './ui-gaps-lib.mjs';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const root = process.cwd();
 const csvPath = path.join(root, 'audit/registers/ui-gaps.csv');
@@ -142,6 +143,7 @@ function enforceMonotonic(records, ref) {
   }
 
   const result = spawnSync('git', ['show', `${ref}:audit/registers/ui-gaps.csv`], {
+    maxBuffer: GIT_MAX_BUFFER,
     cwd: root,
     encoding: 'utf8',
   });

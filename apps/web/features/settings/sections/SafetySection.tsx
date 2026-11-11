@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Switch } from '@agiworkforce/ui';
 import {
   fetchPreferenceNamespace,
+  invalidatePreferencesSnapshot,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -25,6 +26,14 @@ export function SafetySection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,14 +63,26 @@ export function SafetySection() {
     setSaving(true);
     setError(null);
     void savePreferenceNamespace(NAMESPACE, next)
-      .catch((caught) => {
-        setPreferences((current) => ({
-          ...current,
-          reduceSensitiveContent: !enabled,
-        }));
-        setError(toUserMessage(caught, 'Failed to save safety settings'));
+      .catch(async (caught) => {
+        const message = toUserMessage(caught, 'Failed to save safety settings');
+        invalidatePreferencesSnapshot();
+        try {
+          const persisted = await fetchPreferenceNamespace<SafetyPreferences>(
+            NAMESPACE,
+            DEFAULT_SAFETY_PREFERENCES,
+          );
+          if (!mountedRef.current) return;
+          setPreferences(persisted);
+          setError(message);
+        } catch {
+          if (!mountedRef.current) return;
+          setPreferences((current) => ({ ...current, reduceSensitiveContent: !enabled }));
+          setError('Could not confirm the saved safety setting. Reload to check it.');
+        }
       })
-      .finally(() => setSaving(false));
+      .finally(() => {
+        if (mountedRef.current) setSaving(false);
+      });
   };
 
   return (

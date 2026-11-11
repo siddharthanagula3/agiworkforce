@@ -18,6 +18,11 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 import { UpgradeWelcome } from './UpgradeWelcome';
+import { getBillingPlanPricing } from '@agiworkforce/types';
+
+const PLAN_LABEL = {
+  max_15x: getBillingPlanPricing('max_15x').label,
+} as const;
 
 const PERIOD_END_UNIX = Math.floor(Date.UTC(2026, 8, 14) / 1000);
 
@@ -31,7 +36,7 @@ describe('UpgradeWelcome', () => {
     const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="max_15x" />);
 
     expect(screen.getByRole('heading', { name: 'Payment received.' })).toBeInTheDocument();
-    expect(screen.getByText('Activating your Max 20x plan…')).toBeInTheDocument();
+    expect(screen.getByText(`Activating your ${PLAN_LABEL.max_15x} plan…`)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /all set/i })).toBeNull();
     unmount();
   });
@@ -40,7 +45,7 @@ describe('UpgradeWelcome', () => {
     billingState.subscription = { tier: 'max_15x', status: 'canceled' };
     const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="max_15x" />);
 
-    expect(screen.getByText('Activating your Max 20x plan…')).toBeInTheDocument();
+    expect(screen.getByText(`Activating your ${PLAN_LABEL.max_15x} plan…`)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /all set/i })).toBeNull();
     unmount();
   });
@@ -50,7 +55,7 @@ describe('UpgradeWelcome', () => {
     const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="max_15x" />);
 
     expect(screen.getByRole('heading', { name: /all set/i })).toBeInTheDocument();
-    expect(screen.getByText('Max 20x')).toBeInTheDocument();
+    expect(screen.getByText(`${PLAN_LABEL.max_15x}`)).toBeInTheDocument();
     expect(screen.getByText('$200/month')).toBeInTheDocument();
     expect(screen.queryByText(/Activating your/i)).toBeNull();
     expect(billingState.refreshUser).not.toHaveBeenCalled();

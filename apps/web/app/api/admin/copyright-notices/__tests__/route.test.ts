@@ -82,12 +82,18 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
   getNeonDb: () => mocks.db,
 }));
-vi.mock('@/lib/server/copyright-notices', () => ({
-  CONTENT_NOTICE_TYPES: vi.fn(),
-  recordCopyrightNotice: vi.fn(),
-  listCopyrightNotices: mocks.listCopyrightNotices,
-  setCopyrightNoticeDisposition: mocks.setCopyrightNoticeDisposition,
-}));
+type CopyrightNoticesModule = typeof import('@/lib/server/copyright-notices');
+
+vi.mock('@/lib/server/copyright-notices', async (importOriginal) => {
+  const actual = await importOriginal<CopyrightNoticesModule>();
+  return {
+    CONTENT_NOTICE_TYPES: vi.fn(),
+    recordCopyrightNotice: vi.fn(),
+    listCopyrightNotices: mocks.listCopyrightNotices,
+    parseCopyrightNoticeCursor: actual.parseCopyrightNoticeCursor,
+    setCopyrightNoticeDisposition: mocks.setCopyrightNoticeDisposition,
+  };
+});
 
 import { createError } from '@/lib/errors';
 import { GET, POST } from '../route';
@@ -119,7 +125,7 @@ beforeEach(() => {
   mocks.assertAccountActive.mockResolvedValue(undefined);
   mocks.withRateLimit.mockResolvedValue(null);
   mocks.requireCsrfToken.mockResolvedValue(null);
-  mocks.listCopyrightNotices.mockResolvedValue([NOTICE]);
+  mocks.listCopyrightNotices.mockResolvedValue({ notices: [NOTICE], nextCursor: null });
   mocks.setCopyrightNoticeDisposition.mockResolvedValue(NOTICE);
 });
 
@@ -163,8 +169,29 @@ describe('GET /api/admin/copyright-notices', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-    expect(await response.json()).toEqual({ notices: [NOTICE] });
-    expect(mocks.listCopyrightNotices).toHaveBeenCalledWith(mocks.db, { status: 'received' });
+    expect(await response.json()).toEqual({ notices: [NOTICE], nextCursor: null });
+    expect(mocks.listCopyrightNotices).toHaveBeenCalledWith(mocks.db, { filter: 'received' });
+  });
+
+  it('filters decided notices on the server and passes the continuation cursor', async () => {
+    const before = '2026-10-01T12:00:00.123Z|0f0e0d0c-0b0a-4090-8070-605040302010';
+    mocks.listCopyrightNotices.mockResolvedValue({ notices: [NOTICE], nextCursor: 'next' });
+
+    const response = await GET(getRequest(`?status=decided&before=${encodeURIComponent(before)}`));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ notices: [NOTICE], nextCursor: 'next' });
+    expect(mocks.listCopyrightNotices).toHaveBeenCalledWith(mocks.db, {
+      filter: 'decided',
+      before: { at: '2026-10-01T12:00:00.123Z', id: '0f0e0d0c-0b0a-4090-8070-605040302010' },
+    });
+  });
+
+  it('rejects a cursor this list did not issue', async () => {
+    const response = await GET(getRequest('?status=decided&before=yesterday'));
+
+    expect(response.status).toBe(400);
+    expect(mocks.listCopyrightNotices).not.toHaveBeenCalled();
   });
 });
 

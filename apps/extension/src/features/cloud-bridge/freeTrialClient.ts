@@ -39,12 +39,12 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   classifyManagedQuotaErrorCode,
-  messageKindForAgentEvent,
   effectivePlanTier,
   getDefaultModelFor,
   IMAGE_CARD_KIND,
   INTERACTIVE_CARD_REQUEST_KEY,
   MAX_ATTACHMENT_BYTES,
+  messageKindForAgentEvent,
   normalizeBillingPlanTier,
   parseManagedUsageSummaryResponse,
   WEB_SEARCH_CITATION_DELTA_KEY,
@@ -353,9 +353,10 @@ async function developmentTokenOwner(token: string): Promise<ManagedCloudOwner> 
 
 export async function getManagedCloudAuthContext(
   forceRefresh = false,
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
 ): Promise<ManagedCloudAuthContext | null> {
   try {
-    const context = await getFreshClerkAuthContext(forceRefresh);
+    const context = await (clerkRead ?? getFreshClerkAuthContext(forceRefresh));
     if (context) return context;
   } catch (error) {
     if (forceRefresh) throw error;
@@ -381,7 +382,12 @@ export async function clearAuthToken(): Promise<void> {
   await clearLocalAuth(false);
 }
 
-async function clearLocalAuth(endClerkSession: boolean): Promise<{ webSessionEnded: boolean }> {
+export interface LocalAuthClearResult {
+  webSessionEnded: boolean;
+  profileCleared: boolean;
+}
+
+async function clearLocalAuth(endClerkSession: boolean): Promise<LocalAuthClearResult> {
   let previousContext: ManagedCloudAuthContext | null = null;
   try {
     previousContext = await getManagedCloudAuthContext();
@@ -437,13 +443,19 @@ async function clearLocalAuth(endClerkSession: boolean): Promise<{ webSessionEnd
   } catch {
     // ignore
   }
-  await clearAutofillProfile();
-  return { webSessionEnded };
+  let profileCleared = true;
+  try {
+    await clearAutofillProfile();
+  } catch (error) {
+    console.warn('[AGI] Removing the saved autofill profile failed:', error);
+    profileCleared = false;
+  }
+  return { webSessionEnded, profileCleared };
 }
 
 const LEGACY_ACCOUNT_STORAGE_KEYS = ['agi_api_key', 'agi_user_id', 'agi_user_tier', 'agi_session'];
 
-export async function signOutOfAccount(): Promise<{ webSessionEnded: boolean }> {
+export async function signOutOfAccount(): Promise<LocalAuthClearResult> {
   const result = await clearLocalAuth(true);
   await chrome.storage.local.remove(LEGACY_ACCOUNT_STORAGE_KEYS);
   return result;
@@ -769,6 +781,17 @@ export interface ManagedChatStreamOptions {
 }
 
 const MANAGED_CHAT_IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
+
+function browserTimeZone(): string | undefined {
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof timeZone === 'string' && timeZone.length > 0 && timeZone.length <= 64
+      ? timeZone
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return Boolean(
@@ -1453,6 +1476,7 @@ export async function* streamFreeChat(
                     : { agi_work_plan_approval: true }),
                 }
               : {}),
+            ...(browserTimeZone() ? { client_timezone: browserTimeZone() } : {}),
             ...(options.memoryCommand ? { memory_command: options.memoryCommand } : {}),
             ...(options.skillName ? { skill_name: options.skillName } : {}),
             ...(options.webSearch ? { web_search: true } : {}),
@@ -1632,20 +1656,19 @@ export async function* streamFreeChat(
         if (frame.agentEvent) {
           callerReader.observe(frame.agentEvent);
           sawAgentActivity = true;
-          if (
-            messageKindForAgentEvent(frame.agentEvent.event.type) === 'text' &&
-            frame.agentEvent.event.type === 'text-delta'
-          ) {
+          const liveEvent = frame.agentEvent.event;
+          const liveKind = messageKindForAgentEvent(liveEvent.type);
+          if (liveKind === 'text' && liveEvent.type === 'text-delta') {
             unacknowledgedPublicText = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
-              frame.agentEvent.event.delta,
+              liveEvent.delta,
             ).pending;
           }
           chunks.push({ type: 'agent-event', envelope: frame.agentEvent });
           const runChunk = publishRunReference({
             lastSequence: frame.agentEvent.sequence,
-            ...(frame.agentEvent.event.type === 'task-state-changed'
-              ? { state: frame.agentEvent.event.state }
+            ...(liveKind === 'status' && liveEvent.type === 'task-state-changed'
+              ? { state: liveEvent.state }
               : {}),
           });
           if (runChunk) chunks.push(runChunk);

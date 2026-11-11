@@ -51,8 +51,10 @@ const COMPANION_AND_METHODS = `
         intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString()
       else -> null
     }
-    val files = copySharedStreams(intent)
-    if (text.isNullOrBlank() && files.length() == 0) {
+    val streams = sharedStreamUris(intent)
+    val files = copySharedStreams(streams)
+    val omitted = streams.size - files.length()
+    if (text.isNullOrBlank() && files.length() == 0 && omitted == 0) {
       return intent
     }
     val uri = Uri.Builder()
@@ -69,6 +71,9 @@ const COMPANION_AND_METHODS = `
         if (files.length() > 0) {
           appendQueryParameter("files", files.toString())
         }
+        if (omitted > 0) {
+          appendQueryParameter("omitted", omitted.toString())
+        }
       }
       .appendQueryParameter("ts", System.currentTimeMillis().toString())
       .build()
@@ -81,9 +86,9 @@ const COMPANION_AND_METHODS = `
    * the app's own cache here, while the grant still holds, and hand JS file://
    * URIs it can open, mirroring what the iOS extension does with the App Group.
    */
-  private fun copySharedStreams(intent: Intent): JSONArray {
+  private fun copySharedStreams(streams: List<Uri>): JSONArray {
     val copied = JSONArray()
-    val uris = sharedStreamUris(intent).take(MAX_SHARED_FILES)
+    val uris = streams.take(MAX_SHARED_FILES)
     if (uris.isEmpty()) {
       return copied
     }

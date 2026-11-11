@@ -31,6 +31,7 @@ const feedbackRouteMocks = vi.hoisted(() => {
     claimScope: vi.fn((..._args: unknown[]) => scopedDb),
     storageConfigured: vi.fn(() => true),
     putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
+    deletePrivateObject: vi.fn(async (_key: string) => undefined),
   };
 });
 
@@ -70,6 +71,7 @@ vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
   ...(await importOriginal<ObjectStorageModule>()),
   isPrivateObjectStorageConfigured: feedbackRouteMocks.storageConfigured,
   putPrivateObject: feedbackRouteMocks.putPrivateObject,
+  deletePrivateObject: feedbackRouteMocks.deletePrivateObject,
 }));
 
 import { DELETE, POST } from './route';
@@ -390,6 +392,195 @@ describe('POST /api/feedback', () => {
     expect(response.status).toBe(429);
     expect(feedbackRouteMocks.putPrivateObject).not.toHaveBeenCalled();
     expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
+
+  describe('a screenshot whose report was not stored', () => {
+    const withScreenshot = () =>
+      request({
+        subject: 'Desktop report',
+        message: 'Something happened.',
+        metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+        screenshot: { data_url: `data:image/png;base64,${Buffer.from('png').toString('base64')}` },
+      });
+
+    it('keeps the screenshot when the report is stored', async () => {
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBe(200);
+      expect(feedbackRouteMocks.putPrivateObject).toHaveBeenCalledTimes(1);
+      expect(feedbackRouteMocks.deletePrivateObject).not.toHaveBeenCalled();
+    });
+
+    it('confirms the screenshot was stored', async () => {
+      const response = await POST(withScreenshot());
+
+      await expect(response.json()).resolves.toEqual({ success: true, screenshot_stored: true });
+    });
+
+    it('tells the sender the screenshot was not stored when private storage is unavailable', async () => {
+      feedbackRouteMocks.storageConfigured.mockReturnValueOnce(false);
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBe(200);
+      expect(feedbackRouteMocks.putPrivateObject).not.toHaveBeenCalled();
+      expect(feedbackRouteMocks.query).toHaveBeenCalledTimes(1);
+      await expect(response.json()).resolves.toEqual({ success: true, screenshot_stored: false });
+    });
+
+    it('says nothing about a screenshot when none was sent', async () => {
+      const response = await POST(
+        request({
+          subject: 'Desktop report',
+          message: 'Something happened.',
+          metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+        }),
+      );
+
+      await expect(response.json()).resolves.toEqual({ success: true });
+    });
+
+    beforeEach(() => {
+      feedbackRouteMocks.execute.mockReset();
+      feedbackRouteMocks.execute.mockResolvedValue(1);
+    });
+
+    const failStatement = (fragment: string) =>
+      feedbackRouteMocks.execute.mockImplementation(async (sql: string) => {
+        if (sql.includes(fragment)) throw new Error('connection refused');
+        return 1;
+      });
+
+    it('writes the cleanup record before the upload and clears it with the report', async () => {
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBe(200);
+      const uploaded = feedbackRouteMocks.putPrivateObject.mock.calls[0]?.[0]?.key;
+      const [recordSql, recordParams] = feedbackRouteMocks.execute.mock.calls[0] as [
+        string,
+        unknown[],
+      ];
+      expect(recordSql).toContain('insert into public.feedback_screenshot_cleanups');
+      expect(recordParams).toEqual([uploaded, 'user-web']);
+      expect(feedbackRouteMocks.execute.mock.invocationCallOrder[0]).toBeLessThan(
+        feedbackRouteMocks.putPrivateObject.mock.invocationCallOrder[0] as number,
+      );
+      expect(feedbackRouteMocks.scopedDb.transaction).toHaveBeenCalledTimes(1);
+      const [, insertSql, clearSql] = feedbackRouteMocks.execute.mock.calls.map(([sql]) => sql);
+      expect(insertSql).toContain('insert into public.feedback ');
+      expect(clearSql).toContain('delete from public.feedback_screenshot_cleanups');
+      expect(feedbackRouteMocks.execute.mock.calls[2]?.[1]).toEqual([uploaded]);
+    });
+
+    it('records a signed-out screenshot with no owner on the owner connection', async () => {
+      feedbackRouteMocks.optionalUser.mockResolvedValue(null);
+
+      await POST(withScreenshot());
+
+      expect(feedbackRouteMocks.claimScope).not.toHaveBeenCalled();
+      expect(feedbackRouteMocks.ownerDb.transaction).toHaveBeenCalledTimes(1);
+      expect(feedbackRouteMocks.execute.mock.calls[0]?.[1]).toEqual([
+        expect.stringMatching(/^feedback\/anonymous\//u),
+        null,
+      ]);
+    });
+
+    it('deletes the uploaded screenshot and its record when the insert fails', async () => {
+      failStatement('insert into public.feedback ');
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      const uploaded = feedbackRouteMocks.putPrivateObject.mock.calls[0]?.[0]?.key;
+      expect(uploaded).toMatch(/^feedback\/user-web\/\d+_.+\.png$/u);
+      expect(feedbackRouteMocks.deletePrivateObject).toHaveBeenCalledWith(uploaded);
+      const [lastSql, lastParams] = feedbackRouteMocks.execute.mock.calls.at(-1) as [
+        string,
+        unknown[],
+      ];
+      expect(lastSql).toContain('delete from public.feedback_screenshot_cleanups');
+      expect(lastParams).toEqual([uploaded]);
+    });
+
+    it('uploads nothing when the database cannot be reached', async () => {
+      const { getNeonDb } = await import('@/lib/server/neon-db');
+      vi.mocked(getNeonDb).mockImplementationOnce(() => {
+        throw new Error('database is not configured');
+      });
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      expect(feedbackRouteMocks.putPrivateObject).not.toHaveBeenCalled();
+      expect(feedbackRouteMocks.deletePrivateObject).not.toHaveBeenCalled();
+    });
+
+    it('leaves the cleanup record for the sweep when the delete also fails', async () => {
+      failStatement('insert into public.feedback ');
+      feedbackRouteMocks.deletePrivateObject.mockRejectedValueOnce(new Error('storage down'));
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ objectKey: expect.stringMatching(/^feedback\//u) }),
+        expect.stringContaining('Failed to discard the screenshot'),
+      );
+      expect(
+        feedbackRouteMocks.execute.mock.calls.some(([sql]) =>
+          String(sql).includes('delete from public.feedback_screenshot_cleanups'),
+        ),
+      ).toBe(false);
+    });
+
+    it('still reports the failed submission when the record cannot be cleared after the delete', async () => {
+      feedbackRouteMocks.execute.mockImplementation(async (sql: string) => {
+        if (sql.includes('insert into public.feedback ')) throw new Error('connection refused');
+        if (sql.includes('delete from public.feedback_screenshot_cleanups')) {
+          throw new Error('connection refused');
+        }
+        return 1;
+      });
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      expect(feedbackRouteMocks.deletePrivateObject).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ objectKey: expect.stringMatching(/^feedback\//u) }),
+        expect.stringContaining('the sweep clears it'),
+      );
+    });
+
+    it('discards the object and its record when the upload itself fails', async () => {
+      feedbackRouteMocks.putPrivateObject.mockRejectedValueOnce(new Error('storage down'));
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      expect(feedbackRouteMocks.deletePrivateObject).toHaveBeenCalledTimes(1);
+      const [lastSql] = feedbackRouteMocks.execute.mock.calls.at(-1) as [string];
+      expect(lastSql).toContain('delete from public.feedback_screenshot_cleanups');
+      expect(
+        feedbackRouteMocks.execute.mock.calls.some(([sql]) =>
+          String(sql).includes('insert into public.feedback '),
+        ),
+      ).toBe(false);
+    });
+
+    it('drops the screenshot, not the report, when its cleanup record cannot be written', async () => {
+      failStatement('insert into public.feedback_screenshot_cleanups');
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBe(200);
+      expect(feedbackRouteMocks.putPrivateObject).not.toHaveBeenCalled();
+      await expect(response.json()).resolves.toEqual({ success: true, screenshot_stored: false });
+      expect(feedbackRouteMocks.query).toHaveBeenCalledWith(
+        expect.stringContaining('insert into public.feedback '),
+        expect.any(Array),
+      );
+    });
   });
 });
 

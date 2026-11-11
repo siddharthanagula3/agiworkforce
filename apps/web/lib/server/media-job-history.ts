@@ -33,6 +33,9 @@ interface ImageJobRow {
   prompt: string;
   model: string;
   retryable: boolean;
+  attempts: number;
+  max_attempts: number;
+  terminal_at: string | Date | null;
   public_error: string | null;
   cancel_requested_at: string | Date | null;
   conversation_id: string | null;
@@ -59,6 +62,15 @@ function iso(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+function awaitsNextAttempt(row: ImageJobRow): boolean {
+  return (
+    row.status === 'failed' &&
+    row.retryable &&
+    row.terminal_at === null &&
+    row.attempts < row.max_attempts
+  );
+}
+
 function inFlight(status: MediaJobStatus): boolean {
   return status === 'queued' || status === 'running';
 }
@@ -70,6 +82,7 @@ async function imageJobs(
 ): Promise<MediaJobEntry[]> {
   const rows = await db.query<ImageJobRow>(
     `select jobs.id, jobs.status, jobs.operation, jobs.prompt, jobs.model, jobs.retryable,
+            jobs.attempts, jobs.max_attempts, jobs.terminal_at,
             jobs.public_error, jobs.cancel_requested_at, jobs.conversation_id,
             jobs.created_at, jobs.updated_at,
             array_remove(array_agg(assets.asset_id order by assets.candidate_index), null) as asset_ids
@@ -98,7 +111,7 @@ async function imageJobs(
     [userId, organizationId, MEDIA_JOB_HISTORY_MAX],
   );
   return rows.map((row) => {
-    const status = IMAGE_JOB_STATUS[row.status] ?? 'failed';
+    const status = awaitsNextAttempt(row) ? 'queued' : (IMAGE_JOB_STATUS[row.status] ?? 'failed');
     return {
       id: row.id,
       kind: 'image',
@@ -109,7 +122,9 @@ async function imageJobs(
       updated_at: iso(row.updated_at),
       error: status === 'failed' ? row.public_error : null,
       retryable:
-        status === 'failed' && row.retryable && row.operation === RETRYABLE_IMAGE_OPERATION,
+        awaitsNextAttempt(row) &&
+        row.cancel_requested_at === null &&
+        row.operation === RETRYABLE_IMAGE_OPERATION,
       cancellable: inFlight(status) && row.cancel_requested_at === null,
       progress: null,
       result_urls: (row.asset_ids ?? []).map(authenticatedMediaUrl),

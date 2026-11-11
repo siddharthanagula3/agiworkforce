@@ -49,7 +49,7 @@ export function toDeveloperRequestLog(row: RequestLogRow): DeveloperRequestLog {
       ['provider_started', row.provider_started_at],
       ['provider_answered', row.provider_succeeded_at],
       ['delivered', row.client_delivered_at],
-      ['settled', row.finalized_at],
+      ['settled', row.status === 'completed' ? row.finalized_at : null],
     ] as const
   ).flatMap(([name, at]) => {
     const when = iso(at);

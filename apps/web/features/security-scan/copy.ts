@@ -27,6 +27,8 @@ export const SECURITY_SCAN_COPY = {
   approve: 'Approve fix',
   dismiss: 'Dismiss',
   approved: 'Fix approved',
+  deliveryUnknown:
+    'This fix was approved, but its push to GitHub has not reported back. Check the session branch before pushing it.',
   dismissed: 'Dismissed',
   pullRequest: 'View pull request',
   approveTitle: 'Approve this fix?',

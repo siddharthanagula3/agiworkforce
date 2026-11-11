@@ -28,6 +28,7 @@ describe('UpgradeConfirmDialog order details', () => {
       amountDueNowCents: 11_819,
       currency: 'usd',
       previewToken: 'tok_preview',
+      recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' },
       charge: {
         lineItems: [
           { description: 'Max plan - 20x', amountCents: 20_000 },
@@ -68,6 +69,7 @@ describe('UpgradeConfirmDialog order details', () => {
       amountDueNowCents: 2_135,
       currency: 'usd',
       previewToken: 'tok_preview',
+      recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' },
       charge: {
         lineItems: [{ description: 'Pro plan', amountCents: 2_000 }],
         subtotalCents: 2_000,
@@ -100,6 +102,7 @@ describe('UpgradeConfirmDialog order details', () => {
       amountDueNowCents: 8_596,
       currency: 'usd',
       previewToken: 'tok_preview',
+      recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' },
       charge: {
         lineItems: [
           { description: 'Max plan - 5x', amountCents: 10_000 },
@@ -134,6 +137,7 @@ describe('UpgradeConfirmDialog order details', () => {
     amountDueNowCents: 8_596,
     currency: 'usd',
     previewToken: 'tok_preview',
+    recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' },
     charge: {
       lineItems: [{ description: 'Max plan - 5x', amountCents: 10_000 }],
       subtotalCents: 8_064,
@@ -197,13 +201,13 @@ describe('UpgradeConfirmDialog order details', () => {
     );
 
     const confirm = await screen.findByRole('button', { name: /pay \$85\.96/i });
-    expect(confirm.querySelector('.animate-spin')).toBeNull();
+    expect(confirm.querySelector('.agi-mark-spin')).toBeNull();
     fireEvent.click(confirm);
 
     const busy = await screen.findByRole('button', { name: /Upgrading/ });
     expect(busy).toHaveAttribute('aria-busy', 'true');
     expect(busy).toBeDisabled();
-    expect(busy.querySelector('.animate-spin')).not.toBeNull();
+    expect(busy.querySelector('.agi-mark-spin')).not.toBeNull();
     expect(within(busy).getByText(/Upgrading/)).toBeTruthy();
   });
 });

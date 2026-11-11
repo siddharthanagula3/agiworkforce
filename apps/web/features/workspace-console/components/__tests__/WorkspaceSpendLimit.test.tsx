@@ -7,6 +7,7 @@ vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => headers),
 }));
 
+import { MAX_MONTHLY_CAP_CREDITS } from '@/lib/spend-limit-bounds';
 import { WorkspaceSpendLimit } from '../WorkspaceSpendLimit';
 
 const fetchMock = vi.fn();
@@ -103,6 +104,30 @@ describe('WorkspaceSpendLimit', () => {
     expect(await screen.findByText(/500 credits of 2,000 credits used/)).toBeVisible();
     expect(screen.getByLabelText('Cap (credits)')).toHaveValue(2_000);
     expect(view.container).not.toHaveTextContent('$');
+  });
+
+  it('keeps Set limit disabled for values the server would refuse', async () => {
+    fetchMock.mockResolvedValue(response(spendLimit()));
+    renderPanel();
+
+    const cap = await screen.findByLabelText('Cap (credits)');
+    const alertAt = screen.getByLabelText('Alert at');
+    const submit = screen.getByRole('button', { name: 'Set limit' });
+
+    fireEvent.change(cap, { target: { value: '25' } });
+    expect(submit).toBeEnabled();
+
+    fireEvent.change(alertAt, { target: { value: '150' } });
+    expect(submit).toBeDisabled();
+    fireEvent.change(alertAt, { target: { value: '0' } });
+    expect(submit).toBeDisabled();
+    fireEvent.change(alertAt, { target: { value: '100' } });
+    expect(submit).toBeEnabled();
+
+    fireEvent.change(cap, { target: { value: String(MAX_MONTHLY_CAP_CREDITS + 1) } });
+    expect(submit).toBeDisabled();
+    fireEvent.change(cap, { target: { value: String(MAX_MONTHLY_CAP_CREDITS) } });
+    expect(submit).toBeEnabled();
   });
 
   it('renders nothing for a caller who cannot administer the limit', async () => {

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { z } from 'zod';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AccountSecurityHandoffClient } from '@agiworkforce/cloud-contracts/account-security';
 
@@ -395,7 +396,7 @@ export async function undoEnrollment(
   return ownerDb.transaction(async (tx) => {
     const [cleared] = await tx.query<{ enrolled_at: Timestamp }>(
       `with enrolled as (
-         select enrolled_at
+         select enrolled_at, enrolled_session_id, undo_expires_at
            from public.account_security_enrollments
           where user_id = $1
             and undo_token_hash = $2
@@ -404,7 +405,11 @@ export async function undoEnrollment(
           for update
        )
        update public.account_security_enrollments
-          set ${CLEARED_ENROLLMENT}
+          set ${CLEARED_ENROLLMENT},
+              undo_cleanup_token_hash = $2,
+              undo_cleanup_expires_at = enrolled.undo_expires_at,
+              undo_cleanup_lease_until = null,
+              undo_cleanup = jsonb_build_object('enrolledSessionId', enrolled.enrolled_session_id)
          from enrolled
         where public.account_security_enrollments.user_id = $1
        returning enrolled.enrolled_at`,
@@ -423,6 +428,90 @@ export async function undoEnrollment(
     ]);
     return true;
   });
+}
+
+const UndoCleanupProgressSchema = z.object({
+  enrolledSessionId: z.string().nullable().optional(),
+  enrollmentForgotten: z.literal(true).optional(),
+  mobileIntentsRevoked: z.literal(true).optional(),
+  enrollingSession: z.enum(['ended', 'none']).optional(),
+  password: z.enum(['reset', 'not_set']).optional(),
+  containment: z
+    .object({
+      sessionsRevoked: z.number().int().nonnegative(),
+      deviceCredentialsRevoked: z.number().int().nonnegative(),
+    })
+    .optional(),
+  notified: z.literal(true).optional(),
+});
+
+export type UndoCleanupProgress = z.infer<typeof UndoCleanupProgressSchema>;
+
+export type UndoCleanupClaim =
+  | { status: 'claimed'; userId: string; progress: UndoCleanupProgress }
+  | { status: 'busy' }
+  | { status: 'none' };
+
+export async function claimUndoCleanup(
+  ownerDb: DatabaseAdapter,
+  input: { tokenHash: string; leaseSeconds: number },
+): Promise<UndoCleanupClaim> {
+  const [claimed] = await ownerDb.query<{ user_id: string; undo_cleanup: unknown }>(
+    `update public.account_security_enrollments
+        set undo_cleanup_lease_until = now() + make_interval(secs => $2::integer)
+      where undo_cleanup_token_hash = $1
+        and undo_cleanup_expires_at > now()
+        and enrolled_at is null
+        and (undo_cleanup_lease_until is null or undo_cleanup_lease_until <= now())
+      returning user_id, undo_cleanup`,
+    [input.tokenHash, input.leaseSeconds],
+  );
+  if (claimed) {
+    return {
+      status: 'claimed',
+      userId: claimed.user_id,
+      progress: UndoCleanupProgressSchema.parse(claimed.undo_cleanup),
+    };
+  }
+  const [held] = await ownerDb.query<{ user_id: string }>(
+    `select user_id
+       from public.account_security_enrollments
+      where undo_cleanup_token_hash = $1
+        and undo_cleanup_expires_at > now()
+        and enrolled_at is null`,
+    [input.tokenHash],
+  );
+  return held ? { status: 'busy' } : { status: 'none' };
+}
+
+export async function recordUndoCleanupStep(
+  ownerDb: DatabaseAdapter,
+  input: { userId: string; tokenHash: string; settled: UndoCleanupProgress },
+): Promise<boolean> {
+  const updated = await ownerDb.execute(
+    `update public.account_security_enrollments
+        set undo_cleanup = undo_cleanup || $3::jsonb
+      where user_id = $1
+        and undo_cleanup_token_hash = $2
+        and undo_cleanup is not null`,
+    [input.userId, input.tokenHash, JSON.stringify(UndoCleanupProgressSchema.parse(input.settled))],
+  );
+  return updated > 0;
+}
+
+export async function endUndoCleanup(
+  ownerDb: DatabaseAdapter,
+  input: { userId: string; tokenHash: string; finished: boolean },
+): Promise<void> {
+  await ownerDb.execute(
+    `update public.account_security_enrollments
+        set undo_cleanup_lease_until = null,
+            undo_cleanup_token_hash = case when $3::boolean then null else undo_cleanup_token_hash end,
+            undo_cleanup_expires_at = case when $3::boolean then null else undo_cleanup_expires_at end,
+            undo_cleanup = case when $3::boolean then null else undo_cleanup end
+      where user_id = $1 and undo_cleanup_token_hash = $2`,
+    [input.userId, input.tokenHash, input.finished],
+  );
 }
 
 export async function replaceEnrollmentCode(

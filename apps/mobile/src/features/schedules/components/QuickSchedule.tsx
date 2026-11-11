@@ -59,13 +59,16 @@ function parseTime(raw: string): string | null {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-function findExplicitTime(text: string): string | null {
-  const atMatch = text.match(/(?:at|@)\s*([\w:]+(?:\s*(?:am|pm))?)/i);
-  return atMatch ? parseTime(atMatch[1]) : null;
-}
+const TIME_INTRODUCER = /(?:\bat\b|@)\s*([\w:]+(?:\s*(?:am|pm))?)/gi;
 
-function extractTime(text: string): string {
-  return findExplicitTime(text) ?? '09:00';
+function findExplicitTime(text: string): { introduced: boolean; time: string | null } {
+  let introduced = false;
+  for (const match of text.matchAll(TIME_INTRODUCER)) {
+    introduced = true;
+    const time = parseTime(match[1]);
+    if (time) return { introduced, time };
+  }
+  return { introduced, time: null };
 }
 
 export function parseNaturalLanguage(text: string): ParsedSchedule | null {
@@ -73,7 +76,9 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
   if (!lower) return null;
   if (requestsSubDailySchedule(lower)) return null;
 
-  const timeOfDay = extractTime(text);
+  const explicit = findExplicitTime(text);
+  if (explicit.introduced && !explicit.time) return null;
+  const timeOfDay = explicit.time ?? '09:00';
 
   const dayMatches: number[] = [];
   for (const [name, idx] of Object.entries(DAY_NAMES)) {
@@ -145,7 +150,7 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     };
   }
 
-  if (findExplicitTime(text)) {
+  if (explicit.time) {
     return { recurrence: 'daily', timeOfDay, description: `Daily at ${timeOfDay}` };
   }
 

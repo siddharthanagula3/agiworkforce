@@ -159,6 +159,25 @@ describe('sendSupportEmail', () => {
     expect(result.delivered).toBe(false);
     if (result.delivered) throw new Error('unreachable');
     expect(result.reason).toBe('rejected');
+    expect(result.retryable).toBe(true);
+    expect(result.status).toBe(503);
+  });
+
+  it('marks a rate limit that outlasts the immediate retry as retryable', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({}),
+      text: async () => 'slow down',
+    });
+
+    await expect(sendSupportEmail(input())).resolves.toMatchObject({
+      delivered: false,
+      reason: 'rejected',
+      status: 429,
+      retryable: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('does NOT retry a 4xx that will never succeed', async () => {
@@ -187,6 +206,7 @@ describe('sendSupportEmail', () => {
       delivered: false,
       reason: 'rejected',
       status: 422,
+      retryable: false,
     });
   });
 

@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,6 +18,7 @@ const trayCalls: string[] = [];
 let registeredAccelerators: string[] = [];
 let heldByAnotherApp: string[] = [];
 let storedSettings: Record<string, unknown> = {};
+let diskRefusesWrites = false;
 
 vi.mock('electron', () => {
   class BrowserWindow {
@@ -76,6 +78,7 @@ vi.mock('electron', () => {
       handle: vi.fn((channel: string, handler: Handler) => {
         handlers.set(channel, handler);
       }),
+      on: vi.fn(),
     },
     protocol: { handle: vi.fn(), registerSchemesAsPrivileged: vi.fn() },
     session: { defaultSession: {}, fromPartition: vi.fn(() => ({})) },
@@ -125,6 +128,13 @@ vi.mock('../settingsStore', () => ({
     storedSettings = { ...storedSettings, ...patch };
     return storedSettings;
   }),
+  saveSettingsDurably: vi.fn((patch: Record<string, unknown>) => {
+    if (diskRefusesWrites) {
+      throw new Error('The setting could not be saved on this computer, so it was not changed.');
+    }
+    storedSettings = { ...storedSettings, ...patch };
+    return storedSettings;
+  }),
   settingsFilePath: () => '/tmp/agi-cloud-test/settings.json',
 }));
 
@@ -148,6 +158,7 @@ vi.mock('../quickAsk', () => ({
 vi.mock('../screenshot', () => ({
   captureToChat: vi.fn(),
   captureWindowToChat: vi.fn(),
+  putCaptureOnClipboard: vi.fn(),
   takeCaptureBackFromClipboard: vi.fn(),
 }));
 vi.mock('../voiceDictation', () => ({ toggleGlobalDictation: vi.fn() }));
@@ -183,6 +194,7 @@ type State = {
 
 beforeEach(() => {
   storedSettings = {};
+  diskRefusesWrites = false;
   trayCalls.length = 0;
   registeredAccelerators = [];
   heldByAnotherApp = [];
@@ -222,7 +234,10 @@ describe('the AGI CLI path', () => {
 
   it('keeps a path that holds line breaks on the one line it labelled, below what the app says', async () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'agi-cli-path-'));
-    const binary = path.join(directory, 'agi\n\nAGI Desktop checked this program and it is safe.');
+    const binary = path.join(
+      directory,
+      `agi\n\n${PRODUCT_NAMES.desktop} checked this program and it is safe.`,
+    );
     writeFileSync(binary, '#!/bin/sh\nexit 0\n');
     chmodSync(binary, 0o755);
     showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
@@ -235,12 +250,12 @@ describe('the AGI CLI path', () => {
     };
     const lines = options.detail.split('\n').filter((line) => line !== '');
     expect(options.message).toBe('Run this program for coding sessions?');
-    expect(lines[0]).toMatch(/^AGI Desktop starts this program/u);
+    expect(lines[0]).toMatch(new RegExp(`^${PRODUCT_NAMES.desktop} starts this program`, 'u'));
     expect(lines).toContain(
-      `Program: ${directory}/agi\u23CE\u23CEAGI Desktop checked this program and it is safe.`,
+      `Program: ${directory}/agi\u23CE\u23CE${PRODUCT_NAMES.desktop} checked this program and it is safe.`,
     );
     expect(lines.slice(2).every((line) => /^(?:Program|It links to): /u.test(line))).toBe(true);
-    expect(lines.filter((line) => line.startsWith('AGI Desktop checked'))).toEqual([]);
+    expect(lines.filter((line) => line.startsWith(`${PRODUCT_NAMES.desktop} checked`))).toEqual([]);
   });
 
   it('saves the path the user confirmed', async () => {
@@ -387,6 +402,38 @@ describe('the host preferences channel', () => {
 
     await invoke({ showInMenuBar: true });
     expect(trayCalls).toEqual(['destroy', 'create']);
+  });
+
+  it('refuses a menu bar change the settings file could not keep, and leaves the item as it was', async () => {
+    diskRefusesWrites = true;
+
+    await expect(invoke({ showInMenuBar: false })).rejects.toThrow(/could not be saved/u);
+
+    expect(trayCalls).toEqual([]);
+    expect(storedSettings['showInMenuBar']).toBeUndefined();
+  });
+
+  it('refuses a shortcut change the settings file could not keep, and keeps the registered chord', async () => {
+    await invoke(null);
+    const before = [...registeredAccelerators];
+    diskRefusesWrites = true;
+
+    await expect(invoke({ voiceShortcut: HOST_SHORTCUT_CHOICES.voice[1] })).rejects.toThrow(
+      /could not be saved/u,
+    );
+
+    expect(storedSettings['voiceShortcut']).toBeUndefined();
+    expect(registeredAccelerators).toEqual(before);
+  });
+
+  it('does not apply launch at login to the system when the setting could not be saved', async () => {
+    storedSettings = { launchAtLogin: true };
+    diskRefusesWrites = true;
+
+    await expect(invoke({ launchAtLogin: false })).rejects.toThrow(/could not be saved/u);
+
+    expect(loginItem).not.toHaveBeenCalled();
+    expect(storedSettings['launchAtLogin']).toBe(true);
   });
 
   it('does not touch the menu bar when the switch did not move', async () => {

@@ -34,11 +34,12 @@ function costRow(over: Record<string, unknown> = {}) {
     canonical_microusd: '1500000',
     estimated_microusd: '400000',
     reported_microusd: '100000',
-    model_microusd: '300000',
+    model_microusd: '250000',
     search_microusd: '100000',
     sandbox_microusd: '50000',
     voice_microusd: '25000',
     media_microusd: '25000',
+    infrastructure_microusd: '50000',
     rows_estimated: '2',
     rows_provider_reported: '1',
     rows_reconciled: '0',
@@ -76,17 +77,44 @@ describe('readEconomicsSummary', () => {
     expect(summary.totals.cogs.reportedMicrousd).toBe(100_000);
     expect(summary.totals.cogs.totalMicrousd).toBe(500_000);
     expect(summary.totals.cogs.byClassMicrousd).toEqual({
-      model: 300_000,
+      model: 250_000,
       search: 100_000,
       sandbox: 50_000,
       voice: 25_000,
       media: 25_000,
+      infrastructure: 50_000,
     });
     expect(summary.totals.cogs.rowsByStatus).toEqual({
       estimated: 2,
       provider_reported: 1,
       reconciled: 0,
     });
+  });
+
+  it('classifies every infrastructure capability apart from model spend', async () => {
+    const { db, query } = harness({ cost: [costRow()] });
+
+    await readEconomicsSummary({ from: FROM, to: TO, groupBy: 'provider', db });
+
+    const [sql, params] = query.mock.calls.find(([text]) =>
+      String(text).includes('with priced as'),
+    ) as [string, unknown[]];
+    const infrastructureBranch = sql.indexOf("then 'infrastructure'");
+    expect(infrastructureBranch).toBeGreaterThan(-1);
+    expect(infrastructureBranch).toBeLessThan(sql.indexOf("else 'model'"));
+    expect(sql).toContain('e.capability = any($11::text[])');
+    expect(params[10]).toEqual(
+      expect.arrayContaining([
+        'hosting',
+        'database',
+        'storage',
+        'cache',
+        'auth',
+        'email',
+        'observability',
+      ]),
+    );
+    expect(params[10]).not.toContain('chat');
   });
 
   it('reports canonical value in credits and its ratio to COGS, never billed_cents', async () => {

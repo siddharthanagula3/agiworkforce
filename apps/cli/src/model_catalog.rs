@@ -487,13 +487,11 @@ fn api_model_id_for_any(catalog: &SharedModelsCatalog, model_id: &str) -> Option
         return Some(api_id);
     }
 
-    catalog.models.values().find_map(|model| {
-        let api_id = model.api_model_id.as_deref().unwrap_or(&model.id);
-        if api_id.eq_ignore_ascii_case(model_id) || model.id.eq_ignore_ascii_case(model_id) {
-            Some(api_id.to_string())
-        } else {
-            None
-        }
+    direct_model_for_any(catalog, model_id).map(|model| {
+        model
+            .api_model_id
+            .clone()
+            .unwrap_or_else(|| model.id.clone())
     })
 }
 
@@ -518,6 +516,36 @@ fn shared_model_for_any<'a>(
             .get(model_id)
             .and_then(|canonical| catalog.models.get(canonical))
     })
+}
+
+/// The model a direct provider request for `model_id` means. A provider's
+/// canonicalization map only renames models that provider serves, so the
+/// managed gateway's migrations to another vendor's model never rewrite what a
+/// direct, local or custom route sends.
+fn direct_model_for_any<'a>(
+    catalog: &'a SharedModelsCatalog,
+    model_id: &str,
+) -> Option<&'a SharedModelMetadata> {
+    catalog
+        .models
+        .values()
+        .find(|model| {
+            let api_id = model.api_model_id.as_deref().unwrap_or(&model.id);
+            api_id.eq_ignore_ascii_case(model_id) || model.id.eq_ignore_ascii_case(model_id)
+        })
+        .or_else(|| {
+            catalog
+                .providers
+                .iter()
+                .find_map(|(provider_id, provider)| {
+                    provider
+                        .canonicalization
+                        .iter()
+                        .find(|(alias, _)| alias.eq_ignore_ascii_case(model_id))
+                        .and_then(|(_, canonical)| catalog.models.get(canonical))
+                        .filter(|model| model.provider == *provider_id)
+                })
+        })
 }
 
 /// Resolve a user- or config-supplied model identifier to the **wire id** the
@@ -1403,12 +1431,8 @@ pub enum EffortSupport {
 }
 
 pub fn effort_support(model_id: &str) -> EffortSupport {
-    let Some(meta) = shared_catalog().and_then(|catalog| {
-        catalog.models.values().find(|meta| {
-            let api_id = meta.api_model_id.as_deref().unwrap_or(&meta.id);
-            api_id.eq_ignore_ascii_case(model_id) || meta.id.eq_ignore_ascii_case(model_id)
-        })
-    }) else {
+    let Some(meta) = shared_catalog().and_then(|catalog| direct_model_for_any(catalog, model_id))
+    else {
         return EffortSupport::NotInCatalog;
     };
     match meta.reasoning.as_ref() {
@@ -1464,13 +1488,7 @@ pub fn model_rejects_sampling_parameters(model_id: &str) -> bool {
     let Some(catalog) = shared_catalog() else {
         return false;
     };
-    catalog
-        .models
-        .values()
-        .find(|meta| {
-            let api_id = meta.api_model_id.as_deref().unwrap_or(&meta.id);
-            api_id.eq_ignore_ascii_case(model_id) || meta.id.eq_ignore_ascii_case(model_id)
-        })
+    direct_model_for_any(catalog, model_id)
         .and_then(|meta| meta.reasoning.as_ref())
         .and_then(|reasoning| reasoning.rejects_sampling_parameters)
         .unwrap_or(false)
@@ -1884,6 +1902,65 @@ mod tests {
         assert_eq!(
             api_wire_id("fixture-local-model:latest"),
             "fixture-local-model:latest"
+        );
+    }
+
+    #[test]
+    fn a_providers_own_alias_projects_its_successor_and_foreign_migrations_do_not() {
+        let catalog = shared_catalog().expect("embedded catalog must deserialize");
+        let mut own_aliases = 0;
+        for (provider_id, provider) in &catalog.providers {
+            for (alias, canonical) in &provider.canonicalization {
+                let Some(successor) = catalog.models.get(canonical) else {
+                    continue;
+                };
+                let known_model = catalog.models.values().any(|model| {
+                    model.id.eq_ignore_ascii_case(alias)
+                        || model
+                            .api_model_id
+                            .as_deref()
+                            .is_some_and(|api_id| api_id.eq_ignore_ascii_case(alias))
+                });
+                if known_model {
+                    continue;
+                }
+                let successor_wire = successor.api_model_id.as_deref().unwrap_or(&successor.id);
+                if successor.provider == *provider_id {
+                    own_aliases += 1;
+                    assert_eq!(api_wire_id(alias), successor_wire, "{alias}");
+                    assert_eq!(
+                        api_wire_id(&alias.to_ascii_uppercase()),
+                        successor_wire,
+                        "{alias}"
+                    );
+                    assert_eq!(
+                        model_rejects_sampling_parameters(alias),
+                        model_rejects_sampling_parameters(successor_wire),
+                        "{alias}"
+                    );
+                    match (effort_support(alias), effort_support(successor_wire)) {
+                        (EffortSupport::NotInCatalog, _) => {
+                            panic!("{alias} must resolve to its successor's effort support")
+                        }
+                        (EffortSupport::Levels(alias_levels), EffortSupport::Levels(levels)) => {
+                            assert_eq!(alias_levels, levels, "{alias}");
+                        }
+                        (EffortSupport::Any, EffortSupport::Any)
+                        | (EffortSupport::Unsupported, EffortSupport::Unsupported) => {}
+                        _ => panic!("{alias} must carry its successor's effort support"),
+                    }
+                } else {
+                    assert_eq!(api_wire_id(alias), alias.as_str(), "{alias}");
+                    assert!(
+                        matches!(effort_support(alias), EffortSupport::NotInCatalog),
+                        "{alias}"
+                    );
+                }
+            }
+        }
+        assert!(
+            own_aliases > 0,
+            "the catalog must declare a provider alias for this proof to read"
         );
     }
 

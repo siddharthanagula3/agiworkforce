@@ -84,7 +84,14 @@ confidence-threshold = 0.8
 # All fourteen first-party package manifests now declare `publish = false`.
 # `licenses.private.ignore = true` below therefore excludes them as intended;
 # no invalid SPDX exception or text-based clarification is needed.
-exceptions = []
+#
+# `sqlcipher-src` is the SQLCipher source carrier that libsqlite3-sys 0.39
+# builds from. It declares `MIT AND BSD-3-Clause AND blessing AND WTFPL`:
+# `blessing` is SQLite's public-domain dedication and `WTFPL` is the
+# alternative libtomcrypt offers beside public domain. Both are permissive,
+# carry no copyleft or network-use terms, and are accepted for this one
+# crate only, so neither atom can ride in on another dependency.
+exceptions = [{ crate = "sqlcipher-src", allow = ["blessing", "WTFPL"] }]
 
 [licenses.private]
 # First-party packages are private (`publish = false`); third-party dependency

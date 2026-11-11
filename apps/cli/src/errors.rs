@@ -119,6 +119,15 @@ impl IncompleteTurnCause {
         }
     }
 
+    /// The qualification a machine-readable record keeps beside a delivered answer.
+    pub fn receipt(self) -> serde_json::Value {
+        serde_json::json!({
+            "kind": self.kind(),
+            "message": self.summary(),
+            "hint": self.next_move(),
+        })
+    }
+
     /// The protocol's own member for this outcome. Retryability and the action
     /// a surface offers are read from there, never decided a second time here.
     pub fn code(self) -> TurnFailureCode {

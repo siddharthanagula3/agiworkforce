@@ -1,4 +1,5 @@
 import { sanitizePageText } from '../../background/policy';
+import { summarizeRequestUrl } from './networkCapture';
 
 export const CONSOLE_BUFFER_LIMIT = 200;
 export const CONSOLE_TEXT_MAX_CHARS = 600;
@@ -102,12 +103,13 @@ function buildEntry(
 ): ConsoleEntry | null {
   const text = sanitizePageText(rawText).trim().slice(0, CONSOLE_TEXT_MAX_CHARS);
   if (!text) return null;
+  const url = location.url ? summarizeRequestUrl(location.url) : '';
   return {
     at,
     level,
     source,
     text,
-    ...(location.url ? { url: location.url } : {}),
+    ...(url ? { url } : {}),
     ...(location.line === undefined ? {} : { line: location.line }),
   };
 }

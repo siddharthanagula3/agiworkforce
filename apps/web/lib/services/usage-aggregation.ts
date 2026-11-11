@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { creditsFromMicrousd } from '@agiworkforce/types';
+import { creditsFromMicrousd, microusdFromCredits } from '@agiworkforce/types';
 
 /**
  * The one definition of what "usage" means when it is read back.
@@ -57,7 +57,7 @@ export interface AggregateRow {
 }
 
 export interface DayRow {
-  day: string | Date;
+  day: string;
   requests: string | number | null;
   cost_microusd: string | number | null;
 }
@@ -82,7 +82,13 @@ export interface UsageBreakdownRow {
   credits: number;
 }
 
+export interface UsageBreakdownOmitted {
+  requests: number;
+  credits: number;
+}
+
 export interface UsageDayRow {
+  /** UTC calendar date of the bucket, `YYYY-MM-DD`. */
   day: string;
   requests: number;
   credits: number;
@@ -123,6 +129,23 @@ export function toRow(row: AggregateRow): UsageBreakdownRow {
   };
 }
 
+export function toOmitted(
+  totals: UsageTotals,
+  rows: readonly UsageBreakdownRow[],
+): UsageBreakdownOmitted {
+  if (rows.length < BREAKDOWN_LIMIT) return { requests: 0, credits: 0 };
+  const shownRequests = rows.reduce((sum, row) => sum + row.requests, 0);
+  const shownMicrousd = rows.reduce(
+    (sum, row) => sum + Math.round(microusdFromCredits(row.credits)),
+    0,
+  );
+  const omittedMicrousd = Math.round(microusdFromCredits(totals.credits)) - shownMicrousd;
+  return {
+    requests: Math.max(0, totals.requests - shownRequests),
+    credits: creditsFromMicrousd(Math.max(0, omittedMicrousd)),
+  };
+}
+
 export function toTotals(row: AggregateRow | undefined): UsageTotals {
   const totals = row ? toRow(row) : null;
   return {
@@ -135,7 +158,7 @@ export function toTotals(row: AggregateRow | undefined): UsageTotals {
 
 export function toDays(rows: readonly DayRow[]): UsageDayRow[] {
   return rows.map((row) => ({
-    day: row.day instanceof Date ? row.day.toISOString() : String(row.day),
+    day: row.day,
     requests: num(row.requests),
     credits: creditsFromMicrousd(num(row.cost_microusd)),
   }));

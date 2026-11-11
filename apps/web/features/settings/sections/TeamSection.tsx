@@ -224,6 +224,7 @@ export function TeamSection({ active = true }: { active?: boolean }) {
   const [memberRole, setMemberRole] = useState<TeamInvitation['role']>('member');
   const [pendingAction, setPendingAction] = useState<PendingMemberAction>(null);
   const [invitationLink, setInvitationLink] = useState<{
+    invitationId: string;
     email: string;
     url: string;
     delivery: TeamInvitationCredentialResult['delivery'];
@@ -575,6 +576,7 @@ export function TeamSection({ active = true }: { active?: boolean }) {
       {
         onSuccess: (result) => {
           setInvitationLink({
+            invitationId: result.invitation.id,
             email,
             url: buildInvitationLink(result.inviteToken),
             delivery: result.delivery,
@@ -593,6 +595,7 @@ export function TeamSection({ active = true }: { active?: boolean }) {
       {
         onSuccess: (result) => {
           setInvitationLink({
+            invitationId: invitation.id,
             email: invitation.email,
             url: buildInvitationLink(result.inviteToken),
             delivery: result.delivery,
@@ -619,10 +622,16 @@ export function TeamSection({ active = true }: { active?: boolean }) {
   function confirmMemberAction() {
     if (!pendingAction || !organization) return;
     if (pendingAction.kind === 'revoke-invitation') {
-      revokeInvitation.mutate({
-        invitationId: pendingAction.invitation.id,
-        organizationId: organization.id,
-      });
+      const invitationId = pendingAction.invitation.id;
+      revokeInvitation.mutate(
+        { invitationId, organizationId: organization.id },
+        {
+          onSuccess: () =>
+            setInvitationLink((current) =>
+              current?.invitationId === invitationId ? null : current,
+            ),
+        },
+      );
     } else if (pendingAction.kind === 'remove') {
       removeMember.mutate({
         memberId: pendingAction.member.id,

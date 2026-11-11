@@ -4,6 +4,7 @@ import {
   MAP_SEARCH_MAX_PLACES,
   MAP_SEARCH_MAX_ZOOM,
   MAP_SEARCH_MIN_ZOOM,
+  MAP_SEARCH_UNRESOLVED_STOP_MAX_LENGTH,
   type MapSearchPlace,
   type MapSearchView,
 } from '@agiworkforce/types';
@@ -200,6 +201,7 @@ export function fitZoom(places: MapSearchPlace[], tilesAcross: number, tilesDown
 export interface ResolvedMapView {
   view: MapSearchView;
   places: MapSearchPlace[];
+  unresolvedStops: string[];
 }
 
 export async function resolveMapView(
@@ -213,6 +215,7 @@ export async function resolveMapView(
     const targets = route ?? [query];
     const radiusKm = targets.length >= 3 ? ROUTE_RADIUS_KM : SAME_CONTEXT_RADIUS_KM;
     const resolved: MapSearchPlace[] = [];
+    const unresolvedStops: string[] = [];
 
     // The first place establishes the geography; later ones are searched near
     // it and then checked against it, so a same-name match on another continent
@@ -220,7 +223,10 @@ export async function resolveMapView(
     let anchor: MapSearchPlace | undefined;
     for (const target of targets.slice(0, MAP_SEARCH_MAX_PLACES)) {
       const place = await geocodeOne(target, controller.signal, anchor);
-      if (!place) continue;
+      if (!place) {
+        unresolvedStops.push(target.slice(0, MAP_SEARCH_UNRESOLVED_STOP_MAX_LENGTH));
+        continue;
+      }
       if (!anchor) {
         anchor = place;
         resolved.push({ ...place, confident: true });
@@ -244,6 +250,7 @@ export async function resolveMapView(
     return {
       view: { latitude, longitude, zoom, attribution: OSM_ATTRIBUTION },
       places: resolved,
+      unresolvedStops,
     };
   } catch (error) {
     logger.warn({ error }, 'Map card geocoding failed; shipping link-only card');

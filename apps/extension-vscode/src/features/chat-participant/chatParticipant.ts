@@ -22,6 +22,7 @@ import { buildCustomInstructionInput } from '../instructions';
 import { getActiveCloudProject } from '../projects/activeProject';
 import { buildPromptReferenceInputs } from './promptReferences';
 import { rateParticipantAnswer } from '../feedback/answerRating';
+import { recordCompletedTurnUsage } from '../../data/turnUsage';
 import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
 import { assertRunnableStartedThread } from '../../integrations/developerSessionValidation';
 
@@ -285,7 +286,7 @@ function buildRuntimeTurnInput(request: vscode.ChatRequest, ctx: EditorContext):
 }
 
 export function createChatHandler(
-  _secrets: vscode.SecretStorage,
+  secrets: vscode.SecretStorage,
   conversationTreeProvider?: ConversationTreeProvider,
   globalState?: vscode.ExtensionContext['globalState'],
   localRuntimes?: LocalRuntimePool,
@@ -355,6 +356,7 @@ export function createChatHandler(
       requestedAuthorityDiffers(historicalAuthority, requestedModel);
     if (boundaryChanged) threadId = undefined;
     let turnId: string | undefined;
+    let servedModel: string | undefined;
     let terminal = false;
     let cancelled = token.isCancellationRequested;
     let cancellationError: string | undefined;
@@ -489,7 +491,17 @@ export function createChatHandler(
             }
           }
         })();
+      } else if (event.type === 'turn_model') {
+        servedModel = event.model;
       } else if (event.type === 'turn_completed') {
+        recordCompletedTurnUsage(secrets, {
+          model: servedModel ?? model,
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          ...(event.managedRequestIds === undefined
+            ? {}
+            : { managedRequestIds: event.managedRequestIds }),
+        });
         conversationTreeProvider?.refresh();
         finish();
       } else if (event.type === 'turn_interrupted') {
@@ -550,6 +562,7 @@ export function createChatHandler(
           : buildCustomInstructionInput(
               { globalState, workspaceState },
               {
+                project: activeProject ?? null,
                 projectAppliedByServer:
                   activeProject !== undefined && threadAuthority?.trustMode === 'managed',
               },

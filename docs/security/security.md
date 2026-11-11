@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-10-23
+Last updated: 2026-11-10
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -98,6 +98,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `list_files`                   | asks                   | runs                           | read, reversible                                                                 |
 | `read_file`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 | `edit_file`                    | asks                   | asks                           | write, not reversible                                                            |
+| `delete_file`                  | asks                   | asks                           | delete, not reversible                                                           |
 | `create_office_file`           | asks                   | asks                           | write, reversible                                                                |
 | `generate_image`               | asks                   | asks                           | write, reversible                                                                |
 | `edit_image`                   | asks                   | asks                           | write, reversible                                                                |
@@ -152,6 +153,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `browser_find`                 | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `browser_fill_form`            | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_history`              | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_stop`                 | asks                   | asks                           | write, not reversible, createsEgressPath                                         |
 | `browser_list_tabs`            | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `agi_reconnect`                | asks                   | runs                           | read, reversible                                                                 |
 | `device_calendar_events`       | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
@@ -310,9 +312,9 @@ DNS-resolution SSRF validation (`assertResolvedPublicHostname`).
 ### 1.3 Retained Tauri implementation, not a public Desktop capability
 
 The retained Tauri source tree is not reachable from the public Electron
-Desktop selected by D-2026-09-15-04. The public Desktop is managed-cloud-only
-and exposes neither Local/BYOK inference nor OAuth connector flows from that
-tree. This inventory records the security properties of retained code; it must
+Desktop selected by D-2026-09-15-04. The public Desktop does not expose Local/BYOK
+inference or OAuth connector flows from that tree: its chat uses Cloud, and its
+local coding sessions run the CLI and its own Local and BYOK routes. This inventory records the security properties of retained code; it must
 not be used as evidence of a shipped Desktop feature.
 
 The retained tree holds no Gmail, Google Calendar or Outlook Calendar client.
@@ -1134,7 +1136,7 @@ the WHERE clause of each statement that destroys, never evaluated into a list of
 rows first: a hold placed between a read and a delete has to win, and a
 candidate list computed beforehand cannot let it.
 `scripts/check-legal-hold-coverage.mjs` judges that per statement, from the
-source, and reports 16 of 16 gated with an empty baseline. Account and workspace
+source, and reports 17 of 17 gated with an empty baseline. Account and workspace
 erasure refuse the whole operation instead, so a held subject is never partly
 erased. A refusal is audited as `deletion_blocked_by_legal_hold` with
 `outcome: 'denied'`.
@@ -1143,10 +1145,12 @@ erased. A refusal is audited as `deletion_blocked_by_legal_hold` with
 
 - **The soft-delete purge ships off.** `SOFT_DELETED_RESOURCE_PURGE_ENABLED` is
   unset by default, so on a deployment that has not set it the recovery window
-  for conversations, messages, artifacts, projects and knowledge files does not
-  end on schedule. `media_assets` is purged by a separate cron that is always
-  on. Until the switch is turned on, the published recovery window is honoured
-  for one store out of six.
+  for conversations, messages, artifacts and projects does not end on schedule.
+  `media_assets` and `project_knowledge_files` are purged by
+  `cron/purge-deleted-media`, which is always on. Until the switch is turned
+  on, the published recovery window is honoured for two stores out of six. A
+  project row is never purged while mobile and the CLI learn deletions only
+  from its sync tombstone.
 - **A hold does not preserve what this product never stored.** A knowledge file
   or media asset row whose storage pointer is null is a reference to content
   held elsewhere. The preservation endpoint and the export manifest count those

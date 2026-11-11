@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -383,6 +384,7 @@ const deleteDeveloperThread = vi.fn(async () => ({
 }));
 const forkDeveloperThread = vi.fn(async () => ({ id: 'thread-branch' }));
 const compactDeveloperThread = vi.fn(async () => ({ threadId: 't-1', compacted: true }));
+const setDeveloperSkillConsent = vi.fn(async () => true);
 vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   syncDeveloperAccounts,
@@ -404,6 +406,7 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   readWorktreeSetupScript,
   runDeveloperWorktreeSetup,
   stopDeveloperRuntime,
+  setDeveloperSkillConsent,
 }));
 vi.mock('../runtime/regularFile', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -608,6 +611,19 @@ describe('dispatch, local command gating', () => {
     expect(runShellCommand).toHaveBeenCalledWith(
       expect.objectContaining({ review: 'Run curl https://collector.example in Documents' }),
     );
+  });
+
+  it('hands the sandbox to the shell service unresolved, so the run is claimed before it is awaited', async () => {
+    getPermissionState.mockReturnValue('granted');
+
+    await dispatch(window, 'shell_run', {
+      rootId: root.id,
+      runId: 'run-1',
+      command: 'git status',
+    });
+
+    const input = runShellCommand.mock.calls[0]?.[0] as { sandbox: unknown };
+    expect(input.sandbox).toBeInstanceOf(Promise);
   });
 
   it('rejects a command argument that is not a string', async () => {
@@ -1285,6 +1301,28 @@ describe('recorded permissions', () => {
     expect(stopDeveloperRuntime).not.toHaveBeenCalled();
   });
 
+  it('says so when a withdrawn permission could not be saved, after the withdrawal took effect', async () => {
+    revokePermission.mockReturnValueOnce(false);
+
+    const result = await dispatch(window, 'permission_revoke', {
+      capability: 'filesystem.read',
+      scope: folder,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: {
+        code: 'io-error',
+        message: expect.stringContaining('may return after the app restarts'),
+      },
+    });
+    expect(send).toHaveBeenCalledWith(DESKTOP_RUNTIME_EVENT_CHANNEL, {
+      kind: 'permission-changed',
+      capability: 'filesystem.read',
+      scope: folder,
+    });
+  });
+
   it('clears a refusal only after main confirms it, so a page cannot bring a prompt back by itself', async () => {
     listPermissions.mockReturnValue([
       {
@@ -1314,7 +1352,9 @@ describe('recorded permissions', () => {
       message: string;
       detail: string;
     };
-    expect(options.message).toBe(`Let AGI Desktop ask again to shell.execute in ${root.path}?`);
+    expect(options.message).toBe(
+      `Let ${PRODUCT_NAMES.desktop} ask again to shell.execute in ${root.path}?`,
+    );
     expect(options.detail).toContain('allows nothing by itself');
     expect(options.buttons).toEqual(['Cancel', 'Clear Refusal']);
     expect(options.defaultId).toBe(0);
@@ -1629,6 +1669,40 @@ describe('worktree commands', () => {
     expect(response).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
     const call = requestPermission.mock.calls[0] as unknown as unknown[];
     expect(call[1]).toBe('filesystem.read');
+  });
+});
+
+describe("trusting a folder's skills", () => {
+  beforeEach(() => {
+    getPermissionState.mockReturnValue('granted');
+    setDeveloperSkillConsent.mockClear();
+  });
+
+  it('hands the reviewed digest to the runtime with a grant', async () => {
+    const response = await dispatch(window, 'developer_skill_consent', {
+      rootId: root.id,
+      granted: true,
+      digest: 'digest-a',
+    });
+
+    expect(response).toEqual({ ok: true, value: true });
+    expect(setDeveloperSkillConsent).toHaveBeenCalledWith(root.id, true, 'digest-a');
+  });
+
+  it('refuses a grant that names no digest before it reaches the runtime', async () => {
+    const response = await dispatch(window, 'developer_skill_consent', {
+      rootId: root.id,
+      granted: true,
+    });
+
+    expect(response).toMatchObject({ ok: false });
+    expect(setDeveloperSkillConsent).not.toHaveBeenCalled();
+  });
+
+  it('revokes without a digest', async () => {
+    await dispatch(window, 'developer_skill_consent', { rootId: root.id, granted: false });
+
+    expect(setDeveloperSkillConsent).toHaveBeenCalledWith(root.id, false, undefined);
   });
 });
 
@@ -2222,7 +2296,7 @@ describe('the dialog a local command is approved in', () => {
     cwd: '/approved/project/src',
     sandboxed,
   });
-  const MARKER = 'Nothing below this line is AGI Desktop speaking.';
+  const MARKER = `Nothing below this line is ${PRODUCT_NAMES.desktop} speaking.`;
 
   it.each([true, false])(
     'says what it knows first, then the command on one line (sandboxed: %s)',
@@ -2391,6 +2465,19 @@ describe('reading what the preview page logged', () => {
   it('treats anything but true as not clearing', async () => {
     await dispatch(window, 'app_preview_errors', { clear: 'yes' });
     expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(false);
+  });
+
+  it('reads only the server it is asked about, and refuses an address that is not local', async () => {
+    await dispatch(window, 'app_preview_errors', { clear: true, url: 'http://0.0.0.0:5173/a' });
+    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(true, 'http://localhost:5173');
+
+    readPreviewConsoleErrors.mockClear();
+    const refused = await dispatch(window, 'app_preview_errors', {
+      clear: true,
+      url: 'https://example.com/',
+    });
+    expect(refused).toMatchObject({ ok: false });
+    expect(readPreviewConsoleErrors).not.toHaveBeenCalled();
   });
 });
 

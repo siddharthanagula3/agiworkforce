@@ -8,18 +8,6 @@ const mockPut = jest.fn();
 let mockFocus: (() => void) | undefined;
 let mockBlur: (() => void) | undefined;
 
-function handlerFor(
-  screen: ReturnType<typeof render>,
-  label: string,
-  prop: 'onValueChange' | 'onPress',
-): (value?: boolean) => void {
-  const owner = screen
-    .UNSAFE_getAllByProps({ accessibilityLabel: label })
-    .find((node) => typeof node.props[prop] === 'function');
-  if (!owner) throw new Error(`No ${prop} handler is attached to "${label}"`);
-  return owner.props[prop] as (value?: boolean) => void;
-}
-
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (callback: () => void | (() => void)) => {
@@ -84,6 +72,7 @@ jest.mock('lucide-react-native', () => ({ MapPin: () => null }));
 
 import { UsOnlyRoutingGroup } from '@/src/features/settings/cloud-privacy/UsOnlyRoutingGroup';
 import { useAuthStore } from '@/src/features/auth/store';
+import { ownerHandler } from '@/test-utils/ownerProps';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
 import {
@@ -134,7 +123,7 @@ describe('owned provider location choices', () => {
   it('takes one synchronous lease and preserves the loaded geo overlay', async () => {
     mockGet.mockResolvedValue({ us_only: false, geo_overlay: 'in' });
     const screen = await readyScreen();
-    const saved = handlerFor(screen, label, 'onValueChange');
+    const saved = ownerHandler(screen.getByLabelText(label), 'onValueChange');
     const pending = deferred<unknown>();
     mockPut.mockImplementationOnce(() => pending.promise);
     act(() => {
@@ -165,7 +154,7 @@ describe('owned provider location choices', () => {
     'retires a rendered callback when %s leaves and returns',
     async (kind) => {
       const screen = await readyScreen();
-      const saved = handlerFor(screen, label, 'onValueChange');
+      const saved = ownerHandler(screen.getByLabelText(label), 'onValueChange');
       act(() => {
         if (kind === 'account') {
           activateCloudAccount('account-b');
@@ -195,7 +184,7 @@ describe('owned provider location choices', () => {
 
   it('refuses old callbacks immediately in Local mode or after eligibility is lost', async () => {
     const screen = await readyScreen();
-    const saved = handlerFor(screen, label, 'onValueChange');
+    const saved = ownerHandler(screen.getByLabelText(label), 'onValueChange');
     act(() => {
       useChatAppModeStore.setState({ appMode: 'local' });
       saved(true);
@@ -205,7 +194,7 @@ describe('owned provider location choices', () => {
     expect(screen.getByLabelText(label).props.disabled).toBe(true);
     act(() => useChatAppModeStore.setState({ appMode: 'cloud' }));
     await waitFor(() => expect(screen.getByLabelText(label).props.disabled).toBe(false));
-    const current = handlerFor(screen, label, 'onValueChange');
+    const current = ownerHandler(screen.getByLabelText(label), 'onValueChange');
     act(() => {
       useTierStore.setState({ tier: 'free' });
       current(true);
@@ -232,7 +221,7 @@ describe('owned provider location choices', () => {
     mockGet.mockRejectedValueOnce(new Error('HTTP 500'));
     const screen = render(<UsOnlyRoutingGroup />);
     await waitFor(() => expect(screen.getByLabelText(retry)).toBeTruthy());
-    act(() => handlerFor(screen, label, 'onValueChange')(true));
+    act(() => ownerHandler(screen.getByLabelText(label), 'onValueChange')(true));
     expect(mockPut).not.toHaveBeenCalled();
     fireEvent.press(screen.getByLabelText(retry));
     await waitFor(() => expect(screen.getByLabelText(label).props.disabled).toBe(false));

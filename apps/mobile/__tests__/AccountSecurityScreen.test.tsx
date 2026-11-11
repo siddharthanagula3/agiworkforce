@@ -2,7 +2,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import type { ReactTestInstance } from 'react-test-renderer';
 
 const mockPush = jest.fn();
 const mockOpenInAppBrowser = jest.fn();
@@ -217,12 +216,9 @@ jest.mock('../src/features/settings/Common', () => {
   };
 });
 
-function pressHandler(element: ReactTestInstance): () => void {
-  let current: ReactTestInstance | null = element;
-  while (current && typeof current.props.onPress !== 'function') current = current.parent;
-  if (!current) throw new Error('No press handler found on the element or its ancestors');
-  return current.props.onPress as () => void;
-}
+jest.mock('@/src/features/siri', () => ({ AskFromSiriSetting: () => null }));
+
+import { ownerHandler } from '../test-utils/ownerProps';
 
 const AccountSecurityScreen = require('../src/features/settings/account-security')
   .default as typeof import('../src/features/settings/account-security').default;
@@ -581,7 +577,7 @@ describe('Mobile Account Security screen', () => {
     });
     const screen = render(<AccountSecurityScreen />);
     fireEvent.press(await screen.findByText('Set up authenticator app'));
-    const copy = pressHandler(await screen.findByLabelText('Copy setup key'));
+    const copy = ownerHandler(await screen.findByLabelText('Copy setup key'), 'onPress');
     await act(async () => {
       mockEpoch += 2;
       mockEpochListeners.forEach((listener) => listener());
@@ -674,6 +670,10 @@ describe('Mobile Account Security screen', () => {
         });
       }
       await act(async () => {
+        if (boundary === 'unmount') {
+          confirm?.onPress?.();
+          return;
+        }
         if (boundary === 'epoch') {
           mockEpoch += 2;
           mockEpochListeners.forEach((listener) => listener());
@@ -753,7 +753,7 @@ describe('Mobile Account Security screen', () => {
     );
     const screen = render(<AccountSecurityScreen />);
     const row = await screen.findByLabelText('Macintosh · Chrome 141. 3h ago');
-    const press = pressHandler(row);
+    const press = ownerHandler(row, 'onPress');
     act(() => {
       press();
       press();

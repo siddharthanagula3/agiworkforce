@@ -2,6 +2,8 @@
 //! Chrome extension and mobile read, so a CLI turn appears in the sidebar of
 //! every other client signed in to the account.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -118,6 +120,67 @@ pub struct ChatPullResponse {
     pub cursor: String,
     #[serde(default)]
     pub has_more: bool,
+}
+
+trait SyncRow {
+    fn id(&self) -> &str;
+    fn version(&self) -> &str;
+}
+
+impl SyncRow for ConversationDelta {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn version(&self) -> &str {
+        &self.server_version
+    }
+}
+
+impl SyncRow for MessageDelta {
+    fn id(&self) -> &str {
+        &self.id
+    }
+    fn version(&self) -> &str {
+        &self.server_version
+    }
+}
+
+fn absorb_newest<T: SyncRow>(rows: &mut Vec<T>, page: Vec<T>) {
+    let mut positions: HashMap<String, usize> = rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| (row.id().to_string(), index))
+        .collect();
+    for row in page {
+        match positions.get(row.id()) {
+            Some(&index) => {
+                let superseded = match (
+                    rows[index].version().parse::<u128>(),
+                    row.version().parse::<u128>(),
+                ) {
+                    (Ok(kept), Ok(incoming)) => incoming >= kept,
+                    _ => true,
+                };
+                if superseded {
+                    rows[index] = row;
+                }
+            }
+            None => {
+                positions.insert(row.id().to_string(), rows.len());
+                rows.push(row);
+            }
+        }
+    }
+}
+
+impl ChatPullResponse {
+    /// Pages deliberately overlap at the slowest table's frontier, so a row can
+    /// arrive on more than one page; keep one copy of each, the newest.
+    fn absorb(&mut self, page: ChatPullResponse) {
+        absorb_newest(&mut self.conversations, page.conversations);
+        absorb_newest(&mut self.messages, page.messages);
+        self.cursor = page.cursor;
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -499,14 +562,11 @@ impl<'a> ChatSync<'a> {
         };
         loop {
             let page = self.pull(&cursor).await?;
-            merged
-                .conversations
-                .extend(page.conversations.iter().cloned());
-            merged.messages.extend(page.messages.iter().cloned());
             let advanced = page.cursor != cursor;
+            let has_more = page.has_more;
             cursor = page.cursor.clone();
-            merged.cursor = cursor.clone();
-            if !page.has_more || !advanced {
+            merged.absorb(page);
+            if !has_more || !advanced {
                 break;
             }
         }
@@ -1007,6 +1067,75 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["one", "two"]
         );
+    }
+
+    #[test]
+    fn overlapping_pull_pages_list_each_conversation_and_message_once() {
+        let conversation = |title: &str, version: &str, deleted: bool| ConversationDelta {
+            id: "c1".to_string(),
+            title: title.to_string(),
+            model: None,
+            project_id: None,
+            updated_at: "2026-09-12T00:00:00Z".to_string(),
+            deleted_at: deleted.then(|| "2026-09-13T00:00:00Z".to_string()),
+            archived: false,
+            server_version: version.to_string(),
+        };
+        let message = |id: &str, content: &str, version: &str| MessageDelta {
+            id: id.to_string(),
+            conversation_id: "c1".to_string(),
+            role: "user".to_string(),
+            content: content.to_string(),
+            created_at: None,
+            deleted_at: None,
+            server_version: version.to_string(),
+        };
+        let page = |conversations, messages, cursor: &str, has_more| ChatPullResponse {
+            conversations,
+            messages,
+            cursor: cursor.to_string(),
+            has_more,
+        };
+        let mut merged = page(Vec::new(), Vec::new(), INITIAL_CURSOR, false);
+
+        merged.absorb(page(
+            vec![conversation("Trip", "12", false)],
+            vec![message("m1", "one", "1"), message("m2", "two", "2")],
+            "2",
+            true,
+        ));
+        merged.absorb(page(
+            vec![conversation("Trip", "12", false)],
+            vec![message("m2", "two", "2")],
+            "12",
+            false,
+        ));
+        let assembled = assemble(&merged);
+        assert_eq!(assembled.len(), 1);
+        assert_eq!(assembled[0].messages.len(), 2);
+        assert_eq!(merged.cursor, "12");
+
+        merged.absorb(page(
+            vec![conversation("Old title", "3", false)],
+            vec![message("m1", "edited", "13")],
+            "13",
+            false,
+        ));
+        let assembled = assemble(&merged);
+        assert_eq!(assembled[0].title, "Trip");
+        assert_eq!(assembled[0].messages.len(), 2);
+        assert!(assembled[0]
+            .messages
+            .iter()
+            .any(|message| message.id == "m1" && message.content == "edited"));
+
+        merged.absorb(page(
+            vec![conversation("Trip", "14", true)],
+            Vec::new(),
+            "14",
+            false,
+        ));
+        assert!(assemble(&merged).is_empty());
     }
 
     #[test]

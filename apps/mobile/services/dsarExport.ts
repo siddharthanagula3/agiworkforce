@@ -210,17 +210,43 @@ function getAppVersion(): string | null {
   return Constants.expoConfig?.version ?? null;
 }
 
+const EXPORT_PAGE_SIZE = 1_000;
+
+async function collectAllPages<T extends { id: string }>(
+  fetchPage: (offset: number, limit: number) => Promise<T[]>,
+  assertActive: () => void,
+): Promise<T[]> {
+  const seen = new Set<string>();
+  const all: T[] = [];
+  for (let offset = 0; ; offset += EXPORT_PAGE_SIZE) {
+    const page = await fetchPage(offset, EXPORT_PAGE_SIZE);
+    assertActive();
+    for (const item of page) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      all.push(item);
+    }
+    if (page.length < EXPORT_PAGE_SIZE) return all;
+  }
+}
+
 async function collectConversations(assertActive: () => void): Promise<DsarConversation[]> {
-  const convs = await listConversations({ limit: 10_000 });
-  assertActive();
-  const allArchived = await listConversations({ archived: true, limit: 10_000 });
-  assertActive();
+  const convs = await collectAllPages(
+    (offset, limit) => listConversations({ limit, offset }),
+    assertActive,
+  );
+  const allArchived = await collectAllPages(
+    (offset, limit) => listConversations({ archived: true, limit, offset }),
+    assertActive,
+  );
   const all: Conversation[] = [...convs, ...allArchived];
 
   const result: DsarConversation[] = [];
   for (const conv of all) {
-    const msgs = await getMessagesForConversation(conv.id, { limit: 10_000 });
-    assertActive();
+    const msgs = await collectAllPages(
+      (offset, limit) => getMessagesForConversation(conv.id, { limit, offset }),
+      assertActive,
+    );
     const dsarMessages: DsarMessage[] = msgs.map((m: Message): DsarMessage => ({
       id: m.id,
       role: m.role,
@@ -254,8 +280,11 @@ async function collectConversations(assertActive: () => void): Promise<DsarConve
   return result;
 }
 
-async function collectMemoryFacts(): Promise<DsarMemoryFact[]> {
-  const facts = await listMemoryFacts({ limit: 10_000, includeReplaced: true });
+async function collectMemoryFacts(assertActive: () => void): Promise<DsarMemoryFact[]> {
+  const facts = await collectAllPages(
+    (offset, limit) => listMemoryFacts({ limit, offset, includeReplaced: true }),
+    assertActive,
+  );
   return facts.map((f: MemoryFact): DsarMemoryFact => ({
     id: f.id,
     fact: f.fact,
@@ -328,7 +357,7 @@ export async function exportAllUserData(
   notify('conversations', 1, 1);
 
   notify('memory', 0, 1);
-  const memory_facts = await collectMemoryFacts();
+  const memory_facts = await collectMemoryFacts(assertActive);
   notify('memory', 1, 1);
 
   notify('instructions', 0, 1);

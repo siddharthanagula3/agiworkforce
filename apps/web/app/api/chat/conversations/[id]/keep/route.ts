@@ -4,10 +4,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { refuseEditedAssistantOverwrite } from '@/lib/server/assistant-content-edits';
 import { z } from 'zod';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
-import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+  readPersistedAttachments,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
+import { isKeepableChatMessage, keptMessageContent } from '@/lib/chat-kept-messages';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
@@ -36,6 +40,17 @@ const KeepTemporaryChatSchema = z.object({
   messages: z.array(KeptMessageSchema).max(MAX_KEPT_MESSAGES),
 });
 
+function attachedAssetIds(messages: z.infer<typeof KeptMessageSchema>[]): string[] {
+  const ids = new Set<string>();
+  for (const message of messages) {
+    if (message.role !== 'user') continue;
+    for (const attachment of readPersistedAttachments(message.metadata['attachments']) ?? []) {
+      if (UUID_PATTERN.test(attachment.assetId)) ids.add(attachment.assetId.toLowerCase());
+    }
+  }
+  return [...ids];
+}
+
 async function handleKeepTemporaryChat(request: NextRequest, context: RouteContext) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -55,7 +70,7 @@ async function handleKeepTemporaryChat(request: NextRequest, context: RouteConte
   const parsed = KeepTemporaryChatSchema.safeParse(rawBody);
   if (!parsed.success) throw createError.validation('Invalid request body', parsed.error);
 
-  const messages = parsed.data.messages.filter((message) => message.content.trim().length > 0);
+  const messages = parsed.data.messages.filter(isKeepableChatMessage);
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const scope = { conversationId, userId, organizationId };
 
@@ -104,7 +119,7 @@ async function handleKeepTemporaryChat(request: NextRequest, context: RouteConte
           message.id ?? null,
           conversationId,
           message.role,
-          message.content.trim(),
+          keptMessageContent(message),
           message.role === 'assistant' ? (message.model ?? null) : null,
           JSON.stringify(normalizeMessageMetadata(message.metadata) ?? {}),
           parentId,
@@ -121,12 +136,12 @@ async function handleKeepTemporaryChat(request: NextRequest, context: RouteConte
       keptFiles = await tx.execute(
         `update public.media_assets
             set temporary_chat = false
-          where conversation_id = $1::uuid
+          where (conversation_id = $1::uuid or id = any($4::uuid[]))
             and user_id = $2
             and organization_id is not distinct from $3
             and temporary_chat
             and deleted_at is null`,
-        [conversationId, userId, organizationId],
+        [conversationId, userId, organizationId, attachedAssetIds(messages)],
       );
     });
   } catch (error) {

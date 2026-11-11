@@ -55,6 +55,7 @@ export interface LiveVoiceBarProps {
   interrupted: boolean;
   turns: LiveTranscriptTurn[];
   error: string | null;
+  routeNotice?: string | null;
   approvals: readonly LiveVoicePendingApproval[];
   toolActivity: readonly LiveVoiceToolActivity[];
   toolOutcomes: readonly LiveVoiceToolOutcome[];
@@ -183,6 +184,7 @@ export function LiveVoiceBar({
   interrupted,
   turns,
   error,
+  routeNotice = null,
   approvals,
   toolActivity,
   toolOutcomes,
@@ -334,6 +336,21 @@ export function LiveVoiceBar({
           )}
         </Text>
       </View>
+
+      {routeNotice && !error ? (
+        <Text
+          testID="live-voice-route-notice"
+          accessibilityLiveRegion="polite"
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.subhead,
+            textAlign: 'center',
+            marginBottom: 12,
+          }}
+        >
+          {routeNotice}
+        </Text>
+      ) : null}
 
       {error ? (
         <View

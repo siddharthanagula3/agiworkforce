@@ -12,6 +12,10 @@ import {
   writeDictationLanguage,
 } from '../src/features/side-panel/dictation-language';
 import { micTooltip } from '../src/features/side-panel/voice';
+import {
+  createDictationLanguageRow,
+  type PreferenceRow,
+} from '../src/features/options/preference-rows';
 
 const catalog = JSON.parse(
   readFileSync(
@@ -133,6 +137,64 @@ describe('dictation language preference', () => {
     await expect(
       activeDictationLanguage({ languages: ['en-US'], language: 'en-US' }),
     ).resolves.toBe('nl-NL');
+  });
+});
+
+describe('dictation language row', () => {
+  const environment = { languages: ['fr-FR', 'de-DE'], language: 'fr-FR' };
+
+  function stubStorage(set: (items: Record<string, unknown>) => Promise<void>): void {
+    (globalThis as unknown as { chrome: unknown }).chrome = {
+      i18n,
+      storage: {
+        sync: {
+          get: async () => ({ [DICTATION_LANGUAGE_KEY]: 'fr-FR' }),
+          set,
+        },
+      },
+    };
+  }
+
+  async function choose(row: PreferenceRow, tag: string): Promise<HTMLSelectElement> {
+    await row.loaded;
+    const select = row.control as HTMLSelectElement;
+    select.value = tag;
+    select.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(select.disabled).toBe(false));
+    return select;
+  }
+
+  afterEach(() => {
+    delete (globalThis as unknown as { chrome?: unknown }).chrome;
+  });
+
+  it('puts the previous language back when saving fails', async () => {
+    stubStorage(async () => {
+      throw new Error('quota exceeded');
+    });
+    const row = createDictationLanguageRow(environment);
+    const select = await choose(row, 'de-DE');
+    expect(select.value).toBe('fr-FR');
+    expect(row.status.textContent).toBe(getMessage('spPreferenceSaveFailed'));
+  });
+
+  it('keeps the chosen language once it is saved, and falls back to it after a later failure', async () => {
+    const saved: Record<string, unknown>[] = [];
+    let fail = false;
+    stubStorage(async (items) => {
+      if (fail) throw new Error('quota exceeded');
+      saved.push(items);
+    });
+    const row = createDictationLanguageRow(environment);
+    const select = await choose(row, 'de-DE');
+    expect(select.value).toBe('de-DE');
+    expect(saved).toEqual([{ [DICTATION_LANGUAGE_KEY]: 'de-DE' }]);
+
+    fail = true;
+    select.value = 'fr-FR';
+    select.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(select.disabled).toBe(false));
+    expect(select.value).toBe('de-DE');
   });
 });
 

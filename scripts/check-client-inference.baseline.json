@@ -223,12 +223,6 @@
       "why": "restates the tool status vocabulary in local literals; import TOOL_STATUSES and compare against it."
     },
     {
-      "file": "apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx",
-      "symbol": "LIFECYCLE_STATUSES",
-      "family": "lifecycle state names",
-      "why": "restates the lifecycle vocabulary in local literals; import LIFECYCLE_STATUSES and compare against it."
-    },
-    {
       "file": "apps/mobile/src/features/schedules/store.ts",
       "symbol": "LIFECYCLE_STATUSES",
       "family": "lifecycle state names",

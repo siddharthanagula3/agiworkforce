@@ -146,6 +146,27 @@ export async function insertConnectorToolSessionGrants(
   }
 }
 
+/**
+ * Every change to a connector's saved permissions goes through here first, in
+ * the transaction that makes the change, so the row lock orders it against a
+ * remembered approval being saved, which locks the same row.
+ */
+export async function advanceConnectorPermissionGeneration(
+  db: Pick<DatabaseAdapter, 'query'>,
+  userId: string,
+  connectorId: string,
+): Promise<void> {
+  const rows = await db.query<{ generation: string }>(
+    `insert into public.connector_permission_generations (user_id, connector_id, generation)
+     values ($1, $2, 1)
+     on conflict (user_id, connector_id)
+       do update set generation = connector_permission_generations.generation + 1
+     returning generation::text as generation`,
+    [userId, connectorId],
+  );
+  if (rows.length !== 1) throw new Error('The connector permission change could not be recorded.');
+}
+
 export async function revokeConnectorSessionGrants(
   db: DatabaseAdapter,
   connectorId: string,

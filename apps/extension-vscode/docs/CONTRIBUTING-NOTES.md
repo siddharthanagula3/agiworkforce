@@ -71,7 +71,7 @@ the macOS login Keychain. Native secure-storage behavior needs its own test.
 
 ## Cloud account and Web handoffs
 
-`AGI Code: Sign In to AGI Cloud` uses the shared browser-approved device
+`Code: Sign In to AGI Cloud` uses the shared browser-approved device
 flow and stores its revocable developer credential in VS Code `SecretStorage`.
 The Account & Usage command reads `/api/usage`, applies both plan and
 subscription status before caching an effective tier, and exposes explicit Web

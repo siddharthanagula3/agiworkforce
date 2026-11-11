@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { ChatComposerNew } from './ChatComposerNew';
 import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 
@@ -11,6 +12,7 @@ const dictation = vi.hoisted(() => ({
   start: vi.fn(),
   stop: vi.fn(),
   send: vi.fn(),
+  interrupt: vi.fn(),
   onInsert: undefined as undefined | ((text: string) => void),
 }));
 
@@ -63,6 +65,7 @@ vi.mock('@features/chat/hooks/use-dictation', async (importOriginal) => ({
       },
       send: dictation.send,
       cancel: vi.fn(),
+      interrupt: dictation.interrupt,
       retry: vi.fn(),
     };
   },
@@ -86,6 +89,53 @@ beforeEach(() => {
   dictation.start.mockClear();
   dictation.stop.mockClear();
   dictation.send.mockClear();
+  dictation.interrupt.mockClear();
+});
+
+function hideWindow() {
+  Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+  fireEvent(document, new Event('visibilitychange'));
+}
+
+describe('a recording left in a hidden desktop window', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'agiHost');
+    Reflect.deleteProperty(document, 'visibilityState');
+    window.history.pushState({}, '', '/');
+  });
+
+  it('is discarded with a reason when Quick Ask is hidden', () => {
+    Object.assign(window, { agiHost: hostBridgeStub() });
+    window.history.pushState({}, '', '/quick-ask');
+    dictation.active = true;
+    composer();
+
+    hideWindow();
+
+    expect(dictation.interrupt).toHaveBeenCalledTimes(1);
+    expect(dictation.interrupt).toHaveBeenCalledWith(expect.stringContaining('discarded'));
+  });
+
+  it('is left running when the main chat window is hidden', () => {
+    Object.assign(window, { agiHost: hostBridgeStub() });
+    window.history.pushState({}, '', '/chat');
+    dictation.active = true;
+    composer();
+
+    hideWindow();
+
+    expect(dictation.interrupt).not.toHaveBeenCalled();
+  });
+
+  it('is left running in a browser tab', () => {
+    window.history.pushState({}, '', '/quick-ask');
+    dictation.active = true;
+    composer();
+
+    hideWindow();
+
+    expect(dictation.interrupt).not.toHaveBeenCalled();
+  });
 });
 
 describe('composer shortcuts', () => {

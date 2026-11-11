@@ -31,13 +31,25 @@ const WEB_FIELD_GATE_PATTERNS = [
  */
 export const BROWSER_RESERVED_KEYS = new Set(['n', 't', 'w', 'q', 'l', 'p', 'd', 'j']);
 
+const TAB_CYCLING_REASON =
+  'Control+Tab and Control+Shift+Tab cycle tabs on macOS, Windows and Linux alike (Safari documents Control-Tab, Electron keeps Control as Control on every platform), and CommandOrControl+Tab would be Command+Tab on macOS, which the system reserves for switching apps.';
+
+/**
+ * App-menu accelerators that deliberately name one modifier on every platform.
+ * An entry is an exact (id, accelerator) pair with the reason it cannot be
+ * CommandOrControl; one that no longer matches a real binding fails.
+ */
+export const PLATFORM_LITERAL_ACCELERATORS = Object.freeze([
+  { id: 'host-previous-tab', accelerator: 'Ctrl+Shift+Tab', reason: TAB_CYCLING_REASON },
+  { id: 'host-next-tab', accelerator: 'Ctrl+Tab', reason: TAB_CYCLING_REASON },
+]);
+
 function read(repoRoot, relativePath) {
   return readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-/** Tab navigation keeps physical Control; Command+Tab belongs to the macOS app switcher. */
+/** `CommandOrControl` is the one spelling that gives both platforms a variant. */
 export function crossPlatformAccelerator(accelerator) {
-  if (/^(?:Control|Ctrl)\+(?:Shift\+)?Tab$/i.test(accelerator)) return true;
   return !/(^|\+)(Command|Cmd|Super|Meta|Control|Ctrl)(\+|$)/i.test(accelerator);
 }
 
@@ -217,7 +229,10 @@ function vscodeBindingKeys(binding) {
   ].filter(([, value]) => typeof value === 'string' && value.length > 0);
 }
 
-export function checkShortcutRegistry(repoRoot = REPO_ROOT) {
+export function checkShortcutRegistry(
+  repoRoot = REPO_ROOT,
+  { platformLiteral = PLATFORM_LITERAL_ACCELERATORS } = {},
+) {
   const failures = [];
   const fail = (scope, message) => failures.push(`${scope}: ${message}`);
 
@@ -231,10 +246,42 @@ export function checkShortcutRegistry(repoRoot = REPO_ROOT) {
     const owner = seen.get(chord);
     if (owner) fail('app-menu', `${shortcut.id} and ${owner} both claim ${shortcut.accelerator}`);
     seen.set(chord, shortcut.id);
-    if (!crossPlatformAccelerator(shortcut.accelerator)) {
+    const registeredLiteral = platformLiteral.some(
+      (entry) => entry.id === shortcut.id && entry.accelerator === shortcut.accelerator,
+    );
+    if (!crossPlatformAccelerator(shortcut.accelerator) && !registeredLiteral) {
       fail(
         'app-menu',
         `${shortcut.id} claims ${shortcut.accelerator}, which names one platform's modifier instead of CommandOrControl`,
+      );
+    }
+  }
+
+  const registeredPairs = new Set();
+  for (const entry of platformLiteral) {
+    const pair = `${entry.id} ${entry.accelerator}`;
+    if (registeredPairs.has(pair)) {
+      fail(
+        'app-menu',
+        `${entry.id} is registered as platform-literal twice for ${entry.accelerator}`,
+      );
+    }
+    registeredPairs.add(pair);
+    if (typeof entry.reason !== 'string' || entry.reason.trim().length < 40) {
+      fail('app-menu', `${entry.id} is registered as platform-literal without a reason`);
+    }
+    const binding = menuShortcuts.find(
+      (shortcut) => shortcut.id === entry.id && shortcut.accelerator === entry.accelerator,
+    );
+    if (binding === undefined) {
+      fail(
+        'app-menu',
+        `${entry.id} is registered as platform-literal for ${entry.accelerator}, which no menu binding matches. Delete the entry; the list only shrinks.`,
+      );
+    } else if (crossPlatformAccelerator(binding.accelerator)) {
+      fail(
+        'app-menu',
+        `${entry.id} is registered as platform-literal but ${binding.accelerator} already names both platforms. Delete the entry; the list only shrinks.`,
       );
     }
   }

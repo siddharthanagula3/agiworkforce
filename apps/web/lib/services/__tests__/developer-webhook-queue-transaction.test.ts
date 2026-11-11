@@ -46,6 +46,7 @@ vi.mock('@/lib/server/organization-encryption-keys', async () => ({
   )),
 
   PLATFORM_TENANT_KEY_ENV: 'UNUSED_WEBHOOK_FIXTURE_KEY',
+  platformTenantRing: mocks.forbidden,
 }));
 
 import {

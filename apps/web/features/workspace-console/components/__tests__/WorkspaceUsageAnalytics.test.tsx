@@ -1,6 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceUsageAnalytics } from '../WorkspaceUsageAnalytics';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const mocks = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('../../hooks/use-workspace-usage', () => ({
@@ -8,6 +11,8 @@ vi.mock('../../hooks/use-workspace-usage', () => ({
   WORKSPACE_USAGE_QUERY_KEY: ['workspace', 'usage-analytics'],
 }));
 vi.mock('../WorkspaceSpendLimit', () => ({ WorkspaceSpendLimit: () => null }));
+
+const NONE_OMITTED = { requests: 0, credits: 0 };
 
 function usage(unsettledRequests: number) {
   return {
@@ -21,6 +26,13 @@ function usage(unsettledRequests: number) {
     byProvider: [],
     byWorkload: [],
     byProject: [],
+    omitted: {
+      byMember: NONE_OMITTED,
+      byModel: NONE_OMITTED,
+      byProvider: NONE_OMITTED,
+      byWorkload: NONE_OMITTED,
+      byProject: NONE_OMITTED,
+    },
     daily: [],
     freshness: { asOf: '2026-09-19T10:00:00.000Z', latestActivityAt: null, unsettledRequests },
   };
@@ -43,7 +55,7 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     });
     render(<WorkspaceUsageAnalytics />);
     expect(screen.getByText(/2 requests are awaiting settlement/)).toBeInTheDocument();
-    expect(screen.getByText('No settled managed usage in this window')).toBeInTheDocument();
+    expect(screen.getByText(`No settled ${CLOUD} usage in this window`)).toBeInTheDocument();
     expect(screen.getByText('0 credits')).toBeInTheDocument();
     expect(screen.queryByText(/has cost nothing/)).not.toBeInTheDocument();
   });
@@ -53,7 +65,11 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     expect(container.querySelector('time')).toHaveAttribute('dateTime', '2026-09-19T10:00:00.000Z');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(
-      screen.getByText(/Local and BYOK activity is not included in these managed cloud totals/),
+      screen.getByText(
+        new RegExp(
+          `Local and BYOK activity is not included in these ${CLOUD.toLowerCase()} totals`,
+        ),
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/never reaches our infrastructure/)).not.toBeInTheDocument();
   });
@@ -108,6 +124,35 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     expect(container).not.toHaveTextContent('$');
   });
 
+  it('says how much usage a capped member list leaves out and that the totals include it', () => {
+    mocks.query.mockReturnValue({
+      data: {
+        currentUserRole: 'owner',
+        usage: {
+          ...usage(0),
+          totals: { requests: 51, credits: 510, inputTokens: 0, outputTokens: 0 },
+          byMember: [
+            { key: 'ada@example.com', requests: 50, inputTokens: 0, outputTokens: 0, credits: 500 },
+          ],
+          omitted: {
+            ...usage(0).omitted,
+            byMember: { requests: 1, credits: 10 },
+          },
+        },
+      },
+      isPending: false,
+      isError: false,
+    });
+    render(<WorkspaceUsageAnalytics />);
+
+    const byMember = screen.getByRole('region', { name: 'By member' });
+    expect(byMember).toHaveTextContent('Showing the top 1.');
+    expect(byMember).toHaveTextContent('1 more turns and 10 credits are not listed here');
+    expect(
+      within(screen.getByRole('region', { name: 'By model' })).queryByText(/not listed here/),
+    ).toBeNull();
+  });
+
   it('tells someone who does not administer the workspace why there is no breakdown', () => {
     mocks.query.mockReturnValue({ data: null, isPending: false, isError: false });
     render(<WorkspaceUsageAnalytics />);
@@ -124,6 +169,24 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
       'href',
       '/api/settings/organization/usage-analytics/export?from=2026-09-01T00%3A00%3A00.000Z&to=2026-09-19T10%3A00%3A00.000Z&dimension=daily',
     );
+  });
+
+  it('labels each daily bar with its UTC calendar day rather than a browser-shifted date', () => {
+    mocks.query.mockReturnValue({
+      data: {
+        currentUserRole: 'owner',
+        usage: { ...usage(0), daily: [{ day: '2026-11-09', requests: 1, credits: 5 }] },
+      },
+      isPending: false,
+      isError: false,
+    });
+    const { container } = render(<WorkspaceUsageAnalytics />);
+
+    const bar = container.querySelector('[aria-label="Daily credits used"] span');
+    const utcDay = new Date(Date.UTC(2026, 10, 9)).toLocaleDateString(undefined, {
+      timeZone: 'UTC',
+    });
+    expect(bar?.getAttribute('title')?.startsWith(`${utcDay} UTC, `)).toBe(true);
   });
 
   it('shows active members against seats in use and the average credits per active member', () => {

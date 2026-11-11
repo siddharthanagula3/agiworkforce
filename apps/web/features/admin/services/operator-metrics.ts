@@ -22,6 +22,23 @@ export interface OperatorOverview {
   growth: GrowthPoint[];
 }
 
+const FEEDBACK_CONTEXT_FIELDS = [
+  'source',
+  'platform',
+  'version',
+  'feedback_context',
+  'finish_reason',
+  'conversation_id',
+  'message_id',
+  'run_id',
+] as const;
+
+export type FeedbackContextField = (typeof FEEDBACK_CONTEXT_FIELDS)[number];
+
+export type FeedbackReportContext = Partial<Record<FeedbackContextField, string>>;
+
+const FEEDBACK_CONTEXT_VALUE_MAX_CHARS = 200;
+
 export interface FeedbackRow {
   id: string;
   userId: string | null;
@@ -31,6 +48,18 @@ export interface FeedbackRow {
   createdAt: string;
   pagePath: string | null;
   screenshotKey: string | null;
+  context: FeedbackReportContext;
+}
+
+function feedbackReportContext(metadata: Record<string, unknown> | null): FeedbackReportContext {
+  const context: FeedbackReportContext = {};
+  for (const field of FEEDBACK_CONTEXT_FIELDS) {
+    const value = metadata?.[field];
+    if (typeof value === 'string' && value.length > 0) {
+      context[field] = value.slice(0, FEEDBACK_CONTEXT_VALUE_MAX_CHARS);
+    }
+  }
+  return context;
 }
 
 export interface UserRow {
@@ -155,6 +184,7 @@ export async function readRecentFeedback(limit = 50): Promise<FeedbackRow[]> {
     pagePath: typeof row.metadata?.['page_path'] === 'string' ? row.metadata['page_path'] : null,
     screenshotKey:
       typeof row.metadata?.['screenshot_key'] === 'string' ? row.metadata['screenshot_key'] : null,
+    context: feedbackReportContext(row.metadata),
   }));
 }
 

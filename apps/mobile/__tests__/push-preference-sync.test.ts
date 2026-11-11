@@ -98,11 +98,12 @@ function makeContext(
 let appStateListener: ((state: string) => void) | undefined;
 
 describe('push delivery preference sync', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockApiPost.mockResolvedValue(undefined);
     appStateListener = undefined;
+    await useNotificationPrefsStore.persist.rehydrate();
     jest
       .spyOn(AppState, 'addEventListener')
       .mockImplementation((_event: string, handler: (state: string) => void) => {
@@ -178,6 +179,29 @@ describe('push delivery preference sync', () => {
     expect(body.preferences.eventTypes.agent_approval_needed).toBe(false);
     expect(body.preferences.eventTypes.schedule_run).toBe(false);
     expect(body.preferences.eventTypes.chat_message).toBe(true);
+  });
+
+  it('syncs a category switched off while the first registration is still in flight', async () => {
+    let resolveFirst!: () => void;
+    mockApiPost.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    const registration = beginPushRegistration('expo-token-a', makeContext());
+    const first = postPushRegistration(registration);
+    await settle();
+
+    useNotificationPrefsStore.getState().setCategoryEnabled('tasks', false);
+    resolveFirst();
+    await expect(first).resolves.toBe(true);
+    jest.runOnlyPendingTimers();
+    await settle();
+
+    expect(mockApiPost).toHaveBeenCalledTimes(2);
+    expect(bodyOfCall(0).preferences.categories.tasks).toBe(true);
+    expect(bodyOfCall(1).preferences.categories.tasks).toBe(false);
+    expect(bodyOfCall(1).preferences.eventTypes.task_completed).toBe(false);
   });
 
   it('turns off only chat reply pushes when chat replies are switched off', async () => {

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { TasksPage } from '../TasksPage';
 
 const RUN_ID = '0190a000-0000-7000-8000-0000000000a1';
@@ -54,7 +55,7 @@ describe('Tasks run identity', () => {
     renderTasks(client(runs));
 
     expect(await screen.findByText('Orchard Calculator and CSV Generator')).toBeTruthy();
-    expect(screen.getByText('AGI Work')).toBeTruthy();
+    expect(screen.getByText(PRODUCT_NAMES.work)).toBeTruthy();
     expect(
       screen.getByRole('button', {
         name: 'View details for Orchard Calculator and CSV Generator, Ready for review',
@@ -89,7 +90,9 @@ describe('Tasks run identity', () => {
     renderTasks(client(runs));
 
     expect(
-      await screen.findByRole('button', { name: 'View details for AGI Work, Ready for review' }),
+      await screen.findByRole('button', {
+        name: `View details for ${PRODUCT_NAMES.work}, Ready for review`,
+      }),
     ).toBeTruthy();
   });
 
@@ -106,7 +109,11 @@ describe('Tasks run identity', () => {
     // Opening the panel merges getRun's result back into the list. That
     // response carries no title, so a naive merge blanked the row.
     await waitFor(() => expect(screen.getByText('Orchard Calculator')).toBeTruthy());
-    expect(screen.queryByRole('button', { name: /^View details for AGI Work,/ })).toBeNull();
+    expect(
+      screen.queryByRole('button', {
+        name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+      }),
+    ).toBeNull();
   });
 
   it('prefers the run’s own title over the host resolver', async () => {

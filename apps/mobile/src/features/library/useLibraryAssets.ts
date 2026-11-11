@@ -61,12 +61,24 @@ export function useLibraryAssets(
     scopeKey: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [storage, setStorage] = useState<{ used: number | null; limit: number | null }>({
-    used: null,
-    limit: null,
-  });
+  const [storage, setStorage] = useState<{
+    ownerId: string | null;
+    used: number | null;
+    limit: number | null;
+  }>({ ownerId: null, used: null, limit: null });
   const [showingCachedPage, setShowingCachedPage] = useState(false);
   const requestRef = useRef(0);
+  const assetsRef = useRef(assets);
+  assetsRef.current = assets;
+  const removalEpochRef = useRef(0);
+
+  const dropLoadedAsset = useCallback((id: string) => {
+    const wasLoaded = assetsRef.current.some((asset) => asset.id === id);
+    setAssets((current) => current.filter((asset) => asset.id !== id));
+    if (!wasLoaded) return;
+    removalEpochRef.current += 1;
+    setNextOffset((current) => (current === null ? current : Math.max(0, current - 1)));
+  }, []);
 
   const loadFirstPage = useCallback(
     async (mode: 'initial' | 'refresh') => {
@@ -77,6 +89,7 @@ export function useLibraryAssets(
         setHasMore(false);
         setNextOffset(null);
         setLoadedScope(null);
+        setStorage({ ownerId: null, used: null, limit: null });
         setShowingCachedPage(false);
         setError(null);
         setLoading(false);
@@ -103,6 +116,7 @@ export function useLibraryAssets(
         setError(null);
         if (!deleted) {
           setStorage({
+            ownerId,
             used: page.storageUsedBytes ?? null,
             limit: page.storageLimitBytes ?? null,
           });
@@ -116,6 +130,7 @@ export function useLibraryAssets(
             ? null
             : readLibraryPage(ownerId);
         setAssets(cached ?? []);
+        if (!deleted) setStorage({ ownerId: null, used: null, limit: null });
         setLoadedScope({ ownerId, search, sort, scopeKey });
         setHasMore(false);
         setNextOffset(null);
@@ -167,6 +182,7 @@ export function useLibraryAssets(
     )
       return;
     const request = requestRef.current;
+    const removalEpoch = removalEpochRef.current;
     const offset = nextOffset;
     setLoadingMore(true);
     void fetchLibraryPage({
@@ -180,6 +196,7 @@ export function useLibraryAssets(
     })
       .then((page) => {
         if (requestRef.current !== request || ownerIdRef.current !== ownerId) return;
+        if (removalEpochRef.current !== removalEpoch) return;
         setAssets((current) => {
           const seen = new Set(current.map((asset) => asset.id));
           return [...current, ...page.assets.filter((asset) => !seen.has(asset.id))];
@@ -217,10 +234,10 @@ export function useLibraryAssets(
       if (!ownerId) return;
       await deleteLibraryAsset(id);
       if (ownerIdRef.current !== ownerId) return;
-      setAssets((current) => current.filter((asset) => asset.id !== id));
+      dropLoadedAsset(id);
       removeLibraryAsset(ownerId, id);
     },
-    [ownerId, removeLibraryAsset],
+    [dropLoadedAsset, ownerId, removeLibraryAsset],
   );
 
   const restoreAsset = useCallback(
@@ -228,9 +245,9 @@ export function useLibraryAssets(
       if (!ownerId) return;
       await restoreLibraryAsset(id);
       if (ownerIdRef.current !== ownerId) return;
-      setAssets((current) => current.filter((asset) => asset.id !== id));
+      dropLoadedAsset(id);
     },
-    [ownerId],
+    [dropLoadedAsset, ownerId],
   );
 
   const permanentlyDeleteAsset = useCallback(
@@ -238,10 +255,10 @@ export function useLibraryAssets(
       if (!ownerId) return;
       await permanentlyDeleteLibraryAsset(id);
       if (ownerIdRef.current !== ownerId) return;
-      setAssets((current) => current.filter((asset) => asset.id !== id));
+      dropLoadedAsset(id);
       removeLibraryAsset(ownerId, id);
     },
-    [ownerId, removeLibraryAsset],
+    [dropLoadedAsset, ownerId, removeLibraryAsset],
   );
 
   return {
@@ -259,8 +276,8 @@ export function useLibraryAssets(
     error,
     showingCachedPage,
     signedOut: !ownerId,
-    storageUsedBytes: storage.used,
-    storageLimitBytes: storage.limit,
+    storageUsedBytes: storage.ownerId === ownerId ? storage.used : null,
+    storageLimitBytes: storage.ownerId === ownerId ? storage.limit : null,
     refresh,
     loadMore,
     removeAsset,

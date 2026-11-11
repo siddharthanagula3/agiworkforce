@@ -120,6 +120,8 @@ export const LOCAL_CODE_COPY = {
   runningSince: (minutes: number): string =>
     minutes < 1 ? 'Started just now' : `Running for ${minutes} min`,
   stopCommand: (command: string): string => `Stop ${command}`,
+  stopCommandFailed: (command: string): string =>
+    `${command} could not be stopped and may still be running.`,
   stopAllCommands: 'Stop all',
   openPreview: 'Preview',
   openPreviewOf: (url: string): string => `Open a preview of ${url}`,
@@ -257,6 +259,9 @@ export const LOCAL_CODE_COPY = {
   questionMore: (count: number): string =>
     count === 1 ? '1 more question is waiting.' : `${count} more questions are waiting.`,
   sessionNotFound: 'That coding session is not on this device any more.',
+  sessionUnreadable:
+    'The coding sessions on this device could not be read, so that one is not open yet.',
+  sessionWithheld: 'Allow running commands in this folder to open that coding session.',
   deleteSession: 'Delete session',
   deleteSessionWhileRunning: 'Stop the running turn before deleting this session.',
   deleteSessionTitle: 'Delete this session?',
@@ -1053,6 +1058,29 @@ export function sharedUnavailableLine(groups: readonly DeveloperSessionGroup[]):
   if (!first) return null;
   const same = messages.every((value) => value?.message === first.message);
   return same ? `${first.message} ${first.hint}` : null;
+}
+
+export type LocalRouteResolution =
+  | { kind: 'found'; session: LocalDeveloperSession }
+  | { kind: 'waiting'; notice: string }
+  | { kind: 'missing' };
+
+export function resolveLocalRoute(
+  groups: readonly DeveloperSessionGroup[],
+  wanted: { rootId: string; threadId: string },
+  listError: string | null,
+): LocalRouteResolution {
+  const group = groups.find((candidate) => candidate.rootId === wanted.rootId);
+  const session = group?.sessions.find((candidate) => candidate.id === wanted.threadId);
+  if (session) return { kind: 'found', session };
+  if (group?.sessionsWithheld === true) {
+    return { kind: 'waiting', notice: LOCAL_CODE_COPY.sessionWithheld };
+  }
+  if (group?.unavailable) {
+    return { kind: 'waiting', notice: `${group.unavailable.message} ${group.unavailable.hint}` };
+  }
+  if (listError !== null) return { kind: 'waiting', notice: LOCAL_CODE_COPY.sessionUnreadable };
+  return { kind: 'missing' };
 }
 
 const NPM_PLACEHOLDER_TEST = 'no test specified';

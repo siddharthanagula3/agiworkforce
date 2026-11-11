@@ -190,6 +190,7 @@ describe('export scope', () => {
     const page = Array.from({ length: 500 }, (_, index) => ({
       id: `c${index}`,
       created_at: '2026-01-01T00:00:00.000Z',
+      cursor_created_at: '2026-01-01T00:00:00.000000Z',
     }));
     const h = readHarness({ conversation: page });
     let calls = 0;
@@ -201,6 +202,83 @@ describe('export scope', () => {
 
     const chunks = await drain(h.db, hold(), filter({ resourceTypes: ['conversation'] }));
     expect(chunks.map((chunk) => chunk.records)).toEqual([1, 500]);
+  });
+
+  describe('page boundary', () => {
+    const MICROS = '2026-11-01T12:00:00.123456Z';
+
+    function fullPage(lastCursor: string, lastId: string) {
+      return Array.from({ length: 500 }, (_, index) => ({
+        id: index === 499 ? lastId : `c${index}`,
+        created_at: new Date('2026-11-01T12:00:00.123Z'),
+        cursor_created_at: index === 499 ? lastCursor : '2026-11-01T11:00:00.000000Z',
+      }));
+    }
+
+    it('continues from the exact database timestamp, not the millisecond Date', async () => {
+      const h = readHarness();
+      const seen: unknown[][] = [];
+      let calls = 0;
+      (h.db.query as ReturnType<typeof vi.fn>).mockImplementation(
+        async (sql: string, params: unknown[] = []) => {
+          if (!/from public\.web_conversations c\s+where/.test(String(sql))) return [];
+          seen.push(params);
+          calls += 1;
+          return calls === 1 ? fullPage(MICROS, 'last-id') : [];
+        },
+      );
+
+      await drain(h.db, hold(), filter({ resourceTypes: ['conversation'] }));
+
+      expect(seen).toHaveLength(2);
+      expect(seen[1]?.[2]).toBe(MICROS);
+      expect(seen[1]?.[3]).toBe('last-id');
+    });
+
+    it('orders and positions every store on microsecond text and keeps it out of the records', async () => {
+      const h = readHarness({
+        conversation: [{ id: 'c1', created_at: new Date(), cursor_created_at: MICROS }],
+      });
+      const records: Array<Record<string, unknown>> = [];
+      for await (const chunk of iterateLegalHoldExport(
+        h.db,
+        hold(),
+        filter({ resourceTypes: ['conversation'] }),
+      )) {
+        records.push(...chunk.records.map((record) => record.data));
+      }
+
+      expect(h.reads[0]?.sql).toMatch(/HH24:MI:SS\.US/);
+      expect(h.reads[0]?.sql).toMatch(/order by q\.created_at, q\.id/);
+      expect(records.some((data) => 'cursor_created_at' in data)).toBe(false);
+      expect(records.some((data) => data['id'] === 'c1')).toBe(true);
+    });
+
+    it('stops rather than re-emit a page when the boundary does not advance', async () => {
+      const h = readHarness();
+      (h.db.query as ReturnType<typeof vi.fn>).mockImplementation(async (sql: string) =>
+        /from public\.web_conversations c\s+where/.test(String(sql))
+          ? fullPage('-infinity', '00000000-0000-0000-0000-000000000000')
+          : [],
+      );
+
+      await expect(
+        drain(h.db, hold(), filter({ resourceTypes: ['conversation'] })),
+      ).rejects.toThrow(/no progress/);
+    });
+
+    it('refuses a full page that carries no exact position', async () => {
+      const h = readHarness();
+      (h.db.query as ReturnType<typeof vi.fn>).mockImplementation(async (sql: string) =>
+        /from public\.web_conversations c\s+where/.test(String(sql))
+          ? Array.from({ length: 500 }, (_, index) => ({ id: `c${index}`, created_at: new Date() }))
+          : [],
+      );
+
+      await expect(
+        drain(h.db, hold(), filter({ resourceTypes: ['conversation'] })),
+      ).rejects.toThrow(/exact position/);
+    });
   });
 });
 
@@ -301,7 +379,10 @@ describe('chain of custody', () => {
     };
   }
 
-  function custodyHarness(previous: string | null) {
+  function custodyHarness(
+    previous: string | null,
+    previousCompletedAt: Date | string = '2026-09-17T00:00:00.000Z',
+  ) {
     const inserts: unknown[][] = [];
     const query = vi.fn(async (sql: string, params: unknown[] = []) => {
       if (/insert into public\.ediscovery_exports/.test(String(sql))) {
@@ -309,7 +390,7 @@ describe('chain of custody', () => {
         return [{ id: 'export-1' }];
       }
       if (/pg_advisory_xact_lock/.test(String(sql))) return [];
-      return previous === null ? [] : [{ entry_hash: previous }];
+      return previous === null ? [] : [{ entry_hash: previous, completed_at: previousCompletedAt }];
     });
     const db = {
       query,
@@ -346,6 +427,34 @@ describe('chain of custody', () => {
 
     expect(record.previousHash).toBe(earlier);
     expect(record.entryHash).toBe(ediscoveryCustodyHash(earlier, custodyInput()));
+  });
+
+  it('keeps the recorded order identical to the order the tail is read in', async () => {
+    const tail = new Date('2026-09-18T00:00:02.000Z');
+    const h = custodyHarness('e'.repeat(64), tail);
+    const record = await recordEdiscoveryExport(h.db, custodyInput());
+
+    const completedAt = '2026-09-18T00:00:02.001Z';
+    expect(record.completedAt).toBe(completedAt);
+    expect(h.inserts[0]?.[13]).toBe(completedAt);
+    expect(record.entryHash).toBe(
+      ediscoveryCustodyHash('e'.repeat(64), custodyInput({ completedAt })),
+    );
+  });
+
+  it('moves a completion that ties the tail past it', async () => {
+    const h = custodyHarness('e'.repeat(64), '2026-09-18T00:00:01.000Z');
+    const record = await recordEdiscoveryExport(h.db, custodyInput());
+
+    expect(record.completedAt).toBe('2026-09-18T00:00:01.001Z');
+  });
+
+  it('keeps its own completion when it already follows the tail', async () => {
+    const h = custodyHarness('e'.repeat(64), '2026-09-18T00:00:00.500Z');
+    const record = await recordEdiscoveryExport(h.db, custodyInput());
+
+    expect(record.completedAt).toBe('2026-09-18T00:00:01.000Z');
+    expect(h.inserts[0]?.[13]).toBe('2026-09-18T00:00:01.000Z');
   });
 
   it('breaks the link when any recorded field is altered', () => {

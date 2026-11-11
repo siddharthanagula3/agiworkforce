@@ -39,15 +39,17 @@ function Alternatives() {
 
 function DownloadButton({
   architecture,
+  version,
   detected,
 }: {
   architecture: MacArchitecture;
+  version: string;
   detected: DetectedArchitecture;
 }) {
   const recommended = detected === architecture;
   return (
     <a
-      href={macDownloadHref(architecture)}
+      href={macDownloadHref(architecture, version)}
       className="agi-ds-btn"
       data-variant={recommended ? 'primary' : 'secondary'}
       aria-describedby={recommended ? 'desktop-arch-detected' : undefined}
@@ -98,6 +100,7 @@ export function DesktopDownloadAvailability() {
                     <DownloadButton
                       key={architecture}
                       architecture={architecture}
+                      version={availability.version}
                       detected={detected}
                     />
                   ))}

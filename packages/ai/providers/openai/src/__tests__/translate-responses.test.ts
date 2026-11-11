@@ -22,7 +22,66 @@ const request: ChatRequest = {
   messages: [{ role: 'user', content: 'Hello' }],
 };
 
+const mixedStrictnessRequest: ChatRequest = {
+  ...request,
+  tools: [
+    {
+      name: 'lookup_exact',
+      description: 'Exact lookup.',
+      strict: true,
+      inputSchema: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'lookup_optional',
+      description: 'Optional lookup.',
+      strict: false,
+      inputSchema: {
+        type: 'object',
+        properties: { query: { type: 'string' } },
+        additionalProperties: false,
+      },
+    },
+    {
+      name: 'lookup_default',
+      description: 'Default lookup.',
+      inputSchema: {
+        type: 'object',
+        properties: { term: { type: 'string' } },
+        additionalProperties: false,
+      },
+    },
+  ],
+};
+
 describe('translateChatRequestToResponses', () => {
+  it('derives strictness per tool and keeps an explicit false', () => {
+    const params = translateChatRequestToResponses(mixedStrictnessRequest, { compat });
+
+    expect(params.tools).toEqual([
+      expect.objectContaining({ name: 'lookup_exact', strict: true }),
+      expect.objectContaining({ name: 'lookup_optional', strict: false }),
+      expect.not.objectContaining({ strict: expect.anything() }),
+    ]);
+    expect(params.tools?.[1]).toMatchObject({
+      parameters: mixedStrictnessRequest.tools?.[1]?.inputSchema,
+    });
+  });
+
+  it('omits strictness for every tool when the endpoint does not support strict mode', () => {
+    const params = translateChatRequestToResponses(mixedStrictnessRequest, {
+      compat: { ...compat, supportsStrictMode: false },
+    });
+
+    for (const tool of params.tools ?? []) {
+      expect(tool).not.toHaveProperty('strict');
+    }
+  });
+
   it('omits store by default so Local/BYOK requests stay stateless', () => {
     const params = translateChatRequestToResponses(request, { compat });
 
@@ -244,6 +303,31 @@ describe('translateChatRequestToResponses', () => {
 });
 
 describe('translateChatRequest', () => {
+  it('derives strictness per tool and keeps an explicit false', () => {
+    const params = translateChatRequest(mixedStrictnessRequest, { compat, provider: 'openai' });
+
+    expect(params.tools?.map((tool) => (tool.type === 'function' ? tool.function : null))).toEqual([
+      expect.objectContaining({ name: 'lookup_exact', strict: true }),
+      expect.objectContaining({ name: 'lookup_optional', strict: false }),
+      expect.not.objectContaining({ strict: expect.anything() }),
+    ]);
+    const optional = params.tools?.[1];
+    expect(optional?.type === 'function' ? optional.function.parameters : null).toEqual(
+      mixedStrictnessRequest.tools?.[1]?.inputSchema,
+    );
+  });
+
+  it('omits strictness for every tool when the endpoint does not support strict mode', () => {
+    const params = translateChatRequest(mixedStrictnessRequest, {
+      compat: { ...compat, supportsStrictMode: false },
+      provider: 'openai',
+    });
+
+    for (const tool of params.tools ?? []) {
+      expect(tool.type === 'function' ? tool.function : {}).not.toHaveProperty('strict');
+    }
+  });
+
   it('rejects a binary file on Chat Completions instead of silently dropping it', () => {
     expect(() =>
       translateChatRequest(

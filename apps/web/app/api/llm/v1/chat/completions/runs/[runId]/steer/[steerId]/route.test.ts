@@ -33,9 +33,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', async () => ({
-  ...(await vi.importActual<typeof import('@/lib/services/cloud-agent-run-service')>(
-    '@/lib/services/cloud-agent-run-service',
-  )),
+  ...(await vi.importActual<CloudAgentRunServiceModule>('@/lib/services/cloud-agent-run-service')),
 
   APPROVAL_CHECKPOINT_TTL_HOURS: vi.fn(),
   ARCHIVABLE_TASK_STATES: vi.fn(),
@@ -106,6 +104,8 @@ import {
   withdrawCloudAgentRunSteer,
 } from '@/lib/services/cloud-agent-run-service';
 import { DELETE } from './route';
+
+type CloudAgentRunServiceModule = typeof import('@/lib/services/cloud-agent-run-service');
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const STEER_ID = '0190a000-0000-7000-8000-0000000000bb';

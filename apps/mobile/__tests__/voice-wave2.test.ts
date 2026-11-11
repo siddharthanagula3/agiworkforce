@@ -56,6 +56,7 @@ jest.mock('expo-speech', () => ({
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import * as VoiceOutput from '@/src/features/voice/services/voiceOutput';
+import * as TTS from '@/src/features/voice/services/tts';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 
 const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
@@ -162,6 +163,15 @@ describe('voiceOutput service', () => {
   it('getAvailableVoices returns an array', async () => {
     const voices = await VoiceOutput.getAvailableVoices();
     expect(Array.isArray(voices)).toBe(true);
+  });
+
+  it('reports a failed voice inventory to the picker instead of an empty one', async () => {
+    const speech = jest.requireMock('expo-speech') as { getAvailableVoicesAsync: jest.Mock };
+    speech.getAvailableVoicesAsync.mockRejectedValueOnce(new Error('inventory unavailable'));
+    await expect(TTS.getVoicesForLanguage('fr')).rejects.toThrow('inventory unavailable');
+
+    speech.getAvailableVoicesAsync.mockRejectedValueOnce(new Error('inventory unavailable'));
+    await expect(TTS.getAvailableVoices()).resolves.toEqual([]);
   });
 
   it('stop does not throw', async () => {

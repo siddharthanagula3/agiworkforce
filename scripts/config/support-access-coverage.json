@@ -160,6 +160,10 @@
       "serves": "submitted_to_platform",
       "reason": "The transcript of the conversation a member opened with support, redacted of secrets before it is served."
     },
+    "apps/web/app/api/support/handoff/agent/active/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "The conversations an agent already took, each raised by the member in it, returned so the agent can resume them."
+    },
     "apps/web/app/api/support/handoff/agent/presence/route.ts": {
       "serves": "platform_only",
       "reason": "Which support agents are online."

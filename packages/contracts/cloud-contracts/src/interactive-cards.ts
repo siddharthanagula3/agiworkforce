@@ -18,6 +18,7 @@ import {
   MAP_SEARCH_MAX_ZOOM,
   MAP_SEARCH_MIN_ZOOM,
   MAP_SEARCH_QUERY_MAX_LENGTH,
+  MAP_SEARCH_UNRESOLVED_STOP_MAX_LENGTH,
   PLACES_CARD_ADDRESS_MAX_LENGTH,
   PLACES_CARD_ATTRIBUTION_MAX_LENGTH,
   PLACES_CARD_CATEGORY_MAX_LENGTH,
@@ -455,11 +456,23 @@ export const MapSearchCardBodySchema = z
     actions: z.array(MapSearchActionSchema).min(1).max(2),
     view: MapSearchViewSchema.optional(),
     places: z.array(MapSearchPlaceSchema).max(MAP_SEARCH_MAX_PLACES).optional(),
+    unresolvedStops: z
+      .array(z.string().min(1).max(MAP_SEARCH_UNRESOLVED_STOP_MAX_LENGTH))
+      .min(1)
+      .max(MAP_SEARCH_MAX_PLACES)
+      .optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
     if (!body.view && body.places && body.places.length > 0) {
       ctx.addIssue({ code: 'custom', path: ['places'], message: 'places require a view' });
+    }
+    if (body.unresolvedStops && !body.places?.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['unresolvedStops'],
+        message: 'unresolved stops require located places',
+      });
     }
     if (new Set(body.actions.map((action) => action.provider)).size !== body.actions.length) {
       ctx.addIssue({ code: 'custom', path: ['actions'], message: 'duplicate map provider' });

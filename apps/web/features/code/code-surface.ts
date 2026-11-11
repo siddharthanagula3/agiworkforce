@@ -8,12 +8,14 @@ import {
   CLOUD_CODE_SESSION_COPY,
   cloudCodeRepositoryLabel,
   cloudCodeSessionPagePath,
+  cloudTaskRepositoryName,
   type CloudCodeChangeState,
   type CloudCodeGoalCommand,
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
   type CloudCodeTurnStepBound,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from '@/lib/services/cloud-code-turn-budget';
 
@@ -196,6 +198,7 @@ export const CODE_COPY = {
   approve: CLOUD_CODE_SESSION_COPY.approve,
   reject: CLOUD_CODE_SESSION_COPY.reject,
   agentWorking: CLOUD_CODE_SESSION_COPY.agentWorking,
+  earlierTurnsNotShown: CLOUD_CODE_SESSION_COPY.earlierTurnsNotShown,
   deploymentDisabled:
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
   planNotEntitled: 'Your plan does not include managed environments.',
@@ -379,7 +382,7 @@ export const CODE_COPY = {
   sharedSnapshot: 'You are viewing a shared session as it was when you opened it.',
   sharedByPrefix: 'Shared by',
   sharedUpdated: 'Updated',
-  sharedOpenCode: 'Open chat Code',
+  sharedOpenCode: `Open ${PRODUCT_NAMES.code}`,
   editEnvironment: 'Edit environment',
   rename: 'Rename',
   renameLabel: 'Session title',
@@ -502,15 +505,17 @@ export function changeStateLabel(state: CloudCodeChangeState): string {
 }
 
 export function continueInVsCodeHref(
-  session: Pick<CloudCodeSession, 'id' | 'title' | 'workingBranch'>,
+  session: Pick<CloudCodeSession, 'id' | 'title' | 'workingBranch' | 'repositoryUrl'>,
 ): string | null {
-  if (session.workingBranch === null) return null;
+  const repository = cloudTaskRepositoryName(session.repositoryUrl);
+  if (session.workingBranch === null || repository === null) return null;
   try {
     return buildVsCodeCloudTaskHandoffUri({
       runId: session.id,
       goal: session.title,
       plan: [],
       branch: session.workingBranch,
+      repository,
     });
   } catch {
     return null;

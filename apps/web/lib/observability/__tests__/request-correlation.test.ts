@@ -197,6 +197,44 @@ describe('work started inside a request keeps its identity', () => {
     expect(seen.fields['organization_id']).toBe('org_1');
   });
 
+  it('seeds a span with the tenant it was given instead of the one it ran under', async () => {
+    const parent = {
+      traceId: INBOUND_TRACE_ID,
+      spanId: '00f067aa0ba902b7',
+      sampled: true,
+      requestId: 'req_parent',
+      organizationId: 'org_ambient',
+      userId: 'usr_ambient',
+    };
+
+    const seen = await runWithTraceContext(parent, async () =>
+      withSpan(
+        'background_job.run',
+        { domain: 'queue', tenant: { organizationId: 'org_job', userId: 'usr_job' } },
+        () => withSpan('tool.execute', { domain: 'tool' }, () => traceLogFields()),
+      ),
+    );
+
+    expect(seen['organization_id']).toBe('org_job');
+    expect(seen['user_id']).toBe('usr_job');
+    expect(seen['request_id']).toBe('req_parent');
+  });
+
+  it('does not let a span without a tenant inherit the ambient one when given an empty scope', async () => {
+    const parent = {
+      traceId: INBOUND_TRACE_ID,
+      spanId: '00f067aa0ba902b7',
+      sampled: true,
+      organizationId: 'org_ambient',
+    };
+
+    const seen = await runWithTraceContext(parent, async () =>
+      withSpan('background_job.run', { domain: 'queue', tenant: {} }, () => traceLogFields()),
+    );
+
+    expect(seen).not.toHaveProperty('organization_id');
+  });
+
   it('carries the trace and the request id through a queued payload', () => {
     const parent = {
       traceId: INBOUND_TRACE_ID,

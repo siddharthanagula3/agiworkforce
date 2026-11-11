@@ -1,8 +1,15 @@
 import { presignedUrlExpiresAt } from '@agiworkforce/object-storage/presign';
+import { sameSourceUrl } from '@/lib/web-search/source-url-key';
 import type { ChatSession, ChatMessage } from '../types';
+import {
+  collectMessageResearchSources,
+  sourceDisplayHost,
+  type MessageResearchSourceMetadata,
+} from '../utils/research-sources';
 
 export interface ExportContentOptions {
   includeTimestamps?: boolean;
+  includeMetadata?: boolean;
 }
 
 export const EXPIRING_LINK_PLACEHOLDER = '[expiring link removed from export]';
@@ -28,6 +35,51 @@ function withoutExpiringLinks(value: unknown): unknown {
   return value;
 }
 
+interface ExportedSource {
+  marker: number | null;
+  title: string;
+  url: string | null;
+}
+
+const WEB_URL = /^https?:\/\//i;
+
+function exportedSources(message: ChatMessage): ExportedSource[] {
+  if (message.role === 'user') return [];
+  const { searchSources, citationsByMarker } = collectMessageResearchSources(
+    message.metadata as MessageResearchSourceMetadata | undefined,
+  );
+  const numbered = citationsByMarker.map((source) => ({
+    source,
+    marker: source.citationIndex ?? null,
+  }));
+  const unnumbered = searchSources
+    .filter((source) => !citationsByMarker.some((cited) => sameSourceUrl(cited.url, source.url)))
+    .map((source) => ({ source, marker: null }));
+  return [...numbered, ...unnumbered].flatMap(({ source, marker }) => {
+    const url = source.url.trim();
+    if (!WEB_URL.test(url)) return [];
+    const expiring = presignedUrlExpiresAt(url) !== null;
+    return [
+      {
+        marker,
+        title: source.title.replace(/\s+/g, ' ').trim() || sourceDisplayHost(url),
+        url: expiring ? null : url,
+      },
+    ];
+  });
+}
+
+function markdownSourceLine(source: ExportedSource): string {
+  const marker = source.marker === null ? '' : `[${source.marker}] `;
+  const title = source.title.replace(/([[\]\\])/g, '\\$1');
+  if (source.url === null) return `- ${marker}${title} ${EXPIRING_LINK_PLACEHOLDER}\n`;
+  const destination = source.url.replace(
+    /[()\s]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`,
+  );
+  return `- ${marker}[${title}](${destination})\n`;
+}
+
 export class ChatExportService {
   exportAsMarkdown(
     session: ChatSession,
@@ -35,11 +87,14 @@ export class ChatExportService {
     options: ExportContentOptions = {},
   ): string {
     const includeTimestamps = options.includeTimestamps !== false;
-    let markdown = `# ${session.title}\n\n`;
-    markdown += `**Created:** ${session.createdAt.toLocaleString()}\n`;
-    markdown += `**Last Updated:** ${session.updatedAt.toLocaleString()}\n`;
-    markdown += `**Messages:** ${messages.length}\n\n`;
-    markdown += `---\n\n`;
+    let markdown = '';
+    if (options.includeMetadata !== false) {
+      markdown += `# ${session.title}\n\n`;
+      markdown += `**Created:** ${session.createdAt.toLocaleString()}\n`;
+      markdown += `**Last Updated:** ${session.updatedAt.toLocaleString()}\n`;
+      markdown += `**Messages:** ${messages.length}\n\n`;
+      markdown += `---\n\n`;
+    }
 
     for (const message of messages) {
       const role = message.role === 'user' ? '👤 User' : '🤖 Assistant';
@@ -57,6 +112,11 @@ export class ChatExportService {
           markdown += `- ${attachment.name} (${this.formatFileSize(attachment.size)})\n`;
         }
         markdown += `\n`;
+      }
+
+      const sources = exportedSources(message);
+      if (sources.length > 0) {
+        markdown += `**Sources:**\n${sources.map(markdownSourceLine).join('')}\n`;
       }
 
       markdown += `---\n\n`;
@@ -182,6 +242,16 @@ export class ChatExportService {
 `;
       }
 
+      const sources = exportedSources(message);
+      if (sources.length > 0) {
+        html += `    <div class="attachments">
+      <strong>Sources:</strong>
+      <ul>
+${sources.map((source) => this.htmlSourceItem(source)).join('')}      </ul>
+    </div>
+`;
+      }
+
       html += `  </div>\n`;
     }
 
@@ -204,6 +274,16 @@ export class ChatExportService {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+
+  private htmlSourceItem(source: ExportedSource): string {
+    const marker = source.marker === null ? '' : `[${source.marker}] `;
+    const title = this.escapeHtml(source.title);
+    const body =
+      source.url === null
+        ? `${title} ${this.escapeHtml(EXPIRING_LINK_PLACEHOLDER)}`
+        : `<a href="${this.escapeHtml(source.url)}" rel="noopener noreferrer">${title}</a>`;
+    return `        <li>${marker}${body}</li>\n`;
   }
 
   private formatFileSize(bytes: number): string {

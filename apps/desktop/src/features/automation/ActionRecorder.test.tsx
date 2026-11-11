@@ -42,6 +42,7 @@ vi.mock('@/services/recorderHudWindow', () => ({
   closeRecorderHudWindow: mocks.closeRecorderHudWindow,
 }));
 
+import { useChatStore } from '@agiworkforce/unified-chat';
 import { ActionRecorder } from './ActionRecorder';
 
 describe('ActionRecorder', () => {
@@ -113,6 +114,13 @@ describe('ActionRecorder', () => {
     expect(screen.getByRole('button', { name: 'Record again' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Describe it instead' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Create skill' })).not.toBeInTheDocument();
+
+    useChatStore.getState().setDraftContent('my unsent question');
+    await user.click(screen.getByRole('button', { name: 'Describe it instead' }));
+    expect(useChatStore.getState().draftContent).toBe(
+      'my unsent question\n\nI was trying to demonstrate this workflow: ',
+    );
+    useChatStore.getState().setDraftContent('');
   });
 
   it('aborts native capture if the detached controls cannot open', async () => {

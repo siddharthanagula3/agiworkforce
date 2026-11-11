@@ -85,6 +85,38 @@ describe('AudioRoutePicker', () => {
     );
   });
 
+  it('moves focus onto an output when the menu opens and lets the arrows walk them', async () => {
+    const user = userEvent.setup();
+    renderPicker();
+
+    await user.click(await screen.findByTestId('voice-audio-route-trigger'));
+    const speakers = await screen.findByRole('menuitemradio', { name: /macbook pro speakers/i });
+    const airpods = screen.getByRole('menuitemradio', { name: /airpods pro/i });
+    expect(document.activeElement).toBe(speakers);
+
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(airpods);
+    await user.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(speakers);
+    await user.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(airpods);
+    await user.keyboard('{Home}');
+    expect(document.activeElement).toBe(speakers);
+    await user.keyboard('{End}');
+    expect(document.activeElement).toBe(airpods);
+  });
+
+  it('routes playback to the output the keyboard focused', async () => {
+    const user = userEvent.setup();
+    renderPicker();
+
+    await user.click(await screen.findByTestId('voice-audio-route-trigger'));
+    await screen.findByRole('menuitemradio', { name: /airpods pro/i });
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(setSinkId).toHaveBeenCalledWith('bt-1');
+  });
+
   it('closes on Escape and hands focus back to the trigger', async () => {
     const user = userEvent.setup();
     renderPicker();

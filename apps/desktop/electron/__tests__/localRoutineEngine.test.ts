@@ -4,7 +4,11 @@ import type {
   LocalRoutineInput,
   DeveloperSessionEvent,
 } from '@agiworkforce/local-runtime-contract';
-import { LocalRoutineEngine, type LocalRoutineDependencies } from '../runtime/localRoutineEngine';
+import {
+  LocalRoutineCapacityError,
+  LocalRoutineEngine,
+  type LocalRoutineDependencies,
+} from '../runtime/localRoutineEngine';
 
 function fixture() {
   let now = new Date('2026-10-16T09:00:00Z');
@@ -308,6 +312,84 @@ describe('device-owned local routine lifecycle', () => {
     expect(f.engine.state().routines[0]!.pausedReason).toBeNull();
   });
 
+  it('delivers a failure notice deferred before startup acknowledgment once the turn matches', async () => {
+    const f = fixture();
+    const deliverNotice = vi.fn();
+    f.dependencies.deliverNotice = deliverNotice;
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    const failure = finished('failed');
+    expect(f.engine.note('root', failure)).toEqual({ notify: false });
+    expect(deliverNotice).not.toHaveBeenCalled();
+    start.resolve('turn');
+    await vi.waitFor(() => expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('failed'));
+    expect(deliverNotice).toHaveBeenCalledOnce();
+    expect(deliverNotice).toHaveBeenCalledWith('root', failure);
+  });
+
+  it('delivers no deferred notice for an event of another turn or an opted-out outcome', async () => {
+    const f = fixture();
+    const deliverNotice = vi.fn();
+    f.dependencies.deliverNotice = deliverNotice;
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    f.engine.create({
+      ...f.input,
+      notificationSettings: { ...f.input.notificationSettings, onSuccess: false },
+    });
+    f.advance(60_000);
+    await launched(f);
+    f.engine.note('root', { ...finished('failed'), turnId: 'other-turn' });
+    f.engine.note('root', finished());
+    start.resolve('turn');
+    await vi.waitFor(() => expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('completed'));
+    expect(deliverNotice).not.toHaveBeenCalled();
+  });
+
+  it('delivers a deferred approval notice only while that approval is still unanswered', async () => {
+    const f = fixture();
+    const deliverNotice = vi.fn();
+    f.dependencies.deliverNotice = deliverNotice;
+    const start = deferred<string>();
+    f.dependencies.start = vi.fn(() => start.promise);
+    f.engine.create(f.input);
+    f.advance(60_000);
+    await launched(f);
+    const requested = (requestId: string): DeveloperSessionEvent => ({
+      type: 'approval-requested',
+      threadId: 'thread',
+      turnId: 'turn',
+      requestId,
+      kind: 'exec',
+      summary: 'Tests',
+      detail: '',
+      command: 'cargo test',
+      riskLevel: null,
+      reversible: null,
+      proposedCommandPrefix: null,
+    });
+    const open = requested('open');
+    f.engine.note('root', requested('answered'));
+    f.engine.note('root', open);
+    f.engine.note('root', {
+      type: 'approval-answered',
+      threadId: 'thread',
+      turnId: 'turn',
+      requestId: 'answered',
+      decision: 'deny',
+      approved: false,
+    });
+    start.resolve('turn');
+    await vi.waitFor(() =>
+      expect(f.engine.state().routines[0]!.runs[0]!.state).toBe('awaiting_input'),
+    );
+    expect(deliverNotice).toHaveBeenCalledOnce();
+    expect(deliverNotice).toHaveBeenCalledWith('root', open);
+  });
+
   it('restores buffered input state without reacquiring awake state for a stop request', async () => {
     const f = fixture();
     const start = deferred<string>();
@@ -460,6 +542,46 @@ describe('device-owned local routine lifecycle', () => {
     f.advance(60_000);
     await expect(f.engine.tick()).rejects.toThrow('disk full');
     expect(f.dependencies.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a create that exceeds store capacity without stopping or keeping the candidate', async () => {
+    const f = fixture();
+    const kept = f.engine.create(f.input);
+    f.dependencies.save = vi.fn(() => {
+      throw new LocalRoutineCapacityError('The local routine store is full.');
+    });
+    expect(() => f.engine.create({ ...f.input, name: 'One too many' })).toThrow(
+      LocalRoutineCapacityError,
+    );
+    expect(f.engine.state().error).toBeNull();
+    expect(f.engine.state().routines.map((routine) => routine.id)).toEqual([kept.id]);
+
+    f.dependencies.save = vi.fn();
+    f.advance(60_000);
+    await launched(f);
+    await f.engine.remove(kept.id);
+    expect(f.engine.state().routines).toEqual([]);
+    expect(() => f.engine.create({ ...f.input, name: 'After cleanup' })).not.toThrow();
+  });
+
+  it('still stops the engine when a create fails for a storage reason', () => {
+    const f = fixture();
+    f.dependencies.save = vi.fn(() => {
+      throw new Error('disk full');
+    });
+    expect(() => f.engine.create(f.input)).toThrow('disk full');
+    expect(f.engine.state().error).toMatch(/store could not be written/);
+    expect(() => f.engine.create(f.input)).toThrow(/unavailable/);
+  });
+
+  it('keeps a capacity refusal on an existing routine fatal because memory is ahead of disk', async () => {
+    const f = fixture();
+    const routine = f.engine.create(f.input);
+    f.dependencies.save = vi.fn(() => {
+      throw new LocalRoutineCapacityError('The local routine store is full.');
+    });
+    await expect(f.engine.setEnabled(routine.id, false)).rejects.toThrow(LocalRoutineCapacityError);
+    expect(f.engine.state().error).toMatch(/store could not be written/);
   });
 
   it('marks sleep interruption explicitly and never duplicates that claim on wake', async () => {

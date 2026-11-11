@@ -85,6 +85,7 @@ export {
   writeLocalModelSettings,
   type LocalChatDelta,
   type LocalChatRun,
+  type LocalBackgroundCommandStart,
   type LocalCommandOutput,
   type LocalCommandRun,
 } from './lib/runtime-client';
@@ -112,7 +113,7 @@ export { useHostShortcuts, type HostShortcutRow } from './hooks/use-host-shortcu
 export { CODE_AGENT_MODE_CYCLE_ROW, CODE_AGENT_MODE_CYCLE_SHORTCUT } from './lib/code-shortcuts';
 export { useHostNavigation, type HostNavigationControls } from './hooks/use-host-navigation';
 export { useWindowZoom } from './hooks/use-window-zoom';
-export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
+export { useDesktopVoiceHotkey, useDesktopWindowHidden } from './hooks/use-desktop-voice-hotkey';
 export { usePairedDesktop, type PairedDesktop } from './hooks/use-paired-desktop';
 export { ContinueOnDesktop, type ContinueOnDesktopProps } from './components/ContinueOnDesktop';
 export { DesktopHostMount } from './components/DesktopHostMount';

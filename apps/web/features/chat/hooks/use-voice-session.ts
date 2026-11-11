@@ -597,6 +597,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
         language: settings.language,
         pace: settings.pace,
         reasoning: settings.reasoning,
+        isMuted: () => useVoiceSessionStore.getState().session.muted,
         callbacks: {
           onStarted: () => {
             if (current()) store.dispatch({ type: VOICE_SESSION_EVENT.ready, listening: true });

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { measurePublicFontProof, settlePublicPage } from './lib/public-page-readiness';
 import { evaluatePublicTextContrast } from './lib/public-text-contrast';
 import { measurePublicTypographyWithScroll } from './lib/public-typography-scroll';
@@ -39,7 +40,11 @@ const routes = [
     code: [],
     transcripts: ['Two commands quoted from the scenarios on this page'],
   },
-  { path: '/features/plugins', code: [], transcripts: ['A plugin install in the AGI CLI'] },
+  {
+    path: '/features/plugins',
+    code: [],
+    transcripts: [`A plugin install in the ${PRODUCT_NAMES.cli}`],
+  },
 ] as const;
 const root = path.resolve(__dirname, '../../..');
 const sourceOwners = [

@@ -128,35 +128,90 @@ export interface ReviewDiffChunk {
   byteLength: number;
 }
 
-function renderHunk(path: string, hunk: ReviewDiffHunk): string {
-  const body = hunk.lines
-    .map((line) => {
-      const marker = line.kind === 'added' ? '+' : line.kind === 'removed' ? '-' : ' ';
-      const number = line.newLine === null ? '    ' : String(line.newLine).padStart(4, ' ');
-      return `${number} ${marker}${line.text}`;
-    })
-    .join('\n');
-  return `--- ${path} ${hunk.header}\n${body}`;
+export interface ReviewDiffChunks {
+  chunks: ReviewDiffChunk[];
+  /** Hunks with at least one part left out because the chunk ceiling was reached. */
+  omittedHunks: number;
+  /** Lines too long for one chunk, cut to fit. */
+  clippedLines: number;
+}
+
+const CHUNK_SEPARATOR = '\n\n';
+const HUNK_CONTINUED_MARK = ' (continued)';
+
+function renderLine(line: ReviewDiffLine): string {
+  const marker = line.kind === 'added' ? '+' : line.kind === 'removed' ? '-' : ' ';
+  const number = line.newLine === null ? '    ' : String(line.newLine).padStart(4, ' ');
+  return `${number} ${marker}${line.text}`;
+}
+
+function clipToBytes(text: string, maxBytes: number): string {
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) return text;
+  if (maxBytes <= 0) return '';
+  const cut = Buffer.from(text, 'utf8').subarray(0, maxBytes).toString('utf8');
+  return cut.endsWith('�') ? cut.slice(0, -1) : cut;
 }
 
 /**
- * Split the diff into prompt-sized pieces, each carrying whole hunks.
+ * One hunk as parts that each fit a chunk. A hunk larger than a chunk is split
+ * on line boundaries, each part repeating the hunk header, so no part of it is
+ * dropped and every line keeps its head-side number.
+ */
+function renderHunkParts(
+  path: string,
+  hunk: ReviewDiffHunk,
+  maxBytes: number,
+): { parts: string[]; clippedLines: number } {
+  const header = clipToBytes(`--- ${path} ${hunk.header}`, Math.floor(maxBytes / 4));
+  const parts: string[] = [];
+  let clippedLines = 0;
+  let head = header;
+  let body: string[] = [];
+  let used = Buffer.byteLength(head, 'utf8');
+
+  const close = (): void => {
+    parts.push(body.length > 0 ? `${head}\n${body.join('\n')}` : head);
+    head = `${header}${HUNK_CONTINUED_MARK}`;
+    body = [];
+    used = Buffer.byteLength(head, 'utf8');
+  };
+
+  for (const line of hunk.lines) {
+    let rendered = renderLine(line);
+    const available = maxBytes - Buffer.byteLength(head, 'utf8') - 1;
+    if (Buffer.byteLength(rendered, 'utf8') > available) {
+      rendered = clipToBytes(rendered, available);
+      clippedLines += 1;
+    }
+    const size = Buffer.byteLength(rendered, 'utf8') + 1;
+    if (body.length > 0 && used + size > maxBytes) close();
+    body.push(rendered);
+    used += size;
+  }
+  close();
+  return { parts, clippedLines };
+}
+
+/**
+ * Split the diff into prompt-sized pieces, each carrying hunks or consecutive
+ * lines of one hunk.
  *
- * A large PR used to be truncated to the first 50 KB and everything after it
- * went unreviewed without anyone being told. Chunking reviews all of it, and
- * the per-line numbers are rendered into the text so the model names a real
- * line instead of counting.
+ * The per-line numbers are rendered into the text so the model names a real
+ * line instead of counting. What the chunk ceiling leaves out is counted, so
+ * the review can say what it did not look at.
  */
 export function chunkDiff(
   files: readonly ReviewDiffFile[],
   options: { maxBytes: number; maxChunks: number },
-): ReviewDiffChunk[] {
+): ReviewDiffChunks {
   const chunks: ReviewDiffChunk[] = [];
   let current: { paths: Set<string>; parts: string[]; bytes: number } | null = null;
+  let omittedHunks = 0;
+  let clippedLines = 0;
 
   const flush = (): void => {
     if (!current || current.parts.length === 0) return;
-    const text = current.parts.join('\n\n');
+    const text = current.parts.join(CHUNK_SEPARATOR);
     chunks.push({ paths: [...current.paths], text, byteLength: Buffer.byteLength(text, 'utf8') });
     current = null;
   };
@@ -164,16 +219,25 @@ export function chunkDiff(
   for (const file of files) {
     if (file.binary || file.deleted) continue;
     for (const hunk of file.hunks) {
-      if (chunks.length >= options.maxChunks) return chunks;
-      const rendered = renderHunk(file.path, hunk);
-      const size = Buffer.byteLength(rendered, 'utf8');
-      if (current && current.bytes + size > options.maxBytes) flush();
-      current ??= { paths: new Set(), parts: [], bytes: 0 };
-      current.paths.add(file.path);
-      current.parts.push(rendered.slice(0, options.maxBytes));
-      current.bytes += size;
+      const rendered = renderHunkParts(file.path, hunk, options.maxBytes);
+      clippedLines += rendered.clippedLines;
+      let hunkOmitted = false;
+      for (const part of rendered.parts) {
+        const size = Buffer.byteLength(part, 'utf8');
+        const separator = current?.parts.length ? CHUNK_SEPARATOR.length : 0;
+        if (current && current.bytes + separator + size > options.maxBytes) flush();
+        if (!current && chunks.length >= options.maxChunks) {
+          hunkOmitted = true;
+          continue;
+        }
+        current ??= { paths: new Set(), parts: [], bytes: 0 };
+        current.bytes += (current.parts.length > 0 ? CHUNK_SEPARATOR.length : 0) + size;
+        current.paths.add(file.path);
+        current.parts.push(part);
+      }
+      if (hunkOmitted) omittedHunks += 1;
     }
   }
   flush();
-  return chunks.slice(0, options.maxChunks);
+  return { chunks, omittedHunks, clippedLines };
 }

@@ -178,6 +178,53 @@ describe('read aloud row', () => {
     expect(storage.store[READ_ALOUD_STORAGE_KEY]).toEqual({ voiceURI: 'v1', rate: 2 });
   });
 
+  it('keeps the saved voice when the speed changes before the settings finish loading', async () => {
+    const storage = memoryStorage({ [READ_ALOUD_STORAGE_KEY]: { voiceURI: 'v1', rate: 1 } });
+    let releaseRead: () => void = () => undefined;
+    const pendingRead = new Promise<void>((resolveRead) => {
+      releaseRead = resolveRead;
+    });
+    const readStored = storage.get.getMockImplementation()!;
+    storage.get.mockImplementationOnce(async (query) => {
+      await pendingRead;
+      return readStored(query);
+    });
+    const row = createReadAloudRow(storage, synth());
+
+    expect(row.rateSelect.disabled).toBe(true);
+    expect(row.voiceSelect.disabled).toBe(true);
+    row.rateSelect.value = '1.5';
+    row.rateSelect.dispatchEvent(new Event('change'));
+    await flush();
+    expect(storage.set).not.toHaveBeenCalled();
+    expect(storage.store[READ_ALOUD_STORAGE_KEY]).toEqual({ voiceURI: 'v1', rate: 1 });
+
+    releaseRead();
+    await row.loaded;
+    expect(row.rateSelect.disabled).toBe(false);
+    expect(row.voiceSelect.value).toBe('v1');
+    row.rateSelect.value = '1.5';
+    row.rateSelect.dispatchEvent(new Event('change'));
+    await flush();
+    expect(storage.store[READ_ALOUD_STORAGE_KEY]).toEqual({ voiceURI: 'v1', rate: 1.5 });
+  });
+
+  it('stays locked and says so when the saved settings cannot be read', async () => {
+    const storage = memoryStorage({ [READ_ALOUD_STORAGE_KEY]: { voiceURI: 'v1', rate: 1 } });
+    storage.get.mockRejectedValueOnce(new Error('storage unavailable'));
+    const row = createReadAloudRow(storage, synth());
+    await row.loaded;
+
+    expect(row.status.textContent).toBe('optReadAloudLoadFailed');
+    expect(row.rateSelect.disabled).toBe(true);
+    expect(row.voiceSelect.disabled).toBe(true);
+    row.rateSelect.value = '2';
+    row.rateSelect.dispatchEvent(new Event('change'));
+    await flush();
+    expect(storage.set).not.toHaveBeenCalled();
+    expect(storage.store[READ_ALOUD_STORAGE_KEY]).toEqual({ voiceURI: 'v1', rate: 1 });
+  });
+
   it('previews the voice with the chosen settings', async () => {
     vi.stubGlobal(
       'SpeechSynthesisUtterance',
@@ -278,6 +325,22 @@ describe('desktop pairing rows', () => {
     await flush();
     expect(unpairButton.hidden).toBe(true);
     expect(rows.element.querySelector('#opt-pairing-label')!.textContent).toBe('spPairingIdle');
+  });
+
+  it('shows why Desktop still holds the pairing after an unpair it could not deliver', async () => {
+    const notice = 'Desktop could not be reached to remove the pairing.';
+    const rows = createDesktopPairingRows({
+      loadPairingState: async () => state('paired', { fingerprint: 'ab:cd' }),
+      beginPairing: vi.fn(),
+      submitPairingCode: vi.fn(),
+      unpair: vi.fn(async () => state('idle', { error: notice })),
+    });
+    await rows.loaded;
+    document.body.appendChild(rows.element);
+    rows.element.querySelector<HTMLButtonElement>('#opt-unpair-btn')!.click();
+    rows.element.querySelector<HTMLButtonElement>('#opt-unpair-confirm-btn')!.click();
+    await flush();
+    expect(rows.element.textContent).toContain(notice);
   });
 
   it('asks for the code Desktop shows', async () => {

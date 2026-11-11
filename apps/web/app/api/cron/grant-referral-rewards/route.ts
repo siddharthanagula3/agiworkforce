@@ -25,6 +25,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (summary.failed > 0) {
       logger.error(summary, 'Some referral rewards could not be settled');
     }
+    if (summary.resetsFailed > 0) {
+      logger.error(summary, 'Some referral resets could not be granted');
+    }
     logger.info(summary, 'Referral rewards settled');
     return NextResponse.json(summary);
   } catch (error) {

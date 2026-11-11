@@ -13,6 +13,7 @@ import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-pro
 import {
   normalizeOpenAIStrictToolParameters,
   resolveOpenAIReasoningEffortForModel,
+  resolveOpenAIToolStrictness,
   stripSystemPromptCacheBoundary,
 } from '@agiworkforce/provider-protocol';
 
@@ -146,14 +147,15 @@ function extractInstructions(
   return stripSystemPromptCacheBoundary(joined);
 }
 
-function translateTool(tool: ToolDef, strict: boolean): ResponsesFunctionTool {
-  const parameters = normalizeOpenAIStrictToolParameters(tool.inputSchema, strict);
+function translateTool(tool: ToolDef, supportsStrictMode: boolean): ResponsesFunctionTool {
+  const strict = resolveOpenAIToolStrictness(tool, supportsStrictMode);
+  const parameters = normalizeOpenAIStrictToolParameters(tool.inputSchema, strict === true);
   return {
     type: 'function',
     name: tool.name,
     description: tool.description,
     parameters: parameters as Record<string, unknown>,
-    ...(strict ? { strict: true } : {}),
+    ...(strict !== undefined ? { strict } : {}),
   };
 }
 
@@ -268,9 +270,8 @@ export function translateChatRequestToResponses(
 
   const instructions = extractInstructions(req.messages, req.system);
 
-  const strict = compat.supportsStrictMode && (req.tools?.some((t) => t.strict) ?? false);
   const tools: ResponsesTool[] = [
-    ...(req.tools?.map((t) => translateTool(t, strict)) ?? []),
+    ...(req.tools?.map((t) => translateTool(t, compat.supportsStrictMode)) ?? []),
     ...(req.rawVendorTools?.map(translateNativeTool) ?? []),
   ];
   const usesNativeWebSearch = tools.some(

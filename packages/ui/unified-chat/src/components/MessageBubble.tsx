@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button, translateUiPlural, useUiTranslation } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { ActionBar, type MessageActionSlots } from './ActionBar';
 import { ThinkingBlock } from './ThinkingBlock';
 import { LegacyWebSearchCard } from './WebSearchCard';
@@ -63,7 +64,7 @@ interface MessageBubbleProps {
    * before, so hosts without the derivation capability are unaffected.
    */
   artifactProjection?: MessageArtifactProjection | null;
-  onEdit?: (messageId: string, newContent: string) => void;
+  onEdit?: (messageId: string, newContent: string) => boolean | void;
   /** Sends a follow-up suggestion as the next turn. Absent, the suggestion stays text. */
   onFollowUp?: (text: string) => void;
   /** Optional actions the host can carry out; each stays hidden when absent. */
@@ -718,7 +719,7 @@ export function MessageBubble({
 
   function commitEdit() {
     const next = (editDraft ?? '').trim();
-    if (next.length > 0 && next !== message.content) onEdit?.(message.id, next);
+    if (next.length > 0 && next !== message.content && onEdit?.(message.id, next) === false) return;
     setEditDraft(null);
   }
 
@@ -741,6 +742,7 @@ export function MessageBubble({
               value={editDraft ?? ''}
               onChange={(event) => setEditDraft(event.target.value)}
               onKeyDown={(event) => {
+                if (isImeComposingKey(event.nativeEvent)) return;
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
                   commitEdit();

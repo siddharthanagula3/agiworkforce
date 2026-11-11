@@ -33,6 +33,7 @@ import {
 } from '@/lib/services/scheduled-agent-executor';
 
 const TITLE_MAX_CHARS = 60;
+const SAVE_ATTEMPTS = 2;
 const NO_TRAINING_ANSWER =
   'No model on your plan keeps your chats out of training right now, so AGI could not answer. Try again later in the app.';
 const ASK_DIRECTIVE =
@@ -60,31 +61,51 @@ async function saveAskConversation(
     input.prompt.length > TITLE_MAX_CHARS
       ? `${input.prompt.slice(0, TITLE_MAX_CHARS).trim()}…`
       : input.prompt;
-  const [conversation] = await db.query<{ id: string }>(
-    `insert into web_conversations (user_id, organization_id, title, model, is_temporary)
-     values ($1, $2, $3, $4, false)
-     returning id`,
-    [owner.userId, owner.organizationId, title, input.model],
-  );
-  if (!conversation) throw new Error('The Siri conversation was not created');
-  const [question] = await db.query<{ id: string }>(
-    `insert into web_messages (conversation_id, role, content, model, metadata)
-     values ($1, 'user', $2, $3, $4::jsonb)
-     returning id`,
-    [conversation.id, input.prompt, input.model, JSON.stringify({ source: 'siri' })],
-  );
-  await db.execute(
-    `insert into web_messages (conversation_id, role, content, model, metadata, parent_id)
-     values ($1, 'assistant', $2, $3, $4::jsonb, $5::uuid)`,
-    [
-      conversation.id,
-      input.answer,
-      input.model,
-      JSON.stringify({ source: 'siri' }),
-      question?.id ?? null,
-    ],
-  );
-  return conversation.id;
+  return db.transaction(async (tx) => {
+    const [conversation] = await tx.query<{ id: string }>(
+      `insert into web_conversations (user_id, organization_id, title, model, is_temporary)
+       values ($1, $2, $3, $4, false)
+       returning id`,
+      [owner.userId, owner.organizationId, title, input.model],
+    );
+    if (!conversation) throw new Error('The Siri conversation was not created');
+    const [question] = await tx.query<{ id: string }>(
+      `insert into web_messages (conversation_id, role, content, model, metadata)
+       values ($1, 'user', $2, $3, $4::jsonb)
+       returning id`,
+      [conversation.id, input.prompt, input.model, JSON.stringify({ source: 'siri' })],
+    );
+    await tx.execute(
+      `insert into web_messages (conversation_id, role, content, model, metadata, parent_id)
+       values ($1, 'assistant', $2, $3, $4::jsonb, $5::uuid)`,
+      [
+        conversation.id,
+        input.answer,
+        input.model,
+        JSON.stringify({ source: 'siri' }),
+        question?.id ?? null,
+      ],
+    );
+    return conversation.id;
+  });
+}
+
+async function saveAskConversationOrNull(
+  db: DatabaseAdapter,
+  owner: MobileIntentTokenOwner,
+  input: { prompt: string; answer: string; model: string },
+): Promise<string | null> {
+  for (let attempt = 1; attempt <= SAVE_ATTEMPTS; attempt += 1) {
+    try {
+      return await saveAskConversation(db, owner, input);
+    } catch (error) {
+      logger.error(
+        { error, tokenId: owner.tokenId, attempt },
+        '[mobile-intent] the answered conversation could not be saved',
+      );
+    }
+  }
+  return null;
 }
 
 export async function answerMobileIntentAsk(input: {
@@ -92,7 +113,7 @@ export async function answerMobileIntentAsk(input: {
   owner: MobileIntentTokenOwner;
   prompt: string;
   signal: AbortSignal;
-}): Promise<{ text: string; conversationId: string }> {
+}): Promise<{ text: string; conversationId: string | null }> {
   const { owner, prompt, request, signal } = input;
   const access = accountAccessDecision(await readAccountStatus(owner.userId));
   if (!access.allowed) throw new MobileIntentRefusal(403, 'account_unavailable', access.message);
@@ -204,7 +225,7 @@ export async function answerMobileIntentAsk(input: {
         totalTokens: completion.totalTokens,
       },
     });
-    const conversationId = await saveAskConversation(db, owner, {
+    const conversationId = await saveAskConversationOrNull(db, owner, {
       prompt,
       answer: completion.text,
       model: route.modelKey,

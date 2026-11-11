@@ -44,12 +44,13 @@ function state(overrides: Partial<SpendState> = {}): SpendState {
   };
 }
 
-function harness({ alreadySent = false } = {}) {
+function harness({ alreadySent = false, membersFail = false } = {}) {
   const query = vi.fn(async (sql: string) => {
     if (sql.includes('insert into public.organization_spend_alerts')) {
       return alreadySent ? [] : [{ period_start: '2026-09-01' }];
     }
     if (sql.includes('from public.organization_members')) {
+      if (membersFail) throw new Error('database unavailable');
       return [
         { user_id: 'owner-1', role: 'owner', email: 'owner@example.com', workspace_name: 'Acme' },
         { user_id: 'admin-1', role: 'admin', email: 'admin@example.com', workspace_name: 'Acme' },
@@ -70,6 +71,7 @@ function harness({ alreadySent = false } = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.sendSpendAlertEmail.mockResolvedValue({ delivered: true, providerMessageId: 'msg' });
 });
 
 describe('dueSpendAlertKind', () => {
@@ -181,5 +183,63 @@ describe('dispatchSpendAlertIfDue', () => {
     const outcome = await dispatchSpendAlertIfDue(ORG, state(), h.db);
 
     expect(outcome).toMatchObject({ dispatched: true, recipientsNotified: 1 });
+  });
+
+  it('only notifies active members', async () => {
+    const h = harness();
+
+    await dispatchSpendAlertIfDue(ORG, state(), h.db);
+
+    const membersQuery = h.query.mock.calls
+      .map(([sql]) => sql)
+      .find((sql) => sql.includes('from public.organization_members'));
+    expect(membersQuery).toContain("m.status = 'active'");
+  });
+
+  it('releases the claim when the recipient lookup fails so a later evaluation can retry', async () => {
+    const h = harness({ membersFail: true });
+
+    await expect(dispatchSpendAlertIfDue(ORG, state(), h.db)).rejects.toThrow(
+      'database unavailable',
+    );
+
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('delete from public.organization_spend_alerts'),
+      [ORG, '2026-09-01', 'threshold'],
+    );
+  });
+
+  it('releases the claim when an email fails for a retryable reason', async () => {
+    mocks.sendSpendAlertEmail.mockResolvedValueOnce({
+      delivered: false,
+      reason: 'network',
+      detail: 'reset',
+      retryable: true,
+    } as never);
+    const h = harness();
+
+    const outcome = await dispatchSpendAlertIfDue(ORG, state(), h.db);
+
+    expect(outcome).toMatchObject({ dispatched: true, recipientsNotified: 1 });
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('delete from public.organization_spend_alerts'),
+      [ORG, '2026-09-01', 'threshold'],
+    );
+  });
+
+  it('keeps the claim when no email transport is configured', async () => {
+    mocks.sendSpendAlertEmail.mockResolvedValue({
+      delivered: false,
+      reason: 'not_configured',
+      detail: 'x',
+    } as never);
+    const h = harness();
+
+    await dispatchSpendAlertIfDue(ORG, state(), h.db);
+
+    expect(h.execute).not.toHaveBeenCalledWith(
+      expect.stringContaining('delete from public.organization_spend_alerts'),
+      expect.anything(),
+    );
   });
 });

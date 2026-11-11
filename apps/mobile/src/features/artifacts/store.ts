@@ -66,12 +66,68 @@ function versionsForArtifacts(
   return kept;
 }
 
+type IncomingArtifactOrigin = 'derived' | 'edited';
+
+function mergeIncomingArtifacts(
+  state: ArtifactStoreState,
+  safeIncoming: ScopedMobileArtifact[],
+  activeOwnerId: string | null,
+  origin: IncomingArtifactOrigin,
+): Partial<ArtifactStoreState> {
+  const existing = state.artifacts.filter(
+    (artifact): artifact is ScopedMobileArtifact =>
+      isScopedMobileArtifact(artifact) &&
+      (artifact.provenance.scope === 'local' || artifact.provenance.ownerId === activeOwnerId),
+  );
+  const currentById = new Map(existing.map((artifact) => [artifact.id, artifact]));
+  const novel =
+    origin === 'edited' ? [] : safeIncoming.filter((artifact) => !currentById.has(artifact.id));
+  const revised = new Map<string, ScopedMobileArtifact>();
+  for (const artifact of safeIncoming) {
+    const current = currentById.get(artifact.id);
+    if (!current || current.content === artifact.content) continue;
+    if (origin === 'derived') {
+      const seen = state.versionsById[artifact.id];
+      if (Array.isArray(seen) && seen.some((version) => version.content === artifact.content)) {
+        continue;
+      }
+    }
+    revised.set(artifact.id, artifact);
+  }
+  const artifacts = [...novel, ...existing.map((artifact) => revised.get(artifact.id) ?? artifact)];
+  const versionsById = versionsForArtifacts(state.versionsById, artifacts);
+  for (const [id, revision] of revised) {
+    const priorVersions = state.versionsById[id];
+    versionsById[id] = appendVersion(
+      Array.isArray(priorVersions) && priorVersions.length > 0
+        ? priorVersions
+        : [currentById.get(id)!],
+      revision,
+    );
+  }
+  const hasIncomingCloud = novel.some((artifact) => artifact.provenance.scope === 'cloud');
+  const ownerChanged =
+    state.cloudArtifactsOwnerId !== null && state.cloudArtifactsOwnerId !== activeOwnerId;
+  return {
+    artifacts,
+    versionsById,
+    cloudArtifacts: ownerChanged ? [] : state.cloudArtifacts,
+    cloudArtifactsOwnerId: hasIncomingCloud
+      ? activeOwnerId
+      : ownerChanged
+        ? null
+        : state.cloudArtifactsOwnerId,
+  };
+}
+
 interface ArtifactStoreState {
   artifacts: MobileArtifact[];
 
   versionsById: VersionsById;
 
   addArtifacts: (incoming: MobileArtifact[]) => void;
+
+  saveArtifactEdit: (artifact: MobileArtifact) => void;
 
   getArtifactVersions: (id: string) => MobileArtifact[];
 
@@ -107,48 +163,19 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         });
         if (safeIncoming.length === 0) return;
 
-        set((state) => {
-          const existing = state.artifacts.filter(
-            (artifact): artifact is ScopedMobileArtifact =>
-              isScopedMobileArtifact(artifact) &&
-              (artifact.provenance.scope === 'local' ||
-                artifact.provenance.ownerId === activeOwnerId),
-          );
-          const currentById = new Map(existing.map((artifact) => [artifact.id, artifact]));
-          const novel = safeIncoming.filter((artifact) => !currentById.has(artifact.id));
-          const revised = new Map<string, ScopedMobileArtifact>();
-          for (const artifact of safeIncoming) {
-            const current = currentById.get(artifact.id);
-            if (current && current.content !== artifact.content) revised.set(artifact.id, artifact);
-          }
-          const artifacts = [
-            ...novel,
-            ...existing.map((artifact) => revised.get(artifact.id) ?? artifact),
-          ];
-          const versionsById = versionsForArtifacts(state.versionsById, artifacts);
-          for (const [id, revision] of revised) {
-            const priorVersions = state.versionsById[id];
-            versionsById[id] = appendVersion(
-              Array.isArray(priorVersions) && priorVersions.length > 0
-                ? priorVersions
-                : [currentById.get(id)!],
-              revision,
-            );
-          }
-          const hasIncomingCloud = novel.some((artifact) => artifact.provenance.scope === 'cloud');
-          const ownerChanged =
-            state.cloudArtifactsOwnerId !== null && state.cloudArtifactsOwnerId !== activeOwnerId;
-          return {
-            artifacts,
-            versionsById,
-            cloudArtifacts: ownerChanged ? [] : state.cloudArtifacts,
-            cloudArtifactsOwnerId: hasIncomingCloud
-              ? activeOwnerId
-              : ownerChanged
-                ? null
-                : state.cloudArtifactsOwnerId,
-          };
-        });
+        set((state) => mergeIncomingArtifacts(state, safeIncoming, activeOwnerId, 'derived'));
+      },
+
+      saveArtifactEdit: (artifact) => {
+        const activeOwnerId = captureCloudAccountEpoch()?.ownerId ?? null;
+        if (!isScopedMobileArtifact(artifact)) return;
+        if (
+          artifact.provenance.scope === 'cloud' &&
+          artifact.provenance.ownerId !== activeOwnerId
+        ) {
+          return;
+        }
+        set((state) => mergeIncomingArtifacts(state, [artifact], activeOwnerId, 'edited'));
       },
 
       getArtifactVersions: (id) => get().versionsById[id] ?? [],

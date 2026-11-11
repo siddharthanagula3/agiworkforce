@@ -75,6 +75,8 @@ function translatePart(block: ContentBlock, toolUseNames: Map<string, string>): 
         ...(block.signature ? { thoughtSignature: block.signature } : {}),
         text: block.thinking,
       };
+    case 'redacted_thinking':
+      return null;
   }
 }
 

@@ -90,3 +90,108 @@ describe('accepting an inline diff after the file moved on', () => {
     expect(String(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0])).toContain('3');
   });
 });
+
+describe('accepting several edits in one file at once', () => {
+  const uri = vscode.Uri.file('/workspace/a.ts');
+  let provider: DiffDecorationProvider;
+  let version: number;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    version = 1;
+    vi.mocked(vscode.workspace.openTextDocument).mockImplementation((async () => ({
+      version,
+      getText: () => '',
+    })) as never);
+    vi.mocked(vscode.workspace.applyEdit).mockImplementation((async (edit: {
+      entries: () => unknown[];
+    }) => {
+      version += edit.entries().length > 0 ? 1 : 0;
+      return true;
+    }) as never);
+    provider = new DiffDecorationProvider();
+  });
+
+  function propose(line: number, text: string) {
+    return provider.showDiff(
+      versioned(makeEditor(uri), () => version),
+      '',
+      text,
+      new vscode.Range(line, 0, line, 0),
+    );
+  }
+
+  it('applies two insertions proposed at the same version in a single edit', async () => {
+    propose(3, 'first');
+    propose(10, 'second');
+
+    await provider.acceptAll(uri);
+
+    expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+    const edit = vi.mocked(vscode.workspace.applyEdit).mock.calls[0]?.[0] as unknown as {
+      entries: () => Array<[unknown, Array<{ newText: string }>]>;
+    };
+    expect(edit.entries()[0]?.[1].map((change) => change.newText)).toEqual(['second', 'first']);
+    expect(provider.sessionCount).toBe(0);
+    expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+  });
+
+  it('still refuses every insertion when the file changed after they were proposed', async () => {
+    propose(3, 'first');
+    propose(10, 'second');
+    version += 1;
+
+    await provider.acceptAll(uri);
+
+    expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
+    expect(provider.sessionCount).toBe(2);
+    expect(String(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0])).toContain('2');
+  });
+
+  it('applies the fresh edits and leaves the stale one waiting', async () => {
+    const stale = provider.showDiff(
+      versioned(makeEditor(uri), () => version),
+      'old',
+      'new',
+      new vscode.Range(5, 0, 5, 3),
+    );
+    propose(10, 'second');
+    vi.mocked(vscode.workspace.openTextDocument).mockImplementation((async () => ({
+      version,
+      getText: () => 'edited by hand',
+    })) as never);
+
+    await provider.acceptAll(uri);
+
+    expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+    expect(provider.getSession(stale.id)).toBeDefined();
+    expect(provider.sessionCount).toBe(1);
+  });
+
+  it('applies neither of two insertions at the same point, and keeps both', async () => {
+    propose(4, 'one');
+    propose(4, 'two');
+
+    await provider.acceptAll(uri);
+
+    expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+    expect(provider.sessionCount).toBe(1);
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps every edit and says so when the editor refuses the write', async () => {
+    propose(3, 'first');
+    propose(10, 'second');
+    vi.mocked(vscode.workspace.applyEdit).mockResolvedValue(false as never);
+
+    await provider.acceptAll(uri);
+
+    expect(provider.sessionCount).toBe(2);
+    expect(String(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0])).toContain('2');
+  });
+});
+
+function versioned(editor: vscode.TextEditor, read: () => number): vscode.TextEditor {
+  Object.defineProperty(editor.document, 'version', { get: read });
+  return editor;
+}

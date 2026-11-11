@@ -337,7 +337,7 @@ function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<FileCode2 size={14} aria-hidden />}
       title="Shared artifacts"
-      description="An artifact shared here opens for every member without a public link. Members can read and download it; only the publisher can change or withdraw it."
+      description="An artifact shared here opens for every member without a public link. Members can read and download it; only the publisher or a workspace sharing manager can withdraw it."
     >
       {artifacts.length === 0 ? (
         <Empty>
@@ -438,7 +438,7 @@ function SharedConversations({ overview }: { overview: OrgSharedOverview }) {
     <SectionCard
       icon={<MessagesSquare size={14} aria-hidden />}
       title="Shared conversations"
-      description="A conversation shared here opens for every member without a public link. It is a read-only snapshot that still expires on its own clock, and only the person who shared it can change or withdraw it."
+      description="A conversation shared here opens for every member without a public link. It is a read-only snapshot that still expires on its own clock, and only the person who shared it or a workspace sharing manager can withdraw it."
     >
       {conversations.length === 0 ? (
         <Empty>

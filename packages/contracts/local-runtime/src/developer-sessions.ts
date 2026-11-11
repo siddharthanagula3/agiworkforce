@@ -365,6 +365,8 @@ type DeveloperSessionEventBody =
       outputTokens: number;
       /** Follow-ups steered into the turn that it ended before reading, the newest last. */
       unsentSteers?: number;
+      /** Tokens the conversation occupies in the context window after the turn; absent when the CLI did not measure it. */
+      contextTokens?: number;
     }
   | {
       type: 'tool-queued';

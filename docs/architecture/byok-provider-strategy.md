@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + provider/platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-10
 
 This document defines how AGI should think about BYOK providers, open-weight models, hosted open-model APIs, and local model runtimes before implementation agents add or rank models.
 
@@ -13,8 +13,9 @@ Use this with `docs/product/definition.md`, `audit/prior-audits/parity-implement
 BYOK developer surfaces are not limited to OpenAI, Anthropic, and Google keys.
 
 The released CLI, and VS Code when published, must support three
-BYOK/open-model classes. The public Electron Desktop is managed-cloud-only and
-must not expose these routes:
+BYOK/open-model classes. Public Electron Desktop chat is managed-cloud-only and
+must not expose these routes; a Desktop local coding session runs the CLI and
+reaches them through it:
 
 1. Direct frontier/provider keys: OpenAI, Anthropic, Google, xAI, Mistral, DeepSeek, Qwen/Alibaba Model Studio, Z.ai/GLM, and Bedrock.
 2. Hosted open-model providers: OpenRouter, NVIDIA NIM, Groq, Hugging Face Inference Providers, Replicate, and selected specialist providers that pass a founder-approved implementation review.

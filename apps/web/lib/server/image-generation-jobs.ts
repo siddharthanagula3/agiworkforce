@@ -581,6 +581,51 @@ export async function closeCancelledImageGenerationJob(input: {
   return job;
 }
 
+/**
+ * Close a job whose last allowed attempt was abandoned. No claim can start
+ * another attempt and the attempt that held the last one is gone, so nothing
+ * else would ever end the row. A live claim keeps its owner's right to finish.
+ */
+export async function closeExhaustedImageGenerationJob(input: {
+  db: DatabaseAdapter;
+  jobId: string;
+  userId: string;
+  publicError: string;
+  billingOutcome: 'released' | null;
+  billingSettlementStatus: 'succeeded' | 'pending' | 'terminal' | null;
+}): Promise<ImageGenerationJob | null> {
+  const job = await queryJob(
+    input.db,
+    `update public.image_generation_jobs
+        set status = 'failed',
+            retryable = false,
+            public_error = left($3, 500),
+            billing_outcome = $4,
+            billing_settlement_status = $5,
+            claim_token = null,
+            claim_expires_at = null,
+            terminal_at = now(),
+            updated_at = now()
+      where id = $1
+        and user_id = $2
+        and status in ('queued', 'processing', 'failed')
+        and terminal_at is null
+        and cancel_requested_at is null
+        and attempts >= max_attempts
+        and (claim_expires_at is null or claim_expires_at <= now())
+      returning ${JOB_COLUMNS}`,
+    [
+      input.jobId,
+      input.userId,
+      input.publicError,
+      input.billingOutcome,
+      input.billingSettlementStatus,
+    ],
+  );
+  if (job) reportImageGeneration(job, 'failed');
+  return job;
+}
+
 /** True while another attempt can still run, which is what "Try again" needs. */
 export function isImageGenerationJobRetryable(job: ImageGenerationJob): boolean {
   return (

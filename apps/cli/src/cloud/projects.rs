@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::client::{CloudClient, CloudError};
-use super::state::SyncState;
+use super::state::{SyncSection, SyncState};
 
 pub const PROJECTS_SYNC_PATH: &str = "/api/projects/sync";
 const NAME_MAX_CHARS: usize = 200;
@@ -55,6 +55,8 @@ pub struct ProjectsPullResponse {
     pub cursor: String,
     #[serde(default)]
     pub has_more: bool,
+    #[serde(default)]
+    pub workspace_scope: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -84,8 +86,12 @@ pub struct ProjectsPushResponse {
 /// when it could not refresh.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct ProjectCache {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
     #[serde(default)]
     pub projects: Vec<CachedProject>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synced_through: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -122,6 +128,11 @@ impl ProjectCache {
         }
         self.projects
             .sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    }
+
+    pub fn adopt(&mut self, response: &ProjectsPullResponse) {
+        self.apply(&response.projects);
+        self.synced_through = Some(response.cursor.clone());
     }
 
     pub fn find(&self, id_or_name: &str) -> Option<&CachedProject> {
@@ -161,7 +172,6 @@ pub fn apply_push_response(response: &ProjectsPushResponse, state: &mut SyncStat
             state.projects.record(&conflict.id, &current.server_version);
         }
     }
-    state.projects.advance(&response.cursor);
 }
 
 pub fn apply_pull_response(response: &ProjectsPullResponse, state: &mut SyncState) {
@@ -169,6 +179,57 @@ pub fn apply_pull_response(response: &ProjectsPullResponse, state: &mut SyncStat
         state.projects.record(&project.id, &project.server_version);
     }
     state.projects.advance(&response.cursor);
+}
+
+fn workspace_changed_error() -> CloudError {
+    CloudError::Api {
+        status: 409,
+        message: "the account's selected workspace changed while its projects were listed; run the command again".to_string(),
+    }
+}
+
+fn fold_pull_page(
+    merged: &mut ProjectsPullResponse,
+    page: ProjectsPullResponse,
+    first: bool,
+) -> Result<bool, CloudError> {
+    if first {
+        merged.workspace_scope = page.workspace_scope.clone();
+    } else if page.workspace_scope != merged.workspace_scope {
+        return Err(workspace_changed_error());
+    }
+    merged.projects.extend(page.projects);
+    let advanced = page.cursor != merged.cursor;
+    merged.cursor = page.cursor;
+    Ok(page.has_more && advanced)
+}
+
+pub fn scope_to_adopt(
+    response: &ProjectsPullResponse,
+    cache: &ProjectCache,
+    state: &SyncState,
+) -> Option<String> {
+    let scope = response.workspace_scope.as_ref()?;
+    (cache.scope.as_ref() != Some(scope) || state.projects_scope.as_ref() != Some(scope))
+        .then(|| scope.clone())
+}
+
+pub fn reset_scope(scope: &str, cache: &mut ProjectCache, state: &mut SyncState) {
+    *cache = ProjectCache {
+        scope: Some(scope.to_string()),
+        projects: Vec::new(),
+        synced_through: None,
+    };
+    state.projects = SyncSection::default();
+    state.projects_scope = Some(scope.to_string());
+}
+
+pub fn require_scope(response: &ProjectsPullResponse, scope: &str) -> Result<(), CloudError> {
+    if response.workspace_scope.as_deref() == Some(scope) {
+        Ok(())
+    } else {
+        Err(workspace_changed_error())
+    }
 }
 
 /// Names of projects the push was refused for, so a caller never reports a
@@ -203,21 +264,19 @@ impl<'a> ProjectsSync<'a> {
     }
 
     pub async fn pull_all(&self, since: &str) -> Result<ProjectsPullResponse, CloudError> {
-        let mut cursor = since.to_string();
         let mut merged = ProjectsPullResponse {
             projects: Vec::new(),
-            cursor: cursor.clone(),
+            cursor: since.to_string(),
             has_more: false,
+            workspace_scope: None,
         };
+        let mut first = true;
         loop {
-            let page = self.pull(&cursor).await?;
-            merged.projects.extend(page.projects.iter().cloned());
-            let advanced = page.cursor != cursor;
-            cursor = page.cursor.clone();
-            merged.cursor = cursor.clone();
-            if !page.has_more || !advanced {
+            let page = self.pull(&merged.cursor).await?;
+            if !fold_pull_page(&mut merged, page, first)? {
                 break;
             }
+            first = false;
         }
         Ok(merged)
     }
@@ -301,7 +360,46 @@ mod tests {
         };
         apply_push_response(&response, &mut state);
         assert_eq!(state.projects.base_version("p1"), "44");
-        assert_eq!(state.projects.cursor, "44");
+        assert_eq!(state.projects.cursor, super::super::state::INITIAL_CURSOR);
+    }
+
+    #[test]
+    fn creating_a_project_does_not_skip_deltas_this_device_has_not_pulled() {
+        let mut state = SyncState::default();
+        state.projects.advance("10");
+        let created = new_project("Launch", None);
+        let response = ProjectsPushResponse {
+            applied: vec![AppliedRow {
+                id: created.id.clone(),
+                server_version: "12".to_string(),
+            }],
+            conflicts: Vec::new(),
+            cursor: "12".to_string(),
+        };
+        apply_push_response(&response, &mut state);
+        assert_eq!(state.projects.base_version(&created.id), "12");
+        assert_eq!(state.projects.cursor, "10");
+
+        let mut cache = ProjectCache {
+            synced_through: Some("10".to_string()),
+            ..ProjectCache::default()
+        };
+        let since =
+            super::super::state::pull_frontier(&state.projects, cache.synced_through.as_deref());
+        assert_eq!(since, "10");
+        let renamed_elsewhere = pull(
+            None,
+            vec![
+                delta("p-other", "Renamed elsewhere", "11", false),
+                delta(&created.id, "Launch", "12", false),
+            ],
+            "12",
+        );
+        cache.adopt(&renamed_elsewhere);
+        apply_pull_response(&renamed_elsewhere, &mut state);
+        assert!(cache.find("p-other").is_some());
+        assert_eq!(cache.synced_through.as_deref(), Some("12"));
+        assert_eq!(state.projects.cursor, "12");
     }
 
     #[test]
@@ -331,5 +429,115 @@ mod tests {
         let json = serde_json::to_value(&request).expect("serializes");
         assert!(json["projects"][0]["baseVersion"].is_string());
         assert!(json["projects"][0].get("description").is_none());
+    }
+
+    fn pull(scope: Option<&str>, deltas: Vec<ProjectDelta>, cursor: &str) -> ProjectsPullResponse {
+        ProjectsPullResponse {
+            projects: deltas,
+            cursor: cursor.to_string(),
+            has_more: false,
+            workspace_scope: scope.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn a_pull_page_reads_the_hosted_workspace_scope() {
+        let page: ProjectsPullResponse = serde_json::from_value(serde_json::json!({
+            "projects": [],
+            "cursor": "0",
+            "hasMore": false,
+            "workspaceScope": "personal"
+        }))
+        .expect("decodes");
+        assert_eq!(page.workspace_scope.as_deref(), Some("personal"));
+    }
+
+    #[test]
+    fn a_workspace_change_replaces_the_cache_and_cursor_instead_of_merging() {
+        let mut state = SyncState::default();
+        let mut cache = ProjectCache::default();
+        let in_a = pull(
+            Some("org-a"),
+            vec![delta("a1", "Alpha", "100", false)],
+            "100",
+        );
+        let scope = scope_to_adopt(&in_a, &cache, &state).expect("first scope is adopted");
+        reset_scope(&scope, &mut cache, &mut state);
+        cache.apply(&in_a.projects);
+        apply_pull_response(&in_a, &mut state);
+        assert_eq!(state.projects.cursor, "100");
+
+        let incremental_b = pull(Some("org-b"), Vec::new(), "100");
+        let scope = scope_to_adopt(&incremental_b, &cache, &state).expect("B differs from A");
+        assert_eq!(scope, "org-b");
+        reset_scope(&scope, &mut cache, &mut state);
+        assert!(cache.projects.is_empty());
+        assert_eq!(state.projects.cursor, super::super::state::INITIAL_CURSOR);
+        assert_eq!(
+            state.projects.base_version("a1"),
+            super::super::state::INITIAL_CURSOR
+        );
+
+        let full_b = pull(Some("org-b"), vec![delta("b1", "Beta", "50", false)], "50");
+        require_scope(&full_b, &scope).expect("same scope");
+        cache.apply(&full_b.projects);
+        apply_pull_response(&full_b, &mut state);
+        let ids: Vec<&str> = cache
+            .projects
+            .iter()
+            .map(|project| project.id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["b1"]);
+        assert_eq!(cache.scope.as_deref(), Some("org-b"));
+        assert_eq!(state.projects_scope.as_deref(), Some("org-b"));
+        assert!(scope_to_adopt(&pull(Some("org-b"), Vec::new(), "50"), &cache, &state).is_none());
+    }
+
+    #[test]
+    fn a_cache_written_before_scopes_is_rebuilt_on_the_first_scoped_pull() {
+        let mut state = SyncState::default();
+        state.projects.advance("100");
+        let mut cache = ProjectCache::default();
+        cache.apply(&[delta("a1", "Alpha", "100", false)]);
+        let scoped = pull(Some("personal"), Vec::new(), "100");
+        assert_eq!(
+            scope_to_adopt(&scoped, &cache, &state).as_deref(),
+            Some("personal")
+        );
+        assert!(scope_to_adopt(&pull(None, Vec::new(), "100"), &cache, &state).is_none());
+    }
+
+    #[test]
+    fn a_rebuild_that_lands_in_another_workspace_is_refused() {
+        assert!(require_scope(&pull(Some("org-c"), Vec::new(), "9"), "org-b").is_err());
+        assert!(require_scope(&pull(None, Vec::new(), "9"), "org-b").is_err());
+    }
+
+    #[test]
+    fn pages_from_different_workspaces_are_not_merged() {
+        let mut merged = pull(None, Vec::new(), "0");
+        let mut first = pull(Some("org-a"), vec![delta("a1", "Alpha", "1", false)], "1");
+        first.has_more = true;
+        assert!(fold_pull_page(&mut merged, first, true).expect("first page"));
+        let second = pull(Some("org-b"), vec![delta("b1", "Beta", "2", false)], "2");
+        assert!(fold_pull_page(&mut merged, second, false).is_err());
+
+        let mut merged = pull(None, Vec::new(), "0");
+        let mut first = pull(Some("org-a"), vec![delta("a1", "Alpha", "1", false)], "1");
+        first.has_more = true;
+        assert!(fold_pull_page(&mut merged, first, true).expect("first page"));
+        let second = pull(Some("org-a"), vec![delta("a2", "Alpha 2", "2", false)], "2");
+        assert!(!fold_pull_page(&mut merged, second, false).expect("same scope"));
+        assert_eq!(merged.projects.len(), 2);
+        assert_eq!(merged.cursor, "2");
+        assert_eq!(merged.workspace_scope.as_deref(), Some("org-a"));
+    }
+
+    #[test]
+    fn a_page_that_does_not_advance_the_cursor_stops_the_pull() {
+        let mut merged = pull(None, Vec::new(), "7");
+        let mut stuck = pull(Some("org-a"), Vec::new(), "7");
+        stuck.has_more = true;
+        assert!(!fold_pull_page(&mut merged, stuck, true).expect("first page"));
     }
 }

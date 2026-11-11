@@ -40,8 +40,9 @@ import {
 } from '../features/instructions';
 import { SYNTHETIC_LOCAL_MODEL_ID, requireCatalogModel } from './catalogModelFixtures';
 import { getTokenCounter } from '../data/tokenCounter';
-import { modelDisplayNameById } from '@agiworkforce/types';
+import { modelDisplayNameById, PRODUCT_NAMES } from '@agiworkforce/types';
 import * as api from '../utils/api';
+import { Config } from '../platform/config';
 import * as accountAccess from '../features/surfaces/accountAccess';
 import * as proposedChangeReview from '../features/permissions/proposedChangeReview';
 import * as tierResolver from '../integrations/tierResolver';
@@ -279,6 +280,78 @@ describe('ChatStateManager local turn lifecycle', () => {
     },
   );
 
+  it('discards a web page that finishes loading after New Chat replaced the conversation', async () => {
+    const harness = makeHarness();
+    let answerInput: (value: string) => void = () => undefined;
+    vi.mocked(vscode.window.showInputBox).mockImplementationOnce(
+      () =>
+        new Promise<string | undefined>((resolve) => {
+          answerInput = resolve;
+        }),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        text: async () => 'OLD_CONVERSATION_PAGE_BODY',
+      }),
+    );
+    let send: Promise<void> | undefined;
+    try {
+      const attaching = harness.manager.handleMessage({
+        type: 'attachContext',
+        payload: { kind: 'url' },
+      });
+      await harness.manager.handleMessage({ type: 'newChat' });
+
+      answerInput('https://example.test/page');
+      await attaching;
+
+      expect(harness.posted.some((message) => message.type === 'contextAttached')).toBe(false);
+
+      send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hello' } });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+      expect(JSON.stringify(harness.runtime.startTurn.mock.calls[0]?.[0])).not.toContain(
+        'OLD_CONVERSATION_PAGE_BODY',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      harness.emit({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+      if (send !== undefined) await send;
+    }
+  });
+
+  it('keeps a web page that finishes loading in the same conversation', async () => {
+    const harness = makeHarness();
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('https://example.test/page');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        text: async () => 'CURRENT_PAGE_BODY',
+      }),
+    );
+    try {
+      await harness.manager.handleMessage({ type: 'attachContext', payload: { kind: 'url' } });
+
+      expect(harness.posted.some((message) => message.type === 'contextAttached')).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('rechecks retained pinned context files against current gitignore before dispatch', async () => {
     const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-pinned-context-')));
     const file = path.join(root, 'ordinary.txt');
@@ -468,6 +541,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.posted).toContainEqual({
       type: 'fileSearchResults',
       payload: {
+        query: 'app',
         files: [
           {
             path: 'src/app.ts',
@@ -1610,6 +1684,51 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('keeps a retired turn out of the cleared conversation while its interrupt settles', async () => {
+    let resolveInterrupt!: () => void;
+    const delayedInterrupt = new Promise<void>((resolve) => {
+      resolveInterrupt = resolve;
+    });
+    const harness = makeHarness({ interruptTurn: delayedInterrupt });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Old conversation' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.manager.resetConversation();
+    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+    const clearedAt = harness.posted.length;
+
+    harness.emit({
+      type: 'output_delta',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      delta: 'stale fragment',
+    });
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      toolCallId: 'tool-1',
+      name: 'read_file',
+      category: 'read',
+      summary: 'Read a file',
+      input: {},
+    } as LocalRuntimeEvent);
+    harness.emit({
+      type: 'turn_interrupted',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    } as LocalRuntimeEvent);
+    resolveInterrupt();
+    await send;
+
+    const afterClear = harness.posted.slice(clearedAt);
+    expect(afterClear.some((message) => message.type === 'token')).toBe(false);
+    expect(afterClear.some((message) => message.type === 'toolCallStart')).toBe(false);
+  });
+
   it('fails closed when a Local session is aimed at catalog or Auto routing', async () => {
     const harness = makeHarness({
       localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
@@ -2040,6 +2159,49 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
+  });
+
+  it('sends the effort a later settings change chose, not the earlier composer pick', async () => {
+    const harness = makeHarness();
+    harness.runtime.offers.mockImplementation(
+      async (capability: string) => capability === 'reasoningEffortLadder',
+    );
+    await realContextWorkspace(harness);
+    const handlers = vi
+      .mocked(vscode.workspace.onDidChangeConfiguration)
+      .mock.calls.map(([listener]) => listener as (event: vscode.ConfigurationChangeEvent) => void);
+    await harness.manager.handleMessage({ type: 'setEffort', payload: { effort: 'high' } });
+
+    const effortSpy = vi.spyOn(Config, 'agentEffort').mockReturnValue('low');
+    for (const handler of handlers) {
+      handler({
+        affectsConfiguration: (section: string) => section === 'agiWorkforce.agent.effort',
+      });
+    }
+
+    expect(harness.posted.filter((message) => message.type === 'effortChanged').at(-1)).toEqual({
+      type: 'effortChanged',
+      payload: expect.objectContaining({ effort: 'low' }),
+    });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Think less' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'low' }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    effortSpy.mockRestore();
   });
 
   it('sends an older CLI only a level it accepts, and offers it only those four', async () => {
@@ -2949,6 +3111,109 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
+  it('counts only edits that finished, not attempts that failed', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const edit = (toolCallId: string, path: string, sequence: number) =>
+      harness.emit({
+        type: 'tool_execution_start',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence,
+        emittedAtMs: sequence,
+        toolCallId,
+        name: 'edit_file',
+        category: 'filesystem',
+        summary: `Edit ${path}`,
+        input: { path, old_string: 'a', new_string: 'b' },
+      });
+    const finish = (toolCallId: string, isError: boolean, sequence: number) =>
+      harness.emit({
+        type: 'tool_execution_end',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence,
+        emittedAtMs: sequence,
+        toolCallId,
+        name: 'edit_file',
+        output: isError ? 'old_string not found' : 'Edited',
+        isError,
+      });
+    edit('call-1', 'src/missing.ts', 1);
+    finish('call-1', true, 2);
+    edit('call-2', 'src/retry.ts', 3);
+    finish('call-2', true, 4);
+    edit('call-3', 'src/retry.ts', 5);
+    finish('call-3', false, 6);
+    edit('call-4', 'src/unfinished.ts', 7);
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Done.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.objectContaining({ turnId: 'turn-1', changedFiles: 1 }),
+    });
+  });
+
+  it('reports no changed files when every edit failed', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      category: 'filesystem',
+      summary: 'Edit src/example.txt',
+      input: { path: 'src/example.txt', old_string: 'absent', new_string: 'x' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'old_string not found',
+      isError: true,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'I could not apply that edit.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.not.objectContaining({ changedFiles: expect.anything() }),
+    });
+  });
+
   it('refuses automatic Undo when checkpoints cannot prove reply ownership', async () => {
     const harness = makeHarness();
     const rewindThread = vi.fn().mockResolvedValue({
@@ -2991,6 +3256,17 @@ describe('ChatStateManager local turn lifecycle', () => {
       category: 'filesystem',
       summary: 'Edit src/math.ts',
       input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'Edited src/math.ts',
+      isError: false,
     });
     harness.emit({
       type: 'turn_completed',
@@ -3205,6 +3481,65 @@ describe('ChatStateManager local turn lifecycle', () => {
       }),
     );
     expect(harness.posted).not.toContainEqual({ type: 'attachmentsConsumed' });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('omits an attachment removed while the turn is still being prepared', async () => {
+    const harness = makeHarness();
+    let releaseLadder!: () => void;
+    const ladderGate = new Promise<boolean>((resolve) => {
+      releaseLadder = () => resolve(false);
+    });
+    harness.runtime.offers.mockImplementation(async (capability: string) =>
+      capability === 'reasoningEffortLadder' ? ladderGate : false,
+    );
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 5,
+            dataUrl: 'data:text/plain;base64,aGVsbG8=',
+          },
+        ],
+      },
+    });
+    const ack = harness.posted.find((m) => m.type === 'attachFilesAck') as {
+      type: 'attachFilesAck';
+      payload: { added: Array<{ id: string }> };
+    };
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Summarize the attachment' },
+    });
+    await vi.waitFor(() =>
+      expect(harness.runtime.offers).toHaveBeenCalledWith('reasoningEffortLadder'),
+    );
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+
+    await harness.manager.handleMessage({
+      type: 'removePendingAttachment',
+      payload: { id: ack.payload.added[0]!.id },
+    });
+    releaseLadder();
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: [{ type: 'text', text: 'Summarize the attachment', text_elements: [] }],
+      }),
+    );
     harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',
@@ -4153,7 +4488,7 @@ describe('ChatStateManager context usage reporting', () => {
     } as ContextPanelProvider);
   });
 
-  it('reports the runtime-measured turn tokens against the catalog context window', async () => {
+  it('reports the context the CLI measured against the catalog window, not the turn’s summed tokens', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
     const model = MODEL_PICKER_OPTIONS.filter((option) => !isAutoPickerModelId(option.id)).find(
@@ -4172,15 +4507,52 @@ describe('ChatStateManager context usage reporting', () => {
       turnId: 'turn-1',
       status: 'completed',
       response: 'done',
-      inputTokens: 41_200,
-      outputTokens: 1_800,
+      inputTokens: 20_100,
+      outputTokens: 200,
+      contextTokens: 10_200,
     });
     await send;
 
-    expect(harness.posted).toContainEqual({
-      type: 'contextUsage',
-      payload: { usedTokens: 43_000, contextWindow: MODEL_CONTEXT_LIMITS[model!.id] },
+    const contextPosts = harness.posted.filter((message) => message.type === 'contextUsage');
+    expect(contextPosts).toEqual([
+      {
+        type: 'contextUsage',
+        payload: { usedTokens: 10_200, contextWindow: MODEL_CONTEXT_LIMITS[model!.id] },
+      },
+    ]);
+  });
+
+  it('shows no context figure when the CLI did not measure one', async () => {
+    const harness = makeHarness();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
     });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 20_100,
+      outputTokens: 200,
+    });
+    await send;
+
+    const contextPosts = harness.posted.filter((message) => message.type === 'contextUsage');
+    expect(contextPosts).toEqual([{ type: 'contextUsage', payload: { usedTokens: 0 } }]);
+
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
+    await harness.manager.showSessionStatus();
+    const rows = vi.mocked(vscode.window.showQuickPick).mock.calls.at(-1)?.[0] as Array<{
+      label: string;
+      description?: string;
+    }>;
+    expect(rows.find((entry) => entry.label.endsWith('Context'))?.description).toBe(
+      'Not measured yet in this window',
+    );
   });
 
   it('feeds the session token counter the runtime-measured counts, not a char estimate', async () => {
@@ -4225,6 +4597,7 @@ describe('ChatStateManager context usage reporting', () => {
       response: 'done',
       inputTokens: 900,
       outputTokens: 100,
+      contextTokens: 1_000,
     });
     await send;
 
@@ -4261,6 +4634,7 @@ describe('ChatStateManager session compaction', () => {
       response: 'done',
       inputTokens: 90_000,
       outputTokens: 10_000,
+      contextTokens: 100_000,
     });
     await send;
     return harness;
@@ -4454,7 +4828,7 @@ describe('ChatStateManager session compaction', () => {
     await harness.manager.compactConversation();
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Code: nothing in this session is old enough to summarize yet.',
+      `${PRODUCT_NAMES.code}: nothing in this session is old enough to summarize yet.`,
     );
     expect(harness.posted.filter((message) => message.type === 'sessionNotice')).toHaveLength(0);
   });
@@ -4660,7 +5034,7 @@ describe('ChatStateManager error classification', () => {
     );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Code: Trust this workspace before resuming a developer session.',
+      `${PRODUCT_NAMES.code}: Trust this workspace before resuming a developer session.`,
       'Manage Trust',
     );
   });

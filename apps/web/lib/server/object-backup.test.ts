@@ -31,6 +31,7 @@ import {
   missingBackupEnv,
   objectBackupReadiness,
   reconcileBackupDeletions,
+  replicateObjectWithLegacyFallback,
   requeueReplicasAfterRestore,
   recordBackupReplica,
 } from './object-backup';
@@ -140,6 +141,66 @@ describe('recordBackupReplica', () => {
   });
 });
 
+describe('replicateObjectWithLegacyFallback', () => {
+  function sourceHolding(bucket: string | null) {
+    return {
+      head: vi.fn(async (name: string) => (name === bucket ? { contentLength: 3 } : null)),
+      get: vi.fn(async () => ({ data: new Uint8Array([1, 2, 3]), contentType: 'text/plain' })),
+    };
+  }
+
+  it('copies from the private bucket and never looks at the public one when it holds the object', async () => {
+    mocks.objectStorageConfig.mockReturnValue({
+      privateBucket: 'agi-primary',
+      publicBucket: 'agi-public',
+    });
+    const store = backupStore();
+    store.head.mockResolvedValue(null);
+    const source = sourceHolding('agi-primary');
+
+    const result = await replicateObjectWithLegacyFallback('a.png', {
+      source: source as never,
+      target: target(store),
+    });
+
+    expect(result).toEqual({ outcome: 'replicated', bytes: 3 });
+    expect(source.head).toHaveBeenCalledTimes(1);
+    expect(source.head).toHaveBeenCalledWith('agi-primary', 'a.png');
+  });
+
+  it('copies an object only the legacy public bucket holds', async () => {
+    mocks.objectStorageConfig.mockReturnValue({
+      privateBucket: 'agi-primary',
+      publicBucket: 'agi-public',
+    });
+    const store = backupStore();
+    store.head.mockResolvedValue(null);
+    const source = sourceHolding('agi-public');
+
+    const result = await replicateObjectWithLegacyFallback('legacy.pdf', {
+      source: source as never,
+      target: target(store),
+    });
+
+    expect(result).toEqual({ outcome: 'replicated', bytes: 3 });
+    expect(source.get).toHaveBeenCalledWith('agi-public', 'legacy.pdf');
+    expect(store.put).toHaveBeenCalledWith(expect.objectContaining({ key: 'legacy.pdf' }));
+  });
+
+  it('reports a missing source when no public bucket is configured', async () => {
+    const store = backupStore();
+    const source = sourceHolding(null);
+
+    const result = await replicateObjectWithLegacyFallback('gone.pdf', {
+      source: source as never,
+      target: target(store),
+    });
+
+    expect(result).toEqual({ outcome: 'missing-source', bytes: 0 });
+    expect(store.put).not.toHaveBeenCalled();
+  });
+});
+
 describe('reconcileBackupDeletions', () => {
   it('deletes the backup copy of a key the primary no longer holds', async () => {
     const store = backupStore();
@@ -156,7 +217,35 @@ describe('reconcileBackupDeletions', () => {
 
     expect(source.head).toHaveBeenCalledWith('agi-primary', 'gone.png');
     expect(store.delete).toHaveBeenCalledWith('agi-backup', 'gone.png');
-    expect(result).toEqual({ checked: 1, deleted: 1, retained: 0 });
+    expect(result).toEqual({ checked: 1, deleted: 1, retained: 0, failed: 0 });
+  });
+
+  it('keeps going past a key that fails and still forgets the orphans it finished', async () => {
+    const store = backupStore();
+    store.head.mockImplementation(async (_bucket: string, key: string) => {
+      if (key === 'stuck.png') throw new Error('backup HEAD refused');
+      return { contentLength: 10 };
+    });
+    const source = { head: vi.fn(async () => null) };
+    mocks.query
+      .mockResolvedValueOnce([
+        { object_key: 'done-before.png' },
+        { object_key: 'stuck.png' },
+        { object_key: 'gone-after.png' },
+      ])
+      .mockResolvedValueOnce([{ object_key: 'done-before.png' }, { object_key: 'gone-after.png' }]);
+
+    const result = await reconcileBackupDeletions(10, {
+      target: target(store),
+      source: source as never,
+    });
+
+    expect(store.delete).toHaveBeenCalledWith('agi-backup', 'done-before.png');
+    expect(store.delete).toHaveBeenCalledWith('agi-backup', 'gone-after.png');
+    expect(result).toEqual({ checked: 3, deleted: 2, retained: 0, failed: 1 });
+    const [forgetSql, forgetParams] = mocks.query.mock.calls[1] as unknown as [string, unknown[]];
+    expect(forgetSql).toContain('delete from public.object_backup_replicas');
+    expect(forgetParams).toEqual([['done-before.png', 'gone-after.png']]);
   });
 
   it('keeps the copy of a key the primary still holds and re-stamps its check', async () => {
@@ -170,7 +259,7 @@ describe('reconcileBackupDeletions', () => {
     });
 
     expect(store.delete).not.toHaveBeenCalled();
-    expect(result).toEqual({ checked: 1, deleted: 0, retained: 1 });
+    expect(result).toEqual({ checked: 1, deleted: 0, retained: 1, failed: 0 });
     expect(mocks.execute).toHaveBeenCalledWith(expect.stringContaining('set verified_at = now()'), [
       'live.png',
     ]);
@@ -181,6 +270,7 @@ describe('reconcileBackupDeletions', () => {
       checked: 0,
       deleted: 0,
       retained: 0,
+      failed: 0,
     });
     expect(mocks.query).not.toHaveBeenCalled();
   });

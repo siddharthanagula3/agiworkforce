@@ -157,12 +157,31 @@ pub async fn account_status(refresh: bool) -> AccountSnapshot {
     let Ok(context) = tier_cache::ManagedRequestContext::capture() else {
         return AccountSnapshot::default();
     };
+    account_status_for(context, crate::account_privacy_mode(), refresh).await
+}
+
+async fn account_status_for(
+    context: tier_cache::ManagedRequestContext,
+    privacy: crate::platform::runtime::session::PrivacyMode,
+    refresh: bool,
+) -> AccountSnapshot {
     let Some(_) = context.jwt.as_deref() else {
         return AccountSnapshot {
             cached: true,
             ..AccountSnapshot::default()
         };
     };
+    if crate::cloud::CloudClient::admit(privacy).is_err() {
+        return AccountSnapshot {
+            signed_in: true,
+            tier: context
+                .with_current(|| tier_cache::read_tier_for(&context))
+                .flatten()
+                .map(|cached| tier_cache::tier_slug(&cached.tier)),
+            cached: true,
+            ..AccountSnapshot::default()
+        };
+    }
     if refresh {
         context.with_current(|| {
             tier_cache::invalidate_tier_cache();
@@ -597,22 +616,37 @@ async fn revoke_snapshot(
 }
 
 pub async fn sign_out() -> Result<bool> {
-    let (base, entries) = AuthStore::transaction_with_commit(
-        |store| {
-            let base = device_auth_base();
-            let entries = store.entries.clone();
-            forget_managed(store);
-            Ok((base, entries))
-        },
-        |_| forget_account_caches(),
-    )?;
-    Ok(revoke_snapshot(&base, &entries).await)
+    Ok(sign_out_of_account().await?.revoked)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CliSignOut {
     pub providers: usize,
     pub revoked: bool,
+}
+
+fn holds_managed_grant(store: &AuthStore) -> bool {
+    MANAGED_AUTH_KEYS
+        .iter()
+        .any(|key| store.entries.contains_key(*key))
+}
+
+pub async fn sign_out_of_account() -> Result<CliSignOut> {
+    let (base, entries, held) = AuthStore::transaction_with_commit(
+        |store| {
+            let base = device_auth_base();
+            let entries = store.entries.clone();
+            let held = holds_managed_grant(store);
+            forget_managed(store);
+            Ok((base, entries, held))
+        },
+        |_| forget_account_caches(),
+    )?;
+    let revoked = revoke_snapshot(&base, &entries).await;
+    Ok(CliSignOut {
+        providers: usize::from(held),
+        revoked,
+    })
 }
 
 impl CliSignOut {
@@ -941,5 +975,70 @@ mod tests {
             store.entries.is_empty(),
             "a device grant survives sign-out: save_device_grant writes a key MANAGED_AUTH_KEYS does not name"
         );
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_reads_no_account_status_from_the_cloud() {
+        use crate::platform::runtime::session::PrivacyMode;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let connections = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&connections);
+        let server = tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                counted.fetch_add(1, Ordering::SeqCst);
+                drop(stream);
+            }
+        });
+        let context = |base: &str| tier_cache::ManagedRequestContext {
+            jwt: Some(token("account-a", "session-a", 1)),
+            base: base.to_string(),
+            owner: None,
+        };
+
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let snapshot = account_status_for(context(&base), mode, true).await;
+            assert!(snapshot.signed_in);
+            assert!(snapshot.cached);
+            assert_eq!(snapshot.email, None);
+            assert_eq!(snapshot.balance_credits, None);
+            assert_eq!(snapshot.purchased_credits, None);
+        }
+        assert_eq!(
+            connections.load(Ordering::SeqCst),
+            0,
+            "a Local or BYOK session reached the account for its status"
+        );
+
+        account_status_for(context(&base), PrivacyMode::Managed, false).await;
+        assert!(
+            connections.load(Ordering::SeqCst) > 0,
+            "the probe never saw the managed read, so it proves nothing about the refused modes"
+        );
+        server.abort();
+    }
+
+    #[test]
+    fn signing_out_of_the_account_counts_only_the_managed_grant() {
+        let mut store = AuthStore::default();
+        store.entries.insert(
+            "anthropic".to_string(),
+            AuthEntry::ApiKey {
+                key: "the user's own key".to_string(),
+            },
+        );
+        assert!(!holds_managed_grant(&store));
+
+        store
+            .entries
+            .insert("agiworkforce".to_string(), grant("granted", "refresh"));
+        assert!(holds_managed_grant(&store));
+
+        forget_managed(&mut store);
+        assert!(!holds_managed_grant(&store));
+        assert!(store.entries.contains_key("anthropic"));
     }
 }

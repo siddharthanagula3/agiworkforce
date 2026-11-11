@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { DEVELOPER_SESSION_PROTOCOL_VERSION } from '@agiworkforce/types';
 
 import { setupCommands } from '../core/commandSetup';
 import { Config } from '../platform/config';
@@ -27,8 +28,14 @@ describe('taking a session somewhere else', () => {
     chatTurnInFlight: () => boolean;
     reveal: ReturnType<typeof vi.fn>;
     resetConversation: ReturnType<typeof vi.fn>;
+    resumeConversation: ReturnType<typeof vi.fn>;
     prefillComposer: ReturnType<typeof vi.fn>;
     pushActiveProject: ReturnType<typeof vi.fn>;
+  };
+  let runtime: {
+    listThreads: ReturnType<typeof vi.fn>;
+    handOffThread: ReturnType<typeof vi.fn>;
+    acceptHandoff: ReturnType<typeof vi.fn>;
   };
 
   beforeEach(() => {
@@ -36,6 +43,11 @@ describe('taking a session somewhere else', () => {
     __resetStartupWorkForTests();
     handlers = new Map();
     terminals = [];
+    runtime = {
+      listThreads: vi.fn(),
+      handOffThread: vi.fn(),
+      acceptHandoff: vi.fn().mockResolvedValue(undefined),
+    };
     activeThreadId = 'thread-7f3';
     turnInFlight = false;
     sidebar = {
@@ -43,6 +55,7 @@ describe('taking a session somewhere else', () => {
       chatTurnInFlight: () => turnInFlight,
       reveal: vi.fn(),
       resetConversation: vi.fn(),
+      resumeConversation: vi.fn().mockResolvedValue(undefined),
       prefillComposer: vi.fn(),
       pushActiveProject: vi.fn(),
       releaseForTerminal: vi.fn().mockResolvedValue(undefined),
@@ -73,7 +86,7 @@ describe('taking a session somewhere else', () => {
       artifactsTreeProvider: tree(),
       artifactContentProvider: {} as never,
       connectorsTreeProvider: tree(),
-      localRuntimes: { forWorkspace: vi.fn() } as never,
+      localRuntimes: { forWorkspace: vi.fn(() => runtime) } as never,
       contextPanelProvider: tree(),
       memoryTreeProvider: tree(),
       diffDecorationProvider: {} as never,
@@ -152,6 +165,56 @@ describe('taking a session somewhere else', () => {
     expect(String((options as { detail?: string }).detail)).toContain('will not be recoverable');
     expect(confirm).toBe('Start new chat');
     expect(sidebar.resetConversation).not.toHaveBeenCalled();
+  });
+
+  it('opens the accepted CLI session in the sidebar instead of leaving another thread selected', async () => {
+    const issuedAt = new Date().toISOString();
+    runtime.listThreads.mockResolvedValue({
+      threads: [
+        { id: 'thread-old', updatedAt: '2026-09-20T10:00:00.000Z' },
+        { id: 'thread-cli', updatedAt: '2026-09-20T12:00:00.000Z' },
+      ],
+    });
+    runtime.handOffThread.mockResolvedValue({
+      protocolVersion: DEVELOPER_SESSION_PROTOCOL_VERSION,
+      threadId: 'thread-cli',
+      origin: 'developer_session',
+      issuedBy: 'cli',
+      issuedAt,
+      fromEnvironment: 'local',
+      toEnvironment: 'local',
+      workspace: { cwd: vscode.Uri.file('/repo').fsPath },
+      posture: { agentMode: 'agent', trustMode: 'local', permissionProfileId: 'default' },
+    });
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Continue here' as never);
+
+    await handlers.get('agi-workforce.continueCliSession')?.();
+
+    expect(runtime.acceptHandoff).toHaveBeenCalledOnce();
+    expect(sidebar.resumeConversation).toHaveBeenCalledWith('thread-cli');
+  });
+
+  it('does not touch the sidebar thread when the handoff review is declined', async () => {
+    runtime.listThreads.mockResolvedValue({
+      threads: [{ id: 'thread-cli', updatedAt: '2026-09-20T12:00:00.000Z' }],
+    });
+    runtime.handOffThread.mockResolvedValue({
+      protocolVersion: DEVELOPER_SESSION_PROTOCOL_VERSION,
+      threadId: 'thread-cli',
+      origin: 'developer_session',
+      issuedBy: 'cli',
+      issuedAt: new Date().toISOString(),
+      fromEnvironment: 'local',
+      toEnvironment: 'local',
+      workspace: { cwd: vscode.Uri.file('/repo').fsPath },
+      posture: { agentMode: 'agent', trustMode: 'local', permissionProfileId: 'default' },
+    });
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined as never);
+
+    await handlers.get('agi-workforce.continueCliSession')?.();
+
+    expect(runtime.acceptHandoff).not.toHaveBeenCalled();
+    expect(sidebar.resumeConversation).not.toHaveBeenCalled();
   });
 
   it('asks for a selection rather than opening an empty new chat', async () => {

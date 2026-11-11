@@ -1,3 +1,4 @@
+import { Modal } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { AppLockOverlay } from '../src/features/auth/components/AppLockOverlay';
 import { SecureStorageUnavailable } from '../src/features/auth/components/SecureStorageUnavailable';
@@ -30,6 +31,22 @@ describe('AppLockOverlay', () => {
     fireEvent.press(getByTestId('app-lock-reset'));
     expect(onReset).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['locked', 'cover'] as const)(
+    'puts the %s surface in its own native window above any open modal',
+    (variant) => {
+      const onUnlock = jest.fn();
+      const { UNSAFE_getByType } = render(<AppLockOverlay onUnlock={onUnlock} variant={variant} />);
+      const window = UNSAFE_getByType(Modal);
+
+      expect(window.props.visible).toBe(true);
+      expect(window.props.transparent).toBe(true);
+      expect(window.props.animationType).toBe('none');
+      window.props.onRequestClose();
+      expect(onUnlock).not.toHaveBeenCalled();
+      expect(UNSAFE_getByType(Modal)).toBeTruthy();
+    },
+  );
 
   it('shows no reset action on the background cover', () => {
     const { queryByTestId } = render(

@@ -115,6 +115,20 @@ describe('StudyModeBanner', () => {
     expect(await screen.findByText('Studying: Spanish past tense · Practise it')).toBeTruthy();
   });
 
+  it('shows study mode as off when leaving was saved but its reply was lost', async () => {
+    (api.get as jest.Mock).mockResolvedValueOnce({ sessions: [session()] }).mockResolvedValueOnce({
+      sessions: [session({ endedAt: '2026-10-19T09:00:00.000Z' })],
+    });
+    (apiFetch as jest.Mock).mockRejectedValue(new Error('network lost'));
+    render(<StudyModeBanner conversationId={CONVERSATION_ID} />);
+
+    expect(await screen.findByText('Studying: Spanish past tense · Practise it')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Leave study mode'));
+
+    expect(await screen.findByText(STUDY_MODE_OFF_NOTE)).toBeTruthy();
+    expect(screen.getByLabelText('Turn study mode back on')).toBeTruthy();
+  });
+
   it('stays hidden in a chat that is not a study session', async () => {
     render(<StudyModeBanner conversationId={CONVERSATION_ID} />);
     await waitFor(() => expect(api.get).toHaveBeenCalled());

@@ -20,7 +20,10 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
-import { finishFamilyAsCompromised } from '@/lib/server/refresh-token-family';
+import {
+  finishFamilyAsCompromised,
+  lockRefreshFamilyForRotation,
+} from '@/lib/server/refresh-token-family';
 import { notifyDeviceCredentialCompromised } from '@/lib/services/account-activity-notifications';
 import {
   CURRENT_TERMS_VERSION,
@@ -95,6 +98,8 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
   const tokenHash = hashDeviceRefreshToken(parsed.data.refresh_token);
   const nowIso = new Date().toISOString();
   const result = await db.transaction<RotationResult>(async (tx) => {
+    const family = await lockRefreshFamilyForRotation(tx, tokenHash);
+    if (!family) return { kind: 'invalid' };
     const rows = await tx.query<RefreshTokenRow>(
       `SELECT t.id, t.family_id, t.user_id, t.user_email, t.expires_at, t.used_at, t.revoked_at,
               t.device_id, t.device_name, t.organization_id,
@@ -113,6 +118,13 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
     if (!current) return { kind: 'invalid' };
 
     if (current.owner_missing || current.owner_deletion_scheduled_for) {
+      await tx.execute(
+        `UPDATE public.device_refresh_token_families
+            SET revoked_at = COALESCE(revoked_at, $2)
+          WHERE family_id = $1
+            AND user_id = $3`,
+        [current.family_id, nowIso, current.user_id],
+      );
       await tx.execute(
         `UPDATE device_refresh_tokens
             SET revoked_at = COALESCE(revoked_at, $2)
@@ -139,6 +151,17 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       };
     }
     if (current.revoked_at) return { kind: 'invalid' };
+    if (family.revoked) {
+      await tx.execute(
+        `UPDATE device_refresh_tokens
+            SET revoked_at = COALESCE(revoked_at, $2)
+          WHERE family_id = $1
+            AND user_id = $3
+            AND revoked_at IS NULL`,
+        [current.family_id, nowIso, current.user_id],
+      );
+      return { kind: 'invalid' };
+    }
     if (new Date(current.expires_at) <= new Date()) {
       await tx.execute('UPDATE device_refresh_tokens SET revoked_at = $2 WHERE id = $1', [
         current.id,

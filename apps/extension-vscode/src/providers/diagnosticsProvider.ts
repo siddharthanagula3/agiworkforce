@@ -14,6 +14,9 @@ import { describeOutboundRefusal } from '../core/outboundContentGuard';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { reviewDepthInstruction } from './reviewEffort';
 
+const STALE_REVIEW_REASON =
+  'The file changed while the review ran, so its findings no longer line up. Run Code Review again.';
+
 export function toCodeSelection(editor: vscode.TextEditor): CodeSelection {
   const selection = editor.selection;
   return {
@@ -58,6 +61,7 @@ export class AgiDiagnosticsProvider
    * file: URI, so recovering one from the path would name a document that is not open.
    */
   private readonly _reviewedUris = new Map<string, vscode.Uri>();
+  private readonly _reviewGenerations = new Map<string, number>();
 
   constructor() {
     this._diagnosticCollection = vscode.languages.createDiagnosticCollection('agiWorkforce');
@@ -126,6 +130,12 @@ export class AgiDiagnosticsProvider
       return { status: 'not-reviewed', reason: 'No code to review.' };
     }
 
+    const reviewedDocument = editor.document;
+    const reviewedVersion = reviewedDocument.version;
+    const reviewKey = reviewedDocument.uri.toString();
+    const generation = (this._reviewGenerations.get(reviewKey) ?? 0) + 1;
+    this._reviewGenerations.set(reviewKey, generation);
+
     const prompt = buildCodeReviewPrompt(selection);
     const depth = reviewDepthInstruction(effort);
     const messages: LlmChatMessage[] = [
@@ -134,6 +144,14 @@ export class AgiDiagnosticsProvider
     ];
 
     const response = await chatCompletion(secrets, messages, cancellationToken);
+    if (
+      reviewedDocument.isClosed ||
+      reviewedDocument.version !== reviewedVersion ||
+      this._reviewGenerations.get(reviewKey) !== generation
+    ) {
+      return { status: 'not-reviewed', reason: STALE_REVIEW_REASON };
+    }
+
     const { diagnostics, summary } = parseCodeReview(response, selection);
 
     this._reviewedUris.set(selection.document.path, editor.document.uri);

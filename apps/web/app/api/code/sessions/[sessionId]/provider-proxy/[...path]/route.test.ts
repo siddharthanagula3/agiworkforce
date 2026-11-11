@@ -115,14 +115,16 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-compute-access', () => ({
   evaluateManagedComputeAccess: mockEvaluateManagedComputeAccess,
 }));
-vi.mock('@/lib/services/cloud-code-session-service', () => ({
+vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   resolveCloudCodeSessionOwnerOrganizationId: mockResolveSessionOrganizationId,
 }));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: mockRecordSettledProviderCost,
   getOrganizationMonthToDateSpendCents: mockGetOrganizationMonthToDateSpendCents,
 }));
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   UnpricedModelError: MockUnpricedModelError,
   LLMCostCalculator: {
     calculateListCost: mockCalculateListCost,
@@ -943,4 +945,35 @@ describe('provider proxy, a model outside the plan or the workspace policy', () 
 
     vi.unstubAllGlobals();
   });
+
+  it('asks the model policy of the organization that owns the session', async () => {
+    mockEvaluateManagedComputeAccess.mockResolvedValueOnce({
+      ...ALLOWED_DECISION,
+      organizationId: 'org-owner',
+    });
+    modelAccess.evaluate.mockResolvedValueOnce({
+      allowed: false,
+      code: 'model_not_allowed',
+      message: 'Your workspace does not allow this model.',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { req, context } = request({ headers: { 'x-api-key': token() } });
+    const response = await POST(req, context);
+
+    expect(response.status).toBe(403);
+    expect(modelAccess.evaluate).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: 'org-owner', db: { query: mockDbQuery } }),
+    );
+    expect(modelAccess.evaluate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ userId: expect.anything() }),
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
 });
+
+type ImportedModule1 = typeof import('@/lib/services/cloud-code-session-service');
+type ImportedModule0 = typeof import('@/lib/services/llm-cost-calculator');

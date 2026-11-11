@@ -1070,34 +1070,9 @@ pub async fn git_reset(
                 .iter()
                 .map(|file| validate_git_relative_path(&path, file))
                 .collect::<Result<Vec<_>, _>>()?;
-            return spawn_blocking(move || {
-                agiworkforce_worktree::config_guard::check_repository_config_blocking(
-                    Path::new(&path_clone),
-                    agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
-                    false,
-                )
-                .map_err(desktop_git_error)?;
-                let mut cmd = agiworkforce_worktree::host_git();
-                cmd.current_dir(&path_clone)
-                    .arg("reset")
-                    .arg("--no-recurse-submodules")
-                    .arg("HEAD")
-                    .arg("--");
-                for f in &file_list_clone {
-                    cmd.arg(f);
-                }
-                let output = host_git_output(cmd)?;
-                if output.status.success() {
-                    Ok(format!(
-                        "Reset {} file(s) successfully",
-                        file_list_clone.len()
-                    ))
-                } else {
-                    Err(String::from_utf8_lossy(&output.stderr).to_string())
-                }
-            })
-            .await
-            .map_err(|e| e.to_string())?;
+            return spawn_blocking(move || unstage_files_blocking(&path_clone, &file_list_clone))
+                .await
+                .map_err(|e| e.to_string())?;
         }
     }
 
@@ -1163,33 +1138,42 @@ pub async fn git_checkout_files(
         .iter()
         .map(|file| validate_git_relative_path(&path, file))
         .collect::<Result<Vec<_>, _>>()?;
-    spawn_blocking(move || {
-        agiworkforce_worktree::config_guard::check_repository_config_blocking(
-            Path::new(&path),
-            agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
-            false,
-        )
-        .map_err(desktop_git_error)?;
-        let mut cmd = agiworkforce_worktree::host_git();
-        cmd.current_dir(&path)
-            .arg("checkout")
-            .arg("--no-recurse-submodules")
-            .arg("--");
-        for f in &files_clone {
-            cmd.arg(f);
-        }
-        let output = host_git_output(cmd)?;
-        if output.status.success() {
-            Ok(format!(
-                "Discarded changes in {} file(s)",
-                files_clone.len()
-            ))
-        } else {
-            Err(String::from_utf8_lossy(&output.stderr).to_string())
-        }
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    spawn_blocking(move || discard_files_blocking(&path, &files_clone))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn literal_pathspec_git(repo: &str, subcommand: &[&str], files: &[String]) -> Result<(), String> {
+    agiworkforce_worktree::config_guard::check_repository_config_blocking(
+        Path::new(repo),
+        agiworkforce_worktree::config_guard::ConfigUse::CONTENT,
+        false,
+    )
+    .map_err(desktop_git_error)?;
+    let mut cmd = agiworkforce_worktree::host_git();
+    cmd.current_dir(repo)
+        .arg("--literal-pathspecs")
+        .args(subcommand)
+        .arg("--");
+    for f in files {
+        cmd.arg(f);
+    }
+    let output = host_git_output(cmd)?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+fn unstage_files_blocking(repo: &str, files: &[String]) -> Result<String, String> {
+    literal_pathspec_git(repo, &["reset", "--no-recurse-submodules", "HEAD"], files)?;
+    Ok(format!("Reset {} file(s) successfully", files.len()))
+}
+
+fn discard_files_blocking(repo: &str, files: &[String]) -> Result<String, String> {
+    literal_pathspec_git(repo, &["checkout", "--no-recurse-submodules"], files)?;
+    Ok(format!("Discarded changes in {} file(s)", files.len()))
 }
 
 static GIT_TRUST_DECISIONS: crate::sys::native_confirm::ConfirmGate =
@@ -1474,6 +1458,83 @@ mod security_tests {
             let escaped = validate_git_relative_path(&repo, "linked.txt").unwrap_err();
             assert!(escaped.contains("escapes repository"));
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod literal_selection_tests {
+    use super::{discard_files_blocking, unstage_files_blocking};
+    use git2::{Repository, Signature, Status};
+    use std::fs;
+    use std::path::Path;
+    use tempfile::{tempdir, TempDir};
+
+    const WILDCARD_NAME: &str = "a*.txt";
+    const SIBLING_NAME: &str = "alpha.txt";
+
+    fn repo_with_both_files_edited() -> (TempDir, Repository) {
+        let dir = tempdir().unwrap();
+        let repo = Repository::init(dir.path()).unwrap();
+        for name in [WILDCARD_NAME, SIBLING_NAME] {
+            fs::write(dir.path().join(name), "committed").unwrap();
+        }
+        let mut index = repo.index().unwrap();
+        for name in [WILDCARD_NAME, SIBLING_NAME] {
+            index.add_path(Path::new(name)).unwrap();
+        }
+        index.write().unwrap();
+        let tree = repo.find_tree(index.write_tree().unwrap()).unwrap();
+        let author = Signature::now("Test User", "test@example.com").unwrap();
+        repo.commit(Some("HEAD"), &author, &author, "initial", &tree, &[])
+            .unwrap();
+        drop(tree);
+        for name in [WILDCARD_NAME, SIBLING_NAME] {
+            fs::write(dir.path().join(name), "edited").unwrap();
+        }
+        (dir, repo)
+    }
+
+    fn repo_root(dir: &TempDir) -> String {
+        dir.path().to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn discarding_a_wildcard_named_file_leaves_the_sibling_edits() {
+        let (dir, _repo) = repo_with_both_files_edited();
+
+        let message =
+            discard_files_blocking(&repo_root(&dir), &[WILDCARD_NAME.to_string()]).unwrap();
+
+        assert_eq!(message, "Discarded changes in 1 file(s)");
+        assert_eq!(
+            fs::read_to_string(dir.path().join(WILDCARD_NAME)).unwrap(),
+            "committed"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join(SIBLING_NAME)).unwrap(),
+            "edited"
+        );
+    }
+
+    #[test]
+    fn unstaging_a_wildcard_named_file_leaves_the_sibling_staged() {
+        let (dir, repo) = repo_with_both_files_edited();
+        let mut index = repo.index().unwrap();
+        for name in [WILDCARD_NAME, SIBLING_NAME] {
+            index.add_path(Path::new(name)).unwrap();
+        }
+        index.write().unwrap();
+
+        let message =
+            unstage_files_blocking(&repo_root(&dir), &[WILDCARD_NAME.to_string()]).unwrap();
+
+        assert_eq!(message, "Reset 1 file(s) successfully");
+        let repo = Repository::open(dir.path()).unwrap();
+        let wildcard = repo.status_file(Path::new(WILDCARD_NAME)).unwrap();
+        let sibling = repo.status_file(Path::new(SIBLING_NAME)).unwrap();
+        assert!(!wildcard.contains(Status::INDEX_MODIFIED));
+        assert!(wildcard.contains(Status::WT_MODIFIED));
+        assert!(sibling.contains(Status::INDEX_MODIFIED));
     }
 }
 

@@ -266,27 +266,36 @@ interface PresignUploadParams {
   expiresInSeconds?: number;
 }
 
-function presignUploadForBucket(bucket: string, params: PresignUploadParams): Promise<string> {
-  return getObjectStore().presignPut({
+interface PresignedDirectUpload {
+  uploadUrl: string;
+  uploadHeaders: Readonly<Record<string, string>>;
+}
+
+async function presignUploadForBucket(
+  bucket: string,
+  params: PresignUploadParams,
+): Promise<PresignedDirectUpload> {
+  const { url, headers } = await getObjectStore().presignPut({
     bucket,
     key: params.key,
     contentType: params.contentType,
     contentLength: params.contentLength,
     expiresInSeconds: params.expiresInSeconds ?? DEFAULT_PRESIGNED_UPLOAD_TTL_SECONDS,
   });
+  return { uploadUrl: url, uploadHeaders: headers };
 }
 
 export async function getPresignedUploadUrl(
   params: PresignUploadParams,
-): Promise<{ uploadUrl: string; publicUrl: string }> {
-  const uploadUrl = await presignUploadForBucket(publicBucketName(), params);
-  return { uploadUrl, publicUrl: publicUrlForKey(params.key) };
+): Promise<PresignedDirectUpload & { publicUrl: string }> {
+  const upload = await presignUploadForBucket(publicBucketName(), params);
+  return { ...upload, publicUrl: publicUrlForKey(params.key) };
 }
 
-export async function getPresignedPrivateUploadUrl(
+export function getPresignedPrivateUploadUrl(
   params: PresignUploadParams,
-): Promise<{ uploadUrl: string }> {
-  return { uploadUrl: await presignUploadForBucket(privateBucketName(), params) };
+): Promise<PresignedDirectUpload> {
+  return presignUploadForBucket(privateBucketName(), params);
 }
 
 export function getPresignedPrivateDownloadUrl(params: {

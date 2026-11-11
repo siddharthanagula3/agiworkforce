@@ -194,6 +194,12 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
       },
 
       shouldNotify: (type: NotificationEventType): boolean => {
+        if (
+          !useNotificationPrefsStore.persist.hasHydrated() &&
+          !QUIET_HOURS_EXEMPT_EVENT_TYPES.includes(type)
+        ) {
+          return false;
+        }
         return shouldNotifyWithPreferences(type, get(), new Date());
       },
     }),

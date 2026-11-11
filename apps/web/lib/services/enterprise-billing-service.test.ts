@@ -643,6 +643,65 @@ describe('recordEnterpriseInvoiceEvent', () => {
     ).toBe(true);
   });
 
+  it('locks the contract row before the invoice write and the oldest-open aggregate read', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (sql.includes('insert into public.organization_billing_invoices')) {
+        return [{ stripe_invoice_id: 'in_open_1' }];
+      }
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1' }];
+      }
+      if (sql.includes('from public.organization_billing_invoices')) return [];
+      return [];
+    });
+
+    await recordEnterpriseInvoiceEvent(db, invoiceFixture({ status: 'void' }), {
+      eventCreatedAt: 1_700_000_500,
+    });
+
+    const lockIndex = calls.findIndex(
+      (call) =>
+        call.sql.includes('from public.organization_billing_contracts') &&
+        /for no key update\s*$/u.test(call.sql.trim()),
+    );
+    const insertIndex = calls.findIndex((call) =>
+      call.sql.includes('insert into public.organization_billing_invoices'),
+    );
+    const aggregateIndex = calls.findIndex(
+      (call) =>
+        call.sql.includes('from public.organization_billing_invoices') &&
+        call.sql.includes('order by due_at'),
+    );
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeLessThan(insertIndex);
+    expect(insertIndex).toBeLessThan(aggregateIndex);
+  });
+
+  it('admits an equal-second snapshot only when it does not move the invoice back in its lifecycle', async () => {
+    const { db, calls } = makeDb((sql) => {
+      if (
+        sql.includes('from public.organization_billing_contracts') &&
+        sql.includes('stripe_subscription_id')
+      ) {
+        return [{ organization_id: 'org_1' }];
+      }
+      return [];
+    });
+
+    await recordEnterpriseInvoiceEvent(db, invoiceFixture(), { eventCreatedAt: 1_700_000_500 });
+
+    const insert = calls.find((call) =>
+      call.sql.includes('insert into public.organization_billing_invoices'),
+    );
+    const sql = insert!.sql.replace(/\s+/gu, ' ');
+    expect(sql).toMatch(
+      /last_stripe_event_at <= to_timestamp\(\$18::double precision\) and \( organization_billing_invoices\.last_stripe_event_at < to_timestamp\(\$18::double precision\) or \(case organization_billing_invoices\.status when 'paid' then 3 when 'void' then 3 when 'uncollectible' then 2 when 'open' then 1 else 0 end\) <= \(case excluded\.status when 'paid' then 3 when 'void' then 3 when 'uncollectible' then 2 when 'open' then 1 else 0 end\)/u,
+    );
+  });
+
   it('skips the write, logs at debug, and never recomputes when a newer event has already been applied', async () => {
     const { db, calls } = makeDb((sql) => {
       if (sql.includes('insert into public.organization_billing_invoices')) return [];

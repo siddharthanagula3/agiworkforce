@@ -1329,6 +1329,38 @@ describe('pauseE2BSession / killE2BSession', () => {
     expect(sessions.get(scopeKey(sessionScope))?.computeReservation).toBeUndefined();
   });
 
+  it('keeps a settled interval closed when the executor is disposed after its pause', async () => {
+    const sessionScope = scope('conv-pause-dispose', 'user-pause-dispose', 'free');
+    const { getE2BExecutor } = await import('../runtime');
+    const first = await getE2BExecutor(sessionScope);
+    expect(first).not.toBeNull();
+    await first!.pause!();
+    await first!.dispose();
+    await first!.dispose();
+
+    const stored = sessions.get(scopeKey(sessionScope));
+    expect(stored?.computeReservation).toBeUndefined();
+    expect(stored?.activeSinceMs).toBeUndefined();
+
+    const second = await getE2BExecutor(sessionScope);
+    expect(second).not.toBeNull();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not restore the mapping of a sandbox released by the pause fallback on dispose', async () => {
+    const sessionScope = scope('conv-release-dispose', 'user-release-dispose', 'free');
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(sessionScope);
+    staticPause.mockRejectedValueOnce(new Error('pause failed'));
+    staticPause.mockRejectedValueOnce(new Error('pause retry failed'));
+
+    await executor!.pause!();
+    await executor!.dispose();
+
+    expect(sessions.has(scopeKey(sessionScope))).toBe(false);
+  });
+
   it('does not reuse a settled hold from a previously stored paused session', async () => {
     const sessionScope = scope('conv-legacy', 'user-legacy', 'free');
     sessions.set(scopeKey(sessionScope), {

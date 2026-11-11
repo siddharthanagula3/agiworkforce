@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, ScrollView, RefreshControl } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -70,23 +70,29 @@ export default function ReflectScreen() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
 
+  const latestRequest = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
+
   const load = useCallback(
-    async (signal?: AbortSignal) => {
+    async (signal?: AbortSignal): Promise<boolean> => {
+      const requestId = ++latestRequest.current;
+      const isCurrent = () => requestId === latestRequest.current && !signal?.aborted;
       try {
         const recap = await fetchReflectRecap(range, signal);
-        if (signal?.aborted) return;
+        if (!isCurrent()) return false;
         setState({ kind: 'ready', recap });
       } catch (error) {
-        if (signal?.aborted) return;
+        if (!isCurrent()) return false;
         if (error instanceof ReflectMemoryRequiredError) {
           setState({ kind: 'memory-off' });
-          return;
+          return true;
         }
         setState({
           kind: 'error',
           message: 'Reflect could not load. Check your connection and try again.',
         });
       }
+      return true;
     },
     [range],
   );
@@ -94,10 +100,23 @@ export default function ReflectScreen() {
   useEffect(() => {
     if (!isClerkSignedIn || appMode !== 'cloud') return;
     const controller = new AbortController();
+    activeRequest.current = controller;
+    setRefreshing(false);
     setState({ kind: 'loading' });
     void load(controller.signal);
-    return () => controller.abort();
+    return () => {
+      activeRequest.current?.abort();
+      activeRequest.current = null;
+      latestRequest.current += 1;
+    };
   }, [appMode, isClerkSignedIn, load]);
+
+  const reload = useCallback(() => {
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    return load(controller.signal);
+  }, [load]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -109,9 +128,8 @@ export default function ReflectScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
+    if (await reload()) setRefreshing(false);
+  }, [reload]);
 
   const header = (
     <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
@@ -309,7 +327,7 @@ export default function ReflectScreen() {
               {state.message}
             </Text>
             <Pressable
-              onPress={() => void load()}
+              onPress={() => void reload()}
               accessibilityRole="button"
               accessibilityLabel="Retry loading Reflect"
               style={{ marginTop: 10, alignSelf: 'flex-start' }}
@@ -625,7 +643,8 @@ export default function ReflectScreen() {
         <Text
           style={{ fontSize: typeScale.caption, lineHeight: 16, color: c.textMuted, marginTop: 18 }}
         >
-          Excludes temporary chats and AGI Work runs, and never reads message text.
+          Excludes temporary chats and AGI Work runs. Topics are worked out on our servers from chat
+          titles and your first few messages, and are not shared with an AI model.
         </Text>
       </ScrollView>
     </SafeAreaView>

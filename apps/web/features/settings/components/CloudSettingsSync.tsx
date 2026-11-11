@@ -17,6 +17,7 @@ import { useCloudSettingsSyncStatusStore } from '@/features/settings/lib/cloud-s
 import {
   APPEARANCE_NAMESPACE,
   LANGUAGE_NAMESPACE,
+  acknowledgedAppearance,
   appearanceDelta,
   fromAppearanceNamespace,
   readStoredLocale,
@@ -80,6 +81,7 @@ export function CloudSettingsSync() {
 
   const [hydrateKey, setHydrateKey] = useState(0);
   const [hydratedAt, setHydratedAt] = useState<number | null>(null);
+  const [acknowledgedWrites, setAcknowledgedWrites] = useState(0);
   const acknowledged = useRef<AppearanceNamespace | null>(null);
   const acknowledgedLocale = useRef<string | null>(null);
   const acknowledgedCommands = useRef<CustomCommand[] | null>(null);
@@ -89,6 +91,26 @@ export function CloudSettingsSync() {
 
   const i18nRef = useRef(i18n);
   i18nRef.current = i18n;
+
+  const projectedAppearance = toAppearanceNamespace({
+    theme: isSyncedTheme(theme) ? theme : 'system',
+    accentColor,
+    chatFont: chatFont ?? 'default',
+    chatTextSize,
+    motion,
+    highContrast,
+    codeBlockWrap,
+    codeTheme,
+    sendWithEnter,
+    defaultWorkMode,
+    followUpSuggestionsEnabled,
+    followUpBehavior,
+    dictationEnabled,
+    voiceSpeed: voiceSpeed ?? 'normal',
+    hiddenNavIds: hiddenNavIds ?? [],
+  });
+  const localAppearance = useRef(projectedAppearance);
+  localAppearance.current = projectedAppearance;
 
   const language = i18n.language;
   const currentLocale = language.split('-')[0] ?? language;
@@ -155,6 +177,7 @@ export function CloudSettingsSync() {
           } else {
             acknowledgedLocale.current = String(patch['locale'] ?? acknowledgedLocale.current);
           }
+          setAcknowledgedWrites((count) => count + 1);
           setStatus(null, null);
         } catch (error) {
           setStatus(toUserMessage(error, 'Your settings did not reach your account.'), () =>
@@ -179,6 +202,7 @@ export function CloudSettingsSync() {
 
     let cancelled = false;
     const revisionsAtRead = { ...appearanceRevisions.current };
+    const appearanceAtRead = localAppearance.current;
     void getCsrfToken().catch(() => {});
     void Promise.all([
       fetchStoredPreferenceNamespace<AppearanceNamespace>(APPEARANCE_NAMESPACE),
@@ -214,7 +238,7 @@ export function CloudSettingsSync() {
         if (cancelled) return;
         acknowledgedLocale.current = storedLocale;
 
-        acknowledged.current = storedAppearance;
+        acknowledged.current = acknowledgedAppearance(storedAppearance, appearanceAtRead);
         setHydratedAt(Date.now());
         setStatus(null, null);
       })
@@ -234,25 +258,11 @@ export function CloudSettingsSync() {
 
   useEffect(() => {
     if (hydratedAt === null || !isSignedIn) return;
-    const next = toAppearanceNamespace({
-      theme: isSyncedTheme(theme) ? theme : 'system',
-      accentColor,
-      chatFont: chatFont ?? 'default',
-      chatTextSize,
-      motion,
-      highContrast,
-      codeBlockWrap,
-      codeTheme,
-      sendWithEnter,
-      defaultWorkMode,
-      followUpSuggestionsEnabled,
-      followUpBehavior,
-      dictationEnabled,
-      voiceSpeed: voiceSpeed ?? 'normal',
-      hiddenNavIds: hiddenNavIds ?? [],
-    });
-    const delta = appearanceDelta(acknowledged.current, next);
-    if (!delta) return;
+    const delta = appearanceDelta(acknowledged.current, localAppearance.current);
+    if (!delta) {
+      pendingAppearanceWrite.current = null;
+      return;
+    }
 
     pendingAppearanceWrite.current = delta as Record<string, unknown>;
     if (debounce.current) clearTimeout(debounce.current);
@@ -266,6 +276,7 @@ export function CloudSettingsSync() {
       if (debounce.current) clearTimeout(debounce.current);
     };
   }, [
+    acknowledgedWrites,
     accentColor,
     chatFont,
     chatTextSize,
@@ -290,14 +301,14 @@ export function CloudSettingsSync() {
     if (hydratedAt === null || !isSignedIn) return;
     if (sameCustomCommands(acknowledgedCommands.current, customCommands)) return;
     write(CUSTOM_COMMANDS_NAMESPACE, { commands: customCommands });
-  }, [customCommands, hydratedAt, isSignedIn, write]);
+  }, [acknowledgedWrites, customCommands, hydratedAt, isSignedIn, write]);
 
   useEffect(() => {
     if (hydratedAt === null || !isSignedIn) return;
     if (!SUPPORTED_LOCALES.includes(currentLocale)) return;
     if (acknowledgedLocale.current === currentLocale) return;
     write(LANGUAGE_NAMESPACE, { locale: currentLocale });
-  }, [currentLocale, hydratedAt, isSignedIn, write]);
+  }, [acknowledgedWrites, currentLocale, hydratedAt, isSignedIn, write]);
 
   useEffect(() => {
     const flush = () => {

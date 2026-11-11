@@ -38,7 +38,7 @@ agiworkforce-protocol = { path = "../../../crates/agiworkforce-protocol" }
 agiworkforce-sandbox-policy = { path = "../../../crates/agiworkforce-sandbox-policy" }
 agiworkforce-worktree = { path = "../../../crates/agiworkforce-worktree" }
 
-tauri = { version = "2.11.0", features = ["tray-icon", "macos-private-api"] }
+tauri = { version = "2.11.0", features = ["tray-icon", "macos-private-api", "isolation"] }
 tauri-plugin-shell = { version = "2.3.5", optional = true }
 tauri-plugin-process = "2.3.1"
 tauri-plugin-fs = "2.5.1"
@@ -97,7 +97,7 @@ thiserror = "2.0"
 
 # Note: bundled-sqlcipher requires libclang at build time on some platforms.
 # Install via: brew install llvm (macOS) or apt install libclang-dev (Linux).
-rusqlite = { version = "0.32.1", features = ["bundled-sqlcipher-vendored-openssl", "backup", "blob", "chrono"] }
+rusqlite = { version = "0.41.1", default-features = false, features = ["bundled-sqlcipher-vendored-openssl", "backup", "blob", "cache", "chrono", "fallible_uint"] }
 # tokio-rusqlite removed, replaced by data/async_sqlite.rs wrapper to resolve libsqlite3-sys conflict
 tokio-postgres = { version = "0.7", features = ["with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
 postgres-types = { version = "0.2", features = ["derive", "with-serde_json-1", "with-chrono-0_4", "with-uuid-1"], optional = true }
@@ -113,7 +113,7 @@ mongodb = { version = "3.8", optional = true, default-features = false, features
   "dns-resolver",
   "bson-3",
 ] }
-redis = { version = "~1.7", features = ["aio", "tokio-comp", "connection-manager"], optional = true }
+redis = { version = "~1.8", features = ["aio", "tokio-comp", "connection-manager"], optional = true }
 bson = { version = "3.1", optional = true }
 
 
@@ -215,13 +215,13 @@ cap-std = "4.0.2"
 
 
 flate2 = "1.0"
-zip = "=9.0.5"
+zip = "=9.3.0"
 
 
 pdf-extract = "0.12"
 lopdf = "0.42"
 roxmltree = "0.20"
-calamine = { version = "0.37.0", features = ["chrono"] }
+calamine = { version = "0.38.0", features = ["chrono"] }
 
 
 docx-rs = "0.4"
@@ -318,7 +318,7 @@ remote-databases = ["dep:tokio-postgres", "dep:postgres-types", "dep:deadpool-po
 
 [build-dependencies]
 embed-resource = "3.0.6"
-tauri-build = { version = "2.5.6", features = [] }
+tauri-build = { version = "2.5.6", features = ["isolation"] }
 
 [dev-dependencies]
 tempfile = "3.10"

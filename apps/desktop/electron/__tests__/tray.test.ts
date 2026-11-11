@@ -6,6 +6,9 @@ import {
   type GarnishShortcuts,
 } from '../garnishCore';
 
+type NativeSurfaceModule = typeof import('../runtime/nativeSurface');
+type ShortcutsModule = typeof import('../shortcuts');
+
 type MenuTemplate = Electron.MenuItemConstructorOptions[];
 
 const contextMenus: MenuTemplate[] = [];
@@ -25,6 +28,7 @@ vi.mock('electron', () => ({
   Tray: function Tray() {
     return trayInstance;
   },
+  Notification: { isSupported: () => true },
   nativeImage: {
     createFromBuffer: vi.fn(() => {
       throw new Error('no assets in test');
@@ -44,13 +48,28 @@ vi.mock('../settingsStore', () => ({
   saveSettings: (patch: Partial<GarnishShortcuts>) => saveSettings(patch),
 }));
 
-const registerGarnishShortcuts = vi.fn();
-const unregisterGarnishShortcuts = vi.fn();
+const shownNotifications: { title: string; body: string }[] = [];
+
+vi.mock('../runtime/nativeSurface', async (importOriginal) => ({
+  ...(await importOriginal<NativeSurfaceModule>()),
+  createNativeNotification: (options: { title: string; body: string }) => ({
+    show: () => {
+      shownNotifications.push(options);
+    },
+  }),
+}));
+
+let refusal: string | null = null;
+const changeGarnishShortcuts = vi.fn((patch: Partial<GarnishShortcuts>, _handlers: unknown) => {
+  if (refusal === null) saveSettings(patch);
+  return refusal;
+});
 let statuses: { key: keyof GarnishShortcuts; accelerator: string; status: string }[] = [];
 
-vi.mock('../shortcuts', () => ({
-  registerGarnishShortcuts: (handlers: unknown) => registerGarnishShortcuts(handlers),
-  unregisterGarnishShortcuts: () => unregisterGarnishShortcuts(),
+vi.mock('../shortcuts', async (importOriginal) => ({
+  ...(await importOriginal<ShortcutsModule>()),
+  changeGarnishShortcuts: (patch: Partial<GarnishShortcuts>, handlers: unknown) =>
+    changeGarnishShortcuts(patch, handlers),
   shortcutRegistrations: () => statuses,
   shortcutStatusDetail: (status: string) =>
     status === 'taken' ? 'is already in use by another app' : null,
@@ -110,8 +129,9 @@ describe('tray shortcut customization', () => {
     statuses = [];
     contextMenus.length = 0;
     saveSettings.mockClear();
-    registerGarnishShortcuts.mockClear();
-    unregisterGarnishShortcuts.mockClear();
+    changeGarnishShortcuts.mockClear();
+    shownNotifications.length = 0;
+    refusal = null;
     destroyTray();
   });
 
@@ -133,15 +153,19 @@ describe('tray shortcut customization', () => {
 
     expect(saveSettings).toHaveBeenCalledWith({ quickAskShortcut: target });
     expect(stored.quickAskShortcut).toBe(target);
-    expect(unregisterGarnishShortcuts).toHaveBeenCalledTimes(1);
-    expect(registerGarnishShortcuts).toHaveBeenCalledWith({
-      onQuickAsk: handlers.onQuickAsk,
-      onNewChat: handlers.onNewChatWindow,
-      onScreenshot: handlers.onScreenshot,
-      onWindowShot: handlers.onWindowShot,
-      onVoice: handlers.onVoice,
-      onStop: handlers.onStopAgents,
-    });
+    expect(changeGarnishShortcuts).toHaveBeenCalledTimes(1);
+    expect(changeGarnishShortcuts).toHaveBeenCalledWith(
+      { quickAskShortcut: target },
+      {
+        onQuickAsk: handlers.onQuickAsk,
+        onNewChat: handlers.onNewChatWindow,
+        onScreenshot: handlers.onScreenshot,
+        onWindowShot: handlers.onWindowShot,
+        onVoice: handlers.onVoice,
+        onStop: handlers.onStopAgents,
+      },
+    );
+    expect(shownNotifications).toEqual([]);
 
     expect(contextMenus).toHaveLength(2);
     const rebuilt = latestMenu();
@@ -149,6 +173,32 @@ describe('tray shortcut customization', () => {
     expect(
       itemLabelled(submenuOf(rebuilt, 'Shortcuts'), describeAccelerator(target, process.platform))
         .checked,
+    ).toBe(true);
+  });
+
+  it('keeps the Stop Agents choice that was working, and says why, when the new one is refused', () => {
+    createTray(makeHandlers());
+    const working = stored.stopShortcut;
+    const held = shortcutChoices('stopShortcut', working).find((value) => value !== working);
+    if (!held) throw new Error('no alternative Stop Agents shortcut is offered');
+    refusal = 'Stop Agents could not take that shortcut. The shortcut it had is kept.';
+
+    itemLabelled(
+      submenuOf(latestMenu(), 'Shortcuts'),
+      describeAccelerator(held, process.platform),
+    ).click?.(
+      {} as Electron.MenuItem,
+      undefined as unknown as Electron.BrowserWindow,
+      {} as Electron.KeyboardEvent,
+    );
+
+    expect(stored.stopShortcut).toBe(working);
+    expect(shownNotifications).toEqual([{ title: 'Shortcut not changed', body: refusal }]);
+    expect(
+      itemLabelled(
+        submenuOf(latestMenu(), 'Shortcuts'),
+        describeAccelerator(working, process.platform),
+      ).checked,
     ).toBe(true);
   });
 

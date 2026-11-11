@@ -53,7 +53,8 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
   getNeonDb: () => mocks.neonDb,
 }));
-vi.mock('@/lib/server/data-region', () => ({
+vi.mock('@/lib/server/data-region', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   CustomerKeyRegionError: class CustomerKeyRegionError extends Error {},
   RegionMoveNotRequestedError: class RegionMoveNotRequestedError extends Error {},
   assertCustomerKeyRegion: vi.fn(),
@@ -252,3 +253,5 @@ describe('/api/settings/organization/data-region', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/data-region');

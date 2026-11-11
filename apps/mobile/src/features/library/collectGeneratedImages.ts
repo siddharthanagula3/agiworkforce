@@ -1,8 +1,12 @@
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
-import { getDurableGeneratedImagePath } from '@/src/features/image/services/imagegen';
+import {
+  getDurableGeneratedImageAssetId,
+  getDurableGeneratedImagePath,
+} from '@/src/features/image/services/imagegen';
 
 export interface LibraryImage {
   id: string;
+  assetId: string;
   conversationId: string;
   imageUrl: string;
   prompt?: string;
@@ -26,9 +30,11 @@ export function collectGeneratedImages(
         message.imageGenPersisted === false
           ? null
           : getDurableGeneratedImagePath({ url: message.imageUrl });
-      if (!durablePath) continue;
+      const assetId = durablePath ? getDurableGeneratedImageAssetId(durablePath) : null;
+      if (!durablePath || !assetId) continue;
       images.push({
         id: message.id,
+        assetId,
         conversationId: conversation.id,
         imageUrl: durablePath,
         prompt: message.imageGenPrompt ?? message.revisedPrompt,

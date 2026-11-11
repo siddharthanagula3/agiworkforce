@@ -14,6 +14,7 @@ import {
 
 import { useTeamMembers, type TeamMember } from '@/features/settings/hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useServerDraftSync } from '../hooks/use-server-draft-sync';
 import {
   useCreateWorkspaceGroup,
   useCreateWorkspaceRole,
@@ -118,16 +119,18 @@ function RoleEditor({
   const update = useUpdateWorkspaceRole();
   const [name, setName] = useState(initial?.name ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
-  const [permissions, setPermissions] = useState<OrganizationPermission[]>(
-    initial?.permissions ?? ['feature.content.view'],
+  const [permissions, setPermissions] = useState<OrganizationPermission[]>(() =>
+    initial ? distinctPermissions(initial.permissions) : ['feature.content.view'],
   );
   const held = expandOrganizationPermissions(data.currentUserPermissions);
   const pending = create.isPending || update.isPending;
   const canSave = name.trim().length > 0 && permissions.length > 0 && !pending;
 
-  function toggle(permission: OrganizationPermission, on: boolean) {
+  function toggle(permission: CanonicalOrganizationPermission, on: boolean) {
     setPermissions((current) =>
-      on ? [...new Set([...current, permission])] : current.filter((p) => p !== permission),
+      on
+        ? [...new Set([...current, permission])]
+        : current.filter((p) => canonicalOrganizationPermission(p) !== permission),
     );
   }
 
@@ -310,9 +313,10 @@ function RoleList({ data }: { data: WorkspaceRolesResult }) {
       </ul>
       {editing ? (
         <RoleEditor
+          key={editing === 'new' ? 'new' : editing.id}
           data={data}
           initial={editing === 'new' ? null : editing}
-          onDone={() => setEditing(null)}
+          onDone={() => setEditing((current) => (current === editing ? null : current))}
         />
       ) : data.canManageRoles ? (
         <div className="flex items-center gap-3 px-5 py-3">
@@ -368,11 +372,55 @@ function ReadOnlyMemberRoleRow({
   );
 }
 
+function idSetKey(ids: readonly string[]): string {
+  return JSON.stringify([...ids].sort());
+}
+
+function useServerIdDraft(server: readonly string[]) {
+  const serverKey = idSetKey(server);
+  const [edit, setEdit] = useState<{ base: string; ids: string[] } | null>(null);
+
+  useEffect(() => {
+    if (edit && idSetKey(edit.ids) === serverKey) setEdit(null);
+  }, [edit, serverKey]);
+
+  const dirty = edit !== null && idSetKey(edit.ids) !== serverKey;
+  return {
+    ids: edit?.ids ?? [...server],
+    dirty,
+    stale: dirty && edit.base !== serverKey,
+    change: (update: (ids: string[]) => string[]) =>
+      setEdit((current) => ({
+        base: current?.base ?? serverKey,
+        ids: update(current?.ids ?? [...server]),
+      })),
+    discard: () => setEdit(null),
+  };
+}
+
+function StaleDraftNotice({ onDiscard }: { onDiscard: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <p role="status" className="text-xs" style={{ color: 'var(--text-3)' }}>
+        These changed elsewhere while you were editing. Discard your changes to see the current
+        state.
+      </p>
+      <button
+        type="button"
+        className={secondaryButton}
+        style={{ borderColor: 'var(--settings-border)', color: 'var(--text-1)' }}
+        onClick={onDiscard}
+      >
+        Discard changes
+      </button>
+    </div>
+  );
+}
+
 function MemberRoleRow({ member, data }: { member: TeamMember; data: WorkspaceRolesResult }) {
   const setRoles = useSetMemberRoles();
-  const current = data.memberRoleGrants[member.userId] ?? [];
-  const [selected, setSelected] = useState<string[]>(current);
-  const dirty = JSON.stringify([...selected].sort()) !== JSON.stringify([...current].sort());
+  const draft = useServerIdDraft(data.memberRoleGrants[member.userId] ?? []);
+  const selected = draft.ids;
   const held = expandOrganizationPermissions(data.currentUserPermissions);
 
   return (
@@ -395,7 +443,7 @@ function MemberRoleRow({ member, data }: { member: TeamMember; data: WorkspaceRo
                 checked={selected.includes(role.id)}
                 disabled={!grantable || setRoles.isPending}
                 onChange={(event) =>
-                  setSelected((ids) =>
+                  draft.change((ids) =>
                     event.target.checked ? [...ids, role.id] : ids.filter((id) => id !== role.id),
                   )
                 }
@@ -405,17 +453,20 @@ function MemberRoleRow({ member, data }: { member: TeamMember; data: WorkspaceRo
           );
         })}
       </div>
-      {dirty ? (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            className={primaryButton}
-            disabled={setRoles.isPending}
-            onClick={() => setRoles.mutate({ userId: member.userId, roleIds: selected })}
-          >
-            {setRoles.isPending ? 'Saving…' : 'Save roles'}
-          </button>
-          <ErrorLine error={setRoles.error} />
+      {draft.dirty ? (
+        <div className="flex flex-col gap-2">
+          {draft.stale ? <StaleDraftNotice onDiscard={draft.discard} /> : null}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className={primaryButton}
+              disabled={setRoles.isPending || draft.stale}
+              onClick={() => setRoles.mutate({ userId: member.userId, roleIds: selected })}
+            >
+              {setRoles.isPending ? 'Saving…' : 'Save roles'}
+            </button>
+            <ErrorLine error={setRoles.error} />
+          </div>
         </div>
       ) : null}
     </li>
@@ -483,9 +534,11 @@ function WorkspaceGroupFields({
   const [name, setName] = useState(group.displayName);
   const [selected, setSelected] = useState<string[] | null>(null);
 
-  useEffect(() => {
-    if (current.data) setSelected(current.data.userIds);
-  }, [current.data]);
+  useServerDraftSync(
+    current.data,
+    (acknowledged) => selected === null || idSetKey(selected) === idSetKey(acknowledged.userIds),
+    (incoming) => setSelected(incoming.userIds),
+  );
 
   useEffect(() => {
     const saved = current.data?.userIds ?? [];
@@ -606,13 +659,14 @@ function GroupRow({
   const setMembers = useSetWorkspaceGroupMembers();
   const [memberIds, setMemberIds] = useState<string[] | null>(null);
   const workspaceGroup = isWorkspaceGroup(group);
-  const [roleIds, setRoleIds] = useState(group.roleIds);
-  const [managerIds, setManagerIds] = useState(group.managerUserIds);
+  const rolesDraft = useServerIdDraft(group.roleIds);
+  const managersDraft = useServerIdDraft(group.managerUserIds);
+  const roleIds = rolesDraft.ids;
+  const managerIds = managersDraft.ids;
   const held = expandOrganizationPermissions(data.currentUserPermissions);
-  const rolesDirty =
-    JSON.stringify([...roleIds].sort()) !== JSON.stringify([...group.roleIds].sort());
-  const managersDirty =
-    JSON.stringify([...managerIds].sort()) !== JSON.stringify([...group.managerUserIds].sort());
+  const rolesDirty = rolesDraft.dirty;
+  const managersDirty = managersDraft.dirty;
+  const draftStale = rolesDraft.stale || managersDraft.stale;
 
   return (
     <li
@@ -652,7 +706,7 @@ function GroupRow({
                 checked={roleIds.includes(role.id)}
                 disabled={!role.permissions.every((p) => held.has(p)) || setRoles.isPending}
                 onChange={(event) =>
-                  setRoleIds((ids) =>
+                  rolesDraft.change((ids) =>
                     event.target.checked ? [...ids, role.id] : ids.filter((id) => id !== role.id),
                   )
                 }
@@ -668,7 +722,9 @@ function GroupRow({
             multiple
             value={managerIds}
             onChange={(event) =>
-              setManagerIds(Array.from(event.target.selectedOptions, (option) => option.value))
+              managersDraft.change(() =>
+                Array.from(event.target.selectedOptions, (option) => option.value),
+              )
             }
             style={{ ...controlStyle, minHeight: 72 }}
           >
@@ -681,22 +737,34 @@ function GroupRow({
         </label>
       ) : null}
       {rolesDirty || managersDirty || memberIds !== null ? (
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            className={primaryButton}
-            disabled={setRoles.isPending || setManagers.isPending || setMembers.isPending}
-            onClick={() => {
-              if (rolesDirty) setRoles.mutate({ groupId: group.id, roleIds });
-              if (managersDirty) setManagers.mutate({ groupId: group.id, userIds: managerIds });
-              if (memberIds !== null) {
-                setMembers.mutate({ groupId: group.id, userIds: memberIds });
+        <div className="flex flex-col gap-2">
+          {draftStale ? (
+            <StaleDraftNotice
+              onDiscard={() => {
+                rolesDraft.discard();
+                managersDraft.discard();
+              }}
+            />
+          ) : null}
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className={primaryButton}
+              disabled={
+                setRoles.isPending || setManagers.isPending || setMembers.isPending || draftStale
               }
-            }}
-          >
-            Save group
-          </button>
-          <ErrorLine error={setRoles.error ?? setManagers.error ?? setMembers.error} />
+              onClick={() => {
+                if (rolesDirty) setRoles.mutate({ groupId: group.id, roleIds });
+                if (managersDirty) setManagers.mutate({ groupId: group.id, userIds: managerIds });
+                if (memberIds !== null) {
+                  setMembers.mutate({ groupId: group.id, userIds: memberIds });
+                }
+              }}
+            >
+              Save group
+            </button>
+            <ErrorLine error={setRoles.error ?? setManagers.error ?? setMembers.error} />
+          </div>
         </div>
       ) : null}
     </li>

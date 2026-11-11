@@ -201,7 +201,7 @@ intent_pattern!(
 );
 intent_pattern!(
     REFUSED_WEB_SEARCH_ITEM,
-    r###"^(?:(?:(?:web|internet|online|live|public)\s+)?(?:search(?:es|ing)?|brows(?:e|ing)|googl(?:e|ing))(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online))?(?:\s+tools?)?|(?:the\s+)?(?:public\s+)?(?:web|internet)|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|check(?:ing)?\s+(?:online|the\s+web))$"###
+    r###"^(?:(?:(?:public\s+)?(?:web|internet|online|live)\s+|public\s+)?(?:search(?:es|ing)?|brows(?:e|ing)|googl(?:e|ing))(?:\s+(?:(?:on|in)\s+)?(?:the\s+)?(?:(?:public\s+)?(?:web|internet)|online))?(?:\s+tools?)?|(?:the\s+)?(?:public\s+)?(?:web|internet)|look(?:ing)?\s+(?:(?:it|this|that|anything)\s+up|up\s+anything)|check(?:ing)?\s+(?:online|the\s+web))$"###
 );
 
 const SEARCH_VERB_PHRASES: &[&str] = &[
@@ -1423,6 +1423,20 @@ mod tests {
         assert!(has_explicit_web_search_opt_out(
             "Don't guess or search the web."
         ));
+    }
+
+    #[test]
+    fn a_qualified_public_search_is_refused_inside_a_list_of_refusals() {
+        for message in [
+            "Read the attached resource. Do not use public web search.",
+            "Read the attached resource. No public web searches.",
+            "Use the connector only. Do not search my workspace, edit anything, use public web search, or generate images.",
+        ] {
+            assert!(
+                !refused_web_search_ranges(message).is_empty(),
+                "{message}"
+            );
+        }
     }
 
     #[test]

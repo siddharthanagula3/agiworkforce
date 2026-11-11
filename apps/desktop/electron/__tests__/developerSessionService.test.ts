@@ -525,6 +525,7 @@ describe('developer session runtime', () => {
     expect(approveDeviceCode).toHaveBeenCalledExactlyOnceWith('QRST-9876');
     expect(asked).toContain('account/login/wait');
     expect(asked.filter((method) => method === 'model/list')).toHaveLength(1);
+    expect(rememberShellSignedCliIn).toHaveBeenCalledWith(true);
     expect((await service.readDeveloperRuntimeStatus()).accountSyncError).toBeNull();
   });
 
@@ -2682,6 +2683,49 @@ describe('developer session runtime', () => {
     ).toEqual([{}, { keep: 4 }]);
   });
 
+  it('carries the project skills digest out of the list and back with a grant', async () => {
+    const listed = {
+      name: 'team-lint',
+      description: 'Review lint results',
+      scope: 'project',
+      path: '/approved/project/.agiworkforce/skills/team-lint',
+      enabled: false,
+      consented: false,
+      requiredTools: [],
+      requiredEnvVars: [],
+      missingTools: [],
+      missingEnvVars: [],
+    };
+    const { service, children } = await loadService((method) =>
+      method === 'skills/list'
+        ? { skills: [listed, { nonsense: true }], projectSkillsDigest: 'digest-a' }
+        : method === 'skills/consent'
+          ? { consented: true, path: '/Users/qa/consent.json' }
+          : defaultResponder(method),
+    );
+
+    const response = await service.listDeveloperSkills(root.id);
+    expect(response).toEqual({ skills: [listed], projectSkillsDigest: 'digest-a' });
+
+    await expect(
+      service.setDeveloperSkillConsent(root.id, true, response.projectSkillsDigest),
+    ).resolves.toBe(true);
+    await service.setDeveloperSkillConsent(root.id, false, 'digest-a');
+    expect(
+      children[0]?.written
+        .filter((entry) => entry.method === 'skills/consent')
+        .map((entry) => entry.params),
+    ).toEqual([{ granted: true, digest: 'digest-a' }, { granted: false }]);
+  });
+
+  it('lists no digest for a workspace that supplies no skills of its own', async () => {
+    const { service } = await loadService((method) =>
+      method === 'skills/list' ? { skills: [] } : defaultResponder(method),
+    );
+
+    await expect(service.listDeveloperSkills(root.id)).resolves.toEqual({ skills: [] });
+  });
+
   it('starts a fresh runtime after one exits, and says the old one stopped', async () => {
     const { service, children, events, spawn } = await loadService();
     await service.listDeveloperSessions();
@@ -2835,6 +2879,32 @@ describe('developer session runtime', () => {
       response: 'done',
     });
     expect(events.at(-1)?.event).not.toHaveProperty('unsentSteers');
+  });
+
+  it('relays the context the CLI measured apart from the turn’s summed tokens, and none it did not', async () => {
+    const { service, children, events } = await loadService();
+
+    await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'ping' });
+    const completed = {
+      threadId: thread.id,
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 20_100,
+      outputTokens: 200,
+    };
+    children[0]?.notify('turn/completed', { ...completed, contextTokens: 10_200 });
+    expect(events.at(-1)?.event).toMatchObject({
+      type: 'turn-finished',
+      inputTokens: 20_100,
+      contextTokens: 10_200,
+    });
+
+    children[0]?.notify('turn/completed', completed);
+    expect(events.at(-1)?.event).not.toHaveProperty('contextTokens');
+
+    children[0]?.notify('turn/completed', { ...completed, contextTokens: -5 });
+    expect(events.at(-1)?.event).not.toHaveProperty('contextTokens');
   });
 
   it('opens the session in its new worktree and reports the older ones cleanup left', async () => {
@@ -3033,14 +3103,18 @@ describe('a sign-out with no app-server running', () => {
 
     const pending = service.syncDeveloperAccounts();
     await vi.waitFor(() =>
-      expect(spawn).toHaveBeenCalledWith('/Users/qa/.cargo/bin/agi', ['logout'], expect.anything()),
+      expect(spawn).toHaveBeenCalledWith(
+        '/Users/qa/.cargo/bin/agi',
+        ['logout', '--account-only'],
+        expect.anything(),
+      ),
     );
     children.at(-1)?.emit('exit', 0, null);
     await pending;
 
     expect(spawn).toHaveBeenCalledExactlyOnceWith(
       '/Users/qa/.cargo/bin/agi',
-      ['logout'],
+      ['logout', '--account-only'],
       expect.objectContaining({
         env: expect.objectContaining({ AGIWORKFORCE_API_BASE: 'http://localhost:3100' }),
       }),
@@ -3083,7 +3157,11 @@ describe('a sign-out with no app-server running', () => {
 
     const pending = service.syncDeveloperAccounts();
     await vi.waitFor(() =>
-      expect(spawn).toHaveBeenCalledWith('/Users/qa/.cargo/bin/agi', ['logout'], expect.anything()),
+      expect(spawn).toHaveBeenCalledWith(
+        '/Users/qa/.cargo/bin/agi',
+        ['logout', '--account-only'],
+        expect.anything(),
+      ),
     );
     children.at(-1)?.emit('exit', 3, null);
     await pending;

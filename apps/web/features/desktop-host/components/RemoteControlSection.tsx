@@ -20,7 +20,11 @@ import {
   useConfirmAction,
   translateUiPlural,
 } from '@agiworkforce/ui';
-import { billingPlanCapabilityWireTiers, canUseBillingPlanCapability } from '@agiworkforce/types';
+import {
+  billingPlanCapabilityWireTiers,
+  canUseBillingPlanCapability,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import { browserPairingLink } from '@/features/remote-dispatch/lib/browser-pairing';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -31,8 +35,7 @@ import { readRemoteControl, stopRemoteControl } from '../lib/runtime-client';
 const HEADING = 'Remote Control';
 const INTRO =
   'Pair your phone to follow Code sessions running on this computer: approve steps, read diffs, test results and new files, and steer the next turn.';
-const HOW_TO_PAIR =
-  'Open chat Mobile on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.';
+const HOW_TO_PAIR = `Open ${PRODUCT_NAMES.mobile} on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.`;
 const PAIRING_WINDOW =
   'Scan the code in the pairing window with Mobile on your phone. Before the phone connects, this computer asks you to allow it.';
 const PHONE_CAN_RECONNECT =

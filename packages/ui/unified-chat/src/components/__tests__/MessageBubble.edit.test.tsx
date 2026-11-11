@@ -101,4 +101,37 @@ describe('MessageBubble edit affordance', () => {
     expect(onEdit).not.toHaveBeenCalled();
     expect(screen.getByText('original question')).toBeTruthy();
   });
+
+  it('keeps the editor and the rewritten text when the host refuses the edit', async () => {
+    const onEdit = vi.fn().mockReturnValue(false);
+    const user = userEvent.setup();
+    render(<MessageBubble message={userMessage} onEdit={onEdit} />);
+
+    await user.click(screen.getByRole('button', { name: /edit message/i }));
+    const textarea = screen.getByRole('textbox', { name: /edit message/i });
+    await user.clear(textarea);
+    await user.type(textarea, 'rewritten question');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(onEdit).toHaveBeenCalledWith('u1', 'rewritten question');
+    expect(
+      (screen.getByRole('textbox', { name: /edit message/i }) as HTMLTextAreaElement).value,
+    ).toBe('rewritten question');
+  });
+
+  it('closes the editor once the host accepts the retained draft', async () => {
+    const onEdit = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const user = userEvent.setup();
+    render(<MessageBubble message={userMessage} onEdit={onEdit} />);
+
+    await user.click(screen.getByRole('button', { name: /edit message/i }));
+    const textarea = screen.getByRole('textbox', { name: /edit message/i });
+    await user.clear(textarea);
+    await user.type(textarea, 'rewritten question');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(onEdit).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('textbox', { name: /edit message/i })).toBeNull();
+  });
 });

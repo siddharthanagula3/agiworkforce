@@ -108,8 +108,25 @@ let capturedAttachmentPreviewProps:
         sendFailed?: boolean;
       }>;
       onExpandPastedText?: (id: string) => void;
+      onRetryUpload?: (id: string) => void;
     }
   | undefined;
+
+jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
+  ...jest.requireActual('../src/features/auth/services/cloudAccountSession'),
+  captureCloudAccountEpoch: () => ({ ownerId: 'account-a', epoch: 1 }),
+  isCloudAccountEpochCurrent: () => true,
+}));
+
+const mockUploadWithRetry = jest.fn();
+jest.mock('../src/features/chat/upload/uploadAttachment', () => ({
+  uploadWithRetry: (...args: unknown[]) => mockUploadWithRetry(...args),
+}));
+
+const mockResolveUploadContext = jest.fn();
+jest.mock('../src/features/chat/upload/uploadContext', () => ({
+  resolveUploadContext: (...args: unknown[]) => mockResolveUploadContext(...args),
+}));
 
 jest.mock('../src/features/chat/components/AttachmentPreview', () => {
   const React = require('react');
@@ -123,6 +140,7 @@ jest.mock('../src/features/chat/components/AttachmentPreview', () => {
         sendFailed?: boolean;
       }>;
       onExpandPastedText?: (id: string) => void;
+      onRetryUpload?: (id: string) => void;
     }) => {
       capturedAttachmentPreviewProps = props;
       return <View testID="attachment-preview" />;
@@ -281,6 +299,11 @@ jest.mock('../lib/constants', () => ({
 
 import { ChatInput, type ChatInputHandle } from '../src/features/chat/components/ChatInput';
 import { useUploadLifecycleStore } from '../src/features/chat/upload/uploadLifecycle';
+import {
+  adoptComposerHandoff,
+  stageComposerText,
+  takeComposerText,
+} from '../src/features/chat/composerHandoff';
 
 const defaultProps = {
   onSend: jest.fn(),
@@ -543,6 +566,39 @@ describe('ChatInput', () => {
         expect(sentAttachments[0]).not.toHaveProperty('sendFailed');
       },
     );
+  });
+
+  describe('attachment Retry context', () => {
+    it('uploads a retried file under the receiving conversation, not the new-chat preference', async () => {
+      const context = { conversationId: 'conversation-1', temporary: false };
+      mockResolveUploadContext.mockReturnValue(context);
+      mockUploadWithRetry.mockResolvedValue(null);
+      const attachRef = React.createRef<ChatInputHandle>();
+      renderInput({ attachRef, conversationId: 'conversation-1' });
+
+      await act(async () => {
+        attachRef.current?.addAttachments([
+          {
+            id: 'a-1',
+            uri: 'file:///doc.pdf',
+            mimeType: 'application/pdf',
+            fileName: 'doc.pdf',
+            fileSize: 1024,
+          },
+        ]);
+      });
+      await act(async () => {
+        capturedAttachmentPreviewProps?.onRetryUpload?.('a-1');
+      });
+
+      expect(mockResolveUploadContext).toHaveBeenCalledWith('conversation-1');
+      expect(mockUploadWithRetry).toHaveBeenCalledWith(
+        { uri: 'file:///doc.pdf', name: 'doc.pdf', type: 'application/pdf' },
+        'doc.pdf',
+        'a-1',
+        context,
+      );
+    });
   });
 
   describe('[+] button', () => {
@@ -1034,6 +1090,53 @@ describe('ChatInput', () => {
       act(() => ref.current?.prefillText?.('Help me write '));
       expect(screen.getByLabelText('Message input').props.value).toBe('My existing draft');
       expect(onSend).not.toHaveBeenCalled();
+    });
+
+    it('restores returned text into an empty composer and after an existing draft', () => {
+      const ref = React.createRef<ChatInputHandle>();
+      const screen = renderInput({ attachRef: ref });
+
+      act(() => ref.current?.restoreText?.('Also cover Q3'));
+      expect(screen.getByLabelText('Message input').props.value).toBe('Also cover Q3');
+
+      fireEvent.changeText(screen.getByLabelText('Message input'), 'My existing draft');
+      act(() => ref.current?.restoreText?.('Also cover Q3'));
+      expect(screen.getByLabelText('Message input').props.value).toBe(
+        'My existing draft\n\nAlso cover Q3',
+      );
+    });
+
+    it('adds shared text after a parked draft instead of replacing it', () => {
+      mockGetDraft.mockImplementation(() => 'My parked draft');
+      const ref = React.createRef<ChatInputHandle>();
+      const screen = renderInput({
+        attachRef: ref,
+        draftKey: 'new-chat',
+        draftProvenance: { scope: 'local' },
+      });
+
+      adoptComposerHandoff('new-chat', null);
+      stageComposerText('new-chat', 'Shared article text');
+      stageComposerText('new-chat', 'Shared article text');
+      act(() => adoptComposerHandoff('new-chat', ref.current));
+
+      expect(screen.getByLabelText('Message input').props.value).toBe(
+        'My parked draft\n\nShared article text',
+      );
+      expect(mockSetDraft).toHaveBeenLastCalledWith(
+        'new-chat',
+        'My parked draft\n\nShared article text',
+        { scope: 'local' },
+      );
+      expect(takeComposerText('new-chat')).toBe('');
+      mockGetDraft.mockImplementation(() => '');
+    });
+
+    it('leaves shared text staged until a composer can receive it', () => {
+      stageComposerText('conversation-9', 'Shared before mount');
+      adoptComposerHandoff('conversation-9', null);
+
+      expect(takeComposerText('conversation-9')).toBe('Shared before mount');
     });
 
     it('exposes focus() and drives the real text field with it', () => {

@@ -104,7 +104,7 @@ describe('account notification destinations', () => {
   it('opens product links and chats natively and everything else in the in-app browser', () => {
     expect(accountNotificationDestination(`/open/work/${RUN_ID}`)).toEqual({
       kind: 'native',
-      route: '/(app)/tasks',
+      route: `/(app)/tasks?runId=${RUN_ID}`,
     });
     expect(accountNotificationDestination(`/chat/${CHAT_ID}`)).toEqual({
       kind: 'native',
@@ -168,7 +168,7 @@ describe('notifications inbox, account feed', () => {
     expect(mockPatch).toHaveBeenCalledWith('/api/notifications', {
       ids: ['0190a000-0000-7000-8000-000000000041'],
     });
-    expect(mockPush).toHaveBeenCalledWith('/(app)/tasks');
+    expect(mockPush).toHaveBeenCalledWith(`/(app)/tasks?runId=${RUN_ID}`);
     expect(useAccountNotificationFeed.getState().unreadCount).toBe(0);
   });
 
@@ -225,5 +225,130 @@ describe('notifications inbox, account feed', () => {
 
     expect(mockGet).not.toHaveBeenCalled();
     expect(screen.getByText('No notifications yet.')).toBeTruthy();
+  });
+});
+
+function deferred() {
+  let reject: (reason: unknown) => void = () => undefined;
+  const promise = new Promise<unknown>((_resolve, rejectPromise) => {
+    reject = rejectPromise;
+  });
+  return { promise, reject };
+}
+
+const ID_A = '0190a000-0000-7000-8000-000000000051';
+const ID_B = '0190a000-0000-7000-8000-000000000052';
+const ID_C = '0190a000-0000-7000-8000-000000000053';
+
+describe('account notification feed read-state ownership', () => {
+  it('does not restore a retired account feed when its mark-all request fails late', async () => {
+    mockGet.mockResolvedValue({
+      notifications: [feedItem({ id: ID_A, title: 'Account A notice' })],
+      unreadCount: 1,
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    const pending = deferred();
+    mockPatch.mockReturnValueOnce(pending.promise);
+
+    act(() => {
+      useAccountNotificationFeed.getState().markAllRead();
+    });
+    act(() => {
+      useAccountNotificationFeed.getState().reset();
+    });
+    mockGet.mockResolvedValue({
+      notifications: [feedItem({ id: ID_B, title: 'Account B notice' })],
+      unreadCount: 1,
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    await act(async () => {
+      pending.reject(new Error('offline'));
+      await pending.promise.catch(() => undefined);
+    });
+
+    const state = useAccountNotificationFeed.getState();
+    expect(state.items.map((item) => item.id)).toEqual([ID_B]);
+    expect(state.unreadCount).toBe(1);
+  });
+
+  it('keeps an older page loaded after mark-all and restores only the rows it changed', async () => {
+    const firstPage = Array.from({ length: 30 }, (_, index) =>
+      feedItem({
+        id: `0190a000-0000-7000-8000-0000000001${String(index).padStart(2, '0')}`,
+        createdAt: `2026-09-29T10:${String(59 - index).padStart(2, '0')}:00.000Z`,
+      }),
+    );
+    mockGet.mockResolvedValueOnce({ notifications: firstPage, unreadCount: 31 });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    const pending = deferred();
+    mockPatch.mockReturnValueOnce(pending.promise);
+    act(() => {
+      useAccountNotificationFeed.getState().markAllRead();
+    });
+    mockGet.mockResolvedValueOnce({
+      notifications: [feedItem({ id: ID_C, createdAt: '2026-09-29T09:00:00.000Z' })],
+      unreadCount: 31,
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().loadMore();
+    });
+    await act(async () => {
+      pending.reject(new Error('offline'));
+      await pending.promise.catch(() => undefined);
+    });
+
+    const state = useAccountNotificationFeed.getState();
+    expect(state.items).toHaveLength(31);
+    expect(state.items.at(-1)?.id).toBe(ID_C);
+    expect(state.items.slice(0, 30).every((item) => !item.read)).toBe(true);
+    expect(state.unreadCount).toBe(31);
+  });
+
+  it('does not invent an unread count for a row that is no longer in the feed', async () => {
+    mockGet.mockResolvedValue({ notifications: [feedItem({ id: ID_A })], unreadCount: 1 });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    const pending = deferred();
+    mockPatch.mockReturnValueOnce(pending.promise);
+    act(() => {
+      useAccountNotificationFeed.getState().markRead(ID_A);
+    });
+    mockGet.mockResolvedValue({ notifications: [], unreadCount: 0 });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    await act(async () => {
+      pending.reject(new Error('offline'));
+      await pending.promise.catch(() => undefined);
+    });
+
+    expect(useAccountNotificationFeed.getState().unreadCount).toBe(0);
+  });
+
+  it('restores every unread row and the unloaded remainder when mark-all fails on an unchanged feed', async () => {
+    mockGet.mockResolvedValue({
+      notifications: [feedItem({ id: ID_A }), feedItem({ id: ID_B, read: true })],
+      unreadCount: 4,
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    mockPatch.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => {
+      useAccountNotificationFeed.getState().markAllRead();
+    });
+
+    await waitFor(() => expect(useAccountNotificationFeed.getState().unreadCount).toBe(4));
+    expect(useAccountNotificationFeed.getState().items.map((item) => item.read)).toEqual([
+      false,
+      true,
+    ]);
   });
 });

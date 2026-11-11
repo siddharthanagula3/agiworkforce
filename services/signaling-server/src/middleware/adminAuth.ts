@@ -52,11 +52,11 @@ function recordAuthFailure(ip: string): void {
     };
   } else {
     entry.failures++;
+  }
 
-    if (entry.failures >= MAX_AUTH_FAILURES && !entry.lockedUntil) {
-      entry.lockedUntil = now + AUTH_LOCKOUT_DURATION_MS;
-      logger.warn({ ip, failures: entry.failures }, 'IP locked out due to auth failures');
-    }
+  if (entry.failures >= MAX_AUTH_FAILURES && !entry.lockedUntil) {
+    entry.lockedUntil = now + AUTH_LOCKOUT_DURATION_MS;
+    logger.warn({ ip, failures: entry.failures }, 'IP locked out due to auth failures');
   }
 
   authFailures.set(ip, entry);

@@ -62,7 +62,7 @@ use async_trait::async_trait;
 use base64::Engine as _;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::{
     broadcast, oneshot, Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, OwnedRwLockWriteGuard,
@@ -97,6 +97,8 @@ use crate::runtime::session_handoff::{
 };
 use crate::runtime::writer_lease::{self, LeaseClaim, WriterIdentity, WriterLease};
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
+
+mod context_occupancy;
 
 const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
@@ -143,10 +145,13 @@ const WRITER_LABEL: &str = "AGI app-server";
 /// a user who turned memory off on the web is not remembered or read here.
 /// Only the terminal CLI refreshed this before, so a desktop session kept the
 /// last cached answer. Signed out or offline, the cached answer stands.
-async fn refresh_account_memory_setting() {
+async fn refresh_account_memory_setting(privacy: crate::agent::PrivacyMode) -> bool {
+    if crate::cloud::CloudClient::admit(privacy).is_err() {
+        return false;
+    }
     let (memory, skills) = tokio::join!(
-        crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed),
-        crate::cloud::refresh_account_skills(crate::agent::PrivacyMode::Managed, false),
+        crate::cloud::refresh_memory(privacy),
+        crate::cloud::refresh_account_skills(privacy, false),
     );
     if let Err(error) = memory {
         tracing::debug!(%error, "account memory setting not refreshed");
@@ -154,6 +159,7 @@ async fn refresh_account_memory_setting() {
     if let Err(error) = skills {
         tracing::debug!(%error, "account skills not refreshed");
     }
+    true
 }
 
 fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse {
@@ -581,6 +587,71 @@ pub struct CliDeveloperSessionHost {
     /// call. An interrupt of the thread or a shutdown raises it, and the
     /// summary ends with the thread as it was.
     compactions: Arc<StdMutex<HashMap<String, Arc<tokio::sync::Notify>>>>,
+    mcp_reloads: Arc<McpReloadTickets>,
+}
+
+/// Which integration reload owns each thread's MCP manager. A reload claims a
+/// ticket when it is scheduled, after the configuration change that asked for
+/// it was saved, so only the newest claim may publish its manager.
+#[derive(Default)]
+struct McpReloadTickets {
+    next: AtomicU64,
+    latest: StdMutex<HashMap<String, u64>>,
+}
+
+impl McpReloadTickets {
+    fn claim(&self, thread_id: &str) -> u64 {
+        let ticket = self.next.fetch_add(1, Ordering::AcqRel) + 1;
+        self.latest
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(thread_id.to_string(), ticket);
+        ticket
+    }
+
+    fn is_current(&self, thread_id: &str, ticket: u64) -> bool {
+        self.latest
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(thread_id)
+            == Some(&ticket)
+    }
+
+    fn forget(&self, thread_id: &str) {
+        self.latest
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(thread_id);
+    }
+}
+
+/// Replace the session's MCP manager with the one a reload built, `None`
+/// meaning the configuration now has no servers. A reload that a newer one
+/// superseded, or whose thread is gone, installs nothing and stops what it
+/// built. Returns whether the reload was still current.
+async fn publish_mcp_reload(
+    session: &Arc<Mutex<AgentSession>>,
+    tickets: &McpReloadTickets,
+    thread_id: &str,
+    ticket: u64,
+    built: Option<crate::mcp::McpManager>,
+) -> bool {
+    let (current, previous) = {
+        let mut agent = session.lock().await;
+        if tickets.is_current(thread_id, ticket) {
+            let previous = agent.take_mcp_manager();
+            if let Some(manager) = built {
+                agent.set_mcp_manager(manager);
+            }
+            (true, previous)
+        } else {
+            (false, built)
+        }
+    };
+    if let Some(mut stale) = previous {
+        stale.shutdown_all().await;
+    }
+    current
 }
 
 /// One thread's entry in the host's table of running summaries, taken out
@@ -685,6 +756,7 @@ impl CliDeveloperSessionHost {
             workspace_files: Arc::new(RwLock::new(())),
             deleted_threads: Arc::new(StdMutex::new(HashSet::new())),
             compactions: Arc::new(StdMutex::new(HashMap::new())),
+            mcp_reloads: Arc::new(McpReloadTickets::default()),
         })
     }
 
@@ -1120,7 +1192,7 @@ impl CliDeveloperSessionHost {
             .require_routing_authority()
             .map_err(invalid_request)?;
         let system_context = context::gather_system_context_for(self.workspace_root.clone()).await;
-        refresh_account_memory_setting().await;
+        refresh_account_memory_setting(self.config.account_privacy_mode()).await;
         let mut agent = AgentSession::new_checked(
             model,
             &system_context,
@@ -1159,6 +1231,8 @@ impl CliDeveloperSessionHost {
         let shutdown_started = self.shutdown_started.clone();
         let lifecycle = self.lifecycle.clone();
         let workspace_root = self.workspace_root.clone();
+        let reloads = self.mcp_reloads.clone();
+        let ticket = reloads.claim(&thread_id);
         tokio::spawn(async move {
             // Discovery may launch MCP subprocesses, so it participates in the
             // same admission barrier as requests. Shutdown either waits for
@@ -1181,42 +1255,42 @@ impl CliDeveloperSessionHost {
             .await;
 
             let (method, message) = match result {
-                Ok(Ok(Some(mut manager))) => {
+                Ok(Ok(built)) => {
                     if shutdown_started.load(Ordering::Acquire) {
-                        manager.shutdown_all().await;
+                        if let Some(mut manager) = built {
+                            manager.shutdown_all().await;
+                        }
                         return;
                     }
-                    let previous = {
-                        let mut agent = session.lock().await;
-                        let previous = agent.take_mcp_manager();
-                        agent.set_mcp_manager(manager);
-                        previous
-                    };
-                    if let Some(mut previous) = previous {
-                        previous.shutdown_all().await;
+                    if !publish_mcp_reload(&session, &reloads, &thread_id, ticket, built).await {
+                        return;
                     }
                     (
                         "mcp/ready",
                         crate::mcp::consent::withheld_message(&workspace_root),
                     )
                 }
-                Ok(Ok(None)) => (
-                    "mcp/ready",
-                    crate::mcp::consent::withheld_message(&workspace_root),
-                ),
                 Ok(Err(error)) => {
+                    if !reloads.is_current(&thread_id, ticket) {
+                        return;
+                    }
                     eprintln!("MCP integration discovery failed: {error:#}");
                     (
                         "mcp/unavailable",
                         Some("MCP integrations could not be loaded for this session".to_string()),
                     )
                 }
-                Err(_) => (
-                    "mcp/unavailable",
-                    Some(format!(
-                        "MCP integration discovery timed out after {MCP_LOAD_TIMEOUT_SECONDS} seconds"
-                    )),
-                ),
+                Err(_) => {
+                    if !reloads.is_current(&thread_id, ticket) {
+                        return;
+                    }
+                    (
+                        "mcp/unavailable",
+                        Some(format!(
+                            "MCP integration discovery timed out after {MCP_LOAD_TIMEOUT_SECONDS} seconds"
+                        )),
+                    )
+                }
             };
             if shutdown_started.load(Ordering::Acquire) {
                 return;
@@ -1370,15 +1444,16 @@ impl CliDeveloperSessionHost {
         ThreadStatus::Idle
     }
 
-    /// Held for the life of the connection: every local runtime is probed and
-    /// every route's credential looked up, so this cannot run per request.
-    async fn host_models(&self, refresh: bool) -> Vec<HostModelSummary> {
+    /// Held for the life of the connection: every route's credential and plan
+    /// is looked up, so this cannot run per request. Local runtimes are not
+    /// held; each response reports the ones it just probed.
+    async fn catalog_host_models(&self, refresh: bool) -> Vec<HostModelSummary> {
         if !refresh {
             if let Some(cached) = self.host_models.read().await.clone() {
                 return cached;
             }
         }
-        let resolved = crate::model_reachability::host_models(&self.config).await;
+        let resolved = crate::model_reachability::catalog_host_models(&self.config).await;
         *self.host_models.write().await = Some(resolved.clone());
         resolved
     }
@@ -2180,8 +2255,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 local_servers: Vec::new(),
             });
         }
-        let host_models = self.host_models(params.refresh).await;
+        let catalog_models = self.catalog_host_models(params.refresh).await;
         let probes = crate::local_models::discover_all(&self.config).await;
+        let host_models = crate::model_reachability::with_running_local_models(
+            catalog_models,
+            crate::model_reachability::running_local_models(&probes),
+        );
         let local_servers = probes
             .iter()
             .filter_map(surfaces::local_server_status)
@@ -2258,7 +2337,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             Some(_) => auto_vendor.as_deref(),
             None => plan_first.as_deref(),
         };
-        refresh_account_memory_setting().await;
+        refresh_account_memory_setting(self.config.account_privacy_mode()).await;
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
         agent.install_workspace_file_authority(self.workspace_file_authority.clone());
@@ -2854,6 +2933,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(not_found_error)?;
         self.release_writer_quietly(&id_for_event).await;
         let removed = self.sessions.lock().await.remove(&id_for_event);
+        self.mcp_reloads.forget(&id_for_event);
         if let Some(session) = removed {
             let memory_consolidation_tasks = session.lock().await.take_memory_consolidation_tasks();
             abort_and_join_tasks(memory_consolidation_tasks).await;
@@ -3195,6 +3275,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.refuse_foreign_writer(&params.thread_id, &path, "deleted")?;
 
         let removed = self.sessions.lock().await.remove(&params.thread_id);
+        self.mcp_reloads.forget(&params.thread_id);
         if let Some(session) = removed {
             let (mcp_manager, subagent_manager, memory_consolidation_tasks) = {
                 let mut session = session.lock().await;
@@ -3885,6 +3966,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             }
 
             leave_bypass(&mut *task_session.lock().await);
+            let context_tokens = context_occupancy::context_tokens_after_turn(
+                &*task_session.lock().await,
+                task_config.default.max_tokens as usize,
+            );
 
             let pending_ids = {
                 let pending = task_pending.lock().await;
@@ -4041,6 +4126,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     failure: final_failure,
                     managed_request_ids,
                     unsent_steers,
+                    context_tokens: Some(context_tokens),
                 },
             ) {
                 let _ = task_notifications.send(notification);
@@ -7110,6 +7196,18 @@ mod tests {
         assert_eq!(device_surface(None), "cli");
     }
 
+    #[tokio::test]
+    async fn a_local_or_byok_host_reads_no_account_memory_or_skills() {
+        for mode in ["local", "byok"] {
+            let mut config = CliConfig::default();
+            config.ui.privacy_mode = Some(mode.to_string());
+            assert!(
+                !refresh_account_memory_setting(config.account_privacy_mode()).await,
+                "a {mode} host must not reach the account for memory or skills"
+            );
+        }
+    }
+
     #[test]
     fn a_signed_in_account_starts_threads_on_its_own_route_not_a_provider_key() {
         let mut config = CliConfig::default();
@@ -9970,6 +10068,77 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_empty_mcp_reload_retires_the_manager_the_session_still_held() {
+        let tickets = McpReloadTickets::default();
+        let session = Arc::new(Mutex::new(test_agent()));
+        session
+            .lock()
+            .await
+            .set_mcp_manager(crate::mcp::McpManager::new());
+        let ticket = tickets.claim("thread-1");
+
+        assert!(publish_mcp_reload(&session, &tickets, "thread-1", ticket, None).await);
+
+        assert!(session.lock().await.mcp_manager.is_none());
+    }
+
+    #[tokio::test]
+    async fn an_older_mcp_reload_finishing_last_cannot_replace_the_newer_manager() {
+        let tickets = McpReloadTickets::default();
+        let session = Arc::new(Mutex::new(test_agent()));
+        let older = tickets.claim("thread-1");
+        let newer = tickets.claim("thread-1");
+
+        assert!(
+            publish_mcp_reload(
+                &session,
+                &tickets,
+                "thread-1",
+                newer,
+                Some(crate::mcp::McpManager::new()),
+            )
+            .await
+        );
+        assert!(
+            !publish_mcp_reload(
+                &session,
+                &tickets,
+                "thread-1",
+                older,
+                Some(crate::mcp::McpManager::new()),
+            )
+            .await
+        );
+        assert!(session.lock().await.mcp_manager.is_some());
+
+        let newest_empty = tickets.claim("thread-1");
+        assert!(!publish_mcp_reload(&session, &tickets, "thread-1", newer, None).await);
+        assert!(session.lock().await.mcp_manager.is_some());
+        assert!(publish_mcp_reload(&session, &tickets, "thread-1", newest_empty, None).await);
+        assert!(session.lock().await.mcp_manager.is_none());
+    }
+
+    #[tokio::test]
+    async fn an_mcp_reload_for_a_removed_thread_installs_nothing() {
+        let tickets = McpReloadTickets::default();
+        let session = Arc::new(Mutex::new(test_agent()));
+        let ticket = tickets.claim("thread-1");
+        tickets.forget("thread-1");
+
+        assert!(
+            !publish_mcp_reload(
+                &session,
+                &tickets,
+                "thread-1",
+                ticket,
+                Some(crate::mcp::McpManager::new()),
+            )
+            .await
+        );
+        assert!(session.lock().await.mcp_manager.is_none());
+    }
+
+    #[tokio::test]
     async fn shutdown_aborts_and_joins_detached_memory_consolidation_before_acknowledging() {
         struct TaskDropMarker(Arc<AtomicBool>);
 
@@ -10337,7 +10506,7 @@ mod tests {
             },
             &crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -10386,7 +10555,7 @@ mod tests {
             },
             &crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,

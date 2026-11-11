@@ -90,7 +90,7 @@ import type {
   AgentEventToolCategory,
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
-import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
+import type { InteractiveCard, ReasoningReplayBlock } from '@agiworkforce/types';
 import {
   getModelMetadataById,
   getRegistryRoute,
@@ -99,11 +99,13 @@ import {
   isBrowserCommand,
   isImageChatToolName,
   isPhoneWriteStep,
+  isReplayableReasoningBlock,
   resolveMaxOutputTokens,
   skillLoadActivitySummary,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { agentAllowsSkill } from '@/lib/agents/agent-turn-config';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
 import { redactAuditedSecrets } from '@/lib/security/secrets-audit';
@@ -407,6 +409,7 @@ import {
   executeManagedSkillTool,
   executeManagedSkillToolForPlugins,
   findManagedSkillWithFiles,
+  type SkillInstallOverrides,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import {
@@ -587,6 +590,7 @@ export interface ToolLoopApprovalCheckpoint {
     qualifiedName: string;
     args: Record<string, unknown>;
     approvalScopes: ToolApprovalScope[];
+    permissionGeneration?: string;
   }>;
 }
 
@@ -707,7 +711,7 @@ export interface ToolLoopProviderStepResult {
   textContent: string;
   publicTextTail: string;
   generatedFileRefs: GeneratedFileRef[];
-  thinkingBlocks: ThinkingBlock[];
+  thinkingBlocks: ReasoningReplayBlock[];
   canonicalText: string;
   usage: ObservedProviderUsage;
   providerTrace?: ProviderStreamShape;
@@ -2192,10 +2196,10 @@ async function withSkillSandboxNote(
   return { content: note ? `${result.content}\n${note}` : result.content, isError: result.isError };
 }
 
-function readSkillInstallOverrides(userId: string): Promise<ReadonlyMap<string, boolean>> {
+function readSkillInstallOverrides(userId: string): Promise<SkillInstallOverrides> {
   return getSkillInstallOverrides(getNeonDb(), userId).catch((error: unknown) => {
-    logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
-    return EMPTY_SKILL_INSTALL_OVERRIDES;
+    logger.warn({ error, userId }, 'Skill install overrides read failed; withholding skills');
+    return null;
   });
 }
 
@@ -2304,7 +2308,8 @@ async function runMcpTool(
     allowInputRequired?: boolean;
     inputResponses?: Record<string, unknown>;
     requestState?: string;
-    loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
+    loadSkillInstallOverrides?: () => Promise<SkillInstallOverrides>;
+    allowSkill?: (skillName: string) => boolean;
     temporaryChat?: boolean;
     queueSandboxFiles?: SandboxSeedQueue;
     conversationId?: string | null;
@@ -2329,12 +2334,17 @@ async function runMcpTool(
     const enabledPluginIds = userId
       ? await listPermittedPluginIds(callerScopedDb(executionContext, userId), userId)
       : null;
+    const allowSkill = executionContext?.allowSkill;
     const result = enabledPluginIds
       ? await executeManagedSkillToolForPlugins(enabledPluginIds, toolCall.args, {
           availableTools,
           installOverrides: await executionContext?.loadSkillInstallOverrides?.(),
+          ...(allowSkill ? { allowSkill } : {}),
         })
-      : await executeManagedSkillTool(toolCall.args, { availableTools });
+      : await executeManagedSkillTool(toolCall.args, {
+          availableTools,
+          ...(allowSkill ? { allowSkill } : {}),
+        });
     if (result.code === 'skill_loaded' && requestedSkillName) {
       return withSkillSandboxNote(
         result,
@@ -2343,7 +2353,12 @@ async function runMcpTool(
         queueSandboxFiles,
       );
     }
-    if (result.code === 'skill_not_found' && userId && requestedSkillName) {
+    if (
+      result.code === 'skill_not_found' &&
+      userId &&
+      requestedSkillName &&
+      (allowSkill?.(requestedSkillName) ?? true)
+    ) {
       const pluginsAllowed = await workspaceAllowsPlugins(
         callerScopedDb(executionContext, userId),
         userId,
@@ -3674,10 +3689,15 @@ export async function* runToolLoop(
     options.unattendedEscalationPauses === true &&
     options.onApprovalCheckpoint !== undefined;
   const skillInstallOverridesUserId = options.userId;
-  let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
-  const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> => {
+  let skillInstallOverridesPromise: Promise<SkillInstallOverrides> | undefined;
+  const loadSkillInstallOverrides = (): Promise<SkillInstallOverrides> => {
     if (!skillInstallOverridesUserId) return Promise.resolve(EMPTY_SKILL_INSTALL_OVERRIDES);
-    skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId);
+    skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId).then(
+      (overrides) => {
+        if (overrides === null) skillInstallOverridesPromise = undefined;
+        return overrides;
+      },
+    );
     return skillInstallOverridesPromise;
   };
   let sensitiveDataRead = false;
@@ -5262,6 +5282,8 @@ export async function* runToolLoop(
               sourcePositionFor,
               isRetrievedSource,
               loadSkillInstallOverrides,
+              allowSkill: (skillName) =>
+                agentAllowsSkill(processed.agentTurn?.config ?? null, skillName),
               queueSandboxFiles,
               ...(processed.chatRequest?.client_timezone
                 ? { clientTimeZone: processed.chatRequest.client_timezone }
@@ -7002,7 +7024,7 @@ export async function* runToolLoop(
             ? await options.takeSteerMessages()
             : [];
         if (lateSteers.length > 0) {
-          const answerThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
+          const answerThinking = providerStep.thinkingBlocks.filter(isReplayableReasoningBlock);
           const answerMessage: (typeof messages)[number] = {
             role: 'assistant',
             content: answerThinking.length > 0 ? providerStep.canonicalText : textContent,
@@ -7021,7 +7043,7 @@ export async function* runToolLoop(
         type: 'function' as const,
         function: { name: tc.qualifiedName, arguments: JSON.stringify(tc.args) },
       }));
-      const signedThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
+      const signedThinking = providerStep.thinkingBlocks.filter(isReplayableReasoningBlock);
       const assistantMessage: (typeof messages)[number] = {
         role: 'assistant',
         content: signedThinking.length > 0 ? providerStep.canonicalText : textContent,
@@ -7405,11 +7427,20 @@ export async function* runToolLoop(
           completedSteps: step,
           events: approvalEvents,
           messages: messages.map((message) => ({ ...message })),
-          pendingToolCalls: approvalCalls.map(({ tc: call, gate }) => ({
-            ...call,
-            args: { ...call.args },
-            approvalScopes: toolApprovalReview(call.qualifiedName, gate).approval_scopes,
-          })),
+          pendingToolCalls: approvalCalls.map(({ tc: call, gate }) => {
+            const approvalScopes = toolApprovalReview(call.qualifiedName, gate).approval_scopes;
+            const connectorId = parseQualifiedToolName(call.qualifiedName)?.serverId;
+            const permissionGeneration =
+              approvalScopes.length > 1 && connectorId
+                ? connectorPermissions.permissionGenerationFor?.(connectorId)
+                : undefined;
+            return {
+              ...call,
+              args: { ...call.args },
+              approvalScopes,
+              ...(permissionGeneration !== undefined ? { permissionGeneration } : {}),
+            };
+          }),
         });
 
         for (const chunk of approvalChunks) yield chunk;

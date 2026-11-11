@@ -11,6 +11,7 @@ type NotificationModule = typeof import('../notification-service');
 const mocks = vi.hoisted(() => ({
   retrieveStripeCharge: vi.fn(),
   refundStripeCharge: vi.fn(),
+  findStripeRefundsForRequest: vi.fn(),
   readStripeCustomerCountry: vi.fn(),
   readStripeSubscriptionPayment: vi.fn(),
   getNeonDb: vi.fn(),
@@ -21,6 +22,7 @@ vi.mock('@/lib/server/payments/stripe-provider', async (importOriginal) => ({
   ...(await importOriginal<StripeProviderModule>()),
   retrieveStripeCharge: mocks.retrieveStripeCharge,
   refundStripeCharge: mocks.refundStripeCharge,
+  findStripeRefundsForRequest: mocks.findStripeRefundsForRequest,
   readStripeCustomerCountry: mocks.readStripeCustomerCountry,
   readStripeSubscriptionPayment: mocks.readStripeSubscriptionPayment,
 }));
@@ -30,7 +32,7 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
 }));
 vi.mock('../notification-service', async (importOriginal) => ({
   ...(await importOriginal<NotificationModule>()),
-  recordNotification: vi.fn(),
+  insertNotification: vi.fn(),
 }));
 
 import { fileRefundRequest } from '../billing-refund-service';
@@ -144,6 +146,10 @@ function createLedgerDb(ledger: Ledger) {
       row.decision_note = (params[6] as string | null) ?? null;
       row.decided_at = NOW.toISOString();
       return [{ ...row }];
+    }
+    if (/from public\.billing_refund_requests\s+where id = \$1\s+for update/u.test(sql)) {
+      const row = ledger.requests.find((r) => r.id === params[0]);
+      return row ? [{ ...row }] : [];
     }
     if (sql.includes('from public.billing_refund_requests request')) {
       return ledger.requests
@@ -289,7 +295,6 @@ function fileFor(
     db,
     userId: USER_ID,
     customerId: CUSTOMER_ID,
-    subscriptionId: null,
     chargeId,
     reason,
     details: null,
@@ -298,6 +303,7 @@ function fileFor(
 }
 
 beforeEach(() => {
+  mocks.findStripeRefundsForRequest.mockResolvedValue({ active: null, failedAttempts: 0 });
   mocks.readStripeCustomerCountry.mockResolvedValue(null);
   mocks.readStripeSubscriptionPayment.mockResolvedValue(null);
 });

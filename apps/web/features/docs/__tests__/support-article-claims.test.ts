@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const WEB_ROOT = join(__dirname, '..', '..', '..');
 const REPO_ROOT = join(WEB_ROOT, '..', '..');
@@ -329,12 +330,25 @@ describe('current CLI help articles distinguish implementation from release avai
     );
   });
 
-  it('retains the implemented Desktop cloud boundary in all touched surface explanations', () => {
+  it('states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation', () => {
     const dispatcher = repoText('apps', 'desktop', 'electron', 'runtime', 'dispatcher.ts');
     expect(dispatcher).toContain('localModels: false');
     expect(dispatcher).toMatch(
       /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
     );
+    expect(dispatcher).not.toContain('providers/setKey');
+    const sessions = repoText(
+      'apps',
+      'desktop',
+      'electron',
+      'runtime',
+      'developerSessionService.ts',
+    );
+    expect(sessions).toContain("'app-server'");
+    expect(sessions).toMatch(/requestOrNull\(server, 'model\/list'/u);
+    const reachability = repoText('apps', 'cli', 'src', 'model_reachability.rs');
+    expect(reachability).toMatch(/"ollama" \| "lmstudio" => DeveloperSessionTrustMode::Local/u);
+    expect(reachability).toMatch(/_ => DeveloperSessionTrustMode::Byok/u);
     expect(repoText('apps', 'desktop', 'electron', 'config.ts')).toMatch(
       /export const CLOUD_APP_ORIGIN = resolveCloudAppOrigin\(\);/u,
     );
@@ -349,7 +363,7 @@ describe('current CLI help articles distinguish implementation from release avai
       'install-desktop-and-mobile',
     ]) {
       expect(collapsed(`content/support/${id}.md`)).toContain(
-        'The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.',
+        'Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.',
       );
     }
   });
@@ -447,11 +461,13 @@ describe('current CLI help articles distinguish implementation from release avai
       ['fix', 'Fix Issue'],
       ['refactor', 'Refactor Code'],
       ['generateTests', 'Generate Tests'],
+      ['setApiKey', 'Set API Key'],
+      ['clearApiKey', 'Clear API Key'],
     ]) {
       expect(manifest.contributes.commands).toContainEqual(
         expect.objectContaining({
           command: `agi-workforce.${command}`,
-          title: `AGI Code: ${label}`,
+          title: `${PRODUCT_NAMES.code}: ${label}`,
         }),
       );
       expect(setup).toContain(`register('agi-workforce.${command}',`);

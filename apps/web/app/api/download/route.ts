@@ -16,6 +16,10 @@ import { isTrustedReleaseAssetUrl } from '@/lib/releases/trusted-release-asset-u
 type MacArchitecture = 'arm64' | 'x64';
 
 const DESKTOP_INSTALLER_FILENAME = 'agiworkforce.dmg';
+const DOWNLOAD_PAGE_PATH = '/download';
+const MAX_VERSION_LENGTH = 64;
+const VERSIONED_CACHE_CONTROL = 'public, max-age=3600';
+const LATEST_CACHE_CONTROL = 'no-store';
 
 function installerFilename(assetName: string): string {
   const name = assetName.replace(/[^\w .()-]/g, '').trim();
@@ -47,6 +51,7 @@ async function handleDownload(request: NextRequest) {
   const platform = searchParams.get('platform');
   const app = searchParams.get('app');
   const architecture = searchParams.get('arch');
+  const version = searchParams.get('version')?.trim() ?? null;
 
   logger.info(
     {
@@ -70,6 +75,9 @@ async function handleDownload(request: NextRequest) {
       'Invalid architecture requested. macOS installers are arm64 or x64.',
     );
   }
+  if (version !== null && (version === '' || version.length > MAX_VERSION_LENGTH)) {
+    throw createError.validation('Invalid version requested.');
+  }
   if (platform !== 'mac') return unavailable(platform);
 
   const release = await fetchLatestStableDesktopRelease({
@@ -77,6 +85,11 @@ async function handleDownload(request: NextRequest) {
     tagPrefix: DESKTOP_CLOUD_TAG_PREFIX,
     revalidateSeconds: 0,
   });
+  if (release && version !== null && release.version !== version) {
+    const response = NextResponse.redirect(new URL(DOWNLOAD_PAGE_PATH, request.url), 303);
+    response.headers.set('Cache-Control', LATEST_CACHE_CONTROL);
+    return response;
+  }
   const asset = release ? macInstallerAsset(release, architecture as MacArchitecture | null) : null;
   if (!asset) return unavailable(platform);
 
@@ -99,7 +112,7 @@ async function handleDownload(request: NextRequest) {
       'Content-Type': fileResponse.headers.get('Content-Type') || 'application/octet-stream',
       'Content-Length': fileResponse.headers.get('Content-Length') || '',
       'Content-Disposition': `attachment; filename="${installerFilename(asset.name)}"`,
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': version === null ? LATEST_CACHE_CONTROL : VERSIONED_CACHE_CONTROL,
     },
   });
 }

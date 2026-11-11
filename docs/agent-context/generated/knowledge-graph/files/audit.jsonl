@@ -1,5 +1,7 @@
-{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
+{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
 {"path":"audit/baselines/raw-error-to-user.json","unit":"audit","role":"config","unparsed":"notCode"}
+{"path":"audit/baselines/seo-ai-visibility-2026-11-07.json","unit":"audit","role":"config","unparsed":"notCode"}
+{"path":"audit/baselines/seo-content-2026-11-07.json","unit":"audit","role":"config","unparsed":"notCode"}
 {"path":"audit/baselines/theme-only-text-colours.json","unit":"audit","role":"config","unparsed":"notCode"}
 {"path":"audit/baselines/ui-gaps-baseline.json","unit":"audit","role":"config","unparsed":"notCode"}
 {"path":"audit/blockers/14-desktop-and-vscode-need-unpublished-cli.md","unit":"audit","role":"doc","unparsed":"notCode"}
@@ -14,6 +16,7 @@
 {"path":"audit/codex-reaudit/future-risks.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/codex-reaudit/new-features.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/codex-reaudit/open-work.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/content/multi-model-ai-subscriptions.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/decisions/founder-actions.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/decisions/founder-decisions.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/decisions/open-questions.md","unit":"audit","role":"doc","unparsed":"notCode"}
@@ -73,7 +76,13 @@
 {"path":"audit/live-check/105-developer-platform-and-console.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/live-check/107-discovery-social-and-public-content-products.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/live-check/110-cross-product-experiences-to-include-in-the-product-map.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/live-check/architecture-edge-case-conformance.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/live-check/chat-rendering-2026-10-30.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/live-check/chrome-assistant-parity-2026-11-03.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/live-check/codex-live-verification-queue.md","unit":"audit","role":"doc","unparsed":"oversize"}
+{"path":"audit/live-check/neon-free-plan-readiness.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/live-check/seo-ai-visibility.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/live-check/skills-connectors-plugins-integration.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/002-public-website-and-acquisition-screens.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/003-authentication-and-onboarding-screens.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/missing/004-signed-in-application-destinations.md","unit":"audit","role":"doc","unparsed":"notCode"}

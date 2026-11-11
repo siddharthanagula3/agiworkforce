@@ -11,6 +11,7 @@ import type {
 import { HOSTED_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 import { ComputerUseSettings } from '../components/ComputerUseSettings';
 import { DesktopPermissionsSection } from '../components/DesktopPermissionsSection';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const STATUS: ComputerUseStatus = {
   enabled: false,
@@ -172,7 +173,7 @@ describe('the computer use page', () => {
 
   it.each([
     [{ ...PAIRING, connected: false }, 'Paired, but Chrome is not connected right now'],
-    [{ ...PAIRING, paired: false, connected: false }, 'AGI Extension not paired'],
+    [{ ...PAIRING, paired: false, connected: false }, `${PRODUCT_NAMES.extension} not paired`],
     [{ ...PAIRING, hostInstalled: false }, 'Chrome cannot reach this app'],
     [null, 'The browser connection could not be read.'],
   ])('says how Chrome is connected', async (pairing, text) => {

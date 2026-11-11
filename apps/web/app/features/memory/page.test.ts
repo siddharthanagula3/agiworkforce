@@ -1,17 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const WEB_ROOT = join(__dirname, '..', '..', '..');
-const REPO_ROOT = join(WEB_ROOT, '..', '..');
 
+const editor = readFileSync(
+  join(WEB_ROOT, '..', '..', 'packages/ui/unified-chat/src/components/MemoryEditor.tsx'),
+  'utf8',
+);
 const page = readFileSync(join(__dirname, 'page.tsx'), 'utf8').replace(/\s+/gu, ' ');
 const recall = readFileSync(
   join(WEB_ROOT, 'lib/services/managed-memory-context-service.ts'),
-  'utf8',
-);
-const editor = readFileSync(
-  join(REPO_ROOT, 'packages/ui/unified-chat/src/components/MemoryEditor.tsx'),
   'utf8',
 );
 const importDialog = readFileSync(
@@ -44,7 +46,7 @@ describe('/features/memory states the limits the code enforces', () => {
     const characters = constant(recall, 'MAX_TOTAL_MEMORY_CHARS');
 
     expect(page).toContain(
-      `Up to ${facts} facts on AGI managed cloud, capped at ${characters.toLocaleString('en-US')} characters in total.`,
+      `Up to ${facts} facts on ${CLOUD}, capped at ${characters.toLocaleString('en-US')} characters in total.`,
     );
   });
 
@@ -58,8 +60,9 @@ describe('/features/memory states the limits the code enforces', () => {
 
   it('prints the length the add box accepts', () => {
     expect(page).toContain(
-      `A box above the list takes up to ${constant(editor, 'MAX_FACT_CHARS')} characters.`,
+      `A box above the list takes up to \${MANAGED_MEMORY_MAX_CONTENT_CHARS.toLocaleString('en-US')} characters.`,
     );
+    expect(editor).toContain('MANAGED_MEMORY_MAX_CONTENT_CHARS as MAX_FACT_CHARS');
   });
 
   it('states no limit for a surface that is not released', () => {

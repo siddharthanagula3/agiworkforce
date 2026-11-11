@@ -215,6 +215,22 @@ describe('GET /api/code/repositories/branches', () => {
     expect((await response.json()).error.message).toContain('Reconnect GitHub');
   });
 
+  it('lists a private repository, whose branches GitHub only gives to a contents-read token', async () => {
+    mocks.getInstallationAccessToken.mockImplementation(
+      async (_installationId: number, scope: { permissions: Record<string, string> }) =>
+        scope.permissions['contents'] === 'read' ? 'ghs_contents_token' : 'ghs_metadata_token',
+    );
+    mocks.listGitHubRepositoryBranches.mockImplementation(async (token: string) => {
+      if (token !== 'ghs_contents_token') throw new Error('GitHub answered 404');
+      return LISTED;
+    });
+
+    const response = await GET(request(VALID));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(LISTED);
+  });
+
   it('answers 503 when GitHub does not answer', async () => {
     mocks.listGitHubRepositoryBranches.mockRejectedValue(new Error('timeout'));
 
@@ -223,7 +239,7 @@ describe('GET /api/code/repositories/branches', () => {
     expect(response.status).toBe(503);
   });
 
-  it('lists branches with a metadata-only token scoped to the repository', async () => {
+  it('lists branches with a contents-read token scoped to the one repository', async () => {
     expect(getPlanMaxSandboxes('pro')).toBeGreaterThan(0);
 
     const response = await GET(request(VALID));
@@ -238,7 +254,7 @@ describe('GET /api/code/repositories/branches', () => {
     expect(mocks.assertRepositoryIsVerified).toHaveBeenCalledWith(42, ['acme/app'], 'acme/app');
     expect(mocks.getInstallationAccessToken).toHaveBeenCalledWith(42, {
       repositories: ['app'],
-      permissions: { metadata: 'read' },
+      permissions: { contents: 'read' },
     });
     expect(mocks.listGitHubRepositoryBranches).toHaveBeenCalledWith('ghs_token', 'acme', 'app', {
       perPage: 100,

@@ -7,6 +7,7 @@ import { MAX_PURCHASABLE_SEATS } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getEnterpriseProductId, isEnterpriseProductId } from '@/lib/price-tier-mapping';
+import { DEFAULT_CHECKOUT_CURRENCY } from '@/lib/pricing';
 import { getSubscriptionPeriod } from '@/lib/stripe-types';
 import { normalizeStripeSubscription } from '@/lib/server/payments/stripe-provider';
 import { recordSubscriptionStateTransition } from '@/lib/server/payments/subscription-history';
@@ -169,6 +170,16 @@ const ENDED_SUBSCRIPTION_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new
 ]);
 
 const BLOCKING_INVOICE_STATUSES: readonly string[] = ['open', 'uncollectible'];
+
+function invoiceStatusRankSql(statusColumn: string): string {
+  return `(case ${statusColumn}
+            when 'paid' then 3
+            when 'void' then 3
+            when 'uncollectible' then 2
+            when 'open' then 1
+            else 0
+          end)`;
+}
 
 async function resolveOrganizationIdForSubscriptionOwner(
   db: DatabaseAdapter,
@@ -708,7 +719,8 @@ export async function recordEnterpriseInvoiceEvent(
     `select organization_id, payment_terms_days
        from public.organization_billing_contracts
       where stripe_subscription_id = $1
-      limit 1`,
+      limit 1
+      for no key update`,
     [stripeSubscriptionId],
   );
   const organizationId = contract?.organization_id;
@@ -753,7 +765,14 @@ export async function recordEnterpriseInvoiceEvent(
        )
      where $18::double precision is null
         or organization_billing_invoices.last_stripe_event_at is null
-        or organization_billing_invoices.last_stripe_event_at <= to_timestamp($18::double precision)
+        or (
+          organization_billing_invoices.last_stripe_event_at <= to_timestamp($18::double precision)
+          and (
+            organization_billing_invoices.last_stripe_event_at < to_timestamp($18::double precision)
+            or ${invoiceStatusRankSql('organization_billing_invoices.status')}
+               <= ${invoiceStatusRankSql('excluded.status')}
+          )
+        )
      returning stripe_invoice_id`,
     [
       invoice.id,
@@ -815,7 +834,17 @@ type EnterpriseContractRow = OrganizationBillingContractRow & {
   commercial_agreement_id: string | null;
   commercial_agreement_version: number | string | null;
   activation_blocked_reason: ActivationBlockedReason | null;
+  overage_closeout_at?: string | Date | null;
+  overage_closeout_reason?: EnterpriseOverageWriteOff['reason'] | null;
+  overage_written_off_cents?: number | string | null;
 };
+
+export interface EnterpriseOverageWriteOff {
+  reason: 'contract_ended';
+  writtenOffCents: number;
+  currency: string;
+  recordedAt: string;
+}
 
 export interface EnterpriseContractContact {
   name: string | null;
@@ -840,6 +869,7 @@ export interface EnterpriseContractSummary {
   signedOrderSignedAt: string | null;
   commercialAgreementVersion: number | null;
   activationBlockedReason: ActivationBlockedReason | null;
+  overageWriteOff: EnterpriseOverageWriteOff | null;
 }
 
 export interface EnterpriseInvoiceSummary {
@@ -870,16 +900,33 @@ function isoOrNull(value: string | Date | null): string | null {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function overageWriteOffOf(
+  contract: EnterpriseContractRow,
+  invoiceCurrency: string | undefined,
+): EnterpriseOverageWriteOff | null {
+  const recordedAt = isoOrNull(contract.overage_closeout_at ?? null);
+  if (!recordedAt || !contract.overage_closeout_reason) return null;
+  return {
+    reason: contract.overage_closeout_reason,
+    writtenOffCents: Number(contract.overage_written_off_cents ?? 0),
+    currency: invoiceCurrency ?? DEFAULT_CHECKOUT_CURRENCY,
+    recordedAt,
+  };
+}
+
 export async function readEnterpriseContractSummary(
   db: DatabaseAdapter,
   organizationId: string,
 ): Promise<{ contract: EnterpriseContractSummary | null; invoices: EnterpriseInvoiceSummary[] }> {
   const [contract] = await db.query<EnterpriseContractRow>(
-    `select customer_legal_entity, procurement_reference, contract_term_start, contract_term_end,
+    `select customer_legal_entity, procurement_reference,
+            contract_term_start::text as contract_term_start,
+            contract_term_end::text as contract_term_end,
             billing_cadence, committed_seats, support_tier, payment_terms_days, tax_exempt_status,
             collection_stage, ended_at, billing_contact_name, billing_contact_email,
             procurement_contact_name, procurement_contact_email, signed_order_reference,
-            signed_order_signed_at, commercial_agreement_version, activation_blocked_reason
+            signed_order_signed_at, commercial_agreement_version, activation_blocked_reason,
+            overage_closeout_at, overage_closeout_reason, overage_written_off_cents
        from public.organization_billing_contracts
       where organization_id = $1::uuid
       limit 1`,
@@ -924,6 +971,7 @@ export async function readEnterpriseContractSummary(
           ? null
           : Number(contract.commercial_agreement_version),
       activationBlockedReason: contract.activation_blocked_reason ?? null,
+      overageWriteOff: overageWriteOffOf(contract, invoices[0]?.currency),
     },
     invoices: invoices.map((invoice) => ({
       invoiceNumber: invoice.invoice_number,

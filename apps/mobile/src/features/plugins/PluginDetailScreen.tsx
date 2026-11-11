@@ -53,6 +53,7 @@ import {
   pluginIncludes,
   pluginWorksWith,
   updateOfferFor,
+  versionMoveSummary,
   versionSwitchSummary,
 } from './pluginsModel';
 import {
@@ -258,15 +259,15 @@ export function PluginDetailScreen() {
   );
 
   const switchVersion = useCallback(
-    async (toVersion: string, summary: string) => {
+    async (toVersion: string, describe: (permissions: readonly string[]) => string) => {
       if (!entry || !state?.versions) return;
+      const acknowledged = pluginPermissionsToAcknowledge(state.versions, toVersion);
       const confirmed = await confirmIrreversible({
         title: `Switch to version ${toVersion}?`,
-        consequence: `${summary} The plugin stays on this version for your account until you choose another.`,
+        consequence: `${describe(acknowledged)} The plugin stays on this version for your account until you choose another.`,
         actionLabel: 'Switch',
       });
       if (!confirmed) return;
-      const acknowledged = pluginPermissionsToAcknowledge(state.versions, toVersion);
       void act(
         'version',
         () => movePluginToVersion(entry.id, toVersion, acknowledged),
@@ -487,9 +488,8 @@ export function PluginDetailScreen() {
                     loading={busy === 'version'}
                     disabled={busy !== null}
                     onPress={() =>
-                      void switchVersion(
-                        state.offer!.latestVersion,
-                        versionSwitchSummary(state.offer!),
+                      void switchVersion(state.offer!.latestVersion, (permissions) =>
+                        versionSwitchSummary(state.offer!, permissions),
                       )
                     }
                   />
@@ -522,9 +522,12 @@ export function PluginDetailScreen() {
                     }
                     onPress={() =>
                       chosenVersion
-                        ? void switchVersion(
-                            chosenVersion,
-                            `Moves from ${installation.installedVersion} to ${chosenVersion}.`,
+                        ? void switchVersion(chosenVersion, (permissions) =>
+                            versionMoveSummary(
+                              installation.installedVersion,
+                              chosenVersion,
+                              permissions,
+                            ),
                           )
                         : undefined
                     }

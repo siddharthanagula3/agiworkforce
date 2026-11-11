@@ -68,7 +68,7 @@ function SigningSecretNotice({ secret, onDismiss }: { secret: string; onDismiss:
       <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
         It is shown once and cannot be recovered. Each delivery carries an X-AGI-Audit-Signature
         header: an HMAC-SHA256 of the X-AGI-Audit-Timestamp value, a full stop, and the raw body,
-        keyed with the SHA-256 hex digest of this secret.
+        keyed with this secret as the text shown below, not hex-decoded.
       </p>
       <code
         className="block overflow-x-auto rounded-md border px-3 py-2 text-xs"

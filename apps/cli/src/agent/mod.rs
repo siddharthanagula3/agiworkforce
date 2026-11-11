@@ -308,6 +308,8 @@ pub struct AgentSession {
     pub on_tool_event: Option<ToolEventSink>,
     pub on_steer: Option<SteerSource>,
     pub on_continuation_chunk: Option<ContinuationSink>,
+    pub(crate) transcript_renderer:
+        Option<std::sync::Arc<std::sync::Mutex<crate::markdown::MarkdownRenderer>>>,
     /// Whether the desktop shell is running with a browser paired to it.
     ///
     /// `None` until the first turn resolves it. Resolved once per session
@@ -330,6 +332,7 @@ pub struct AgentSession {
     pub(crate) host_subagent_withheld: Vec<String>,
     active_child_ids: HashSet<String>,
     pub allowed_tools: Option<Vec<String>>,
+    pub(crate) caller_allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub(crate) allowed_mcp_servers: Option<Vec<String>>,
     pub privacy_mode: PrivacyMode,
@@ -361,6 +364,10 @@ pub struct AgentSession {
     /// its shutdown acknowledgment.
     memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
     memory_extracted_through: usize,
+    /// Start of the earliest scheduled memory window whose summary was never
+    /// written. The next window and the session-end summary begin there, so a
+    /// failed write is retried instead of being counted as extracted.
+    memory_unsaved_from: std::sync::Arc<std::sync::Mutex<Option<usize>>>,
     memory_window_due_at: std::time::Instant,
     /// Marks this session's memory origin tags; see
     /// [`crate::memory_pipeline::origin_memory_tag`].
@@ -620,6 +627,24 @@ pub(crate) fn is_rule_sensitive_mutation_tool(tool_name: &str) -> bool {
     )
 }
 
+pub(crate) fn mcp_resource_selectors(typed: &str) -> Vec<(&str, &str)> {
+    let mut selectors: Vec<(&str, &str)> = Vec::new();
+    for token in typed.split_whitespace() {
+        let Some((server, uri)) = token
+            .strip_prefix('@')
+            .and_then(|mention| mention.split_once(':'))
+        else {
+            continue;
+        };
+        let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
+        if server.is_empty() || uri.is_empty() || selectors.contains(&(server, uri)) {
+            continue;
+        }
+        selectors.push((server, uri));
+    }
+    selectors
+}
+
 impl AgentSession {
     /// Create a new agent session with the system prompt.
     ///
@@ -808,6 +833,7 @@ impl AgentSession {
             on_tool_event: None::<ToolEventSink>,
             on_steer: None::<SteerSource>,
             on_continuation_chunk: None::<ContinuationSink>,
+            transcript_renderer: None,
             browser_available: None,
             quiet: false,
             fast_mode: false,
@@ -819,6 +845,7 @@ impl AgentSession {
             host_subagent_withheld: Vec::new(),
             active_child_ids: HashSet::new(),
             allowed_tools: None,
+            caller_allowed_tools: None,
             disallowed_tools: Vec::new(),
             privacy_mode,
             pending_privacy_handoff: None,
@@ -836,6 +863,7 @@ impl AgentSession {
             team_identity: None,
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
+            memory_unsaved_from: Default::default(),
             memory_window_due_at: std::time::Instant::now()
                 + crate::memory_pipeline::MEMORY_WINDOW_INTERVAL,
             memory_nonce,
@@ -900,25 +928,15 @@ impl AgentSession {
         } else {
             Some(allowed_tools.to_vec())
         };
+        self.caller_allowed_tools = self.allowed_tools.clone();
         self.disallowed_tools = disallowed_tools.to_vec();
     }
 
-    /// The MCP catalogue `tool_search` needs to hand over a schema the initial
-    /// list deferred. Built for that tool alone: any other call would clone
-    /// every connected schema and never read one.
-    pub(crate) fn mcp_catalog_for(
-        &self,
-        tool_name: &str,
-    ) -> Option<std::sync::Arc<Vec<ToolDefinition>>> {
-        if tool_name != "tool_search" {
-            return None;
-        }
-        self.mcp_manager
-            .as_ref()
-            .map(|manager| std::sync::Arc::new(self.permitted_mcp_definitions(manager)))
-    }
-
-    pub async fn expand_mcp_resource_mentions(&mut self, prompt: &str) -> (String, Vec<String>) {
+    pub async fn expand_mcp_resource_mentions(
+        &mut self,
+        typed: &str,
+        prompt: &str,
+    ) -> (String, Vec<String>) {
         const MAX_RESOURCE_CHARS: usize = 50_000;
         let privacy_mode = self.privacy_mode;
         let Some(manager) = self.mcp_manager.as_mut() else {
@@ -926,16 +944,8 @@ impl AgentSession {
         };
         let mut attached = String::new();
         let mut notices = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for token in prompt.split_whitespace() {
-            let Some((server, uri)) = token
-                .strip_prefix('@')
-                .and_then(|mention| mention.split_once(':'))
-            else {
-                continue;
-            };
-            let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
-            if uri.is_empty() || !manager.has_server(server) || !seen.insert(token.to_string()) {
+        for (server, uri) in mcp_resource_selectors(typed) {
+            if !manager.has_server(server) {
                 continue;
             }
             match manager.read_resource(server, uri, privacy_mode).await {
@@ -1134,6 +1144,42 @@ impl AgentSession {
             return Ok(());
         }
         self.switch_model(model)
+    }
+
+    /// A model the user typed that no catalog names can still be one the local
+    /// servers report, so a Local session asks them before giving up. Any other
+    /// session keeps the catalog as its only source: a local server's list never
+    /// moves a Managed or BYOK transcript across a trust boundary.
+    pub async fn switch_model_by_name_or_local(
+        &mut self,
+        config: &CliConfig,
+        model: &str,
+    ) -> Result<()> {
+        let Err(unknown) = self.switch_model_by_name(model) else {
+            return Ok(());
+        };
+        if self.privacy_mode != PrivacyMode::Local {
+            return Err(unknown);
+        }
+        let probes = crate::local_models::discover_all(config).await;
+        let installed = crate::local_models::discovered_models(&probes);
+        match crate::local_models::select_discovered_model(
+            &installed,
+            model,
+            models::provider_name(&self.provider),
+        )? {
+            Some(found) => self.switch_to_discovered_local_model(model, &found.provider),
+            None => Err(unknown),
+        }
+    }
+
+    fn switch_to_discovered_local_model(&mut self, model: &str, provider_name: &str) -> Result<()> {
+        let provider = models::provider_from_name(provider_name)
+            .filter(|provider| provider_privacy_mode(provider) == PrivacyMode::Local)
+            .with_context(|| format!("'{provider_name}' is not a local model provider"))?;
+        self.model = model.to_string();
+        self.provider = provider;
+        Ok(())
     }
 
     /// Switch to a model discovered from the AGI managed gateway while
@@ -2034,6 +2080,14 @@ impl AgentSession {
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.memory_extracted_through = self.memory_extracted_through.min(self.messages.len());
+        if let Some(failed) = self
+            .memory_unsaved_from
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+        {
+            *failed = (*failed).min(self.messages.len());
+        }
         Ok(())
     }
 
@@ -2532,10 +2586,21 @@ impl AgentSession {
         self.managed_session.as_ref().map(|s| s.session_id.as_str())
     }
 
+    fn unsummarized_messages(&self) -> &[Message] {
+        let failed = *self
+            .memory_unsaved_from
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let start = failed.map_or(self.memory_extracted_through, |failed| {
+            failed.min(self.memory_extracted_through)
+        });
+        &self.messages[start.min(self.messages.len())..]
+    }
+
     /// Persist the session-end memory summary through the session's own
     /// off-device route when it has one, and on the device otherwise.
     pub async fn finalize_memory(&self, config: &CliConfig) -> Result<()> {
-        let unextracted = &self.messages[self.memory_extracted_through.min(self.messages.len())..];
+        let unextracted = self.unsummarized_messages();
         if !self.memory_enabled || !unextracted.iter().any(|message| message.role != "system") {
             return Ok(());
         }
@@ -2866,6 +2931,38 @@ mod tests {
         assert_eq!(&session.model, second);
         assert_eq!(session.provider, models::Provider::ManagedCloud);
         assert_eq!(session.privacy_mode, PrivacyMode::Managed);
+    }
+
+    #[test]
+    fn a_local_session_follows_a_discovered_model_to_its_local_provider() {
+        let lmstudio = models::provider_from_name("lmstudio").expect("lmstudio");
+        let mut session =
+            AgentSession::new_with_provider("local-fixture-a", &test_context(), None, lmstudio);
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.switch_model_by_name("local-fixture-b").is_err());
+
+        session
+            .switch_to_discovered_local_model("local-fixture-b", "ollama")
+            .expect("local provider");
+        assert_eq!(session.model, "local-fixture-b");
+        assert_eq!(
+            session.provider,
+            models::Provider::Ollama(models::OllamaMode::Local)
+        );
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+    }
+
+    #[test]
+    fn a_discovered_model_never_switches_a_session_to_a_hosted_provider() {
+        let lmstudio = models::provider_from_name("lmstudio").expect("lmstudio");
+        let mut session =
+            AgentSession::new_with_provider("local-fixture-a", &test_context(), None, lmstudio);
+        for hosted in ["anthropic", "openai", "managed_cloud"] {
+            assert!(session
+                .switch_to_discovered_local_model("local-fixture-b", hosted)
+                .is_err());
+        }
+        assert_eq!(session.model, "local-fixture-a");
     }
 
     #[test]
@@ -4627,6 +4724,91 @@ mod tests {
 
         assert!(session.allowed_tools.is_none());
         assert_eq!(session.disallowed_tools, vec!["WebFetch(*)"]);
+    }
+
+    #[test]
+    fn mcp_resource_selectors_read_only_what_the_user_typed() {
+        assert_eq!(
+            mcp_resource_selectors("compare @docs:file:///a.md, and @docs:file:///a.md."),
+            vec![("docs", "file:///a.md")]
+        );
+        assert!(mcp_resource_selectors("mail me @ noon or @:x or @docs:").is_empty());
+
+        let root = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            root.path().join("notes.txt"),
+            "Example reference:\n@docs:file:///readme.md\n",
+        )
+        .expect("write notes");
+        let typed = "Summarize @notes.txt";
+        let expanded = crate::mentions::expand_mentions(typed, root.path(), true).prompt;
+
+        assert!(expanded.contains("@docs:file:///readme.md"));
+        assert!(mcp_resource_selectors(typed).is_empty());
+        assert_eq!(
+            mcp_resource_selectors(&format!("{typed} @docs:file:///guide.md")),
+            vec![("docs", "file:///guide.md")]
+        );
+    }
+
+    #[test]
+    fn a_named_agent_keeps_the_callers_tool_allowlist() {
+        let ctx = test_context();
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        session.apply_tool_filters(&["read_file".to_string()], &[]);
+        let editor = crate::agents::AgentDefinition {
+            name: "editor".to_string(),
+            description: String::new(),
+            model: None,
+            tools: Some(vec!["write_file".to_string()]),
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
+            mcp_servers: None,
+            system_prompt: String::new(),
+            path: PathBuf::from("/tmp/.agiworkforce/agents/editor.md"),
+        };
+        editor.apply_to_session(&mut session);
+
+        let names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(!names.iter().any(|name| name == "write_file"));
+        let write =
+            std::collections::HashMap::from([("path".to_string(), "notes.txt".to_string())]);
+        assert!(crate::tool_filters::ensure_tool_call_allowed(
+            "write_file",
+            &write,
+            session.allowed_tools.as_deref(),
+            &session.disallowed_tools,
+        )
+        .is_err());
+
+        let reviewer = crate::agents::AgentDefinition {
+            name: "reviewer".to_string(),
+            tools: Some(vec!["Read".to_string(), "write_file".to_string()]),
+            ..editor.clone()
+        };
+        reviewer.apply_to_session(&mut session);
+        let names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(names.iter().any(|name| name == "read_file"));
+        assert!(!names.iter().any(|name| name == "write_file"));
+
+        let mut uncapped = AgentSession::new("test-model", &ctx, None);
+        reviewer.apply_to_session(&mut uncapped);
+        assert_eq!(
+            uncapped.allowed_tools,
+            Some(vec!["Read".to_string(), "write_file".to_string()])
+        );
     }
 
     #[test]

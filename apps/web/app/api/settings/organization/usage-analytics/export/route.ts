@@ -18,7 +18,7 @@ import {
   readOrganizationUsage,
   type OrganizationUsage,
 } from '@/lib/services/organization-usage-service';
-import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
+import { BREAKDOWN_LIMIT, resolveUsageWindow } from '@/lib/services/usage-aggregation';
 
 export const runtime = 'nodejs';
 
@@ -63,9 +63,25 @@ function rowsFor(usage: OrganizationUsage, dimension: Dimension): string[][] {
   ]);
 }
 
+function omittedLinesFor(usage: OrganizationUsage, dimension: Dimension): string[][] {
+  if (dimension === 'daily') return [];
+  const omitted = {
+    member: usage.omitted.byMember,
+    model: usage.omitted.byModel,
+    provider: usage.omitted.byProvider,
+    workload: usage.omitted.byWorkload,
+    project: usage.omitted.byProject,
+  }[dimension];
+  return [
+    ['# breakdown_row_limit', String(BREAKDOWN_LIMIT)],
+    ['# omitted_requests', String(omitted.requests)],
+    ['# omitted_credits', String(omitted.credits)],
+  ];
+}
+
 function headerFor(dimension: Dimension): string[] {
   return dimension === 'daily'
-    ? ['day', 'requests', 'credits']
+    ? ['day_utc', 'requests', 'credits']
     : [dimension, 'requests', 'input_tokens', 'output_tokens', 'credits'];
 }
 
@@ -111,6 +127,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     ['# as_of', usage.freshness.asOf],
     ['# latest_activity_at', usage.freshness.latestActivityAt ?? ''],
     ['# unsettled_requests', String(usage.freshness.unsettledRequests)],
+    ...omittedLinesFor(usage, dimension),
     headerFor(dimension),
     ...rowsFor(usage, dimension),
   ]

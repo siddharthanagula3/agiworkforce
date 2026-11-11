@@ -211,16 +211,20 @@ export function watchJobCancellation(
 }
 
 /**
- * A cancellation whose worker died holding the lease. The lease is gone, so
- * nothing is running and the row can be finished without a fence.
+ * A cancellation whose worker died holding the lease, or whose job was put
+ * back on the queue after the request was recorded. Either way nothing is
+ * running, so the row can be finished without a fence and is never claimed again.
  */
 export async function reapAbandonedCancellations(db: DatabaseAdapter): Promise<number> {
   return db.execute(
     `update public.background_jobs
         set status = 'cancelled', lease_expires_at = null, worker_id = null,
             completed_at = now(), updated_at = now()
-      where status = 'running' and cancel_requested_at is not null
-        and lease_expires_at is not null and lease_expires_at < now()`,
+      where cancel_requested_at is not null
+        and (
+          status = 'queued'
+          or (status = 'running' and lease_expires_at is not null and lease_expires_at < now())
+        )`,
     [],
   );
 }

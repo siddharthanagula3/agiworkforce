@@ -1,5 +1,6 @@
 import { SUPPORTED_LANGUAGES } from '@agiworkforce/i18n/languages';
 import { artifactReplyFormat, normalizeEditInstruction } from './artifact-edit-request';
+import { bestOccurrence, windowAround, type OccurrenceContext } from './text-occurrence';
 
 const MAX_SELECTION_CHARS = 4_000;
 const CONTEXT_CHARS = 400;
@@ -70,9 +71,27 @@ export interface ArtifactSelection {
   after: string;
 }
 
-export function captureSelectionContext(source: string, selectedText: string): ArtifactSelection {
+function locateSelection(source: string, text: string, rendered?: OccurrenceContext): number {
+  const first = source.indexOf(text);
+  if (first < 0 || !rendered) return first;
+  const starts = [first];
+  for (let at = source.indexOf(text, first + 1); at >= 0; at = source.indexOf(text, at + 1)) {
+    starts.push(at);
+  }
+  const chosen = bestOccurrence(
+    starts.map((at) => windowAround(source, at, at + text.length)),
+    rendered,
+  );
+  return starts[chosen ?? 0]!;
+}
+
+export function captureSelectionContext(
+  source: string,
+  selectedText: string,
+  rendered?: OccurrenceContext,
+): ArtifactSelection {
   const text = selectedText.trim().slice(0, MAX_SELECTION_CHARS);
-  const index = text ? source.indexOf(text) : -1;
+  const index = text ? locateSelection(source, text, rendered) : -1;
   if (index < 0) return { text, before: '', after: '' };
   return {
     text,

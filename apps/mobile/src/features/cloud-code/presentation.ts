@@ -228,3 +228,10 @@ export const CLOUD_CODE_REPLY_COPY = Object.freeze({
   copy: 'Copy reply',
   share: 'Share reply',
 });
+
+export function cloudCodeRestoreRefusedGoal(current: string, goal: string): string {
+  const typed = current.trim();
+  if (!typed) return goal;
+  if (typed === goal) return current;
+  return `${goal}\n\n${current}`;
+}

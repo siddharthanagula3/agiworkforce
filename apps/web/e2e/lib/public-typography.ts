@@ -591,7 +591,7 @@ export function scanPublicTypography(
     'stat-label': {
       selector: 'dt.agi-ds-stat-label',
       size: '--public-label-size',
-      font: '--font-geist-mono',
+      font: '--font-geist-sans',
     },
     'stat-note': {
       selector: 'dd.agi-ds-stat-note',

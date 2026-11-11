@@ -12,6 +12,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { parseDocument } from 'yaml';
 import { parse as parseToml } from 'smol-toml';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const BASELINE_PATH = 'scripts/config/supply-chain.json';
@@ -37,6 +38,7 @@ function walk(root, relative, out) {
 export function containerFiles(root) {
   const files = fs.existsSync(path.join(root, '.git'))
     ? execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
+        maxBuffer: GIT_MAX_BUFFER,
         cwd: root,
         encoding: 'utf8',
       })
@@ -307,6 +309,7 @@ export function installSteps(root) {
   }
   const files = fs.existsSync(path.join(root, '.git'))
     ? execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
+        maxBuffer: GIT_MAX_BUFFER,
         cwd: root,
         encoding: 'utf8',
       })

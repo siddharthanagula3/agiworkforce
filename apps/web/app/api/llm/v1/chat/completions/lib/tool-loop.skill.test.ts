@@ -449,6 +449,133 @@ describe('managed Cloud Skill tool loop', () => {
     expect(output).toContain('Inspect the rendered interface');
   });
 
+  describe('agent skill selection', () => {
+    beforeEach(() => {
+      directorySkills.findInstalledDirectorySkillWithFiles.mockClear();
+    });
+
+    afterEach(() => {
+      directorySkills.findInstalledDirectorySkillWithFiles.mockReset();
+      directorySkills.findInstalledDirectorySkillWithFiles.mockResolvedValue(null);
+    });
+
+    async function addSecondManagedSkill(): Promise<void> {
+      const directory = join(root, 'release-notes');
+      await mkdir(directory, { recursive: true });
+      await writeFile(
+        join(directory, 'SKILL.md'),
+        [
+          '---',
+          'name: release-notes',
+          'description: Draft release notes.',
+          '---',
+          '',
+          'Group changes by user-visible impact.',
+        ].join('\n'),
+        'utf-8',
+      );
+      resetManagedSkillCatalogCacheForTests();
+    }
+
+    function processedForAgent(skillNames: string[] | null): ProcessedRequest {
+      return {
+        ...makeProcessed(root),
+        agentTurn: {
+          agentId: 'agent-1',
+          config: { skillNames },
+          files: [],
+        } as unknown as ProcessedRequest['agentTurn'],
+      };
+    }
+
+    it('loads a skill the agent selected', async () => {
+      await addSecondManagedSkill();
+      provider.stream
+        .mockResolvedValueOnce(toolCallStream('design-review'))
+        .mockResolvedValueOnce(finalAnswerStream('Done.'));
+
+      const output = await collect(
+        runToolLoop(processedForAgent(['design-review']), { approvalMode: 'auto' }),
+      );
+
+      expect(output).toContain('"status":"completed"');
+      expect(output).toContain('Inspect the rendered interface');
+    });
+
+    it('refuses a managed skill the agent did not select even though the account can load it', async () => {
+      await addSecondManagedSkill();
+      provider.stream
+        .mockResolvedValueOnce(toolCallStream('release-notes'))
+        .mockResolvedValueOnce(finalAnswerStream('That skill is unavailable.'));
+
+      const output = await collect(
+        runToolLoop(processedForAgent(['design-review']), { approvalMode: 'auto' }),
+      );
+
+      expect(output).toContain('"status":"failed"');
+      expect(output).toContain('Unknown skill: release-notes');
+      expect(output).not.toContain('Group changes by user-visible impact');
+    });
+
+    it('does not fall back to installed-directory or caller skills for a name the agent did not select', async () => {
+      const fallback = {
+        skill: {
+          name: 'session-report',
+          description: 'Generate a session report.',
+          body: 'Summarise tokens, cache hits and subagents.',
+          contentHash: 'sha256:0000',
+          filePath: 'plugins/session-report/skills/session-report/SKILL.md',
+          source: 'extra' as const,
+          metadata: {},
+          frontmatter: {},
+        },
+        access: {
+          listFiles: async () => [],
+          readFile: async () => ({ ok: false as const, reason: 'not_found' as const }),
+        },
+      };
+      directorySkills.findInstalledDirectorySkillWithFiles.mockResolvedValue(fallback);
+      userSkillService.findUserSkillWithFiles.mockResolvedValue(fallback);
+      provider.stream
+        .mockResolvedValueOnce(toolCallStream('session-report'))
+        .mockResolvedValueOnce(finalAnswerStream('That skill is unavailable.'));
+
+      const output = await collect(
+        runToolLoop(processedForAgent(['design-review']), {
+          approvalMode: 'auto',
+          userId: 'caller-1',
+        }),
+      );
+
+      expect(output).toContain('Unknown skill: session-report');
+      expect(output).not.toContain('Summarise tokens, cache hits and subagents.');
+      expect(directorySkills.findInstalledDirectorySkillWithFiles).not.toHaveBeenCalled();
+      expect(userSkillService.findUserSkillWithFiles).not.toHaveBeenCalled();
+    });
+
+    it('refuses every skill call when the agent selected none', async () => {
+      provider.stream
+        .mockResolvedValueOnce(toolCallStream('design-review'))
+        .mockResolvedValueOnce(finalAnswerStream('No skills here.'));
+
+      const output = await collect(runToolLoop(processedForAgent([]), { approvalMode: 'auto' }));
+
+      expect(output).toContain('Unknown skill: design-review');
+      expect(output).not.toContain('Inspect the rendered interface');
+    });
+
+    it('inherits every eligible skill when the agent has no fixed selection', async () => {
+      await addSecondManagedSkill();
+      provider.stream
+        .mockResolvedValueOnce(toolCallStream('release-notes'))
+        .mockResolvedValueOnce(finalAnswerStream('Done.'));
+
+      const output = await collect(runToolLoop(processedForAgent(null), { approvalMode: 'auto' }));
+
+      expect(output).toContain('Group changes by user-visible impact');
+    });
+  });
+
   it('reads the install overrides once even when the skill tool is called twice in one turn', async () => {
     neonAdapter.query.mockImplementation(async (sql: string) =>
       sql.includes('user_settings') ? [{ settings: {} }] : [],

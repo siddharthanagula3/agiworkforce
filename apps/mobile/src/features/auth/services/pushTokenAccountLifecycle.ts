@@ -1,5 +1,8 @@
 import type { PushNotificationAccountContext } from '@/services/notifications';
-import { unregisterPushTokenForSignOut } from '@/src/features/auth/services/signOutPushTokenCleanup';
+import {
+  PushTokenCleanupCredentialRejectedError,
+  unregisterPushTokenForSignOut,
+} from '@/src/features/auth/services/signOutPushTokenCleanup';
 
 export type ClerkTokenResolver = () => Promise<string | null>;
 
@@ -9,6 +12,12 @@ interface PushTokenOwnerBinding {
   controller: AbortController;
   getToken: ClerkTokenResolver;
   capturedToken: Promise<string | null>;
+  published: boolean;
+  inheritedCleanupToken: Promise<string | null> | null;
+}
+
+function mayHaveRegistered(binding: PushTokenOwnerBinding): boolean {
+  return binding.published || binding.inheritedCleanupToken !== null;
 }
 
 let activeBinding: PushTokenOwnerBinding | null = null;
@@ -47,13 +56,19 @@ function enqueueCleanup(binding: PushTokenOwnerBinding | null): Promise<void> {
     .then(async () => {
       while (cleanupQueue.length > 0) {
         const queuedBinding = cleanupQueue[0]!;
-        const token = await queuedBinding.capturedToken;
-        if (!token) {
+        const token =
+          (await queuedBinding.capturedToken) ?? (await queuedBinding.inheritedCleanupToken);
+        if (token) {
+          try {
+            await unregisterPushTokenForSignOut(token);
+          } catch (error) {
+            if (!(error instanceof PushTokenCleanupCredentialRejectedError)) throw error;
+          }
+        } else if (mayHaveRegistered(queuedBinding)) {
           throw new Error(
             `Cannot safely transfer the push token from Clerk account ${queuedBinding.ownerId}: its cleanup credential is unavailable`,
           );
         }
-        await unregisterPushTokenForSignOut(token);
         cleanupQueue.shift();
       }
     });
@@ -79,6 +94,13 @@ export async function beginPushTokenAccountSession(
     controller: new AbortController(),
     getToken,
     capturedToken: captureToken(getToken),
+    published: false,
+    inheritedCleanupToken:
+      previousBinding?.ownerId === normalizedOwnerId
+        ? previousBinding.published
+          ? previousBinding.capturedToken
+          : previousBinding.inheritedCleanupToken
+        : null,
   };
   activeBinding = binding;
 
@@ -92,6 +114,7 @@ export async function beginPushTokenAccountSession(
   const initialToken = await binding.capturedToken;
   if (!initialToken || !bindingIsCurrent(binding)) return null;
 
+  binding.published = true;
   return {
     ownerId: binding.ownerId,
     signal: binding.controller.signal,

@@ -84,13 +84,41 @@ impl From<DeveloperSessionHostError> for RpcError {
 enum TurnEnd {
     Ended(Box<TurnEndedNotification>),
     Cancelled,
+    OutcomeLost(String),
+}
+
+impl TurnEnd {
+    fn concerns(&self, active_turn_id: Option<&str>) -> bool {
+        match self {
+            TurnEnd::Ended(ended) => active_turn_id.is_none_or(|id| id == ended.turn_id),
+            TurnEnd::Cancelled => true,
+            TurnEnd::OutcomeLost(turn_id) => active_turn_id == Some(turn_id.as_str()),
+        }
+    }
 }
 
 struct ActiveTurn {
     turn_id: Option<String>,
     stop: Option<AgentEventStopReason>,
     cancelled: bool,
+    interrupt_sent: bool,
     done: oneshot::Sender<Result<Value, RpcError>>,
+}
+
+impl ActiveTurn {
+    fn adopt(&mut self, turn_id: &str) -> Option<String> {
+        self.turn_id.get_or_insert_with(|| turn_id.to_string());
+        self.claim_interrupt()
+    }
+
+    fn claim_interrupt(&mut self) -> Option<String> {
+        if !self.cancelled || self.interrupt_sent {
+            return None;
+        }
+        let turn_id = self.turn_id.clone()?;
+        self.interrupt_sent = true;
+        Some(turn_id)
+    }
 }
 
 struct Session {
@@ -496,6 +524,7 @@ impl AcpConnection {
                     turn_id: None,
                     stop: None,
                     cancelled: false,
+                    interrupt_sent: false,
                     done,
                 },
             );
@@ -530,20 +559,13 @@ impl AcpConnection {
                 return Err(error.into());
             }
             Ok(summary) => {
-                let cancel_now = self
-                    .turns
-                    .lock()
-                    .ok()
-                    .and_then(|mut turns| {
-                        turns.get_mut(&session_id).map(|turn| {
-                            let cancel_already_sent = turn.turn_id.is_some();
-                            turn.turn_id.get_or_insert(summary.id.clone());
-                            turn.cancelled && !cancel_already_sent
-                        })
-                    })
-                    .unwrap_or(false);
-                if cancel_now {
-                    self.clone().interrupt(session_id.clone(), summary.id).await;
+                let pending_interrupt = self.turns.lock().ok().and_then(|mut turns| {
+                    turns
+                        .get_mut(&session_id)
+                        .and_then(|turn| turn.adopt(&summary.id))
+                });
+                if let Some(turn_id) = pending_interrupt {
+                    self.clone().interrupt(session_id.clone(), turn_id).await;
                 }
             }
         }
@@ -561,7 +583,7 @@ impl AcpConnection {
                 return;
             };
             turn.cancelled = true;
-            turn.turn_id.clone()
+            turn.claim_interrupt()
         };
         if let Some(turn_id) = turn_id {
             tokio::spawn(self.interrupt(session_id, turn_id));
@@ -582,12 +604,12 @@ impl AcpConnection {
     }
 
     fn finish(&self, session_id: &str, end: TurnEnd) {
-        let Some(turn) = self
-            .turns
-            .lock()
-            .ok()
-            .and_then(|mut turns| turns.remove(session_id))
-        else {
+        let Some(turn) = self.turns.lock().ok().and_then(|mut turns| {
+            if !end.concerns(turns.get(session_id)?.turn_id.as_deref()) {
+                return None;
+            }
+            turns.remove(session_id)
+        }) else {
             return;
         };
         let result = if turn.cancelled {
@@ -595,6 +617,10 @@ impl AcpConnection {
         } else {
             match end {
                 TurnEnd::Cancelled => Ok(json!({ "stopReason": "cancelled" })),
+                TurnEnd::OutcomeLost(_) => Err(RpcError::new(
+                    INTERNAL_ERROR,
+                    "Session events were dropped under load, so how this turn ended is unknown. Read the session before relying on its result.",
+                )),
                 TurnEnd::Ended(ended) if ended.status == TurnStatus::Completed => {
                     Ok(json!({ "stopReason": stop_reason(turn.stop) }))
                 }
@@ -639,7 +665,12 @@ impl AcpConnection {
     }
 
     async fn pump(self: Arc<Self>, mut events: broadcast::Receiver<AppServerNotification>) {
+        let mut lagged = false;
         loop {
+            if lagged && events.is_empty() {
+                lagged = false;
+                self.settle_after_lag().await;
+            }
             match events.recv().await {
                 Ok(notification) => self.clone().forward(notification).await,
                 Err(broadcast::error::RecvError::Lagged(skipped)) => {
@@ -647,7 +678,7 @@ impl AcpConnection {
                         "{}: {skipped} session events were dropped under load; checking running prompts.",
                         crate::PRODUCT_NAME
                     );
-                    self.settle_after_lag().await;
+                    lagged = true;
                 }
                 Err(broadcast::error::RecvError::Closed) => return,
             }
@@ -655,12 +686,19 @@ impl AcpConnection {
     }
 
     async fn settle_after_lag(&self) {
-        let running: Vec<String> = self
+        let started: Vec<(String, String)> = self
             .turns
             .lock()
-            .map(|turns| turns.keys().cloned().collect())
+            .map(|turns| {
+                turns
+                    .iter()
+                    .filter_map(|(session_id, turn)| {
+                        Some((session_id.clone(), turn.turn_id.clone()?))
+                    })
+                    .collect()
+            })
             .unwrap_or_default();
-        for session_id in running {
+        for (session_id, turn_id) in started {
             let Ok(read) = self
                 .host
                 .read_thread(ThreadIdParams {
@@ -674,32 +712,7 @@ impl AcpConnection {
                 read.thread.status,
                 ThreadStatus::Running | ThreadStatus::AwaitingApproval
             ) {
-                let turn_id = self
-                    .turns
-                    .lock()
-                    .ok()
-                    .and_then(|turns| turns.get(&session_id).and_then(|turn| turn.turn_id.clone()))
-                    .unwrap_or_default();
-                let status = if read.thread.status == ThreadStatus::Failed {
-                    TurnStatus::Failed
-                } else {
-                    TurnStatus::Completed
-                };
-                self.finish(
-                    &session_id,
-                    TurnEnd::Ended(Box::new(TurnEndedNotification {
-                        thread_id: session_id.clone(),
-                        turn_id,
-                        status,
-                        response: String::new(),
-                        input_tokens: 0,
-                        output_tokens: 0,
-                        error: None,
-                        failure: None,
-                        managed_request_ids: Vec::new(),
-                        unsent_steers: 0,
-                    })),
-                );
+                self.finish(&session_id, TurnEnd::OutcomeLost(turn_id));
             }
         }
     }
@@ -718,10 +731,13 @@ impl AcpConnection {
         match notification.method.as_str() {
             "turn/started" => {
                 if let Some(turn_id) = params.get("turnId").and_then(Value::as_str) {
-                    if let Ok(mut turns) = self.turns.lock() {
-                        if let Some(turn) = turns.get_mut(&thread_id) {
-                            turn.turn_id.get_or_insert_with(|| turn_id.to_string());
-                        }
+                    let pending_interrupt = self.turns.lock().ok().and_then(|mut turns| {
+                        turns
+                            .get_mut(&thread_id)
+                            .and_then(|turn| turn.adopt(turn_id))
+                    });
+                    if let Some(turn_id) = pending_interrupt {
+                        tokio::spawn(self.clone().interrupt(thread_id, turn_id));
                     }
                 }
             }
@@ -1223,7 +1239,11 @@ mod tests {
         AskApproval,
         Stall,
         Fail,
+        HeldStart,
+        FailAfterFlood { failure_retained: bool },
     }
+
+    const LAG_TEST_CAPACITY: usize = 4;
 
     struct FakeHost {
         script: Script,
@@ -1233,11 +1253,17 @@ mod tests {
         approvals: Mutex<Vec<ApprovalResponseParams>>,
         interrupts: Mutex<Vec<TurnInterruptParams>>,
         shutdowns: Mutex<u32>,
+        accept_turn: tokio::sync::Notify,
+        return_turn: tokio::sync::Notify,
     }
 
     impl FakeHost {
         fn new(script: Script) -> Arc<Self> {
-            let (notifications, _) = broadcast::channel(64);
+            let capacity = match script {
+                Script::FailAfterFlood { .. } => LAG_TEST_CAPACITY,
+                _ => 64,
+            };
+            let (notifications, _) = broadcast::channel(capacity);
             Arc::new(Self {
                 script,
                 notifications,
@@ -1246,7 +1272,31 @@ mod tests {
                 approvals: Mutex::new(Vec::new()),
                 interrupts: Mutex::new(Vec::new()),
                 shutdowns: Mutex::new(0),
+                accept_turn: tokio::sync::Notify::new(),
+                return_turn: tokio::sync::Notify::new(),
             })
+        }
+
+        fn flood(&self) {
+            for index in 0..=LAG_TEST_CAPACITY {
+                self.emit(
+                    "turn/output_delta",
+                    json!({ "threadId": "thread-1", "turnId": "turn-1", "delta": "x", "index": index }),
+                );
+            }
+        }
+
+        fn provider_unavailable(&self) {
+            self.end_turn(
+                "turn/failed",
+                "failed",
+                Some(json!({
+                    "code": "provider_unavailable",
+                    "message": "The provider is unavailable.",
+                    "retryable": true,
+                    "action": "retry",
+                })),
+            );
         }
 
         fn emit(&self, method: &str, params: Value) {
@@ -1353,7 +1403,16 @@ mod tests {
             &self,
             _params: ThreadIdParams,
         ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
-            Err(unused())
+            Ok(ThreadReadResponse {
+                child_tasks: None,
+                thread: thread(),
+                messages: Vec::new(),
+                transcript_truncated: false,
+                approvals: Vec::new(),
+                file_changes: Vec::new(),
+                plan: Vec::new(),
+                todos: Vec::new(),
+            })
         }
 
         async fn fork_thread(
@@ -1384,11 +1443,24 @@ mod tests {
             client: TurnClient,
         ) -> Result<TurnSummary, DeveloperSessionHostError> {
             self.turns.lock().await.push((params, client));
+            if matches!(self.script, Script::HeldStart) {
+                self.accept_turn.notified().await;
+            }
             self.emit(
                 "turn/started",
                 json!({ "threadId": "thread-1", "turnId": "turn-1" }),
             );
             match self.script {
+                Script::HeldStart => self.return_turn.notified().await,
+                Script::FailAfterFlood { failure_retained } => {
+                    if failure_retained {
+                        self.flood();
+                        self.provider_unavailable();
+                    } else {
+                        self.provider_unavailable();
+                        self.flood();
+                    }
+                }
                 Script::Answer => {
                     self.emit(
                         "turn/output_delta",
@@ -1429,18 +1501,7 @@ mod tests {
                     );
                 }
                 Script::Stall => {}
-                Script::Fail => {
-                    self.end_turn(
-                        "turn/failed",
-                        "failed",
-                        Some(json!({
-                            "code": "provider_unavailable",
-                            "message": "The provider is unavailable.",
-                            "retryable": true,
-                            "action": "retry",
-                        })),
-                    );
-                }
+                Script::Fail => self.provider_unavailable(),
             }
             Ok(TurnSummary {
                 id: "turn-1".to_string(),
@@ -1811,6 +1872,76 @@ mod tests {
         let finished = client.response(2, &mut Vec::new()).await;
         assert_eq!(finished["result"]["stopReason"], "cancelled");
         assert_eq!(host.interrupts.lock().await.len(), 1);
+        client.close().await.expect("clean shutdown");
+    }
+
+    #[tokio::test]
+    async fn cancel_before_the_turn_id_is_sent_once_the_start_event_names_the_turn() {
+        let host = FakeHost::new(Script::HeldStart);
+        let mut client = Client::start(host.clone());
+        let session_id = client.open_session().await;
+        client.prompt(&session_id).await;
+        client
+            .send(json!({
+                "jsonrpc": "2.0", "method": "session/cancel",
+                "params": { "sessionId": session_id },
+            }))
+            .await;
+        client
+            .send(json!({ "jsonrpc": "2.0", "id": 9, "method": "session/load", "params": {} }))
+            .await;
+        let mut seen = Vec::new();
+        client.response(9, &mut seen).await;
+
+        host.accept_turn.notify_one();
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while host.interrupts.lock().await.is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("the start event delivered the pending cancel to the host");
+        host.return_turn.notify_one();
+
+        let finished = client.response(2, &mut seen).await;
+        assert_eq!(finished["result"]["stopReason"], "cancelled");
+        let interrupts = host.interrupts.lock().await.clone();
+        assert_eq!(interrupts.len(), 1);
+        assert_eq!(interrupts[0].turn_id, "turn-1");
+        client.close().await.expect("clean shutdown");
+    }
+
+    #[tokio::test]
+    async fn a_failure_still_queued_after_lag_answers_the_prompt_with_that_failure() {
+        let host = FakeHost::new(Script::FailAfterFlood {
+            failure_retained: true,
+        });
+        let mut client = Client::start(host);
+        let session_id = client.open_session().await;
+        client.prompt(&session_id).await;
+
+        let failed = client.response(2, &mut Vec::new()).await;
+        assert_eq!(failed["error"]["code"], INTERNAL_ERROR);
+        assert_eq!(failed["error"]["message"], "The provider is unavailable.");
+        assert_eq!(failed["error"]["data"]["code"], "provider_unavailable");
+        client.close().await.expect("clean shutdown");
+    }
+
+    #[tokio::test]
+    async fn a_turn_whose_end_was_dropped_under_lag_is_never_reported_as_completed() {
+        let host = FakeHost::new(Script::FailAfterFlood {
+            failure_retained: false,
+        });
+        let mut client = Client::start(host);
+        let session_id = client.open_session().await;
+        client.prompt(&session_id).await;
+
+        let settled = client.response(2, &mut Vec::new()).await;
+        assert!(settled.get("result").is_none(), "{settled}");
+        assert_eq!(settled["error"]["code"], INTERNAL_ERROR);
+        assert!(settled["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("unknown")));
         client.close().await.expect("clean shutdown");
     }
 

@@ -81,6 +81,7 @@ import {
   nestedDeadlineMs,
 } from '@/lib/deadline-policy';
 import { startCloudAgentWorkflowExecution } from '@/lib/workflows/start-cloud-agent-workflow';
+import { CloudAgentCapabilityRefusedError } from '@/lib/workflows/cloud-agent-capability-refusal';
 import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
 import {
   claimDurableStreamWithinBudget,
@@ -138,6 +139,7 @@ import {
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
   takeCloudAgentRunSteers,
+  transitionCloudAgentRun,
 } from '@/lib/services/cloud-agent-run-service';
 import type {
   CloudAgentOriginSurface,
@@ -334,6 +336,25 @@ async function beginCloudAgentRun(
       { status: 503, headers: getSecurityHeaders() },
     );
   }
+}
+
+async function closeRefusedAgentRun(
+  userId: string,
+  processed: ProcessedRequest,
+  runId: string,
+  db: DatabaseAdapter,
+): Promise<void> {
+  await transitionCloudAgentRun(db, { userId, runId, state: 'failed' }).catch((error: unknown) => {
+    logger.error({ error, userId, runId }, 'Refused agent run could not be closed');
+  });
+  await refundFailedReservation(
+    userId,
+    processed,
+    'request_failure',
+    'capability_unavailable',
+  ).catch((error: unknown) => {
+    logger.error({ error, userId, runId }, 'Refused agent run reservation could not be released');
+  });
 }
 
 function addAgentRunHeaders(headers: Record<string, string>, run: CloudAgentRun): void {
@@ -984,6 +1005,10 @@ async function dispatchChatCompletions(
             headers: durableHeaders,
           });
         } catch (error) {
+          if (error instanceof CloudAgentCapabilityRefusedError) {
+            await closeRefusedAgentRun(userId, processed, run.id, runDb);
+            throw error.refusal;
+          }
           // Degrade, do not fail: the inline path below produces the same SSE
           // wire and the same journal. The turn is merely no longer detachable.
           // A turn with no reservation at all is an ordinary, expected miss, not

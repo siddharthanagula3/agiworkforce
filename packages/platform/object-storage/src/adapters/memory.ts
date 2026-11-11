@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { objectChecksum } from '../checksum';
 import { bindPresignedDownload, bindPresignedUpload, bindPresignedUploadPart } from '../presign';
+import { encryptionUploadHeaders } from '../upload-headers';
 import {
   ObjectChecksumMismatchError,
   ObjectStorageConfigError,
@@ -15,6 +16,7 @@ import {
   type PresignGetInput,
   type PresignPutInput,
   type PresignUploadPartInput,
+  type PresignedPutRequest,
   type PutObjectInput,
   type StoredObjectBytes,
   type StoredObjectHead,
@@ -347,7 +349,7 @@ export class MemoryObjectStore implements ObjectStore {
     return url.toString();
   }
 
-  async presignPut(input: PresignPutInput): Promise<string> {
+  async presignPut(input: PresignPutInput): Promise<PresignedPutRequest> {
     const bound = bindPresignedUpload(input);
     const url = this.uploadUrl();
     url.searchParams.set(UPLOAD_BUCKET_PARAM, input.bucket);
@@ -358,7 +360,7 @@ export class MemoryObjectStore implements ObjectStore {
       UPLOAD_EXPIRES_PARAM,
       String(this.now() + bound.expiresInSeconds * MILLISECONDS_PER_SECOND),
     );
-    return url.toString();
+    return { url: url.toString(), headers: encryptionUploadHeaders(this.encryption) };
   }
 }
 

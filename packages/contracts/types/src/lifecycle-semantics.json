@@ -15,6 +15,11 @@
       "symbol": "unexpiredMemoryPredicate",
       "module": "apps/web/lib/services/managed-memory-context-service.ts",
       "resources": ["user_memories"]
+    },
+    {
+      "symbol": "READABLE_PROJECT_SCOPE_SQL",
+      "module": "apps/web/lib/server/project-read-access.ts",
+      "resources": ["user_projects"]
     }
   ],
   "resources": {
@@ -447,6 +452,24 @@
       "why": "The statement withdraws the knowledge files of the project being deleted, which is already marked deleted when its contents are released; filtering on the project marker would leave those files live."
     },
     {
+      "file": "apps/web/lib/server/project-deletion.ts",
+      "table": "project_knowledge_files",
+      "class": "retention-sweep",
+      "why": "The legal-hold lookup decides whether an object may be deleted, and a withdrawn file under an active hold must still keep its bytes; filtering withdrawal would let the object go while the hold stands."
+    },
+    {
+      "file": "apps/web/lib/server/retention/deleted-project-files.ts",
+      "table": "project_knowledge_files",
+      "class": "purge",
+      "why": "The purge exists to collect knowledge files their owner deleted once the recovery window has passed and no legal hold covers them, so it selects and removes withdrawn rows by design."
+    },
+    {
+      "file": "apps/web/lib/server/retention/deleted-project-files.ts",
+      "table": "user_projects",
+      "class": "purge",
+      "why": "The purge reads the workspace of the project whose deleted file it is collecting to take that workspace's hold lock; a knowledge file falls due whether it was deleted alone from a live project or together with its project, so the project may be live or withdrawn; filtering the withdrawal marker would give the files of a withdrawn project no workspace and skip the lock."
+    },
+    {
       "file": "apps/web/lib/server/temporary-files/purge.ts",
       "table": "media_assets",
       "class": "purge",
@@ -630,7 +653,7 @@
       "file": "apps/web/lib/services/published-artifact-publication-policy.ts",
       "table": "web_conversations",
       "class": "ownership-check",
-      "why": "Resolves the conversation workspace for the shared publication policy, including withdrawn conversation metadata, so the originating workspace restrictions still apply. The read selects organization_id only, never conversation content."
+      "why": "Resolves the workspace that stores the chat an artifact is published from so that workspace's external sharing policy applies to the publication. A soft-deleted chat keeps its workspace, so including it keeps the stricter policy; this probe returns only the organization id, never conversation content."
     }
   ],
   "hardDeleteStores": {

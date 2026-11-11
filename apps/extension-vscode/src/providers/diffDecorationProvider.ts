@@ -19,6 +19,36 @@ export interface DiffSession {
   readonly confidence?: 'high' | 'medium' | 'low';
 }
 
+function comparePositions(a: vscode.Position, b: vscode.Position): number {
+  return a.line !== b.line ? a.line - b.line : a.character - b.character;
+}
+
+function rangesConflict(a: vscode.Range, b: vscode.Range): boolean {
+  const reachesOther =
+    comparePositions(a.start, b.end) <= 0 && comparePositions(b.start, a.end) <= 0;
+  if (!reachesOther) return false;
+  if (a.isEmpty || b.isEmpty) return true;
+  return comparePositions(a.start, b.end) < 0 && comparePositions(b.start, a.end) < 0;
+}
+
+function isStaleIn(session: DiffSession, document: vscode.TextDocument): boolean {
+  if (session.range.isEmpty) {
+    const version = (document as { version?: number }).version;
+    return (
+      version !== undefined &&
+      session.documentVersion !== undefined &&
+      version !== session.documentVersion
+    );
+  }
+  return document.getText(session.range) !== session.originalText;
+}
+
+interface BulkAcceptOutcome {
+  stale: number;
+  conflicting: number;
+  failed: number;
+}
+
 interface DiffLine {
   kind: 'added' | 'removed' | 'modified';
   editorLine: number;
@@ -318,15 +348,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
   private async _isStale(session: DiffSession): Promise<boolean> {
     try {
       const document = await vscode.workspace.openTextDocument(session.uri);
-      if (session.range.isEmpty) {
-        const version = (document as { version?: number }).version;
-        return (
-          version !== undefined &&
-          session.documentVersion !== undefined &&
-          version !== session.documentVersion
-        );
-      }
-      return document.getText(session.range) !== session.originalText;
+      return isStaleIn(session, document);
     } catch {
       return true;
     }
@@ -468,22 +490,66 @@ export class DiffDecorationProvider implements vscode.Disposable {
       existing.push(session);
       byUri.set(key, existing);
     }
-    let stale = 0;
+    const total: BulkAcceptOutcome = { stale: 0, conflicting: 0, failed: 0 };
     for (const uriSessions of byUri.values()) {
-      uriSessions.sort((a, b) => b.range.start.line - a.range.start.line);
-      for (const session of uriSessions) {
-        if (!(await this.acceptDiff(session.id, { quiet: true }))) {
-          stale += 1;
-        }
-      }
+      const outcome = await this._acceptDocumentSessions(uriSessions);
+      total.stale += outcome.stale;
+      total.conflicting += outcome.conflicting;
+      total.failed += outcome.failed;
     }
-    if (stale > 0) {
+    if (total.stale > 0) {
       vscode.window.showWarningMessage(
-        stale === 1
+        total.stale === 1
           ? STALE_DIFF_MESSAGE
-          : `${PRODUCT_NAMES.code}: ${stale} edits were not applied because those files changed since they were proposed. Ask again to get fresh edits.`,
+          : `${PRODUCT_NAMES.code}: ${total.stale} edits were not applied because those files changed since they were proposed. Ask again to get fresh edits.`,
       );
     }
+    if (total.conflicting > 0) {
+      vscode.window.showWarningMessage(
+        `${PRODUCT_NAMES.code}: ${total.conflicting} ${total.conflicting === 1 ? 'edit was' : 'edits were'} not applied because ${total.conflicting === 1 ? 'it overlaps' : 'they overlap'} another edit in the same place. Accept ${total.conflicting === 1 ? 'it' : 'them'} one at a time.`,
+      );
+    }
+    if (total.failed > 0) {
+      vscode.window.showWarningMessage(
+        `${PRODUCT_NAMES.code}: ${total.failed} ${total.failed === 1 ? 'edit' : 'edits'} could not be applied and ${total.failed === 1 ? 'is' : 'are'} still waiting for review.`,
+      );
+    }
+  }
+
+  private async _acceptDocumentSessions(
+    uriSessions: readonly DiffSession[],
+  ): Promise<BulkAcceptOutcome> {
+    const outcome: BulkAcceptOutcome = { stale: 0, conflicting: 0, failed: 0 };
+    const ordered = [...uriSessions].sort((a, b) => comparePositions(b.range.start, a.range.start));
+    let document: vscode.TextDocument;
+    try {
+      document = await vscode.workspace.openTextDocument(ordered[0]!.uri);
+    } catch {
+      outcome.stale = ordered.length;
+      return outcome;
+    }
+
+    const wsEdit = new vscode.WorkspaceEdit();
+    const accepted: DiffSession[] = [];
+    for (const session of ordered) {
+      if (!this._activeDiffs.has(session.id)) continue;
+      if (isStaleIn(session, document)) {
+        outcome.stale += 1;
+      } else if (accepted.some((other) => rangesConflict(other.range, session.range))) {
+        outcome.conflicting += 1;
+      } else {
+        wsEdit.replace(session.uri, session.range, session.newText);
+        accepted.push(session);
+      }
+    }
+    if (accepted.length === 0) return outcome;
+
+    if (await vscode.workspace.applyEdit(wsEdit)) {
+      for (const session of accepted) this._removeSession(session.id);
+    } else {
+      outcome.failed = accepted.length;
+    }
+    return outcome;
   }
 
   private _rejectSessions(sessions: readonly DiffSession[]): void {

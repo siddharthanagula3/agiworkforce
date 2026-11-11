@@ -17,6 +17,7 @@
  * @module inPagePanel/panel
  */
 
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { sanitizePageText } from '../../../background/policy';
 import { isDomSmallEnoughToRead } from '../../../dom-helpers';
 import type { InPagePromptOutcome, InPagePromptResponse } from '../../../types';
@@ -541,7 +542,7 @@ export function createPanel(): {
 
   els.submitBtn.addEventListener('click', submitComposer);
   els.textarea.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !isImeComposingKey(e)) {
       e.preventDefault();
       submitComposer();
     }

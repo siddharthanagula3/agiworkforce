@@ -1,8 +1,21 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { englishResources } from '@agiworkforce/i18n/en';
+import { BILLING_PLAN_PRICING, SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER } from '@agiworkforce/types';
+import { planCapabilityLabel } from '../features/billing/lib/plan-capability-release';
 import { mockAuthProvider } from './lib/mock-auth-provider';
 
 const WCAG_AA_NORMAL = 4.5;
 const PUBLIC_SMALL_TEXT_CONTRAST = 7;
+
+const copy = englishResources.pricing;
+const fill = (template: string, values: Record<string, string>) =>
+  template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => values[key] ?? '');
+const INDIVIDUAL_TIERS = ['free', ...SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER] as const;
+const TEAM_LABEL = BILLING_PLAN_PRICING.team.label;
+const BUSINESS_AUDIENCE_LABEL = fill(copy.businessAudience, {
+  team: TEAM_LABEL,
+  enterprise: BILLING_PLAN_PRICING.enterprise.label,
+});
 
 const LOCALIZED_PRICING = {
   country: 'US',
@@ -132,8 +145,8 @@ test.describe('/pricing Team card prices each seat type in its own row', () => {
       await expect(standard).toContainText('$25 per seat / month when billed monthly');
       await expect(premium.locator('.agi-tier-seat-price')).toHaveText('$100 per seat / month');
       await expect(premium).toContainText('$125 per seat / month when billed monthly');
-      await expect(premium).toContainText('5x the usage of a Standard seat');
-      await expect(card).toContainText('Mix both seat types in one team');
+      await expect(premium).toContainText(copy.cardPremiumSeatUsage);
+      await expect(card).toContainText(copy.seatTypesNote);
       expect(await pageOverflow(page)).toBe(0);
 
       await card.getByRole('button', { name: /^Monthly/ }).click();
@@ -167,8 +180,10 @@ const CARD_VIEWPORTS = [
   { width: 320, height: 700 },
 ] as const;
 
-const COMPARED_PLANS = ['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x', 'Team'];
-const CARD_PLANS = ['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x'];
+const CARD_PLANS = INDIVIDUAL_TIERS.map((tier) => BILLING_PLAN_PRICING[tier].label);
+const COMPARED_PLANS = CARD_PLANS;
+const getCta = (template: string, tier: (typeof INDIVIDUAL_TIERS)[number]) =>
+  fill(template, { plan: BILLING_PLAN_PRICING[tier].label });
 const COMPARISON_GROUPS = [
   'Usage',
   'Models',
@@ -178,6 +193,7 @@ const COMPARISON_GROUPS = [
   'Admin and data',
 ];
 const RUNNING_TEXT_MIN = 17;
+const FOOTNOTE_TEXT_MIN = 14;
 
 async function openPricing(page: Page, hash = '') {
   await mockAuthProvider(page);
@@ -225,11 +241,15 @@ test.describe('/pricing shows five plan cards, then Team', () => {
       await expect(cards.locator('.agi-tier-name')).toHaveText(CARD_PLANS);
       await expect(page.locator('.agi-tier-badge, .agi-tier--featured')).toHaveCount(0);
       await expect(page.getByRole('group', { name: 'Billing audience' })).toHaveCount(0);
-      await expect(cards.nth(3).getByRole('button', { name: 'Get Max 5x' })).toBeVisible();
-      await expect(cards.nth(4).getByRole('button', { name: 'Get Max 20x' })).toBeVisible();
+      await expect(
+        cards.nth(3).getByRole('button', { name: getCta(copy.maxCta, 'max') }),
+      ).toBeVisible();
+      await expect(
+        cards.nth(4).getByRole('button', { name: getCta(copy.max15xCta, 'max_15x') }),
+      ).toBeVisible();
       await expect(
         page.locator('article').filter({ has: page.locator('#pricing-team-title') }),
-      ).toContainText('Everything in Pro, plus:');
+      ).toContainText(fill(copy.everythingInPlan, { plan: BILLING_PLAN_PRICING.pro.label }));
 
       const fills = await cards
         .locator('.agi-tier-cta-group > .agi-tier-cta')
@@ -243,11 +263,17 @@ test.describe('/pricing shows five plan cards, then Team', () => {
       expect(paidFills[0]).not.toBe(freeFill);
 
       const smallest = await page
-        .locator('.agi-tier-features li, .agi-tier-body')
+        .locator('.agi-tier-features li:not(.agi-tier-usage-note), .agi-tier-body')
         .evaluateAll((nodes) =>
           Math.min(...nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize))),
         );
       expect(smallest).toBeGreaterThanOrEqual(RUNNING_TEXT_MIN);
+      const footnotes = await page
+        .locator('.agi-tier-usage-note')
+        .evaluateAll((nodes) =>
+          nodes.map((node) => Number.parseFloat(getComputedStyle(node).fontSize)),
+        );
+      expect(Math.min(...footnotes)).toBeGreaterThanOrEqual(FOOTNOTE_TEXT_MIN);
       expect(await pageOverflow(page)).toBe(0);
 
       if (viewport.width >= 1280) {
@@ -324,7 +350,7 @@ test.describe('/pricing comparison is one table from 1100px', () => {
       }
       await expect(table.locator('tr.agi-compare-group th')).toHaveText(COMPARISON_GROUPS);
       await expect(table.locator('tbody th[scope="row"]').first()).toContainText(
-        'Managed Cloud chat',
+        planCapabilityLabel('managed_chat'),
       );
 
       const fits = () =>
@@ -351,7 +377,9 @@ test.describe('/pricing comparison is one table from 1100px', () => {
       expect(yearly.scrollers).toEqual([]);
       expect(await pageOverflow(page)).toBe(0);
 
-      const team = table.locator('thead th').last();
+      await page.getByRole('button', { name: BUSINESS_AUDIENCE_LABEL, exact: true }).click();
+      await expect(planNames).toHaveText([TEAM_LABEL, BILLING_PLAN_PRICING.enterprise.label]);
+      const team = table.locator('thead th').filter({ hasText: TEAM_LABEL });
       await expect(team).toContainText('$20 per seat / month');
       await expect(team).toContainText('billed yearly');
       await page

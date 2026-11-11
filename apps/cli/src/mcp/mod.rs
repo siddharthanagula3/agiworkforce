@@ -359,6 +359,37 @@ pub struct McpTool {
     pub input_schema: serde_json::Value,
 }
 
+/// What a server returned for a tool call that reached it. `is_error` is the
+/// server's own `isError` verdict, kept apart from protocol and transport
+/// failures, which surface as `Err`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpToolOutput {
+    pub text: String,
+    pub is_error: bool,
+}
+
+fn tool_call_output(result: &serde_json::Value) -> McpToolOutput {
+    let is_error = result
+        .get("isError")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let text = match result.get("content").and_then(|c| c.as_array()) {
+        Some(content) => content
+            .iter()
+            .filter_map(|c| {
+                if c.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    c.get("text").and_then(|t| t.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+        None => result.to_string(),
+    };
+    McpToolOutput { text, is_error }
+}
+
 /// MCP prompt discovered from a server.
 #[derive(Debug, Clone)]
 pub struct McpPrompt {
@@ -819,6 +850,62 @@ impl TokenStore for KeyringTokenStore {
     }
 }
 
+/// Remembers a failed token save. The transport keeps using a token it could
+/// not save, so a sign-in that connected has not necessarily left a credential
+/// for later connections to read.
+struct PersistenceReportingTokenStore {
+    inner: Arc<dyn TokenStore>,
+    save_failure: std::sync::Mutex<Option<String>>,
+}
+
+impl PersistenceReportingTokenStore {
+    fn new(inner: Arc<dyn TokenStore>) -> Self {
+        Self {
+            inner,
+            save_failure: std::sync::Mutex::new(None),
+        }
+    }
+
+    fn ensure_saved(&self, name: &str) -> Result<()> {
+        let failure = self
+            .save_failure
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .take();
+        match failure {
+            Some(error) => bail!(
+                "MCP server '{name}' accepted the sign-in, but its token could not be saved ({error}). The next connection will ask for sign-in again; fix the credential store and run `agi mcp login {name}` again."
+            ),
+            None => Ok(()),
+        }
+    }
+}
+
+impl TokenStore for PersistenceReportingTokenStore {
+    fn get(&self, server_url: &str) -> Option<OAuthToken> {
+        self.inner.get(server_url)
+    }
+
+    fn set(&self, server_url: &str, token: OAuthToken) -> anyhow::Result<()> {
+        let saved = self.inner.set(server_url, token);
+        if let Err(error) = &saved {
+            *self
+                .save_failure
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(format!("{error:#}"));
+        }
+        saved
+    }
+
+    fn client(&self, issuer: &str) -> Option<ClientRegistration> {
+        self.inner.client(issuer)
+    }
+
+    fn set_client(&self, issuer: &str, client: ClientRegistration) -> anyhow::Result<()> {
+        self.inner.set_client(issuer, client)
+    }
+}
+
 /// The interactive browser + TTY gate for the OAuth flow. Preserves the CLI's
 /// user-action chokepoint (`open_external_url` only launches for an explicitly
 /// user-initiated action) and its TTY interactivity check.
@@ -1094,7 +1181,11 @@ async fn sign_in(
     {
         bail!(refusal);
     }
-    let hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
+    let mut hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
+    let store = Arc::new(PersistenceReportingTokenStore::new(
+        hooks.token_store.clone(),
+    ));
+    hooks.token_store = store.clone();
     if let TransportConfig::Http {
         url,
         oauth: Some(oauth),
@@ -1116,7 +1207,7 @@ async fn sign_in(
     .await
     .with_context(|| format!("could not authorize MCP server '{name}'"))?;
     let _ = client.shutdown().await;
-    Ok(())
+    store.ensure_saved(name)
 }
 
 async fn complete_step_up(url: &str, oauth: &OAuthConfig, hooks: &ClientHooks) -> Result<()> {
@@ -1553,27 +1644,11 @@ impl McpConnection {
         &mut self,
         tool_name: &str,
         arguments: serde_json::Value,
-    ) -> Result<String> {
+    ) -> Result<McpToolOutput> {
         let result = self.client.call_tool_value(tool_name, arguments).await;
         self.recent_logs();
         let result = result?.unwrap_or(serde_json::Value::Null);
-
-        // Extract text content from the response.
-        if let Some(content) = result.get("content").and_then(|c| c.as_array()) {
-            let texts: Vec<&str> = content
-                .iter()
-                .filter_map(|c| {
-                    if c.get("type").and_then(|t| t.as_str()) == Some("text") {
-                        c.get("text").and_then(|t| t.as_str())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            Ok(texts.join("\n"))
-        } else {
-            Ok(result.to_string())
-        }
+        Ok(tool_call_output(&result))
     }
 
     /// Shut down the MCP server gracefully.
@@ -1600,6 +1675,7 @@ pub struct McpManager {
     tools: Vec<McpTool>,
     prompts: Vec<McpPrompt>,
     remote_servers: HashSet<String>,
+    alias_owners: HashMap<String, (String, String)>,
     /// The folder local servers start in and are sandboxed to: the one their
     /// configs were loaded and approved for.
     project_root: Option<std::path::PathBuf>,
@@ -1722,6 +1798,15 @@ fn parse_mcp_config_contents(
     path: &std::path::Path,
     strict: bool,
 ) -> Result<HashMap<String, McpServerConfig>> {
+    parse_mcp_config_contents_reporting(contents, path, strict, &mut Vec::new())
+}
+
+fn parse_mcp_config_contents_reporting(
+    contents: &str,
+    path: &std::path::Path,
+    strict: bool,
+    skipped: &mut Vec<String>,
+) -> Result<HashMap<String, McpServerConfig>> {
     let mut configs = HashMap::new();
 
     let parsed = match serde_json::from_str::<serde_json::Value>(contents) {
@@ -1730,7 +1815,10 @@ fn parse_mcp_config_contents(
             return Err(err)
                 .with_context(|| format!("Invalid MCP config JSON in {}", path.display()));
         }
-        Err(_) => return Ok(configs),
+        Err(err) => {
+            skipped.push(format!("{}: invalid JSON: {err}", path.display()));
+            return Ok(configs);
+        }
     };
 
     let Some(root) = parsed.as_object() else {
@@ -1740,6 +1828,7 @@ fn parse_mcp_config_contents(
                 path.display()
             );
         }
+        skipped.push(format!("{}: must be a JSON object", path.display()));
         return Ok(configs);
     };
 
@@ -1754,6 +1843,7 @@ fn parse_mcp_config_contents(
             if strict {
                 bail!("mcpServers in {} must be an object", path.display());
             }
+            skipped.push(format!("{}: mcpServers must be an object", path.display()));
             return Ok(configs);
         };
         for (name, config) in servers {
@@ -1764,6 +1854,7 @@ fn parse_mcp_config_contents(
                     });
                 }
                 eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                skipped.push(format!("{}: server skipped: {error}", path.display()));
                 continue;
             }
             let config = normalize_nested_transport(config).unwrap_or_else(|| config.clone());
@@ -1780,7 +1871,12 @@ fn parse_mcp_config_contents(
                         )
                     });
                 }
-                Err(_) => {}
+                Err(err) => {
+                    skipped.push(format!(
+                        "{}: server `{name}` skipped: {err}",
+                        path.display()
+                    ));
+                }
             }
         }
     } else {
@@ -1808,6 +1904,7 @@ fn parse_mcp_config_contents(
                             });
                         }
                         eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                        skipped.push(format!("{}: server skipped: {error}", path.display()));
                         continue;
                     }
                     configs.insert(name, config);
@@ -1821,7 +1918,9 @@ fn parse_mcp_config_contents(
                     )
                 });
             }
-            Err(_) => {}
+            Err(err) => {
+                skipped.push(format!("{}: no server loaded: {err}", path.display()));
+            }
         }
     }
 
@@ -1870,6 +1969,40 @@ fn user_servers() -> HashMap<String, McpServerConfig> {
         .collect()
 }
 
+fn config_file_problems(path: &std::path::Path) -> Vec<String> {
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(err) => return vec![format!("{}: unreadable: {err}", path.display())],
+    };
+    let mut problems = Vec::new();
+    let _ = parse_mcp_config_contents_reporting(&contents, path, false, &mut problems);
+    problems
+}
+
+impl McpManager {
+    pub fn default_config_problems(project: Option<&std::path::Path>) -> Vec<String> {
+        let mut problems = Vec::new();
+        let project = project
+            .map(std::path::Path::to_path_buf)
+            .or_else(|| std::env::current_dir().ok());
+        if let Some(project) = project {
+            for filename in consent::PROJECT_CONFIG_FILES {
+                problems.extend(config_file_problems(&project.join(filename)));
+            }
+        }
+        match crate::config::CliConfig::config_dir() {
+            Ok(config_dir) => {
+                for filename in [".mcp.json", "mcp.json"] {
+                    problems.extend(config_file_problems(&config_dir.join(filename)));
+                }
+            }
+            Err(err) => problems.push(format!("configuration folder unavailable: {err}")),
+        }
+        problems
+    }
+}
+
 fn load_explicit_mcp_configs(
     configs: &mut HashMap<String, McpServerConfig>,
     explicit_paths: &[std::path::PathBuf],
@@ -1902,6 +2035,7 @@ impl McpManager {
             tools: Vec::new(),
             prompts: Vec::new(),
             remote_servers: HashSet::new(),
+            alias_owners: HashMap::new(),
             project_root: None,
         }
     }
@@ -2144,20 +2278,34 @@ impl McpManager {
     /// string, and a duplicate would make the reverse lookup in
     /// [`Self::tool_identity`] resolve every call to whichever tool was
     /// discovered first.
+    ///
+    /// A name stays bound to the server tool it was first given to, even after
+    /// a catalog refresh retires that tool. A call the model already issued
+    /// under a retired name then fails the lookup instead of reaching a
+    /// different tool that sanitizes to the same string.
     fn register_discovered_tools(&mut self, discovered: Vec<McpTool>) {
         for mut tool in discovered {
             let base = tool.namespaced_name.clone();
+            let identity = (tool.server_name.clone(), tool.original_name.clone());
             let mut suffix = 2usize;
-            while self
-                .tools
-                .iter()
-                .any(|existing| existing.namespaced_name == tool.namespaced_name)
-            {
+            while self.alias_is_taken(&tool.namespaced_name, &identity) {
                 tool.namespaced_name = format!("{base}_{suffix}");
                 suffix += 1;
             }
+            self.alias_owners
+                .insert(tool.namespaced_name.clone(), identity);
             self.tools.push(tool);
         }
+    }
+
+    fn alias_is_taken(&self, alias: &str, identity: &(String, String)) -> bool {
+        self.tools
+            .iter()
+            .any(|existing| existing.namespaced_name == alias)
+            || self
+                .alias_owners
+                .get(alias)
+                .is_some_and(|owner| owner != identity)
     }
 
     /// Convert MCP tools to ToolDefinitions for the LLM.
@@ -2299,7 +2447,7 @@ impl McpManager {
         namespaced_name: &str,
         arguments: serde_json::Value,
         privacy_mode: crate::agent::PrivacyMode,
-    ) -> Result<String> {
+    ) -> Result<McpToolOutput> {
         self.tool_identity(namespaced_name, privacy_mode)?;
         let tool = self
             .tools
@@ -3524,6 +3672,70 @@ mod tests {
     }
 
     #[test]
+    fn config_file_problems_name_malformed_and_unreadable_default_files() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let truncated = tmp.path().join("truncated.json");
+        std::fs::write(&truncated, r#"{"mcpServers":{"docs":{"command":"#).expect("write");
+        let problems = config_file_problems(&truncated);
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].contains("invalid JSON"));
+        assert!(!problems[0].contains("docs"));
+
+        let not_object = tmp.path().join("array.json");
+        std::fs::write(&not_object, "[]").expect("write");
+        assert_eq!(config_file_problems(&not_object).len(), 1);
+
+        let bad_servers = tmp.path().join("servers.json");
+        std::fs::write(&bad_servers, r#"{"mcpServers":[]}"#).expect("write");
+        assert_eq!(config_file_problems(&bad_servers).len(), 1);
+
+        let unreadable = tmp.path().join("directory.json");
+        std::fs::create_dir(&unreadable).expect("mkdir");
+        let problems = config_file_problems(&unreadable);
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].contains("unreadable"));
+    }
+
+    #[test]
+    fn config_file_problems_flag_a_skipped_entry_beside_a_valid_one() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("mcp.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers":{"docs":{"command":"node"},"broken":{"transport":"smoke"},"a__b":{"command":"node"}}}"#,
+        )
+        .expect("write");
+
+        let problems = config_file_problems(&path);
+
+        assert_eq!(problems.len(), 2);
+        assert!(problems
+            .iter()
+            .any(|p| p.contains("server `broken` skipped")));
+        assert!(problems.iter().any(|p| p.contains("must not contain '__'")));
+        assert!(!problems.iter().any(|p| p.contains("docs")));
+    }
+
+    #[test]
+    fn config_file_problems_accept_missing_and_valid_files() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        assert!(config_file_problems(&tmp.path().join("absent.json")).is_empty());
+
+        let empty = tmp.path().join("empty.json");
+        std::fs::write(&empty, r#"{"mcpServers":{}}"#).expect("write");
+        assert!(config_file_problems(&empty).is_empty());
+
+        let valid = tmp.path().join("valid.json");
+        std::fs::write(
+            &valid,
+            r#"{"mcpServers":{"docs":{"command":"node","args":["server.js"]}}}"#,
+        )
+        .expect("write");
+        assert!(config_file_problems(&valid).is_empty());
+    }
+
+    #[test]
     fn strict_load_configs_uses_only_explicit_files() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let path = tmp.path().join("explicit.mcp.json");
@@ -3759,9 +3971,10 @@ while True:
         ]}})
     elif method == "tools/call":
         text = req.get("params", {}).get("arguments", {}).get("text", "")
-        write_frame({"jsonrpc": "2.0", "id": req["id"], "result": {"content": [
-            {"type": "text", "text": text}
-        ]}})
+        result = {"content": [{"type": "text", "text": text}]}
+        if text.startswith("fail:"):
+            result["isError"] = True
+        write_frame({"jsonrpc": "2.0", "id": req["id"], "result": result})
     elif req.get("id") is not None:
         write_frame({"jsonrpc": "2.0", "id": req["id"], "result": {}})
 "#;
@@ -3790,9 +4003,165 @@ while True:
             .call_tool("echo", serde_json::json!({ "text": "hello facade" }))
             .await
             .expect("call_tool");
-        assert_eq!(out, "hello facade");
+        assert_eq!(
+            out,
+            McpToolOutput {
+                text: "hello facade".to_string(),
+                is_error: false,
+            }
+        );
+
+        let failed = conn
+            .call_tool("echo", serde_json::json!({ "text": "fail: bad input" }))
+            .await
+            .expect("an execution error is still a delivered result");
+        assert_eq!(
+            failed,
+            McpToolOutput {
+                text: "fail: bad input".to_string(),
+                is_error: true,
+            }
+        );
 
         let _ = conn.shutdown().await;
+    }
+
+    struct RefusingTokenStore;
+
+    impl TokenStore for RefusingTokenStore {
+        fn get(&self, _server_url: &str) -> Option<OAuthToken> {
+            None
+        }
+
+        fn set(&self, _server_url: &str, _token: OAuthToken) -> anyhow::Result<()> {
+            Err(anyhow::anyhow!("keychain is locked"))
+        }
+
+        fn client(&self, _issuer: &str) -> Option<ClientRegistration> {
+            None
+        }
+
+        fn set_client(&self, _issuer: &str, _client: ClientRegistration) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_login_whose_token_was_not_saved_does_not_report_success() {
+        let token: OAuthToken =
+            serde_json::from_value(serde_json::json!({"access_token": "granted"}))
+                .expect("a minimal token");
+
+        let refusing = PersistenceReportingTokenStore::new(Arc::new(RefusingTokenStore));
+        refusing
+            .ensure_saved("docs")
+            .expect("nothing was attempted, nothing failed");
+        assert!(refusing
+            .set("https://docs.example/mcp", token.clone())
+            .is_err());
+        let error = refusing
+            .ensure_saved("docs")
+            .expect_err("a token that was not saved is not a completed login");
+        let message = format!("{error:#}");
+        assert!(message.contains("keychain is locked"), "{message}");
+        assert!(message.contains("agi mcp login docs"), "{message}");
+        refusing
+            .ensure_saved("docs")
+            .expect("the failure is reported once");
+
+        let working = PersistenceReportingTokenStore::new(Arc::new(
+            agiworkforce_mcp::hooks::InMemoryTokenStore::new(),
+        ));
+        working
+            .set("https://docs.example/mcp", token)
+            .expect("saved");
+        working.ensure_saved("docs").expect("saved login succeeds");
+    }
+
+    #[test]
+    fn tool_call_output_keeps_the_server_declared_execution_error() {
+        let failed = tool_call_output(&serde_json::json!({
+            "content": [{"type": "text", "text": "The requested operation failed validation."}],
+            "isError": true,
+        }));
+        assert!(failed.is_error);
+        assert_eq!(failed.text, "The requested operation failed validation.");
+
+        for result in [
+            serde_json::json!({"content": [{"type": "text", "text": "ok"}]}),
+            serde_json::json!({"content": [{"type": "text", "text": "ok"}], "isError": false}),
+        ] {
+            let succeeded = tool_call_output(&result);
+            assert!(!succeeded.is_error);
+            assert_eq!(succeeded.text, "ok");
+        }
+
+        let unstructured = tool_call_output(&serde_json::json!({"isError": true, "detail": 1}));
+        assert!(unstructured.is_error);
+        assert!(unstructured.text.contains("\"detail\":1"));
+    }
+
+    #[test]
+    fn a_refresh_never_hands_a_retired_tool_name_to_a_different_tool() {
+        fn docs_tool(original: &str) -> McpTool {
+            McpTool {
+                namespaced_name: mcp_tool_name("docs", original),
+                original_name: original.to_string(),
+                server_name: "docs".to_string(),
+                description: original.to_string(),
+                input_schema: serde_json::json!({"type": "object"}),
+            }
+        }
+        fn refresh(manager: &mut McpManager, originals: &[&str]) {
+            manager.tools.retain(|tool| tool.server_name != "docs");
+            manager.register_discovered_tools(originals.iter().map(|o| docs_tool(o)).collect());
+        }
+
+        let mut manager = McpManager::new();
+        manager.register_discovered_tools(vec![
+            docs_tool("refresh_index"),
+            docs_tool("search.web"),
+            docs_tool("search_web"),
+        ]);
+        let resolves_to = |manager: &McpManager, alias: &str| {
+            manager
+                .tool_identity(alias, crate::agent::PrivacyMode::Byok)
+                .map(|(_, original)| original)
+                .ok()
+        };
+        assert_eq!(
+            resolves_to(&manager, "mcp__docs__search_web").as_deref(),
+            Some("search.web")
+        );
+        assert_eq!(
+            resolves_to(&manager, "mcp__docs__search_web_2").as_deref(),
+            Some("search_web")
+        );
+
+        refresh(&mut manager, &["refresh_index", "search_web"]);
+        assert_eq!(resolves_to(&manager, "mcp__docs__search_web"), None);
+        assert_eq!(
+            resolves_to(&manager, "mcp__docs__search_web_2").as_deref(),
+            Some("search_web")
+        );
+
+        refresh(&mut manager, &["search_web", "refresh_index", "search.web"]);
+        assert_eq!(
+            resolves_to(&manager, "mcp__docs__search_web").as_deref(),
+            Some("search.web")
+        );
+        assert_eq!(
+            resolves_to(&manager, "mcp__docs__search_web_2").as_deref(),
+            Some("search_web")
+        );
+
+        refresh(&mut manager, &["refresh_index", "search_web"]);
+        refresh(&mut manager, &["search:web", "refresh_index", "search_web"]);
+        assert_eq!(resolves_to(&manager, "mcp__docs__search_web"), None);
+        assert_eq!(
+            resolves_to(&manager, "mcp__docs__search_web_3").as_deref(),
+            Some("search:web")
+        );
     }
 
     /// A single small server publishes fewer tools than the budget, so nothing

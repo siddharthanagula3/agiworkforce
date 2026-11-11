@@ -30,6 +30,7 @@ import { executePersistedAgentTurn } from '@/lib/services/cloud-code-agent-servi
 import {
   CloudCodeApprovalExpiredError,
   decideCloudCodeAgentApproval,
+  findPendingCloudCodeApprovalRequest,
   listCloudCodeAgentApprovals,
 } from '@/lib/services/cloud-code-agent-approval-service';
 
@@ -309,5 +310,48 @@ describe('approvals are owner-scoped', () => {
       }),
     ).rejects.toBeInstanceOf(CloudCodeNotFoundError);
     expect(harness.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('findPendingCloudCodeApprovalRequest', () => {
+  function dbReturning(rows: unknown[]) {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) =>
+      sql.replace(/\s+/g, ' ').trim().startsWith('select a.step_index') ? rows : [],
+    );
+    return { db: { query } as never, query };
+  }
+
+  it('rebuilds the paused request for the turn from its stored approval', async () => {
+    const { db, query } = dbReturning([
+      {
+        step_index: 3,
+        command: DANGEROUS_COMMAND,
+        reason: 'Deletes files',
+        tool_name: 'run_command',
+        tool_args: { command: DANGEROUS_COMMAND },
+      },
+    ]);
+
+    await expect(
+      findPendingCloudCodeApprovalRequest(db, OWNER, SESSION_ID, TURN_ID),
+    ).resolves.toEqual({
+      stepIndex: 3,
+      toolUseId: 'step-3',
+      toolName: 'run_command',
+      args: { command: DANGEROUS_COMMAND },
+      command: DANGEROUS_COMMAND,
+      reason: 'Deletes files',
+    });
+    const select = query.mock.calls.find(([sql]) => sql.includes('select a.step_index'))!;
+    expect(select[1]).toEqual([TURN_ID, SESSION_ID, 'user-1', null]);
+    expect(select[0]).toContain("a.state = 'pending'");
+  });
+
+  it('answers null when no pending approval is stored for the turn', async () => {
+    const { db } = dbReturning([]);
+
+    await expect(
+      findPendingCloudCodeApprovalRequest(db, OWNER, SESSION_ID, TURN_ID),
+    ).resolves.toBeNull();
   });
 });

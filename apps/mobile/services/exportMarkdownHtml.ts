@@ -4,6 +4,11 @@ import { KATEX_JS_URL } from '@/src/features/chat/utils/katexAssets';
 
 const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
 const SAFE_LINK = /^(?:https?:|mailto:)/i;
+
+export function isSafeExportLink(url: string): boolean {
+  return SAFE_LINK.test(url);
+}
+
 const HEADING = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/;
 const RULE = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/;
 const LIST_ITEM = /^(\s*)(?:[-*+]|(\d{1,9})[.)])\s+(.*)$/;
@@ -118,7 +123,9 @@ function renderInline(text: string): string {
       /!?\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^)]*&quot;)?\)/g,
       (_match, label: string, href: string) => {
         const url = href.replace(/&amp;/g, '&');
-        return SAFE_LINK.test(url) ? `<a href="${escapeHtml(url)}">${label}</a>` : label;
+        return SAFE_LINK.test(url)
+          ? `${hold(`<a href="${escapeHtml(url)}">`)}${label}${hold('</a>')}`
+          : label;
       },
     )
     .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, '<strong>$1</strong>')

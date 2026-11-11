@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BILLING_PLAN_PRICING } from '../billing-catalog';
 import {
   PLAN_LABEL,
   canSwitchProviderInThread,
@@ -26,10 +27,12 @@ describe('UI plan identity', () => {
   });
 
   it('uses the canonical public plan labels', () => {
-    expect(PLAN_LABEL.free).toBe('Free');
-    expect(PLAN_LABEL.max).toBe('Max 5x');
-    expect(PLAN_LABEL.max_15x).toBe('Max 20x');
-    expect(PLAN_LABEL.team).toBe('Team');
+    expect(PLAN_LABEL.free).toBe(BILLING_PLAN_PRICING.free.label);
+    expect(PLAN_LABEL.pro).toBe(BILLING_PLAN_PRICING.pro.label);
+    expect(PLAN_LABEL.max).toBe(BILLING_PLAN_PRICING.max.label);
+    expect(PLAN_LABEL.max_15x).toBe(BILLING_PLAN_PRICING.max_15x.label);
+    expect(PLAN_LABEL.team).toBe(BILLING_PLAN_PRICING.team.label);
+    expect(new Set([PLAN_LABEL.max, PLAN_LABEL.max_15x]).size).toBe(2);
   });
 
   it('treats Managed Free as free-priced but not as BYOK', () => {

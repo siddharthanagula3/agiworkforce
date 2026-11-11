@@ -8,7 +8,8 @@ export type ReconciliationFailure =
   | 'video_incident_alert_recovery_failed'
   | 'stripe_reconciliation_failed'
   | 'stripe_divergence_undeliverable'
-  | 'cogs_import_failed';
+  | 'cogs_import_failed'
+  | 'cogs_import_coverage_behind';
 
 export type AlertDelivery = 'not_needed' | 'delivered' | 'undeliverable';
 
@@ -51,6 +52,7 @@ const FAILURE_PRECEDENCE: readonly ReconciliationFailure[] = [
   'stripe_divergence_undeliverable',
   'stripe_reconciliation_failed',
   'cogs_import_failed',
+  'cogs_import_coverage_behind',
 ];
 
 function worst(failures: readonly (ReconciliationFailure | null)[]): ReconciliationFailure | null {

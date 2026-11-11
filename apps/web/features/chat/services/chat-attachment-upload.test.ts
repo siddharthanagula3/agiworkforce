@@ -91,6 +91,65 @@ describe('uploadChatAttachments', () => {
     ]);
   });
 
+  it('sends the captured Bearer, and only to the same-origin relay', async () => {
+    const id = '32b71cf4-c0d1-4cc7-b6c4-776ece82f137';
+    const relayUrl = `${window.location.origin}/api/uploads/chat-attachment/put?token=grant`;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            storageKey: 'chat-attachments/user/key.txt',
+            uploadUrl: relayUrl,
+            uploadMethod: 'PUT',
+            uploadHeaders: { 'Content-Type': 'text/plain', 'x-csrf-token': 'csrf-token' },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            attachment: {
+              id,
+              name: 'notes.txt',
+              mimeType: 'text/plain',
+              byteCount: 5,
+              type: 'file',
+              url: `/api/files/${id}`,
+            },
+          }),
+          { status: 200 },
+        ),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const authority = createRequestAuthority({
+      userId: 'owner-a',
+      sessionId: 'session-a',
+      isCurrent: () => true,
+      getToken: async () => 'owner-a-token',
+    });
+
+    await uploadChatAttachments(
+      [new File(['hello'], 'notes.txt', { type: 'text/plain' })],
+      {},
+      authority,
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      relayUrl,
+      expect.objectContaining({ method: 'PUT' }),
+    );
+    const relayInit = fetchMock.mock.calls[1]![1] as RequestInit;
+    const relayHeaders = new Headers(relayInit.headers);
+    expect(relayHeaders.get('Authorization')).toBe('Bearer owner-a-token');
+    expect(relayHeaders.get('x-csrf-token')).toBe('csrf-token');
+    expect(relayHeaders.get('Content-Type')).toBe('text/plain');
+    expect(relayInit.credentials).toBe('omit');
+  });
+
   it('does not dispatch when the original session retires during CSRF preparation', async () => {
     let resolveCsrf!: (value: string) => void;
     csrfMocks.getCsrfToken.mockImplementation(

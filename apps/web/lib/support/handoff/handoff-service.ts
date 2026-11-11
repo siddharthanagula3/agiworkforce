@@ -342,6 +342,10 @@ export async function claimHandoffForAgent(
   const row = await claimSessionForAgent(sessionId, agentUserId);
   if (!row) return null;
   clearAvailabilityCache();
+  return toHandoffClaimResponse(row);
+}
+
+export function toHandoffClaimResponse(row: HandoffSessionRow): HandoffClaimResponse {
   return {
     sessionId: row.id,
     referenceId: row.reference_id,

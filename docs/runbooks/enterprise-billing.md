@@ -253,9 +253,24 @@ daily `report-enterprise-usage` cron (WP-C) reports new overage since the
 last report to the meter behind `overage_stripe_price_id` via
 `stripe.billing.meterEvents.create`. Each report is first claimed as pending in
 the contract's `overage_*` columns (0367), so a retry resends the same
-identifier and value, and is committed once Stripe accepts it.
+identifier and value, and is committed once Stripe accepts it. The pending
+report also stores the customer and overage price it was claimed for (0401),
+and a retry sends to those, not to the contract's current values.
 A contract with no overage price configured is skipped and logged once, not
 retried daily.
+
+When a contract ends, the overage it used before `ended_at` that was never
+reported is forgiven, never billed. The same cron closes out each ended
+contract once per `ended_at` (0402): it sends nothing to Stripe, records the
+written-off amount, time and reason (`contract_ended`) in the contract's
+`overage_closeout_*` and `overage_written_off_*` columns, clears any pending
+report and keeps its identifier in
+`overage_written_off_unconfirmed_identifier`, and moves the reported baseline
+past the written-off amount so a reactivated contract never bills it. The
+cron's response lists each closeout under `results[].closeout` with the run's
+`closedOut` count and `writtenOffCents` total. A non-null unconfirmed
+identifier means Stripe's outcome for that event was unknown: look it up in
+the meter's event history before treating its amount as unbilled.
 
 `getOrganizationMonthToDateSpendCents` sums `provider_cost_events` by that
 table's own `organization_id` column, set at settlement time to the funding

@@ -19,6 +19,33 @@ export const PAGE_CAPTURE_UNAVAILABLE_MESSAGE =
 export const PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE =
   'Page capture works only on sites you approved with browser control in the extension options.';
 
+export const PAGE_CAPTURE_TAB_CHANGED_MESSAGE =
+  'The tab changed before the page was captured, so nothing was sent. Try the shortcut again.';
+
+export interface PageCaptureSource {
+  id: number;
+  windowId: number;
+  url?: string;
+}
+
+export interface PageCaptureTabAccess {
+  visibleTab: (windowId: number) => Promise<{ id?: number; url?: string } | undefined>;
+  capture: (windowId: number) => Promise<string>;
+}
+
+export async function captureAdmittedTab(
+  source: PageCaptureSource,
+  access: PageCaptureTabAccess,
+): Promise<string | null> {
+  const stillShowing = async (): Promise<boolean> => {
+    const visible = await access.visibleTab(source.windowId);
+    return visible?.id === source.id && visible.url === source.url;
+  };
+  if (!(await stillShowing())) return null;
+  const dataUrl = await access.capture(source.windowId);
+  return (await stillShowing()) ? dataUrl : null;
+}
+
 export function pageCaptureFailureMessage(reason: string): string {
   const trimmed = reason.trim();
   if (!trimmed || /native host/i.test(trimmed)) {

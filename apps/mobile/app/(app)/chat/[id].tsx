@@ -19,7 +19,10 @@ import { Composer } from '@/src/features/chat/components/Composer/Composer';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { trackProductEvent } from '@/services/productAnalytics';
 import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
-import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
+import {
+  dispatchHandedOffSend,
+  resolveOnAcceptedSend,
+} from '@/src/features/chat/utils/sendDispatch';
 import { confirmShareConversation } from '@/src/features/shared-links/shareConversation';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { WorkModeSwitch } from '@/src/features/chat/components/WorkModeSwitch';
@@ -141,7 +144,11 @@ import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
-import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
+import {
+  runImageGenerationTurn,
+  takeImageEditRetry,
+  type ImageEditTurnRequest,
+} from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
 import {
   MediaGenerationAdmissionError,
@@ -748,7 +755,10 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!id || isStreaming || isLoadingMessages) return;
     const handedOff = takeConversationSend(id);
-    if (handedOff) void handleSend(handedOff);
+    if (!handedOff) return;
+    void dispatchHandedOffSend(handedOff, handleSend, (text) =>
+      chatInputAttachRef.current?.restoreText?.(text),
+    );
   }, [handleSend, id, isLoadingMessages, isStreaming]);
 
   const handleStop = useCallback(() => {
@@ -1427,6 +1437,28 @@ export default function ChatScreen() {
     [id, setMessageReaction],
   );
 
+  const runImageEditTurn = useCallback(
+    (request: ImageEditTurnRequest) => {
+      void runImageGenerationTurn({
+        ...request,
+        begin: beginImageGeneration,
+        complete: completeImageGeneration,
+        fail: failImageGeneration,
+        remove: deleteMessage,
+        onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
+        onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
+      });
+    },
+    [
+      beginImageGeneration,
+      completeImageGeneration,
+      deleteMessage,
+      failImageGeneration,
+      setPaywallError,
+      setSendError,
+    ],
+  );
+
   const handleRetryMessage = useCallback(
     (messageId: string) => {
       if (!id) return;
@@ -1465,6 +1497,11 @@ export default function ChatScreen() {
         target?.role === 'assistant' &&
         (target.type === 'image' || target.imageGenStatus === 'failed')
       ) {
+        const edit = clerkUserId ? takeImageEditRetry(messageId, clerkUserId) : null;
+        if (edit) {
+          runImageEditTurn(edit);
+          return;
+        }
         const original = conversationMessages[messageIndex - 1];
         if (original?.role === 'user') {
           void Promise.resolve(handleSend(original.content));
@@ -1475,11 +1512,13 @@ export default function ChatScreen() {
       retryMessage(id, messageId);
     },
     [
+      clerkUserId,
       conversationMessages,
       handleSend,
       id,
       resolveOfflineMessage,
       retryMessage,
+      runImageEditTurn,
       setSendError,
       stopSpeaking,
     ],
@@ -1500,9 +1539,9 @@ export default function ChatScreen() {
 
   const handleEditMessage = useCallback(
     (messageId: string, newContent: string) => {
-      if (!id) return;
+      if (!id) return false;
       stopSpeaking();
-      editMessage(id, messageId, newContent);
+      return editMessage(id, messageId, newContent);
     },
     [id, editMessage, stopSpeaking],
   );
@@ -1538,7 +1577,7 @@ export default function ChatScreen() {
   const handleEditImageArea = useCallback(
     (message: ChatMessage, edit: ImageAreaEdit) => {
       if (!id || !clerkUserId || !message.model) return;
-      void runImageGenerationTurn({
+      runImageEditTurn({
         conversationId: id,
         displayText: edit.prompt,
         prompt: edit.prompt,
@@ -1547,24 +1586,9 @@ export default function ChatScreen() {
         sourceImageBase64: edit.sourceBase64,
         maskImageBase64: edit.maskBase64,
         ownerId: clerkUserId,
-        begin: beginImageGeneration,
-        complete: completeImageGeneration,
-        fail: failImageGeneration,
-        remove: deleteMessage,
-        onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
-        onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
       });
     },
-    [
-      beginImageGeneration,
-      clerkUserId,
-      completeImageGeneration,
-      deleteMessage,
-      failImageGeneration,
-      id,
-      setPaywallError,
-      setSendError,
-    ],
+    [clerkUserId, id, runImageEditTurn],
   );
 
   const handleDeleteImageConversation = useCallback(() => {
@@ -1628,7 +1652,7 @@ export default function ChatScreen() {
     const whenCurrent = (run: () => void) => () => {
       if (isConversationActionCurrent(actionScope)) run();
     };
-    openActions(id, title, conversation?.pinned === true, {
+    openActions(id, title, {
       extraActions: [
         ...(cloud && conversation?.temporary
           ? [
@@ -1654,7 +1678,6 @@ export default function ChatScreen() {
     });
   }, [
     captureConversationAction,
-    conversation?.pinned,
     conversation?.temporary,
     conversationExecutionMode,
     handleBack,
@@ -2030,6 +2053,7 @@ export default function ChatScreen() {
             exhaustedUsageRecovery={usageLimit.exhaustedRecovery}
             initialText={initialPrompt || undefined}
             draftKey={id}
+            conversationId={id}
             draftProvenance={
               conversationExecutionMode === 'local'
                 ? { scope: 'local' }

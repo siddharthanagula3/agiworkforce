@@ -428,17 +428,17 @@ export default function MemoryScreen() {
   );
 
   const handleSave = useCallback(
-    (content: string, _category?: string) => {
-      if (!isScopeCurrent(editorScopeRef.current)) return;
-      void addMemory(content);
+    async (content: string, _category?: string) => {
+      if (!isScopeCurrent(editorScopeRef.current)) return null;
+      return (await addMemory(content)) ?? null;
     },
     [addMemory, isScopeCurrent],
   );
 
   const handleUpdate = useCallback(
-    (id: string, content: string) => {
-      if (!isScopeCurrent(editorScopeRef.current)) return;
-      void updateMemory(id, content);
+    async (id: string, content: string) => {
+      if (!isScopeCurrent(editorScopeRef.current)) return null;
+      return (await updateMemory(id, content)) ?? null;
     },
     [isScopeCurrent, updateMemory],
   );

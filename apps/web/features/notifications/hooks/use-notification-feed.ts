@@ -23,6 +23,15 @@ export function useNotificationFeed(enabled: boolean): NotificationFeedState {
   const [notifications, setNotifications] = useState<NotificationFeedItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const inFlight = useRef<AbortController | null>(null);
+  const stateVersion = useRef(0);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     inFlight.current?.abort();
@@ -32,6 +41,7 @@ export function useNotificationFeed(enabled: boolean): NotificationFeedState {
     try {
       const feed = await fetchNotificationFeed(controller.signal);
       if (controller.signal.aborted) return;
+      stateVersion.current += 1;
       setNotifications(feed.notifications);
       setUnreadCount(feed.unreadCount);
       setStatus('ready');
@@ -64,6 +74,7 @@ export function useNotificationFeed(enabled: boolean): NotificationFeedState {
     (id: string) => {
       const target = notifications.find((item) => item.id === id);
       if (!target || target.read) return;
+      stateVersion.current += 1;
       setNotifications((current) =>
         current.map((item) => (item.id === id ? { ...item, read: true } : item)),
       );
@@ -75,17 +86,24 @@ export function useNotificationFeed(enabled: boolean): NotificationFeedState {
 
   const markAllRead = useCallback(async () => {
     const previous = { notifications, unreadCount };
+    stateVersion.current += 1;
+    const optimisticVersion = stateVersion.current;
     setNotifications((current) => current.map((item) => ({ ...item, read: true })));
     setUnreadCount(0);
     try {
       await markNotificationFeedRead({ all: true });
       return true;
     } catch {
-      setNotifications(previous.notifications);
-      setUnreadCount(previous.unreadCount);
+      if (!mounted.current) return false;
+      if (stateVersion.current === optimisticVersion) {
+        setNotifications(previous.notifications);
+        setUnreadCount(previous.unreadCount);
+      } else {
+        void refresh();
+      }
       return false;
     }
-  }, [notifications, unreadCount]);
+  }, [notifications, unreadCount, refresh]);
 
   return { status, notifications, unreadCount, refresh, markRead, markAllRead };
 }

@@ -27,6 +27,11 @@ interface TerminalEntry {
   exitCode: number | null;
   failed: boolean;
   running: boolean;
+  detached?: boolean;
+}
+
+interface CancellableRun {
+  runId: string;
 }
 
 export interface LocalTerminalProps {
@@ -46,7 +51,8 @@ export function LocalTerminal({
 }: LocalTerminalProps) {
   const [command, setCommand] = useState('');
   const [entries, setEntries] = useState<TerminalEntry[]>([]);
-  const run = useRef<LocalCommandRun | null>(null);
+  const run = useRef<CancellableRun | null>(null);
+  const stopRequested = useRef(new Set<string>());
   const fieldId = useId();
   const endRef = useRef<HTMLDivElement>(null);
   const runningCommand = entries.find((entry) => entry.running)?.command ?? null;
@@ -134,6 +140,7 @@ export function LocalTerminal({
       }));
     } finally {
       run.current = null;
+      stopRequested.current.delete(started.runId);
       onCommandFinished();
     }
   };
@@ -142,35 +149,44 @@ export function LocalTerminal({
     const line = command.trim();
     if (!line || running) return;
     setCommand('');
-    const id = crypto.randomUUID();
+    const { runId, started: pending } = startBackgroundLocalCommand({ rootId, command: line });
+    run.current = { runId };
     setEntries((current) => [
       ...current,
-      { id, command: line, output: '', exitCode: null, failed: false, running: true },
+      { id: runId, command: line, output: '', exitCode: null, failed: false, running: true },
     ]);
     try {
-      const started = await startBackgroundLocalCommand({ rootId, command: line });
-      update(id, () => ({
-        output: [started.output, LOCAL_CODE_COPY.startedInBackground]
+      const started = await pending;
+      const stopped = stopRequested.current.delete(runId);
+      const detached = started.running && !stopped;
+      update(runId, () => ({
+        output: [started.output, detached ? LOCAL_CODE_COPY.startedInBackground : '']
           .filter((text) => text !== '')
           .join('\n')
           .slice(-MAX_ENTRY_OUTPUT),
         exitCode: started.running ? null : started.exitCode,
         failed: !started.running && started.exitCode !== EXIT_CODE_OK,
         running: false,
+        detached,
       }));
-      onBackgroundStarted?.();
+      if (!stopped) onBackgroundStarted?.();
     } catch (cause: unknown) {
-      update(id, () => ({
+      stopRequested.current.delete(runId);
+      update(runId, () => ({
         output: toUserMessage(cause, LOCAL_CODE_COPY.commandFailed),
         failed: true,
         running: false,
       }));
+    } finally {
+      if (run.current?.runId === runId) run.current = null;
     }
   };
 
   const stop = () => {
     const current = run.current;
-    if (current) void cancelLocalCommand(current.runId);
+    if (!current) return;
+    stopRequested.current.add(current.runId);
+    void cancelLocalCommand(current.runId);
   };
 
   return (
@@ -185,7 +201,7 @@ export function LocalTerminal({
             {entry.output && <pre className={styles['terminalOutput']}>{entry.output}</pre>}
             {entry.running ? (
               <Spinner size="sm" aria-label={LOCAL_CODE_COPY.working} />
-            ) : (
+            ) : entry.detached ? null : (
               <div
                 className={`${styles['terminalScreenExit']} ${entry.failed ? styles['terminalError'] : ''}`}
               >

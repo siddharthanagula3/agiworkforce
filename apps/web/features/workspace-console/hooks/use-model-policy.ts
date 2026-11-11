@@ -82,7 +82,8 @@ export function useUpdateModelPolicy() {
       if (!res.ok) throw new Error(await readApiError(res));
       return (await res.json()) as ModelPolicyResult;
     },
-    onSuccess: () => {
+    onSuccess: (saved) => {
+      queryClient.setQueryData(MODEL_POLICY_QUERY_KEY, saved);
       void queryClient.invalidateQueries({ queryKey: MODEL_POLICY_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: ['workspace', 'posture'] });
     },

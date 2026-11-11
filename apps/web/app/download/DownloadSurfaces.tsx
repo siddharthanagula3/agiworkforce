@@ -33,6 +33,7 @@ import {
 import { ARCHITECTURE_LABELS, macDownloadHref, useDesktopRelease } from './use-desktop-release';
 import { CLI_PLATFORM_LABELS, useCliRelease, type CliAvailability } from './use-cli-release';
 import type { MacArchitecture } from './detect-architecture';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const DESKTOP_APP_PATH = '/Applications/Desktop.app';
 
@@ -107,7 +108,7 @@ function WebHero({ preview }: { preview: ReactNode }) {
       </p>
       <div className="agi-ds-btn-row">
         <Link href={WEB_ENTRY_HREF} className="agi-ds-btn" data-variant="primary">
-          Open chat Chat
+          Open {PRODUCT_NAMES.chat}
         </Link>
         {NOTIFY_SURFACES.length > 0 ? (
           <a href={`#${NOTIFY_FORM_ID}`} className="agi-ds-btn" data-variant="secondary">
@@ -149,7 +150,7 @@ function MacHero({
       </p>
       <div className="agi-ds-btn-row">
         <a
-          href={macDownloadHref(recommended)}
+          href={macDownloadHref(recommended, version)}
           className="agi-ds-btn"
           data-variant="primary"
           aria-describedby="agi-download-arch"
@@ -158,7 +159,7 @@ function MacHero({
           Download for Mac
         </a>
         <Link href={WEB_ENTRY_HREF} className="agi-ds-btn" data-variant="secondary">
-          Open chat Chat
+          Open {PRODUCT_NAMES.chat}
         </Link>
       </div>
       <p className="agi-dl-fine" id="agi-download-arch">
@@ -170,7 +171,7 @@ function MacHero({
         {other ? (
           <>
             {` On ${OTHER_MAC[other]}? `}
-            <a href={macDownloadHref(other)} className="agi-dl-link">
+            <a href={macDownloadHref(other, version)} className="agi-dl-link">
               Download the {ARCHITECTURE_LABELS[other]} version
             </a>
             .
@@ -284,7 +285,7 @@ export function DownloadSurfaces({
     if (surface === 'web') {
       return (
         <Link href={WEB_ENTRY_HREF} className="agi-ds-btn" data-variant="primary">
-          Open chat Chat
+          Open {PRODUCT_NAMES.chat}
         </Link>
       );
     }
@@ -292,7 +293,7 @@ export function DownloadSurfaces({
       if (desktopRelease) {
         return (
           <a
-            href={macDownloadHref(desktopRelease.recommended)}
+            href={macDownloadHref(desktopRelease.recommended, desktopRelease.version)}
             className="agi-ds-btn"
             data-variant="primary"
           >

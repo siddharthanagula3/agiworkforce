@@ -40,6 +40,16 @@ export const RENDER_CACHE_SECONDS = {
   publicAsset: 24 * 60 * 60,
 } as const;
 
+const LIVE_SIGNAL_STALE_AFTER_WINDOWS = 2;
+
+/**
+ * The age past which a live signal no longer counts as a current observation:
+ * the status page labels it stale and the readiness endpoint refuses to report
+ * it as a success.
+ */
+export const LIVE_SIGNAL_STALE_AFTER_SECONDS =
+  LIVE_SIGNAL_STALE_AFTER_WINDOWS * RENDER_CACHE_SECONDS.liveSignal;
+
 const MS_PER_SECOND = 1_000;
 
 interface DecidedRenderInput<TResult> {

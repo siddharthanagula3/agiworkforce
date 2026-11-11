@@ -34,6 +34,7 @@ import {
 } from '@/lib/surface-status';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 import DownloadPage from '../page';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 type DetectArchitectureModule = typeof import('../detect-architecture');
 
@@ -121,7 +122,7 @@ beforeEach(() => {
 });
 
 describe('/download with no published desktop build', () => {
-  it('leads with AGI Chat under one visible heading', async () => {
+  it(`leads with ${PRODUCT_NAMES.chat} under one visible heading`, async () => {
     render(<DownloadPage />);
 
     const heading = screen.getByRole('heading', { level: 1 });
@@ -130,7 +131,7 @@ describe('/download with no published desktop build', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
 
     const hero = heading.closest('section')!;
-    expect(within(hero).getByRole('link', { name: 'Open AGI Chat' })).toHaveAttribute(
+    expect(within(hero).getByRole('link', { name: `Open ${PRODUCT_NAMES.chat}` })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );
@@ -205,7 +206,7 @@ describe('/download with no published desktop build', () => {
     fireEvent.click(within(desktop).getByRole('button', { name: 'Retry release check' }));
 
     expect(
-      await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' }),
+      await screen.findByRole('heading', { level: 1, name: `${PRODUCT_NAMES.desktop} for Mac` }),
     ).toBeVisible();
   });
 });
@@ -216,17 +217,20 @@ describe('/download with a published macOS build', () => {
     macRelease();
     render(<DownloadPage />);
 
-    const heading = await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' });
+    const heading = await screen.findByRole('heading', {
+      level: 1,
+      name: `${PRODUCT_NAMES.desktop} for Mac`,
+    });
     const hero = heading.closest('section')!;
     await waitFor(() => expect(hero).toHaveTextContent('Detected: Apple silicon.'));
     expect(within(hero).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=arm64',
+      '/api/download?platform=mac&arch=arm64&version=1.2.0',
     );
     expect(
       within(hero).getByRole('link', { name: 'Download the Intel Mac version' }),
-    ).toHaveAttribute('href', '/api/download?platform=mac&arch=x64');
-    expect(within(hero).getByRole('link', { name: 'Open AGI Chat' })).toHaveAttribute(
+    ).toHaveAttribute('href', '/api/download?platform=mac&arch=x64&version=1.2.0');
+    expect(within(hero).getByRole('link', { name: `Open ${PRODUCT_NAMES.chat}` })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );
@@ -236,7 +240,7 @@ describe('/download with a published macOS build', () => {
     expect(desktop).toHaveTextContent(AVAILABLE_NOW_LABEL);
     expect(within(desktop).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=arm64',
+      '/api/download?platform=mac&arch=arm64&version=1.2.0',
     );
   });
 
@@ -246,18 +250,18 @@ describe('/download with a published macOS build', () => {
     render(<DownloadPage />);
 
     const hero = (
-      await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' })
+      await screen.findByRole('heading', { level: 1, name: `${PRODUCT_NAMES.desktop} for Mac` })
     ).closest('section')!;
     await waitFor(() =>
       expect(within(hero).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
         'href',
-        '/api/download?platform=mac&arch=x64',
+        '/api/download?platform=mac&arch=x64&version=1.2.0',
       ),
     );
     expect(hero).toHaveTextContent('Detected: Intel Mac.');
     expect(
       within(hero).getByRole('link', { name: 'Download the Apple silicon version' }),
-    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64');
+    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64&version=1.2.0');
   });
 
   it('says so when the release carries only the other architecture', async () => {
@@ -266,14 +270,14 @@ describe('/download with a published macOS build', () => {
     render(<DownloadPage />);
 
     const hero = (
-      await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' })
+      await screen.findByRole('heading', { level: 1, name: `${PRODUCT_NAMES.desktop} for Mac` })
     ).closest('section')!;
     await waitFor(() =>
       expect(hero).toHaveTextContent('This release is published for Apple silicon only.'),
     );
     expect(within(hero).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=arm64',
+      '/api/download?platform=mac&arch=arm64&version=1.2.0',
     );
     expect(within(hero).queryByRole('link', { name: /version$/ })).not.toBeInTheDocument();
   });
@@ -283,7 +287,7 @@ describe('/download with a published macOS build', () => {
     render(<DownloadPage />);
 
     const hero = (
-      await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' })
+      await screen.findByRole('heading', { level: 1, name: `${PRODUCT_NAMES.desktop} for Mac` })
     ).closest('section')!;
     expect(hero).toHaveTextContent('This is the Apple silicon version.');
     expect(hero).toHaveTextContent('About This Mac');
@@ -303,7 +307,9 @@ describe('/download with a published macOS build', () => {
     const checksums = await within(details).findByRole('list', { name: 'Installer checksums' });
     expect(checksums).toHaveTextContent(ARM64_SHA);
     expect(checksums).not.toHaveTextContent(X64_SHA);
-    expect(details).toHaveTextContent('codesign -dv --verbose=4 "/Applications/AGI Desktop.app"');
+    expect(details).toHaveTextContent(
+      `codesign -dv --verbose=4 "/Applications/${PRODUCT_NAMES.desktop}.app"`,
+    );
     expect(details).toHaveTextContent(
       'xcrun stapler validate ~/Downloads/agiworkforce_1.2.0_aarch64.dmg',
     );

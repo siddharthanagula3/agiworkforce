@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: vi.fn() }) }));
@@ -35,22 +35,22 @@ interface Window {
  */
 function windowedDb(answers: Readonly<Record<string, { recent: Window; baseline: Window }>>): {
   db: DatabaseAdapter;
+  query: Mock<(sql: string, params?: unknown[]) => Promise<Window[]>>;
   queries: string[];
 } {
   const recentFromIso = new Date(NOW.getTime() - ANOMALY_RECENT_HOURS * 3_600_000).toISOString();
   const queries: string[] = [];
-  const db = {
-    query: vi.fn(async (sql: string, params: unknown[] = []) => {
-      queries.push(sql);
-      const series = ANOMALY_SERIES.find((candidate) => sql.includes(candidate.value));
-      if (!series) throw new Error(`no series matches ${sql}`);
-      const answer = answers[series.id];
-      if (!answer) return [{ samples: 0, measured: null }];
-      const side = params[0] === recentFromIso ? answer.recent : answer.baseline;
-      return [{ samples: side.samples, measured: side.measured }];
-    }),
-  } as unknown as DatabaseAdapter;
-  return { db, queries };
+  const query = vi.fn(async (sql: string, params: unknown[] = []): Promise<Window[]> => {
+    queries.push(sql);
+    const series = ANOMALY_SERIES.find((candidate) => sql.includes(candidate.value));
+    if (!series) throw new Error(`no series matches ${sql}`);
+    const answer = answers[series.id];
+    if (!answer) return [{ samples: 0, measured: null }];
+    const side = params[0] === recentFromIso ? answer.recent : answer.baseline;
+    return [{ samples: side.samples, measured: side.measured }];
+  });
+  const db = { query } as unknown as DatabaseAdapter;
+  return { db, query, queries };
 }
 
 const NORMAL: Window = { samples: 500, measured: 1_000 };
@@ -118,8 +118,9 @@ describe('a series against its own baseline', () => {
       'turn-cost': { recent: { samples: 500, measured: 2_400 }, baseline: NORMAL },
     });
 
-    const alerts = await evaluateAnomalies(NOW, db);
+    const { alerts, failed } = await evaluateAnomalies(NOW, db);
 
+    expect(failed).toEqual([]);
     expect(alerts).toHaveLength(1);
     expect(alerts[0]!.id).toBe('turn-cost');
     expect(alerts[0]!.severity).toBe('critical');
@@ -135,7 +136,7 @@ describe('a series against its own baseline', () => {
       'turn-cost': { recent: { samples: 800, measured: 1_600 }, baseline: NORMAL },
     });
 
-    const alerts = await evaluateAnomalies(NOW, db);
+    const { alerts } = await evaluateAnomalies(NOW, db);
 
     expect(alerts.map((alert) => alert.id)).toEqual(['turn-cost']);
     expect(alerts[0]!.severity).toBe('warning');
@@ -150,7 +151,7 @@ describe('a series against its own baseline', () => {
       },
     });
 
-    const alerts = await evaluateAnomalies(NOW, db);
+    const { alerts } = await evaluateAnomalies(NOW, db);
 
     expect(alerts.map((alert) => alert.id)).toEqual(['turn-time-to-first-token']);
     expect(alerts[0]!.sloId).toBe('first-token');
@@ -161,7 +162,7 @@ describe('a series against its own baseline', () => {
       'turn-cost': { recent: { samples: 500, measured: 1_050 }, baseline: NORMAL },
     });
 
-    expect(await evaluateAnomalies(NOW, db)).toEqual([]);
+    expect(await evaluateAnomalies(NOW, db)).toEqual({ alerts: [], failed: [] });
   });
 
   it('refuses to alert on a window too small to mean anything', async () => {
@@ -172,7 +173,7 @@ describe('a series against its own baseline', () => {
       },
     });
 
-    expect(await evaluateAnomalies(NOW, db)).toEqual([]);
+    expect(await evaluateAnomalies(NOW, db)).toEqual({ alerts: [], failed: [] });
   });
 
   it('refuses to alert against a baseline too small to be a normal', async () => {
@@ -183,7 +184,23 @@ describe('a series against its own baseline', () => {
       },
     });
 
-    expect(await evaluateAnomalies(NOW, db)).toEqual([]);
+    expect(await evaluateAnomalies(NOW, db)).toEqual({ alerts: [], failed: [] });
+  });
+
+  it('reports an unreadable series as failed instead of normal and keeps the other alerts', async () => {
+    const answers = windowedDb({
+      'turn-cost': { recent: { samples: 500, measured: 2_400 }, baseline: NORMAL },
+    });
+    const answer = answers.query.getMockImplementation()!;
+    answers.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('duration_ms')) throw new Error('connection terminated');
+      return answer(sql, params);
+    });
+
+    const { alerts, failed } = await evaluateAnomalies(NOW, answers.db);
+
+    expect(alerts.map((alert) => alert.id)).toEqual(['turn-cost']);
+    expect(failed).toEqual([{ id: 'turn-latency', error: 'connection terminated' }]);
   });
 
   it('builds the baseline from the week before the recent window, not including it', async () => {

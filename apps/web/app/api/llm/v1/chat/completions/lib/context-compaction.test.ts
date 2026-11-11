@@ -23,7 +23,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   markManagedUsageProviderStarted: vi.fn(),
   finalizeManagedUsageRequest: vi.fn(),
 }));
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),
@@ -361,6 +362,42 @@ describe('compactContextWindow', () => {
     ).toBe(true);
   });
 
+  it('does not reuse a summary of another branch after the active path switches', async () => {
+    const db = makeDb();
+    await compactContextWindow(baseInput({ messages: buildMessages(), db: db as never }));
+    expect(db.conversation.compaction_summary).toBe('Summary of earlier turns.');
+    const firstBranchKey = vi.mocked(reserveManagedUsageRequest).mock.calls[0]?.[0].idempotencyKey;
+    vi.clearAllMocks();
+    vi.mocked(drainToLlmResponse).mockResolvedValue({
+      providerElapsedMs: 0,
+      model: 'model-key',
+      content: 'Summary of the sibling branch.',
+      promptTokens: 50,
+      completionTokens: 20,
+      totalTokens: 70,
+    });
+
+    const siblingPath = buildMessages().map((message) =>
+      message.role === 'user' && message.content.startsWith('first-question')
+        ? { ...message, content: message.content.replaceAll('first-question', 'other-question') }
+        : message,
+    );
+    await compactContextWindow(baseInput({ messages: siblingPath, db: db as never }));
+
+    expect(drainToLlmResponse).toHaveBeenCalledTimes(1);
+    expect(summarySentToModel()).toContain('other-question');
+    expect(summarySentToModel()).not.toContain('Summary of earlier turns.');
+    expect(vi.mocked(reserveManagedUsageRequest).mock.calls[0]?.[0].idempotencyKey).not.toBe(
+      firstBranchKey,
+    );
+    expect(
+      siblingPath.some((message) => message.content.includes('Summary of the sibling branch.')),
+    ).toBe(true);
+    expect(
+      siblingPath.some((message) => message.content.includes('Summary of earlier turns.')),
+    ).toBe(false);
+  });
+
   it('extends the cached summary by only the messages that newly fell off', async () => {
     const shortSpan = droppedPersistableCount(3);
     const longSpan = droppedPersistableCount(6);
@@ -555,3 +592,5 @@ describe('compactContextWindow', () => {
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/llm-cost-calculator');

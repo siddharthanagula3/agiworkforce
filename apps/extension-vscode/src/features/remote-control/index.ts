@@ -188,7 +188,7 @@ export function registerRemoteControl(
         { location: vscode.ProgressLocation.Notification, title: t('remote.starting') },
         () => remote.start(),
       );
-      showPanel();
+      if (remote.active()) showPanel();
     } catch (error) {
       const message =
         error instanceof RemoteControlUnavailable

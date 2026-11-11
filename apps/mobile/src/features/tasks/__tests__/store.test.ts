@@ -15,12 +15,14 @@ const mockResumeRun = jest.fn();
 const mockCancelRun = jest.fn();
 const mockPauseRun = jest.fn();
 const mockResumePausedRun = jest.fn();
+const mockAnswerRunInput = jest.fn();
 
 jest.mock('@/services/streaming', () => ({
   createMobileCloudAgentRunClient: () => ({
     listRuns: mockListRuns,
     followRun: mockFollowRun,
     resumeRun: mockResumeRun,
+    answerRunInput: mockAnswerRunInput,
     cancelRun: mockCancelRun,
     pauseRun: mockPauseRun,
     resumePausedRun: mockResumePausedRun,
@@ -102,6 +104,21 @@ function followsWith(page: CloudAgentRunSnapshotPage): void {
       return { run: page.run, lastSequence: page.nextAfterSequence };
     },
   );
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+function settle(): Promise<void> {
+  return new Promise((done) => setTimeout(done, 0));
 }
 
 beforeEach(() => {
@@ -337,5 +354,153 @@ describe('pausing and resuming a cloud run', () => {
 
     expect(useCloudTaskStore.getState().detail?.error).toBe('This task could not be resumed');
     expect(useCloudTaskStore.getState().detail?.pendingAction).toBeNull();
+  });
+});
+
+describe('list requests that no longer own the list', () => {
+  type Page = { runs: CloudAgentRun[]; nextCursor: string | null };
+
+  it('ignores a first page requested for a filter that is no longer selected', async () => {
+    activateCloudAccount('user_1');
+    const allPage = deferred<Page>();
+    const blockedPage = deferred<Page>();
+    mockListRuns.mockReturnValueOnce(allPage.promise).mockReturnValueOnce(blockedPage.promise);
+
+    const pending = useCloudTaskStore.getState().load('initial');
+    useCloudTaskStore.getState().setFilter('blocked');
+    blockedPage.resolve({ runs: [cloudRun({ id: 'blocked-1' })], nextCursor: 'blocked-cursor' });
+    await settle();
+    allPage.resolve({ runs: [cloudRun({ id: 'all-1' })], nextCursor: 'all-cursor' });
+    await pending;
+    await settle();
+
+    const state = useCloudTaskStore.getState();
+    expect(state.filter).toBe('blocked');
+    expect(state.runs.map((run) => run.id)).toEqual(['blocked-1']);
+    expect(state.nextCursor).toBe('blocked-cursor');
+  });
+
+  it('drops a continuation page that was requested before the filter changed', async () => {
+    activateCloudAccount('user_1');
+    mockListRuns.mockResolvedValueOnce({
+      runs: [cloudRun({ id: 'all-1' })],
+      nextCursor: 'all-cursor',
+    });
+    await useCloudTaskStore.getState().load('initial');
+
+    const continuation = deferred<Page>();
+    mockListRuns.mockReturnValueOnce(continuation.promise);
+    const pending = useCloudTaskStore.getState().loadMore();
+
+    mockListRuns.mockResolvedValueOnce({
+      runs: [cloudRun({ id: 'blocked-1' })],
+      nextCursor: 'blocked-cursor',
+    });
+    useCloudTaskStore.getState().setFilter('blocked');
+    await settle();
+    continuation.resolve({ runs: [cloudRun({ id: 'all-2' })], nextCursor: 'all-cursor-2' });
+    await pending;
+
+    const state = useCloudTaskStore.getState();
+    expect(state.runs.map((run) => run.id)).toEqual(['blocked-1']);
+    expect(state.nextCursor).toBe('blocked-cursor');
+    expect(state.loadingMore).toBe(false);
+  });
+
+  it('drops a continuation page that a newer first page has replaced', async () => {
+    activateCloudAccount('user_1');
+    mockListRuns.mockResolvedValueOnce({
+      runs: [cloudRun({ id: 'old-1' })],
+      nextCursor: 'old-cursor',
+    });
+    await useCloudTaskStore.getState().load('initial');
+
+    const continuation = deferred<Page>();
+    mockListRuns.mockReturnValueOnce(continuation.promise);
+    const pending = useCloudTaskStore.getState().loadMore();
+
+    mockListRuns.mockResolvedValueOnce({
+      runs: [cloudRun({ id: 'fresh-1' })],
+      nextCursor: 'fresh-cursor',
+    });
+    await useCloudTaskStore.getState().load('refresh');
+    continuation.resolve({ runs: [cloudRun({ id: 'old-2' })], nextCursor: 'old-cursor-2' });
+    await pending;
+
+    const state = useCloudTaskStore.getState();
+    expect(state.runs.map((run) => run.id)).toEqual(['fresh-1']);
+    expect(state.nextCursor).toBe('fresh-cursor');
+    expect(state.loadingMore).toBe(false);
+  });
+});
+
+describe('actions that finish after the detail was left', () => {
+  it('does not reopen a dismissed run when its approval succeeds', async () => {
+    activateCloudAccount('user_1');
+    followsWith(snapshot(pendingApprovalRun()));
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    const decision = deferred<void>();
+    mockResumeRun.mockReturnValueOnce(decision.promise);
+    const pending = useCloudTaskStore.getState().resolveApproval('approved');
+    useCloudTaskStore.getState().closeRun();
+    decision.resolve();
+    await pending;
+
+    expect(useCloudTaskStore.getState().detail).toBeNull();
+    expect(mockFollowRun).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a newly selected run when an earlier approval succeeds', async () => {
+    activateCloudAccount('user_1');
+    followsWith(snapshot(pendingApprovalRun()));
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    const decision = deferred<void>();
+    mockResumeRun.mockReturnValueOnce(decision.promise);
+    const pending = useCloudTaskStore.getState().resolveApproval('approved');
+    followsWith(snapshot(cloudRun({ id: 'run-b', state: 'running' })));
+    await useCloudTaskStore.getState().openRun('run-b');
+    decision.resolve();
+    await pending;
+
+    expect(useCloudTaskStore.getState().detail?.runId).toBe('run-b');
+    expect(mockFollowRun).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not reopen a dismissed run when its connector answer succeeds', async () => {
+    activateCloudAccount('user_1');
+    followsWith(
+      snapshot(
+        cloudRun({
+          state: 'awaiting_input',
+          pendingInput: {
+            requestedAt: new Date(NOW).toISOString(),
+            toolCalls: [
+              {
+                toolCallId: 'call_1',
+                name: 'lookup',
+                connectorId: 'connector_1',
+                round: 0,
+                inputRequests: {},
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    await useCloudTaskStore.getState().openRun(RUN_ID);
+
+    const answer = deferred<void>();
+    mockAnswerRunInput.mockReturnValueOnce(answer.promise);
+    const pending = useCloudTaskStore
+      .getState()
+      .answerInput([{ toolCallId: 'call_1', responses: { answer: 'yes' } }]);
+    useCloudTaskStore.getState().closeRun();
+    answer.resolve();
+    await pending;
+
+    expect(useCloudTaskStore.getState().detail).toBeNull();
+    expect(mockFollowRun).toHaveBeenCalledTimes(1);
   });
 });

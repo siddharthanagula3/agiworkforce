@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::client::{CloudClient, CloudError, Route};
+use crate::platform::runtime::session::PrivacyMode;
 
 pub const REFERRALS_PATH: &str = "/api/referrals";
 pub const REFERRAL_CODE_PATH: &str = "/api/referrals/code";
@@ -41,8 +42,8 @@ pub fn code_route() -> Route {
     Route::post(REFERRAL_CODE_PATH)
 }
 
-pub async fn invite() -> Result<Invite, CloudError> {
-    let client = CloudClient::connect_managed()?;
+pub async fn invite(privacy: PrivacyMode) -> Result<Invite, CloudError> {
+    let client = CloudClient::connect(privacy)?;
     let overview: ReferralOverview = client.call(&overview_route(), &[], None).await?;
     let (code, link) = match (overview.code, overview.link) {
         (Some(code), Some(link)) => (code, link),
@@ -68,4 +69,20 @@ pub fn invite_text(invite: &Invite) -> String {
         invite.program.reward_credits,
         invite.program.hold_days,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_asks_the_account_for_an_invite() {
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let refused = invite(mode)
+                .await
+                .err()
+                .expect("a non-Cloud session must be refused before any request");
+            assert!(matches!(refused, CloudError::NotManaged(seen) if seen == mode));
+        }
+    }
 }

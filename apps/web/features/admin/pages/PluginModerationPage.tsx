@@ -101,7 +101,7 @@ interface SuspendResult extends VersionResult {
 type LifecyclePayload =
   | { action: 'publish'; version: string }
   | { action: ReasonAction; version: string; reason: string }
-  | { action: 'rollback' };
+  | { action: 'rollback'; from: string; to: string };
 
 interface ReasonDraft {
   action: ReasonAction;
@@ -244,6 +244,7 @@ function PluginReviewPanel({
       await Promise.all([load(), onChanged()]);
     } catch (actionError) {
       setFailure({ version, message: toUserMessage(actionError, fallback) });
+      if (payload.action === 'rollback') void Promise.all([load(), onChanged()]);
     } finally {
       setPending(null);
     }
@@ -329,7 +330,7 @@ function PluginReviewPanel({
       confirmLabel: 'Roll back',
       onConfirm: () =>
         run<PluginRollbackResult>(
-          { action: 'rollback' },
+          { action: 'rollback', from: plugin.version, to: target.version },
           (result) =>
             `Rolled back to ${result.restored.version}. ${installations(result.installationsMoved)} moved from ${result.from ?? 'the previous version'}.`,
           'The plugin was not rolled back.',

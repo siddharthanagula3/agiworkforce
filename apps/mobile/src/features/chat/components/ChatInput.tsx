@@ -48,6 +48,7 @@ import { trailingMention, withoutTrailingMention } from '@/src/features/chat/uti
 import { MediaModeChip } from './MediaModeChip';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
+import { resolveUploadContext } from '@/src/features/chat/upload/uploadContext';
 import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
 import { useKeyboardVisible } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
@@ -111,9 +112,8 @@ function mergeTranscript(previous: string, transcript: string): string {
 }
 
 function attachmentIdentity(attachment: Attachment): string {
-  return attachment.pastedText !== undefined
-    ? `text:${attachment.id}`
-    : `${attachment.mimeType}:${attachment.fileName}:${attachment.fileSize ?? attachment.uri}`;
+  if (attachment.pastedText !== undefined) return `text:${attachment.id}`;
+  return attachment.assetId ? `asset:${attachment.assetId}` : `uri:${attachment.uri}`;
 }
 
 interface QueuedFollowUp {
@@ -129,6 +129,7 @@ export interface ChatInputHandle {
   ) => ComposerAttachmentOperation | null;
   focus?: () => void;
   prefillText?: (starter: string) => void;
+  restoreText?: (text: string) => void;
 }
 
 interface ChatInputProps {
@@ -148,6 +149,7 @@ interface ChatInputProps {
   isThreadActive?: boolean;
   initialText?: string;
   draftKey?: string;
+  conversationId?: string;
   draftProvenance?: DraftProvenance;
   selectedSkillName?: string;
   onClearSelectedSkill?: () => void;
@@ -172,6 +174,7 @@ export function ChatInput({
   isThreadActive = false,
   initialText,
   draftKey,
+  conversationId,
   draftProvenance,
   selectedSkillName,
   onClearSelectedSkill,
@@ -353,6 +356,9 @@ export function ChatInput({
       },
       prefillText: (starter: string) => {
         setText((current) => (current.trim() ? current : starter));
+      },
+      restoreText: (restored: string) => {
+        setText((current) => (current.trim() ? `${current}\n\n${restored}` : restored));
       },
       addAttachments,
       captureAttachmentOperation: (executionMode: 'local' | 'cloud') => {
@@ -629,7 +635,7 @@ ${current}`
         { uri: target.uri, name: target.fileName, type: target.mimeType },
         target.fileName,
         target.id,
-        { temporary: useSettingsStore.getState().isTemporaryChat },
+        resolveUploadContext(conversationId),
       )
         .then((result) => {
           if (!result || !isCloudAccountEpochCurrent(accountEpoch)) return;
@@ -656,7 +662,7 @@ ${current}`
             .settle(id, 'failed', 'Could not upload this file. Check your connection and retry.');
         });
     },
-    [attachments],
+    [attachments, conversationId],
   );
 
   const handleDictationFailure = useCallback(() => {

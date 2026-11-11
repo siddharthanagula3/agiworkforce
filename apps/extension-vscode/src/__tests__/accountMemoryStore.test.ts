@@ -60,6 +60,7 @@ function makeClient(overrides: Partial<AccountMemoryClient> = {}): AccountMemory
     pull: vi.fn(async () => ({ memories: [], cursor: INITIAL_CURSOR, hasMore: false })),
     pullAll: vi.fn(async () => ({ memories: [], cursor: INITIAL_CURSOR, hasMore: false })),
     readScope: vi.fn(async () => ({ organizationId: null, workspaceName: null })),
+    deleteAll: vi.fn(async () => undefined),
     push: vi.fn(async (): Promise<MemoryPushResponse> => ({
       protocolVersion: 2,
       applied: [],
@@ -347,6 +348,65 @@ describe('AccountMemoryStore', () => {
     expect(state.status).toBe('unreachable');
     expect(state.detail).toContain('connection refused');
     expect(state.facts.map((fact) => fact.text)).toEqual(['Prefer Rust']);
+  });
+
+  it('keeps a forgotten memory out of turns when the follow-up read fails', async () => {
+    const storage = makeMemento();
+    const pullAll = vi
+      .fn<AccountMemoryClient['pullAll']>()
+      .mockResolvedValueOnce({ memories: [delta()], cursor: '7', hasMore: false });
+    const client = makeClient({
+      pullAll,
+      deleteAll: vi.fn(async () => {
+        pullAll.mockRejectedValue(new Error('connection refused'));
+      }),
+    });
+    const store = new AccountMemoryStore(
+      storage,
+      makeSecrets(SIGNED_IN_TOKEN),
+      makeMemento({ [WORKSPACE_MEMORY_ADOPTED_KEY]: true }),
+      client,
+    );
+    await store.refresh();
+    expect(store.turnFacts()).toHaveLength(1);
+
+    const cleared = await store.clear();
+
+    expect(cleared).toEqual({ applied: true, refusals: [] });
+    expect(store.turnFacts()).toEqual([]);
+    expect(store.cachedFacts()).toEqual([]);
+    expect(storage.get<Record<string, string>>(ACCOUNT_MEMORY_VERSIONS_KEY)).toEqual({});
+  });
+
+  it('does not restore a forgotten memory from a read that began before the forget', async () => {
+    const storage = makeMemento();
+    let releaseStale: (() => void) | undefined;
+    const pullAll = vi
+      .fn<AccountMemoryClient['pullAll']>()
+      .mockResolvedValueOnce({ memories: [delta()], cursor: '7', hasMore: false })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseStale = () =>
+              resolve({ memories: [delta({ server_version: '8' })], cursor: '8', hasMore: false });
+          }),
+      )
+      .mockResolvedValue({ memories: [], cursor: '9', hasMore: false });
+    const store = new AccountMemoryStore(
+      storage,
+      makeSecrets(SIGNED_IN_TOKEN),
+      makeMemento({ [WORKSPACE_MEMORY_ADOPTED_KEY]: true }),
+      makeClient({ pullAll, deleteAll: vi.fn(async () => undefined) }),
+    );
+    await store.refresh();
+
+    const stale = store.refresh();
+    await vi.waitFor(() => expect(releaseStale).toBeDefined());
+    await store.clear();
+    releaseStale?.();
+    await stale;
+
+    expect(store.turnFacts()).toEqual([]);
   });
 
   it('promotes facts written before memory was an account feature, exactly once', async () => {

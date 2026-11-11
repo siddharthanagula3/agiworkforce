@@ -373,14 +373,36 @@ export function guardFinalDownloadUrl(id: number, rules: WebDomainRules): void {
 
 const CLICK_DOWNLOAD_WATCH_MS = 10_000;
 
+function originOf(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const { origin } = new URL(url);
+    return origin === 'null' ? null : origin;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A click or a form can start a download the command never named. For a short
- * while after such a command, every download Chrome starts is held to the
- * workspace's rules by its final address, like one the assistant asked for.
+ * while after such a command, a download that the commanded tab's page started
+ * is held to the workspace's rules by its final address, like one the assistant
+ * asked for. Chrome does not say which tab started a download, so ownership is
+ * the page that referred it; a download with no referrer from one of the
+ * tab's pages, such as a manual one begun in another tab, is never touched.
  */
-export function watchDownloadsStartedBy(rules: WebDomainRules): () => void {
+export function watchDownloadsStartedBy(
+  rules: WebDomainRules,
+  ownerPageUrls: () => Promise<ReadonlyArray<string | null | undefined>>,
+): () => void {
   const onCreated = (item: chrome.downloads.DownloadItem) => {
-    guardFinalDownloadUrl(item.id, rules);
+    const referrer = originOf(item.referrer);
+    if (referrer === null) return;
+    void ownerPageUrls()
+      .then((urls) => {
+        if (urls.some((url) => originOf(url) === referrer)) guardFinalDownloadUrl(item.id, rules);
+      })
+      .catch(() => undefined);
   };
   chrome.downloads.onCreated.addListener(onCreated);
   const stop = () => chrome.downloads.onCreated.removeListener(onCreated);

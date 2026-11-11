@@ -3,8 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useNavigation, useRouter } from 'expo-router';
-import { stageComposerAttachments } from '@/src/features/chat/composerHandoff';
-import { setDraft } from '@/src/features/chat/draftStore';
+import { stageComposerAttachments, stageComposerText } from '@/src/features/chat/composerHandoff';
 import { enterMediaMode, listMediaModels } from '@/src/features/chat/actions/mediaMode';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -139,6 +138,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     reportTarget?: ReturnType<typeof libraryReportTarget>;
   } | null>(null);
   const videoLoadingRef = useRef(false);
+  const videoScopeRef = useRef<AccountScopedUiState | null>(null);
   const selectionScopeRef = useRef<AccountScopedUiState | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
   const [deletingSelected, setDeletingSelected] = useState(false);
@@ -217,6 +217,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     previewImageScopeRef.current = null;
     setPreviewImage(null);
   }, [clerkUserId, previewImage]);
+
+  useLayoutEffect(() => {
+    if (!videoPlayer) return;
+    if (isAccountScopedUiStateOwned(videoScopeRef.current)) return;
+    videoScopeRef.current = null;
+    setVideoPlayer(null);
+  }, [clerkUserId, videoPlayer]);
 
   useLayoutEffect(() => {
     if (selectedIds === null || isAccountScopedUiStateOwned(selectionScopeRef.current)) return;
@@ -333,10 +340,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, [handleCloseImage, library, previewImage]);
 
   const handleShareAsset = useCallback(async (asset: LibraryAsset) => {
+    const scope = captureAccountScopedUiState('cloud');
+    if (!scope) return;
+    const isCurrent = () => isAccountScopedUiStateOwned(scope);
     try {
       const localUri = await downloadGeneratedFile(absoluteAssetUrl(asset.uri), asset.fileName);
-      await shareFile(localUri);
+      await shareFile(localUri, { isCurrent });
     } catch {
+      if (!isCurrent()) return;
       Alert.alert('Could not open this file', 'The file could not be downloaded. Try again.');
     }
   }, []);
@@ -344,15 +355,20 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const handlePlayVideo = useCallback(
     async (asset: LibraryAsset) => {
       if (videoLoadingRef.current) return;
+      const scope = captureAccountScopedUiState('cloud');
+      if (!scope) return;
       videoLoadingRef.current = true;
       try {
         const player = await prepareLocalVideoPlayer(absoluteAssetUrl(asset.uri), c.black);
+        if (!isAccountScopedUiStateOwned(scope)) return;
+        videoScopeRef.current = scope;
         setVideoPlayer({
           player,
           label: asset.prompt ? `Video: ${asset.prompt}` : asset.fileName,
           reportTarget: isGeneratedMedia(asset) ? libraryReportTarget(asset) : undefined,
         });
       } catch {
+        if (!isAccountScopedUiStateOwned(scope)) return;
         Alert.alert('Could not play the video', 'Check your connection and try again.');
       } finally {
         videoLoadingRef.current = false;
@@ -361,7 +377,10 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     [c.black],
   );
 
-  const handleCloseVideo = useCallback(() => setVideoPlayer(null), []);
+  const handleCloseVideo = useCallback(() => {
+    videoScopeRef.current = null;
+    setVideoPlayer(null);
+  }, []);
 
   const router = useRouter();
   const handleAddToChat = useCallback(
@@ -391,7 +410,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         return;
       }
       if (asset.prompt?.trim() && clerkUserId) {
-        setDraft('new-chat', asset.prompt, { scope: 'cloud', ownerId: clerkUserId });
+        stageComposerText('new-chat', asset.prompt);
       }
       handleAddToChat(asset);
     },
@@ -778,6 +797,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             !library.signedOut &&
             GENERATION_FILTERS.has(filter) ? (
               <MediaJobsSection
+                onJobsCompleted={library.refresh}
                 onOpenConversation={(conversationId) =>
                   router.push({ pathname: '/(app)/chat/[id]', params: { id: conversationId } })
                 }

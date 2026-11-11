@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import * as Haptics from 'expo-haptics';
+import { preferredNotificationHaptic } from '@/src/shared/utils/haptics';
 import {
   X,
   Copy,
@@ -330,7 +331,7 @@ export function ArtifactFullScreen({
   const storedArtifact = useArtifactStore((s) =>
     artifactId ? s.artifacts.find((candidate) => candidate.id === artifactId) : undefined,
   );
-  const addArtifacts = useArtifactStore((s) => s.addArtifacts);
+  const saveArtifactEdit = useArtifactStore((s) => s.saveArtifactEdit);
   const [editDraft, setEditDraft] = useState<string | null>(null);
   const versionCount = versionHistory?.length ?? 0;
   const shownVersionIndex = viewedVersionIndex ?? (versionCount > 0 ? versionCount - 1 : 0);
@@ -412,7 +413,7 @@ export function ArtifactFullScreen({
             .join('\n'),
         });
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert('Share failed', 'This generated file is not available to share right now.');
     }
@@ -435,7 +436,7 @@ export function ArtifactFullScreen({
         }
         await shareFile(await exportArtifact(activeContent, artifact.title, option));
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert('Download failed', 'Could not download or share this file. Try again.');
     } finally {
@@ -514,7 +515,7 @@ export function ArtifactFullScreen({
     if (!artifactId) return;
     if (restoreArtifactVersion(artifactId, shownVersionIndex)) {
       setViewedVersionIndex(null);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     }
   }, [artifactId, restoreArtifactVersion, shownVersionIndex]);
 
@@ -532,7 +533,7 @@ export function ArtifactFullScreen({
       if (restoreArtifactVersion(artifactId, index)) {
         setViewedVersionIndex(null);
         setVersionHistoryOpen(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
       }
     },
     [artifactId, restoreArtifactVersion],
@@ -547,11 +548,11 @@ export function ArtifactFullScreen({
   const handleSaveEdit = useCallback(() => {
     if (!storedArtifact || editDraft === null) return;
     if (editDraft !== activeContent && editDraft.trim().length > 0) {
-      addArtifacts([{ ...storedArtifact, content: editDraft }]);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      saveArtifactEdit({ ...storedArtifact, content: editDraft });
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     }
     setEditDraft(null);
-  }, [activeContent, addArtifacts, editDraft, storedArtifact]);
+  }, [activeContent, editDraft, saveArtifactEdit, storedArtifact]);
 
   const handleCopyLink = useCallback(() => {
     if (!publishedUrl) return;

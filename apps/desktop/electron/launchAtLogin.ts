@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { getPreferences, saveSettings } from './settingsStore';
+import { getPreferences, saveSettingsDurably } from './settingsStore';
 
 /**
  * Opt-in launch at login.
@@ -19,7 +19,7 @@ export function applyLaunchAtLogin(): void {
 }
 
 export function setLaunchAtLogin(enabled: boolean): boolean {
-  saveSettings({ launchAtLogin: enabled });
+  saveSettingsDurably({ launchAtLogin: enabled });
   app.setLoginItemSettings({ openAtLogin: enabled });
   return enabled;
 }

@@ -56,6 +56,7 @@ export function MobileSignIn({
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [step, setStep] = useState<SignInStep>('email');
   const [email, setEmail] = useState('');
+  const [admittedEmail, setAdmittedEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [codeDeliveryFailed, setCodeDeliveryFailed] = useState(false);
@@ -161,6 +162,7 @@ export function MobileSignIn({
         setError(authErrorMessage(result.error, 'sign-in'));
         return;
       }
+      setAdmittedEmail(identifier);
       await resolveState();
     });
 
@@ -450,10 +452,10 @@ export function MobileSignIn({
             <>
               <Text style={{ color: colors.textSecondary, textAlign: 'center', marginBottom: 24 }}>
                 {step === 'password'
-                  ? email.trim()
+                  ? admittedEmail
                   : codeDeliveryFailed
-                    ? `We couldn't send a code to ${email.trim()}. Try sending it again.`
-                    : `Enter the code sent to ${email.trim()}.`}
+                    ? `We couldn't send a code to ${admittedEmail}. Try sending it again.`
+                    : `Enter the code sent to ${admittedEmail}.`}
               </Text>
               {step === 'code' && codeDeliveryFailed ? null : (
                 <TextInput

@@ -6,7 +6,7 @@
  */
 
 import { translateUiPlural } from '@agiworkforce/ui';
-import { useCallback, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { signedOutRedirectUrl, useSignOut } from '@/lib/identity/client';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
@@ -54,7 +54,12 @@ import {
   useWorkspaceQuery,
   type WorkspaceQueryScope,
 } from '@/features/workspaces/hooks/use-workspace-query';
-import type { RequestAuthority } from '@/lib/identity/request-authority';
+import type { RequestAuthority, SessionAuthority } from '@/lib/identity/request-authority';
+import { authService } from '@shared/services/authentication-manager';
+import {
+  createAccountDeletionRequest,
+  type OwnedAccountDeletionSnapshot,
+} from './use-account-deletion-status';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   parseAccountDeletionScheduleReceipt,
@@ -454,6 +459,9 @@ export function useDeleteAPIKey(): UseMutationResult<
 /** Parsed response from `DELETE /api/user/delete-account`. */
 export type DeleteAccountResult = AccountDeletionScheduleReceipt;
 
+const DELETION_SCHEDULE_NOT_SENT =
+  'Deletion was not scheduled. Close this dialog, check the current status, and reopen the confirmation.';
+
 const DELETION_SCHEDULE_UNCONFIRMED =
   'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.';
 
@@ -483,7 +491,11 @@ function readDeleteAccountError(data: unknown, fallback: string, status: number)
  */
 const SITE_HOME_PATH = '/';
 
-export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error, void> & {
+export function useDeleteAccount(): UseMutationResult<
+  DeleteAccountResult,
+  Error,
+  OwnedAccountDeletionSnapshot
+> & {
   signOutAfterDeletion: () => Promise<void>;
   stepUpDialog: ReactElement | null;
 } {
@@ -491,30 +503,66 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
   const identitySignOut = useSignOut();
   const router = useRouter();
   const { withStepUp, dialog } = useStepUp();
+  const mounted = useRef(true);
+  const receiptSession = useRef<SessionAuthority | null>(null);
 
-  const mutation = useMutation<DeleteAccountResult, Error, void>({
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const mutation = useMutation<DeleteAccountResult, Error, OwnedAccountDeletionSnapshot>({
     retry: false,
-    mutationFn: async (): Promise<DeleteAccountResult> => {
-      const res = await withStepUp(async (stepUpHeaders) =>
-        fetch(MANAGED_CLOUD_ACCOUNT_DELETION_PATH, {
-          method: 'DELETE',
-          headers: {
-            ...(await addCsrfHeaders({ 'Content-Type': 'application/json' })),
-            ...stepUpHeaders,
-          },
-        }),
-      ).catch((error: unknown) => {
-        if (isStepUpCancelled(error)) throw error;
-        throw new Error(DELETION_SCHEDULE_UNCONFIRMED);
-      });
-      const data: unknown = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(readDeleteAccountError(data, 'Account deletion failed.', res.status));
-      }
+    mutationFn: async (snapshot): Promise<DeleteAccountResult> => {
+      receiptSession.current = null;
+      let dispatched = false;
+      const request = createAccountDeletionRequest(
+        snapshot,
+        () => mounted.current,
+        () => {
+          dispatched = true;
+        },
+        'schedule',
+      );
+      if (!request) throw new Error(DELETION_SCHEDULE_NOT_SENT);
       try {
-        return parseAccountDeletionScheduleReceipt(data);
-      } catch {
-        throw new Error(DELETION_SCHEDULE_UNCONFIRMED);
+        const res = await withStepUp(
+          async (stepUpHeaders) => {
+            request.assertCurrent();
+            const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+            request.assertCurrent();
+            return request.fetch(MANAGED_CLOUD_ACCOUNT_DELETION_PATH, {
+              method: 'DELETE',
+              headers: { ...headers, ...stepUpHeaders },
+            });
+          },
+          null,
+          {
+            authority: request,
+            onStepUpRequired: () => {
+              dispatched = false;
+            },
+          },
+        ).catch((error: unknown) => {
+          if (isStepUpCancelled(error)) throw error;
+          throw new Error(dispatched ? DELETION_SCHEDULE_UNCONFIRMED : DELETION_SCHEDULE_NOT_SENT);
+        });
+        const data: unknown = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(readDeleteAccountError(data, 'Account deletion failed.', res.status));
+        }
+        let receipt: DeleteAccountResult;
+        try {
+          receipt = parseAccountDeletionScheduleReceipt(data);
+        } catch {
+          throw new Error(DELETION_SCHEDULE_UNCONFIRMED);
+        }
+        receiptSession.current = request.session;
+        return receipt;
+      } finally {
+        request.retire();
       }
     },
     onError: (error: Error): void => {
@@ -524,13 +572,16 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
   });
 
   const signOutAfterDeletion = useCallback(async (): Promise<void> => {
+    const session = receiptSession.current;
+    if (!session?.isCurrent()) return;
     // `signedOutRedirectUrl` is what decides where this lands: the marketing
     // home in a browser, the sign-in route inside the desktop shell, which does
     // not host the marketing site and would open it in a browser instead.
     const destination = signedOutRedirectUrl(SITE_HOME_PATH, isDesktopHost());
     try {
-      await logout();
-      await identitySignOut({ redirectUrl: destination });
+      await logout({ sessionId: session.sessionId });
+      if (authService.isSessionSuperseded(session.sessionId)) return;
+      await identitySignOut({ sessionId: session.sessionId, redirectUrl: destination });
     } catch (err) {
       // Account deletion is already scheduled server-side by the time this runs
       // (it only fires after the mutation above succeeded), if
@@ -539,7 +590,9 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
       // settings screen with no feedback and no way out.
       console.warn('[useDeleteAccount] Post-deletion sign-out failed, forcing navigation:', err);
     } finally {
-      router.replace(destination ?? SITE_HOME_PATH);
+      if (!authService.isSessionSuperseded(session.sessionId)) {
+        router.replace(destination ?? SITE_HOME_PATH);
+      }
     }
   }, [logout, identitySignOut, router]);
 
@@ -1185,20 +1238,35 @@ export {
   type PreparedWorkspaceMembershipAction,
 } from './use-organization-membership-mutation';
 
+const TeamMemberRemovalReceiptSchema = z.object({
+  revoked: z.object({
+    sessions: z.number().int().nonnegative(),
+    deviceTokens: z.number().int().nonnegative(),
+    apiKeys: z.number().int().nonnegative(),
+  }),
+  warnings: z.array(z.string()),
+});
+
+export type TeamMemberRemovalOutcome =
+  | { cleanup: 'confirmed'; revoked: z.infer<typeof TeamMemberRemovalReceiptSchema>['revoked'] }
+  | { cleanup: 'incomplete' | 'unconfirmed' };
+
+type TeamMemberRemovalVariables = { memberId: string; organizationId: string };
+
 export function useRemoveTeamMember(): UseMutationResult<
-  void,
+  TeamMemberRemovalOutcome,
   Error,
-  { memberId: string; organizationId: string }
+  TeamMemberRemovalVariables
 > {
   const queryClient: QueryClient = useQueryClient();
 
-  return useMutation<void, Error, { memberId: string; organizationId: string }>({
+  return useMutation<TeamMemberRemovalOutcome, Error, TeamMemberRemovalVariables>({
     mutationFn: async ({
       memberId,
     }: {
       memberId: string;
       organizationId: string;
-    }): Promise<void> => {
+    }): Promise<TeamMemberRemovalOutcome> => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
 
@@ -1215,13 +1283,27 @@ export function useRemoveTeamMember(): UseMutationResult<
       if (!res.ok) {
         throw new Error(await readApiError(res));
       }
+      const body: unknown = await res.json().catch(() => null);
+      const receipt = TeamMemberRemovalReceiptSchema.safeParse(body);
+      if (!receipt.success) return { cleanup: 'unconfirmed' };
+      if (receipt.data.warnings.length > 0) return { cleanup: 'incomplete' };
+      return { cleanup: 'confirmed', revoked: receipt.data.revoked };
     },
-    onSuccess: (_, { organizationId }) => {
+    onSuccess: (outcome, { organizationId }) => {
       queryClient.invalidateQueries({
         queryKey: ['settings', 'team', organizationId],
       });
       queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
-      toast.success('Team member removed');
+      if (outcome.cleanup === 'confirmed') {
+        toast.success('Team member removed');
+        return;
+      }
+      toast.warning(
+        outcome.cleanup === 'incomplete'
+          ? 'Team member removed, but some of their sessions, device tokens or API keys could not be revoked. Check their access before assuming it has ended.'
+          : 'Team member removed, but revoking their sessions, device tokens and API keys could not be confirmed. Check their access before assuming it has ended.',
+        { duration: Infinity },
+      );
     },
     onError: (error: Error) => {
       logger.error('Failed to remove team member:', error);

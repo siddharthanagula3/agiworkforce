@@ -10,18 +10,28 @@ import { recordNotification } from './notification-service';
 export const SCHEDULE_PUSH_PREFERENCE_KEY = 'mobilePushScheduleDone';
 export const SCHEDULE_EMAIL_PREFERENCE_KEY = 'emailScheduleDone';
 
+export interface SchedulePreferences {
+  push: boolean;
+  email: boolean;
+  email_address: string | null;
+  enabled: boolean;
+}
+
 export async function loadSchedulePreferences(
   db: DatabaseAdapter,
   userId: string,
   notice?: Pick<ScheduleCompletionNotice, 'taskId' | 'status'>,
-): Promise<{ push: boolean; email: boolean; email_address: string | null; enabled: boolean }> {
+): Promise<SchedulePreferences> {
+  let row:
+    | {
+        notifications: unknown;
+        email: string | null;
+        schedule_notifications?: unknown;
+        schedule_exists?: boolean;
+      }
+    | undefined;
   try {
-    const [row] = await db.query<{
-      notifications: unknown;
-      email: string | null;
-      schedule_notifications?: unknown;
-      schedule_exists?: boolean;
-    }>(
+    [row] = await db.query<NonNullable<typeof row>>(
       `select coalesce(us.settings -> 'notifications', '{}'::jsonb) as notifications,
               p.email as email,
               (select st.metadata -> 'notificationSettings' from public.scheduled_tasks st
@@ -35,34 +45,46 @@ export async function loadSchedulePreferences(
         limit 1`,
       [userId, notice?.taskId ?? null],
     );
-    const preferences =
-      row?.notifications &&
-      typeof row.notifications === 'object' &&
-      !Array.isArray(row.notifications)
-        ? (row.notifications as Record<string, unknown>)
-        : {};
-    const schedule = ManagedCloudScheduleNotificationSettingsSchema.parse(
-      row?.schedule_notifications ?? {},
-    );
-    const enabled =
-      row !== undefined &&
-      row.schedule_exists !== false &&
-      (!notice ||
-        (notice.status === 'success'
-          ? schedule.onSuccess
-          : notice.status === 'awaiting_approval'
-            ? schedule.onApproval
-            : schedule.onFailure));
-    return {
-      enabled,
-      push: enabled && schedule.push && preferences[SCHEDULE_PUSH_PREFERENCE_KEY] !== false,
-      email: enabled && schedule.email && preferences[SCHEDULE_EMAIL_PREFERENCE_KEY] !== false,
-      email_address: typeof row?.email === 'string' ? row.email : null,
-    };
   } catch (error) {
     logger.warn({ error, userId }, '[notifications] could not read preferences');
-    return { push: false, email: false, email_address: null, enabled: false };
+    throw error;
   }
+  const disabled = { push: false, email: false, email_address: null, enabled: false };
+  const parsed = ManagedCloudScheduleNotificationSettingsSchema.safeParse(
+    row?.schedule_notifications ?? {},
+  );
+  if (!parsed.success) {
+    logger.warn({ userId }, '[notifications] stored schedule notification settings are invalid');
+    return disabled;
+  }
+  const schedule = parsed.data;
+  const preferences =
+    row?.notifications && typeof row.notifications === 'object' && !Array.isArray(row.notifications)
+      ? (row.notifications as Record<string, unknown>)
+      : {};
+  const enabled =
+    row !== undefined &&
+    row.schedule_exists !== false &&
+    (!notice ||
+      (notice.status === 'success'
+        ? schedule.onSuccess
+        : notice.status === 'awaiting_approval'
+          ? schedule.onApproval
+          : schedule.onFailure));
+  return {
+    enabled,
+    push: enabled && schedule.push && preferences[SCHEDULE_PUSH_PREFERENCE_KEY] !== false,
+    email: enabled && schedule.email && preferences[SCHEDULE_EMAIL_PREFERENCE_KEY] !== false,
+    email_address: typeof row?.email === 'string' ? row.email : null,
+  };
+}
+
+export function scheduleQuietHoursType(
+  status: ScheduleCompletionNotice['status'],
+): string | undefined {
+  if (status === 'awaiting_approval') return 'agent_approval_needed';
+  if (status === 'failed' || status === 'timeout') return 'agent_failed';
+  return undefined;
 }
 
 function shortTitle(name: string): string {
@@ -117,16 +139,18 @@ function noticeCopy(notice: ScheduleCompletionNotice): {
 export async function notifyScheduleCompleted(
   db: DatabaseAdapter,
   notice: ScheduleCompletionNotice,
-  options: { email?: boolean } = {},
+  options: { email?: boolean; preferences?: SchedulePreferences } = {},
 ): Promise<{ pushed: boolean; emailed: boolean }> {
   const includeEmail = options.email ?? true;
   const none = { pushed: false, emailed: false };
   try {
     if (notice.status === 'cancelled') return none;
-    const loaded = await loadSchedulePreferences(db, notice.userId, notice);
+    const loaded =
+      options.preferences ?? (await loadSchedulePreferences(db, notice.userId, notice));
     if (!loaded.enabled) return none;
 
     const { title, body, severity } = noticeCopy(notice);
+    const quietHoursType = scheduleQuietHoursType(notice.status);
 
     const recorded = await recordNotification(db, {
       userId: notice.userId,
@@ -152,6 +176,7 @@ export async function notifyScheduleCompleted(
               title,
               body,
               data: { type: 'schedule_run', taskId: notice.taskId },
+              ...(quietHoursType ? { quietHoursType } : {}),
             },
             // The opt-in behind `preferences.push` is settings' "Mobile push",
             // described there as the AGI app on signed-in devices. Browsers

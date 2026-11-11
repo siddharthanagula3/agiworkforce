@@ -380,7 +380,12 @@ export async function diagnoseMemberPolicy(
 ): Promise<MemberPolicyDiagnosis> {
   const member = await readMemberControls(db, organizationId, memberUserId);
   if (!member) {
-    return { effective: null, decision: ask ? UNSCOPED_POLICY_DECISION : null };
+    if (!ask) return { effective: null, decision: null };
+    const billingHold = evaluateBillingHold(
+      ask,
+      await readOrganizationCollectionState(db, organizationId),
+    );
+    return { effective: null, decision: billingHold ?? UNSCOPED_POLICY_DECISION };
   }
   const collectionState = await readOrganizationCollectionState(db, organizationId);
   return {

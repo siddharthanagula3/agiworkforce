@@ -102,10 +102,15 @@ const {
   revealDownload,
   watchDownloadsStartedBy,
 } = await import('../src/features/browser-tools/downloads');
-const { recordConsoleEvent, readConsoleEntries, clearConsoleEntries } =
+const { recordConsoleEvent, readConsoleEntries, clearConsoleEntries, formatConsoleEntries } =
   await import('../src/features/browser-tools/consoleCapture');
-const { recordNetworkEvent, readNetworkEntries, clearNetworkEntries, summarizeRequestUrl } =
-  await import('../src/features/browser-tools/networkCapture');
+const {
+  recordNetworkEvent,
+  readNetworkEntries,
+  clearNetworkEntries,
+  summarizeRequestUrl,
+  NETWORK_URL_MAX_CHARS,
+} = await import('../src/features/browser-tools/networkCapture');
 const {
   startPageWatch,
   stopPageWatch,
@@ -258,13 +263,42 @@ describe('downloads', () => {
     vi.mocked(chrome.downloads.search).mockResolvedValue([
       { id: 901, finalUrl: 'https://blocked.example/x.exe', state: 'in_progress' },
     ] as never);
-    const stop = watchDownloadsStartedBy({ allow: [], deny: ['blocked.example'] });
+    const stop = watchDownloadsStartedBy({ allow: [], deny: ['blocked.example'] }, async () => [
+      `${SITE}/page`,
+    ]);
     const [onCreated] = vi.mocked(chrome.downloads.onCreated.addListener).mock.calls.at(-1) ?? [];
-    (onCreated as (item: { id: number }) => void)({ id: 901 });
+    (onCreated as (item: { id: number; referrer: string }) => void)({
+      id: 901,
+      referrer: `${SITE}/page`,
+    });
 
     await vi.waitFor(() => expect(chrome.downloads.cancel).toHaveBeenCalledWith(901));
     stop();
     expect(chrome.downloads.onCreated.removeListener).toHaveBeenCalledWith(onCreated);
+    vi.mocked(chrome.downloads.search).mockResolvedValue([]);
+  });
+
+  it('leaves a download another page or an unknown page started alone', async () => {
+    vi.mocked(chrome.downloads.search).mockResolvedValue([
+      { id: 902, finalUrl: 'https://blocked.example/mine.zip', state: 'in_progress' },
+      { id: 903, finalUrl: 'https://blocked.example/mine.zip', state: 'in_progress' },
+    ] as never);
+    vi.mocked(chrome.downloads.cancel).mockClear();
+    vi.mocked(chrome.downloads.removeFile).mockClear();
+    vi.mocked(chrome.downloads.erase).mockClear();
+    const stop = watchDownloadsStartedBy({ allow: [], deny: ['blocked.example'] }, async () => [
+      `${SITE}/page`,
+    ]);
+    const [onCreated] = vi.mocked(chrome.downloads.onCreated.addListener).mock.calls.at(-1) ?? [];
+    const created = onCreated as (item: { id: number; referrer: string }) => void;
+    created({ id: 902, referrer: 'https://elsewhere.example/tab-b' });
+    created({ id: 903, referrer: '' });
+
+    await new Promise((resolveTimer) => setTimeout(resolveTimer, 20));
+    stop();
+    expect(chrome.downloads.cancel).not.toHaveBeenCalled();
+    expect(chrome.downloads.removeFile).not.toHaveBeenCalled();
+    expect(chrome.downloads.erase).not.toHaveBeenCalled();
     vi.mocked(chrome.downloads.search).mockResolvedValue([]);
   });
 
@@ -319,6 +353,83 @@ describe('console capture', () => {
     });
     const [entry] = readConsoleEntries(TAB_ID);
     expect(entry?.text).not.toContain('ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ');
+  });
+
+  describe('credential-bearing source locations', () => {
+    const SENTINEL = 'DAYSTAR_SENTINEL_123';
+    const LEAKY = `${SITE}/app.js?access_token=${SENTINEL}&v=2#frag`;
+
+    function expectScrubbed(): void {
+      const entries = readConsoleEntries(TAB_ID);
+      expect(entries).toHaveLength(1);
+      expect(JSON.stringify(entries)).not.toContain(SENTINEL);
+      expect(formatConsoleEntries(entries)).not.toContain(SENTINEL);
+      expect(entries[0]?.url).toBe(`${SITE}/app.js?access_token=&v=2`);
+      expect(entries[0]?.line).toBe(7);
+    }
+
+    it('scrubs the first stack frame of a console call', () => {
+      recordConsoleEvent(TAB_ID, 'Runtime.consoleAPICalled', {
+        type: 'log',
+        timestamp: 1_000,
+        args: [{ type: 'string', value: 'ready' }],
+        stackTrace: { callFrames: [{ url: LEAKY, lineNumber: 6 }] },
+      });
+      expectScrubbed();
+    });
+
+    it('scrubs the url of an uncaught exception', () => {
+      recordConsoleEvent(TAB_ID, 'Runtime.exceptionThrown', {
+        timestamp: 1_000,
+        exceptionDetails: { text: 'Uncaught', url: LEAKY, lineNumber: 6 },
+      });
+      expectScrubbed();
+    });
+
+    it('scrubs the stack fallback of an uncaught exception', () => {
+      recordConsoleEvent(TAB_ID, 'Runtime.exceptionThrown', {
+        timestamp: 1_000,
+        exceptionDetails: {
+          text: 'Uncaught',
+          lineNumber: 6,
+          stackTrace: { callFrames: [{ url: LEAKY, lineNumber: 0 }] },
+        },
+      });
+      expectScrubbed();
+    });
+
+    it('scrubs the url of a browser log entry', () => {
+      recordConsoleEvent(TAB_ID, 'Log.entryAdded', {
+        entry: { level: 'error', source: 'network', text: 'blocked', url: LEAKY, lineNumber: 6 },
+      });
+      expectScrubbed();
+    });
+
+    it('drops userinfo and caps the length of a source location', () => {
+      recordConsoleEvent(TAB_ID, 'Log.entryAdded', {
+        entry: {
+          level: 'info',
+          text: 'loaded',
+          url: `https://user:${SENTINEL}@host.example/${'a'.repeat(2_000)}.js`,
+        },
+      });
+      const [entry] = readConsoleEntries(TAB_ID);
+      expect(entry?.url).not.toContain(SENTINEL);
+      expect(entry?.url?.length).toBeLessThanOrEqual(NETWORK_URL_MAX_CHARS);
+    });
+
+    it('keeps an ordinary source location intact', () => {
+      recordConsoleEvent(TAB_ID, 'Runtime.consoleAPICalled', {
+        type: 'log',
+        timestamp: 1_000,
+        args: [{ type: 'string', value: 'ready' }],
+        stackTrace: { callFrames: [{ url: `${SITE}/app.js?page=2`, lineNumber: 6 }] },
+      });
+      expect(readConsoleEntries(TAB_ID)[0]).toMatchObject({
+        url: `${SITE}/app.js?page=2`,
+        line: 7,
+      });
+    });
   });
 
   it('filters by pattern and by level', () => {

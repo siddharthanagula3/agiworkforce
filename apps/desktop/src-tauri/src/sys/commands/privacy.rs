@@ -596,11 +596,7 @@ fn export_table_rows(
     let mut stmt = conn
         .prepare(&query)
         .map_err(|e| format!("Failed to prepare export of {}: {}", table, e))?;
-    let columns: Vec<String> = stmt
-        .column_names()
-        .into_iter()
-        .map(str::to_string)
-        .collect();
+    let columns: Vec<String> = stmt.column_names().map(str::to_string).collect();
 
     let rows = stmt
         .query_map([], |row| {

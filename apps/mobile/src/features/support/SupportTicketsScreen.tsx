@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LifeBuoy, Plus } from 'lucide-react-native';
@@ -33,10 +33,28 @@ function formatDate(iso: string): string {
 
 export function SupportTicketsScreen() {
   const router = useRouter();
-  const colors = useThemeColors();
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
+
+  if (!isClerkLoaded || !isClerkSignedIn || appMode !== 'cloud') {
+    return (
+      <SettingsScreenShell title="Support" backHref="/(app)/about">
+        <CloudAccountRequired
+          isLoading={!isClerkLoaded}
+          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  return <SupportTicketList key={clerkUserId ?? ''} />;
+}
+
+function SupportTicketList() {
+  const router = useRouter();
+  const colors = useThemeColors();
   const [tickets, setTickets] = useState<SupportTicketView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
@@ -45,22 +63,55 @@ export function SupportTicketsScreen() {
   const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const generation = useRef(0);
+
   const load = useCallback(async (signal?: AbortSignal) => {
+    generation.current += 1;
     setLoadError(null);
+    setMoreError(null);
+    setLoadingMore(false);
     try {
-      setTickets(await listSupportTickets(signal));
+      const page = await listSupportTickets(signal);
+      setTickets(page.tickets);
+      setNextOffset(page.nextOffset);
     } catch (error) {
       if (signal?.aborted) return;
       setLoadError(toUserMessage(error, 'Your tickets could not be loaded.'));
     }
   }, []);
 
+  const loadMore = useCallback(async () => {
+    if (nextOffset === null || loadingMore) return;
+    const started = generation.current;
+    setLoadingMore(true);
+    setMoreError(null);
+    try {
+      const page = await listSupportTickets(undefined, nextOffset);
+      if (generation.current !== started) return;
+      setTickets((current) => {
+        const known = new Set((current ?? []).map((ticket) => ticket.id));
+        return [...(current ?? []), ...page.tickets.filter((ticket) => !known.has(ticket.id))];
+      });
+      setNextOffset(page.nextOffset);
+    } catch (error) {
+      if (generation.current !== started) return;
+      setMoreError(toUserMessage(error, 'Your older tickets could not be loaded.'));
+    } finally {
+      if (generation.current === started) setLoadingMore(false);
+    }
+  }, [loadingMore, nextOffset]);
+
   useEffect(() => {
-    if (!isClerkSignedIn || appMode !== 'cloud') return;
     const controller = new AbortController();
     void load(controller.signal);
-    return () => controller.abort();
-  }, [appMode, isClerkSignedIn, load]);
+    return () => {
+      generation.current += 1;
+      controller.abort();
+    };
+  }, [load]);
 
   const submit = useCallback(() => {
     const trimmedSubject = subject.trim();
@@ -95,17 +146,6 @@ export function SupportTicketsScreen() {
     })();
   }, [includeDiagnostics, load, message, subject]);
 
-  if (!isClerkLoaded || !isClerkSignedIn || appMode !== 'cloud') {
-    return (
-      <SettingsScreenShell title="Support" backHref="/(app)/about">
-        <CloudAccountRequired
-          isLoading={!isClerkLoaded}
-          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
-        />
-      </SettingsScreenShell>
-    );
-  }
-
   const inputStyle = [
     styles.input,
     { backgroundColor: colors.inputSurface, borderColor: colors.border, color: colors.textPrimary },
@@ -115,7 +155,7 @@ export function SupportTicketsScreen() {
     <SettingsScreenShell title="Support" backHref="/(app)/about">
       <SettingsInfo
         title="Raise a ticket"
-        body="Describe what went wrong and the support team replies here. Replies are not emailed."
+        body="Describe what went wrong. The support team replies here, and also by email to your account address."
         icon={LifeBuoy}
       />
       {composing ? (
@@ -200,9 +240,18 @@ export function SupportTicketsScreen() {
                   >[0],
                 )
               }
-              isLast={index === tickets.length - 1}
+              isLast={index === tickets.length - 1 && nextOffset === null}
             />
           ))}
+          {nextOffset !== null ? (
+            <SettingsRow
+              label={moreError ? 'Older tickets could not be loaded' : 'Show older tickets'}
+              icon={LifeBuoy}
+              value={loadingMore ? 'Loading…' : moreError ? 'Retry' : undefined}
+              onPress={loadingMore ? undefined : () => void loadMore()}
+              isLast
+            />
+          ) : null}
         </SettingsGroup>
       )}
     </SettingsScreenShell>

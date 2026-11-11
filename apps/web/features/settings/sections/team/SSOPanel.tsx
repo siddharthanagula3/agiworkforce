@@ -171,6 +171,7 @@ export function SSOPanel({
   const [metadataUrl, setMetadataUrl] = useState('');
   const [discoveryUrl, setDiscoveryUrl] = useState('');
   const [clientId, setClientId] = useState('');
+  const [activationSecrets, setActivationSecrets] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -362,6 +363,9 @@ export function SSOPanel({
 
           {connections.map((connection) => {
             const copy = STATUS_COPY[connection.status];
+            const needsActivationSecret =
+              connection.providerType === 'oidc' && !connection.isActive;
+            const activationSecret = activationSecrets[connection.id] ?? '';
             return (
               <article
                 key={connection.id}
@@ -507,23 +511,60 @@ export function SSOPanel({
                         </button>
                       </>
                     ) : (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        style={buttonStyle}
-                        onClick={() =>
-                          void mutate(
-                            `/api/admin/sso/${connection.id}`,
-                            'PATCH',
-                            { is_active: !connection.isActive },
-                            connection.isActive
-                              ? 'Could not deactivate the connection.'
-                              : 'Could not activate the connection.',
-                          )
-                        }
-                      >
-                        {connection.isActive ? 'Deactivate' : 'Activate'}
-                      </button>
+                      <>
+                        {needsActivationSecret ? (
+                          <label
+                            style={{
+                              display: 'grid',
+                              gap: 'var(--space-1)',
+                              flexBasis: '100%',
+                              fontSize: 12,
+                              color: 'var(--text-3)',
+                            }}
+                          >
+                            OIDC client secret
+                            <input
+                              type="password"
+                              autoComplete="off"
+                              aria-label="OIDC client secret"
+                              value={activationSecret}
+                              onChange={(event) =>
+                                setActivationSecrets((current) => ({
+                                  ...current,
+                                  [connection.id]: event.target.value,
+                                }))
+                              }
+                              style={controlStyle}
+                            />
+                          </label>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={busy || (needsActivationSecret && !activationSecret.trim())}
+                          style={buttonStyle}
+                          onClick={() =>
+                            void mutate(
+                              `/api/admin/sso/${connection.id}`,
+                              'PATCH',
+                              needsActivationSecret
+                                ? { is_active: true, oidc_client_secret: activationSecret.trim() }
+                                : { is_active: !connection.isActive },
+                              connection.isActive
+                                ? 'Could not deactivate the connection.'
+                                : 'Could not activate the connection.',
+                            ).then((ok) => {
+                              if (ok && needsActivationSecret) {
+                                setActivationSecrets((current) => ({
+                                  ...current,
+                                  [connection.id]: '',
+                                }));
+                              }
+                            })
+                          }
+                        >
+                          {connection.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"

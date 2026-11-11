@@ -1332,7 +1332,7 @@
       "id": "soft-delete-purge-is-off-by-default",
       "section": "5.4 Gaps this section records rather than papers over",
       "kind": "prose",
-      "sentence": "**The soft-delete purge ships off.** `SOFT_DELETED_RESOURCE_PURGE_ENABLED` is unset by default, so on a deployment that has not set it the recovery window for conversations, messages, artifacts, projects and knowledge files does not end on schedule.",
+      "sentence": "**The soft-delete purge ships off.** `SOFT_DELETED_RESOURCE_PURGE_ENABLED` is unset by default, so on a deployment that has not set it the recovery window for conversations, messages, artifacts and projects does not end on schedule.",
       "implementation": ["apps/web/app/api/cron/purge-soft-deleted-resources/route.ts"],
       "proof": [
         {
@@ -1346,13 +1346,53 @@
       "id": "media-assets-purge-is-always-on",
       "section": "5.4 Gaps this section records rather than papers over",
       "kind": "prose",
-      "sentence": "`media_assets` is purged by a separate cron that is always on.",
-      "implementation": ["apps/web/lib/server/media-assets.ts"],
+      "sentence": "`media_assets` and `project_knowledge_files` are purged by `cron/purge-deleted-media`, which is always on.",
+      "implementation": [
+        "apps/web/app/api/cron/purge-deleted-media/route.ts",
+        "apps/web/lib/server/retention/deleted-project-files.ts"
+      ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/lib/server/__tests__/media-assets.permanent-delete.test.ts",
           "name": "media"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/retention/__tests__/deleted-project-files.test.ts",
+          "name": "completes the deletion the user asked for: object and row both go, and it is audited"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/resources/__tests__/purge-soft-deleted.test.ts",
+          "name": "refuses to delete a row that is the only address of an object in storage"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/cron/deployable-components.test.ts",
+          "name": "registers a component for every scheduled path"
+        }
+      ]
+    },
+    {
+      "id": "project-row-is-never-purged",
+      "section": "5.4 Gaps this section records rather than papers over",
+      "kind": "prose",
+      "sentence": "A project row is never purged while mobile and the CLI learn deletions only from its sync tombstone.",
+      "implementation": [
+        "apps/web/lib/server/retention/deleted-project-files.ts",
+        "apps/web/lib/resources/purge-soft-deleted.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/retention/__tests__/deleted-project-files.test.ts",
+          "name": "never purges a deleted project record, even once its last file is gone"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/resources/__tests__/purge-soft-deleted.test.ts",
+          "name": "refuses to delete a row that is the only address of an object in storage"
         }
       ]
     },
@@ -1424,7 +1464,7 @@
       "id": "approval-precedence-and-tool-table",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "rows",
-      "rows": 83,
+      "rows": 85,
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts"
@@ -2031,11 +2071,15 @@
       "reason": "the retained Tauri tree and the shipped Electron desktop are separate build graphs and no guard enumerates unreachability across them yet"
     },
     {
-      "id": "public-desktop-is-managed-cloud-only",
+      "id": "public-desktop-runs-no-retained-inference",
       "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
       "kind": "prose",
-      "sentence": "The public Desktop is managed-cloud-only and exposes neither Local/BYOK inference nor OAuth connector flows from that tree.",
-      "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
+      "sentence": "The public Desktop does not expose Local/BYOK inference or OAuth connector flows from that tree: its chat uses Cloud, and its local coding sessions run the CLI and its own Local and BYOK routes.",
+      "implementation": [
+        "apps/desktop/src-tauri/tauri.conf.json",
+        "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels"
+      ],
       "reason": "the retained Tauri tree and the shipped Electron desktop are separate build graphs and no guard enumerates unreachability across them yet"
     }
   ],

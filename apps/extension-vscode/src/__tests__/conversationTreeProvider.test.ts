@@ -403,6 +403,125 @@ describe('ConversationTreeProvider', () => {
     expect((await provider.getChildren())[0]).toBeInstanceOf(ConversationTreeItem);
   });
 
+  describe('active sessions beyond the first page', () => {
+    function singleFolderProvider(runtime: Record<string, unknown>): ConversationTreeProvider {
+      const pool = {
+        forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+      } as unknown as LocalRuntimePool;
+      vscode.workspace.workspaceFolders = [
+        { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
+      ];
+      return new ConversationTreeProvider(pool);
+    }
+
+    it('follows the continuation and routes sessions from later pages', async () => {
+      const first = Array.from({ length: 100 }, (_, index) =>
+        thread(`recent-${index}`, '2026-07-14T00:00:00Z', '/workspace/a'),
+      );
+      const listThreads = vi
+        .fn()
+        .mockResolvedValueOnce({ threads: first, nextCursor: 'recent-99' })
+        .mockResolvedValueOnce({
+          threads: [thread('older', '2026-06-01T00:00:00Z', '/workspace/a')],
+        });
+      const readThread = vi.fn().mockResolvedValue({
+        thread: thread('older', '2026-06-01T00:00:00Z', '/workspace/a'),
+        messages: [],
+        transcriptTruncated: false,
+      });
+      const provider = singleFolderProvider({ listThreads, readThread });
+
+      const threads = await provider.getThreads();
+
+      expect(threads).toHaveLength(101);
+      expect(threads.at(-1)?.id).toBe('older');
+      expect(listThreads).toHaveBeenLastCalledWith(
+        expect.objectContaining({ cursor: 'recent-99', includeArchived: false }),
+      );
+      await expect(provider.readThread('older')).resolves.toBeDefined();
+    });
+
+    it('shows a continuation that never advances as a listing failure, not a truncated list', async () => {
+      const listThreads = vi.fn().mockResolvedValue({
+        threads: [thread('one', '2026-07-14T00:00:00Z', '/workspace/a')],
+        nextCursor: 'c',
+      });
+      const provider = singleFolderProvider({ listThreads });
+
+      const children = await provider.getChildren();
+
+      expect(children).toHaveLength(1);
+      expect(children[0]).toBeInstanceOf(ConversationTreeErrorItem);
+      expect(listThreads).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('archived sessions', () => {
+    const archived = (id: string, updatedAt: string): ThreadSummary => ({
+      ...thread(id, updatedAt, '/workspace/a'),
+      status: 'archived',
+    });
+
+    function singleFolderProvider(runtime: Record<string, unknown>): ConversationTreeProvider {
+      const pool = {
+        forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+      } as unknown as LocalRuntimePool;
+      vscode.workspace.workspaceFolders = [
+        { name: 'a', index: 0, uri: vscode.Uri.file('/workspace/a') },
+      ];
+      return new ConversationTreeProvider(pool);
+    }
+
+    it('follows the continuation past a first page of active sessions', async () => {
+      const active = Array.from({ length: 100 }, (_, index) =>
+        thread(`active-${index}`, '2026-07-14T00:00:00Z', '/workspace/a'),
+      );
+      const listThreads = vi
+        .fn()
+        .mockResolvedValueOnce({ threads: active, nextCursor: 'active-99' })
+        .mockResolvedValueOnce({ threads: [archived('old', '2026-06-01T00:00:00Z')] });
+      const provider = singleFolderProvider({ listThreads });
+
+      const { items, failures } = await provider.getArchivedThreads();
+
+      expect(items.map((item) => item.id)).toEqual(['old']);
+      expect(failures).toEqual([]);
+      expect(listThreads).toHaveBeenCalledTimes(2);
+      expect(listThreads).toHaveBeenLastCalledWith(
+        expect.objectContaining({ cursor: 'active-99', includeArchived: true }),
+      );
+    });
+
+    it('collects archived sessions from every page', async () => {
+      const listThreads = vi
+        .fn()
+        .mockResolvedValueOnce({
+          threads: [archived('newer', '2026-07-01T00:00:00Z')],
+          nextCursor: 'newer',
+        })
+        .mockResolvedValueOnce({ threads: [archived('older', '2026-06-01T00:00:00Z')] });
+      const provider = singleFolderProvider({ listThreads });
+
+      const { items } = await provider.getArchivedThreads();
+
+      expect(items.map((item) => item.id)).toEqual(['newer', 'older']);
+    });
+
+    it('reports a continuation that never advances as a listing failure', async () => {
+      const listThreads = vi
+        .fn()
+        .mockResolvedValue({ threads: [archived('one', '2026-07-01T00:00:00Z')], nextCursor: 'c' });
+      const provider = singleFolderProvider({ listThreads });
+
+      const { items, failures } = await provider.getArchivedThreads();
+
+      expect(items).toEqual([]);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]?.folderName).toBe('a');
+      expect(listThreads).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('rejects relative host cwd metadata even when it resolves to the owner path', () => {
     expect(isSameWorkspacePath(process.cwd(), '.')).toBe(false);
     expect(isSameWorkspacePath('/workspace/a', 'workspace/a')).toBe(false);

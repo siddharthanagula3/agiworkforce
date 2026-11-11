@@ -19,15 +19,21 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: mocks.organizationId,
   })),
 }));
-vi.mock('@/lib/server/data-region', () => ({
-  readOrganizationRegion: vi.fn(async () => ({
+vi.mock('@/lib/server/data-region', () => {
+  const region = () => ({
     effective: mocks.region.effective,
     requested: null,
     requestedAt: null,
     provisioned: mocks.region.provisioned,
     missing: mocks.region.missing,
-  })),
-}));
+  });
+  return {
+    readOrganizationRegion: vi.fn(async () => region()),
+    readStoredOrganizationRegion: vi.fn(async () =>
+      mocks.region.effective === '' ? null : region(),
+    ),
+  };
+});
 
 import { DATA_REGIONS } from '@agiworkforce/compliance';
 import { SEARCH_SOURCE_KINDS } from '@agiworkforce/data-layer/search';

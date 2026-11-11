@@ -20,11 +20,13 @@ const scanRoot = rootIndex >= 0 ? path.resolve(process.argv[rootIndex + 1]) : re
 const CLAIM_PAGES = [
   {
     file: 'apps/web/app/privacy/page.tsx',
-    must: [/does not train AGI-owned models on customer prompts/i],
+    must: [/does\s+not\s+train\s+AGI-owned\s+models\s+on\s+customer\s+prompts/i],
   },
   {
     file: 'apps/web/features/settings/sections/PrivacySection.tsx',
-    must: [/There\s+is\s+no\s+training opt-in, because that data path does not exist/i],
+    must: [
+      /There\s+is\s+no\s+training\s+opt-in,\s+because\s+that\s+data\s+path\s+does\s+not\s+exist/i,
+    ],
   },
 ];
 

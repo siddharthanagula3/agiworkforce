@@ -86,8 +86,10 @@ with **Forgot password?**.
 
 Settings, Account changes the email address on the account. The new address gets
 a code to prove you own it, then you confirm it is you and it becomes the
-address on the account. The previous address is removed unless a sign-in method
-still uses it. Password resets and security notices go to the new address.
+address on the account. The previous address is removed from the account; if
+the sign-in service keeps it, Settings says so and asks you to check your
+sign-in methods before removing it yourself. Password resets and security
+notices go to the new address.
 
 ## Confirming it is you
 

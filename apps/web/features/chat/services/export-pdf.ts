@@ -673,12 +673,18 @@ class PdfDocumentRenderer {
   private readonly textColor: Rgb;
   private y: number;
   private pendingMarker: PendingMarker | null = null;
+  private readonly pageBreak: { leave: () => void; enter: () => void } | null;
 
   constructor(
     private readonly pdf: jsPDF,
     private readonly direction: DocumentDirection,
-    options: { margin?: number; textColor?: Rgb } = {},
+    options: {
+      margin?: number;
+      textColor?: Rgb;
+      onPageBreak?: { leave: () => void; enter: () => void };
+    } = {},
   ) {
+    this.pageBreak = options.onPageBreak ?? null;
     this.margin = options.margin ?? PAGE_MARGIN;
     this.textColor = options.textColor ?? TEXT_COLOR;
     this.y = this.margin;
@@ -703,8 +709,10 @@ class PdfDocumentRenderer {
   }
 
   private newPage(): void {
+    this.pageBreak?.leave();
     this.pdf.addPage();
     this.y = this.margin;
+    this.pageBreak?.enter();
   }
 
   private ensureSpace(height: number): void {
@@ -1208,13 +1216,37 @@ export function renderPdfSlides(
   const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format });
   const page: PdfArea = { x: 0, y: 0, width: PDF_SLIDE_WIDTH, height: PDF_SLIDE_HEIGHT };
   const { background, text, muted } = options.palette;
-  slides.forEach((slide, index) => {
-    if (index > 0) pdf.addPage(format, 'landscape');
+  const paintBackground = () => {
     pdf.setFillColor(background[0], background[1], background[2]);
     pdf.rect(0, 0, PDF_SLIDE_WIDTH, PDF_SLIDE_HEIGHT, 'F');
+  };
+  const drawFooter = (index: number, continued: boolean) => {
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(SLIDE_FOOTER_SIZE);
+    pdf.setTextColor(muted[0], muted[1], muted[2]);
+    const baseline = PDF_SLIDE_HEIGHT - SLIDE_MARGIN / 2;
+    pdf.text(options.title, SLIDE_MARGIN, baseline);
+    pdf.text(
+      `${index + 1} / ${slides.length}${continued ? ' (cont.)' : ''}`,
+      PDF_SLIDE_WIDTH - SLIDE_MARGIN,
+      baseline,
+      { align: 'right' },
+    );
+  };
+  slides.forEach((slide, index) => {
+    if (index > 0) pdf.addPage(format, 'landscape');
+    paintBackground();
+    let continued = false;
     const renderer = new PdfDocumentRenderer(pdf, documentDirection(slide.blocks, options.title), {
       margin: SLIDE_MARGIN,
       textColor: text,
+      onPageBreak: {
+        leave: () => drawFooter(index, continued),
+        enter: () => {
+          continued = true;
+          paintBackground();
+        },
+      },
     });
     renderer.renderDocument(slide.blocks);
     const top = slide.blocks.length > 0 ? renderer.cursor() + BLOCK_GAP : SLIDE_MARGIN;
@@ -1228,14 +1260,7 @@ export function renderPdfSlides(
       },
       page,
     );
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(SLIDE_FOOTER_SIZE);
-    pdf.setTextColor(muted[0], muted[1], muted[2]);
-    const baseline = PDF_SLIDE_HEIGHT - SLIDE_MARGIN / 2;
-    pdf.text(options.title, SLIDE_MARGIN, baseline);
-    pdf.text(`${index + 1} / ${slides.length}`, PDF_SLIDE_WIDTH - SLIDE_MARGIN, baseline, {
-      align: 'right',
-    });
+    drawFooter(index, continued);
   });
   return pdf;
 }

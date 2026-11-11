@@ -104,6 +104,84 @@ describe('resolving a customer-managed ring', () => {
     );
   });
 
+  describe('after a replacement moved the association onto another key resource', () => {
+    const REPLACEMENT: CmekKeyDescriptor = {
+      provider: 'local',
+      keyUri: 'local://org-a/kek-2',
+      region: 'us-east-1',
+    };
+
+    async function replacedRecord(provider: CmekProvider) {
+      const { record } = await recordFor(provider);
+      const sealedUnderV1 = sealEnvelope(
+        await createCustomerKeyRingResolver({ local: provider })(record),
+        'older secret',
+        'hex-triple',
+      );
+      const next = await provider.generateDataKey(REPLACEMENT);
+      return {
+        sealedUnderV1,
+        previous: record,
+        replaced: {
+          ...record,
+          descriptor: REPLACEMENT,
+          active: { version: '2', wrapped: next.wrapped },
+          retired: [{ ...record.active, descriptor: DESCRIPTOR }],
+        } satisfies OrganizationKeyRecord,
+      };
+    }
+
+    it('opens the retired version at the key resource that wrapped it', async () => {
+      const provider = localProvider();
+      const { sealedUnderV1, replaced } = await replacedRecord(provider);
+      const resolve = createCustomerKeyRingResolver({ local: provider });
+
+      const ring = await resolve(replaced);
+
+      expect(ring.active.id).toBe('2');
+      expect(openEnvelope(ring, sealedUnderV1, 'hex-triple').plaintext).toBe('older secret');
+    });
+
+    it('routes each retired version to the provider client of its own descriptor', async () => {
+      const aws = localProvider();
+      const gcp = localProvider();
+      const awsUnwrap = vi.spyOn(aws, 'unwrapDataKey');
+      const gcpUnwrap = vi.spyOn(gcp, 'unwrapDataKey');
+      const awsDescriptor: CmekKeyDescriptor = { ...DESCRIPTOR, provider: 'aws_kms' };
+      const gcpDescriptor: CmekKeyDescriptor = { ...DESCRIPTOR, provider: 'gcp_kms' };
+      const old = await aws.generateDataKey(awsDescriptor);
+      const next = await gcp.generateDataKey(gcpDescriptor);
+      const resolve = createCustomerKeyRingResolver({ aws_kms: aws, gcp_kms: gcp });
+
+      const ring = await resolve({
+        organizationId: 'org-a',
+        descriptor: gcpDescriptor,
+        status: 'active',
+        active: { version: '2', wrapped: next.wrapped },
+        retired: [{ version: '1', wrapped: old.wrapped, descriptor: awsDescriptor }],
+      });
+
+      expect(ring.retired.map((key) => key.id)).toEqual(['1']);
+      expect(awsUnwrap).toHaveBeenCalledTimes(1);
+      expect(awsUnwrap.mock.calls[0]?.[0]).toEqual(awsDescriptor);
+      expect(gcpUnwrap).toHaveBeenCalledTimes(1);
+      expect(gcpUnwrap.mock.calls[0]?.[0]).toEqual(gcpDescriptor);
+    });
+
+    it('cannot open a retired version whose descriptor was not kept', async () => {
+      const provider = localProvider();
+      const { replaced } = await replacedRecord(provider);
+      const resolve = createCustomerKeyRingResolver({ local: provider });
+
+      await expect(
+        resolve({
+          ...replaced,
+          retired: [{ version: '1', wrapped: replaced.retired[0]!.wrapped }],
+        }),
+      ).rejects.toBeInstanceOf(CustomerKeyUnavailableError);
+    });
+  });
+
   it('refuses a revoked association without calling the customer’s KMS at all', async () => {
     const provider = localProvider();
     const { record } = await recordFor(provider);

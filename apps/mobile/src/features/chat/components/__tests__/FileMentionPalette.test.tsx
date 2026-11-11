@@ -4,6 +4,7 @@ import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import { FileMentionPalette } from '@/src/features/chat/components/FileMentionPalette';
+import { ownerHandler } from '@/test-utils/ownerProps';
 
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
@@ -11,17 +12,6 @@ import {
   invalidateCloudAccount,
   __resetCloudAccountSessionForTests,
 } from '@/src/features/auth/services/cloudAccountSession';
-
-function pressHandlerFor(
-  view: Pick<ReturnType<typeof render>, 'UNSAFE_getAllByProps'>,
-  label: string,
-): () => void {
-  const owner = view
-    .UNSAFE_getAllByProps({ accessibilityLabel: label })
-    .find((node) => typeof node.props.onPress === 'function');
-  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
-  return owner.props.onPress as () => void;
-}
 
 describe('FileMentionPalette', () => {
   beforeEach(() => {
@@ -77,8 +67,8 @@ describe('FileMentionPalette', () => {
     const view = render(
       <FileMentionPalette destinationKey="first" query="old" onSelect={onSelect} />,
     );
-    await screen.findByLabelText('Mention old.pdf');
-    const stalePress = pressHandlerFor(screen, 'Mention old.pdf');
+    const row = await screen.findByLabelText('Mention old.pdf');
+    const stalePress = ownerHandler(row, 'onPress');
     view.rerender(<FileMentionPalette destinationKey="second" query="new" onSelect={onSelect} />);
     expect(screen.queryByLabelText('Mention old.pdf')).toBeNull();
     act(() => stalePress());
@@ -101,8 +91,8 @@ describe('FileMentionPalette', () => {
     });
     const onSelect = jest.fn();
     render(<FileMentionPalette destinationKey="new-chat" query="old" onSelect={onSelect} />);
-    await screen.findByLabelText('Mention old.pdf');
-    const stalePress = pressHandlerFor(screen, 'Mention old.pdf');
+    const row = await screen.findByLabelText('Mention old.pdf');
+    const stalePress = ownerHandler(row, 'onPress');
     act(() => {
       invalidateCloudAccount();
       activateCloudAccount('picker-owner');

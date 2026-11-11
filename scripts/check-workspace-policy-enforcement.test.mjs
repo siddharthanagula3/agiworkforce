@@ -207,10 +207,25 @@ test('the published families are read off the effective route, not assumed', () 
     'feature',
   ]);
   assert.ok(servedFamilies('code: effective.code,').has('code'));
-  assert.ok(servedFamilies('code: { ...effective.code, allowMcpServers: permitted },').has('code'));
+  const narrowed =
+    'code: {\n  ...effective.code,\n  // note\n  allowMcpServers:\n    effective.code.allowMcpServers &&\n    !(effective.code.mcpRestrictionActive && effective.code.allowedMcpServers.length === 0),\n},';
+  assert.ok(servedFamilies(narrowed).has('code'));
+  for (const looser of [
+    'code: { ...effective.code, allowMcpServers: true },',
+    'code: { ...effective.code, allowMcpServers: false },',
+    'code: { ...effective.code, allowMcpServers: effective.code.allowMcpServers || flag },',
+    'code: { ...effective.code, allowMcpServers: effective.code.allowMcpServers ? true : flag },',
+    'code: { ...effective.code, allowMcpServers: effective.code.allowGithubConnection && true },',
+    'code: { ...effective.code, allowMcpServers },',
+    'code: { ...effective.code, ...other },',
+    'code: { ...effective.code, allowMcpServers: effective.code.allowMcpServers && ok, allowedEgressHosts: [] },',
+  ]) {
+    assert.equal(servedFamilies(looser).has('code'), false, looser);
+  }
+  assert.equal(servedFamilies('code: effective.code.allowMcpServers,').has('code'), false);
   assert.equal(
-    servedFamilies('code: { allowMcpServers: effective.code.allowMcpServers },').has('code'),
-    false,
+    servedFamilies('code: { allowMcpServers: effective.code.allowMcpServers },').size,
+    0,
   );
   assert.equal(servedFamilies('return NextResponse.json({});').size, 0);
 });
@@ -303,4 +318,46 @@ test('a Code control the decision maps to no act is enforced where a decision re
   });
 
   assert.deepEqual(findUnenforcedKeys(wired).unenforced, []);
+});
+
+const COUNTRY_CONTRACT = `${CONTRACT.replace(
+  '  maxReasoningEffort: WorkspaceReasoningEffort | null;\n',
+  '  maxReasoningEffort: WorkspaceReasoningEffort | null;\n  allowedCountries: readonly string[];\n',
+)}
+export function isWorkspaceCountryAllowed(
+  controls: Pick<WorkspaceControls, 'allowedCountries'>,
+  country: string | null,
+): boolean {
+  return controls.allowedCountries.length === 0 || controls.allowedCountries.includes(country ?? '');
+}
+
+export function resolveWorkspaceControls(base: WorkspaceControls): WorkspaceControls {
+  return { ...base, allowedCountries: base.allowedCountries, maxReasoningEffort: null };
+}
+`;
+
+const ENFORCED_ELSEWHERE = {
+  'apps/web/app/api/projects/route.ts':
+    "buildWorkspaceFeatureGateResponse(userId, request, 'projects', 'web'); features.push('browser'); const maxReasoningEffort = 1; act: 'connect_github'",
+};
+
+test('a decision that asks the contract predicate enforces the controls the predicate reads', () => {
+  const root = tree({
+    [CONTRACT_FILE]: COUNTRY_CONTRACT,
+    ...ENFORCED_ELSEWHERE,
+    'apps/web/lib/services/evaluator.ts':
+      "import { isWorkspaceCountryAllowed } from '@agiworkforce/types';\nif (!isWorkspaceCountryAllowed(policy.controls, country)) return deny();",
+  });
+
+  assert.equal(findUnenforcedKeys(root).unenforced.includes('control:allowedCountries'), false);
+});
+
+test('calling a contract resolver that only merges controls enforces none of them', () => {
+  const root = tree({
+    [CONTRACT_FILE]: COUNTRY_CONTRACT,
+    ...ENFORCED_ELSEWHERE,
+    'apps/web/lib/services/merge.ts': 'const merged = resolveWorkspaceControls(policy.controls);',
+  });
+
+  assert.ok(findUnenforcedKeys(root).unenforced.includes('control:allowedCountries'));
 });

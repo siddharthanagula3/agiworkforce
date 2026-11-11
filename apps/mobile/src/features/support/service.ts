@@ -69,11 +69,26 @@ export function canReplyToTicket(status: TicketStatus): boolean {
   return status !== 'closed';
 }
 
-export async function listSupportTickets(signal?: AbortSignal): Promise<SupportTicketView[]> {
-  const response = await api.get<unknown>(SUPPORT_TICKETS_PATH, signal ? { signal } : undefined);
+export interface SupportTicketPageView {
+  tickets: SupportTicketView[];
+  nextOffset: number | null;
+}
+
+export async function listSupportTickets(
+  signal?: AbortSignal,
+  offset = 0,
+): Promise<SupportTicketPageView> {
+  const path = offset > 0 ? `${SUPPORT_TICKETS_PATH}?offset=${offset}` : SUPPORT_TICKETS_PATH;
+  const response = await api.get<unknown>(path, signal ? { signal } : undefined);
   const tickets =
     isRecord(response) && Array.isArray(response['tickets']) ? response['tickets'] : [];
-  return tickets.map(parseTicket).filter((ticket): ticket is SupportTicketView => ticket !== null);
+  const next = isRecord(response) ? response['nextOffset'] : null;
+  return {
+    tickets: tickets
+      .map(parseTicket)
+      .filter((ticket): ticket is SupportTicketView => ticket !== null),
+    nextOffset: typeof next === 'number' && Number.isInteger(next) && next > offset ? next : null,
+  };
 }
 
 export async function openSupportTicket(input: {

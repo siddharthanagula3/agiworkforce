@@ -69,7 +69,8 @@ vi.mock('@/lib/security-audit', () => ({
   sanitizeAuditDetail: vi.fn(),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   GITHUB_WEBHOOK_SECRET: vi.fn(),
   GitHubAuthorizationRevokedError: class GitHubAuthorizationRevokedError extends Error {},
   GitHubInstallationUnverifiedError: class GitHubInstallationUnverifiedError extends Error {},
@@ -224,6 +225,24 @@ describe('POST /api/code/local-pull-requests', () => {
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
+  it('carries the reconnect reason so the caller can offer the reconnect action', async () => {
+    mocks.openLocalPullRequest.mockRejectedValue(
+      Object.assign(new LocalPullRequestError('Reconnect GitHub to push or open pull requests.'), {
+        reason: 'github_reconnect_required',
+      }),
+    );
+
+    const response = await POST(postRequest(body));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: {
+        message: 'Reconnect GitHub to push or open pull requests.',
+        details: { reason: 'github_reconnect_required' },
+      },
+    });
+  });
+
   it('opens the pull request as the caller and audits it', async () => {
     const response = await POST(postRequest(body));
 
@@ -247,3 +266,5 @@ describe('POST /api/code/local-pull-requests', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/github-app');

@@ -352,6 +352,7 @@ export const ProjectsSyncPullResponseSchema = z.object({
   projects: z.array(ProjectWireDeltaSchema),
   cursor: ServerVersionSchema,
   hasMore: z.boolean(),
+  workspaceScope: z.string().min(1).optional(),
 });
 export type ProjectsSyncPullResponse = z.infer<typeof ProjectsSyncPullResponseSchema>;
 

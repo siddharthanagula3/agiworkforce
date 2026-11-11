@@ -30,6 +30,7 @@ jest.mock('@/src/features/chat/components/VideoPlayerModal', () => ({
 }));
 
 import { GeneratedVideo } from '@/src/features/chat/components/GeneratedVideo';
+import { ownerHandler } from '@/test-utils/ownerProps';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -45,13 +46,6 @@ const player = (id: string) => ({
   playerUri: `file:///${id}/player.html`,
   directoryUri: `file:///${id}/`,
 });
-function pressHandlerFor(view: ReturnType<typeof render>, label: string): () => void {
-  const owner = view
-    .UNSAFE_getAllByProps({ accessibilityLabel: label })
-    .find((node) => typeof node.props.onPress === 'function');
-  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
-  return owner.props.onPress as () => void;
-}
 const video = (url: string) => <GeneratedVideo videoUrl={url} width={240} />;
 
 describe('GeneratedVideo operation ownership', () => {
@@ -130,8 +124,8 @@ describe('GeneratedVideo operation ownership', () => {
     const pending = deferred<ReturnType<typeof player>>();
     mockPrepare.mockReturnValueOnce(pending.promise);
     const screen = render(video('https://example.com/a.mp4'));
-    const play = pressHandlerFor(screen, 'Play generated video');
-    const save = pressHandlerFor(screen, 'Save video');
+    const play = ownerHandler(screen.getByLabelText('Play generated video'), 'onPress');
+    const save = ownerHandler(screen.getByLabelText('Save video'), 'onPress');
     act(() => {
       play();
       save();

@@ -270,6 +270,21 @@ export async function listWaitingQueue(limit: number): Promise<HandoffSessionRow
   );
 }
 
+export async function listConnectedSessionsForAgent(
+  agentUserId: string,
+  limit: number,
+): Promise<HandoffSessionRow[]> {
+  const db = getNeonDb();
+  return db.query<HandoffSessionRow>(
+    `select ${SESSION_COLUMNS}
+       from public.support_handoff_sessions
+      where status = 'connected' and agent_user_id = $1
+      order by connected_at asc
+      limit $2`,
+    [agentUserId, limit],
+  );
+}
+
 export async function claimSessionForAgent(
   sessionId: string,
   agentUserId: string,

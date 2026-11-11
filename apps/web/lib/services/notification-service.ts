@@ -86,15 +86,15 @@ export async function insertNotification(
 export async function recordNotification(
   db: DatabaseAdapter,
   input: NotificationInput,
-): Promise<{ recorded: boolean }> {
+): Promise<{ recorded: boolean; failed: boolean }> {
   try {
-    return { recorded: (await insertNotification(db, input)) === 'inserted' };
+    return { recorded: (await insertNotification(db, input)) === 'inserted', failed: false };
   } catch (error) {
     logger.warn(
       { error, userId: input.userId, category: input.category },
       '[notifications] in-app notification could not be recorded',
     );
-    return { recorded: false };
+    return { recorded: false, failed: true };
   }
 }
 

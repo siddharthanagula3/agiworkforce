@@ -37,6 +37,7 @@ import { useAgentQuestionStore } from '../components/AgentQuestionCard';
 import { useTurnNoticeStore } from '../components/TurnNotices';
 import { CONTINUE_GENERATION_INSTRUCTION, isMessageContinuable } from '../lib/continue-generation';
 import {
+  PRODUCT_NAMES,
   classifyManagedQuotaErrorCode,
   getModelMetadataById,
   getNextUpgradeTier,
@@ -1152,7 +1153,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                   agentActivity: startAgentActivityLocally({
                     sessionId: convId,
                     turnId: assistantMessageId,
-                    summary: 'Starting Work',
+                    summary: `Starting ${PRODUCT_NAMES.work}`,
                     startedAtMs,
                   }),
                 },
@@ -1746,25 +1747,25 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   );
 
   const editAndResend = useCallback(
-    (userMessageId: string, newContent: string) => {
-      if (!runtime || !runtime.deleteMessages || isStreamingRef.current) return;
+    (userMessageId: string, newContent: string): boolean => {
+      if (!runtime || !runtime.deleteMessages || isStreamingRef.current) return false;
       const trimmed = newContent.trim();
-      if (!trimmed) return;
+      if (!trimmed) return false;
       const store = useChatStore.getState();
       const convId = store.activeConversationId;
-      if (!convId) return;
+      if (!convId) return false;
       const messages = store.messagesByConversation[convId] ?? [];
       const plan = planEditRollback(messages, userMessageId);
-      if (!plan) return;
+      if (!plan) return false;
       const userMessage = messages[plan.userIndex];
-      if (!userMessage) return;
-      if (trimmed === userMessage.content.trim()) return;
+      if (!userMessage) return false;
+      if (trimmed === userMessage.content.trim()) return true;
 
       if (userMessage.attachments && userMessage.attachments.length > 0) {
         toast.error(
           'Editing is unavailable for a turn with attachments. Send a new message with the files attached.',
         );
-        return;
+        return false;
       }
 
       const decision = getRegenerateReplayDecision({
@@ -1774,7 +1775,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       });
       if (!decision.ok) {
         toast.error(decision.message);
-        return;
+        return false;
       }
 
       const snapshot = messages.map((message) => ({ ...message }));
@@ -1798,6 +1799,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         decision.replay?.webSearchEnabled ? 'web_search' : undefined,
       );
       if (!start.started) store.setMessages(convId, snapshot);
+      return start.started;
     },
     [runtime, sendMessage],
   );

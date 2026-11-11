@@ -17,7 +17,7 @@ import {
   type CloudAgentRunSteer,
   type ManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { PRODUCT_NAMES, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { AgiMark, ApprovalCard, Button, SegmentedControl, Spinner } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { toUserMessageWithStatus } from '../../lib/network-error';
@@ -603,7 +603,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
           </p>
           {transport.startWork && filter !== 'archived' && filter !== 'needs_you' ? (
             <Button size="sm" onClick={transport.startWork}>
-              Start Work
+              Start {PRODUCT_NAMES.work}
             </Button>
           ) : null}
         </div>

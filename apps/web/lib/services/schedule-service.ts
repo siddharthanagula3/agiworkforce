@@ -1630,6 +1630,7 @@ export async function finalizeScheduleRun(
     result?: Record<string, unknown> | ScheduledExecutionResult | null;
     error?: string | null;
     completedAt: Date;
+    requireExpiredLease?: boolean;
   },
 ): Promise<ScheduleRun> {
   const completedAt = outcome.completedAt.toISOString();
@@ -1652,6 +1653,7 @@ export async function finalizeScheduleRun(
            error = $5,
            lease_expires_at = null
        where id = $6 and task_id = $7 and status = 'running'
+         and (not $8::boolean or now() > lease_expires_at)
        returning *`,
       [
         outcome.status,
@@ -1661,6 +1663,7 @@ export async function finalizeScheduleRun(
         boundedError(outcome.error),
         claim.runId,
         claim.task.id,
+        outcome.requireExpiredLease === true,
       ],
     );
 
@@ -2133,6 +2136,14 @@ async function releaseExecutionSlot(db: DatabaseAdapter, claim: ClaimedScheduleR
   );
 }
 
+function isRetryOfAdmittedOccurrence(
+  claim: ClaimedScheduleRun,
+  previous: ScheduleConditionState,
+): boolean {
+  if ((claim.attemptCount ?? 1) <= 1 || !previous.met || !previous.admittedFor) return false;
+  return new Date(previous.admittedFor).getTime() === new Date(claim.scheduledFor).getTime();
+}
+
 async function checkScheduleCondition(
   db: DatabaseAdapter,
   claim: ClaimedScheduleRun,
@@ -2141,10 +2152,13 @@ async function checkScheduleCondition(
 ): Promise<ScheduleConditionState | null> {
   const condition = claim.task.condition;
   if (!condition || (claim.triggerSource ?? 'schedule') !== 'schedule') return null;
-  const state = await evaluateScheduleCondition(condition, claim.task.conditionState ?? null, {
+  const previous = claim.task.conditionState ?? null;
+  if (previous && isRetryOfAdmittedOccurrence(claim, previous)) return previous;
+  const evaluated = await evaluateScheduleCondition(condition, previous, {
     now,
     signal,
   });
+  const state = evaluated.met ? { ...evaluated, admittedFor: claim.scheduledFor } : evaluated;
   await db.execute(
     `update scheduled_tasks set condition_state = $2::jsonb, updated_at = now()
      where id = $1 and user_id = $3`,
@@ -2315,6 +2329,70 @@ async function findExpiredClaims(
   return rows.map(mapClaim);
 }
 
+const EXPIRED_LEASE_ERROR = 'Worker lease expired before a terminal result was recorded';
+
+async function terminalizeUnreachableScheduleRun(
+  db: DatabaseAdapter,
+  claim: ClaimedScheduleRun,
+): Promise<number> {
+  return db.execute(
+    `update scheduled_task_runs
+        set status = 'timeout',
+            completed_at = now(),
+            duration_ms = greatest(0, floor(extract(epoch from now() - started_at) * 1000))::integer,
+            error = $3,
+            lease_expires_at = null
+      where id = $1 and task_id = $2 and status = 'running'
+        and now() > lease_expires_at`,
+    [claim.runId, claim.task.id, EXPIRED_LEASE_ERROR],
+  );
+}
+
+async function recoverExpiredScheduleRun(
+  db: DatabaseAdapter,
+  claim: ClaimedScheduleRun,
+): Promise<void> {
+  try {
+    await finalizeScheduleRun(createClaimedUserScopedDb(db, claim.scope), claim, {
+      status: 'timeout',
+      error: EXPIRED_LEASE_ERROR,
+      completedAt: new Date(),
+      requireExpiredLease: true,
+    });
+    return;
+  } catch (error) {
+    if (!(error instanceof ScheduleNotFoundError)) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          taskId: claim.task.id,
+          runId: claim.runId,
+        },
+        'Expired scheduled run could not be recovered; it stays for the next sweep',
+      );
+      return;
+    }
+  }
+  try {
+    const ended = await terminalizeUnreachableScheduleRun(db, claim);
+    if (ended > 0) {
+      logger.warn(
+        { taskId: claim.task.id, runId: claim.runId },
+        'Expired scheduled run ended without task bookkeeping: its owner can no longer reach the schedule',
+      );
+    }
+  } catch (error) {
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        taskId: claim.task.id,
+        runId: claim.runId,
+      },
+      'Expired scheduled run could not be ended; it stays for the next sweep',
+    );
+  }
+}
+
 async function expireScheduleRunApprovals(db: DatabaseAdapter, limit: number): Promise<number> {
   const expired = await db.query<{
     run_id: string;
@@ -2379,16 +2457,7 @@ export async function processDueScheduleRuns(options: {
     logger.info({ expiredApprovals }, 'Scheduled runs whose approval request lapsed were stopped');
   }
   const expired = await findExpiredClaims(db, limit);
-  await Promise.all(
-    expired.map((claim) => {
-      const scopedDb = createClaimedUserScopedDb(db, claim.scope);
-      return finalizeScheduleRun(scopedDb, claim, {
-        status: 'timeout',
-        error: 'Worker lease expired before a terminal result was recorded',
-        completedAt: new Date(),
-      });
-    }),
-  );
+  await Promise.all(expired.map((claim) => recoverExpiredScheduleRun(db, claim)));
 
   const claims = await claimDueScheduleRuns(db, {
     limit,

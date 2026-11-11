@@ -18,6 +18,7 @@ import {
   INHERITED_ENV_ALLOWLIST,
   isWithheldVariable,
   runShellCommand,
+  startBackgroundCommand,
   type ShellStreamChunk,
 } from '../runtime/shellService';
 import { detectShellSandbox, type ShellSandbox } from '../runtime/shellSandbox';
@@ -261,6 +262,112 @@ describe('runShellCommand', () => {
 
     const again = await run('node -e "console.log(3)"', { runId });
     expect(again.stdout.trim()).toBe('3');
+  });
+
+  describe('a stop that arrives while the sandbox is still being found', () => {
+    function pendingSandbox() {
+      let resolve: (value: ShellSandbox) => void = () => undefined;
+      const promise = new Promise<ShellSandbox>((done) => {
+        resolve = done;
+      });
+      return { promise, resolve };
+    }
+
+    it('is remembered, so the foreground command never starts', async () => {
+      const runId = randomUUID();
+      const chunks: ShellStreamChunk[] = [];
+      const approve = vi.fn().mockResolvedValue({ approved: true, allowNetwork: false });
+      const detection = pendingSandbox();
+      const outcome = runShellCommand({
+        runId,
+        root,
+        relativePath: '',
+        command: 'node -e "console.log(\'started\')"',
+        policy: allowEverything,
+        sandbox: detection.promise,
+        approve,
+        emit: (chunk) => chunks.push(chunk),
+      }).then(
+        (result) => result,
+        (error: unknown) => error,
+      );
+
+      expect(shellRunsIn(root.id)).toEqual([runId]);
+      expect(cancelShellRun(runId)).toBe(true);
+      detection.resolve(hostSandbox);
+
+      const refused = await outcome;
+      expect(refused).toBeInstanceOf(ShellCommandRefused);
+      expect((refused as Error).message).toBe('That command was cancelled before it started.');
+      expect(approve).not.toHaveBeenCalled();
+      expect(chunks).toEqual([]);
+      expect(shellRunsIn(root.id)).toEqual([]);
+    });
+
+    it('is remembered, so the background command never starts', async () => {
+      const runId = randomUUID();
+      const approve = vi.fn().mockResolvedValue({ approved: true, allowNetwork: false });
+      const detection = pendingSandbox();
+      const outcome = startBackgroundCommand({
+        runId,
+        root,
+        relativePath: '',
+        command: 'node -e "setTimeout(()=>{},10000)"',
+        policy: allowEverything,
+        sandbox: detection.promise,
+        approve,
+        emit: () => undefined,
+      }).then(
+        (result) => result,
+        (error: unknown) => error,
+      );
+
+      expect(cancelShellRun(runId)).toBe(true);
+      detection.resolve(hostSandbox);
+
+      expect(await outcome).toBeInstanceOf(ShellCommandRefused);
+      expect(approve).not.toHaveBeenCalled();
+      expect(shellRunsIn(root.id)).toEqual([]);
+    });
+
+    it('lets a command that was not stopped run once the sandbox is found', async () => {
+      const detection = pendingSandbox();
+      const outcome = runShellCommand({
+        runId: randomUUID(),
+        root,
+        relativePath: '',
+        command: 'node -e "console.log(7)"',
+        policy: allowEverything,
+        sandbox: detection.promise,
+        approve: vi.fn().mockResolvedValue({
+          approved: hostSandbox.backend === 'none',
+          allowNetwork: false,
+        }),
+        emit: () => undefined,
+      });
+      detection.resolve(hostSandbox);
+
+      expect((await outcome).stdout.trim()).toBe('7');
+    });
+
+    it('releases the claim when the sandbox cannot be found, so the id can be used again', async () => {
+      const runId = randomUUID();
+      await expect(
+        runShellCommand({
+          runId,
+          root,
+          relativePath: '',
+          command: 'node -e "1"',
+          policy: allowEverything,
+          sandbox: Promise.reject(new Error('probe failed')),
+          approve: vi.fn(),
+          emit: () => undefined,
+        }),
+      ).rejects.toThrow('probe failed');
+
+      expect(shellRunsIn(root.id)).toEqual([]);
+      expect((await run('node -e "console.log(4)"', { runId })).stdout.trim()).toBe('4');
+    });
   });
 
   it('reports an unknown run id as nothing to cancel', () => {

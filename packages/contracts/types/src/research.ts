@@ -255,7 +255,7 @@ export interface ResearchStep {
 
   completedAt?: string;
 
-  /** Why a step was dropped. Present only on a `dropped` step. */
+  /** Why a step was dropped, failed, or completed only in part. */
   note?: string;
 }
 

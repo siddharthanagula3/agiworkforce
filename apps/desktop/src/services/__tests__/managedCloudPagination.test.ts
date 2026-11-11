@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 import {
   ManagedCloudPaginationError,
@@ -38,7 +39,7 @@ describe('managedCloudPagination', () => {
         name: 'ManagedCloudPaginationError',
         code: 'managed_cloud_pagination_non_advancing',
         resource: 'conversations',
-        message: expect.stringContaining('Archive older conversations in AGI Chat'),
+        message: expect.stringContaining(`Archive older conversations in ${PRODUCT_NAMES.chat}`),
       }),
     );
   });

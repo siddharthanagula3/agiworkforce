@@ -59,8 +59,9 @@ const MODES: readonly LedgerRow[] = [
         Where it goes: from the CLI to Ollama or LM Studio on loopback. Nothing is transmitted to us
         and nothing is silently routed to BYOK or Cloud.
         <br />
-        What we hold: nothing about the local model request. The current Desktop and web apps use
-        Cloud and do not expose Local inference.
+        What we hold: nothing about the local model request. Desktop chat and the web app use Cloud;
+        a Desktop local coding session runs the CLI and can use a model that Ollama or LM Studio
+        serves on your computer.
       </>
     ),
   },

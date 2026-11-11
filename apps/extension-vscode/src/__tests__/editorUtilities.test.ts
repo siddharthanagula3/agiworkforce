@@ -8,6 +8,7 @@ import {
   runEditorUtility,
   setEditorUtilityChat,
 } from '../features/editor-utilities';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
@@ -191,7 +192,7 @@ describe('routing', () => {
 
     expect(asked).toEqual([]);
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Code: Select some code first.',
+      `${PRODUCT_NAMES.code}: Select some code first.`,
     );
   });
 
@@ -199,7 +200,7 @@ describe('routing', () => {
     await runEditorUtility({ ok: true, prompt: 'Explain this' });
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Code: The chat view is not available in this window. Reload the window and try again.',
+      `${PRODUCT_NAMES.code}: The chat view is not available in this window. Reload the window and try again.`,
     );
   });
 });

@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   objectBackupReadiness: vi.fn(),
   isCrossRegionBackup: vi.fn(),
   replicateObject: vi.fn(),
+  legacyFallback: vi.fn(),
   resolveObjectBackupTarget: vi.fn(),
   recordBackupReplica: vi.fn(),
   reconcileBackupDeletions: vi.fn(),
@@ -23,6 +24,10 @@ vi.mock('@/lib/server/object-backup', () => ({
   objectBackupReadiness: mocks.objectBackupReadiness,
   isCrossRegionBackup: mocks.isCrossRegionBackup,
   replicateObject: mocks.replicateObject,
+  replicateObjectWithLegacyFallback: (key: string) => {
+    mocks.legacyFallback(key);
+    return mocks.replicateObject(key);
+  },
   resolveObjectBackupTarget: mocks.resolveObjectBackupTarget,
   recordBackupReplica: mocks.recordBackupReplica,
   reconcileBackupDeletions: mocks.reconcileBackupDeletions,
@@ -89,7 +94,12 @@ beforeEach(() => {
   mocks.replicateObject.mockResolvedValue({ outcome: 'replicated', bytes: 1_024 });
   mocks.resolveObjectBackupTarget.mockReturnValue(TARGET);
   mocks.recordBackupReplica.mockResolvedValue(undefined);
-  mocks.reconcileBackupDeletions.mockResolvedValue({ checked: 0, deleted: 0, retained: 0 });
+  mocks.reconcileBackupDeletions.mockResolvedValue({
+    checked: 0,
+    deleted: 0,
+    retained: 0,
+    failed: 0,
+  });
   mocks.backupReplicaSummary.mockResolvedValue({
     tracked: 2,
     newestReplicatedAt: '2026-09-16T11:00:00.000Z',
@@ -201,7 +211,12 @@ describe(`GET ${ROUTE}`, () => {
   });
 
   it('propagates deletions the primary already made and reports the backlog it tracks', async () => {
-    mocks.reconcileBackupDeletions.mockResolvedValue({ checked: 5, deleted: 2, retained: 3 });
+    mocks.reconcileBackupDeletions.mockResolvedValue({
+      checked: 5,
+      deleted: 2,
+      retained: 3,
+      failed: 0,
+    });
 
     const response = await GET(request());
 
@@ -215,6 +230,24 @@ describe(`GET ${ROUTE}`, () => {
       tracked: 2,
       newestReplicatedAt: '2026-09-16T11:00:00.000Z',
       oldestVerifiedAt: '2026-09-16T10:00:00.000Z',
+    });
+  });
+
+  it('reports a key whose backup deletion could not be reconciled instead of passing silently', async () => {
+    mocks.reconcileBackupDeletions.mockResolvedValue({
+      checked: 5,
+      deleted: 2,
+      retained: 2,
+      failed: 1,
+    });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      reconciled: 5,
+      backupDeletesPropagated: 2,
+      reconcileFailed: 1,
     });
   });
 
@@ -271,6 +304,41 @@ describe(`GET ${ROUTE}`, () => {
       '2026-09-16T09:00:00.000000Z',
       ASSETS[0]?.row_id,
     ]);
+  });
+
+  it('does not scan from the fallback window when a saved cursor cannot be read', async () => {
+    const store = {
+      get: vi.fn(async () => {
+        throw new Error('kv unavailable');
+      }),
+      set: vi.fn(async () => true),
+    };
+    mocks.getKeyValueStore.mockReturnValue(store);
+
+    const response = await GET(request());
+
+    expect(mocks.query).not.toHaveBeenCalled();
+    expect(mocks.replicateObject).not.toHaveBeenCalled();
+    expect(store.set).not.toHaveBeenCalled();
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({ cursorUnreadable: 2, scanned: 0 });
+  });
+
+  it('starts from the fallback window only when there is no saved cursor', async () => {
+    const store = { get: vi.fn(async () => null), set: vi.fn(async () => true) };
+    mocks.getKeyValueStore.mockReturnValue(store);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    expect(mocks.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets only the knowledge source fall back to the legacy public bucket', async () => {
+    await GET(request());
+
+    expect(mocks.legacyFallback).toHaveBeenCalledTimes(1);
+    expect(mocks.legacyFallback).toHaveBeenCalledWith(KNOWLEDGE[0]?.object_reference);
   });
 
   it('answers 500 without leaking the failure to the scheduler body', async () => {

@@ -208,13 +208,18 @@ export function SharedWithYouScreen() {
       router.push({ pathname: '/(app)/chat/[id]', params: { id: createdId } });
     } catch (error) {
       if (createdId) await deleteConversation(createdId).catch(() => undefined);
+      const partialCopyKept =
+        createdId !== null &&
+        useChatStore.getState().conversations.some((conversation) => conversation.id === createdId);
       Alert.alert(
         'Could not continue this chat',
         error instanceof SharedChatUnavailableError
           ? SHARED_CHAT_UNAVAILABLE_COPY[error.reason]
-          : createdId
-            ? 'The shared messages could not be copied, so no new conversation was kept.'
-            : toUserMessage(error, 'This shared conversation could not be opened.'),
+          : partialCopyKept
+            ? 'The shared messages could not be fully copied. The partial copy is still in your chats; delete it there if you do not want it.'
+            : createdId
+              ? 'The shared messages could not be copied, so no new conversation was kept.'
+              : toUserMessage(error, 'This shared conversation could not be opened.'),
       );
     }
   };

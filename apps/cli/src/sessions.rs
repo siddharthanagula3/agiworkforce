@@ -609,10 +609,27 @@ pub fn import_hosted_session(
     model: Option<&str>,
     messages: Vec<Message>,
     origin: &str,
-) -> Result<()> {
-    let mut session = match find_session_path(&conn.base_dir, session_id) {
-        Some(path) => load_managed_session_from_path(&path)?,
-        None => ManagedSession::new(session_id.to_string(), Utc::now()),
+) -> Result<HostedImport> {
+    let existing = find_session_path(&conn.base_dir, session_id)
+        .map(|path| load_managed_session_from_path(&path))
+        .transpose()?;
+    let (mut session, outcome) = match existing {
+        None => (
+            ManagedSession::new(session_id.to_string(), Utc::now()),
+            HostedImport::Created,
+        ),
+        Some(session) => {
+            let local = synced_turns(&session.messages);
+            let incoming = synced_turns(&messages);
+            if incoming.starts_with(&local) {
+                (session, HostedImport::Replaced)
+            } else if local.starts_with(&incoming) {
+                return Ok(HostedImport::KeptLocal);
+            } else {
+                let local_copy = fork_session(conn, session_id)?;
+                (session, HostedImport::PreservedLocal { local_copy })
+            }
+        }
     };
     session.messages = messages;
     session.conversation_replaced();
@@ -631,7 +648,16 @@ pub fn import_hosted_session(
     if let Some(model) = model {
         metadata.model = Some(model.to_string());
     }
-    write_metadata(&conn.base_dir, session_id, &metadata)
+    write_metadata(&conn.base_dir, session_id, &metadata)?;
+    Ok(outcome)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostedImport {
+    Created,
+    Replaced,
+    KeptLocal,
+    PreservedLocal { local_copy: String },
 }
 
 fn managed_cloud_authority() -> crate::platform::runtime::session::ManagedSessionRoutingAuthority {
@@ -811,12 +837,20 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
                     }));
             (title_matches || content_matches || pr_matches).then_some(summary)
         })
-        .take(50)
         .collect())
 }
 
+pub const SEARCH_DISPLAY_LIMIT: usize = 50;
+
+pub fn search_overflow_notice(total_matches: usize) -> Option<String> {
+    (total_matches > SEARCH_DISPLAY_LIMIT).then(|| {
+        format!(
+            "Showing the {SEARCH_DISPLAY_LIMIT} most recently updated of {total_matches} matching sessions. Narrow the query, or run agi --search <query> --output-format json for every match."
+        )
+    })
+}
+
 /// Fork an existing managed session into a new managed session id.
-#[allow(dead_code)]
 pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
     let source_path = resolve_reference_path(&conn.base_dir, source_id)?;
     let source_session = load_managed_session_from_path(&source_path)?;
@@ -827,13 +861,14 @@ pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
     let source_metadata = read_metadata(&conn.base_dir, &source_session.session_id)?;
     let source_summary =
         summary_from_session(&source_path, &source_session, source_metadata.as_ref());
+    let source_metadata = source_metadata.unwrap_or_default();
     let metadata = SessionMetadata {
         title: Some(format!("(fork) {}", source_summary.title)),
         custom_title: true,
-        model: Some(source_summary.model),
-        cwd: Some(source_summary.cwd),
-        git_branch: Some(source_summary.git_branch),
-        imported_from: source_metadata.and_then(|metadata| metadata.imported_from),
+        model: source_metadata.model,
+        cwd: source_metadata.cwd,
+        git_branch: source_metadata.git_branch,
+        imported_from: source_metadata.imported_from,
     };
     write_metadata(&conn.base_dir, &new_id, &metadata)?;
 
@@ -861,6 +896,15 @@ pub fn db_stats(conn: &Connection) -> Result<DbStats> {
         tool_call_count: total_tool_calls,
         total_tokens: total_tokens_count,
     })
+}
+
+/// A destination holding only a strict prefix of its legacy source was left
+/// by an interrupted import; anything else carries turns of its own.
+fn is_unfinished_import(existing: &[Message], legacy: &[Message]) -> bool {
+    existing.len() < legacy.len()
+        && existing.iter().zip(legacy).all(|(have, source)| {
+            have.role == source.role && have.text_content() == source.text_content()
+        })
 }
 
 /// Import legacy JSON conversations into the managed session store.
@@ -895,9 +939,39 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<
             _ => continue,
         };
 
-        if find_session_path(&conn.base_dir, session_id).is_some() {
-            continue;
-        }
+        let legacy_messages: Vec<Message> = json
+            .get("messages")
+            .and_then(|value| value.as_array())
+            .map(|messages| {
+                messages
+                    .iter()
+                    .map(|message| {
+                        let role = message
+                            .get("role")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or("user");
+                        let content = message
+                            .get("content")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or("");
+                        Message::text(role, content)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut session = match find_session_path(&conn.base_dir, session_id) {
+            None => ManagedSession::new(session_id.to_string(), Utc::now()),
+            Some(path) => {
+                let Ok(existing) = load_managed_session_from_path(&path) else {
+                    continue;
+                };
+                if !is_unfinished_import(&existing.messages, &legacy_messages) {
+                    continue;
+                }
+                existing
+            }
+        };
 
         let title = json
             .get("title")
@@ -907,21 +981,18 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<
             .get("model")
             .and_then(|value| value.as_str())
             .unwrap_or("unknown");
-        save_session(conn, session_id, title, model, "", "")?;
+        let mut metadata = read_metadata(&conn.base_dir, session_id)?.unwrap_or_default();
+        metadata.title = Some(title.to_string());
+        metadata.custom_title = true;
+        metadata.model = Some(model.to_string());
+        write_metadata(&conn.base_dir, session_id, &metadata)?;
 
-        if let Some(messages) = json.get("messages").and_then(|value| value.as_array()) {
-            for message in messages {
-                let role = message
-                    .get("role")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("user");
-                let content = message
-                    .get("content")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("");
-                save_message(conn, session_id, &Message::text(role, content), 0)?;
-            }
+        let already_imported = session.messages.len();
+        for message in legacy_messages.into_iter().skip(already_imported) {
+            session.push_message(message);
         }
+        session.touch();
+        save_session_to_default_path(&conn.base_dir, &session)?;
 
         imported += 1;
     }
@@ -1140,6 +1211,126 @@ mod tests {
         );
     }
 
+    const TELEPORTED_ID: &str = "code-5b1e0c3a-8f43-4b0e-9a57-1f7f3e2d9c10";
+
+    fn cloud_turns(turns: &[(&str, &str)]) -> Vec<Message> {
+        turns
+            .iter()
+            .map(|&(role, text)| Message::text(role, text))
+            .collect()
+    }
+
+    fn teleport(conn: &Connection, turns: &[(&str, &str)]) -> HostedImport {
+        import_hosted_session(
+            conn,
+            TELEPORTED_ID,
+            "Fix the build",
+            None,
+            cloud_turns(turns),
+            "the cloud Code session",
+        )
+        .unwrap()
+    }
+
+    fn continue_locally(conn: &Connection, turns: &[(&str, &str)]) {
+        let path = find_session_path(&conn.base_dir, TELEPORTED_ID).unwrap();
+        let mut session = load_managed_session_from_path(&path).unwrap();
+        session.messages.extend(cloud_turns(turns));
+        session.save_to_path(&path).unwrap();
+    }
+
+    fn texts(conn: &Connection, session_id: &str) -> Vec<String> {
+        load_session(conn, session_id)
+            .unwrap()
+            .iter()
+            .map(Message::text_content)
+            .collect()
+    }
+
+    #[test]
+    fn teleporting_an_unchanged_cloud_session_again_keeps_the_local_continuation() {
+        let (_tempdir, conn) = temp_connection();
+        let cloud = [("user", "goal"), ("assistant", "done in the cloud")];
+        assert_eq!(teleport(&conn, &cloud), HostedImport::Created);
+        continue_locally(
+            &conn,
+            &[("user", "continued here"), ("assistant", "answered here")],
+        );
+
+        assert_eq!(teleport(&conn, &cloud), HostedImport::KeptLocal);
+
+        assert_eq!(
+            texts(&conn, TELEPORTED_ID),
+            [
+                "goal",
+                "done in the cloud",
+                "continued here",
+                "answered here"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_diverged_local_continuation_is_kept_in_its_own_session_before_the_cloud_replaces_it() {
+        let (_tempdir, conn) = temp_connection();
+        teleport(
+            &conn,
+            &[("user", "goal"), ("assistant", "done in the cloud")],
+        );
+        continue_locally(&conn, &[("user", "continued here")]);
+
+        let imported = teleport(
+            &conn,
+            &[
+                ("user", "goal"),
+                ("assistant", "done in the cloud"),
+                ("user", "next cloud goal"),
+                ("assistant", "next cloud answer"),
+            ],
+        );
+
+        let HostedImport::PreservedLocal { local_copy } = imported else {
+            panic!("expected the local continuation to be preserved, got {imported:?}");
+        };
+        assert_ne!(local_copy, TELEPORTED_ID);
+        assert_eq!(
+            texts(&conn, &local_copy),
+            ["goal", "done in the cloud", "continued here"]
+        );
+        assert_eq!(
+            texts(&conn, TELEPORTED_ID),
+            [
+                "goal",
+                "done in the cloud",
+                "next cloud goal",
+                "next cloud answer"
+            ]
+        );
+    }
+
+    #[test]
+    fn new_cloud_turns_replace_a_local_copy_with_nothing_of_its_own() {
+        let (_tempdir, conn) = temp_connection();
+        teleport(
+            &conn,
+            &[("user", "goal"), ("assistant", "done in the cloud")],
+        );
+
+        let imported = teleport(
+            &conn,
+            &[
+                ("user", "goal"),
+                ("assistant", "done in the cloud"),
+                ("user", "next cloud goal"),
+                ("assistant", "next cloud answer"),
+            ],
+        );
+
+        assert_eq!(imported, HostedImport::Replaced);
+        assert_eq!(texts(&conn, TELEPORTED_ID).len(), 4);
+        assert_eq!(list_sessions(&conn, 10).unwrap().len(), 1);
+    }
+
     #[test]
     fn renaming_reaches_the_header_the_editor_reads() {
         // The editor's thread list is served from the session header, so a
@@ -1279,6 +1470,36 @@ mod tests {
         assert_eq!(stats.session_count, 2);
         assert_eq!(stats.message_count, 2);
         assert!(stats.total_tokens >= 11);
+    }
+
+    #[test]
+    fn search_returns_every_match_and_labels_the_display_bound() {
+        let (_tempdir, conn) = temp_connection();
+        let total = SEARCH_DISPLAY_LIMIT + 1;
+        for index in 0..total {
+            save_session(
+                &conn,
+                &format!("release-{index:03}"),
+                &format!("Release notes {index}"),
+                "fixture-session-model",
+                "/",
+                "",
+            )
+            .unwrap();
+        }
+
+        let results = search_sessions(&conn, "release").unwrap();
+        assert_eq!(results.len(), total);
+        assert!(results.iter().any(|summary| summary.id == "release-000"));
+
+        assert_eq!(search_overflow_notice(SEARCH_DISPLAY_LIMIT), None);
+        let notice = search_overflow_notice(results.len()).unwrap();
+        assert!(
+            notice.contains(&format!(
+                "{SEARCH_DISPLAY_LIMIT} most recently updated of {total}"
+            )),
+            "{notice}"
+        );
     }
 
     #[test]
@@ -1463,6 +1684,89 @@ mod tests {
         let imported = migrate_json_conversations(&conn, &conversations_dir).unwrap();
         assert_eq!(imported, 1);
         assert_eq!(list_sessions(&conn, 10).unwrap()[0].id, "legacy-session");
+    }
+
+    fn write_legacy_conversation(dir: &Path, id: &str, turns: &[(&str, &str)]) {
+        fs::create_dir_all(dir).unwrap();
+        let messages: Vec<_> = turns
+            .iter()
+            .map(|(role, content)| serde_json::json!({ "role": role, "content": content }))
+            .collect();
+        fs::write(
+            dir.join(format!("{id}.json")),
+            serde_json::json!({ "id": id, "title": "Legacy", "messages": messages }).to_string(),
+        )
+        .unwrap();
+    }
+
+    fn turn_texts(conn: &Connection, id: &str) -> Vec<(String, String)> {
+        load_session(conn, id)
+            .unwrap()
+            .into_iter()
+            .map(|message| (message.role.clone(), message.text_content()))
+            .collect()
+    }
+
+    #[test]
+    fn rerunning_the_migration_completes_an_interrupted_import() {
+        let (tempdir, conn) = temp_connection();
+        let conversations_dir = tempdir.path().join("conversations");
+        let turns = [("user", "Hello"), ("assistant", "Hi"), ("user", "Bye")];
+        write_legacy_conversation(&conversations_dir, "interrupted", &turns);
+        save_session(&conn, "interrupted", "Legacy", "", "", "").unwrap();
+        save_message(&conn, "interrupted", &Message::text("user", "Hello"), 0).unwrap();
+
+        let imported = migrate_json_conversations(&conn, &conversations_dir).unwrap();
+
+        assert_eq!(
+            imported, 1,
+            "a prefix left by an interrupted run is not a finished import"
+        );
+        assert_eq!(
+            turn_texts(&conn, "interrupted"),
+            turns
+                .iter()
+                .map(|(role, text)| (role.to_string(), text.to_string()))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            migrate_json_conversations(&conn, &conversations_dir).unwrap(),
+            0,
+            "a completed import is not imported twice"
+        );
+        assert_eq!(turn_texts(&conn, "interrupted").len(), 3);
+    }
+
+    #[test]
+    fn the_migration_never_rewrites_a_destination_with_its_own_turns() {
+        let (tempdir, conn) = temp_connection();
+        let conversations_dir = tempdir.path().join("conversations");
+        write_legacy_conversation(
+            &conversations_dir,
+            "continued",
+            &[("user", "Hello"), ("assistant", "Hi"), ("user", "Bye")],
+        );
+        save_session(&conn, "continued", "Legacy", "", "", "").unwrap();
+        save_message(&conn, "continued", &Message::text("user", "Hello"), 0).unwrap();
+        save_message(
+            &conn,
+            "continued",
+            &Message::text("user", "local follow-up"),
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(
+            migrate_json_conversations(&conn, &conversations_dir).unwrap(),
+            0
+        );
+        assert_eq!(
+            turn_texts(&conn, "continued"),
+            vec![
+                ("user".to_string(), "Hello".to_string()),
+                ("user".to_string(), "local follow-up".to_string()),
+            ]
+        );
     }
 
     #[test]

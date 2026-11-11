@@ -71,6 +71,8 @@ vi.mock('electron', () => {
     getBounds = () => ({ x: 0, y: 0, width: 1280, height: 800 });
     isMinimized = () => false;
     isDestroyed = () => false;
+    getTitle = () => '';
+    isFocused = () => false;
     isMaximized = () => false;
     isFullScreen = () => false;
   }
@@ -121,7 +123,7 @@ vi.mock('electron', () => {
       showSaveDialog: vi.fn(),
     },
     globalShortcut: { register: vi.fn(() => true), unregister: vi.fn(), unregisterAll: vi.fn() },
-    ipcMain: { handle: vi.fn() },
+    ipcMain: { handle: vi.fn(), on: vi.fn() },
     nativeImage: {
       createFromPath: vi.fn(() => ({ setTemplateImage: vi.fn(), isEmpty: () => true })),
     },
@@ -159,6 +161,7 @@ vi.mock('../quickAsk', () => ({
 vi.mock('../screenshot', () => ({
   captureToChat: vi.fn(),
   captureWindowToChat: vi.fn(),
+  putCaptureOnClipboard: vi.fn(),
   takeCaptureBackFromClipboard: vi.fn(),
 }));
 vi.mock('../windowPolicy', async (importOriginal) => ({
@@ -254,6 +257,19 @@ describe('deep-link delivery', () => {
     openUrl(DEEP_LINK);
 
     expect(webContentsSend).not.toHaveBeenCalled();
+  });
+
+  it('holds a link on the sign-in completion page, which has no receiver, and delivers it once the product loads', async () => {
+    await bootMain();
+    pageUrl = `${APP}/auth/desktop/complete`;
+
+    openUrl(DEEP_LINK);
+    pageEvent('did-stop-loading')();
+    expect(webContentsSend).not.toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
+
+    pageUrl = `${APP}/chat`;
+    pageEvent('did-stop-loading')();
+    expect(webContentsSend).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.deepLink, DEEP_LINK);
   });
 
   it('ignores URLs outside the deep-link scheme', async () => {

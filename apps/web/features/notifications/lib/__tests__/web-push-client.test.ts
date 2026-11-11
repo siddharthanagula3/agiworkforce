@@ -58,6 +58,7 @@ function installBrowser(options: {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+  window.localStorage.clear();
   mocks.addCsrfHeaders.mockImplementation(async (headers: Record<string, string>) => ({
     ...headers,
     'x-csrf-token': 'token',
@@ -186,6 +187,33 @@ describe('syncExistingSubscription', () => {
   it('re-registers a live subscription so a pruned row comes back', async () => {
     installBrowser({ permission: 'granted', existing: subscription() });
 
+    await syncExistingSubscription();
+
+    expect(mocks.fetch.mock.calls.some((call) => call[1]?.method === 'POST')).toBe(true);
+  });
+
+  it('does not re-register a subscription the user turned off but the browser could not drop', async () => {
+    const live = subscription({
+      unsubscribe: vi.fn().mockRejectedValue(new Error('refused')),
+    } as Partial<PushSubscription>);
+    installBrowser({ permission: 'granted', existing: live });
+
+    await expect(disableWebPush()).resolves.toBe(false);
+    mocks.fetch.mockClear();
+    await syncExistingSubscription();
+
+    expect(mocks.fetch.mock.calls.some((call) => call[1]?.method === 'POST')).toBe(false);
+  });
+
+  it('resumes re-registering once the user turns notifications back on', async () => {
+    const live = subscription({
+      unsubscribe: vi.fn().mockRejectedValue(new Error('refused')),
+    } as Partial<PushSubscription>);
+    installBrowser({ permission: 'granted', existing: live });
+    await disableWebPush();
+
+    await expect(enableWebPush()).resolves.toBe('enabled');
+    mocks.fetch.mockClear();
     await syncExistingSubscription();
 
     expect(mocks.fetch.mock.calls.some((call) => call[1]?.method === 'POST')).toBe(true);

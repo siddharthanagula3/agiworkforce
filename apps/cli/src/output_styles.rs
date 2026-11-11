@@ -19,7 +19,7 @@
 //!
 //! Slash command: `/output-style [name]` lists or switches.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Identifier of a known output style.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,28 +110,36 @@ pub fn builtin() -> Vec<OutputStyle> {
 pub fn load_all() -> Vec<OutputStyle> {
     let mut all: Vec<OutputStyle> = builtin();
     if let Some(user_dir) = user_dir() {
-        if let Ok(entries) = std::fs::read_dir(&user_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) != Some("md") {
-                    continue;
-                }
-                let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                    continue;
-                };
-                let Ok(body) = std::fs::read_to_string(&path) else {
-                    continue;
-                };
-                let style = parse_user_style(stem, &body, &path);
-                if let Some(slot) = all.iter_mut().find(|s| s.name == style.name) {
-                    *slot = style;
-                } else {
-                    all.push(style);
-                }
+        for (_, style) in user_styles(&user_dir) {
+            if let Some(slot) = all.iter_mut().find(|s| s.name == style.name) {
+                *slot = style;
+            } else {
+                all.push(style);
             }
         }
     }
     all
+}
+
+fn user_styles(dir: &Path) -> Vec<(PathBuf, OutputStyle)> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("md"))
+        .collect();
+    paths.sort();
+    paths
+        .into_iter()
+        .filter_map(|path| {
+            let stem = path.file_stem()?.to_str()?.to_string();
+            let body = std::fs::read_to_string(&path).ok()?;
+            let style = parse_user_style(&stem, &body, &path);
+            Some((path, style))
+        })
+        .collect()
 }
 
 /// Resolve a style by name, falling back to `default` if unknown.
@@ -142,7 +150,7 @@ pub fn resolve(name: &str) -> OutputStyle {
         .unwrap_or_else(OutputStyle::default_style)
 }
 
-fn parse_user_style(stem: &str, source: &str, path: &std::path::Path) -> OutputStyle {
+fn parse_user_style(stem: &str, source: &str, path: &Path) -> OutputStyle {
     let (frontmatter, body) = split_frontmatter(source);
     let field = |key: &str| {
         frontmatter.lines().find_map(|line| {
@@ -177,6 +185,12 @@ fn split_frontmatter(source: &str) -> (&str, &str) {
     }
 }
 
+pub const COMMAND_ACTIONS: [&str; 4] = ["new", "create", "delete", "remove"];
+
+pub fn is_command_action(name: &str) -> bool {
+    COMMAND_ACTIONS.contains(&name)
+}
+
 fn valid_style_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 40
@@ -191,6 +205,11 @@ pub fn create(name: &str, description: &str, instructions: &str) -> Result<PathB
     }
     if builtin().iter().any(|style| style.name == name) {
         return Err(format!("{name} is a built-in style; choose another name."));
+    }
+    if is_command_action(name) {
+        return Err(format!(
+            "{name} is an /output-style command, so a style with that name could not be selected; choose another name."
+        ));
     }
     if instructions.trim().is_empty() {
         return Err("Give the style its instructions after the name.".to_string());
@@ -214,17 +233,35 @@ pub fn create(name: &str, description: &str, instructions: &str) -> Result<PathB
 }
 
 pub fn delete(name: &str) -> Result<PathBuf, String> {
-    if !valid_style_name(name) {
-        return Err(format!("No style named {name}."));
+    delete_in(user_dir().as_deref(), name)
+}
+
+fn delete_in(dir: Option<&Path>, name: &str) -> Result<PathBuf, String> {
+    let mut matches: Vec<PathBuf> = dir
+        .map(user_styles)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|(_, style)| style.name == name)
+        .map(|(path, _)| path)
+        .collect();
+    match matches.len() {
+        0 => Err(format!(
+            "No style of yours named {name}; built-in styles cannot be deleted."
+        )),
+        1 => {
+            let path = matches.remove(0);
+            std::fs::remove_file(&path).map_err(|error| error.to_string())?;
+            Ok(path)
+        }
+        _ => Err(format!(
+            "More than one of your files defines the style {name}: {}. Delete the one you mean from that folder.",
+            matches
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
     }
-    let path = user_dir()
-        .map(|dir| dir.join(format!("{name}.md")))
-        .filter(|path| path.is_file())
-        .ok_or_else(|| {
-            format!("No style of yours named {name}; built-in styles cannot be deleted.")
-        })?;
-    std::fs::remove_file(&path).map_err(|error| error.to_string())?;
-    Ok(path)
 }
 
 fn user_dir() -> Option<PathBuf> {
@@ -261,5 +298,58 @@ mod tests {
     #[test]
     fn explanatory_has_nonempty_prompt() {
         assert!(!OutputStyle::explanatory().system_prompt.is_empty());
+    }
+
+    fn write_style(dir: &Path, file: &str, name: &str) -> PathBuf {
+        let path = dir.join(file);
+        std::fs::write(
+            &path,
+            format!("---\nname: {name}\n---\n\nKeep answers short.\n"),
+        )
+        .unwrap();
+        path
+    }
+
+    #[test]
+    fn delete_targets_the_file_behind_the_listed_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let notes = write_style(dir.path(), "notes.md", "focused");
+        let listed: Vec<_> = user_styles(dir.path())
+            .into_iter()
+            .map(|(_, style)| style.name)
+            .collect();
+        assert_eq!(listed, vec!["focused".to_string()]);
+
+        assert!(delete_in(Some(dir.path()), "notes").is_err());
+        assert!(notes.is_file());
+
+        assert_eq!(delete_in(Some(dir.path()), "focused").unwrap(), notes);
+        assert!(!notes.exists());
+        assert!(user_styles(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn create_refuses_names_the_command_reads_as_actions() {
+        for action in COMMAND_ACTIONS {
+            let reason = create(action, "Short", "Keep replies short").unwrap_err();
+            assert!(reason.contains("/output-style command"), "{reason}");
+        }
+        assert!(!is_command_action("focused"));
+    }
+
+    #[test]
+    fn delete_refuses_ambiguous_names_and_builtin_only_entries() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = write_style(dir.path(), "a.md", "focused");
+        let second = write_style(dir.path(), "b.md", "focused");
+        let reason = delete_in(Some(dir.path()), "focused").unwrap_err();
+        assert!(reason.contains("a.md") && reason.contains("b.md"));
+        assert!(first.is_file() && second.is_file());
+
+        assert!(delete_in(Some(dir.path()), "concise").is_err());
+        assert!(delete_in(None, "focused").is_err());
+
+        let created = write_style(dir.path(), "matching.md", "matching");
+        assert_eq!(delete_in(Some(dir.path()), "matching").unwrap(), created);
     }
 }

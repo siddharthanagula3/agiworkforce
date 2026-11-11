@@ -310,6 +310,49 @@ describe('AgentEditorPage', () => {
     expect(screen.getByText('Save your draft before you publish it.')).toBeInTheDocument();
   });
 
+  it('keeps publishing open for a draft saved while a sharing save is still pending', async () => {
+    type ShareResult = { visibility: 'workspace'; workspaceName: string; members: [] };
+    const published = managedAgent({ publishedVersion: 1, hasUnpublishedChanges: false });
+    let finishShare: (value: ShareResult) => void = () => undefined;
+    const api = fakeApi({
+      get: vi.fn(async () => published),
+      update: vi.fn(async (_id, input) =>
+        managedAgent({
+          ...(input as Partial<ManagedCloudAgent>),
+          publishedVersion: 1,
+          hasUnpublishedChanges: true,
+        }),
+      ),
+      updateShare: vi.fn(
+        () =>
+          new Promise<ShareResult>((resolve) => {
+            finishShare = resolve;
+          }),
+      ),
+    });
+    render(<AgentEditorPage agentId={published.id} api={api} />);
+    await screen.findByRole('heading', { name: 'Release notes writer' });
+    await userEvent.click(await screen.findByRole('radio', { name: /Everyone in the workspace/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save sharing' }));
+    await waitFor(() => expect(api.updateShare).toHaveBeenCalledOnce());
+
+    await userEvent.type(screen.getByLabelText('Description'), ' weekly');
+    await userEvent.click(footerAction('Save draft'));
+    await waitFor(() => expect(api.update).toHaveBeenCalledOnce());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Publish changes' })).toBeEnabled(),
+    );
+
+    await act(async () => {
+      finishShare({ visibility: 'workspace', workspaceName: 'Acme', members: [] });
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Save sharing' })).toBeDisabled(),
+    );
+    expect(screen.getByRole('button', { name: 'Publish changes' })).toBeEnabled();
+    expect(screen.getByText(/Your draft has changes they do not have yet\./)).toBeInTheDocument();
+  });
+
   it('asks before deleting and names what is lost', async () => {
     const api = fakeApi();
     render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={api} />);

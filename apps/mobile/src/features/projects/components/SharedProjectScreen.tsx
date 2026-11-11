@@ -22,6 +22,12 @@ import {
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { toUserMessage } from '@/services/userMessage';
+import {
+  captureCloudAccountEpoch,
+  isCloudAccountEpochCurrent,
+} from '@/src/features/auth/services/cloudAccountSession';
+
+const SHARED_PROJECT_UNAVAILABLE = 'This shared project could not be opened.';
 
 interface SharedProjectView {
   project: ManagedCloudProject;
@@ -39,6 +45,7 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    const account = captureCloudAccountEpoch();
     void Promise.all([
       managedCloudProjects.getProject(projectId, { signal: controller.signal }),
       fetchProjectSharing(controller.signal).catch(() => null),
@@ -47,13 +54,17 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
       .then(([project, overview, files]) => {
         if (controller.signal.aborted) return;
         const owner = overview?.members.find((member) => member.userId === project.ownerUserId);
-        const accountId = overview?.currentUserId ?? null;
-        setHidden(accountId ? hiddenSharerIds(accountId).has(project.ownerUserId) : false);
+        const accountId = overview?.currentUserId ?? account?.ownerId ?? null;
+        if (!accountId || (account && !isCloudAccountEpochCurrent(account))) {
+          setError(SHARED_PROJECT_UNAVAILABLE);
+          return;
+        }
+        setHidden(hiddenSharerIds(accountId).has(project.ownerUserId));
         setView({ project, ownerName: owner ? memberName(owner) : null, accountId, files });
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
-          setError(toUserMessage(cause, 'This shared project could not be opened.'));
+          setError(toUserMessage(cause, SHARED_PROJECT_UNAVAILABLE));
         }
       });
     return () => controller.abort();

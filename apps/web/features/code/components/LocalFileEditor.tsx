@@ -142,6 +142,7 @@ export function LocalFileEditor({
   const [pending, setPending] = useState<EditorAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const epoch = useRef(0);
+  const owner = useRef(0);
   const observedRefreshKey = useRef(refreshKey);
   const { confirm, dialog } = useConfirmAction();
   const fieldId = useId();
@@ -149,7 +150,9 @@ export function LocalFileEditor({
   useEffect(() => {
     let cancelled = false;
     epoch.current += 1;
+    owner.current += 1;
     dispatch({ type: 'reset' });
+    setPending(null);
     setError(null);
     readWorkspaceText(rootId, path)
       .then((file) => {
@@ -162,6 +165,7 @@ export function LocalFileEditor({
       });
     return () => {
       cancelled = true;
+      owner.current += 1;
     };
   }, [rootId, path]);
 
@@ -186,6 +190,7 @@ export function LocalFileEditor({
 
   const truncated = disk?.truncated === true;
   const readOnly = truncated || disk?.readOnly === true;
+  const locked = readOnly || pending !== null;
   const dirty = disk !== null && text !== null && text !== disk.text;
 
   useEffect(() => {
@@ -202,40 +207,51 @@ export function LocalFileEditor({
     return () => window.removeEventListener('beforeunload', preventLoss);
   }, [dirty]);
 
-  const perform = async (action: EditorAction, work: () => Promise<void>, fallback: string) => {
+  const perform = async (
+    action: EditorAction,
+    work: (isCurrent: () => boolean) => Promise<void>,
+    fallback: string,
+  ) => {
+    const held = owner.current;
+    const isCurrent = () => owner.current === held;
     epoch.current += 1;
     setPending(action);
     setError(null);
     try {
-      await work();
+      await work(isCurrent);
     } catch (cause: unknown) {
       if (cause instanceof DesktopRuntimeError && cause.code === 'conflict') {
-        dispatch({ type: 'conflicted', conflict: await conflictOnDisk(rootId, path) });
-      } else {
+        const conflicted = await conflictOnDisk(rootId, path);
+        if (isCurrent()) dispatch({ type: 'conflicted', conflict: conflicted });
+      } else if (isCurrent()) {
         setError(toUserMessage(cause, fallback));
       }
     } finally {
-      epoch.current += 1;
-      setPending(null);
+      if (isCurrent()) {
+        epoch.current += 1;
+        setPending(null);
+      }
     }
   };
 
-  const write = async (expectedSha256: string | undefined) => {
+  const write = async (expectedSha256: string | undefined, isCurrent: () => boolean) => {
     if (text === null || readOnly) return;
     if (exceedsEditableSize(text)) throw new Error(LOCAL_CODE_COPY.fileTooLarge);
     const savedText = disk?.lineEnding === 'crlf' ? text.replace(/\r?\n/g, '\r\n') : text;
     const written = await writeWorkspaceText(rootId, path, savedText, expectedSha256);
-    dispatch({ type: 'saved', text, written });
+    if (isCurrent()) dispatch({ type: 'saved', text, written });
     onSaved();
   };
 
-  const save = () => perform('save', () => write(disk?.sha256), LOCAL_CODE_COPY.fileSaveFailed);
+  const save = () =>
+    perform('save', (isCurrent) => write(disk?.sha256, isCurrent), LOCAL_CODE_COPY.fileSaveFailed);
 
   const reload = () =>
     perform(
       'reload',
-      async () => {
+      async (isCurrent) => {
         const current = await readDiskVersion(rootId, path);
+        if (!isCurrent()) return;
         dispatch(
           current === null
             ? { type: 'conflicted', conflict: 'deleted' }
@@ -248,9 +264,9 @@ export function LocalFileEditor({
   const overwrite = () =>
     perform(
       'overwrite',
-      async () => {
+      async (isCurrent) => {
         const current = await readDiskVersion(rootId, path);
-        await write(current?.sha256);
+        await write(current?.sha256, isCurrent);
       },
       LOCAL_CODE_COPY.fileSaveFailed,
     );
@@ -339,9 +355,9 @@ export function LocalFileEditor({
             className={styles['fileEditorInput']}
             value={text}
             spellCheck={false}
-            readOnly={readOnly}
+            readOnly={locked}
             onChange={(event) => {
-              if (!readOnly) dispatch({ type: 'edited', text: event.target.value });
+              if (!locked) dispatch({ type: 'edited', text: event.target.value });
             }}
           />
           {disk?.readOnly && (

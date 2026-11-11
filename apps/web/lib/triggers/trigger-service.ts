@@ -381,19 +381,24 @@ export async function updateTrigger(
   });
   const [row] = await db.query<TriggerRow>(
     `update event_triggers
-        set name = $3, event_types = $4::text[], conditions = $5::jsonb,
-            debounce_seconds = $6, max_attempts = $7, is_enabled = $8, updated_at = now()
+        set name = coalesce($3, name),
+            event_types = coalesce($4::text[], event_types),
+            conditions = coalesce($5::jsonb, conditions),
+            debounce_seconds = coalesce($6, debounce_seconds),
+            max_attempts = coalesce($7, max_attempts),
+            is_enabled = coalesce($8, is_enabled),
+            updated_at = now()
       where id = $1 and user_id = $2
       returning *`,
     [
       triggerId,
       userId,
-      definition.name,
-      definition.eventTypes,
-      JSON.stringify(definition.conditions),
-      definition.debounceSeconds,
-      definition.maxAttempts,
-      definition.isEnabled,
+      patch.name == null ? null : definition.name,
+      patch.eventTypes == null ? null : definition.eventTypes,
+      patch.conditions == null ? null : JSON.stringify(definition.conditions),
+      patch.debounceSeconds == null ? null : definition.debounceSeconds,
+      patch.maxAttempts == null ? null : definition.maxAttempts,
+      patch.isEnabled == null ? null : definition.isEnabled,
     ],
   );
   if (!row) throw new TriggerNotFoundError();

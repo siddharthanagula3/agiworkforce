@@ -81,3 +81,7 @@ export type AddCustomConnectorInput = Pick<
 >;
 
 export type CustomConnectorResult = Pick<CustomConnector, 'id' | 'shortId' | 'name' | 'url'>;
+
+export interface ConnectorDisconnectResult {
+  vendorNotice: string | null;
+}

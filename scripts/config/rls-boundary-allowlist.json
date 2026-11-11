@@ -282,6 +282,10 @@
       "reason": "platform abuse detection reached only from the admin security route, per-user counts cannot detect an attacker spraying accounts from one IP"
     },
     {
+      "path": "apps/web/lib/services/spend-limit-service.ts",
+      "reason": "a workspace spend limit caps every member's spend, so the month-to-date total sums all members' completed managed_usage_requests for one organization id and returns only that number; a caller-scoped read sees only the caller's rows and would undercount the cap. Callers resolve the organization from the caller's membership or funding workspace first"
+    },
+    {
       "path": "apps/web/lib/services/web-push-service.ts",
       "reason": "the matched word is a local variable holding push-subscription objects, not the billing subscriptions table, every statement already carries user_id"
     },

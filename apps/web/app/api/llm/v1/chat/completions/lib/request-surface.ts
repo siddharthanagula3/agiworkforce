@@ -1,5 +1,8 @@
-import type { NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import {
+  canUseManagedCloudChatSurface,
+  getCloudChatSurfaceCapability,
   resolveCloudChatSurface,
   type AuthenticatedSurfaceClass,
   type BoundSurface,
@@ -30,4 +33,42 @@ export function resolveAuthenticatedSurface(
   return isApiKey
     ? 'api'
     : resolveCloudChatSurface(request, credential.surfaceClass, credential.boundSurface);
+}
+
+export function managedCloudSurfaceRefusal(
+  planTier: string | null | undefined,
+  surface: CloudChatSurface,
+  headers?: Record<string, string>,
+): NextResponse | null {
+  if (canUseManagedCloudChatSurface(planTier, surface)) return null;
+
+  const capability = getCloudChatSurfaceCapability(surface);
+  const error =
+    capability === null
+      ? {
+          message:
+            'This credential is not bound to an AGI client. Use the AGI web, desktop or mobile app, the browser extension, the CLI or the IDE extension, or an API key.',
+          code: 'managed_cloud_surface_unknown',
+        }
+      : capability === 'developer_surfaces'
+        ? {
+            message: `Managed Cloud CLI, browser extension, and IDE access require ${BILLING_PLAN_PRICING.pro.label} or higher.`,
+            code: 'developer_surface_plan_required',
+            requiredTier: 'pro',
+          }
+        : capability === 'managed_api'
+          ? {
+              message: `Managed API access requires ${BILLING_PLAN_PRICING.pro.label} or higher.`,
+              code: 'managed_api_plan_required',
+              requiredTier: 'pro',
+            }
+          : {
+              message: 'Managed Cloud chat is not available on this plan.',
+              code: 'managed_chat_plan_required',
+            };
+
+  return NextResponse.json(
+    { error: { ...error, type: 'invalid_request_error' } },
+    { status: 403, ...(headers ? { headers } : {}) },
+  );
 }

@@ -297,7 +297,7 @@ describe('uplift claims follow the promotion as it is edited', () => {
       kind: 'limit_uplift',
       reference_id: 'uplift',
       expires_at: '2026-11-01T00:00:00.000Z',
-      applied_at: '2026-10-15T00:00:00.000Z',
+      applied_at: '2026-10-20T00:00:00.000Z',
       committed_microusd: EXPOSURE,
       ...overrides,
     };
@@ -328,7 +328,7 @@ describe('uplift claims follow the promotion as it is edited', () => {
     expect(calls.some((sql) => sql.includes('for update'))).toBe(false);
   });
 
-  it('charges the full current exposure again when an edit raised the percent after the claim', async () => {
+  it('tops the commitment up to the raised percent over the whole claim when an edit raised it', async () => {
     const { db, writes } = claimedScript(
       { uplift_percent: 100 },
       claim({ committed_microusd: EXPOSURE }),
@@ -339,28 +339,28 @@ describe('uplift claims follow the promotion as it is edited', () => {
       weekly: 20_000_000,
       flagshipWeekly: 6_000_000,
     });
-    expect(committedWrites(writes).map((write) => write.params)).toEqual([
-      ['code-week', 2 * EXPOSURE],
-    ]);
+    expect(committedWrites(writes).map((write) => write.params)).toEqual([['code-week', EXPOSURE]]);
     const grantUpdate = writes.find((write) =>
       write.sql.includes('update public.usage_limit_promotion_grants'),
     );
-    expect(grantUpdate?.params).toEqual(['code-week', 'user-1', 'uplift', 2 * EXPOSURE]);
+    expect(grantUpdate?.params).toEqual(['code-week', 'user-1', 'uplift', EXPOSURE]);
   });
 
-  it('moves the expiry forward and charges the exposure again when the end date moved', async () => {
+  it('moves the expiry forward and tops the commitment up when the end date moved', async () => {
     const { db, writes } = claimedScript(
       { ends_at: '2026-11-05T00:00:00.000Z' },
       claim({ expires_at: '2026-10-25T00:00:00.000Z' }),
       { committed_microusd: EXPOSURE, lapsed: false, ends_short: true },
     );
     await expect(resolvePromotionalCaps(request, NOW, () => db)).resolves.toEqual(RAISED);
-    expect(committedWrites(writes).map((write) => write.params)).toEqual([['code-week', EXPOSURE]]);
+    expect(committedWrites(writes).map((write) => write.params)).toEqual([
+      ['code-week', EXPOSURE / 2],
+    ]);
     const grantUpdate = writes.find((write) =>
       write.sql.includes('update public.usage_limit_promotion_grants'),
     );
     expect(grantUpdate?.sql).toContain('greatest(g.expires_at, p.ends_at)');
-    expect(grantUpdate?.params[3]).toBe(EXPOSURE);
+    expect(grantUpdate?.params[3]).toBe(EXPOSURE / 2);
   });
 
   it('holds the plan caps when extending the end date would pass the ceiling', async () => {
@@ -368,13 +368,54 @@ describe('uplift claims follow the promotion as it is edited', () => {
       {
         ends_at: '2026-11-05T00:00:00.000Z',
         cost_ceiling_microusd: 12_000_000,
-        committed_microusd: 5_000_000,
+        committed_microusd: 8_000_000,
       },
       claim({ expires_at: '2026-10-25T00:00:00.000Z' }),
       { committed_microusd: EXPOSURE, lapsed: false, ends_short: true },
     );
     await expect(resolvePromotionalCaps(request, NOW, () => db)).resolves.toEqual(CAPS);
     expect(writes).toEqual([]);
+  });
+
+  describe('a percent edit late in the claim', () => {
+    const LATE = Date.parse('2026-10-30T12:00:00.000Z');
+    const EARLY_CLAIM = claim({
+      applied_at: '2026-10-15T00:00:00.000Z',
+      committed_microusd: 15_000_000,
+    });
+    const earlyClaimed = { committed_microusd: 15_000_000, lapsed: false, ends_short: false };
+
+    it('leaves a claim alone while its terms are unchanged however little time remains', async () => {
+      const { db, writes } = claimedScript({}, EARLY_CLAIM, earlyClaimed);
+      await expect(resolvePromotionalCaps(request, LATE, () => db)).resolves.toEqual(RAISED);
+      expect(writes).toEqual([]);
+    });
+
+    it('holds the plan caps when the raise would pass the ceiling the earlier weeks already used', async () => {
+      const { db, writes } = claimedScript(
+        { uplift_percent: 100, cost_ceiling_microusd: 15_000_000, committed_microusd: 15_000_000 },
+        EARLY_CLAIM,
+        earlyClaimed,
+      );
+      await expect(resolvePromotionalCaps(request, LATE, () => db)).resolves.toEqual(CAPS);
+      expect(writes).toEqual([]);
+    });
+
+    it('charges the raised percent over the whole claim, not only the weeks still to run', async () => {
+      const { db, writes } = claimedScript(
+        { uplift_percent: 100, cost_ceiling_microusd: 100_000_000, committed_microusd: 15_000_000 },
+        EARLY_CLAIM,
+        earlyClaimed,
+      );
+      await expect(resolvePromotionalCaps(request, LATE, () => db)).resolves.toEqual({
+        session: 1_000_000,
+        weekly: 20_000_000,
+        flagshipWeekly: 6_000_000,
+      });
+      expect(committedWrites(writes).map((write) => write.params)).toEqual([
+        ['code-week', 15_000_000],
+      ]);
+    });
   });
 
   it('holds the plan caps when an edit would push the claim past the ceiling', async () => {
@@ -541,6 +582,29 @@ describe('summary and apply while switched off', () => {
       }),
     ).resolves.toEqual({ status: 'refused', reason: 'promotions_off' });
     expect(db.transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('applying a reset while the promotion is edited', () => {
+  it('holds the promotion row from eligibility to the counter update', async () => {
+    const { db, calls } = scriptedDb({ promotions: [], grants: [], usage: NO_USAGE });
+    await expect(
+      applyUsageLimitReset(db, {
+        userId: 'user-1',
+        planTier: 'pro',
+        applyKey: 'agi.usage.reset.1',
+        grantId: null,
+        caps: CAPS,
+      }),
+    ).resolves.toEqual({ status: 'refused', reason: 'no_reset' });
+
+    const eligibility = calls.find(
+      (sql) => sql.includes("p.kind = 'limit_reset'") && sql.includes('p.apply_at_percent'),
+    );
+    expect(eligibility).toBeDefined();
+    const compact = eligibility!.replace(/\s+/g, ' ');
+    expect(compact).toContain('and p.enabled');
+    expect(compact).toContain('for update of g for no key update of p');
   });
 });
 

@@ -47,6 +47,39 @@ describe('ComposerFeedbackDialog', () => {
     expect(JSON.stringify(body)).not.toContain('prompt');
   });
 
+  describe('a screenshot attached to the report', () => {
+    const attachAndSend = async (receipt: Record<string, unknown>) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify(receipt), { status: 200 })),
+      );
+      const { container } = render(<ComposerFeedbackDialog />);
+      fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+      const input = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement;
+      fireEvent.change(input, {
+        target: { files: [new File(['png'], 'shot.png', { type: 'image/png' })] },
+      });
+      await screen.findByAltText('Screenshot attached to this feedback');
+      fireEvent.change(screen.getByLabelText('Details'), { target: { value: 'Layout broke.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
+      await waitFor(() => expect(screen.getByText(/your feedback was sent/i)).toBeDefined());
+    };
+
+    it('says so when the server could not store the screenshot', async () => {
+      await attachAndSend({ success: true, screenshot_stored: false });
+
+      expect(
+        screen.getByText(/screenshot could not be stored and was not attached/i),
+      ).toBeDefined();
+    });
+
+    it('stays quiet when the screenshot was stored', async () => {
+      await attachAndSend({ success: true, screenshot_stored: true });
+
+      expect(screen.queryByText(/could not be stored/i)).toBeNull();
+    });
+  });
+
   it('shows a retryable error when the server rejects feedback', async () => {
     vi.stubGlobal(
       'fetch',
@@ -65,6 +98,62 @@ describe('ComposerFeedbackDialog', () => {
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('unavailable'));
     expect(screen.getByRole('button', { name: 'Send feedback' })).not.toBeDisabled();
+  });
+
+  it('freezes the draft while the report is sending and releases it when sending fails', async () => {
+    let settle!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            settle = resolve;
+          }),
+      ),
+    );
+    render(<ComposerFeedbackDialog />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+    fireEvent.change(screen.getByLabelText('Details'), { target: { value: 'First part' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(screen.getByLabelText('Details')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Something is broken' })).toBeDisabled();
+
+    settle(new Response(JSON.stringify({ error: 'Nope' }), { status: 500 }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Nope'));
+    expect(screen.getByLabelText('Details')).toBeEnabled();
+    expect(screen.getByLabelText('Details')).toHaveValue('First part');
+  });
+
+  it('keeps text typed after the sent snapshot when that report is accepted', async () => {
+    let settle!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            settle = resolve;
+          }),
+      ),
+    );
+    render(<ComposerFeedbackDialog />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+    fireEvent.change(screen.getByLabelText('Details'), { target: { value: 'First part' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByLabelText('Details'), {
+      target: { value: 'First part and more' },
+    });
+    settle(new Response(JSON.stringify({ success: true }), { status: 200 }));
+
+    await waitFor(() => expect(screen.getByText(/your feedback was sent/i)).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+    expect(screen.getByLabelText('Details')).toHaveValue('First part and more');
   });
 
   it('submits a refusal report with bounded identifiers and no conversation content', async () => {

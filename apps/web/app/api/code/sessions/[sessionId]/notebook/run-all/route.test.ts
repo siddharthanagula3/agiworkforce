@@ -44,6 +44,7 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   };
 });
 
+import { CloudCodeConflictError } from '@/lib/services/cloud-code-session-service';
 import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { POST } from './route';
 
@@ -157,6 +158,73 @@ describe('POST /notebook/run-all', () => {
     expect(body.results).toHaveLength(1);
     expect(body.completed).toBe(false);
     expect(notebookRunInserts()).toHaveLength(1);
+  });
+
+  it('refuses a run whose later cell is invalid before any earlier cell executes', async () => {
+    const response = await POST(
+      postRequest({
+        cells: [
+          { id: 'cell-a', code: 'x = 1', language: 'python' },
+          { id: 'cell-b', code: 'x'.repeat(50_001), language: 'python' },
+        ],
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain('Cell 2');
+    expect(mockRunCell).not.toHaveBeenCalled();
+    expect(notebookRunInserts()).toHaveLength(0);
+  });
+
+  it('keeps the outcomes of earlier cells when a later cell cannot be run', async () => {
+    mockRunCell
+      .mockResolvedValueOnce({
+        session: SESSION,
+        ok: true,
+        outputs: [{ kind: 'stream', data: 'one' }],
+      })
+      .mockRejectedValueOnce(
+        new CloudCodeConflictError('Code session is busy; wait and try again'),
+      );
+
+    const response = await POST(
+      postRequest({
+        cells: [
+          { id: 'cell-a', code: 'print("one")', language: 'python' },
+          { id: 'cell-b', code: 'print(2)', language: 'python' },
+          { id: 'cell-c', code: 'print(3)', language: 'python' },
+        ],
+      }),
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      completed: boolean;
+      results: Array<{ cellId: string; ok: boolean; outputs: unknown[]; error?: string }>;
+    };
+    expect(body.completed).toBe(false);
+    expect(body.results.map((result) => result.cellId)).toEqual(['cell-a', 'cell-b']);
+    expect(body.results[0]).toMatchObject({ ok: true, outputs: [{ kind: 'stream', data: 'one' }] });
+    expect(body.results[1]).toMatchObject({
+      ok: false,
+      outputs: [],
+      error: 'Code session is busy; wait and try again',
+    });
+    expect(mockRunCell).toHaveBeenCalledTimes(2);
+    expect(notebookRunInserts()).toHaveLength(2);
+  });
+
+  it('still fails the request when the first cell cannot be run', async () => {
+    mockRunCell.mockRejectedValueOnce(new CloudCodeConflictError('Code session is busy'));
+
+    const response = await POST(
+      postRequest({ cells: [{ id: 'cell-a', code: 'print(1)', language: 'python' }] }),
+      context,
+    );
+
+    expect(response.status).toBe(409);
   });
 
   it('refuses a run that demands a tighter network policy than the session has', async () => {

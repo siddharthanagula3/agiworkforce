@@ -3,6 +3,7 @@ import {
   BILLING_PLAN_PRICING,
   CONNECTORS_COMING_SOON_MESSAGE,
   connectorsReleased,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
@@ -84,7 +85,7 @@ export default function AiChatFeaturePage() {
                 <em className="agi-lp-accent">The reply shows its work.</em>
               </h1>
               <ButtonRow>
-                <Button href={WEB_ENTRY_HREF}>Open chat Chat</Button>
+                <Button href={WEB_ENTRY_HREF}>Open {PRODUCT_NAMES.chat}</Button>
                 <Button href="/desktop" variant="secondary">
                   See Desktop
                 </Button>
@@ -190,7 +191,7 @@ export default function AiChatFeaturePage() {
                 {SURFACE_STATUS.desktop.toLowerCase()}.
               </p>
               <ButtonRow>
-                <Button href={WEB_ENTRY_HREF}>Open chat Chat</Button>
+                <Button href={WEB_ENTRY_HREF}>Open {PRODUCT_NAMES.chat}</Button>
                 <Button href="/desktop" variant="secondary">
                   See Desktop
                 </Button>

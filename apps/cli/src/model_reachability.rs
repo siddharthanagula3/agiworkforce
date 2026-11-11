@@ -1,6 +1,6 @@
 //! Which models this machine can reach.
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use agiworkforce_protocol::developer_session::{
     DeveloperSessionTrustMode, HostModelSummary, ModelUnreachable, TurnFailureCode,
@@ -63,24 +63,37 @@ fn model_verdict(
     }
 }
 
-/// Models a local runtime is serving right now, as (id, provider).
-async fn running_local_models(config: &CliConfig) -> Vec<(String, String)> {
-    crate::local_models::discovered_models(&crate::local_models::discover_all(config).await)
+fn sort_summaries(summaries: &mut [HostModelSummary]) {
+    summaries.sort_by(|left, right| {
+        right
+            .reachable
+            .cmp(&left.reachable)
+            .then_with(|| left.provider.cmp(&right.provider))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+}
+
+/// Models the given probes found being served, as (id, provider).
+pub fn running_local_models(
+    probes: &[crate::local_models::LocalProviderProbe],
+) -> Vec<(String, String)> {
+    crate::local_models::discovered_models(probes)
         .into_iter()
         .map(|model| (model.id, model.provider))
         .collect()
 }
 
-/// Every model this host knows about, each with its verdict.
-pub async fn host_models(config: &CliConfig) -> Vec<HostModelSummary> {
-    let local = running_local_models(config).await;
+/// Every catalog model with its verdict. Costly (credential and plan lookups),
+/// so a host may hold it; running local models are not part of it, because
+/// they change whenever a runtime starts or stops.
+pub async fn catalog_host_models(config: &CliConfig) -> Vec<HostModelSummary> {
     crate::tier_cache::ensure_plan_models_cached().await;
     let account = crate::models::AccountRoute::load();
     let mut summaries: Vec<HostModelSummary> = Vec::new();
-    let mut seen: HashMap<String, ()> = HashMap::new();
+    let mut seen: HashSet<String> = HashSet::new();
 
     for model in crate::model_catalog::catalog().all() {
-        if seen.insert(model.id.clone(), ()).is_some() {
+        if !seen.insert(model.id.clone()) {
             continue;
         }
         let (verdict, trust_mode) = model_verdict(config, &account, &model.id, &model.provider);
@@ -93,8 +106,20 @@ pub async fn host_models(config: &CliConfig) -> Vec<HostModelSummary> {
         });
     }
 
+    sort_summaries(&mut summaries);
+    summaries
+}
+
+/// The catalog verdicts plus the local models found serving in the same
+/// observation the caller is about to report, so a verdict never outlives the
+/// runtime that earned it.
+pub fn with_running_local_models(
+    mut summaries: Vec<HostModelSummary>,
+    local: Vec<(String, String)>,
+) -> Vec<HostModelSummary> {
+    let mut seen: HashSet<String> = summaries.iter().map(|summary| summary.id.clone()).collect();
     for (id, provider) in local {
-        if seen.insert(id.clone(), ()).is_some() {
+        if !seen.insert(id.clone()) {
             continue;
         }
         summaries.push(HostModelSummary {
@@ -105,14 +130,7 @@ pub async fn host_models(config: &CliConfig) -> Vec<HostModelSummary> {
             trust_mode: trust_mode_for(&provider),
         });
     }
-
-    summaries.sort_by(|left, right| {
-        right
-            .reachable
-            .cmp(&left.reachable)
-            .then_with(|| left.provider.cmp(&right.provider))
-            .then_with(|| left.id.cmp(&right.id))
-    });
+    sort_summaries(&mut summaries);
     summaries
 }
 
@@ -239,6 +257,61 @@ mod tests {
             .expect("a route with no key and no managed cover cannot be reachable");
         assert_eq!(verdict.code, TurnFailureCode::ProviderAuthMissing);
         assert_eq!(verdict.action, TurnFailureAction::SignInProvider);
+    }
+
+    fn catalog_summary(id: &str, reachable: bool) -> HostModelSummary {
+        HostModelSummary {
+            id: id.to_string(),
+            provider: "anthropic".to_string(),
+            reachable,
+            unreachable: None,
+            trust_mode: DeveloperSessionTrustMode::Byok,
+        }
+    }
+
+    #[test]
+    fn a_stopped_runtime_leaves_no_ready_row_behind() {
+        let held = vec![catalog_summary("catalog-model", true)];
+        let while_serving = with_running_local_models(
+            held.clone(),
+            vec![(
+                "tag-absent-from-catalog:7b".to_string(),
+                "ollama".to_string(),
+            )],
+        );
+        let served = while_serving
+            .iter()
+            .find(|summary| summary.id == "tag-absent-from-catalog:7b")
+            .expect("a model being served is listed");
+        assert!(served.reachable);
+        assert_eq!(served.trust_mode, DeveloperSessionTrustMode::Local);
+
+        let after_it_stopped = with_running_local_models(held, Vec::new());
+        assert!(after_it_stopped
+            .iter()
+            .all(|summary| summary.id != "tag-absent-from-catalog:7b"));
+        assert_eq!(after_it_stopped.len(), 1);
+    }
+
+    #[test]
+    fn a_served_model_never_displaces_or_duplicates_a_catalog_verdict() {
+        let held = vec![catalog_summary("shared-id", false)];
+        let merged =
+            with_running_local_models(held, vec![("shared-id".to_string(), "ollama".to_string())]);
+        assert_eq!(merged.len(), 1);
+        assert!(!merged[0].reachable);
+    }
+
+    #[test]
+    fn merged_rows_keep_reachable_models_first() {
+        let held = vec![
+            catalog_summary("b-blocked", false),
+            catalog_summary("a-ready", true),
+        ];
+        let merged =
+            with_running_local_models(held, vec![("c-local".to_string(), "ollama".to_string())]);
+        let order: Vec<&str> = merged.iter().map(|summary| summary.id.as_str()).collect();
+        assert_eq!(order, vec!["a-ready", "c-local", "b-blocked"]);
     }
 
     #[test]

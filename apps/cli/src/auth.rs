@@ -106,6 +106,8 @@ struct AuthKeyringIndex {
     version: u8,
     storage: String,
     providers: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    removing: Vec<String>,
     #[serde(default)]
     scope: Option<String>,
 }
@@ -309,6 +311,7 @@ fn load_keyring_auth_for_root(
             version: index.version,
             storage: index.storage.clone(),
             providers: index.providers.clone(),
+            removing: Vec::new(),
             scope: index.scope.clone(),
         },
         missing_signs_out,
@@ -331,7 +334,13 @@ fn save_keyring_auth(
     let previous_providers = std::fs::read_to_string(path)
         .ok()
         .and_then(|data| parse_auth_keyring_index(&data))
-        .map(|index| index.providers.into_iter().collect::<BTreeSet<_>>())
+        .map(|index| {
+            index
+                .providers
+                .into_iter()
+                .chain(index.removing)
+                .collect::<BTreeSet<_>>()
+        })
         .unwrap_or_default();
     let current_providers = store.entries.keys().cloned().collect::<BTreeSet<_>>();
 
@@ -351,16 +360,38 @@ fn save_keyring_auth(
             })?;
     }
 
-    for provider in previous_providers.difference(&current_providers) {
-        credentials
-            .delete(&auth_keyring_account(provider))
-            .with_context(|| format!("Could not remove the saved {provider} credential"))?;
-    }
+    let removed: Vec<String> = previous_providers
+        .difference(&current_providers)
+        .cloned()
+        .collect();
+    let providers: Vec<String> = current_providers.into_iter().collect();
 
+    // The index stops naming a provider before its credential is deleted and
+    // keeps listing it as removing until the deletion is confirmed: an
+    // interrupted removal then neither leaves an index naming a deleted
+    // credential nor forgets one still held.
+    if !removed.is_empty() {
+        write_auth_index(credentials, path, &providers, &removed)?;
+        for provider in &removed {
+            credentials
+                .delete(&auth_keyring_account(provider))
+                .with_context(|| format!("Could not remove the saved {provider} credential"))?;
+        }
+    }
+    write_auth_index(credentials, path, &providers, &[])
+}
+
+fn write_auth_index(
+    credentials: &dyn CredentialStore,
+    path: &Path,
+    providers: &[String],
+    removing: &[String],
+) -> Result<()> {
     let index = AuthKeyringIndex {
         version: AUTH_INDEX_VERSION,
         storage: AUTH_INDEX_STORAGE.to_string(),
-        providers: current_providers.into_iter().collect(),
+        providers: providers.to_vec(),
+        removing: removing.to_vec(),
         scope: Some(credentials.scope().to_string()),
     };
     let data = serde_json::to_string_pretty(&index).context("Failed to serialize auth index")?;
@@ -959,7 +990,7 @@ pub async fn login_agiworkforce() -> Result<()> {
     let entry = crate::oauth::device_code_login(&base).await?;
     crate::app_server::account::save_device_grant(entry)?;
     record_credential_use(AGIWORKFORCE_AUTH_KEY, "signed in and saved a credential");
-    crate::device_registry::send_heartbeat().await;
+    let _ = crate::device_registry::send_heartbeat(crate::account_privacy_mode()).await;
     Ok(())
 }
 
@@ -1625,6 +1656,7 @@ mod tests {
             version: AUTH_INDEX_VERSION,
             storage: AUTH_INDEX_STORAGE.to_string(),
             providers: vec!["openai".to_string(), "agiworkforce".to_string()],
+            removing: Vec::new(),
             scope: Some(AUTH_KEYRING_SERVICE.to_string()),
         };
         let serialized = serde_json::to_string(&index).unwrap();
@@ -1830,6 +1862,7 @@ mod tests {
             version: AUTH_INDEX_VERSION,
             storage: AUTH_INDEX_STORAGE.to_string(),
             providers: vec!["openai".to_string()],
+            removing: Vec::new(),
             scope: Some(AUTH_KEYRING_SERVICE.to_string()),
         };
         let error = load_keyring_auth(&DenyingStore, index, true)
@@ -1853,6 +1886,141 @@ mod tests {
             .get(&auth_keyring_account("openai"))
             .expect("get")
             .is_none());
+    }
+
+    struct FaultyStore {
+        inner: MemoryStore,
+        delete_fails: std::sync::atomic::AtomicBool,
+        block_after_delete: std::sync::Mutex<Option<PathBuf>>,
+    }
+
+    impl FaultyStore {
+        fn new(block_after_delete: Option<PathBuf>) -> Self {
+            Self {
+                inner: MemoryStore::default(),
+                delete_fails: std::sync::atomic::AtomicBool::new(false),
+                block_after_delete: std::sync::Mutex::new(block_after_delete),
+            }
+        }
+    }
+
+    impl CredentialStore for FaultyStore {
+        fn get(&self, account: &str) -> Result<Option<String>> {
+            self.inner.get(account)
+        }
+        fn set(&self, account: &str, secret: &str) -> Result<()> {
+            self.inner.set(account, secret)
+        }
+        fn delete(&self, account: &str) -> Result<()> {
+            if self.delete_fails.load(std::sync::atomic::Ordering::SeqCst) {
+                bail!("the OS credential store refused to remove the credential")
+            }
+            self.inner.delete(account)?;
+            if let Some(blocker) = self
+                .block_after_delete
+                .lock()
+                .expect("blocker lock")
+                .as_ref()
+            {
+                std::fs::create_dir_all(blocker)?;
+            }
+            Ok(())
+        }
+    }
+
+    fn the_saved_index(path: &Path) -> AuthKeyringIndex {
+        parse_auth_keyring_index(&std::fs::read_to_string(path).expect("index file"))
+            .expect("parse index")
+    }
+
+    #[test]
+    fn a_failed_index_write_after_a_removal_never_leaves_an_index_naming_a_deleted_credential() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let blocker = dir
+            .path()
+            .join(format!(".auth.json.{}.tmp", std::process::id()));
+        let keyring = FaultyStore::new(Some(blocker.clone()));
+        save_keyring_auth(&keyring, &path, &store_with_secrets()).expect("save");
+        let mut remaining = store_with_secrets();
+        remaining.entries.remove("openai");
+
+        save_keyring_auth(&keyring, &path, &remaining)
+            .expect_err("the final index write is blocked");
+
+        let index = the_saved_index(&path);
+        assert_eq!(index.providers, vec!["agiworkforce".to_string()]);
+        let loaded = load_keyring_auth(&keyring, index, false)
+            .expect("the index must still load after the interrupted removal");
+        assert_eq!(
+            loaded.entries.keys().collect::<Vec<_>>(),
+            vec!["agiworkforce"]
+        );
+
+        std::fs::remove_dir(&blocker).unwrap();
+        *keyring.block_after_delete.lock().unwrap() = None;
+        save_keyring_auth(&keyring, &path, &remaining).expect("a retry completes the removal");
+        let index = the_saved_index(&path);
+        assert!(index.removing.is_empty());
+        assert_eq!(index.providers, vec!["agiworkforce".to_string()]);
+    }
+
+    #[test]
+    fn a_failed_deletion_is_retried_instead_of_forgotten() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let keyring = FaultyStore::new(None);
+        save_keyring_auth(&keyring, &path, &store_with_secrets()).expect("save");
+        let mut remaining = store_with_secrets();
+        remaining.entries.remove("openai");
+
+        keyring
+            .delete_fails
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        save_keyring_auth(&keyring, &path, &remaining).expect_err("the deletion is refused");
+
+        let index = the_saved_index(&path);
+        assert_eq!(index.providers, vec!["agiworkforce".to_string()]);
+        assert_eq!(index.removing, vec!["openai".to_string()]);
+        assert!(keyring
+            .get(&auth_keyring_account("openai"))
+            .unwrap()
+            .is_some());
+
+        keyring
+            .delete_fails
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        save_keyring_auth(&keyring, &path, &remaining).expect("retry");
+
+        assert!(keyring
+            .get(&auth_keyring_account("openai"))
+            .unwrap()
+            .is_none());
+        assert!(the_saved_index(&path).removing.is_empty());
+    }
+
+    #[test]
+    fn signing_in_again_to_a_provider_pending_removal_keeps_its_credential() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let keyring = FaultyStore::new(None);
+        save_keyring_auth(&keyring, &path, &store_with_secrets()).expect("save");
+        let mut remaining = store_with_secrets();
+        remaining.entries.remove("openai");
+        keyring
+            .delete_fails
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        save_keyring_auth(&keyring, &path, &remaining).expect_err("the deletion is refused");
+        keyring
+            .delete_fails
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+
+        save_keyring_auth(&keyring, &path, &store_with_secrets()).expect("sign in again");
+
+        let index = the_saved_index(&path);
+        assert!(index.removing.is_empty());
+        let loaded = load_keyring_auth(&keyring, index, false).expect("load");
+        assert_eq!(loaded.entries.len(), 2);
     }
 
     #[test]

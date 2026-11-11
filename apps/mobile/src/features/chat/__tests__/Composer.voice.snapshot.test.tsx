@@ -140,6 +140,7 @@ import {
   VoiceInputButton,
   type VoiceInputHandle,
 } from '@/src/features/voice/components/VoiceInputButton';
+import { ownerHandler } from '@/test-utils/ownerProps';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
 
@@ -385,14 +386,8 @@ describe('VoiceInputButton recording ownership', () => {
         fireEvent(view.getByTestId('voice-input-button'), 'pressIn');
         jest.advanceTimersByTime(300);
       });
-      // The button is disabled while the start is pending. Pressability still delivers the
-      // release to the responder it already granted, but fireEvent refuses a disabled one.
-      const pressable = view.UNSAFE_root.find(
-        (node) =>
-          node.props.testID === 'voice-input-button' && typeof node.props.onPressOut === 'function',
-      );
       act(() => {
-        pressable.props.onPressOut();
+        ownerHandler(view.getByTestId('voice-input-button'), 'onPressOut')();
       });
       const session = recording();
       await act(async () => finishStart(session));

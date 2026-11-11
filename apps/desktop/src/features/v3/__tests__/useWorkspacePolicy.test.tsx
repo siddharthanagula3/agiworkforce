@@ -1,6 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_WORKSPACE_CONTROLS } from '@agiworkforce/types';
+import {
+  DEFAULT_WORKSPACE_CONTROLS,
+  EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
+} from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({
   cloudFetch: vi.fn(),
@@ -23,6 +26,7 @@ import { filterNavByWorkspaceFeatures, useDisabledWorkspaceFeatures } from '../u
 function policy(revision: number, featureAccess: Record<string, boolean>) {
   return new Response(
     JSON.stringify({
+      schemaVersion: EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
       organizationId: '11111111-1111-4111-8111-111111111111',
       governed: true,
       revision,

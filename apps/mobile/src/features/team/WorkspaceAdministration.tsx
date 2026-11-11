@@ -1,6 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, StyleSheet, TextInput, View } from 'react-native';
-import { Check, MailPlus, ShieldCheck, TriangleAlert, Users } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Share,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import {
+  Check,
+  Copy,
+  MailPlus,
+  Share2,
+  ShieldCheck,
+  TriangleAlert,
+  Users,
+} from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -8,6 +24,7 @@ import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { API_URL } from '@/lib/constants';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/Common';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -18,6 +35,7 @@ import {
   resendWorkspaceInvitation,
   revokeWorkspaceInvitation,
   type InvitableRole,
+  type InvitationReceipt,
   type WorkspaceInvitation,
   type WorkspaceInvitations,
   type WorkspacePosture,
@@ -40,6 +58,55 @@ function seatSummary(invitations: WorkspaceInvitations): string {
   const { licensedSeats, seatsConsumed, seatsAvailable } = invitations.seats;
   if (licensedSeats === null || seatsConsumed === null) return 'Not available';
   return `${seatsConsumed} of ${licensedSeats} used · ${seatsAvailable ?? 0} available`;
+}
+
+function UndeliveredInvitation({
+  receipt,
+  onDismiss,
+}: {
+  receipt: InvitationReceipt;
+  onDismiss: () => void;
+}) {
+  const { status: copyStatus, copy } = useCopyAction();
+  const title = receipt.replacedPreviousLink
+    ? 'Invitation renewed, email not sent'
+    : 'Invitation created, email not sent';
+  const body =
+    receipt.reason ??
+    (receipt.replacedPreviousLink
+      ? 'We could not confirm the email was sent. The previous link no longer works; send the new link to the invited address yourself.'
+      : 'We could not confirm the email was sent. Send the link to the invited address yourself.');
+
+  return (
+    <>
+      <SettingsInfo title={title} body={body} icon={TriangleAlert} />
+      <SettingsGroup>
+        {receipt.link ? (
+          <SettingsRow
+            label={`Copy link for ${receipt.email}`}
+            icon={Copy}
+            value={copyControlLabel(copyStatus, 'Copy')}
+            onPress={() => {
+              void copy(receipt.link ?? '');
+            }}
+          />
+        ) : null}
+        {receipt.link ? (
+          <SettingsRow
+            label={`Share link for ${receipt.email}`}
+            icon={Share2}
+            value="Share"
+            onPress={() => {
+              Share.share({ message: receipt.link ?? '' }).catch(() => {
+                Alert.alert('Could not share the link', 'Copy the link instead.');
+              });
+            }}
+          />
+        ) : null}
+        <SettingsRow label="Dismiss" icon={Check} onPress={onDismiss} isLast />
+      </SettingsGroup>
+    </>
+  );
 }
 
 function InviteMemberModal({
@@ -152,6 +219,13 @@ export function WorkspaceAdministration({ organizationId }: { organizationId: st
   const [loadError, setLoadError] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
   const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null);
+  const [undelivered, setUndelivered] = useState<InvitationReceipt | null>(null);
+  const currentOrganizationId = useRef(organizationId);
+
+  useEffect(() => {
+    currentOrganizationId.current = organizationId;
+    setUndelivered(null);
+  }, [organizationId]);
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -180,8 +254,10 @@ export function WorkspaceAdministration({ organizationId }: { organizationId: st
   const invite = useCallback(
     async (email: string, role: InvitableRole) => {
       try {
-        await inviteWorkspaceMember(organizationId, email, role);
+        const receipt = await inviteWorkspaceMember(organizationId, email, role);
         setInviting(false);
+        if (currentOrganizationId.current !== organizationId) return;
+        if (!receipt.emailSent) setUndelivered(receipt);
         await load();
       } catch (error) {
         Alert.alert('The invitation was not sent', toUserMessage(error, 'Please try again.'));
@@ -195,8 +271,17 @@ export function WorkspaceAdministration({ organizationId }: { organizationId: st
       void (async () => {
         setBusyInvitationId(invitation.id);
         try {
-          if (action === 'resend') await resendWorkspaceInvitation(organizationId, invitation.id);
-          else await revokeWorkspaceInvitation(organizationId, invitation.id);
+          if (action === 'resend') {
+            const receipt = await resendWorkspaceInvitation(
+              organizationId,
+              invitation.id,
+              invitation.email,
+            );
+            if (currentOrganizationId.current !== organizationId) return;
+            if (!receipt.emailSent) setUndelivered(receipt);
+          } else {
+            await revokeWorkspaceInvitation(organizationId, invitation.id);
+          }
           await load();
         } catch (error) {
           Alert.alert(
@@ -240,17 +325,28 @@ export function WorkspaceAdministration({ organizationId }: { organizationId: st
     [runInvitationAction],
   );
 
+  const undeliveredNotice = undelivered ? (
+    <UndeliveredInvitation
+      key={`${undelivered.email}:${undelivered.link ?? ''}`}
+      receipt={undelivered}
+      onDismiss={() => setUndelivered(null)}
+    />
+  ) : null;
+
   if (loadError) {
     return (
-      <SettingsGroup>
-        <SettingsRow
-          label="Workspace administration could not load"
-          icon={TriangleAlert}
-          value="Retry"
-          onPress={() => void load()}
-          isLast
-        />
-      </SettingsGroup>
+      <>
+        {undeliveredNotice}
+        <SettingsGroup>
+          <SettingsRow
+            label="Workspace administration could not load"
+            icon={TriangleAlert}
+            value="Retry"
+            onPress={() => void load()}
+            isLast
+          />
+        </SettingsGroup>
+      </>
     );
   }
 
@@ -265,6 +361,7 @@ export function WorkspaceAdministration({ organizationId }: { organizationId: st
   return (
     <>
       <InviteMemberModal visible={inviting} onCancel={() => setInviting(false)} onInvite={invite} />
+      {undeliveredNotice}
       <SettingsInfo
         title="Seats and invitations"
         body="Pending invitations hold a seat until they are accepted, expire or are revoked."

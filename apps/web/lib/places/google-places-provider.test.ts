@@ -7,7 +7,11 @@ vi.mock('node:dns/promises', () => ({
 }));
 
 import recordedTextSearch from './__fixtures__/google-text-search.json';
-import { buildGoogleTextQuery, createGooglePlacesProvider } from './google-places-provider';
+import {
+  buildGoogleTextQuery,
+  createGooglePlacesProvider,
+  normalizeGooglePlace,
+} from './google-places-provider';
 
 const RECORDED_KEY = 'recorded-test-key';
 
@@ -148,5 +152,51 @@ describe('buildGoogleTextQuery', () => {
 
   it('passes the query through when no locality was given', () => {
     expect(buildGoogleTextQuery({ query: 'coffee', limit: 5 })).toBe('coffee');
+  });
+});
+
+describe('normalizeGooglePlace hours', () => {
+  const base = { id: 'place-a', displayName: { text: 'Cafe A' } };
+  const regular = { weekdayDescriptions: ['Monday: 9:00 AM - 5:00 PM'] };
+
+  it('falls back to regular hours when the current block carries only openNow', () => {
+    const place = normalizeGooglePlace({
+      ...base,
+      currentOpeningHours: { openNow: true },
+      regularOpeningHours: regular,
+    });
+
+    expect(place).toMatchObject({
+      openNow: true,
+      hours: ['Monday: 9:00 AM - 5:00 PM'],
+      hoursKind: 'regular',
+    });
+  });
+
+  it('falls back to regular hours when the current descriptions are empty', () => {
+    const place = normalizeGooglePlace({
+      ...base,
+      currentOpeningHours: { openNow: false, weekdayDescriptions: [] },
+      regularOpeningHours: regular,
+    });
+
+    expect(place).toMatchObject({ hours: ['Monday: 9:00 AM - 5:00 PM'], hoursKind: 'regular' });
+  });
+
+  it('keeps current descriptions ahead of regular ones', () => {
+    const place = normalizeGooglePlace({
+      ...base,
+      currentOpeningHours: { weekdayDescriptions: ['Monday: Closed'] },
+      regularOpeningHours: regular,
+    });
+
+    expect(place).toMatchObject({ hours: ['Monday: Closed'], hoursKind: 'current' });
+  });
+
+  it('reports no hours when neither block carries descriptions', () => {
+    const place = normalizeGooglePlace({ ...base, currentOpeningHours: { openNow: true } });
+
+    expect(place?.hours).toBeUndefined();
+    expect(place?.hoursKind).toBeUndefined();
   });
 });

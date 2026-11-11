@@ -103,7 +103,7 @@ interface PageTask {
   page: number;
   conversationId: string | null;
   finished: boolean;
-  undelivered: Record<string, unknown> | null;
+  undelivered: { status: DispatchTaskLifecycleStatus; payload: Record<string, unknown> } | null;
 }
 
 export class RemoteControlRefused extends Error {}
@@ -284,16 +284,17 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       updatedAt: new Date().toISOString(),
     };
     const delivered = await send('dispatch.task.status', payload);
-    task.undelivered = delivered ? null : payload;
-    if (delivered && task.finished) pageTasks.delete(requestId);
+    task.undelivered = delivered ? null : { status, payload };
+    if (delivered && FINISHED_TASK_STATUSES.has(status)) pageTasks.delete(requestId);
   }
 
   async function flushPageTasks(): Promise<void> {
     for (const [requestId, task] of [...pageTasks]) {
       if (task.undelivered === null) continue;
-      if (!(await send('dispatch.task.status', task.undelivered))) return;
+      const { status, payload } = task.undelivered;
+      if (!(await send('dispatch.task.status', payload))) return;
       task.undelivered = null;
-      if (task.finished) pageTasks.delete(requestId);
+      if (FINISHED_TASK_STATUSES.has(status)) pageTasks.delete(requestId);
     }
   }
 

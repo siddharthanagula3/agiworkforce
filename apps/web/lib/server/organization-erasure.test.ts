@@ -22,15 +22,20 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mocks.query(...args),
-    execute: (...args: unknown[]) => mocks.execute(...args),
-  })),
+  getNeonDb: vi.fn(() => {
+    const db = {
+      query: (...args: unknown[]) => mocks.query(...args),
+      execute: (...args: unknown[]) => mocks.execute(...args),
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => work(db),
+    };
+    return db;
+  }),
 }));
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: (...args: unknown[]) => mocks.deleteStoredMediaObjects(...args),
 }));
-vi.mock('@/lib/server/payments/stripe-provider', () => ({
+vi.mock('@/lib/server/payments/stripe-provider', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   cancelLiveStripeSubscriptionsNow: (...args: unknown[]) =>
     mocks.cancelLiveStripeSubscriptionsNow(...args),
 }));
@@ -38,7 +43,8 @@ vi.mock('@/lib/server/request-context-cache', () => ({
   invalidateActiveOrganizationCache: (...args: unknown[]) =>
     mocks.invalidateActiveOrganizationCache(...args),
 }));
-vi.mock('@/lib/server/object-backup', () => ({
+vi.mock('@/lib/server/object-backup', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   resolveObjectBackupTarget: () => mocks.resolveObjectBackupTarget(),
   deleteBackupObject: (key: string, options?: unknown) => mocks.deleteBackupObject(key, options),
   forgetBackupReplicas: (keys: readonly string[]) => mocks.forgetBackupReplicas(keys),
@@ -762,3 +768,6 @@ describe('eraseOrganizationData', () => {
     expect(mocks.cancelLiveStripeSubscriptionsNow).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/server/payments/stripe-provider');
+type ImportedModule0 = typeof import('@/lib/server/object-backup');

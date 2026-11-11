@@ -5,7 +5,10 @@ import {
   readCallerBrowserContext,
   type CallerBrowserContext,
 } from './features/cloud-bridge/callerBrowserContext';
-import { prepareChatToolResults } from './features/computer-use/chatToolResults';
+import {
+  prepareChatToolResults,
+  type ChatToolResult,
+} from './features/computer-use/chatToolResults';
 import { loadContactAutofillProfile } from './features/content/autofill/profile-storage';
 import {
   createMessageQueue,
@@ -77,6 +80,7 @@ import type {
   ComputerUseCommandResponse,
   ComputerUseApprovalResponseMessage,
   ResolveChatToolsMessage,
+  StartComputerUseMessage,
 } from './types';
 import { parseBrowserUploadBinding } from './features/computer-use/userFileUpload';
 import {
@@ -162,6 +166,7 @@ import {
 } from './features/cloud-bridge/conversationHistoryPull';
 
 import { createChromeShareLink } from './features/cloud-bridge/shareClient';
+import { createHistoryShareLink } from './features/side-panel/historyShare';
 import {
   assignConversationOwner,
   claimConversationOwner,
@@ -239,7 +244,10 @@ import {
   type MessageArtifactsBinding,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
-import type { ConnectorInputBinding } from './features/side-panel/connectorInputForm';
+import {
+  resetConnectorInputMemory,
+  type ConnectorInputBinding,
+} from './features/side-panel/connectorInputForm';
 import {
   clarifyAnswerMessage,
   clarifyAnswersFromResponse,
@@ -285,6 +293,7 @@ import {
 } from './features/side-panel/answeredModel';
 import { buildFreePlanNotices, type FreePlanNotices } from './features/side-panel/freePlanNotices';
 import { replaceComposerRange, replaceComposerText } from './features/side-panel/composerText';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import {
   expandPromptShortcut,
   expandSlashCommand,
@@ -345,6 +354,7 @@ import {
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
 import {
+  createOwnedProjectCatalog,
   readStoredActiveProject,
   type ActiveProjectSelection,
 } from './features/side-panel/activeProject';
@@ -1859,6 +1869,8 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   resolvedRouteByStreamId.clear();
   quickModeByStreamId.clear();
   ownerByStreamId.clear();
+  quotaWarnedStreamIds.clear();
+  resetConnectorInputMemory();
   pendingManagedAdmissions.clear();
   refreshModelPickerUI();
   refreshEffortUI();
@@ -6917,7 +6929,7 @@ function startComposerBrowserTask(
   goal: string,
   nested?: {
     messageId: string;
-    callerHandoff?: import('./types').StartComputerUseMessage['callerHandoff'];
+    callerHandoff?: StartComputerUseMessage['callerHandoff'];
   },
 ): Promise<BrowserTaskOutcome> {
   const owner = _ctx.managedCloudOwner;
@@ -7871,7 +7883,7 @@ async function runHistorySearchTool(
 async function runBrowserTaskTool(
   streamId: string,
   goal: string,
-  callerHandoff?: import('./types').StartComputerUseMessage['callerHandoff'],
+  callerHandoff?: StartComputerUseMessage['callerHandoff'],
 ): Promise<string> {
   const owner = _ctx.managedCloudOwner;
   const generation = _ctx.conversationGeneration;
@@ -8149,7 +8161,7 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
   }
   removeThinking();
   ensureStreamingAssistant(streamId, quickModeByStreamId.get(streamId) === true);
-  const results: import('./features/computer-use/chatToolResults').ChatToolResult[] = [];
+  const results: ChatToolResult[] = [];
   const deadline = setTimeout(() => {
     dismissPendingSiteGrants();
     void taskSiteGrants.releaseTask(streamId);
@@ -11502,18 +11514,26 @@ function buildUI(): void {
           return signOutOfAccount();
         })
         .then((result) => {
-          if (result && !result.webSessionEnded) showTitleStatus(t('spAccountLogOutWebKept'));
+          if (!result) return;
+          if (!result.profileCleared) showTitleStatus(t('spAccountLogOutProfileKept'));
+          else if (!result.webSessionEnded) showTitleStatus(t('spAccountLogOutWebKept'));
         })
         .catch(() => showTitleStatus(t('spAccountLogOutFailed')))
         .finally(() => void refreshCloudAccountUI(true));
     },
     { danger: true },
   );
+  const moreFooter = el(
+    'div',
+    { class: 'sp-more-footer', role: 'none' },
+    t('spMoreVersion', [chrome.runtime.getManifest().version]),
+  );
   menuBtn.addEventListener(
     'click',
     () => {
       renderAccountBlock();
-      logOutItem.hidden = accountBlock.hidden;
+      if (accountBlock.hidden) logOutItem.remove();
+      else moreMenu.insertBefore(logOutItem, moreFooter);
       const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
       if (cloudConversationId && _ctx.messages.length > 0) {
         openChatInWebItem.onclick = () => {
@@ -11544,14 +11564,7 @@ function buildUI(): void {
     });
     moreMenu.appendChild(row);
   }
-  moreMenu.appendChild(logOutItem);
-  moreMenu.appendChild(
-    el(
-      'div',
-      { class: 'sp-more-footer', role: 'none' },
-      t('spMoreVersion', [chrome.runtime.getManifest().version]),
-    ),
-  );
+  moreMenu.appendChild(moreFooter);
 
   const drawerHistoryList = el('div', { id: 'sp-drawer-history-list' });
   const drawerHistorySearch = el('input', {
@@ -11657,6 +11670,7 @@ function buildUI(): void {
     cancelBtn.addEventListener('click', close);
     control.addEventListener('keydown', (event: Event) => {
       const key = (event as KeyboardEvent).key;
+      if (isImeComposingKey(event as KeyboardEvent)) return;
       if (key === 'Enter') {
         event.preventDefault();
         save();
@@ -11856,17 +11870,27 @@ function buildUI(): void {
       close();
     });
     createBtn.addEventListener('click', () => {
+      const owner = _ctx.managedCloudOwner;
+      if (!owner || !sameManagedCloudOwner(entry.owner, owner)) {
+        confirmRow.remove();
+        return;
+      }
       createBtn.disabled = true;
+      const confirmationIsLive = (): boolean =>
+        confirmRow.isConnected && sameManagedCloudOwner(_ctx.managedCloudOwner, owner);
       void (async () => {
-        const auth = await getManagedCloudAuthContext();
-        if (!auth) throw new Error(t('spHistoryShareSignIn'));
-        const link = await createChromeShareLink(auth.token, {
-          title: entry.title,
-          messages: entry.messages.filter((message) => message.content.trim().length > 0),
-          ...(entry.cloudSync?.conversationId
-            ? { conversationId: entry.cloudSync.conversationId }
-            : {}),
+        const shared = await createHistoryShareLink({
+          owner,
+          entryId: entry.id,
+          isLive: confirmationIsLive,
+          getAuth: getManagedCloudAuthContext,
+          getStored: getConversation,
+          createLink: createChromeShareLink,
         });
+        if (shared.status === 'retired') return;
+        if (shared.status === 'signed-out') throw new Error(t('spHistoryShareSignIn'));
+        if (shared.status === 'not-loaded') throw new Error(t('spHistoryShareNotLoaded'));
+        const { link } = shared;
         await navigator.clipboard.writeText(link.url);
         confirmRow.remove();
         const expires = link.expiresAt ? new Date(link.expiresAt) : null;
@@ -11878,6 +11902,7 @@ function buildUI(): void {
         trigger.focus();
       })()
         .catch((error: unknown) => {
+          if (!confirmationIsLive()) return;
           showHistoryStatus(error instanceof Error ? error.message : t('spHistoryShareFailed'));
         })
         .finally(() => {
@@ -13434,7 +13459,7 @@ function buildUI(): void {
   inputEl.addEventListener('input', refreshSlashMenu);
   inputEl.addEventListener('blur', () => closeSlashMenu());
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (!slashOpen()) return;
+    if (!slashOpen() || isImeComposingKey(e)) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       slashActive = (slashActive + 1) % slashMatches.length;
@@ -13512,7 +13537,7 @@ function buildUI(): void {
   let mentionStart = -1;
   let mentionGeneration = 0;
   let mentionTabs: chrome.tabs.Tab[] = [];
-  let mentionProjects: ActiveProjectSelection[] = [];
+  const mentionProjects = createOwnedProjectCatalog();
 
   const mentionOpen = (): boolean => mentionOptions.length > 0;
 
@@ -13570,6 +13595,7 @@ function buildUI(): void {
   function closeMentionMenu(): void {
     mentionGeneration += 1;
     mentionOptions = [];
+    mentionProjects.clear();
     mentionActive = 0;
     mentionStart = -1;
     renderMentionMenu();
@@ -13586,11 +13612,13 @@ function buildUI(): void {
       const detail = pageChipLabel(url);
       return matchesQuery(label, url) ? [{ kind: 'tab', tab, label, detail }] : [];
     });
-    const projectOptions = mentionProjects.flatMap((project): MentionOption[] =>
-      matchesQuery(project.name)
-        ? [{ kind: 'project', project, label: project.name, detail: t('spMentionProjectDetail') }]
-        : [],
-    );
+    const projectOptions = mentionProjects
+      .read(_ctx.managedCloudOwner)
+      .flatMap((project): MentionOption[] =>
+        matchesQuery(project.name)
+          ? [{ kind: 'project', project, label: project.name, detail: t('spMentionProjectDetail') }]
+          : [],
+      );
     mentionOptions = [...tabOptions, ...projectOptions];
     if (mentionActive >= mentionOptions.length) mentionActive = 0;
     renderMentionMenu();
@@ -13612,6 +13640,8 @@ function buildUI(): void {
       return;
     }
     const generation = ++mentionGeneration;
+    const owner = _ctx.managedCloudOwner;
+    mentionProjects.clear();
     void pageWindowQuery().then((query) =>
       chrome.tabs.query(query, (tabs) => {
         if (generation !== mentionGeneration) return;
@@ -13624,11 +13654,18 @@ function buildUI(): void {
       }),
     );
     void listChromeProjects().then((result) => {
-      if (generation !== mentionGeneration) return;
-      mentionProjects =
+      if (
+        generation !== mentionGeneration ||
+        !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+      ) {
+        return;
+      }
+      mentionProjects.set(
+        owner,
         result.status === 'success'
           ? result.projects.map((project) => ({ id: project.id, name: project.name }))
-          : [];
+          : [],
+      );
       recomputeMentionOptions();
     });
   }
@@ -13637,6 +13674,13 @@ function buildUI(): void {
     const option = mentionOptions[index];
     const mention = mentionAtCaret();
     if (!option || !mention) return;
+    if (
+      option.kind === 'project' &&
+      !mentionProjects.read(_ctx.managedCloudOwner).some(({ id }) => id === option.project.id)
+    ) {
+      closeMentionMenu();
+      return;
+    }
     const approval =
       option.kind === 'tab' && option.tab.id !== activePageSource?.tabId
         ? approveSiteForReading(option.tab.url ?? '')
@@ -13655,7 +13699,7 @@ function buildUI(): void {
   inputEl.addEventListener('input', refreshMentionMenu);
   inputEl.addEventListener('blur', () => closeMentionMenu());
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (!mentionOpen()) return;
+    if (!mentionOpen() || isImeComposingKey(e)) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       mentionActive = (mentionActive + 1) % mentionOptions.length;
@@ -13680,7 +13724,7 @@ function buildUI(): void {
     updateSendButton();
   });
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    if (e.key === 'Enter' && !e.shiftKey && !isImeComposingKey(e)) {
       e.preventDefault();
       const text = inputEl.value;
       if (!submitComposerText(text)) return;

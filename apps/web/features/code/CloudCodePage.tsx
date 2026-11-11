@@ -51,6 +51,7 @@ import { useGreeting } from '@features/chat/components/GreetingBanner/useGreetin
 import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { toUserMessage } from '@/lib/user-error-message';
+import { GITHUB_RECONNECT_REQUIRED_REASON } from '@/lib/github-installation-access';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
 import { useNotebookWorkspace } from '@/features/notebook/hooks/useNotebookWorkspace';
 import { useCloudCodeAuthority } from './hooks/use-cloud-code-authority';
@@ -72,6 +73,7 @@ import {
   DEFAULT_RUNTIME_ID,
   type CodeStatusFilter,
   filterAndSortSessions,
+  githubInstallHref,
   parseExtraHosts,
   REPOSITORY_MINIMUM_NETWORK_ACCESS,
   sessionContextChip,
@@ -98,6 +100,7 @@ import {
   localSessionDeletedLine,
   localWorktreeRemovedLine,
   preferredLocalRootId,
+  resolveLocalRoute,
   startingModelId,
   type LocalPlacement,
 } from './local-code';
@@ -150,6 +153,10 @@ function makeRequestId(): string {
 // toUserMessage keeps a sentence somebody wrote and drops operator detail.
 function friendlyError(error: unknown): string {
   return toUserMessage(error, CODE_COPY.loadFailed);
+}
+
+function requiresGitHubReconnect(error: unknown): boolean {
+  return error instanceof CloudCodeApiError && error.code === GITHUB_RECONNECT_REQUIRED_REASON;
 }
 
 const READY_POLLS = 20;
@@ -208,10 +215,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [selectedId, publishSelectedId] = useState<string | null>(sessionId ?? null);
   const [entries, setEntries] = useState<CloudCodeTerminalEntry[]>([]);
   const [turns, setTurns] = useState<CodeTurnRecord[]>([]);
+  const [truncatedSessionId, setTruncatedSessionId] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<CodeApprovalPrompt[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [routeNotice, setRouteNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
@@ -292,6 +301,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
   const setLocalSession = useCallback(
     (next: LocalDeveloperSession | null) => {
+      routeLocalRef.current = null;
       if (
         localSelectionRef.current?.rootId !== next?.rootId ||
         localSelectionRef.current?.id !== next?.id
@@ -345,6 +355,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const railTriggerRef = useRef<HTMLButtonElement>(null);
   const hiddenProbeRef = useRef(false);
   const routeSessionRef = useRef<string | null>(sessionId ?? null);
+  const routeWaitingNotice = useRef<string | null>(null);
   const routeLocalRef = useRef<{ rootId: string; threadId: string } | null>(
     typeof window === 'undefined' || pane ? null : localSessionFromSearch(window.location.search),
   );
@@ -417,7 +428,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     const next = sessionId ?? null;
     if (routeSessionRef.current === next) return;
     routeSessionRef.current = next;
-    if (next !== null) setRouteNotice(null);
+    if (next !== null) {
+      routeLocalRef.current = null;
+      setRouteNotice(null);
+    }
     if (selectionRef.current === next) return;
     setSelectedId(next);
     setTurns([]);
@@ -568,6 +582,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         if (!current()) return;
         replaceSession(body.session, owner);
         setEntries(body.terminalEntries);
+        setTruncatedSessionId(body.turnsTruncated === true ? body.session.id : null);
         // Merge rather than replace: this read races the turn running in this
         // tab, and a response computed before that turn's row existed would
         // wipe it out of the transcript.
@@ -849,17 +864,29 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   useEffect(() => {
     const wanted = routeLocalRef.current;
     if (wanted === null || !local.settled || local.loading) return;
+    const resolution = resolveLocalRoute(local.groups, wanted, local.error);
+    if (resolution.kind === 'waiting') {
+      routeWaitingNotice.current = resolution.notice;
+      setRouteNotice(resolution.notice);
+      return;
+    }
     routeLocalRef.current = null;
-    const found = local.groups
-      .find((group) => group.rootId === wanted.rootId)
-      ?.sessions.find((session) => session.id === wanted.threadId);
-    if (found) {
-      setLocalSession(found);
+    if (resolution.kind === 'found') {
+      const waiting = routeWaitingNotice.current;
+      routeWaitingNotice.current = null;
+      setRouteNotice((current) => (current === waiting ? null : current));
+      setLocalSession(resolution.session);
       return;
     }
     setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
     routerRef.current.replace(CODE_ROUTES.root);
-  }, [local.settled, local.loading, local.groups, setLocalSession]);
+  }, [local.settled, local.loading, local.groups, local.error, setLocalSession]);
+
+  const dismissRouteNotice = useCallback(() => {
+    routeLocalRef.current = null;
+    routeWaitingNotice.current = null;
+    setRouteNotice(null);
+  }, []);
 
   const openLocalSession = useCallback(
     (session: LocalDeveloperSession) => {
@@ -1184,7 +1211,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         void loadChanges(selectedSession.id);
       } catch (commitError) {
         if (!owner.isCurrent()) return;
-        setError(friendlyError(commitError));
+        const message = friendlyError(commitError);
+        setError(message);
+        setReconnectError(requiresGitHubReconnect(commitError) ? message : null);
       } finally {
         if (owner.isCurrent()) setCommitting(false);
       }
@@ -1338,7 +1367,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       replaceSession(body.session, owner);
     } catch (pullRequestError) {
       if (!owner.isCurrent()) return;
-      setError(friendlyError(pullRequestError));
+      const message = friendlyError(pullRequestError);
+      setError(message);
+      setReconnectError(requiresGitHubReconnect(pullRequestError) ? message : null);
     } finally {
       if (owner.isCurrent()) setPullRequestBusy(false);
     }
@@ -1573,10 +1604,16 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{routeNotice}</span>
           <span className={styles['noticeActions']}>
+            {routeNotice === routeWaitingNotice.current &&
+              routeNotice !== LOCAL_CODE_COPY.sessionWithheld && (
+                <button type="button" className={styles['secondaryButton']} onClick={local.refresh}>
+                  {CODE_COPY.retry}
+                </button>
+              )}
             <button
               type="button"
               className={styles['secondaryButton']}
-              onClick={() => setRouteNotice(null)}
+              onClick={dismissRouteNotice}
             >
               <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
               {CODE_COPY.dismiss}
@@ -1589,6 +1626,11 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{error}</span>
           <span className={styles['noticeActions']}>
+            {error === reconnectError && (
+              <a className={styles['primaryButton']} href={githubInstallHref()}>
+                {CODE_COPY.githubReauthorizeAction}
+              </a>
+            )}
             <button
               type="button"
               className={styles['secondaryButton']}
@@ -1836,6 +1878,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                           <div className={styles['notice']} role="status">
                             <Spinner size="sm" aria-label={CODE_COPY.openingSession} />
                             <span>{CODE_COPY.openingSession}</span>
+                          </div>
+                        )}
+
+                        {!detailLoading && truncatedSessionId === selectedSession.id && (
+                          <div className={styles['notice']} role="status">
+                            <span>{CODE_COPY.earlierTurnsNotShown}</span>
                           </div>
                         )}
 

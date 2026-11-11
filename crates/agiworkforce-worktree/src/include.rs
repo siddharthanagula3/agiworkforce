@@ -30,7 +30,7 @@ const UNWALKED: [&str; 2] = [
 /// git ignores into the same place under `target`. A path that runs through a
 /// symlink, on either side, is refused: following it could read or write
 /// something outside the repository.
-pub(crate) async fn copy_included_files(
+pub async fn copy_included_files(
     runner: &dyn CommandRunner,
     source: &Path,
     target: &Path,
@@ -151,14 +151,48 @@ fn copy_one(source: &Path, target: &Path, relative: &str) -> Result<(), String> 
     }
     let destination = path_inside(target, relative)?;
     if std::fs::symlink_metadata(&destination).is_ok() {
-        return Err("the new worktree already has a file there".to_string());
+        return Err(DESTINATION_TAKEN.to_string());
     }
     if let Some(parent) = destination.parent() {
         std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    std::fs::copy(&from, &destination)
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+    let mut reader = open_without_following(&from).map_err(|error| error.to_string())?;
+    let opened = reader.metadata().map_err(|error| error.to_string())?;
+    if !opened.is_file() {
+        return Err("not a regular file".to_string());
+    }
+    let mut writer = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&destination)
+        .map_err(|error| match error.kind() {
+            std::io::ErrorKind::AlreadyExists => DESTINATION_TAKEN.to_string(),
+            _ => error.to_string(),
+        })?;
+    let written = std::io::copy(&mut reader, &mut writer)
+        .and_then(|_| writer.set_permissions(opened.permissions()));
+    if let Err(error) = written {
+        drop(writer);
+        let _ = std::fs::remove_file(&destination);
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
+const DESTINATION_TAKEN: &str = "the new worktree already has a file there";
+
+#[cfg(unix)]
+fn open_without_following(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+}
+
+#[cfg(not(unix))]
+fn open_without_following(path: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::File::open(path)
 }
 
 #[cfg(test)]
@@ -222,6 +256,85 @@ mod tests {
 
         assert!(refused.contains("symbolic link"));
         assert!(!outside.path().join(".env").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_source_that_is_itself_a_symlink_is_refused() {
+        let source = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("secret"), "outside-marker").unwrap();
+        std::os::unix::fs::symlink(
+            outside.path().join("secret"),
+            source.path().join("copy.env"),
+        )
+        .unwrap();
+        let target = tempfile::tempdir().unwrap();
+
+        let refused = copy_one(source.path(), target.path(), "copy.env").unwrap_err();
+
+        assert!(refused.contains("symbolic link"));
+        assert!(std::fs::symlink_metadata(target.path().join("copy.env")).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_destination_symlink_is_not_followed_and_its_referent_keeps_its_bytes() {
+        let source = tempfile::tempdir().unwrap();
+        std::fs::write(source.path().join("copy.env"), "source-marker").unwrap();
+        let target = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("victim"), "outside-marker").unwrap();
+        std::os::unix::fs::symlink(
+            outside.path().join("victim"),
+            target.path().join("copy.env"),
+        )
+        .unwrap();
+
+        let refused = copy_one(source.path(), target.path(), "copy.env").unwrap_err();
+
+        assert_eq!(refused, DESTINATION_TAKEN);
+        assert_eq!(
+            std::fs::read_to_string(outside.path().join("victim")).unwrap(),
+            "outside-marker"
+        );
+    }
+
+    #[test]
+    fn an_existing_destination_file_is_not_overwritten() {
+        let source = tempfile::tempdir().unwrap();
+        std::fs::write(source.path().join("copy.env"), "source-marker").unwrap();
+        let target = tempfile::tempdir().unwrap();
+        std::fs::write(target.path().join("copy.env"), "tracked-marker").unwrap();
+
+        let refused = copy_one(source.path(), target.path(), "copy.env").unwrap_err();
+
+        assert_eq!(refused, DESTINATION_TAKEN);
+        assert_eq!(
+            std::fs::read_to_string(target.path().join("copy.env")).unwrap(),
+            "tracked-marker"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_copied_file_keeps_the_source_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let source = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(source.path().join("config")).unwrap();
+        let from = source.path().join("config/.env");
+        std::fs::write(&from, "SECRET=1\n").unwrap();
+        std::fs::set_permissions(&from, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let target = tempfile::tempdir().unwrap();
+
+        copy_one(source.path(), target.path(), "config/.env").unwrap();
+
+        let copied = target.path().join("config/.env");
+        assert_eq!(std::fs::read_to_string(&copied).unwrap(), "SECRET=1\n");
+        assert_eq!(
+            std::fs::metadata(&copied).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
     }
 
     #[tokio::test]

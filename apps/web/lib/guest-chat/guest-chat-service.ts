@@ -42,6 +42,8 @@ const SPEND_KEY_TTL_SECONDS = 2 * 24 * 60 * 60;
 const GLOBAL_SPEND_SCOPE = 'global';
 const UPSTREAM_FAILURE_MESSAGE =
   'The model could not answer just now. Try again, or sign in to use more models.';
+const TIMEOUT_FAILURE_MESSAGE =
+  'The model took too long to answer. Try again, or sign in to use more models.';
 
 export interface GuestChatModel {
   modelKey: string;
@@ -142,37 +144,54 @@ export function streamGuestChat(input: {
   });
   const encoder = new TextEncoder();
   const frame = (event: unknown) => encoder.encode(`data: ${JSON.stringify(event)}\n\n`);
+  const consumerGone = new AbortController();
+  const providerSignal = AbortSignal.any([input.signal, consumerGone.signal]);
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
+      const send = (bytes: Uint8Array) => {
+        if (!consumerGone.signal.aborted) controller.enqueue(bytes);
+      };
+      const fail = (message: string) => {
+        const failure = {
+          type: 'error',
+          code: GUEST_CHAT_ERROR_CODES.upstream,
+          message,
+          retryable: true,
+        } as StreamChunk;
+        for (const event of assembler.sseChunks(failure)) send(frame(event));
+      };
       let usage: GuestChatUsage | null = null;
+      let reportedError = false;
       try {
-        for await (const chunk of adapter.stream(input.chatRequest, input.signal)) {
+        for await (const chunk of adapter.stream(input.chatRequest, providerSignal)) {
           usage = withUsage(usage, chunk);
-          for (const event of assembler.sseChunks(chunk)) controller.enqueue(frame(event));
+          if (chunk.type === 'error') reportedError = true;
+          for (const event of assembler.sseChunks(chunk)) send(frame(event));
         }
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        if (input.signal.aborted && !reportedError) fail(TIMEOUT_FAILURE_MESSAGE);
       } catch (error) {
-        if (!input.signal.aborted) {
+        if (input.signal.aborted) {
+          fail(TIMEOUT_FAILURE_MESSAGE);
+        } else if (!consumerGone.signal.aborted) {
           logger.warn(
             { error, provider: input.model.provider, model: input.model.modelKey },
             '[guest-chat] the provider stream failed',
           );
-          const failure = {
-            type: 'error',
-            code: GUEST_CHAT_ERROR_CODES.upstream,
-            message: UPSTREAM_FAILURE_MESSAGE,
-            retryable: true,
-          } as StreamChunk;
-          for (const event of assembler.sseChunks(failure)) controller.enqueue(frame(event));
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          fail(UPSTREAM_FAILURE_MESSAGE);
         }
-      } finally {
+      }
+      send(encoder.encode('data: [DONE]\n\n'));
+      try {
         await input.onSettled(usage).catch((error: unknown) => {
           logger.warn({ error }, '[guest-chat] settling the turn failed');
         });
-        if (!input.signal.aborted) controller.close();
+      } finally {
+        if (!consumerGone.signal.aborted) controller.close();
       }
+    },
+    cancel() {
+      consumerGone.abort();
     },
   });
 }
@@ -272,16 +291,43 @@ export async function reserveGuestSpend(input: {
     },
   ];
   const held: string[] = [];
-  for (const scope of scopes) {
-    const total = await input.store.increment(scope.key, amount);
-    held.push(scope.key);
-    await input.store.expire(scope.key, SPEND_KEY_TTL_SECONDS);
-    if (total > scope.cap) {
-      for (const key of held) await input.store.increment(key, -amount);
-      return { ok: false, limit: scope.limit };
+  try {
+    for (const scope of scopes) {
+      const total = await input.store.increment(scope.key, amount);
+      held.push(scope.key);
+      await input.store.expire(scope.key, SPEND_KEY_TTL_SECONDS);
+      if (total > scope.cap) {
+        await releaseGuestSpend(input.store, held, amount);
+        return { ok: false, limit: scope.limit };
+      }
     }
+  } catch (error) {
+    await releaseGuestSpend(input.store, held, amount);
+    throw error;
   }
   return { ok: true, hold: { keys: held, reservedMicrousd: amount } };
+}
+
+function spendScopeOf(key: string): string {
+  const segments = key.slice(SPEND_KEY_PREFIX.length).split(':');
+  return segments.length > 1 ? (segments[0] ?? GLOBAL_SPEND_SCOPE) : GLOBAL_SPEND_SCOPE;
+}
+
+async function releaseGuestSpend(
+  store: KeyValueStore,
+  keys: readonly string[],
+  amount: number,
+): Promise<void> {
+  for (const key of keys) {
+    try {
+      await store.increment(key, -amount);
+    } catch (error) {
+      logger.error(
+        { error, spendScope: spendScopeOf(key), amountMicrousd: amount },
+        '[guest-chat] a refused turn’s spend hold could not be released',
+      );
+    }
+  }
 }
 
 /**

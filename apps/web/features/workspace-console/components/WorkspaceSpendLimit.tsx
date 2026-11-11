@@ -3,11 +3,20 @@
 import { formatCredits } from '@agiworkforce/types';
 import { useConfirmAction } from '@agiworkforce/ui';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import {
+  isValidAlertThresholdPct,
+  isValidMonthlyCapCredits,
+  MAX_ALERT_THRESHOLD_PCT,
+  MAX_MONTHLY_CAP_CREDITS,
+  MIN_ALERT_THRESHOLD_PCT,
+  MIN_MONTHLY_CAP_CREDITS,
+} from '@/lib/spend-limit-bounds';
 import { toUserMessage } from '@/lib/user-error-message';
+import { useServerDraftSync } from '../hooks/use-server-draft-sync';
 
 type Enforcement = 'off' | 'notify' | 'block';
 
@@ -26,6 +35,10 @@ interface SpendLimitResult {
   canManageLimit: boolean;
   state: SpendState;
 }
+
+const UNSET_CAP_INPUT = '';
+const DEFAULT_ENFORCEMENT: Enforcement = 'notify';
+const DEFAULT_ALERT_THRESHOLD_PCT = 80;
 
 const ENDPOINT = '/api/settings/organization/spend-limit';
 const KEY = ['workspace', 'spend-limit'] as const;
@@ -110,17 +123,27 @@ export function WorkspaceSpendLimit() {
     },
   });
 
-  const [capInput, setCapInput] = useState('');
-  const [enforcement, setEnforcement] = useState<Enforcement>('notify');
-  const [threshold, setThreshold] = useState(80);
+  const [capInput, setCapInput] = useState(UNSET_CAP_INPUT);
+  const [enforcement, setEnforcement] = useState<Enforcement>(DEFAULT_ENFORCEMENT);
+  const [threshold, setThreshold] = useState(DEFAULT_ALERT_THRESHOLD_PCT);
 
-  useEffect(() => {
-    const state = data?.state;
-    if (!state?.configured || state.monthlyCapCredits === null) return;
-    setCapInput(String(state.monthlyCapCredits));
-    setEnforcement(state.enforcement);
-    setThreshold(state.alertThresholdPct);
-  }, [data]);
+  useServerDraftSync(
+    data?.state,
+    (acknowledged) =>
+      acknowledged.configured && acknowledged.monthlyCapCredits !== null
+        ? capInput === String(acknowledged.monthlyCapCredits) &&
+          enforcement === acknowledged.enforcement &&
+          threshold === acknowledged.alertThresholdPct
+        : capInput === UNSET_CAP_INPUT &&
+          enforcement === DEFAULT_ENFORCEMENT &&
+          threshold === DEFAULT_ALERT_THRESHOLD_PCT,
+    (state) => {
+      if (!state.configured || state.monthlyCapCredits === null) return;
+      setCapInput(String(state.monthlyCapCredits));
+      setEnforcement(state.enforcement);
+      setThreshold(state.alertThresholdPct);
+    },
+  );
 
   if (isPending) {
     return (
@@ -156,7 +179,10 @@ export function WorkspaceSpendLimit() {
   const { state, canManageLimit } = data;
   const capCredits = Number(capInput);
   const canSave =
-    canManageLimit && Number.isInteger(capCredits) && capCredits >= 1 && !save.isPending;
+    canManageLimit &&
+    isValidMonthlyCapCredits(capCredits) &&
+    isValidAlertThresholdPct(threshold) &&
+    !save.isPending;
 
   return (
     <section style={cardStyle} aria-labelledby="spend-limit-heading">
@@ -207,7 +233,8 @@ export function WorkspaceSpendLimit() {
           <input
             id="spend-cap"
             type="number"
-            min={1}
+            min={MIN_MONTHLY_CAP_CREDITS}
+            max={MAX_MONTHLY_CAP_CREDITS}
             step={1}
             value={capInput}
             disabled={!canManageLimit}
@@ -220,8 +247,8 @@ export function WorkspaceSpendLimit() {
           <input
             id="spend-alert"
             type="number"
-            min={1}
-            max={100}
+            min={MIN_ALERT_THRESHOLD_PCT}
+            max={MAX_ALERT_THRESHOLD_PCT}
             value={threshold}
             disabled={!canManageLimit}
             onChange={(event) => {

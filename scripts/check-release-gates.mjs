@@ -347,6 +347,18 @@ export function checkMobileReleaseGates(workflow) {
     }
   }
 
+  if (validate && !validate.outputs?.commit) {
+    failures.push('validate must export the commit it validated');
+  }
+  for (const jobId of ['device-matrix-e2e', 'release-ios', 'release-android']) {
+    for (const step of jobs[jobId]?.steps ?? []) {
+      if (!String(step?.uses ?? '').startsWith('actions/checkout@')) continue;
+      if (step.with?.ref !== '${{ needs.validate.outputs.commit }}') {
+        failures.push(`${jobId} must check out the commit validate validated, not a movable ref`);
+      }
+    }
+  }
+
   return failures;
 }
 

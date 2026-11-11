@@ -25,7 +25,8 @@ const mocks = vi.hoisted(() => ({
   logAuthFailure: vi.fn(),
 }));
 
-vi.mock('@/lib/server/refresh-token-family', () => ({
+vi.mock('@/lib/server/refresh-token-family', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   REFRESH_FAMILY_COMPROMISE_REASONS: ['replayed', 'device_lost', 'admin_revoked'],
   finishFamilyAsCompromised: vi.fn(),
   revokeDeviceRefreshCredentials: vi.fn(),
@@ -502,3 +503,5 @@ describe('POST /api/settings/password', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');
+
+type ImportedModule1 = typeof import('@/lib/server/refresh-token-family');

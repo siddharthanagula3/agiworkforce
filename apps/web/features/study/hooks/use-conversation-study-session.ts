@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { toUserMessage } from '@/lib/user-error-message';
 
-import type { StudySession } from '../lib/study-session';
+import { isStudySessionActive, type StudySession } from '../lib/study-session';
 import { studyApi, type StudyApi } from '../services/study-api';
 
 export interface ConversationStudySession {
@@ -63,7 +63,13 @@ export function useConversationStudySession(
       setSession(await api.end(session.conversationId));
       setEndedHere(true);
     } catch (cause) {
-      setError(toUserMessage(cause, 'Study mode could not be turned off.'));
+      const settled = await api.forConversation(session.conversationId).catch(() => null);
+      if (settled && !isStudySessionActive(settled)) {
+        setSession(settled);
+        setEndedHere(true);
+      } else {
+        setError(toUserMessage(cause, 'Study mode could not be turned off.'));
+      }
     } finally {
       setPending(false);
     }

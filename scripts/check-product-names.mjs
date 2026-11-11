@@ -53,7 +53,7 @@ const SKIPPED_DIR = new Set(['node_modules', 'dist', '.next', 'build', 'target',
 
 export function readRegistry(root) {
   const source = fs.readFileSync(path.join(root, REGISTRY_PATH), 'utf8');
-  const block = source.match(/PRODUCT_NAMES\s*=\s*\{([\s\S]*?)\}/);
+  const block = source.match(/\bPRODUCT_NAMES\s*=\s*\{([\s\S]*?)\}/);
   if (!block) throw new Error(`${REGISTRY_PATH}: PRODUCT_NAMES not found`);
   const names = {};
   for (const [, key, value] of block[1].matchAll(/(\w+):\s*'([^']+)'/g)) names[key] = value;

@@ -44,13 +44,19 @@
     "privacy": {
       "route": "/privacy",
       "slug": "privacy",
-      "current": "2026-10-18",
+      "current": "2026-11-10",
       "versions": [
+        {
+          "date": "2026-11-10",
+          "summary": "Corrects what the policy says about Desktop. Desktop chat uses Cloud, as before. A local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there, or a provider key you set up in the CLI; the policy used to say Desktop was cloud-only with no user-key path. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-18",
           "summary": "Describes the Chrome extension without a release status and states that data it receives follows the Chrome Web Store User Data Policy, including Limited Use: used only for the task you ask for, never sold and never used for advertising.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-10-15",
@@ -178,7 +184,7 @@
       "versions": [
         {
           "date": "2026-11-10",
-          "summary": "Renames Model providers (Managed Cloud) to Model providers (Cloud). This changes only the recipient-group display label; no recipient entity or provider id is added or removed.",
+          "summary": "The hosted mode is now called Cloud. The Model providers row is headed Model providers (Cloud), every row that mentions the mode says Cloud where it said Managed Cloud, and the E2B row says Sandbox runtime. No recipient was added or removed. The BYOK section also corrects which surfaces have a user-supplied-key path: the web app and Desktop chat have none, and a Desktop local coding session runs the CLI and can use a key you set up there.",
           "status": "current",
           "published": null
         },
@@ -223,13 +229,19 @@
     "security": {
       "route": "/security",
       "slug": "security",
-      "current": "2026-10-08",
+      "current": "2026-11-10",
       "versions": [
+        {
+          "date": "2026-11-10",
+          "summary": "Corrects what the page says about Desktop. Desktop chat uses Cloud and keeps no chat database of its own. A local coding session in Desktop runs the CLI and can use the same local runtimes as CLI Local mode; for it, Desktop signs the CLI in to your account, and the CLI keeps that sign-in in the operating system credential store. The page used to call Desktop cloud only. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-08",
           "summary": "Restates how deletion works in narrower, verified terms: stored media is deleted before its catalogue record and retried if deletion fails, erasure reports list what was deleted, skipped or failed, and the scheduled purge erases account data before the sign-in identity and stops if erasure is incomplete. Corrects three statements: the CLI is no longer described as released, it keeps provider keys in owner-only files on Linux or when the keyring is turned off, and an artifact can load scripts, styles, images and fonts from four pinned CDN hosts, where the page said images and fonts over https and scripts from two. The provider API keys row no longer says keys are encrypted under a device-derived key.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-08-14",
@@ -330,13 +342,19 @@
     "trust": {
       "route": "/trust",
       "slug": "trust",
-      "current": "2026-10-18",
+      "current": "2026-11-10",
       "versions": [
+        {
+          "date": "2026-11-10",
+          "summary": "Corrects two rows. Local mode isolation and Desktop credential storage said Desktop uses Cloud only. Desktop chat does, but its local coding sessions run the CLI, which can use a local model or a provider key set up in the CLI, and Desktop signs that CLI in to your account, which keeps the sign-in in the operating system credential store. The hosted mode is also called Cloud throughout, and the Managed Cloud maturity row is now Cloud maturity.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-18",
           "summary": "Corrects the Desktop credential storage row. Electron Desktop no longer keeps its own encrypted credential store; it writes no account credential of its own, and the sign-in session lives in a persistent browser profile that belongs to the app alone.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-10-08",
@@ -455,13 +473,19 @@
     "indiaPrivacy": {
       "route": "/privacy/india",
       "slug": "privacy-india",
-      "current": "2026-10-15",
+      "current": "2026-11-10",
       "versions": [
+        {
+          "date": "2026-11-10",
+          "summary": "Corrects what the notice says about Desktop. Desktop chat uses Cloud, as before. A local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there; the notice used to say the Desktop app does not expose Local inference. The hosted mode is also called Cloud throughout, where it said Managed Cloud, and the install-notice purpose names the apps without the AGI prefix.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-15",
           "summary": "Changes who can receive a Free plan chat on the default model: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenAI, where it said OpenRouter’s free router. OpenRouter’s free router no longer answers Free plan chats.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-10-08",
@@ -499,13 +523,19 @@
     "dataUse": {
       "route": "/data-use",
       "slug": "data-use",
-      "current": "2026-10-15",
+      "current": "2026-11-10",
       "versions": [
+        {
+          "date": "2026-11-10",
+          "summary": "Corrects the answer on whether it depends on how you run AGI. Web and Desktop chat use Cloud, and a local coding session in Desktop runs the CLI and can also use Local or BYOK; the page used to say web and Desktop are cloud-only. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-15",
           "summary": "Changes who can receive a Free plan chat on the default model: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenAI, where it said OpenRouter’s free router. OpenRouter’s free router no longer answers Free plan chats. Nothing else about how your data is used changed.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-10-08",

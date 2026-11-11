@@ -219,7 +219,9 @@ describe('dev accounts catalog', () => {
       expect(account?.plan).toBe(plan);
       expect(account?.billing).toBe('manual');
     }
-    expect(findDevAccount('max-20x')?.purpose).toContain(BILLING_PLAN_PRICING.max_15x.label);
+    expect(findDevAccount(slugOfPlan('max_15x'))?.purpose).toContain(
+      BILLING_PLAN_PRICING.max_15x.label,
+    );
   });
 
   it('seats the team member in a per-seat workspace after its owner', () => {

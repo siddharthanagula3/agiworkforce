@@ -102,7 +102,7 @@ const PUBLIC_BUCKET_USES: Readonly<Record<string, { writes: boolean; reason: str
   'apps/web/lib/server/object-backup.ts': {
     writes: true,
     reason:
-      'resolves a separate environment whose bucket variable carries the backup bucket, so the name it reads back and writes is the backup target',
+      'resolves a separate environment whose bucket variable carries the backup bucket, so the name it reads back and writes is the backup target, and reads the public bucket only to copy legacy project files that were stored there before the private bucket existed',
   },
   'apps/web/lib/validate-env.ts': {
     writes: false,

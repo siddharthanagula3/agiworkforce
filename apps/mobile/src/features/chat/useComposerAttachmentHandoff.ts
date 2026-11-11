@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import type { ChatInputHandle } from './components/ChatInput';
-import { takeComposerAttachments } from './composerHandoff';
+import { adoptComposerHandoff } from './composerHandoff';
 
 export function useComposerAttachmentHandoff(
   key: string | undefined,
@@ -9,10 +9,7 @@ export function useComposerAttachmentHandoff(
 ): void {
   useFocusEffect(
     useCallback(() => {
-      if (!key) return;
-      const attachments = takeComposerAttachments(key);
-      if (attachments.length === 0) return;
-      attachRef.current?.addAttachments(attachments);
+      adoptComposerHandoff(key, attachRef.current);
     }, [attachRef, key]),
   );
 }

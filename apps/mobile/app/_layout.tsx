@@ -544,12 +544,14 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isInitialized) return;
     return subscribeToIOSShareInbox(
-      ({ text, truncated, files }) => {
+      ({ receiptId, text, truncated, files, unavailableFileCount }) => {
         const handoffKey = stageSharedFileAttachments(files);
         router.push(
           `/(app)/share-preview?text=${encodeURIComponent(text)}${
             truncated ? '&nativeTruncated=1' : ''
-          }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}` as Parameters<
+          }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}${
+            receiptId ? `&receipt=${encodeURIComponent(receiptId)}` : ''
+          }${unavailableFileCount > 0 ? `&omittedFiles=${unavailableFileCount}` : ''}` as Parameters<
             typeof router.push
           >[0],
         );
@@ -640,13 +642,14 @@ export default function RootLayout() {
         const text = getParam('text');
         const nativeTruncated = getParam('truncated') === '1';
         const handoffKey = stageSharedFileAttachments(parseSharedFilesParam(getParam('files')));
-        if ((text && text.trim()) || handoffKey) {
+        const omittedFiles = getParam('omitted');
+        if ((text && text.trim()) || handoffKey || omittedFiles) {
           router.push(
             `/(app)/share-preview?text=${encodeURIComponent(text ?? '')}${
               nativeTruncated ? '&nativeTruncated=1' : ''
-            }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}` as Parameters<
-              typeof router.push
-            >[0],
+            }${handoffKey ? `&handoff=${encodeURIComponent(handoffKey)}` : ''}${
+              omittedFiles ? `&omittedFiles=${encodeURIComponent(omittedFiles)}` : ''
+            }` as Parameters<typeof router.push>[0],
           );
         }
         break;

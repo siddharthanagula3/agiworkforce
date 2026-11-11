@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { cn } from '../lib/utils';
 
 export interface MentionSkill {
@@ -44,6 +45,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      if (isImeComposingKey(e)) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();

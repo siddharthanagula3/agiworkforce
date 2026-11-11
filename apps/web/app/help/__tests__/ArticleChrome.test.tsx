@@ -18,6 +18,7 @@ vi.mock('@shared/components/seo/JsonLd', () => ({
 import { docsNavGroups } from '@/features/docs/lib/docs-nav';
 import { getHelpArticle, helpArticlePath } from '@/lib/support/help-articles';
 
+import HelpArticleLayout from '../[slug]/layout';
 import HelpArticlePage from '../[slug]/page';
 
 const { links: ACCOUNT_LINKS } = docsNavGroups().find((group) => group.id === 'account') ?? {
@@ -29,9 +30,14 @@ async function renderArticle(slug: string) {
   return render(await HelpArticlePage({ params: Promise.resolve({ slug }) }));
 }
 
+async function renderArticleWithLayout(slug: string) {
+  const params = Promise.resolve({ slug });
+  return render(await HelpArticleLayout({ params, children: await HelpArticlePage({ params }) }));
+}
+
 describe('help article page chrome', () => {
   it('describes the visible article and breadcrumb with the same canonical identity', async () => {
-    const { container } = await renderArticle(ARTICLE_ID);
+    const { container } = await renderArticleWithLayout(ARTICLE_ID);
     const blocks = Array.from(container.querySelectorAll('script[type="application/ld+json"]')).map(
       (script) => JSON.parse(script.textContent ?? '{}') as Record<string, unknown>,
     );
@@ -46,6 +52,29 @@ describe('help article page chrome', () => {
     const items = breadcrumb?.['itemListElement'] as { item: string; name: string }[];
     expect(items.at(-1)?.name).toBe(article?.title);
     expect(items.at(-1)?.item).toMatch(new RegExp(`${helpArticlePath(ARTICLE_ID)}$`));
+  });
+
+  it('emits the article structured data from the layout only, once per type', async () => {
+    const page = await renderArticle(ARTICLE_ID);
+    expect(page.container.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(0);
+    page.unmount();
+
+    const { container } = await renderArticleWithLayout(ARTICLE_ID);
+    const types = Array.from(container.querySelectorAll('script[type="application/ld+json"]')).map(
+      (script) => (JSON.parse(script.textContent ?? '{}') as Record<string, unknown>)['@type'],
+    );
+    expect(types).toEqual(['Article', 'BreadcrumbList']);
+  });
+
+  it('emits no structured data for an unknown article', async () => {
+    const { container } = render(
+      await HelpArticleLayout({
+        params: Promise.resolve({ slug: 'no-such-article' }),
+        children: <span>child</span>,
+      }),
+    );
+    expect(container.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(0);
+    expect(container.textContent).toBe('child');
   });
 
   it('ends the breadcrumb with the unlinked article title', async () => {

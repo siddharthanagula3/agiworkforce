@@ -69,7 +69,7 @@ describe('presigned url expiry', () => {
       now: () => NOW_MS,
     });
 
-    const url = await store.presignPut(presignInput(TTL_SECONDS));
+    const { url } = await store.presignPut(presignInput(TTL_SECONDS));
     const expiresAt = NOW_MS + TTL_SECONDS * MILLISECONDS_PER_SECOND;
 
     expect(presignedUrlExpiresAt(url)).toBe(expiresAt);
@@ -84,7 +84,7 @@ describe('presigned url expiry', () => {
       requestTimeoutMs: REQUEST_TIMEOUT_MS,
     });
 
-    const url = await store.presignPut(presignInput(TTL_SECONDS));
+    const { url } = await store.presignPut(presignInput(TTL_SECONDS));
     const expiresAt = presignedUrlExpiresAt(url);
 
     expect(new URL(url).searchParams.get('X-Amz-Expires')).toBe(String(TTL_SECONDS));

@@ -99,6 +99,11 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
+jest.mock('../src/features/model-picker/components/SpeedControl', () => {
+  const { View } = require('react-native');
+  return { SpeedControl: () => <View testID="model-picker-speed" /> };
+});
+
 import { ModelPickerSheet } from '../src/features/model-picker/components/ModelPickerSheet';
 import { useFreeQuotaCatalogueStore } from '../src/features/model-picker/freeQuotaCatalogue';
 import {
@@ -239,17 +244,21 @@ function resetModelStore() {
 const mockSheetRef = { current: { close: jest.fn(), snapToIndex: jest.fn() } };
 function renderPicker(overrides?: {
   onSelect?: (id: string) => void;
+  selectedModelId?: string;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
   conversationId?: string;
+  showSpeed?: boolean;
 }) {
   return render(
     <ModelPickerSheet
       sheetRef={mockSheetRef as never}
       onSelect={overrides?.onSelect}
+      selectedModelId={overrides?.selectedModelId}
       onOpenCloudAccess={overrides?.onOpenCloudAccess}
       modelScope={overrides?.modelScope}
       conversationId={overrides?.conversationId}
+      showSpeed={overrides?.showSpeed}
     />,
   );
 }
@@ -483,6 +492,39 @@ describe('ModelPickerSheet', () => {
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
   });
 
+  it('delivers a tap on the store-selected model to a callback-owned slot holding another model', () => {
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
+    const onSelect = jest.fn();
+    const { getByLabelText } = renderPicker({ onSelect, selectedModelId: LITE_MODEL_ID });
+
+    fireEvent.press(getByLabelText(/AGI Standard/));
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(DEFAULT_LOCAL_MODEL_ID);
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+  });
+
+  it('marks the callback-owned model, not the store model, as the selected row', () => {
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
+    const { getByLabelText } = renderPicker({
+      onSelect: jest.fn(),
+      selectedModelId: LITE_MODEL_ID,
+    });
+
+    expect(getByLabelText(/AGI Lite/).props.accessibilityState.selected).toBe(true);
+    expect(getByLabelText(/AGI Standard/).props.accessibilityState.selected).toBe(false);
+  });
+
+  it('does not call the callback again when the callback-owned model is tapped', () => {
+    const onSelect = jest.fn();
+    const { getByLabelText } = renderPicker({ onSelect, selectedModelId: LITE_MODEL_ID });
+
+    fireEvent.press(getByLabelText(/AGI Lite/));
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(mockSheetRef.current.close).toHaveBeenCalled();
+  });
+
   it('closes the sheet after selecting a local model', () => {
     const { getByLabelText } = renderPicker();
 
@@ -534,6 +576,18 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).toHaveBeenCalled();
     await waitFor(() => expect(onOpenCloudAccess).toHaveBeenCalledWith('invite'));
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('offers the speed switch in the Cloud picker unless the caller opts out of it', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+
+    const shown = renderPicker({ modelScope: 'cloud' });
+    expect(shown.queryByTestId('model-picker-speed')).toBeTruthy();
+    shown.unmount();
+
+    const hidden = renderPicker({ modelScope: 'cloud', showSpeed: false });
+    expect(hidden.queryByTestId('model-picker-speed')).toBeNull();
   });
 
   it('selects cloud rows after invite access', () => {

@@ -418,6 +418,32 @@ describe('DELETE /api/settings/api-keys/[keyId] writes api_key_revoked', () => {
       }),
     ).resolves.toBeUndefined();
   });
+
+  it('rejects when the caller requires the workspace trail and its write fails', async () => {
+    mockQuery.mockRejectedValue(new Error('permission denied for function'));
+
+    await expect(
+      recordAuditEvent({
+        userId: 'user_admin',
+        eventType: 'data_exported',
+        organizationId: '11111111-2222-3333-4444-555555555555',
+        requireWorkspaceTrail: true,
+      }),
+    ).rejects.toMatchObject({ statusCode: 503 });
+    expect(auditInserts()).toHaveLength(1);
+  });
+
+  it('resolves when the caller requires the workspace trail and its write succeeds', async () => {
+    await expect(
+      recordAuditEvent({
+        userId: 'user_admin',
+        eventType: 'data_exported',
+        organizationId: '11111111-2222-3333-4444-555555555555',
+        requireWorkspaceTrail: true,
+      }),
+    ).resolves.toBeUndefined();
+    expect(enterpriseWrites()).toHaveLength(1);
+  });
 });
 
 describe('PATCH /api/settings/team/[memberId] writes member_role_changed', () => {

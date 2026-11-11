@@ -10,8 +10,15 @@ jest.mock('../services/api', () => ({
 }));
 
 import {
+  StaleCloudAccountOperationError,
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
+import {
   addCustomConnector,
   browseConnectorListings,
+  deleteCustomConnector,
+  disconnectConnector,
   fetchConnectorDirectory,
   fetchConnectorListing,
   fetchConnectorToolPermissions,
@@ -26,6 +33,8 @@ import { isLikelyHttpsUrl } from '../src/features/settings/cloud-connectors/AddC
 beforeEach(() => {
   jest.clearAllMocks();
   invalidateConnectorPolicy();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('account-a');
 });
 
 describe('addCustomConnector', () => {
@@ -86,6 +95,61 @@ describe('addCustomConnector', () => {
       name: 'n',
       url: 'https://x.y',
     });
+  });
+});
+
+describe('addCustomConnector account custody', () => {
+  const EMPTY_POLICY = { organizationId: 'org-1', configured: false, policy: null };
+
+  function delayedPolicy() {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    let settle!: (value: unknown) => void;
+    let fail!: (error: Error) => void;
+    mockGet.mockReturnValueOnce(
+      new Promise((resolve, reject) => {
+        settle = resolve;
+        fail = reject;
+      }),
+    );
+    return { settle, fail };
+  }
+
+  it('sends no request under the replacement account when the policy answer lands late', async () => {
+    const policy = delayedPolicy();
+    const pending = addCustomConnector({
+      name: 'Account A tools',
+      url: 'https://account-a.example.com/sse',
+      authToken: 'account-a-secret',
+    });
+
+    activateCloudAccount('account-b');
+    policy.settle(EMPTY_POLICY);
+
+    await expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('treats a policy read that failed for the retired account as terminal, not as ungoverned', async () => {
+    const policy = delayedPolicy();
+    const pending = addCustomConnector({
+      name: 'Account A tools',
+      url: 'https://account-a.example.com/sse',
+    });
+
+    activateCloudAccount('account-b');
+    policy.fail(new Error('Cloud account changed while this API request was in flight'));
+
+    await expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('refuses to start when no Cloud account is active', async () => {
+    __resetCloudAccountSessionForTests();
+
+    await expect(
+      addCustomConnector({ name: 'n', url: 'https://mcp.example.com/sse' }),
+    ).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });
 
@@ -287,5 +351,31 @@ describe('saveConnectorApiKey', () => {
     await expect(saveConnectorApiKey('/api/connectors/x/credentials', 'k')).rejects.toThrow(
       'Invalid connector key response',
     );
+  });
+});
+
+describe('disconnect receipts', () => {
+  const mockDelete = () => jest.requireMock('../services/api').api.delete as jest.Mock;
+  const notice = 'Disconnected here, but Notion access may remain until you remove it in Notion.';
+
+  it('returns the provider notice from a confirmed disconnect', async () => {
+    mockDelete().mockResolvedValueOnce({ success: true, vendorNotice: notice });
+
+    await expect(disconnectConnector('notion')).resolves.toEqual({ vendorNotice: notice });
+    expect(mockDelete()).toHaveBeenCalledWith('/api/connectors?connectorId=notion');
+  });
+
+  it('returns the provider notice from a custom connector removal', async () => {
+    mockDelete().mockResolvedValueOnce({ success: true, vendorNotice: notice });
+
+    await expect(deleteCustomConnector('row-1')).resolves.toEqual({ vendorNotice: notice });
+  });
+
+  it('does not treat a reply without success true as a disconnect', async () => {
+    mockDelete().mockResolvedValueOnce({ success: false });
+    await expect(disconnectConnector('notion')).rejects.toThrow('may still be connected');
+
+    mockDelete().mockResolvedValueOnce(undefined);
+    await expect(disconnectConnector('notion')).rejects.toThrow('may still be connected');
   });
 });

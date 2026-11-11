@@ -2,6 +2,7 @@
 
 import { useId, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { SUPPORT_MAX_QUESTION_LENGTH } from '@agiworkforce/cloud-contracts/support';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import styles from './SupportWidget.module.css';
 
 export function SupportComposer({
@@ -23,7 +24,7 @@ export function SupportComposer({
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key === 'Enter' && !event.shiftKey && !isImeComposingKey(event.nativeEvent)) {
       event.preventDefault();
       submit();
     }

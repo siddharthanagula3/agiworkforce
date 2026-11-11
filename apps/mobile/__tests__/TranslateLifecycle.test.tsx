@@ -4,6 +4,10 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 import type { TranslateOptions, TranslateResult } from '../services/translateService';
 
 const mockTranslate = jest.fn();
+const mockSetStringAsync = jest.fn();
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: (...args: unknown[]) => mockSetStringAsync(...args),
+}));
 const mockRouter = { canGoBack: () => true, back: jest.fn(), replace: jest.fn() };
 let mockParams: { text?: string; targetLanguage?: string } = {};
 let mockBlur: (() => void) | undefined;
@@ -34,8 +38,8 @@ jest.mock('@agiworkforce/local-llm', () => ({
 }));
 jest.mock('../src/ui/theme', () => ({ useThemeColors: () => ({}) }));
 jest.mock('../src/ui/theme/tokens', () => ({
+  ...jest.requireActual('../src/ui/theme/tokens'),
   typeScale: {},
-  loadingMarkSizes: jest.requireActual('../src/ui/theme/tokens').loadingMarkSizes,
 }));
 jest.mock('../components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('../components/ui/PressableBox', () => ({
@@ -173,6 +177,50 @@ test('late route prefill cannot replace manual text or clear intent', () => {
   mockParams = { text: 'later route' };
   view.rerender(<TranslateScreen />);
   expect(view.getByLabelText('Source text input').props.value).toBe('');
+});
+
+test.each([
+  [' Spanish ', 'en', 'es'],
+  ['fr', 'en', 'fr'],
+  ['Deutsch', 'en', 'de'],
+  ['english', 'hi', 'en'],
+])('intent target %p prefills source %s and target %s', (targetLanguage, source, target) => {
+  mockParams = { text: 'hello', targetLanguage };
+  mockTranslate.mockReturnValueOnce(new Promise(() => undefined));
+  const view = render(<TranslateScreen />);
+  expect(view.queryByText(/isn't available for translation/)).toBeNull();
+  fireEvent.press(view.getByLabelText('Translate'));
+  expect(mockTranslate.mock.calls[0].slice(0, 3)).toEqual(['hello', source, target]);
+});
+
+test('an unsupported intent target is reported instead of silently using the default', () => {
+  mockParams = { text: 'hello', targetLanguage: 'Klingon' };
+  const view = render(<TranslateScreen />);
+  expect(view.getByText(/isn't available for translation/)).toBeTruthy();
+  expect(view.getByLabelText('Source text input').props.value).toBe('hello');
+});
+
+test.each([
+  ['rejects', () => Promise.reject(new Error('denied'))],
+  ['reports false', () => Promise.resolve(false)],
+])('copy failure is shown when the clipboard %s, and success shows nothing', async (_, failure) => {
+  mockTranslate.mockResolvedValueOnce(result('hola'));
+  mockSetStringAsync.mockImplementationOnce(failure).mockResolvedValueOnce(true);
+  const view = render(<TranslateScreen />);
+  fireEvent.changeText(view.getByLabelText('Source text input'), 'hello');
+  await act(async () => {
+    fireEvent.press(view.getByLabelText('Translate'));
+  });
+  await act(async () => {
+    fireEvent.press(view.getByLabelText('Copy translation'));
+  });
+  expect(mockSetStringAsync).toHaveBeenCalledWith('hola');
+  expect(view.getByText('Could not copy the translation. Try again.')).toBeTruthy();
+  expect(view.getByText('hola')).toBeTruthy();
+  await act(async () => {
+    fireEvent.press(view.getByLabelText('Copy translation'));
+  });
+  expect(view.queryByText('Could not copy the translation. Try again.')).toBeNull();
 });
 
 test('back synchronously rejects a captured same-turn submit before navigation cleanup', () => {

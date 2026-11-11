@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const privacy = readFileSync(
   join(process.cwd(), 'features/settings/sections/PrivacySection.tsx'),
@@ -32,7 +35,7 @@ describe('privacy copy names the surface each trust boundary applies to', () => 
 
   it('says plainly that hosted web has neither', () => {
     expect(privacy).toMatch(/Hosted Web and\s+Desktop have neither mode/);
-    expect(privacy).toMatch(/everything you send\s+there is a Managed Cloud\s+request/);
+    expect(privacy).toMatch(new RegExp(`everything you send\\s+there is a ${CLOUD}\\s+request`));
   });
 
   it('says the same thing where a reader asks about their own provider keys', () => {
@@ -41,7 +44,7 @@ describe('privacy copy names the surface each trust boundary applies to', () => 
     expect(capabilities).toMatch(
       /provider keys belongs to the \$\{BYOK_SURFACES\.label\}\. \$\{BYOK_SURFACES\.availability\}/,
     );
-    expect(capabilities).toMatch(/Hosted Web and Desktop are Managed Cloud only/);
+    expect(capabilities).toMatch(new RegExp(`Hosted Web and Desktop chat are ${CLOUD} only`));
     expect(capabilities).toMatch(/never store a provider key of yours/);
     expect(capabilities).not.toMatch(/\/settings\/byok/);
   });

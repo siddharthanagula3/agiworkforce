@@ -214,4 +214,45 @@ describe('McpAppCard device permissions', () => {
     expect(container.querySelector('iframe')?.getAttribute('allow')).toContain('microphone');
     unmount();
   });
+
+  it('asks again when a later read of the resource requests a device that was not approved', async () => {
+    vi.stubEnv('NEXT_PUBLIC_MCP_APP_SANDBOX_ORIGIN', 'https://apps.sandbox.test');
+    let permissions: Record<string, unknown> = { camera: {} };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.startsWith('/api/mcp-apps/payload/')) return respond(PAYLOAD);
+        if (url.endsWith('/mcp')) {
+          return respond({
+            connectorId: BODY.connectorId,
+            result: {
+              contents: [
+                {
+                  uri: BODY.resourceUri,
+                  mimeType: RESOURCE_MIME_TYPE,
+                  text: '<p>app</p>',
+                  _meta: { ui: { permissions } },
+                },
+              ],
+            },
+          });
+        }
+        return new Response(null, { status: 404 });
+      }),
+    );
+
+    const { container, unmount } = render(<McpAppCard body={BODY} />);
+
+    expect(await screen.findByText('This app wants to use your camera.')).toBeTruthy();
+    permissions = { camera: {}, microphone: {} };
+    screen.getByRole('button', { name: 'Allow once' }).click();
+
+    expect(
+      await screen.findByText('This app wants to use your camera and microphone.'),
+    ).toBeTruthy();
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBeNull();
+    expect(container.querySelector('iframe')?.getAttribute('allow')).toBeNull();
+    unmount();
+  });
 });

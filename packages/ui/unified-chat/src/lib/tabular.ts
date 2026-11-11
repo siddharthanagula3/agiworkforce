@@ -32,16 +32,39 @@ export function numericValue(value: string): number {
   return negative ? -n : n;
 }
 
-function sniffDelimiter(firstLine: string): ',' | '\t' | ';' {
-  const unquoted = firstLine.replace(/"(?:[^"]|"")*"/g, '');
-  const counts: Array<[',' | '\t' | ';', number]> = [
-    [',', (unquoted.match(/,/g) ?? []).length],
-    ['\t', (unquoted.match(/\t/g) ?? []).length],
-    [';', (unquoted.match(/;/g) ?? []).length],
-  ];
-  counts.sort((a, b) => b[1] - a[1]);
-  return counts[0]![1] > 0 ? counts[0]![0] : ',';
+function sniffDelimiter(text: string): ',' | '\t' | ';' {
+  const counts: Record<',' | '\t' | ';', number> = { ',': 0, '\t': 0, ';': 0 };
+  let inQuotes = false;
+  let atFieldStart = true;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') i += 1;
+        else inQuotes = false;
+      }
+      continue;
+    }
+    if (ch === '\r' || ch === '\n') break;
+    if (ch === '"' && atFieldStart) {
+      inQuotes = true;
+      atFieldStart = false;
+      continue;
+    }
+    if (ch === ',' || ch === '\t' || ch === ';') {
+      counts[ch] += 1;
+      atFieldStart = true;
+      continue;
+    }
+    atFieldStart = false;
+  }
+  const ranked = (Object.entries(counts) as Array<[',' | '\t' | ';', number]>).sort(
+    (a, b) => b[1] - a[1],
+  );
+  return ranked[0]![1] > 0 ? ranked[0]![0] : ',';
 }
+
+const LEADING_BLANK_LINES_RE = /^(?:[ \t]*(?:\r\n|\r|\n))+/;
 
 export function parseDelimited(text: string, delimiter: ',' | '\t' | ';'): string[][] {
   const rows: string[][] = [];
@@ -131,12 +154,13 @@ function fromGrid(
 }
 
 export function parseTabular(content: string): TabularData | null {
-  const text = stripBom(content ?? '').trim();
-  if (!text) return null;
+  const source = stripBom(content ?? '');
+  const trimmed = source.trim();
+  if (!trimmed) return null;
 
-  if (text.startsWith('[')) {
+  if (trimmed.startsWith('[')) {
     try {
-      const parsed: unknown = JSON.parse(text);
+      const parsed: unknown = JSON.parse(trimmed);
       if (
         Array.isArray(parsed) &&
         parsed.length > 0 &&
@@ -163,8 +187,8 @@ export function parseTabular(content: string): TabularData | null {
     }
   }
 
-  const firstLine = text.split('\n', 1)[0] ?? '';
-  const delimiter = sniffDelimiter(firstLine);
+  const text = source.replace(LEADING_BLANK_LINES_RE, '');
+  const delimiter = sniffDelimiter(text);
   const grid = parseDelimited(text, delimiter);
   if (grid.length < 2 && (grid[0]?.length ?? 0) < 2) return null;
   return fromGrid(grid, 'delimited', delimiter);

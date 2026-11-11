@@ -46,8 +46,8 @@ a unified chat protocol.
   `pnpm check:readme-facts` fails when this section drifts from it.
 - **Local-first privacy and BYOK**: the released CLI runs local models through
   Ollama or LM Studio and sends BYOK requests straight to a user's own provider
-  account. The public Electron Desktop is managed-cloud-only; Mobile and VS
-  Code are not yet published.
+  account. Public Electron Desktop chat is Cloud only, and its local coding
+  sessions run the CLI; Mobile and VS Code are not yet published.
 - **Agentic execution and tools**: MCP support in the released CLI and managed remote
   connectors on hosted surfaces, and a tool engine covering file operations,
   code execution, PTY terminal, git, web search, document extraction,

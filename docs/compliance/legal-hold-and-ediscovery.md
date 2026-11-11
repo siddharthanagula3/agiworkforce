@@ -49,7 +49,7 @@ beforehand cannot let it. `scripts/check-legal-hold-coverage.mjs` enumerates
 every destructive statement in `apps/web` and `packages` from the source, takes
 the reach of a delete from the foreign keys in `apps/web/db/neon`, and judges
 each statement individually: a predicate elsewhere in the same file does not
-vouch for it. It reports 16 of 16 statements gated with an empty baseline, and
+vouch for it. It reports 17 of 17 statements gated with an empty baseline, and
 fails on a seventeenth.
 
 Two paths refuse instead of filtering, which is the stronger answer: account
@@ -62,8 +62,13 @@ uncapped query, so a workspace cannot outgrow the answer.
 A deletion a user asked for and a hold refused is recorded, not only refused.
 `refuseHeldDeletion` in `legal-hold-gate.ts` writes a
 `deletion_blocked_by_legal_hold` audit event with `outcome: 'denied'` before
-throwing, and the message the user sees names the consequence and its end: the
-content is preserved by a hold, and will be deleted once the hold is released.
+throwing, and the message the user sees names the consequence
+(`heldDeletionRefusal`). Only a refused media file keeps the promise that it
+will be deleted once the hold is released, because it stays tombstoned and
+`cron/purge-deleted-media` finishes it. A refused chat message is not
+remembered as a deletion, so its refusal says it is preserved and cannot be
+deleted while the hold is active, and promises nothing later; the user deletes
+it again after the release.
 
 ## Retention never beats a hold
 
@@ -171,11 +176,36 @@ data access is logged for the preservation read.
 for the six soft-deletable stores that had no purge at all before it existed. It
 is gated on `SOFT_DELETED_RESOURCE_PURGE_ENABLED` and that variable is **not set
 by default**, so on a deployment that has not set it to `true` the route does
-nothing and soft-deleted conversations, messages, artifacts, projects and
-knowledge files keep their rows past the published recovery window. The switch
-is documented in `apps/web/.env.example`. Until it is turned on, the thirty day
-recovery promise is honoured for `media_assets` alone, through
+nothing and soft-deleted conversations, messages, artifacts and projects keep
+their rows past the published recovery window. The switch is documented in
+`apps/web/.env.example`. Until it is turned on, the thirty day recovery promise
+is honoured for `media_assets` and `project_knowledge_files`, through
 `apps/web/app/api/cron/purge-deleted-media`.
+
+## What happens on release
+
+A deletion a hold deferred is not lost. A project knowledge file a user deleted
+while a hold preserved it keeps its row and its bytes; once no active hold
+covers it, the first daily run of `cron/purge-deleted-media` past its thirty day
+window deletes the object and then the row
+(`apps/web/lib/server/retention/deleted-project-files.ts`), exactly as for a
+file nobody held. A file another active hold still covers, a file nobody
+deleted, and an object a live or held copy still addresses are left alone. The
+run takes the workspace's hold-placement lock and repeats the hold predicate in
+the statement that deletes, so a hold placed mid-run still wins, and a hold set
+that cannot be read stops the run before anything is deleted. Each workspace's
+purge is recorded as a `deleted_content_purged` audit event with the counts,
+for media assets as well. The thirty days follow the leaders' practice:
+Microsoft Purview keeps released content for a 30-day delay hold, and Google
+Vault purges content users deleted more than 30 days earlier once no hold or
+retention rule covers it.
+
+A deleted project's own row is not purged. Mobile
+(`apps/mobile/services/cloudSyncEngine.ts`) and the CLI
+(`apps/cli/src/cloud/projects.rs`) learn a deletion only from the tombstone the
+`/api/projects/sync` delta returns, so a purged row would leave a device that
+was offline past the window showing a project that no longer exists. The row
+can be purged once both clients reconcile against a full pull.
 
 ## Related
 

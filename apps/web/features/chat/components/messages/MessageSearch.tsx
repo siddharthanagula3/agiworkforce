@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useCallback, memo } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { motion } from 'framer-motion';
 import { ChevronDown, ChevronUp, Search, X } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
@@ -40,6 +41,7 @@ const MessageSearchComponent = ({
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (isImeComposingKey(e.nativeEvent)) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();

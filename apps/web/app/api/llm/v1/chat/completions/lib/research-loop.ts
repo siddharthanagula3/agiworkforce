@@ -56,9 +56,13 @@ import type {
   ResearchRunConfig,
   ResearchSourceRequest,
   ResearchStep,
-  ThinkingBlock,
+  ReasoningReplayBlock,
 } from '@agiworkforce/types';
-import { DEFAULT_RESEARCH_DELIVERABLE, RESEARCH_PAUSED_REASON } from '@agiworkforce/types';
+import {
+  DEFAULT_RESEARCH_DELIVERABLE,
+  RESEARCH_PAUSED_REASON,
+  isReplayableReasoningBlock,
+} from '@agiworkforce/types';
 import { cloudAgentRunSteerProgressId } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
@@ -175,6 +179,8 @@ export const DEFAULT_RESEARCH_MAX_PARALLEL_TOOL_CALLS = 3;
 
 /** Research notes appended back into the thread are capped per turn. */
 const MAX_NOTE_CHARS = 6_000;
+const REPORT_PERSIST_ATTEMPTS = 3;
+const REPORT_PERSIST_RETRY_MS = 250;
 
 /**
  * url_fetch inside gathering rounds (parity with OpenAI/Anthropic deep
@@ -373,7 +379,7 @@ export interface ResearchTurnRecord {
   promptTokens: number;
   completionTokens: number;
   canonicalText: string;
-  thinkingBlocks: ThinkingBlock[];
+  thinkingBlocks: ReasoningReplayBlock[];
   sourceAdds: ResearchSourceEntry[];
   usage: ObservedProviderUsage;
 }
@@ -1040,7 +1046,7 @@ interface ResearchTurn extends TurnResult {
    * Signed thinking blocks this turn produced (Anthropic extended thinking).
    * Replayed on the assistant tool_use turn -- see `runFetchCalls`.
    */
-  thinkingBlocks: ThinkingBlock[];
+  thinkingBlocks: ReasoningReplayBlock[];
 }
 
 /**
@@ -1915,6 +1921,7 @@ export async function* runResearchLoop(
 
   // ── Durable report persistence ──
   let reportPersisted = false;
+  let reportSaved = true;
   /** A run paused for approval gathered nothing; a stored empty report would be noise. */
   let awaitingApproval = false;
   const userQuery = extractUserQuery(processed.llmRequest.messages);
@@ -1922,43 +1929,54 @@ export async function* runResearchLoop(
   /**
    * Persist the run exactly once. Never throws into the stream: a storage
    * outage must not destroy a report the user is already reading, so the
-   * failure is logged and the run continues.
+   * write is retried a few times, then the failure is logged and the run
+   * continues. Resolves false when the report was not stored, so the terminal
+   * status can say so instead of advertising a saved report.
    */
   async function persistRun(
     status: ResearchReportStatus,
     content: string,
     error?: string,
-  ): Promise<void> {
-    if (reportPersisted || !options.persistReport) return;
+  ): Promise<boolean> {
+    if (reportPersisted || !options.persistReport) return !options.persistReport;
     reportPersisted = true;
     const outline = extractReportOutline(content);
-    try {
-      await options.persistReport({
-        query: userQuery,
-        title: outline.title,
-        summary: outline.summary,
-        content,
-        citations: sources.toCitations(new Date(now()).toISOString()),
-        steps: plan.map((step) => ({ ...step })),
-        keyFindings: outline.keyFindings,
-        gaps: deriveResearchGaps(plan, content),
-        deliverable,
-        sourceSelection,
-        status,
-        sourcesConsulted: sources.size,
-        durationMs: Math.max(0, now() - startedAt),
-        ...(error ? { error } : {}),
-      });
-    } catch (persistError) {
-      logger.error(
-        {
-          requestId: processed.requestId,
-          status,
-          error: persistError instanceof Error ? persistError.message : String(persistError),
-        },
-        '[research-loop] research report could not be persisted',
-      );
+    const report = {
+      query: userQuery,
+      title: outline.title,
+      summary: outline.summary,
+      content,
+      citations: sources.toCitations(new Date(now()).toISOString()),
+      steps: plan.map((step) => ({ ...step })),
+      keyFindings: outline.keyFindings,
+      gaps: deriveResearchGaps(plan, content),
+      deliverable,
+      sourceSelection,
+      status,
+      sourcesConsulted: sources.size,
+      durationMs: Math.max(0, now() - startedAt),
+      ...(error ? { error } : {}),
+    };
+    for (let attempt = 1; attempt <= REPORT_PERSIST_ATTEMPTS; attempt += 1) {
+      try {
+        await options.persistReport(report);
+        return true;
+      } catch (persistError) {
+        logger.error(
+          {
+            requestId: processed.requestId,
+            status,
+            attempt,
+            error: persistError instanceof Error ? persistError.message : String(persistError),
+          },
+          '[research-loop] research report could not be persisted',
+        );
+        if (attempt < REPORT_PERSIST_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, REPORT_PERSIST_RETRY_MS * attempt));
+        }
+      }
     }
+    return false;
   }
 
   /**
@@ -2421,7 +2439,7 @@ export async function* runResearchLoop(
     // neither drops the signature nor double-represents reasoning as literal
     // `<thinking>` text. Strictly gated on signed blocks: every other provider
     // and every thinking-disabled turn pushes exactly what it pushed before.
-    const signedThinking = turn.thinkingBlocks.filter((block) => block.signature);
+    const signedThinking = turn.thinkingBlocks.filter(isReplayableReasoningBlock);
     const assistantMessage: ProcessedRequest['llmRequest']['messages'][number] = {
       role: 'assistant',
       content: signedThinking.length > 0 ? turn.canonicalText : turn.text,
@@ -3430,7 +3448,7 @@ export async function* runResearchLoop(
         yield encoder.encode(sseDone());
         return;
       }
-      await persistRun('completed', synthesis.canonicalText);
+      reportSaved = await persistRun('completed', synthesis.canonicalText);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const safeMessage = safeUpstreamErrorMessage(
@@ -3469,7 +3487,10 @@ export async function* runResearchLoop(
     // Final cumulative sources + completion status.
     const cumulative = sources.toSearchResultsEvent(responseModel);
     if (cumulative) yield encoder.encode(cumulative);
-    yield status('complete', 'Research complete');
+    yield status(
+      'complete',
+      reportSaved ? 'Research complete' : 'Research complete, but the report could not be saved',
+    );
     yield encoder.encode(eventStream.emit({ type: 'stop', reason: 'end-turn' }));
     yield encoder.encode(sseDone());
   } finally {

@@ -175,6 +175,62 @@ describe('RoutingHealthPanel', () => {
     expect(container.querySelector('[data-credential-unfunded]')).toBeNull();
   });
 
+  function deferredLockouts() {
+    const pending = new Map<string, (response: Response) => void>();
+    mocks.fetch.mockImplementation((url: string) => {
+      if (!url.includes('provider=')) return Promise.resolve(jsonResponse(SUMMARY));
+      const provider = new URL(url, 'https://operator.test').searchParams.get('provider')!;
+      return new Promise<Response>((resolve) => pending.set(provider, resolve));
+    });
+    return pending;
+  }
+
+  it('keeps the newer provider’s lockouts when an older read finishes last', async () => {
+    const pending = deferredLockouts();
+    render(<RoutingHealthPanel />);
+    await screen.findByText(TRIPPED_PROVIDER.provider);
+
+    fireEvent.click(screen.getByRole('button', { name: `${TRIPPED_PROVIDER.liveRoutes} live` }));
+    fireEvent.click(screen.getByRole('button', { name: `${QUIET_PROVIDER.liveRoutes} live` }));
+    await waitFor(() => expect(pending.size).toBe(2));
+
+    pending.get(QUIET_PROVIDER.provider)!(
+      jsonResponse({ provider: QUIET_PROVIDER.provider, routes: [] }),
+    );
+    expect(
+      await screen.findByText('The registry lists no live route for this provider.'),
+    ).toBeInTheDocument();
+
+    pending.get(TRIPPED_PROVIDER.provider)!(
+      jsonResponse({ provider: TRIPPED_PROVIDER.provider, routes: [ROUTE_ROW] }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText(ROUTE_ROW.routeId)).toBeNull();
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(QUIET_PROVIDER.provider);
+  });
+
+  it('does not let an older failed read mask the newer provider’s lockouts', async () => {
+    const pending = deferredLockouts();
+    render(<RoutingHealthPanel />);
+    await screen.findByText(TRIPPED_PROVIDER.provider);
+
+    fireEvent.click(screen.getByRole('button', { name: `${QUIET_PROVIDER.liveRoutes} live` }));
+    fireEvent.click(screen.getByRole('button', { name: `${TRIPPED_PROVIDER.liveRoutes} live` }));
+    await waitFor(() => expect(pending.size).toBe(2));
+
+    pending.get(TRIPPED_PROVIDER.provider)!(
+      jsonResponse({ provider: TRIPPED_PROVIDER.provider, routes: [ROUTE_ROW] }),
+    );
+    expect(await screen.findByText(ROUTE_ROW.routeId)).toBeInTheDocument();
+
+    pending.get(QUIET_PROVIDER.provider)!(jsonResponse({ error: { message: 'Busy.' } }, 503));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText(ROUTE_ROW.routeId)).toBeInTheDocument();
+  });
+
   it('surfaces a failed health read as an alert', async () => {
     mocks.fetch.mockImplementation(async () =>
       jsonResponse({ error: { message: 'Not found.' } }, 404),

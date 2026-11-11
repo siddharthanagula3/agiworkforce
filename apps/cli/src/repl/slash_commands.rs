@@ -68,6 +68,14 @@ pub(super) async fn handle_slash_command(
         return SlashResult::Handled;
     }
 
+    if matches!(cmd.as_str(), "/agents" | "/agent") {
+        if !crate::agents::is_management_subcommand(arg) {
+            return SlashResult::AgentInvoke(arg.to_string());
+        }
+        output::print_block(&crate::agents::render_agents_command(arg));
+        return SlashResult::Handled;
+    }
+
     // `/mcp <subcommand>` mutates the writable MCP registry (add/remove/enable/
     // disable/reconfigure/restart). Bare `/mcp` falls through to the shared
     // live-status renderer below.
@@ -107,7 +115,10 @@ pub(super) async fn handle_slash_command(
             };
         }
         crate::claude_parity::ParityCommandResult::Feedback { kind, message } => {
-            eprintln!("{}", crate::cloud::send_feedback(kind, &message).await);
+            eprintln!(
+                "{}",
+                crate::cloud::send_feedback(session.privacy_mode, kind, &message).await
+            );
             return SlashResult::Handled;
         }
         crate::claude_parity::ParityCommandResult::NotHandled => {}
@@ -125,7 +136,7 @@ pub(super) async fn handle_slash_command(
                      interactive model picker (search + provider sections + effort selector).",
                 );
             } else {
-                match session.switch_model_by_name(arg) {
+                match session.switch_model_by_name_or_local(config, arg).await {
                     Ok(()) => {
                         let provider = crate::models::provider_name(&session.provider);
                         output::print_info(&format!("Switched to {} ({})", arg, provider));
@@ -150,7 +161,7 @@ pub(super) async fn handle_slash_command(
             output::print_session_cost(
                 session.total_input_tokens,
                 session.total_output_tokens,
-                session.turn_count,
+                session.cost_ledger.turns,
                 session.cost_ledger.total_usd,
                 crate::design_system::AccessMode::for_provider(&session.provider),
             );
@@ -240,32 +251,6 @@ pub(super) async fn handle_slash_command(
             let all = crate::skills::discover_skills();
             output::print_block(&crate::skills::format_skill_list(&all));
         }
-        "/agents" | "/agent" => {
-            let is_quick_invoke = !arg.is_empty()
-                && !matches!(
-                    arg.split_whitespace().next().unwrap_or(""),
-                    "list"
-                        | "ls"
-                        | "show"
-                        | "view"
-                        | "inspect"
-                        | "path"
-                        | "where"
-                        | "new"
-                        | "create"
-                        | "init"
-                        | "validate"
-                        | "doctor"
-                        | "check"
-                        | "help"
-                        | "-h"
-                        | "--help"
-                );
-            if is_quick_invoke {
-                return SlashResult::AgentInvoke(arg.to_string());
-            }
-            output::print_block(&crate::agents::render_agents_command(arg));
-        }
         "/hooks" => {
             let hcfg = crate::hooks::load_hooks_or_default();
             output::print_block(&crate::hooks::format_hooks_list(&hcfg));
@@ -274,7 +259,8 @@ pub(super) async fn handle_slash_command(
             let agents = crate::agents::discover_agents();
             output::print_block(&crate::agents::format_subagents(&agents));
         }
-        "/personalize" => match crate::cloud::personalization::run(arg).await {
+        "/personalize" => match crate::cloud::personalization::run(session.privacy_mode, arg).await
+        {
             Ok(text) => output::print_block(&text),
             Err(reason) => output::print_warn(&reason),
         },
@@ -329,8 +315,9 @@ pub(super) async fn handle_slash_command(
         "/usage" => {
             output::print_block(
                 &crate::usage_summary::render_usage_report(
+                    session.privacy_mode,
                     &crate::usage_summary::SessionEstimate {
-                        turns: session.turn_count,
+                        turns: session.cost_ledger.turns,
                         input_tokens: session.total_input_tokens,
                         output_tokens: session.total_output_tokens,
                         cache_read_tokens: session.total_cache_read_tokens,
@@ -606,7 +593,7 @@ pub(super) async fn handle_slash_command(
             let subcmd = a2a_parts.first().copied().unwrap_or_default();
             let subarg = a2a_parts.get(1).copied().unwrap_or_default();
             if subcmd.is_empty() {
-                output::print_warn("Usage: /a2a <discover|delegate|serve|register|card> [args]");
+                output::print_warn("Usage: /a2a <discover|delegate|serve|auth|register|card> [args]");
             } else {
                 return SlashResult::A2a(subcmd.to_string(), subarg.to_string());
             }
@@ -661,10 +648,11 @@ pub(super) async fn handle_slash_command(
             print_help();
         }
         _ => {
-            if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
-                return SlashResult::Prompt(prompt);
-            }
-            match crate::skills::skill_command_prompt(cmd.trim_start_matches('/'), arg) {
+            match crate::command_registry::expand_dynamic_slash_invocation(
+                input,
+                cmd.trim_start_matches('/'),
+                arg,
+            ) {
                 Some(Ok(prompt)) => return SlashResult::Prompt(prompt),
                 Some(Err(reason)) => {
                     output::print_warn(&reason);
@@ -852,6 +840,23 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn agent_management_verbs_are_handled_instead_of_activating_an_agent() {
+        let ctx = crate::context::gather_system_context();
+        let mut session =
+            crate::agent::AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+        let mut config = crate::config::CliConfig::default();
+
+        for verb in ["rename", "set", "delete", "remove", "rm"] {
+            let result =
+                handle_slash_command(&format!("/agents {verb}"), &mut session, &mut config).await;
+            assert!(matches!(result, SlashResult::Handled), "{verb}");
+        }
+
+        let activation = handle_slash_command("/agents reviewer", &mut session, &mut config).await;
+        assert!(matches!(activation, SlashResult::AgentInvoke(name) if name == "reviewer"));
     }
 
     #[tokio::test]

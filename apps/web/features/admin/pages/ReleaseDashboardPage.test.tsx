@@ -135,6 +135,21 @@ describe('the release dashboard', () => {
     ).toBeInTheDocument();
   });
 
+  it('does not call an unreadable trail a never-tested rollback path or an intact chain', async () => {
+    respondWith(dashboard({ unreadable: ['events'] }));
+
+    render(<ReleaseDashboardPage />);
+
+    await waitFor(() =>
+      expect(screen.getAllByText('Unknown, the audit trail could not be read')).toHaveLength(2),
+    );
+    expect(screen.queryByText('Never; the rollback path is untested')).not.toBeInTheDocument();
+    expect(screen.queryByText('None recorded')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Could not be checked, the audit trail could not be read'),
+    ).toBeInTheDocument();
+  });
+
   it('shows the error the route gave rather than a blank page', async () => {
     respondWith({ error: 'Not found.' }, false, 404);
 

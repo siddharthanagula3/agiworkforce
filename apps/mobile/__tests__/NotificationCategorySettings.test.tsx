@@ -36,6 +36,7 @@ jest.mock('@/services/notificationChannels', () => ({
 jest.mock('@/services/preferences', () => ({
   fetchPreferenceNamespace: jest.fn().mockResolvedValue({}),
   savePreferenceNamespace: jest.fn().mockResolvedValue(undefined),
+  patchPreferenceNamespace: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
@@ -123,16 +124,36 @@ describe('notification category settings', () => {
     });
   });
 
+  it('labels the break reminder as a once-a-day threshold, not a repeating interval', async () => {
+    act(() => {
+      useNotificationPrefsStore.setState({ breakReminderMinutes: 30 });
+    });
+    const screen = render(<NotificationPreferencesScreen />);
+    await screen.findByText('Your device is delivering notifications');
+
+    expect(screen.getByLabelText('Break reminder, currently After 30 min today')).toBeTruthy();
+    expect(screen.getByText('After 30 min today')).toBeTruthy();
+    expect(screen.queryByText(/^Every /)).toBeNull();
+
+    act(() => {
+      useNotificationPrefsStore.setState({ breakReminderMinutes: 120 });
+    });
+    expect(screen.getByText('After 2 hr today')).toBeTruthy();
+    act(() => {
+      useNotificationPrefsStore.setState({ breakReminderMinutes: null });
+    });
+  });
+
   it('blocks the per-device category rows while the device denies notifications', async () => {
     const { getPushDeliveryStatus } = require('@/services/notifications');
     (getPushDeliveryStatus as jest.Mock).mockResolvedValueOnce('denied');
-    activateCloudAccount('account-a');
+    activateCloudAccount('notification-owner');
     act(() => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useAuthStore.setState({
-        isClerkSignedIn: true,
         isClerkLoaded: true,
-        clerkUserId: 'account-a',
+        isClerkSignedIn: true,
+        clerkUserId: 'notification-owner',
       });
     });
     const screen = render(<NotificationPreferencesScreen />);

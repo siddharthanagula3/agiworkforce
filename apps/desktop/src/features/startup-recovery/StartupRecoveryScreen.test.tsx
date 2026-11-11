@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -37,7 +38,7 @@ describe('StartupRecoveryScreen', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Open Data Folder' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Export Diagnostics' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Quit AGI Desktop' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: `Quit ${PRODUCT_NAMES.desktop}` })).toBeEnabled();
   });
 
   it('wires all recovery actions and reports a successful sanitized export', async () => {
@@ -54,7 +55,7 @@ describe('StartupRecoveryScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(props.onRetry).toHaveBeenCalledOnce();
 
-    await user.click(screen.getByRole('button', { name: 'Quit AGI Desktop' }));
+    await user.click(screen.getByRole('button', { name: `Quit ${PRODUCT_NAMES.desktop}` }));
     expect(props.onQuit).toHaveBeenCalledOnce();
   });
 

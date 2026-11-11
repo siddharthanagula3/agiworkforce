@@ -153,6 +153,20 @@ describe('admitAttachmentUpload', () => {
     ).rejects.toMatchObject({ statusCode: 429 });
   });
 
+  it('gives the count back when its expiry cannot be set, so a refused upload never spends one', async () => {
+    mocks.planTier.mockResolvedValue('free');
+    const store = memoryStore();
+    store.expire.mockRejectedValueOnce(new Error('store unreachable'));
+    mocks.store.mockReturnValue(store);
+    const now = new Date('2026-10-10T12:00:00Z');
+
+    await expect(
+      admitAttachmentUpload({ db, userId: 'user-1', kind: 'chat-attachment', byteCount: MIB, now }),
+    ).rejects.toMatchObject({ statusCode: 429 });
+
+    expect([...store.values.values()]).toEqual([0]);
+  });
+
   it('does not count paid uploads, and refuses one over the plan limit before counting', async () => {
     const store = memoryStore();
     mocks.store.mockReturnValue(store);

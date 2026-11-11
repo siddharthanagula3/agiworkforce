@@ -1,9 +1,18 @@
 import { createECDH, randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), fetch: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  execute: vi.fn(),
+  fetch: vi.fn(),
+  enqueueJob: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  enqueueJob: mocks.enqueueJob,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -24,7 +33,7 @@ const VAPID_PUBLIC_KEY_ENV = 'WEB_PUSH_VAPID_PUBLIC_KEY';
 const VAPID_PRIVATE_KEY_ENV = 'WEB_PUSH_VAPID_PRIVATE_KEY';
 const VAPID_SUBJECT_ENV = 'WEB_PUSH_VAPID_SUBJECT';
 
-const { deviceAcceptsNotice, getPushTokensForUser, sendPushToUser } =
+const { deviceAcceptsNotice, getPushTokensForUser, resumeDeferredPush, sendPushToUser } =
   await import('../push-notification-service');
 const { resetWebPushCredentialCache } = await import('../web-push-service');
 
@@ -139,7 +148,10 @@ describe('sendPushToUser, never throws', () => {
   });
 
   it('reports a token-lookup failure instead of throwing', async () => {
-    mocks.query.mockRejectedValue(new Error('db down'));
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('user_settings')) return [];
+      throw new Error('db down');
+    });
 
     const result = await sendPushToUser('user-1', { title: 'x', body: 'y' });
 
@@ -281,6 +293,197 @@ function devicePreferences(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe('sendPushToUser, quiet hours', () => {
+  const noon = new Date('2026-09-29T12:00:00Z');
+  const quietPreferences = {
+    quietHours: {
+      enabled: true,
+      days: [0, 1, 2, 3, 4, 5, 6],
+      startTime: '11:00',
+      endTime: '13:00',
+      timezone: 'UTC',
+    },
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(noon);
+    mocks.query.mockImplementation(async (sql: string) =>
+      String(sql).includes('user_settings')
+        ? [{ preferences: quietPreferences }]
+        : [{ push_token: TOKEN_A, push_preferences: null }],
+    );
+    expoReturns([{ status: 'ok' }]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('holds a routine notice inside the account quiet hours', async () => {
+    const result = await sendPushToUser('user-1', {
+      title: 'Done',
+      body: 'x',
+      data: { type: 'schedule_run' },
+    });
+
+    expect(result.sent).toBe(0);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('delivers a notice whose quiet-hours type is urgent although its routing type is not', async () => {
+    const result = await sendPushToUser('user-1', {
+      title: 'Needs you',
+      body: 'x',
+      data: { type: 'schedule_run' },
+      quietHoursType: 'agent_approval_needed',
+    });
+
+    expect(result.sent).toBe(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the quiet-hours type to the device preference as well', () => {
+    const deviceQuiet = devicePreferences({ eventTypes: {}, ...quietPreferences });
+    expect(deviceAcceptsNotice(deviceQuiet, 'schedule_run', noon)).toBe(false);
+    expect(deviceAcceptsNotice(deviceQuiet, 'schedule_run', noon, 'agent_failed')).toBe(true);
+  });
+});
+
+describe('sendPushToUser, unreadable quiet hours', () => {
+  const noon = new Date('2026-09-29T12:00:00Z');
+  const outsideWindow = new Date('2026-09-29T15:00:00Z');
+  const quietPreferences = {
+    quietHours: {
+      enabled: true,
+      days: [0, 1, 2, 3, 4, 5, 6],
+      startTime: '11:00',
+      endTime: '13:00',
+      timezone: 'UTC',
+    },
+  };
+  const transports = { expo: true, web: false };
+  const routine = { title: 'Done', body: 'x', data: { type: 'schedule_run' } };
+  let settingsReadable: boolean;
+  let stored: unknown;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(noon);
+    settingsReadable = false;
+    stored = quietPreferences;
+    mocks.enqueueJob.mockResolvedValue({ id: 'job-1', status: 'queued', created: true });
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (String(sql).includes('user_settings')) {
+        if (!settingsReadable) throw new Error('connection reset');
+        return [{ preferences: stored }];
+      }
+      return [{ push_token: TOKEN_A, push_preferences: null }];
+    });
+    expoReturns([{ status: 'ok' }]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('defers a holdable notice instead of sending or losing it', async () => {
+    const result = await sendPushToUser('user-1', routine, transports);
+
+    expect(result).toEqual({ sent: 0, invalidated: 0, deferred: true });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    expect(mocks.enqueueJob).toHaveBeenCalledExactlyOnceWith(
+      expect.anything(),
+      expect.objectContaining({
+        kind: 'notifications.deferred-push',
+        userId: 'user-1',
+        payload: { message: routine, transports: { expo: true, web: false } },
+      }),
+    );
+  });
+
+  it('still delivers a notice that quiet hours never hold, without reading the setting', async () => {
+    const result = await sendPushToUser(
+      'user-1',
+      { ...routine, quietHoursType: 'agent_approval_needed' },
+      transports,
+    );
+
+    expect(result.sent).toBe(1);
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+    expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('user_settings'))).toBe(
+      false,
+    );
+  });
+
+  it('reports the failure when the notice cannot be queued either', async () => {
+    mocks.enqueueJob.mockRejectedValue(new Error('queue down'));
+
+    const result = await sendPushToUser('user-1', routine, transports);
+
+    expect(result).toEqual({ sent: 0, invalidated: 0, error: 'quiet_hours_unreadable' });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('treats a saved schedule it cannot interpret like an unreadable one', async () => {
+    settingsReadable = true;
+    stored = {
+      quietHours: {
+        enabled: true,
+        days: [],
+        startTime: '11:00',
+        endTime: '13:00',
+        timezone: 'UTC',
+      },
+    };
+
+    const result = await sendPushToUser('user-1', routine, transports);
+
+    expect(result.deferred).toBe(true);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the readable behaviour: deliver outside the window, hold inside it', async () => {
+    settingsReadable = true;
+
+    expect((await sendPushToUser('user-1', routine, transports)).sent).toBe(0);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+
+    vi.setSystemTime(outsideWindow);
+    expect((await sendPushToUser('user-1', routine, transports)).sent).toBe(1);
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+
+  it('retries a deferred notice while the setting is unreadable and sends it once after recovery', async () => {
+    vi.setSystemTime(outsideWindow);
+    const retry = resumeDeferredPush('user-1', routine, { expo: true, web: false }, false);
+    await expect(retry).rejects.toMatchObject({ name: 'QuietHoursUnreadableError' });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+
+    settingsReadable = true;
+    await expect(
+      resumeDeferredPush('user-1', routine, { expo: true, web: false }, false),
+    ).resolves.toMatchObject({ sent: 1 });
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds a deferred notice that recovery finds inside the window, as a readable hold would', async () => {
+    settingsReadable = true;
+
+    await expect(
+      resumeDeferredPush('user-1', routine, { expo: true, web: false }, false),
+    ).resolves.toEqual({ held: true });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('gives up on the last attempt without sending, leaving the notice in the feed', async () => {
+    await expect(
+      resumeDeferredPush('user-1', routine, { expo: true, web: false }, true),
+    ).resolves.toEqual({ dropped: 'quiet_hours_unreadable' });
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('device push preferences', () => {
   const noon = new Date('2026-09-29T12:00:00Z');
 
@@ -321,3 +524,5 @@ describe('device push preferences', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/egress-policy');
+
+type ImportedModule1 = typeof import('@/lib/jobs/job-service');

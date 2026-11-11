@@ -208,8 +208,7 @@ import {
   planFromThread,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
-import { getTokenCounter } from '../../data/tokenCounter';
-import { formatCreditAmount, formatUnsettledRequests } from '../../data/usagePresentation';
+import { recordCompletedTurnUsage } from '../../data/turnUsage';
 import {
   CREDIT_BALANCE_LABEL,
   CREDIT_TOP_UP_LABEL,
@@ -438,7 +437,7 @@ export type ExtToWebviewMessage =
     }
   | {
       type: 'fileSearchResults';
-      payload: { files: Array<WorkspaceFileReference & { label: string }> };
+      payload: { query: string; files: Array<WorkspaceFileReference & { label: string }> };
     }
   | { type: 'conversationCleared' }
   | { type: 'sessionBinding'; payload: { epoch: number } }
@@ -910,6 +909,10 @@ export class ChatStateManager {
   private _lastMeterBoundary: string | undefined;
   private readonly _servedModelByTurn = new Map<string, string>();
   private readonly _writtenFilesByTurn = new Map<string, Set<string>>();
+  private readonly _pendingWritesByToolCall = new Map<
+    string,
+    { turnId: string; filePath: string }
+  >();
   private _lastChangedTurn:
     { threadId: string; turnId: string; files: readonly string[] } | undefined;
   private readonly _pendingAttachments: PendingAttachment[] = [];
@@ -968,6 +971,11 @@ export class ChatStateManager {
       vscode.window.onDidChangeTextEditorSelection(() => void this.pushEditorContext()),
       vscode.languages.onDidChangeDiagnostics(() => void this.pushEditorContext()),
       onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('agiWorkforce.agent.effort')) {
+          this._syncEffortFromConfiguration();
+        }
+      }),
     );
     if (this._workspaceState !== undefined) {
       this._meterCollapsed = this._workspaceState.get<boolean>(
@@ -1207,10 +1215,10 @@ export class ChatStateManager {
         try {
           this._post({
             type: 'fileSearchResults',
-            payload: { files: await searchMentionTargets(query) },
+            payload: { query, files: await searchMentionTargets(query) },
           });
         } catch {
-          this._post({ type: 'fileSearchResults', payload: { files: [] } });
+          this._post({ type: 'fileSearchResults', payload: { query, files: [] } });
         }
         break;
       }
@@ -2465,7 +2473,7 @@ export class ChatStateManager {
       ) {
         return;
       }
-      void this._handleRuntimeEvent(runtime, event, complete);
+      this._deliverTurnEvent(runtime, event, epoch, complete);
     };
     const subscription = runtime.onEvent((event) => {
       if (event.type === 'runtime_disconnected') {
@@ -2601,6 +2609,19 @@ export class ChatStateManager {
     });
   }
 
+  private _syncEffortFromConfiguration(): void {
+    this._effort = undefined;
+    const model = this._activeModel;
+    this._post({
+      type: 'effortChanged',
+      payload: {
+        effort: this._shownEffort(),
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
+    });
+  }
+
   public syncActiveModelFromConfiguration(): void {
     if (this._thread !== undefined) return;
     this._followDefaultModel();
@@ -2614,13 +2635,36 @@ export class ChatStateManager {
    * classification that decides when a thread must be restarted on a boundary
    * change, and never from a fixed literal.
    */
-  private _noteWrittenFile(turnId: string, toolName: string, input: unknown): void {
+  private _noteWriteAttempt(
+    turnId: string,
+    toolCallId: string,
+    toolName: string,
+    input: unknown,
+  ): void {
     const filePath = writtenFilePath(toolName, input);
     const cwd = this._thread?.cwd;
     if (filePath === undefined || cwd === undefined) return;
-    const written = this._writtenFilesByTurn.get(turnId) ?? new Set<string>();
-    written.add(path.resolve(cwd, filePath));
-    this._writtenFilesByTurn.set(turnId, written);
+    this._pendingWritesByToolCall.set(toolCallId, {
+      turnId,
+      filePath: path.resolve(cwd, filePath),
+    });
+  }
+
+  private _confirmWrite(toolCallId: string, failed: boolean): void {
+    const attempt = this._pendingWritesByToolCall.get(toolCallId);
+    if (attempt === undefined) return;
+    this._pendingWritesByToolCall.delete(toolCallId);
+    if (failed) return;
+    const written = this._writtenFilesByTurn.get(attempt.turnId) ?? new Set<string>();
+    written.add(attempt.filePath);
+    this._writtenFilesByTurn.set(attempt.turnId, written);
+  }
+
+  private _clearTurnWrites(turnId: string): void {
+    this._writtenFilesByTurn.delete(turnId);
+    for (const [toolCallId, attempt] of this._pendingWritesByToolCall) {
+      if (attempt.turnId === turnId) this._pendingWritesByToolCall.delete(toolCallId);
+    }
   }
 
   private async _undoTurn(turnId: string): Promise<void> {
@@ -2791,21 +2835,6 @@ export class ChatStateManager {
         this._pendingApprovals.delete(requestId);
       }
     }
-  }
-
-  private async _reportBilledTurn(requestIds: readonly string[]): Promise<void> {
-    const settled = await getTokenCounter().settleBillingRequests(this._secrets, requestIds);
-    const billed = settled.filter((credits): credits is number => credits !== null);
-    if (billed.length === 0) return;
-    const total = billed.reduce((sum, credits) => sum + credits, 0);
-    const open = settled.length - billed.length;
-    const credits = formatCreditAmount(total);
-    vscode.window.setStatusBarMessage(
-      open === 0
-        ? t('billing.turnBilled', { credits })
-        : t('billing.turnBilledSoFar', { credits, unsettled: formatUnsettledRequests(open) }),
-      10_000,
-    );
   }
 
   private _approvalAnsweredOnPhone(answer: ApprovalAnswer): void {
@@ -3037,6 +3066,11 @@ export class ChatStateManager {
     });
   }
 
+  private _forgetContextUsage(threadId: string): void {
+    if (this._contextUsage?.threadId === threadId) this._contextUsage = undefined;
+    this._post({ type: 'contextUsage', payload: { usedTokens: 0 } });
+  }
+
   async compactConversation(): Promise<void> {
     const thread = this._thread;
     if (thread === undefined) {
@@ -3131,7 +3165,9 @@ export class ChatStateManager {
   }
 
   async attachContext(kind: ContextAttachmentKind): Promise<boolean> {
+    const epoch = this._conversationEpoch;
     const attachment = await buildContextAttachment(kind);
+    if (this._conversationEpoch !== epoch) return true;
     if (attachment === undefined) {
       this._post({
         type: 'contextMenuState',
@@ -3825,8 +3861,18 @@ export class ChatStateManager {
     ];
   }
 
-  private async _attachmentInputs(entries: readonly PendingAttachment[]): Promise<UserInput[]> {
-    const inputs: UserInput[] = [];
+  private _unremovedAttachmentInputs(
+    owner: PendingChatSend,
+    admitted: readonly PendingAttachment[],
+  ): UserInput[] {
+    const owned = new Set(owner.attachments.map((entry) => entry.id));
+    return admitted.filter((entry) => owned.has(entry.id)).map((entry) => entry.input);
+  }
+
+  private async _admittedAttachments(
+    entries: readonly PendingAttachment[],
+  ): Promise<PendingAttachment[]> {
+    const admitted: PendingAttachment[] = [];
     for (const entry of entries) {
       if (entry.source !== undefined) {
         if (entry.source.untitled === true) {
@@ -3838,9 +3884,9 @@ export class ChatStateManager {
           if (!resolved.ok || resolved.uri.fsPath !== entry.source.filePath) continue;
         }
       }
-      inputs.push(entry.input);
+      admitted.push(entry);
     }
-    return inputs;
+    return admitted;
   }
 
   private async _buildFollowUpInputs(
@@ -3851,10 +3897,11 @@ export class ChatStateManager {
       hasVisibleReferenceToken(request.text, reference),
     );
     const mentionInputs = await buildWorkspaceReferenceInputs(workspaceUri, visibleReferences);
+    const admittedAttachments = await this._admittedAttachments(request.attachments);
     return [
       ...this._typedTextInputs(request.text, request.browseWeb),
       ...mentionInputs,
-      ...(await this._attachmentInputs(request.attachments)),
+      ...this._unremovedAttachmentInputs(request, admittedAttachments),
     ];
   }
 
@@ -4025,7 +4072,7 @@ export class ChatStateManager {
         resolveCompletion = resolve;
       });
       const deliverTurnEvent = (event: LocalRuntimeEvent): void => {
-        void this._handleRuntimeEvent(runtime, event, () => {
+        this._deliverTurnEvent(runtime, event, conversationEpoch, () => {
           uiSettled = true;
           if (!terminal) {
             terminal = true;
@@ -4037,7 +4084,7 @@ export class ChatStateManager {
       const notificationSubscription = runtime.onNotification((notification) => {
         if (notification.method === 'mcp/authRequired') {
           const required = readMcpAuthRequired(notification.params);
-          if (required?.threadId === thread.id) {
+          if (required?.threadId === thread.id && conversationEpoch === this._conversationEpoch) {
             this._post({ type: 'mcpAuthRequired', payload: { server: required.server } });
           }
           return;
@@ -4060,7 +4107,7 @@ export class ChatStateManager {
         }
         if (event.threadId !== thread.id) return;
         if (event.type === 'mcp_status') {
-          void this._handleRuntimeEvent(runtime, event, () => undefined);
+          this._deliverTurnEvent(runtime, event, conversationEpoch, () => undefined);
           return;
         }
         if (activeTurnId === undefined) {
@@ -4097,9 +4144,10 @@ export class ChatStateManager {
 
       try {
         const attachmentEntries = [...request.attachments];
-        const attachmentInputs = await this._attachmentInputs(attachmentEntries);
+        const admittedAttachments = await this._admittedAttachments(attachmentEntries);
         const activeProject = getActiveCloudProject(this._context.workspaceState);
         const customInstructionInput = buildCustomInstructionInput(this._context, {
+          project: activeProject ?? null,
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
         const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
@@ -4118,6 +4166,12 @@ export class ChatStateManager {
         const disallowedTools = this._disallowedTools.get(thread.id);
         const filtersTools =
           disallowedTools !== undefined && (await runtime.offers('turnToolFilters'));
+        const reasoningEffort = supportedEffort(
+          requestedModel,
+          this._effort ?? Config.agentEffort(),
+          await this._syncEffortLadder(thread.runtime),
+        );
+        const attachmentInputs = this._unremovedAttachmentInputs(request, admittedAttachments);
         const startTurn = runtime.startTurn({
           threadId: thread.id,
           cwd,
@@ -4130,11 +4184,7 @@ export class ChatStateManager {
             ...attachmentInputs,
           ],
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
-          reasoningEffort: supportedEffort(
-            requestedModel,
-            this._effort ?? Config.agentEffort(),
-            await this._syncEffortLadder(thread.runtime),
-          ),
+          reasoningEffort,
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
           ...(filtersTools ? { disallowedTools: [...disallowedTools] } : {}),
           ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
@@ -4196,7 +4246,7 @@ export class ChatStateManager {
           });
         }
         const attachmentIds = attachmentEntries.map((entry) => entry.id);
-        request.attachments.splice(0, attachmentEntries.length);
+        for (const id of attachmentIds) this._removeOwnedAttachment(request, id);
         if (attachmentIds.length > 0) {
           this._post({ type: 'attachmentsConsumed', payload: { ids: attachmentIds } });
         }
@@ -4780,6 +4830,40 @@ export class ChatStateManager {
     );
   }
 
+  private _deliverTurnEvent(
+    runtime: LocalRuntimeClient,
+    event: LocalRuntimeEvent,
+    epoch: number,
+    complete: () => void,
+  ): void {
+    if (epoch === this._conversationEpoch) {
+      void this._handleRuntimeEvent(runtime, event, complete);
+      return;
+    }
+    if (
+      event.type !== 'turn_completed' &&
+      event.type !== 'turn_failed' &&
+      event.type !== 'turn_interrupted'
+    ) {
+      return;
+    }
+    this._expirePendingApprovals(event.turnId);
+    const servedModel = this._servedModelByTurn.get(event.turnId);
+    this._servedModelByTurn.delete(event.turnId);
+    this._clearTurnWrites(event.turnId);
+    if (event.type === 'turn_completed') {
+      recordCompletedTurnUsage(this._secrets, {
+        model: servedModel ?? Config.model(),
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        ...(event.managedRequestIds === undefined
+          ? {}
+          : { managedRequestIds: event.managedRequestIds }),
+      });
+    }
+    complete();
+  }
+
   private async _handleRuntimeEvent(
     runtime: LocalRuntimeClient,
     event: LocalRuntimeEvent,
@@ -4843,7 +4927,7 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'tool_execution_start') {
-      this._noteWrittenFile(event.turnId, event.name, event.input);
+      this._noteWriteAttempt(event.turnId, event.toolCallId, event.name, event.input);
       const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
       if (plan !== undefined) {
         this._latestPlan = { threadId: event.threadId, plan };
@@ -4866,12 +4950,14 @@ export class ChatStateManager {
     if (event.type === 'tool_execution_end') {
       const entry = this._activityEntry('tool', event.toolCallId);
       const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
+      const failed = entry === undefined ? event.isError : entry.status === 'failed';
+      this._confirmWrite(event.toolCallId, failed);
       this._post({
         type: 'toolCallEnd',
         payload: {
           toolUseId: event.toolCallId,
           output: entry?.output ?? event.output,
-          isError: entry === undefined ? event.isError : entry.status === 'failed',
+          isError: failed,
           ...(elapsedMs === undefined ? {} : { elapsedMs }),
         },
       });
@@ -4958,7 +5044,7 @@ export class ChatStateManager {
       const servedModel = this._servedModelByTurn.get(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
       const writtenFiles = [...(this._writtenFilesByTurn.get(event.turnId) ?? [])];
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._clearTurnWrites(event.turnId);
       if (writtenFiles.length > 0) {
         this._lastChangedTurn = {
           threadId: event.threadId,
@@ -4994,15 +5080,23 @@ export class ChatStateManager {
             : {}),
         },
       });
-      this._postContextUsage(
-        event.threadId,
-        event.inputTokens + event.outputTokens,
-        catalogContextWindow(resolvedModel),
-      );
-      getTokenCounter().addMeasuredUsage(resolvedModel, event.inputTokens, event.outputTokens);
-      if (event.managedRequestIds !== undefined && event.managedRequestIds.length > 0) {
-        void this._reportBilledTurn(event.managedRequestIds);
+      if (event.contextTokens === undefined) {
+        this._forgetContextUsage(event.threadId);
+      } else {
+        this._postContextUsage(
+          event.threadId,
+          event.contextTokens,
+          catalogContextWindow(resolvedModel),
+        );
       }
+      recordCompletedTurnUsage(this._secrets, {
+        model: resolvedModel,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        ...(event.managedRequestIds === undefined
+          ? {}
+          : { managedRequestIds: event.managedRequestIds }),
+      });
       this._conversationTreeProvider?.refresh();
       complete();
       return;
@@ -5010,14 +5104,14 @@ export class ChatStateManager {
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._clearTurnWrites(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
     this._expirePendingApprovals(event.turnId);
     this._servedModelByTurn.delete(event.turnId);
-    this._writtenFilesByTurn.delete(event.turnId);
+    this._clearTurnWrites(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
       this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });

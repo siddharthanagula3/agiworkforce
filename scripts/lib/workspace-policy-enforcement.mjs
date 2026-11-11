@@ -286,16 +286,86 @@ export function findUnenforcedKeys(scanRoot) {
 export const EFFECTIVE_ROUTE_FILE =
   'apps/web/app/api/settings/organization/policy/effective/route.ts';
 
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+}
+
+function topLevelEntries(block) {
+  const entries = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < block.length; index += 1) {
+    const char = block[index];
+    if (char === '(' || char === '{' || char === '[') depth += 1;
+    else if (char === ')' || char === '}' || char === ']') depth -= 1;
+    else if (char === ',' && depth === 0) {
+      entries.push(block.slice(start, index));
+      start = index + 1;
+    }
+  }
+  entries.push(block.slice(start));
+  return entries.map((entry) => entry.trim()).filter(Boolean);
+}
+
+function hasTopLevelWidening(expression) {
+  let depth = 0;
+  for (let index = 0; index < expression.length; index += 1) {
+    const char = expression[index];
+    if (char === '(' || char === '{' || char === '[') depth += 1;
+    else if (char === ')' || char === '}' || char === ']') depth -= 1;
+    else if (depth === 0 && (char === '?' || (char === '|' && expression[index + 1] === '|'))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// The spread form serves the effective answer only when every key it overrides
+// is the effective value of that same key joined with `&&`: a published answer
+// may be narrower than the effective policy and never looser.
+function servesEffectiveCodeNarrowedOnly(source) {
+  const spread = /code:\s*\{\s*\.\.\.effective\.code\b\s*/.exec(source);
+  if (!spread) return false;
+  const afterSpread = source.slice(spread.index + spread[0].length);
+  let depth = 1;
+  let end = -1;
+  for (let index = 0; index < afterSpread.length; index += 1) {
+    const char = afterSpread[index];
+    if (char === '{' || char === '(' || char === '[') depth += 1;
+    else if (char === '}' || char === ')' || char === ']') {
+      depth -= 1;
+      if (depth === 0) {
+        end = index;
+        break;
+      }
+    }
+  }
+  if (end < 0) return false;
+  const overrides = topLevelEntries(afterSpread.slice(0, end).replace(/^\s*,/, ''));
+  return overrides.every((entry) => {
+    const parsed = /^(\w+)\s*:\s*([\s\S]+)$/.exec(entry);
+    if (!parsed) return false;
+    const [, key, value] = parsed;
+    if (!new RegExp(`^effective\\.code\\.${key}\\s*&&`).test(value)) return false;
+    return !hasTopLevelWidening(value);
+  });
+}
+
 // A control with no server surface to refuse on is only honoured if the server
 // tells the client about it, so the exemption is paid for by the published answer.
 export function servedFamilies(effectiveRouteSource) {
+  const source = stripComments(effectiveRouteSource);
   const families = new Set();
-  if (/controls:\s*effective\.controls/.test(effectiveRouteSource)) {
+  if (/controls:\s*effective\.controls/.test(source)) {
     families.add('feature');
     families.add('control');
   }
-  if (/code:\s*(?:effective\.code\b|\{\s*\.\.\.effective\.code\b)/.test(effectiveRouteSource))
+  if (
+    /code:\s*effective\.code\s*(?=[,}])/.test(source) ||
+    servesEffectiveCodeNarrowedOnly(source)
+  ) {
     families.add('code');
+  }
   return families;
 }
 

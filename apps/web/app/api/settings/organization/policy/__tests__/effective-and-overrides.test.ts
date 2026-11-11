@@ -256,6 +256,43 @@ describe('PUT /api/settings/organization/policy/overrides', () => {
     expect(mocks.upsert).not.toHaveBeenCalled();
   });
 
+  it('stores a Code control narrowed for one member', async () => {
+    mocks.permissions = new Set(['content.read', 'policy.manage']);
+    mocks.upsert.mockResolvedValueOnce({ id: 'o-code' });
+
+    const response = await putOverride(
+      overrideRequest({
+        subjectType: 'user',
+        subjectId: 'user-2',
+        layer: { code: { allowDesktopCloudSync: false } },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.upsert).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ layer: { code: { allowDesktopCloudSync: false } } }),
+    );
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: expect.objectContaining({ changedKeys: ['code'] }) }),
+    );
+  });
+
+  it('refuses a Code control the product does not define', async () => {
+    mocks.permissions = new Set(['content.read', 'policy.manage']);
+
+    const response = await putOverride(
+      overrideRequest({
+        subjectType: 'user',
+        subjectId: 'user-2',
+        layer: { code: { notAControl: false } },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.upsert).not.toHaveBeenCalled();
+  });
+
   it('refuses an exception for someone outside the workspace', async () => {
     mocks.permissions = new Set(['content.read', 'policy.manage']);
     mocks.subjectExists.mockResolvedValueOnce(false);

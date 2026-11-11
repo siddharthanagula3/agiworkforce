@@ -144,6 +144,10 @@ impl Keybindings {
             .map(|(display, _)| display.as_str())
     }
 
+    pub fn hint(&self, action: KeybindingAction) -> Option<String> {
+        self.display(action).map(title_case_chord)
+    }
+
     pub fn matches(&self, action: KeybindingAction, event: KeyEvent) -> bool {
         self.entries
             .get(action.config_key())
@@ -224,6 +228,23 @@ pub fn validate_config(custom: &BTreeMap<String, String>) -> Result<(), String> 
     Ok(())
 }
 
+fn title_case_chord(display: &str) -> String {
+    display
+        .split('+')
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => first
+                    .to_uppercase()
+                    .chain(chars.flat_map(char::to_lowercase))
+                    .collect(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<String>>()
+        .join("+")
+}
+
 pub fn resolved_edit_mode(configured: Option<&str>) -> &'static str {
     if std::env::var("AGIWORKFORCE_VI")
         .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"))
@@ -279,7 +300,10 @@ fn parse_binding(value: &str) -> Result<(String, KeyChord), String> {
             KeyCode::BackTab
         }
         "tab" => KeyCode::Tab,
-        "backtab" => KeyCode::BackTab,
+        "backtab" => {
+            modifiers.remove(KeyModifiers::SHIFT);
+            KeyCode::BackTab
+        }
         "backspace" => KeyCode::Backspace,
         "delete" | "del" => KeyCode::Delete,
         "home" => KeyCode::Home,
@@ -290,7 +314,7 @@ fn parse_binding(value: &str) -> Result<(String, KeyChord), String> {
         "down" => KeyCode::Down,
         "left" => KeyCode::Left,
         "right" => KeyCode::Right,
-        function if function.starts_with('f') => {
+        function if function.len() > 1 && function.starts_with('f') => {
             let number = function[1..]
                 .parse::<u8>()
                 .map_err(|_| format!("unknown key `{key_name}`"))?;
@@ -394,6 +418,96 @@ mod tests {
             ("redraw".to_string(), "ctrl+x".to_string()),
         ]))
         .is_err());
+    }
+
+    #[test]
+    fn explicit_shift_backtab_matches_both_event_forms() {
+        let custom = BTreeMap::from([("cycle_mode".to_string(), "shift+backtab".to_string())]);
+        validate_config(&custom).unwrap();
+        let bindings = Keybindings::from_config(&custom);
+        assert!(bindings.matches(
+            KeybindingAction::CycleMode,
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)
+        ));
+        assert!(bindings.matches(
+            KeybindingAction::CycleMode,
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)
+        ));
+    }
+
+    #[test]
+    fn ctrl_shift_backtab_matches_with_or_without_shift_on_the_event() {
+        let custom = BTreeMap::from([("cycle_mode".to_string(), "ctrl+shift+backtab".to_string())]);
+        validate_config(&custom).unwrap();
+        let bindings = Keybindings::from_config(&custom);
+        assert!(bindings.matches(
+            KeybindingAction::CycleMode,
+            KeyEvent::new(
+                KeyCode::BackTab,
+                KeyModifiers::CONTROL | KeyModifiers::SHIFT
+            )
+        ));
+        assert!(bindings.matches(
+            KeybindingAction::CycleMode,
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::CONTROL)
+        ));
+        assert!(!bindings.matches(
+            KeybindingAction::CycleMode,
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::NONE)
+        ));
+    }
+
+    #[test]
+    fn backtab_spellings_cannot_bypass_duplicate_validation() {
+        let clash = BTreeMap::from([("redraw".to_string(), "shift+backtab".to_string())]);
+        assert!(validate_config(&clash).is_err());
+        let aliased = BTreeMap::from([
+            ("cycle_mode".to_string(), "backtab".to_string()),
+            ("redraw".to_string(), "shift+backtab".to_string()),
+        ]);
+        assert!(validate_config(&aliased).is_err());
+    }
+
+    #[test]
+    fn the_letter_f_is_a_character_key_not_a_function_key() {
+        let custom = BTreeMap::from([("redraw".to_string(), "ctrl+f".to_string())]);
+        validate_config(&custom).unwrap();
+        assert!(Keybindings::from_config(&custom).matches(
+            KeybindingAction::Redraw,
+            KeyEvent::new(KeyCode::Char('f'), KeyModifiers::CONTROL)
+        ));
+        let function = BTreeMap::from([("redraw".to_string(), "f5".to_string())]);
+        validate_config(&function).unwrap();
+        assert!(Keybindings::from_config(&function).matches(
+            KeybindingAction::Redraw,
+            KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE)
+        ));
+        assert!(validate_config(&BTreeMap::from([(
+            "redraw".to_string(),
+            "ctrl+foo".to_string()
+        )]))
+        .is_err());
+    }
+
+    #[test]
+    fn hints_name_the_effective_chord_in_prose_case() {
+        let defaults = Keybindings::from_config(&BTreeMap::new());
+        assert_eq!(
+            defaults.hint(KeybindingAction::CycleMode).as_deref(),
+            Some("Shift+Tab")
+        );
+        assert_eq!(
+            defaults.hint(KeybindingAction::OpenPalette).as_deref(),
+            Some("/")
+        );
+        assert_eq!(defaults.hint(KeybindingAction::ClearChat), None);
+        let custom = BTreeMap::from([("quit".to_string(), "CTRL+q".to_string())]);
+        assert_eq!(
+            Keybindings::from_config(&custom)
+                .hint(KeybindingAction::Quit)
+                .as_deref(),
+            Some("Ctrl+Q")
+        );
     }
 
     #[test]

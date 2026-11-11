@@ -50,13 +50,24 @@ fn subject(kind: FeedbackKind, message: &str) -> String {
     subject
 }
 
+fn admitted_message(message: &str) -> Result<String, CloudError> {
+    let message = message.trim();
+    let length = message.encode_utf16().count();
+    if length > MESSAGE_LIMIT {
+        return Err(CloudError::LocalFile(format!(
+            "the description is {length} characters and the limit is {MESSAGE_LIMIT}. Press Up to edit it, shorten it by {} characters and send it again.",
+            length - MESSAGE_LIMIT
+        )));
+    }
+    Ok(message.to_string())
+}
+
 pub async fn submit(
     client: &CloudClient,
     kind: FeedbackKind,
     message: &str,
 ) -> Result<String, CloudError> {
-    let message = message.trim();
-    let message: String = message.chars().take(MESSAGE_LIMIT).collect();
+    let message = admitted_message(message)?;
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
     let request = FeedbackRequest {
         subject: subject(kind, &message),
@@ -79,4 +90,41 @@ pub async fn submit(
     } else {
         "The team's feedback inbox did not confirm it. Try again in a moment.".to_string()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn message_at_the_limit_is_sent_whole() {
+        let body = format!("  {}  ", "a".repeat(MESSAGE_LIMIT));
+        assert_eq!(admitted_message(&body).unwrap(), "a".repeat(MESSAGE_LIMIT));
+    }
+
+    #[test]
+    fn message_over_the_limit_is_refused_not_clipped() {
+        let body = format!("{}tail condition", "a".repeat(MESSAGE_LIMIT));
+        let error = admitted_message(&body).unwrap_err().to_string();
+        assert!(error.contains("the limit is 10000"), "{error}");
+        assert!(error.contains("shorten it by 14 characters"), "{error}");
+    }
+
+    #[test]
+    fn limit_counts_utf16_units_like_the_server() {
+        let body = "\u{1F600}".repeat(MESSAGE_LIMIT / 2 + 1);
+        assert!(body.chars().count() <= MESSAGE_LIMIT);
+        assert!(admitted_message(&body).is_err());
+        let fits = "\u{1F600}".repeat(MESSAGE_LIMIT / 2);
+        assert_eq!(admitted_message(&fits).unwrap(), fits);
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_sends_feedback() {
+        use crate::platform::runtime::session::PrivacyMode;
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let reply = crate::cloud::send_feedback(mode, FeedbackKind::Bug, "it broke").await;
+            assert_eq!(reply, CloudError::NotManaged(mode).to_string());
+        }
+    }
 }

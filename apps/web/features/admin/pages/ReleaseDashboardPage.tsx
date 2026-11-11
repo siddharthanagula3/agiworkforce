@@ -106,6 +106,7 @@ export default function ReleaseDashboardPage() {
     void load();
   }, [load]);
 
+  const trailUnreadable = data !== null && data.unreadable.includes('events');
   const drillStale =
     data !== null && (data.drillAgeDays === null || data.drillAgeDays > DRILL_STALE_AFTER_DAYS);
 
@@ -168,11 +169,13 @@ export default function ReleaseDashboardPage() {
                 <Claim
                   label="Audit chain"
                   value={
-                    data.chain.intact
-                      ? `Intact over the last ${data.events.length} events`
-                      : `Broken at event ${data.chain.brokenAt}`
+                    trailUnreadable
+                      ? 'Could not be checked, the audit trail could not be read'
+                      : data.chain.intact
+                        ? `Intact over the last ${data.events.length} events`
+                        : `Broken at event ${data.chain.brokenAt}`
                   }
-                  warn={!data.chain.intact}
+                  warn={trailUnreadable || !data.chain.intact}
                 />
               </div>
             </section>
@@ -187,7 +190,9 @@ export default function ReleaseDashboardPage() {
                       ? `${formatTimestamp(data.lastRollback.recordedAt)} to ${
                           data.lastRollback.deploymentId ?? 'unknown'
                         }`
-                      : 'None recorded'
+                      : trailUnreadable
+                        ? 'Unknown, the audit trail could not be read'
+                        : 'None recorded'
                   }
                 />
                 <Claim
@@ -195,7 +200,9 @@ export default function ReleaseDashboardPage() {
                   value={
                     data.lastDrill
                       ? `${formatTimestamp(data.lastDrill.recordedAt)} (${data.drillAgeDays} days ago)`
-                      : 'Never; the rollback path is untested'
+                      : trailUnreadable
+                        ? 'Unknown, the audit trail could not be read'
+                        : 'Never; the rollback path is untested'
                   }
                   warn={drillStale}
                 />

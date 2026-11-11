@@ -39,7 +39,6 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const NO_STORE = { 'cache-control': 'no-store' };
-
 function refusal(
   status: number,
   code: GuestChatErrorCode,
@@ -132,7 +131,14 @@ async function handleGuestTurn(request: NextRequest) {
       'Chat without an account has reached today’s capacity. Sign in to keep going.',
       { signInPath: AUTH_LOGIN_PATH },
     );
-  if (!store) return capacityReached();
+  const admissionUnavailable = () =>
+    refusal(
+      503,
+      GUEST_CHAT_ERROR_CODES.admissionUnavailable,
+      'Chat without an account is unavailable just now. Try again in a moment, or sign in.',
+      { signInPath: AUTH_LOGIN_PATH },
+    );
+  if (!store) return admissionUnavailable();
 
   const { messages } = parsed.data;
   const moderation = moderateManagedPrompt({
@@ -159,7 +165,7 @@ async function handleGuestTurn(request: NextRequest) {
     });
   } catch (error) {
     logger.error({ error }, '[guest-chat] the turn could not be priced or held; refusing it');
-    return capacityReached();
+    return admissionUnavailable();
   }
   if (!admission.ok) {
     if (admission.limit === 'global') return capacityReached();

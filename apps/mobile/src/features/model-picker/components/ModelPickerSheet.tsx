@@ -237,26 +237,31 @@ interface ModelPickerSheetProps {
   sheetRef: React.RefObject<BottomSheet | null>;
   openSignal?: number;
   onSelect?: (modelId: string) => void;
+  selectedModelId?: string;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
   conversationId?: string;
   offerRoutingProfiles?: boolean;
+  showSpeed?: boolean;
 }
 
 export function ModelPickerSheet({
   sheetRef,
   openSignal,
   onSelect,
+  selectedModelId,
   onOpenCloudAccess,
   modelScope = 'local',
   conversationId,
   offerRoutingProfiles = false,
+  showSpeed = true,
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
   const router = useRouter();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const rowSelectedModel = selectedModelId ?? selectedModel;
   const routingProfile = useModelStore((s) => s.routingProfile);
   const setRoutingProfile = useModelStore((s) => s.setRoutingProfile);
   const favorites = useModelStore((s) => s.favorites);
@@ -377,11 +382,12 @@ export function ModelPickerSheet({
   // Recency order comes from the store, not from the catalogue, so the row is
   // built by walking `recentModels` rather than filtering the model list.
   const recentModelDefs = useMemo(() => {
+    if (query) return [];
     const byId = new Map(filteredModels.map((model) => [model.id, model]));
     return recentModels
       .map((id) => byId.get(id))
       .filter((model): model is ModelDef => model !== undefined);
-  }, [filteredModels, recentModels]);
+  }, [filteredModels, query, recentModels]);
 
   const favoriteModels = useMemo(
     () => filteredModels.filter((model) => favorites.includes(model.id)),
@@ -488,7 +494,7 @@ export function ModelPickerSheet({
         return;
       }
 
-      if (id === selectedModel && !isAutoMode(id)) {
+      if (id === rowSelectedModel && !isAutoMode(id)) {
         if (chosenModel.surface === 'cloud_managed' && chosenModel.supportsThinking) {
           setExpandedModelId((prev) => (prev === id ? null : id));
           return;
@@ -506,8 +512,8 @@ export function ModelPickerSheet({
       openInvite,
       openUpgrade,
       prepareModel,
+      rowSelectedModel,
       selectAndClose,
-      selectedModel,
       sheetRef,
       statusForModel,
     ],
@@ -553,9 +559,9 @@ export function ModelPickerSheet({
         <ModelRow
           key={`${keyPrefix}-${model.id}`}
           model={model}
-          isSelected={selectedModel === model.id}
+          isSelected={rowSelectedModel === model.id}
           isFavorite={favorites.includes(model.id)}
-          isExpanded={expandedModelId === model.id && selectedModel === model.id}
+          isExpanded={expandedModelId === model.id && rowSelectedModel === model.id}
           thinkingEnabled={thinkingEnabledPerModel[model.id] ?? false}
           installStatus={installStatus}
           onSelect={handleSelectModel}
@@ -574,7 +580,7 @@ export function ModelPickerSheet({
       openInvite,
       openUpgrade,
       readySystemModelIds,
-      selectedModel,
+      rowSelectedModel,
       statusForModel,
       thinkingEnabledPerModel,
       toggleFavorite,
@@ -774,7 +780,7 @@ export function ModelPickerSheet({
           </View>
         ) : null}
 
-        {modelScope === 'cloud' ? <SpeedControl modelId={selectedModel} /> : null}
+        {modelScope === 'cloud' && showSpeed ? <SpeedControl modelId={selectedModel} /> : null}
 
         {readingInstalled ? (
           <View
@@ -801,7 +807,7 @@ export function ModelPickerSheet({
                 <AutoModeRow
                   key={mode.id}
                   mode={mode}
-                  selected={selectedModel === mode.id && activeRoutingProfile === 'auto'}
+                  selected={rowSelectedModel === mode.id && activeRoutingProfile === 'auto'}
                   onPress={() => handleSelectAutoMode(mode.id)}
                 />
               ))}
@@ -819,7 +825,7 @@ export function ModelPickerSheet({
             </View>
           ) : null}
 
-          {!query && recentModelDefs.length > 0 ? (
+          {recentModelDefs.length > 0 ? (
             <View style={{ marginBottom: 6 }}>
               <Text
                 style={{

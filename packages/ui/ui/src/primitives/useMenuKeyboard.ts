@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, type RefObject } from 'react';
 
 const NAV_KEYS = ['ArrowDown', 'ArrowUp', 'Home', 'End'];
+const DEFAULT_ITEM_SELECTOR = '[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"]';
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /**
@@ -19,7 +20,7 @@ export function useMenuKeyboard({
   onClose,
   panelRef,
   triggerRef,
-  itemSelector = '[role="menuitem"]',
+  itemSelector = DEFAULT_ITEM_SELECTOR,
   autoFocusFirstItem = true,
   disabledItemsFocusable = false,
 }: {

@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { subjectIsStoredUserId } from '@agiworkforce/identity';
+
 import { logger } from '@/lib/logger';
 
 import {
@@ -55,11 +57,21 @@ function incompleteStores(report: AccountErasureReport): string {
   return failures.join(', ').slice(0, 500);
 }
 
-async function deleteProviderIdentity(
-  userId: string,
+async function readProviderSubjects(userId: string, provider: string): Promise<string[]> {
+  const rows = await getNeonDb().query<{ subject: string }>(
+    `select subject from public.identities where user_id = $1 and provider = $2`,
+    [userId, provider],
+  );
+  const mapped = rows.map((row) => row.subject);
+  if (mapped.length > 0) return mapped;
+  return subjectIsStoredUserId(provider) ? [userId] : [];
+}
+
+async function deleteProviderSubject(
+  subject: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await getIdentityProvider().deleteUser(userId);
+    await getIdentityProvider().deleteUser(subject);
     return { ok: true };
   } catch (deleteError) {
     const message = deleteError instanceof Error ? deleteError.message : String(deleteError);
@@ -73,6 +85,23 @@ async function deleteProviderIdentity(
     }
     return { ok: false, error: message };
   }
+}
+
+async function deleteProviderIdentity(
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let subjects: string[];
+  try {
+    subjects = await readProviderSubjects(userId, getIdentityProvider().name);
+  } catch (lookupError) {
+    const message = lookupError instanceof Error ? lookupError.message : String(lookupError);
+    return { ok: false, error: message };
+  }
+  for (const subject of subjects) {
+    const deleted = await deleteProviderSubject(subject);
+    if (!deleted.ok) return deleted;
+  }
+  return { ok: true };
 }
 
 async function isStillDue(userId: string): Promise<boolean> {

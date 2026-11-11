@@ -109,6 +109,7 @@ export function isJobQueueName(value: string): value is JobQueueName {
 
 export const JOB_KINDS = {
   'notifications.schedule-completed': 'notifications',
+  'notifications.deferred-push': 'notifications',
   'email.schedule-completed': 'email',
   'webhooks.audit-stream-delivery': 'webhooks',
   'webhooks.developer-delivery': 'webhooks',
@@ -121,6 +122,7 @@ export const JOB_KINDS = {
   'data-export.expire-archive': 'data-export',
   'email.data-export-ready': 'email',
   'webhooks.signaling-device-revoke': 'webhooks',
+  'webhooks.identity-account-status': 'webhooks',
 } as const satisfies Record<string, JobQueueName>;
 
 export type JobKind = keyof typeof JOB_KINDS;

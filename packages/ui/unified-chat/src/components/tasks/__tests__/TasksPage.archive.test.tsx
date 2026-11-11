@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { TasksPage } from '../TasksPage';
 
 const RUN_ID = '0190a000-0000-7000-8000-0000000000cc';
@@ -76,7 +77,7 @@ describe('a finished task can be shelved and brought back', () => {
       />,
     );
 
-    await screen.findByText(/AGI Work/);
+    await screen.findByText(PRODUCT_NAMES.work);
     expect(screen.queryByRole('button', { name: /^Archive$/ })).toBeNull();
   });
 
@@ -93,7 +94,7 @@ describe('a finished task can be shelved and brought back', () => {
         }}
       />,
     );
-    await screen.findByText(/AGI Work/);
+    await screen.findByText(PRODUCT_NAMES.work);
 
     fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
 
@@ -151,7 +152,7 @@ describe('a finished task can be shelved and brought back', () => {
     expect(String(notifyError.mock.calls[0]?.[0])).not.toContain('Failed to fetch');
   });
 
-  it('does not offer Start AGI Work from the archived filter', async () => {
+  it('does not offer Start Work from the archived filter', async () => {
     render(
       <TasksPage
         transport={{
@@ -169,7 +170,7 @@ describe('a finished task can be shelved and brought back', () => {
 
     expect(await screen.findByText('No archived work sessions yet')).toBeTruthy();
     expect(screen.getByText(/A finished task moves here when you archive it/)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Start AGI Work' })).toBeNull();
+    expect(screen.queryByRole('button', { name: `Start ${PRODUCT_NAMES.work}` })).toBeNull();
   });
 
   it('is titled Work history and filters through one labelled segmented control', async () => {

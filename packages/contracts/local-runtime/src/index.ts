@@ -209,6 +209,7 @@ export {
   PREVIEW_ERROR_LIMIT,
   PREVIEW_ERROR_TEXT_LIMIT,
   findLocalPreviewUrl,
+  localPreviewOrigin,
   localPreviewUrl,
 } from './apps';
 export type {

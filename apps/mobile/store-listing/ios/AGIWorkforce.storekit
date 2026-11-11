@@ -106,14 +106,14 @@
           "introductoryOffer": null,
           "localizations": [
             {
-              "description": "AGI Pro plan, billed monthly",
+              "description": "AGI Premium plan, billed monthly",
               "displayName": "AGI Premium",
               "locale": "en_US"
             }
           ],
           "productID": "com.agiworkforce.app.sub.pro.monthly",
           "recurringSubscriptionPeriod": "P1M",
-          "referenceName": "AGI Pro Monthly",
+          "referenceName": "AGI Premium Monthly",
           "subscriptionGroupID": "7A1C0001",
           "type": "RecurringSubscription"
         },
@@ -127,14 +127,14 @@
           "introductoryOffer": null,
           "localizations": [
             {
-              "description": "AGI Max 5x plan, billed monthly",
+              "description": "AGI Max plan, billed monthly",
               "displayName": "AGI Max",
               "locale": "en_US"
             }
           ],
           "productID": "com.agiworkforce.app.sub.max.monthly",
           "recurringSubscriptionPeriod": "P1M",
-          "referenceName": "AGI Max 5x Monthly",
+          "referenceName": "AGI Max Monthly",
           "subscriptionGroupID": "7A1C0001",
           "type": "RecurringSubscription"
         },
@@ -148,14 +148,14 @@
           "introductoryOffer": null,
           "localizations": [
             {
-              "description": "AGI Max 20x plan, billed monthly",
+              "description": "AGI Ultra plan, billed monthly",
               "displayName": "AGI Ultra",
               "locale": "en_US"
             }
           ],
           "productID": "com.agiworkforce.app.sub.max20x.monthly",
           "recurringSubscriptionPeriod": "P1M",
-          "referenceName": "AGI Max 20x Monthly",
+          "referenceName": "AGI Ultra Monthly",
           "subscriptionGroupID": "7A1C0001",
           "type": "RecurringSubscription"
         }

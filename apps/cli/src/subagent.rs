@@ -151,6 +151,10 @@ pub fn format_task_detail(
             }
             lines.push(String::new());
             lines.push(result.output.trim().to_string());
+            if let Some(line) = result.incomplete_line() {
+                lines.push(String::new());
+                lines.push(line);
+            }
             if !result.files_modified.is_empty() {
                 lines.push(String::new());
                 lines.push(format!(
@@ -198,6 +202,38 @@ impl SubagentUsage {
             via_subscription: turn.via_subscription,
         }
     }
+
+    pub(crate) fn from_unfinished_session(
+        model: &str,
+        session: &crate::agent::AgentSession,
+    ) -> Option<Self> {
+        let usage = Self {
+            model: model.to_string(),
+            input_tokens: session.total_input_tokens,
+            output_tokens: session.total_output_tokens,
+            cache_read_tokens: session.total_cache_read_tokens,
+            cache_creation_tokens: session.total_cache_creation_tokens,
+            cost_usd: session.cost_ledger.total_usd,
+            via_subscription: false,
+        };
+        let spent = usage.input_tokens > 0
+            || usage.output_tokens > 0
+            || usage.cache_read_tokens > 0
+            || usage.cache_creation_tokens > 0
+            || usage.cost_usd > 0.0;
+        spent.then_some(usage)
+    }
+}
+
+struct ChildRunFailure {
+    error: anyhow::Error,
+    usage: Option<SubagentUsage>,
+}
+
+impl ChildRunFailure {
+    fn before_any_request(error: anyhow::Error) -> Self {
+        Self { error, usage: None }
+    }
 }
 
 /// Result produced by a completed subagent.
@@ -209,6 +245,47 @@ pub struct SubagentResult {
     pub usage: SubagentUsage,
     #[serde(default)]
     pub transcript: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub incomplete: Option<String>,
+}
+
+impl SubagentResult {
+    fn from_turn(
+        id: String,
+        model: &str,
+        turn: crate::agent::TurnResult,
+        transcript: Vec<String>,
+    ) -> Self {
+        Self {
+            id,
+            files_modified: extract_modified_files(&turn.response),
+            usage: SubagentUsage::from_turn(model, &turn),
+            incomplete: turn.incomplete.map(|cause| cause.notice()),
+            output: turn.response,
+            transcript,
+        }
+    }
+
+    pub(crate) fn incomplete_line(&self) -> Option<String> {
+        self.incomplete
+            .as_ref()
+            .map(|notice| format!("Incomplete answer: {notice}"))
+    }
+
+    pub(crate) fn tool_output(&self) -> String {
+        let mut output = format!("Child task: {}\n\n{}", self.id, self.output);
+        if let Some(line) = self.incomplete_line() {
+            output.push_str("\n\n");
+            output.push_str(&line);
+        }
+        if !self.files_modified.is_empty() {
+            output.push_str("\n\nFiles modified:\n");
+            for file in &self.files_modified {
+                output.push_str(&format!("  - {file}\n"));
+            }
+        }
+        output
+    }
 }
 
 const TRANSCRIPT_LINE_CHARS: usize = 400;
@@ -271,6 +348,8 @@ struct SubagentEntry {
     description: String,
     status: Arc<RwLock<SubagentStatus>>,
     result: Arc<RwLock<Option<SubagentResult>>>,
+    /// What the child's provider requests cost, kept however the child ended.
+    spent: Arc<RwLock<Option<SubagentUsage>>>,
     /// OS thread handle, each subagent gets its own tokio runtime on a
     /// dedicated thread, avoiding the `Send` constraint of `tokio::spawn`.
     handle: Option<thread::JoinHandle<()>>,
@@ -527,6 +606,7 @@ impl SubagentManager {
 
         let status = Arc::new(RwLock::new(SubagentStatus::Running));
         let result: Arc<RwLock<Option<SubagentResult>>> = Arc::new(RwLock::new(None));
+        let spent: Arc<RwLock<Option<SubagentUsage>>> = Arc::new(RwLock::new(None));
         let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         // Clone values for the spawned thread
@@ -555,6 +635,7 @@ impl SubagentManager {
         };
         let task_status = Arc::clone(&status);
         let task_result = Arc::clone(&result);
+        let task_spent = Arc::clone(&spent);
         let task_cancelled = Arc::clone(&cancelled);
         let task_description = description.to_string();
         let task_depth = self.depth + 1;
@@ -581,7 +662,9 @@ impl SubagentManager {
                     .expect("Failed to create subagent tokio runtime");
 
                 let task = async move {
-                    let audit = |status: &SubagentStatus, result: Option<&SubagentResult>| {
+                    let audit = |status: &SubagentStatus,
+                                 result: Option<&SubagentResult>,
+                                 usage: Option<&SubagentUsage>| {
                         crate::subagent_audit::record_subagent(
                             &crate::subagent_audit::SubagentAuditRecord {
                                 subagent_id: &task_id,
@@ -590,7 +673,7 @@ impl SubagentManager {
                                 depth: task_depth,
                                 prompt_chars,
                                 status,
-                                usage: result.map(|result| &result.usage),
+                                usage,
                                 files_modified: result
                                     .map_or(0, |result| result.files_modified.len()),
                             },
@@ -600,7 +683,7 @@ impl SubagentManager {
                     // Check cancellation before starting
                     if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
                         *task_status.write().await = SubagentStatus::Cancelled;
-                        audit(&SubagentStatus::Cancelled, None);
+                        audit(&SubagentStatus::Cancelled, None, None);
                         return;
                     }
 
@@ -609,25 +692,31 @@ impl SubagentManager {
 
                     // Check cancellation after completion
                     if task_cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                        let unfinished = match &outcome {
+                            Ok((model, turn, _)) => Some(SubagentUsage::from_turn(model, turn)),
+                            Err(failure) => failure.usage.clone(),
+                        };
+                        *task_spent.write().await = unfinished.clone();
                         *task_status.write().await = SubagentStatus::Cancelled;
-                        audit(&SubagentStatus::Cancelled, None);
+                        audit(&SubagentStatus::Cancelled, None, unfinished.as_ref());
                         return;
                     }
 
                     match outcome {
                         Ok((model, turn, transcript)) => {
-                            let files = extract_modified_files(&turn.response);
-                            let usage = SubagentUsage::from_turn(&model, &turn);
-
-                            let subagent_result = SubagentResult {
-                                id: task_id.clone(),
-                                output: turn.response,
-                                files_modified: files,
-                                usage,
+                            let subagent_result = SubagentResult::from_turn(
+                                task_id.clone(),
+                                &model,
+                                turn,
                                 transcript,
-                            };
+                            );
 
-                            audit(&SubagentStatus::Completed, Some(&subagent_result));
+                            audit(
+                                &SubagentStatus::Completed,
+                                Some(&subagent_result),
+                                Some(&subagent_result.usage),
+                            );
+                            *task_spent.write().await = Some(subagent_result.usage.clone());
                             *task_result.write().await = Some(subagent_result);
                             *task_status.write().await = SubagentStatus::Completed;
 
@@ -639,10 +728,11 @@ impl SubagentManager {
                                 );
                             }
                         }
-                        Err(e) => {
-                            let err_msg = format!("{:#}", e);
+                        Err(failure) => {
+                            let err_msg = format!("{:#}", failure.error);
                             let failed = SubagentStatus::Failed(err_msg.clone());
-                            audit(&failed, None);
+                            audit(&failed, None, failure.usage.as_ref());
+                            *task_spent.write().await = failure.usage;
                             *task_status.write().await = failed;
 
                             if !crate::tui::tui_active() {
@@ -668,6 +758,7 @@ impl SubagentManager {
             description: description.to_string(),
             status,
             result,
+            spent,
             handle: Some(handle),
             cancelled,
             abandoned: false,
@@ -693,6 +784,18 @@ impl SubagentManager {
         let entries = self.entries.read().await;
         if let Some(entry) = entries.get(id) {
             entry.result.read().await.clone()
+        } else {
+            None
+        }
+    }
+
+    /// What a finished subagent's provider requests cost, whether it
+    /// completed, failed or was cancelled. `None` when it made no billable
+    /// request or has not ended.
+    pub async fn get_spent(&self, id: &str) -> Option<SubagentUsage> {
+        let entries = self.entries.read().await;
+        if let Some(entry) = entries.get(id) {
+            entry.spent.read().await.clone()
         } else {
             None
         }
@@ -893,8 +996,11 @@ async fn run_subagent(
     run_config: &SubagentRunConfig,
     prompt: &str,
     cancelled: &std::sync::atomic::AtomicBool,
-) -> Result<(String, crate::agent::TurnResult, Vec<String>)> {
-    let mut session = run_config.route.child_session(&run_config.sys_context)?;
+) -> Result<(String, crate::agent::TurnResult, Vec<String>), ChildRunFailure> {
+    let mut session = run_config
+        .route
+        .child_session(&run_config.sys_context)
+        .map_err(ChildRunFailure::before_any_request)?;
     if let Some(authority) = run_config.workspace_authority.clone() {
         session.install_workspace_file_authority(authority);
     }
@@ -943,13 +1049,19 @@ async fn run_subagent(
         tokio::select! {
             biased;
             () = wait_until_cancelled(cancelled) => {
-                anyhow::bail!("subagent cancelled");
+                Err(anyhow::anyhow!("subagent cancelled"))
             }
-            r = &mut send_fut => r?,
+            r = &mut send_fut => r,
         }
     };
 
-    Ok((model, result, transcript_lines(&session.messages)))
+    match result {
+        Ok(turn) => Ok((model, turn, transcript_lines(&session.messages))),
+        Err(error) => Err(ChildRunFailure {
+            error,
+            usage: SubagentUsage::from_unfinished_session(&model, &session),
+        }),
+    }
 }
 
 /// Resolve once the cancellation flag is set, polling cooperatively (every
@@ -1406,11 +1518,61 @@ mod tests {
                 description: "seeded".to_string(),
                 status: Arc::new(RwLock::new(status)),
                 result: Arc::new(RwLock::new(None)),
+                spent: Arc::new(RwLock::new(None)),
                 handle: None,
                 cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 abandoned: false,
             },
         );
+    }
+
+    #[test]
+    fn a_child_that_failed_after_billable_requests_reports_what_it_spent() {
+        let mut session = workflow_session(false);
+        assert_eq!(
+            SubagentUsage::from_unfinished_session("child-model", &session),
+            None,
+            "a child that made no request spent nothing"
+        );
+
+        session.total_input_tokens = 1_200;
+        session.total_output_tokens = 80;
+        session.total_cache_read_tokens = 600;
+        session.cost_ledger.total_usd = 0.4;
+
+        let usage = SubagentUsage::from_unfinished_session("child-model", &session)
+            .expect("completed requests before the failure are known spend");
+        assert_eq!(usage.model, "child-model");
+        assert_eq!(usage.input_tokens, 1_200);
+        assert_eq!(usage.output_tokens, 80);
+        assert_eq!(usage.cache_read_tokens, 600);
+        assert!((usage.cost_usd - 0.4).abs() < 1e-12);
+    }
+
+    #[tokio::test]
+    async fn the_parent_can_read_what_a_failed_child_spent() {
+        let manager = root_manager();
+        seed_entry(
+            &manager,
+            "failed-child",
+            SubagentStatus::Failed("refused".to_string()),
+        )
+        .await;
+        let spent = SubagentUsage {
+            model: "child-model".to_string(),
+            input_tokens: 900,
+            output_tokens: 40,
+            cost_usd: 0.25,
+            ..SubagentUsage::default()
+        };
+        *manager.entries.read().await["failed-child"]
+            .spent
+            .write()
+            .await = Some(spent.clone());
+
+        assert!(manager.get_result("failed-child").await.is_none());
+        assert_eq!(manager.get_spent("failed-child").await, Some(spent));
+        assert_eq!(manager.get_spent("never-spawned").await, None);
     }
 
     #[tokio::test]
@@ -1517,6 +1679,7 @@ mod tests {
                 description: "shutdown sentinel".to_string(),
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),
+                spent: Arc::new(RwLock::new(None)),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
                 abandoned: false,
@@ -1562,6 +1725,7 @@ mod tests {
                 description: "abort sentinel".to_string(),
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),
+                spent: Arc::new(RwLock::new(None)),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
                 abandoned: false,
@@ -1624,6 +1788,7 @@ mod tests {
                 description: "never finishes".to_string(),
                 status: Arc::new(RwLock::new(SubagentStatus::Running)),
                 result: Arc::new(RwLock::new(None)),
+                spent: Arc::new(RwLock::new(None)),
                 handle: Some(handle),
                 cancelled: cancelled.clone(),
                 abandoned: false,
@@ -1718,5 +1883,53 @@ mod tests {
         session.disallowed_tools.push("task".to_string());
         let reason = workflow_blocker(&session).expect("blocked");
         assert!(reason.contains("task tool"), "{reason}");
+    }
+
+    #[test]
+    fn a_child_answer_cut_at_the_output_limit_reaches_the_parent_with_its_notice() {
+        let notice = crate::errors::IncompleteTurnCause::OutputLimitReached.notice();
+        let turn = |incomplete| crate::agent::TurnResult {
+            response: "partial investigation".to_string(),
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            cost_usd: 0.0,
+            via_subscription: false,
+            incomplete,
+            managed_request_ids: Vec::new(),
+            sources: Vec::new(),
+        };
+        let result = SubagentResult::from_turn(
+            "child-1".to_string(),
+            "fixture-model",
+            turn(Some(crate::errors::IncompleteTurnCause::OutputLimitReached)),
+            Vec::new(),
+        );
+        assert_eq!(result.output, "partial investigation");
+        assert_eq!(result.usage.output_tokens, 20);
+        let parent = result.tool_output();
+        assert!(parent.contains("partial investigation"), "{parent}");
+        assert!(parent.contains(&notice), "{parent}");
+        let detail = format_task_detail(
+            "child-1",
+            "investigate",
+            &SubagentStatus::Completed,
+            Some(&result),
+        );
+        assert!(detail.contains(&notice), "{detail}");
+
+        let complete = SubagentResult::from_turn(
+            "child-2".to_string(),
+            "fixture-model",
+            turn(None),
+            Vec::new(),
+        );
+        assert!(!complete.tool_output().contains("Incomplete answer"));
+        let stored: SubagentResult = serde_json::from_str(
+            r#"{"id":"old","output":"done","files_modified":[],"usage":{"model":"","input_tokens":0,"output_tokens":0,"cache_read_tokens":0,"cache_creation_tokens":0,"cost_usd":0.0,"via_subscription":false}}"#,
+        )
+        .expect("a result saved before the notice existed");
+        assert_eq!(stored.incomplete, None);
     }
 }

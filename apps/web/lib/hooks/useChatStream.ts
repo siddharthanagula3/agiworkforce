@@ -6,6 +6,7 @@ import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { readFreeLimit } from '@/features/chat/lib/freeLimitRecovery';
 import { trackMessageSave } from '@/features/chat/lib/pending-message-saves';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
+import { EMPTY_KEPT_ASSISTANT_CONTENT } from '@/lib/chat-kept-messages';
 import {
   chatCompletionEndpoint,
   freeQuotaSelection,
@@ -242,8 +243,6 @@ import {
   SEAM_INSPECTION_WINDOW,
   type CitationSpan,
 } from '@agiworkforce/unified-chat';
-import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
-import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import { networkErrorMessage, toUserMessage } from '@/lib/user-error-message';
 import {
   buildApiMessageContent,
@@ -359,7 +358,10 @@ export type ToolApprovalDecision = ToolApprovalDecisionValue;
 export interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
   stopGeneration: (conversationId?: string) => void;
-  continueGeneration: (assistantMessageId: string) => Promise<void>;
+  continueGeneration: (
+    assistantMessageId: string,
+    options?: { conversationId?: string },
+  ) => Promise<void>;
   resumeInteractiveCardTurn: (
     assistantMessageId: string,
     options?: { force?: boolean },
@@ -672,8 +674,6 @@ function buildAssistantErrorContent(message: string, code?: string): string {
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
 }
 
-const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
-
 const STOPPED_FINISH_REASON = 'stopped';
 const RATE_LIMITED_SAVE_STATUS = 429;
 
@@ -798,7 +798,7 @@ function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): v
   console.error(`[useChatStream] Failed to save ${kind} message:`, error);
 }
 
-export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLACEHOLDER };
+export { saveMessageToDb, notifyPersistenceFailure };
 
 /**
  * The server treats an absent field as "on", so every request that produces a
@@ -1336,24 +1336,6 @@ function patchInteractiveCardSubmissionError(
     },
     binding.conversationId,
   );
-}
-
-function autoResolvePendingApprovals(
-  assistantMessageId: string,
-  calls: PendingApprovalCall[],
-  resolve: ResolveToolApprovalFn,
-): void {
-  const permissions = useToolPermissionsStore.getState();
-  for (const call of calls) {
-    const parsed = parseQualifiedMcpToolName(call.name);
-    if (!parsed) continue;
-    const level = permissions.getToolPermission(parsed.serverId, parsed.toolName);
-    if (level === 'allow') {
-      void resolve(assistantMessageId, call.toolCallId, 'approved');
-    } else if (level === 'deny') {
-      void resolve(assistantMessageId, call.toolCallId, 'rejected');
-    }
-  }
 }
 
 const REMOTE_APPROVAL_POLL_INTERVAL_MS = 5_000;
@@ -2735,7 +2717,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           {
             id: assistantMessageId,
             role: 'assistant',
-            content: fullContent || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            content: fullContent || EMPTY_KEPT_ASSISTANT_CONTENT,
             model,
             metadata,
             ...(ctx.assistantParentId ? { parentId: ctx.assistantParentId } : {}),
@@ -2909,6 +2891,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       assertTokenOwner(getAuthToken);
       ctx.signal?.throwIfAborted();
       if (remainder) {
+        contentSplitter.discardPendingPublic();
         emitPublicText(remainder, true);
         coalescedAppends.flush();
       }
@@ -4002,11 +3985,7 @@ export function useChatStream(
   }, [activeConversationId, followActiveConversation, userId, isSignedIn, captureSessionSnapshot]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef, requestSettlements);
-  const resolveToolInput = useResolveToolInput(
-    abortControllersRef,
-    resolveToolApproval,
-    requestSettlements,
-  );
+  const resolveToolInput = useResolveToolInput(abortControllersRef, requestSettlements);
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
@@ -4637,11 +4616,6 @@ export function useChatStream(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(
-              assistantMessageId,
-              settled.pendingCalls,
-              resolveToolApproval,
-            );
             followRemoteApproval(assistantMessageId, getAuthToken);
             break;
           }
@@ -4764,7 +4738,6 @@ export function useChatStream(
       setLoading,
       setError,
       getToken,
-      resolveToolApproval,
       beginConversationRequest,
       endConversationRequest,
       captureSessionSnapshot,
@@ -4773,9 +4746,9 @@ export function useChatStream(
   );
 
   const continueGeneration = useCallback(
-    async (assistantMessageId: string) => {
+    async (assistantMessageId: string, options: { conversationId?: string } = {}) => {
       const store = useChatStore.getState();
-      const conversationId = store.activeConversationId;
+      const conversationId = options.conversationId ?? store.activeConversationId;
       const existingAuthority =
         turnAuthoritiesRef.current.get(assistantMessageId) ??
         (conversationId ? requestAuthoritiesRef.current.get(conversationId) : undefined);
@@ -5178,7 +5151,7 @@ export function useChatStream(
                 {
                   id: assistantMessageId,
                   role: 'assistant',
-                  content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                  content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
                   model: message.model,
                   metadata: nextMetadata,
                 },
@@ -5191,7 +5164,7 @@ export function useChatStream(
         }
 
         if (tokenOwnerCurrent(getAuthToken) && !request.controller.signal.aborted) {
-          await continueGeneration(assistantMessageId);
+          await continueGeneration(assistantMessageId, { conversationId });
         }
       } finally {
         request.finish();
@@ -5386,7 +5359,7 @@ export function useResolveToolApproval(
             {
               id: assistantMessageId,
               role: selectedMessage.role,
-              content: selectedMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: selectedMessage.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: selectedMessage.model ?? turn.model,
               metadata: selectedMetadata,
             },
@@ -5452,7 +5425,7 @@ export function useResolveToolApproval(
               {
                 id: assistantMessageId,
                 role: message.role,
-                content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
                 model: message.model ?? turn.model,
                 metadata,
               },
@@ -5483,7 +5456,7 @@ export function useResolveToolApproval(
             {
               id: assistantMessageId,
               role: message.role,
-              content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: message.model ?? turn.model,
               metadata,
             },
@@ -5596,11 +5569,6 @@ export function useResolveToolApproval(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(
-              assistantMessageId,
-              settled.pendingCalls,
-              resolveToolApproval,
-            );
             followRemoteApproval(assistantMessageId, getAuthToken);
           } else {
             pendingTurns.delete(assistantMessageId);
@@ -5664,7 +5632,6 @@ const ANSWERED_APPROVAL_STATUSES = new Set([404, 409, 410]);
 
 function useResolveToolInput(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
-  resolveToolApproval: UseChatStreamReturn['resolveToolApproval'],
   requests: ChatRequestSettlements,
 ): UseChatStreamReturn['resolveToolInput'] {
   const captureSessionSnapshot = useSessionSnapshot();
@@ -5746,7 +5713,7 @@ function useResolveToolInput(
             {
               id: assistantMessageId,
               role: message.role,
-              content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: message.model ?? turn.model,
               ...(message.metadata ? { metadata: message.metadata } : {}),
             },
@@ -5855,7 +5822,6 @@ function useResolveToolInput(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(assistantMessageId, pendingCalls, resolveToolApproval);
             followRemoteApproval(assistantMessageId, getAuthToken);
           }
           if (runId && pendingInputs.length > 0) {
@@ -5909,7 +5875,7 @@ function useResolveToolInput(
         request.finish();
       }
     },
-    [abortControllers, captureSessionSnapshot, resolveToolApproval, requests],
+    [abortControllers, captureSessionSnapshot, requests],
   );
 }
 
@@ -5984,7 +5950,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
         {
           id: assistantMessageId,
           role: 'assistant',
-          content: currentMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+          content: currentMessage.content || EMPTY_KEPT_ASSISTANT_CONTENT,
           model: currentMessage.model ?? model,
           metadata: cancelledMetadata,
           ...(currentMessage.parentId ? { parentId: currentMessage.parentId } : {}),

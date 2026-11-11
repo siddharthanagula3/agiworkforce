@@ -296,6 +296,7 @@ function modelSummary(
   body: ProductComparisonCardBody,
   omissions: readonly Omission[],
   droppedProducts: readonly string[],
+  shortened: boolean,
 ): string {
   return [
     `Rendered a comparison card titled "${body.title}" above your reply, with each product's price, store, buy link and specs side by side. The user can already see it.`,
@@ -304,6 +305,9 @@ function modelSummary(
         `${index + 1}. ${product.name}: ${priceLabel(product)}${product.buyUrl ? ', buy link shown' : ', no buy link'}`,
     ),
     ...omissionLines(omissions),
+    ...(shortened
+      ? ['To fit the card, extra sources and long spec values were shortened; prices are kept.']
+      : []),
     ...(droppedProducts.length > 0
       ? [
           `Not shown, because none of their sources came from this turn: ${droppedProducts.join(', ')}.`,
@@ -314,24 +318,35 @@ function modelSummary(
   ].join('\n');
 }
 
+function sourcesWithinBudget(
+  sources: readonly InteractiveCardSource[],
+  priceSourceUrl: string | undefined,
+  limit: number,
+): InteractiveCardSource[] {
+  const leading = sources.slice(0, limit);
+  const priceSource = sources.find((source) => source.url === priceSourceUrl);
+  if (!priceSource || leading.includes(priceSource)) return leading;
+  return [...leading.slice(0, limit - 1), priceSource];
+}
+
+interface FittedCard {
+  card: InteractiveCard;
+  body: ProductComparisonCardBody;
+  shortened: boolean;
+}
+
 function buildCard(
   body: ProductComparisonCardBody,
   context: ProductComparisonExecutionContext,
-): InteractiveCard | null {
-  for (const budget of FITTING_BUDGETS) {
+): FittedCard | null {
+  for (const [attempt, budget] of FITTING_BUDGETS.entries()) {
     const fitted: ProductComparisonCardBody = {
       ...body,
-      products: body.products.map(({ price, ...product }) => {
-        const sources = product.sources.slice(0, budget.sources);
-        const kept =
-          price && sources.some((source) => source.url === price.sourceUrl) ? price : undefined;
-        return {
-          ...product,
-          ...(kept ? { price: kept } : {}),
-          specs: product.specs.map((value) => value.slice(0, budget.specValue)),
-          sources,
-        };
-      }),
+      products: body.products.map((product) => ({
+        ...product,
+        specs: product.specs.map((value) => value.slice(0, budget.specValue)),
+        sources: sourcesWithinBudget(product.sources, product.price?.sourceUrl, budget.sources),
+      })),
     };
     const rawCard = {
       schemaVersion: INTERACTIVE_CARD_SCHEMA_VERSION,
@@ -344,7 +359,9 @@ function buildCard(
     };
     if (JSON.stringify(rawCard).length > INTERACTIVE_CARD_MAX_SERIALIZED_LENGTH) continue;
     const card = parseInteractiveCardDelta({ card: rawCard });
-    if (card?.recognized && card.kind === PRODUCT_COMPARISON_CARD_KIND) return card;
+    if (card?.recognized && card.kind === PRODUCT_COMPARISON_CARD_KIND) {
+      return { card, body: fitted, shortened: attempt > 0 };
+    }
   }
   return null;
 }
@@ -381,11 +398,11 @@ export function executeProductComparisonTool(
     products,
     checkedAt: (context.now ?? (() => new Date()))().toISOString(),
   };
-  const card = buildCard(body, context);
-  if (!card) return { ok: false, content: TOO_LARGE_MESSAGE };
+  const fitted = buildCard(body, context);
+  if (!fitted) return { ok: false, content: TOO_LARGE_MESSAGE };
   return {
     ok: true,
-    content: modelSummary(body, omissions, droppedProducts),
-    card,
+    content: modelSummary(fitted.body, omissions, droppedProducts, fitted.shortened),
+    card: fitted.card,
   };
 }

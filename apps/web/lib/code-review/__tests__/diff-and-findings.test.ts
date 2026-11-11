@@ -81,18 +81,86 @@ describe('chunking a large diff', () => {
       ].join('\n'),
     ).join('\n');
 
-    const chunks = chunkDiff(parseUnifiedDiff(big), { maxBytes: 900, maxChunks: 4 });
+    const { chunks, omittedHunks } = chunkDiff(parseUnifiedDiff(big), {
+      maxBytes: 900,
+      maxChunks: 4,
+    });
 
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.length).toBeLessThanOrEqual(4);
     for (const chunk of chunks) expect(chunk.text).toContain('@@');
+    expect(omittedHunks).toBeGreaterThan(0);
   });
 
   it('prints the head line number beside every line so the model copies it', () => {
-    const [chunk] = chunkDiff(parseUnifiedDiff(DIFF), { maxBytes: 8000, maxChunks: 2 });
+    const {
+      chunks: [chunk],
+    } = chunkDiff(parseUnifiedDiff(DIFF), { maxBytes: 8000, maxChunks: 2 });
 
     expect(chunk?.text).toContain('  12 +    return true;');
     expect(chunk?.text).toContain('     -  if (role !== "admin") throw new Error("denied");');
+  });
+
+  it('reports nothing omitted when everything fits', () => {
+    const result = chunkDiff(parseUnifiedDiff(DIFF), { maxBytes: 8000, maxChunks: 2 });
+
+    expect(result.omittedHunks).toBe(0);
+    expect(result.clippedLines).toBe(0);
+  });
+
+  it('splits a hunk larger than one chunk instead of dropping its tail', () => {
+    const lines = Array.from({ length: 200 }, (_, index) => `+const value${index} = ${index};`);
+    const oversized = [
+      'diff --git a/src/big.ts b/src/big.ts',
+      `@@ -0,0 +1,${lines.length} @@`,
+      ...lines,
+    ].join('\n');
+
+    const { chunks, omittedHunks, clippedLines } = chunkDiff(parseUnifiedDiff(oversized), {
+      maxBytes: 1200,
+      maxChunks: 20,
+    });
+
+    const text = chunks.map((chunk) => chunk.text).join('\n');
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(text).toContain('const value0 = 0;');
+    expect(text).toContain('const value199 = 199;');
+    expect(text).toContain('(continued)');
+    expect(omittedHunks).toBe(0);
+    expect(clippedLines).toBe(0);
+    for (const chunk of chunks) expect(chunk.byteLength).toBeLessThanOrEqual(1200);
+  });
+
+  it('counts a hunk the chunk ceiling cuts short', () => {
+    const lines = Array.from({ length: 200 }, (_, index) => `+const value${index} = ${index};`);
+    const oversized = [
+      'diff --git a/src/big.ts b/src/big.ts',
+      `@@ -0,0 +1,${lines.length} @@`,
+      ...lines,
+    ].join('\n');
+
+    const { chunks, omittedHunks } = chunkDiff(parseUnifiedDiff(oversized), {
+      maxBytes: 1200,
+      maxChunks: 2,
+    });
+
+    expect(chunks).toHaveLength(2);
+    expect(omittedHunks).toBe(1);
+  });
+
+  it('cuts a single line longer than a chunk on a character boundary and counts it', () => {
+    const wide = `+${'é'.repeat(2000)}`;
+    const diff = ['diff --git a/min.js b/min.js', '@@ -0,0 +1,1 @@', wide].join('\n');
+
+    const { chunks, clippedLines } = chunkDiff(parseUnifiedDiff(diff), {
+      maxBytes: 800,
+      maxChunks: 2,
+    });
+
+    expect(clippedLines).toBe(1);
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]?.byteLength).toBeLessThanOrEqual(800);
+    expect(chunks[0]?.text).not.toContain('�');
   });
 });
 

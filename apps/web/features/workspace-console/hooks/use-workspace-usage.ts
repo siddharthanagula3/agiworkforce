@@ -5,7 +5,11 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { httpStatusMessage } from '@/lib/user-error-message';
 
 import type { OrganizationUsageResponse } from '@/app/api/settings/organization/usage-analytics/route';
-export type { UsageBreakdownRow, UsageDayRow } from '@/lib/services/usage-aggregation';
+export type {
+  UsageBreakdownOmitted,
+  UsageBreakdownRow,
+  UsageDayRow,
+} from '@/lib/services/usage-aggregation';
 
 type WorkspaceUsageResult = OrganizationUsageResponse;
 

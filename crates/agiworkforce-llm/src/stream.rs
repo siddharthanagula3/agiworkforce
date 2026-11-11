@@ -27,8 +27,8 @@ use crate::error::{
 use crate::events::{ChatOutcome, StreamEvent, Usage};
 use crate::serialize::{
     add_message_cache_breakpoint, anthropic_tools_json, anthropic_unsupported_document,
-    build_gemini_tool_name_map, compact_ollama_message_values, convert_message_to_anthropic,
-    convert_message_to_gemini, convert_message_to_openai, convert_message_to_openai_responses,
+    compact_ollama_message_values, convert_message_to_anthropic, convert_message_to_openai,
+    convert_message_to_openai_responses, convert_messages_to_gemini,
     gemini_function_declarations_json, ollama_chat_request_body, ollama_nativize_message_values,
     openai_function_tools_json, openai_responses_function_tools_json, set_openai_max_tokens,
 };
@@ -1130,6 +1130,14 @@ where
                             .get("completion_tokens")
                             .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0) as u32;
+                        usage.cache_read_input_tokens =
+                            u.pointer("/prompt_tokens_details/cached_tokens")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0) as u32;
+                        usage.cache_creation_input_tokens =
+                            u.pointer("/prompt_tokens_details/cache_write_tokens")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0) as u32;
                         on_event(StreamEvent::Usage {
                             usage: usage.clone(),
                         });
@@ -1597,13 +1605,7 @@ where
 /// without a socket. (The model path/URL handling stays in the stream driver.)
 pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
     // Gemini uses a different message format: contents with parts
-    let gemini_tool_names = build_gemini_tool_name_map(req.messages);
-    let contents: Vec<Value> = req
-        .messages
-        .iter()
-        .filter(|m| m.role != "system")
-        .map(|m| convert_message_to_gemini(m, &gemini_tool_names))
-        .collect();
+    let contents = convert_messages_to_gemini(req.messages);
 
     let system_instruction = req.messages.iter().find(|m| m.role == "system").map(|m| {
         serde_json::json!({
@@ -1859,6 +1861,10 @@ where
                             .get("candidatesTokenCount")
                             .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0) as u32;
+                        usage.cache_read_input_tokens =
+                            u.get("cachedContentTokenCount")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0) as u32;
                         on_event(StreamEvent::Usage {
                             usage: usage.clone(),
                         });
@@ -2840,6 +2846,60 @@ mod openai_compat_stream_tests {
         assert_eq!(outcome.stop_reason.as_deref(), Some("stop"));
         assert_eq!(outcome.usage.input_tokens, 598);
         assert_eq!(outcome.usage.output_tokens, 23);
+        assert_eq!(outcome.usage.cache_read_input_tokens, 0);
+        assert_eq!(outcome.usage.cache_creation_input_tokens, 0);
+    }
+
+    #[tokio::test]
+    async fn a_trailing_usage_frame_keeps_the_prompt_cache_buckets() {
+        let frames = concat!(
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n",
+            "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":2048,\"completion_tokens\":10,\"total_tokens\":2058,\"prompt_tokens_details\":{\"cached_tokens\":1536,\"cache_write_tokens\":512}}}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let mut events = Vec::new();
+        let outcome =
+            run_openai_compat_stream(stream, Duration::from_secs(5), "openai", &mut |event| {
+                events.push(event)
+            })
+            .await
+            .expect("the stream decodes");
+        assert_eq!(outcome.usage.input_tokens, 2048);
+        assert_eq!(outcome.usage.output_tokens, 10);
+        assert_eq!(outcome.usage.cache_read_input_tokens, 1536);
+        assert_eq!(outcome.usage.cache_creation_input_tokens, 512);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            StreamEvent::Usage { usage }
+                if usage.cache_read_input_tokens == 1536
+                    && usage.cache_creation_input_tokens == 512
+        )));
+    }
+
+    #[tokio::test]
+    async fn gemini_cached_content_is_counted_inside_the_prompt_not_beside_it() {
+        let frames = concat!(
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"ok\"}]},\"finishReason\":\"STOP\"}],",
+            "\"usageMetadata\":{\"promptTokenCount\":4096,\"cachedContentTokenCount\":3072,\"candidatesTokenCount\":12,\"totalTokenCount\":4108}}\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let mut events = Vec::new();
+        let outcome = run_gemini_stream(stream, Duration::from_secs(5), &mut |event| {
+            events.push(event)
+        })
+        .await
+        .expect("the stream decodes");
+        assert_eq!(outcome.text, "ok");
+        assert_eq!(outcome.usage.input_tokens, 4096);
+        assert_eq!(outcome.usage.output_tokens, 12);
+        assert_eq!(outcome.usage.cache_read_input_tokens, 3072);
+        assert_eq!(outcome.usage.cache_creation_input_tokens, 0);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            StreamEvent::Usage { usage }
+                if usage.input_tokens == 4096 && usage.cache_read_input_tokens == 3072
+        )));
     }
 
     #[tokio::test]

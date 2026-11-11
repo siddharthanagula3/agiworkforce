@@ -10,7 +10,10 @@ import {
 } from '@/lib/services/cloud-code-session-service';
 
 export function rethrowCloudCodeError(error: unknown): never {
-  if (error instanceof CloudCodeValidationError) throw createError.validation(error.message);
+  if (error instanceof CloudCodeValidationError) {
+    if (error.reason) throw createError.validation(error.message, { reason: error.reason });
+    throw createError.validation(error.message);
+  }
   if (error instanceof CloudCodeNotFoundError) throw createError.notFound(error.message);
   if (error instanceof CloudCodeConflictError) throw createError.conflict(error.message);
   if (error instanceof CloudCodeLimitError) throw createError.forbidden(error.message);

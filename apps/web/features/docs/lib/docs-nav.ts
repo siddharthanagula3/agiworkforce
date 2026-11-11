@@ -38,6 +38,13 @@ export function docsSearchLinks(): readonly DocsNavLink[] {
   return OVERVIEW_GROUP.links;
 }
 
+export function docsGroupFor(
+  groups: readonly DocsNavGroup[],
+  href: string,
+): DocsNavGroup | undefined {
+  return groups.find((candidate) => candidate.links.some((link) => link.href === href));
+}
+
 export function docsNeighbours(
   groups: readonly DocsNavGroup[],
   href: string,

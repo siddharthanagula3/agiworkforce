@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -71,6 +72,8 @@ vi.mock('electron', () => {
     getBounds = () => ({ x: 0, y: 0, width: 1280, height: 800 });
     isMinimized = () => false;
     isDestroyed = () => false;
+    getTitle = () => '';
+    isFocused = () => false;
     isMaximized = () => false;
     isFullScreen = () => false;
     isVisible = () => true;
@@ -125,6 +128,7 @@ vi.mock('electron', () => {
     dialog: { showMessageBox: vi.fn() },
     ipcMain: {
       handle: vi.fn((channel: string, handler: Listener) => ipcHandlers.set(channel, handler)),
+      on: vi.fn(),
     },
     protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
     screen: {
@@ -159,6 +163,7 @@ vi.mock('../settingsStore', async (importOriginal) => {
     getShortcuts: () => ({ ...core.DEFAULT_SHORTCUTS }),
     getPreferences: () => ({ ...core.DEFAULT_PREFERENCES, ...preferences }),
     saveSettings: vi.fn(),
+    saveSettingsDurably: vi.fn(),
     settingsFilePath: () => path.join(userData, 'settings.json'),
   };
 });
@@ -503,7 +508,12 @@ describe('closing the main window', () => {
 describe('what the app sets up when it starts', () => {
   it('names the product, its version and the company in the About panel', () => {
     expect(startupAboutCalls).toEqual([
-      [expect.objectContaining({ applicationName: 'AGI Desktop', applicationVersion: '1.2.0' })],
+      [
+        expect.objectContaining({
+          applicationName: PRODUCT_NAMES.desktop,
+          applicationVersion: '1.2.0',
+        }),
+      ],
     ]);
   });
 
@@ -978,6 +988,35 @@ describe('the update buttons', () => {
     } finally {
       downloadedVersion = null;
       vi.unstubAllGlobals();
+    }
+  });
+
+  it('tells a page that attaches later which update is already downloaded', async () => {
+    const pending = ipcHandlers.get(ELECTRON_IPC_CHANNELS.pendingUpdate);
+    if (!pending) throw new Error('the pending update channel was never registered');
+
+    await expect(pending(trustedCaller())).resolves.toBeNull();
+    downloadedVersion = '1.3.0';
+    try {
+      await expect(pending(trustedCaller())).resolves.toEqual({ version: '1.3.0' });
+      downloadedVersion = '';
+      await expect(pending(trustedCaller())).resolves.toEqual({ version: '' });
+    } finally {
+      downloadedVersion = null;
+    }
+  });
+
+  it('does not tell a page it does not trust which update is downloaded', async () => {
+    const pending = ipcHandlers.get(ELECTRON_IPC_CHANNELS.pendingUpdate);
+    if (!pending) throw new Error('the pending update channel was never registered');
+    const frame = { url: 'https://untrusted.example/page' };
+    downloadedVersion = '1.3.0';
+    try {
+      await expect(pending({ senderFrame: frame, sender: { mainFrame: frame } })).rejects.toThrow(
+        'Untrusted bridge caller.',
+      );
+    } finally {
+      downloadedVersion = null;
     }
   });
 

@@ -27,7 +27,8 @@ vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: mocks.requirePlatfor
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/support/handoff/store', () => ({
+vi.mock('@/lib/support/handoff/store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getSessionForOwner: mocks.getSessionForOwner,
   getSessionById: mocks.getSessionById,
   claimExpiredWaitingSession: mocks.claimExpiredWaitingSession,
@@ -282,3 +283,5 @@ describe('agent surface', () => {
     expect((await response.json()).error.message).toMatch(/wait deadline/i);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/support/handoff/store');

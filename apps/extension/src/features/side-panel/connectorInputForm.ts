@@ -49,6 +49,10 @@ const MAX_REMEMBERED_FORMS = 32;
 const memories = new Map<string, ConnectorInputMemory>();
 let nextElementId = 0;
 
+export function resetConnectorInputMemory(): void {
+  memories.clear();
+}
+
 function elementId(): string {
   nextElementId += 1;
   return `sp-connector-input-${nextElementId}`;

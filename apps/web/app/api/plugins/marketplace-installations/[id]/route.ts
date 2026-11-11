@@ -18,10 +18,15 @@ import {
   removePluginConnectors,
   setPluginConnectorsEnabled,
 } from '@/lib/connectors/plugin-connectors';
-import { pluginHasDependentsResponse } from '@/features/plugins/server/directory/install-responses';
 import {
+  pluginDependenciesUnavailableResponse,
+  pluginHasDependentsResponse,
+} from '@/features/plugins/server/directory/install-responses';
+import {
+  dependenciesUnavailableMessage,
   dependentsRefusalMessage,
   listMarketplaceDependents,
+  listUnmetMarketplaceDependencies,
 } from '@/features/plugins/server/directory/installed-dependents';
 
 export const runtime = 'nodejs';
@@ -62,6 +67,17 @@ async function handlePatch(request: NextRequest, context: RouteContext): Promise
     );
   }
 
+  if (body.data.enabled) {
+    const unmet = await listUnmetMarketplaceDependencies(db, userId, params.data.id);
+    if (unmet.length > 0) {
+      const current = await getMarketplaceInstallation(db, userId, params.data.id);
+      if (!current) return notInstalled();
+      return pluginDependenciesUnavailableResponse(
+        dependenciesUnavailableMessage(current.pluginKey, unmet),
+        unmet,
+      );
+    }
+  }
   const dependents = body.data.enabled
     ? []
     : await listMarketplaceDependents(db, userId, params.data.id);

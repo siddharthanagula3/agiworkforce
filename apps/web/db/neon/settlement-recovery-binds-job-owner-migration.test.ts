@@ -77,7 +77,13 @@ describe('settlement recovery binds the job owner', () => {
 
   it('leaves the tenant check on the settlement itself untouched', () => {
     const settle = currentDefinition('settle_managed_usage_credits_microusd');
-    expect(settle.file).toBe('0182_managed_usage_microusd_ledger.sql');
+    const tenantCheck = (body: string | undefined) =>
+      (body ?? '').slice((body ?? '').indexOf('\nbegin\n'), (body ?? '').indexOf('end if;') + 7);
+    const original = functionBodies(withoutLineComments(ledger0182)).get(
+      'settle_managed_usage_credits_microusd',
+    );
+    expect(tenantCheck(original)).toContain("errcode = '42501'");
+    expect(tenantCheck(settle.body)).toBe(tenantCheck(original));
     expect(settle.body).toMatch(
       /p_user_id is distinct from public\.current_app_user_id\(\) then\s+raise exception using errcode = '42501'/,
     );

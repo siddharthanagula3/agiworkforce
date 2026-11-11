@@ -13,10 +13,11 @@ scope: public
 
 Settings, Memory includes these controls, each doing a different thing:
 
-- **Persistent memory**: "Allow AGI to remember details across conversations."
-  With it off, persistent remembered facts are not included in chat context.
+- **Persistent memory**: "Allow the assistant to remember details across
+  conversations." With it off, persistent remembered facts are not included in
+  chat context.
   Search past chats has a separate switch.
-- **Search past chats**: "Let AGI look up excerpts from your other
+- **Search past chats**: "Let the assistant look up excerpts from your other
   conversations when answering." This reads your history at answer time rather
   than storing facts. It is never used in temporary chats.
 - **Include sensitive topics in memory**: off by default. While it is off, AGI

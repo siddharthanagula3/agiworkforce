@@ -252,7 +252,14 @@ function hasActiveDownload(modelId: string): boolean {
   return false;
 }
 
+const _installGenerations = new Map<string, number>();
+
+function installGeneration(modelId: string): number {
+  return _installGenerations.get(modelId) ?? 0;
+}
+
 export function cancelDownload(modelId: string): void {
+  _installGenerations.set(modelId, installGeneration(modelId) + 1);
   for (const [key, d] of _activeDownloads) {
     if (key === modelId || key.startsWith(`${modelId}::`)) {
       d.pauseAsync().catch(() => undefined);
@@ -354,6 +361,29 @@ function expoFileSystemDeps(modelId: string): FileSystemDeps {
   };
 }
 
+function cancellableDeps(deps: FileSystemDeps, assertNotCancelled: () => void): FileSystemDeps {
+  return {
+    fileExists: async (path) => {
+      const exists = await deps.fileExists(path);
+      assertNotCancelled();
+      return exists;
+    },
+    sha256OfFile: async (path) => {
+      const digest = await deps.sha256OfFile(path);
+      assertNotCancelled();
+      return digest;
+    },
+    deleteFile: async (path) => {
+      await deps.deleteFile(path);
+      assertNotCancelled();
+    },
+    downloadToFile: async (url, dest, onFraction) => {
+      await deps.downloadToFile(url, dest, onFraction);
+      assertNotCancelled();
+    },
+  };
+}
+
 export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledModel> {
   assertValidDownloadOptions(opts);
 
@@ -374,9 +404,18 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     throw new ModelDownloadError('already_installed', `Model ${modelId} is already downloading`);
   }
 
+  const generation = installGeneration(modelId);
+  const assertNotCancelled = (): void => {
+    if (installGeneration(modelId) !== generation) {
+      throw new ModelDownloadError('cancelled', 'Download was cancelled.');
+    }
+  };
+
   const existing = await getInstalledModel(modelId);
+  assertNotCancelled();
   if (existing?.local_path) {
     const info = await getInfoAsync(existing.local_path);
+    assertNotCancelled();
     if (info.exists) {
       throw new ModelDownloadError('already_installed', `Model ${modelId} is already installed`);
     }
@@ -386,8 +425,10 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     wifiOnly,
     requiredBytes: fileSizeBytes + (opts.mmprojSizeBytes ?? 0),
   });
+  assertNotCancelled();
 
   await ensureDir(modelDir(modelId));
+  assertNotCancelled();
 
   const destPath = modelFilePath(modelId, format);
 
@@ -418,7 +459,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
         },
         modelPath: destPath,
         mmprojPath,
-        deps: expoFileSystemDeps(modelId),
+        deps: cancellableDeps(expoFileSystemDeps(modelId), assertNotCancelled),
         onProgress: (fraction) => reportBytes(Math.round(fraction * totalBytes), totalBytes),
       });
     } catch (err) {
@@ -438,7 +479,10 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
       onBytes: (written, total) => reportBytes(written, total > 0 ? total : fileSizeBytes),
     });
 
+    assertNotCancelled();
+
     const actualChecksum = await sha256OfFile(destPath);
+    assertNotCancelled();
     if (actualChecksum.toLowerCase() !== checksum.toLowerCase()) {
       await deleteAsync(destPath, { idempotent: true });
       throw new ModelDownloadError(
@@ -447,6 +491,8 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
       );
     }
   }
+
+  assertNotCancelled();
 
   const record: InstalledModel = {
     id: modelId,

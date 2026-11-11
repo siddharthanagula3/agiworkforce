@@ -14,6 +14,7 @@ import {
   getPlanContextWindowTokens,
   type BillingPlanCapability,
   type BillingPlanTier,
+  PRIVACY_MODE_DISPLAY,
 } from '@agiworkforce/types';
 import { COMING_SOON_LABEL, SURFACE_NAMES, SURFACE_STATUS } from '@/lib/surface-status';
 import {
@@ -228,6 +229,7 @@ vi.mock('@features/billing/components/UpgradeWaitlistDialog', () => ({
 import { toast } from 'sonner';
 import { UpgradeAccessRequiredError } from '@features/billing/services/stripe-payments';
 import PricingPage from './page';
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 type StripePaymentsModule = typeof import('@features/billing/services/stripe-payments');
 
@@ -1314,7 +1316,7 @@ describe('PricingPage', () => {
   it('labels the chat and connector rows with what has shipped', () => {
     render(<PricingPage />);
 
-    expect(comparisonRow('Managed Cloud chat on the web').label).toBe(
+    expect(comparisonRow(`${CLOUD} chat on the web`).label).toBe(
       planCapabilityLabel('managed_chat'),
     );
     expect(comparisonRows().map((row) => row.label)).not.toContain(
@@ -1515,7 +1517,7 @@ describe('PricingPage', () => {
     expect(note).toHaveTextContent(
       `${local} and ${byok} are always free and are not plans in this table.`,
     );
-    expect(note).toHaveTextContent('neither draws on managed usage');
+    expect(note).toHaveTextContent(`neither draws on ${CLOUD} usage`);
     expect(note).toHaveTextContent(`${SURFACE_NAMES.cli}: ${SURFACE_STATUS.cli}.`);
     expect(note?.textContent).not.toMatch(/\{\{|every surface/);
 
@@ -1688,6 +1690,7 @@ describe('PricingPage', () => {
       amountDueNowCents: 4200,
       currency: 'usd',
       previewToken: 'signed-preview-token',
+      recurring: { amountCents: 22_500, currency: 'usd', taxBehavior: 'exclusive' },
     });
     stripeMocks.upgradePlanMidCycle.mockResolvedValueOnce({ activation: 'webhook_pending' });
 

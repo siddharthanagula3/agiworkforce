@@ -11,6 +11,7 @@ import {
   submitPairingCode,
   unpair,
   releaseStoredDesktopPairing,
+  readPendingDesktopRevocation,
   desktopPairingRejectsAccount,
   confirmPairing,
   _resetStateForTesting,
@@ -247,6 +248,82 @@ describe('unpair', () => {
   it('is safe to call when already idle', async () => {
     const state = await unpair();
     expect(state.phase).toBe('idle');
+  });
+
+  describe('when Desktop does not acknowledge the unpair', () => {
+    async function pairThenLoseDesktop(
+      answer: () => Promise<unknown>,
+    ): Promise<ReturnType<typeof unpair>> {
+      sessionStore['agi_pair_token'] = 'tok';
+      sessionStore['agi_pairing_fingerprint'] = 'to12';
+      localStore['connectedToDesktop'] = true;
+      localStore['agi_paired_desktop'] = { fingerprint: 'to12', accountId: null };
+      chromeMock.runtime.sendMessage.mockImplementation(answer);
+      return unpair();
+    }
+
+    it.each([
+      ['an explicit failure receipt', () => Promise.resolve({ success: false })],
+      ['a delivery exception', () => Promise.reject(new Error('Receiving end does not exist'))],
+      ['no receipt at all', () => Promise.resolve(undefined)],
+    ])('records the revocation as owed after %s', async (_name, answer) => {
+      const state = await pairThenLoseDesktop(answer);
+
+      expect(state.phase).toBe('idle');
+      expect(state.error).toMatch(/could not be reached to remove the pairing/);
+      expect(sessionStore['agi_pair_token']).toBeUndefined();
+      expect(await readPendingDesktopRevocation()).not.toBeNull();
+    });
+
+    it('keeps telling the user after a browser restart', async () => {
+      await pairThenLoseDesktop(() => Promise.resolve({ success: false }));
+      _resetStateForTesting();
+
+      const restarted = await loadPairingState();
+
+      expect(restarted.phase).toBe('idle');
+      expect(restarted.error).toMatch(/could not be reached to remove the pairing/);
+    });
+
+    it('keeps the pairing when the owed revocation cannot be recorded', async () => {
+      const original = chromeMock.storage.local.set;
+      chromeMock.storage.local.set = (items: Record<string, unknown>, cb?: SetCallback) => {
+        if ('agi_pending_desktop_revocation' in items) {
+          chromeMock.runtime.lastError = { message: 'quota' };
+          cb?.();
+          chromeMock.runtime.lastError = null;
+          return;
+        }
+        original(items, cb);
+      };
+      try {
+        const state = await pairThenLoseDesktop(() => Promise.resolve({ success: false }));
+
+        expect(state.error).toMatch(/pairing was kept/);
+        expect(sessionStore['agi_pair_token']).toBe('tok');
+        expect(await readPendingDesktopRevocation()).toBeNull();
+      } finally {
+        chromeMock.storage.local.set = original;
+      }
+    });
+
+    it('owes nothing once Desktop acknowledges', async () => {
+      const state = await pairThenLoseDesktop(() => Promise.resolve({ success: true }));
+
+      expect(state.error).toBeNull();
+      expect(await readPendingDesktopRevocation()).toBeNull();
+    });
+
+    it('drops the owed revocation when a new pairing replaces the old one', async () => {
+      await pairThenLoseDesktop(() => Promise.resolve({ success: false }));
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(pairRequestResponse()));
+      expect((await startPairing()).phase).toBe('awaiting-code');
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(pairResponse()));
+
+      expect((await submitPairingCode('abcd-2345')).phase).toBe('paired');
+
+      expect(await readPendingDesktopRevocation()).toBeNull();
+    });
   });
 });
 

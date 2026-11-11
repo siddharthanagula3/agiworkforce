@@ -37,6 +37,7 @@ export const ELECTRON_IPC_CHANNELS = {
   sideChatState: 'agi:side-chat-state',
   hostPreferences: 'agi:host-preferences',
   checkUpdate: 'agi:check-update',
+  pendingUpdate: 'agi:pending-update',
   workspaceDrop: 'agi:workspace-drop',
   rendererTheme: 'agi:renderer-theme',
   openUpdateInstaller: 'agi:open-update-installer',

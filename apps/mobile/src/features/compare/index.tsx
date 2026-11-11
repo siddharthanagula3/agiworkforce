@@ -41,6 +41,7 @@ interface CompareStreamState {
   isQueued: boolean;
   isStreaming: boolean;
   isDone: boolean;
+  isStopped: boolean;
   errorMessage: string | null;
   tokenCount: number;
   ttftMs: number | null;
@@ -52,6 +53,7 @@ const initialStreamState = (): CompareStreamState => ({
   isQueued: false,
   isStreaming: false,
   isDone: false,
+  isStopped: false,
   errorMessage: null,
   tokenCount: 0,
   ttftMs: null,
@@ -64,6 +66,13 @@ const COMPARE_ATTACHMENTS_UNSUPPORTED =
 const LOCAL_MODE_COMPARE_NOTICE =
   'Model comparison runs on AGI Cloud, so it is unavailable while chat is in Local Mode. ' +
   'Nothing was sent from this device. Switch to AGI Cloud to compare two models.';
+
+const STOPPED_ANSWER_NOTE = 'Stopped before this answer finished.';
+
+function stopUnfinishedAnswer(state: CompareStreamState): CompareStreamState {
+  if (state.isDone) return state;
+  return { ...state, isQueued: false, isStreaming: false, isDone: true, isStopped: true };
+}
 
 const ONE_ANSWER_AT_A_TIME_NOTE =
   'Your plan runs one answer at a time, so the second answer starts when the first finishes.';
@@ -148,8 +157,8 @@ export default function CompareScreen() {
     compareGenerationRef.current += 1;
     controllerARef.current?.abort();
     controllerBRef.current?.abort();
-    setStateA((prev) => ({ ...prev, isQueued: false, isStreaming: false, isDone: true }));
-    setStateB((prev) => ({ ...prev, isQueued: false, isStreaming: false, isDone: true }));
+    setStateA(stopUnfinishedAnswer);
+    setStateB(stopUnfinishedAnswer);
   }, []);
 
   useLayoutEffect(() => {
@@ -481,11 +490,15 @@ export default function CompareScreen() {
           <ModelPickerSheet
             sheetRef={modelPickerARef}
             modelScope="cloud"
+            showSpeed={false}
+            selectedModelId={modelA}
             onSelect={handleSelectModelA}
           />
           <ModelPickerSheet
             sheetRef={modelPickerBRef}
             modelScope="cloud"
+            showSpeed={false}
+            selectedModelId={modelB}
             onSelect={handleSelectModelB}
           />
         </>
@@ -609,10 +622,14 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
         </View>
       ) : state.content ? (
         <Text className="text-sm text-white leading-5">{state.content}</Text>
-      ) : state.isQueued ? (
+      ) : state.isStopped ? null : state.isQueued ? (
         <Text className="text-sm text-fg-muted">{ONE_ANSWER_AT_A_TIME_NOTE}</Text>
       ) : !state.isStreaming ? (
         <Text className="text-sm text-fg-muted italic">No response yet.</Text>
+      ) : null}
+
+      {state.isStopped ? (
+        <Text className="text-sm text-fg-muted italic mt-2">{STOPPED_ANSWER_NOTE}</Text>
       ) : null}
 
       {(state.isDone || state.tokenCount > 0) && (
@@ -663,12 +680,10 @@ type Winner = 'A' | 'B' | 'tie' | null;
 
 function determineWinner(a: CompareStreamState, b: CompareStreamState): Winner {
   if (!a.isDone || !b.isDone) return null;
-  if (a.errorMessage && b.errorMessage) return null;
-  if (a.errorMessage) return 'B';
-  if (b.errorMessage) return 'A';
-
-  const dA = a.durationMs ?? Infinity;
-  const dB = b.durationMs ?? Infinity;
+  if (a.errorMessage || b.errorMessage || a.isStopped || b.isStopped) return null;
+  const dA = a.durationMs;
+  const dB = b.durationMs;
+  if (dA === null || dB === null) return null;
 
   if (dA === dB) return 'tie';
   return dA < dB ? 'A' : 'B';

@@ -22,6 +22,9 @@ function reminderKey(userId: string, resetAt: string): string {
   return `usage-reset-reminder:${userId}:${resetAt}`;
 }
 
+const REMINDER_PENDING = 'pending';
+const REMINDER_SCHEDULED = 'scheduled';
+
 async function claimReminder(
   userId: string,
   resetAt: string,
@@ -29,7 +32,25 @@ async function claimReminder(
 ): Promise<boolean> {
   const store = getKeyValueStore();
   if (!store) return true;
-  return store.set(reminderKey(userId, resetAt), 1, { ttlSeconds, onlyIfAbsent: true });
+  return store.set(reminderKey(userId, resetAt), REMINDER_PENDING, {
+    ttlSeconds,
+    onlyIfAbsent: true,
+  });
+}
+
+async function confirmReminder(userId: string, resetAt: string, ttlSeconds: number): Promise<void> {
+  try {
+    await getKeyValueStore()?.set(reminderKey(userId, resetAt), REMINDER_SCHEDULED, {
+      ttlSeconds,
+    });
+  } catch (error) {
+    logger.warn({ error, userId }, '[usage-reset-reminder] the scheduled receipt was not recorded');
+  }
+}
+
+async function reminderAlreadyScheduled(userId: string, resetAt: string): Promise<boolean> {
+  const state = await getKeyValueStore()?.get<string>(reminderKey(userId, resetAt));
+  return state === REMINDER_SCHEDULED;
 }
 
 async function releaseReminder(userId: string, resetAt: string): Promise<void> {
@@ -70,6 +91,11 @@ async function handleRemind(request: NextRequest): Promise<NextResponse> {
         .serviceUnavailable('The reminder could not be set right now. Try again in a minute.')
         .asUserSafe();
     }
+    await confirmReminder(userId, resetAt, ttlSeconds);
+  } else if (!(await reminderAlreadyScheduled(userId, resetAt))) {
+    throw createError
+      .conflict('The reminder is still being set. Try again in a moment.')
+      .asUserSafe();
   }
 
   return NextResponse.json({ remindAt: resetAt } satisfies UsageResetReminderResponse);

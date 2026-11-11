@@ -394,6 +394,15 @@ describe('useChatStore, misc state actions', () => {
     );
   });
 
+  it('does not repeat incoming text already in the draft or append it after whitespace', () => {
+    useChatStore.getState().setDraftContent('  \n');
+    useChatStore.getState().appendDraftContent('Rerun the weekly report');
+    expect(useChatStore.getState().draftContent).toBe('Rerun the weekly report');
+
+    useChatStore.getState().appendDraftContent('Rerun the weekly report');
+    expect(useChatStore.getState().draftContent).toBe('Rerun the weekly report');
+  });
+
   it('keeps unsent drafts isolated when the active conversation changes', () => {
     useChatStore.getState().setActiveConversation('conv-a');
     useChatStore.getState().setDraftContent('Draft for A');

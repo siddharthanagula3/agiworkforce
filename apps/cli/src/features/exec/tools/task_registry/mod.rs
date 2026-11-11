@@ -118,19 +118,14 @@ pub(super) async fn execute_cron_list(
 }
 
 /// A scheduled task runs in AGI cloud on the account's own ledger, so the
-/// prompt and its results leave the device. A Local session must not reach it,
-/// and a signed-out session must not be told a schedule was created.
+/// prompt and its results leave the device. A Local or BYOK session must not
+/// reach it, and a signed-out session must not be told a schedule was created.
 fn hosted_schedules(
     privacy_mode: crate::agent::PrivacyMode,
     tool_name: &str,
 ) -> Result<crate::schedules::SchedulesClient, ToolResult> {
-    if privacy_mode == crate::agent::PrivacyMode::Local {
-        return Err(schedule_failure(
-            tool_name,
-            crate::schedules::ScheduleError::LocalPrivacy,
-        ));
-    }
-    crate::schedules::SchedulesClient::connect().map_err(|error| schedule_failure(tool_name, error))
+    crate::schedules::SchedulesClient::connect(privacy_mode)
+        .map_err(|error| schedule_failure(tool_name, error))
 }
 
 fn schedule_failure(tool_name: &str, error: crate::schedules::ScheduleError) -> ToolResult {
@@ -175,38 +170,35 @@ mod hosted_schedule_tests {
         ])
     }
 
-    /// A scheduled task runs in AGI cloud, so a Local session must be refused
-    /// before the prompt reaches the network, and must never be told a
-    /// schedule was created.
+    /// A scheduled task runs in AGI cloud, so a Local or BYOK session must be
+    /// refused before the prompt reaches the network, and must never be told
+    /// a schedule was created.
     #[tokio::test]
-    async fn every_schedule_tool_is_blocked_in_local_privacy_mode() {
-        let create = execute_cron_create(&cron_args(), PrivacyMode::Local)
+    async fn every_schedule_tool_is_blocked_outside_cloud_mode() {
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let refusal = crate::cloud::CloudError::NotManaged(mode).to_string();
+
+            let create = execute_cron_create(&cron_args(), mode)
+                .await
+                .expect("returns Ok");
+            assert!(!create.success, "{}", create.output);
+            assert_eq!(create.output, refusal);
+
+            let list = execute_cron_list(&HashMap::new(), mode)
+                .await
+                .expect("returns Ok");
+            assert!(!list.success, "{}", list.output);
+            assert_eq!(list.output, refusal);
+
+            let delete = execute_cron_delete(
+                &HashMap::from([("id".to_string(), "anything".to_string())]),
+                mode,
+            )
             .await
             .expect("returns Ok");
-        assert!(!create.success, "{}", create.output);
-        assert!(
-            create.output.contains("Local privacy mode"),
-            "{}",
-            create.output
-        );
-        assert!(
-            create.output.contains("must leave this device"),
-            "the refusal must say where the prompt would go: {}",
-            create.output
-        );
-
-        let list = execute_cron_list(&HashMap::new(), PrivacyMode::Local)
-            .await
-            .expect("returns Ok");
-        assert!(!list.success, "{}", list.output);
-
-        let delete = execute_cron_delete(
-            &HashMap::from([("id".to_string(), "anything".to_string())]),
-            PrivacyMode::Local,
-        )
-        .await
-        .expect("returns Ok");
-        assert!(!delete.success, "{}", delete.output);
+            assert!(!delete.success, "{}", delete.output);
+            assert_eq!(delete.output, refusal);
+        }
     }
 
     #[test]

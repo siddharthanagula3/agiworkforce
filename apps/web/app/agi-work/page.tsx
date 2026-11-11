@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, PRODUCT_NAMES } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { AgiWorkRunWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -69,7 +69,7 @@ export default function AgiWorkPage() {
                 <em className="agi-lp-accent">then asks before destructive or unknown actions.</em>
               </h1>
               <ButtonRow>
-                <Button href={AGI_WORK_ENTRY_HREF}>Open chat Work</Button>
+                <Button href={AGI_WORK_ENTRY_HREF}>Open {PRODUCT_NAMES.work}</Button>
                 <Button href="/tasks" variant="secondary">
                   See your runs
                 </Button>

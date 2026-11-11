@@ -75,6 +75,37 @@ function isHeld(alias: string): string {
   return heldPredicate(alias, false);
 }
 
+// A hold may name project_file without project, and the parent delete takes
+// its files with it, so a project with a held file is itself held.
+function hasHeldKnowledgeFile(alias: string, organization: string): string {
+  return `exists (
+      select 1 from public.project_knowledge_files held_file
+       where held_file.project_id = ${alias}.id
+         and ${
+           legalHoldPredicate(null, {
+             alias: 'held_file',
+             nextParamIndex: 3,
+             coversParam: "'project_file'",
+             organization,
+             owner: `${alias}.user_id`,
+           }).sql
+         }
+    )`;
+}
+
+// A duplicated project copies storage_uri rather than the object, so bytes a
+// project outside this sweep still lists, or a held one, must survive it.
+function stillReferencedElsewhere(file: string, project: string): string {
+  return `exists (
+      select 1 from public.project_knowledge_files shared
+        join public.user_projects sharer on sharer.id = shared.project_id
+       where shared.storage_uri = ${file}.storage_uri
+         and shared.project_id <> ${project}.id
+         and shared.deleted_at is null
+         and (sharer.updated_at >= $2 or ${isHeld('sharer')})
+    )`;
+}
+
 export const DOMAIN_RETENTION_BATCH = 200;
 const DOMAIN_RETENTION_MAX_BATCHES = 10;
 
@@ -152,6 +183,45 @@ function memberScoped(alias: string): string {
       select 1 from public.organization_members m
        where m.organization_id = $1 and m.user_id = ${alias}.user_id
     ) and ${notHeld(alias)}`;
+}
+
+function researchReportInWorkspace(alias: string): string {
+  return `exists (
+      select 1 from public.web_conversations c
+       where c.id = ${alias}.conversation_id
+         and c.user_id = ${alias}.user_id
+         and c.organization_id = $1
+    )`;
+}
+
+// A notification carries no workspace of its own; only one whose target is a
+// resource of this workspace is the workspace's to delete. Settings, schedule
+// and untargeted notices belong to the account.
+function notificationInWorkspace(alias: string): string {
+  return `(
+      (${alias}.target_kind = 'chat' and exists (
+        select 1 from public.web_conversations c
+         where c.id::text = ${alias}.target_id
+           and c.user_id = ${alias}.user_id
+           and c.organization_id = $1))
+      or (${alias}.target_kind = 'work' and exists (
+        select 1 from public.cloud_agent_runs r
+         where r.id::text = ${alias}.target_id
+           and r.user_id = ${alias}.user_id
+           and r.organization_id = $1))
+      or (${alias}.target_kind = 'code-session' and exists (
+        select 1 from public.cloud_code_sessions s
+         where s.id::text = ${alias}.target_id
+           and s.user_id = ${alias}.user_id
+           and s.organization_id = $1))
+      or (${alias}.target_kind = 'research' and exists (
+        select 1 from public.research_reports rr
+          join public.web_conversations c on c.id = rr.conversation_id
+         where rr.id::text = ${alias}.target_id
+           and rr.user_id = ${alias}.user_id
+           and c.user_id = rr.user_id
+           and c.organization_id = $1))
+    )`;
 }
 
 function rowsOnlySweeper(options: { heldSql: string; deleteSql: string }): DomainSweeper {
@@ -301,21 +371,27 @@ export function createDomainSweepers(
   return {
     projects: objectBackedSweeper({
       heldSql: `select count(*)::int as count from public.user_projects
-                 where organization_id = $1 and updated_at < $2 and ${isHeld('user_projects')}`,
+                 where organization_id = $1 and updated_at < $2
+                   and (${isHeld('user_projects')}
+                        or ${hasHeldKnowledgeFile('user_projects', '$1')})`,
       candidatesSql: `select p.id,
-                             coalesce(array_agg(k.storage_uri) filter (where k.storage_uri is not null),
+                             coalesce(array_agg(k.storage_uri) filter (
+                                        where k.storage_uri is not null
+                                          and not ${stillReferencedElsewhere('k', 'p')}),
                                       '{}') as object_keys
                         from public.user_projects p
                         left join public.project_knowledge_files k on k.project_id = p.id
                        where p.organization_id = $1
                          and p.updated_at < $2
                          and ${notHeld('p')}
+                         and not ${hasHeldKnowledgeFile('p', '$1')}
                        group by p.id, p.updated_at
                        order by p.updated_at asc
                        limit $4`,
       deleteSql: `delete from public.user_projects target
                    where target.id = any($1::uuid[])
                      and ${notHeldById('target')}
+                     and not ${hasHeldKnowledgeFile('target', '$2')}
                    returning target.id`,
       deleteObjects: async (uris) => {
         const keyByUri = new Map<string, string>();
@@ -425,14 +501,14 @@ export function createDomainSweepers(
     notifications: rowsOnlySweeper({
       heldSql: `select count(*)::int as count from public.notifications t
                  where t.created_at < $2
-                   and exists (select 1 from public.organization_members m
-                                where m.organization_id = $1 and m.user_id = t.user_id)
+                   and ${notificationInWorkspace('t')}
                    and ${isHeld('t')}`,
       deleteSql: `delete from public.notifications
                    where id in (
                      select t.id from public.notifications t
                       where t.created_at < $2
-                        and ${memberScoped('t')}
+                        and ${notificationInWorkspace('t')}
+                        and ${notHeld('t')}
                       order by t.created_at asc
                       limit $4
                    )
@@ -446,14 +522,14 @@ export function createDomainSweepers(
     research: rowsOnlySweeper({
       heldSql: `select count(*)::int as count from public.research_reports t
                  where t.created_at < $2
-                   and exists (select 1 from public.organization_members m
-                                where m.organization_id = $1 and m.user_id = t.user_id)
+                   and ${researchReportInWorkspace('t')}
                    and ${isHeld('t')}`,
       deleteSql: `delete from public.research_reports
                    where id in (
                      select t.id from public.research_reports t
                       where t.created_at < $2
-                        and ${memberScoped('t')}
+                        and ${researchReportInWorkspace('t')}
+                        and ${notHeld('t')}
                       order by t.created_at asc
                       limit $4
                    )

@@ -7,6 +7,7 @@ import {
 } from './sidebar-session-actions';
 import { WebAppShell } from './WebAppShell';
 import { ProductNoticeStack } from '@shared/components/ProductNotice';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 /**
  * WEB-APPSHELL-MOBILE-SIDEBAR-01, at narrow viewports the shell must not
@@ -742,7 +743,7 @@ describe('WebAppShell responsive navigation', () => {
       </WebAppShell>,
     );
 
-    const download = screen.getByRole('link', { name: 'Get AGI Desktop' });
+    const download = screen.getByRole('link', { name: `Get ${PRODUCT_NAMES.desktop}` });
     expect(download).toHaveAttribute('href', '/download#desktop-downloads');
     const account = screen.getByRole('button', { name: /^Account menu for/ });
     expect(account.parentElement).toBe(download.parentElement);
