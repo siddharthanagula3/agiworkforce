@@ -46,6 +46,10 @@ import { TERMS_ACCEPTANCE_PATH } from '@agiworkforce/cloud-contracts';
 import { CloudCredentialUnavailableError } from '../services/apiErrors';
 import { invalidateCloudAccount } from '../src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
+import {
+  isSignInOwedForEndedSession,
+  settleSignInForEndedSession,
+} from '../src/features/auth/services/endedSession';
 
 const mockGetAuthToken = getAuthToken as jest.Mock;
 const mockGetAuthHeaders = getAuthHeaders as jest.Mock;
@@ -78,6 +82,7 @@ beforeEach(() => {
   jest.restoreAllMocks();
   jest.clearAllMocks();
   resetApiAccountState();
+  settleSignInForEndedSession();
   mockToken('access-token-valid');
   mockRefreshAuthSession.mockResolvedValue(false);
   mockClearAuthSession.mockResolvedValue(undefined);
@@ -172,61 +177,67 @@ describe('401 handling, refresh and retry', () => {
 
     mockRefreshAuthSession.mockResolvedValueOnce(false);
 
-    await expect(api.get('/api/expired')).rejects.toThrow('401');
+    await expect(api.get('/api/expired')).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('clears Cloud session when the request remains unauthorized after refresh', async () => {
+  it('keeps the session when the request remains unauthorized after refresh', async () => {
     const fetchSpy = jest
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(makeResponse(401, { error: 'Unauthorized' }))
       .mockResolvedValueOnce(makeResponse(401, { error: 'Unauthorized' }));
     mockRefreshAuthSession.mockResolvedValueOnce(true);
 
-    await expect(api.get('/api/still-expired')).rejects.toThrow('Session expired');
+    await expect(api.get('/api/still-refused')).rejects.toBeInstanceOf(
+      CloudCredentialUnavailableError,
+    );
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
-    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Session Expired',
-      expect.stringContaining('sign in'),
-      expect.any(Array),
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+});
+
+describe('a refusal the refresh cannot recover', () => {
+  beforeEach(() => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
+  });
+
+  it('neither signs out nor leaves Cloud: Clerk alone says when a session has ended', async () => {
+    await expect(api.get('/api/refused')).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
+
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(invalidateCloudAccount).not.toHaveBeenCalled();
+    expect(clearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(isSignInOwedForEndedSession()).toBe(false);
+  });
+
+  it('raises no alert', async () => {
+    await expect(api.get('/api/refused')).rejects.toThrow();
+
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('reports an account it could not confirm, never an expired session', async () => {
+    await expect(api.get('/api/refused')).rejects.toThrow(
+      'Could not confirm your account. Try again.',
     );
   });
 });
 
-describe('failed refresh triggers local cloud-session cleanup', () => {
-  it('clears the auth session facade when refresh returns no session', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
+describe('an account the server refuses outright', () => {
+  it('ends the session quietly and owes the person a sign-in', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(403, {}));
 
-    mockRefreshAuthSession.mockResolvedValueOnce(false);
+    await expect(api.get('/api/me')).rejects.toThrow('can no longer be used');
 
-    await expect(api.get('/api/expired')).rejects.toThrow('401');
-
+    expect(invalidateCloudAccount).toHaveBeenCalledTimes(1);
+    expect(clearLocalCloudAccountState).toHaveBeenCalledTimes(1);
     expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows an alert when session is unrecoverably expired', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
-
-    mockRefreshAuthSession.mockResolvedValueOnce(false);
-
-    await expect(api.get('/api/expired')).rejects.toThrow();
-
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Session Expired',
-      expect.stringContaining('sign in'),
-      expect.any(Array),
-    );
-  });
-
-  it('throws with a descriptive message after failed refresh', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
-
-    mockRefreshAuthSession.mockResolvedValueOnce(false);
-
-    await expect(api.get('/api/expired')).rejects.toThrow('Session expired');
+    expect(isSignInOwedForEndedSession()).toBe(true);
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
 
@@ -263,21 +274,17 @@ describe('a refusal of a request that carried no credential', () => {
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 
-  it('still ends the session when a caller-supplied credential is refused', async () => {
+  it('does not end the session when a caller-supplied credential is refused', async () => {
     mockNoToken();
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
     mockRefreshAuthSession.mockResolvedValueOnce(false);
 
     await expect(
-      api.get('/api/expired', { headers: { authorization: 'Bearer caller-token' } }),
-    ).rejects.toThrow('Session expired');
+      api.get('/api/refused', { headers: { authorization: 'Bearer caller-token' } }),
+    ).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
 
-    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Session Expired',
-      expect.stringContaining('sign in'),
-      expect.any(Array),
-    );
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
 

@@ -54,7 +54,7 @@ describe('toUserMessage', () => {
       'Something went wrong on our side. Try again shortly.',
     );
     expect(toUserMessage(new Error('HTTP 401'), fallback)).toBe(
-      'Your session has expired. Sign in again to continue.',
+      'Could not confirm your account. Try again.',
     );
     expect(toUserMessage(new ApiHttpError('Conflict', 409), fallback)).toBe(fallback);
   });

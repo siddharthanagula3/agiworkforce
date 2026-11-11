@@ -11,7 +11,12 @@ import {
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
-import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
+import {
+  ApiFreeCapacityError,
+  ApiHttpError,
+  CloudCredentialUnavailableError,
+  UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
+} from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import {
   buildAttachedDocumentContext,
@@ -1691,9 +1696,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         } catch (err) {
           if (!isTurnAccountCurrent()) return false;
           const error = err instanceof Error ? err : new Error(String(err));
-          if (error.message.includes('session expired') || error.message.includes('401')) {
+          if (error instanceof CloudCredentialUnavailableError) {
             set({
-              error: 'Session expired. Please sign in again to upload files.',
+              error: UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
               paywallError: null,
               ...streamingFlags(),
             });

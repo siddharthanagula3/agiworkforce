@@ -31,8 +31,14 @@ import { useTierStore } from '@/src/features/billing/store';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
 import {
   activateCloudAccount,
+  hasCloudAccountOwner,
   invalidateCloudAccount,
 } from '@/src/features/auth/services/cloudAccountSession';
+import {
+  isSignInOwedForEndedSession,
+  oweSignInForEndedSession,
+  settleSignInForEndedSession,
+} from '@/src/features/auth/services/endedSession';
 import {
   beginPushTokenAccountSession,
   clearPushTokenAccountSession,
@@ -85,7 +91,10 @@ import {
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
-import { resolveRootRedirect } from '@/src/features/auth/services/rootRouting';
+import {
+  CLOUD_SIGN_IN_RETURN_PATH,
+  resolveRootRedirect,
+} from '@/src/features/auth/services/rootRouting';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { ToastHost } from '@/src/shared/components/Toast';
 import { CloudSyncErrorBanner } from '@/src/features/edge-cases/components/CloudSyncErrorBanner';
@@ -184,6 +193,9 @@ function ClerkTokenBridge() {
       void refreshRolloutRings();
       void registerAppTransactionForAccount(userId);
     } else {
+      // Every sign-out the person chooses retires the Cloud owner before Clerk
+      // answers, so an owner still recorded here means the session ended under them.
+      if (hasCloudAccountOwner()) oweSignInForEndedSession();
       useRolloutStore.getState().clear();
       clearPostAuthIntent();
       setClerkTokenMinter(null, null);
@@ -283,6 +295,7 @@ export default function RootLayout() {
           style: 'destructive',
           onPress: () => {
             void (async () => {
+              invalidateCloudAccount();
               await clearAuthSession();
               await clearBiometricFlag();
             })().catch((err) => {
@@ -478,7 +491,9 @@ export default function RootLayout() {
       isClerkSignedIn,
       onboardingDone: Boolean(storage.getString('onboarding-done')),
       ageGateConfirmed: isAgeGateConfirmed(),
+      signInOwedForEndedSession: isSignInOwedForEndedSession(),
     });
+    if (redirect?.pathname === CLOUD_SIGN_IN_RETURN_PATH) settleSignInForEndedSession();
     if (redirect) {
       const destination =
         redirect.pathname === '/(app)' && isClerkSignedIn ? consumePostAuthDestination() : null;
