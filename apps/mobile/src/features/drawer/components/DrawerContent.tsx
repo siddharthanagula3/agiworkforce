@@ -113,7 +113,8 @@ interface PrimaryItem {
     | 'code'
     | 'remote'
     | 'tasks';
-  label: string;
+  label?: string;
+  labelKey?: string;
   icon: LucideIcon;
   route?: RoutePath;
   cloud?: boolean;
@@ -122,19 +123,19 @@ interface PrimaryItem {
 const PRIMARY_ITEMS: PrimaryItem[] = [
   {
     key: 'chats',
-    label: 'Chats',
+    labelKey: 'chat:sidebar.chats',
     icon: MessageSquare,
     route: '/(app)/chats',
   },
   {
     key: 'projects',
-    label: 'Projects',
+    labelKey: 'navProjects',
     icon: FolderOpen,
     route: '/(app)/(tabs)/projects',
   },
   {
     key: 'library',
-    label: 'Library',
+    labelKey: 'navLibrary',
     icon: BookImage,
     route: '/(app)/library',
   },
@@ -164,35 +165,35 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
   },
   {
     key: 'sites',
-    label: 'Published sites',
+    labelKey: 'drawer.publishedSites',
     icon: Globe,
     route: '/(app)/sites',
     cloud: true,
   },
   {
     key: 'schedules',
-    label: 'Schedules',
+    labelKey: 'drawer.schedules',
     icon: CalendarClock,
     route: '/(app)/schedules',
     cloud: true,
   },
   {
     key: 'agents',
-    label: 'Agents',
+    labelKey: 'navAgents',
     icon: Bot,
     route: '/(app)/agents',
     cloud: true,
   },
   {
     key: 'reports',
-    label: 'Reports',
+    labelKey: 'drawer.reports',
     icon: Telescope,
     route: '/(app)/reports',
     cloud: true,
   },
   {
     key: 'customize',
-    label: 'Customize',
+    labelKey: 'drawer.customize',
     icon: BookOpen,
     route: '/(app)/customize',
     cloud: true,
@@ -349,24 +350,24 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const organizeMenu = useMemo<ConversationMenuState>(
     () => ({
       visible: organizeOpen,
-      title: 'Organize chats',
+      title: t('drawer.organizeChats'),
       close: () => setOrganizeOpen(false),
       actions: [
         {
           key: 'organize-one-list',
-          label: 'In one list',
+          label: t('drawer.inOneList'),
           selected: listArrangement === 'one-list',
           run: () => setListArrangement('one-list'),
         },
         {
           key: 'organize-by-project',
-          label: 'By project',
+          label: t('drawer.byProject'),
           selected: listArrangement === 'by-project',
           run: () => setListArrangement('by-project'),
         },
       ],
     }),
-    [listArrangement, organizeOpen, setListArrangement],
+    [listArrangement, organizeOpen, setListArrangement, t],
   );
   const groupedByProject = listArrangement === 'by-project';
   const [expandedProjectIds, setExpandedProjectIds] = useState<ReadonlySet<string>>(
@@ -494,7 +495,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
         onLongPress={() => openActions(conversation.id, conversation.title || 'Untitled chat')}
         accessibilityRole="button"
-        accessibilityLabel={`Open conversation: ${conversation.title}${conversation.unread ? ', unread' : ''}`}
+        accessibilityLabel={t(
+          conversation.unread ? 'drawer.openConversationUnread' : 'drawer.openConversation',
+          { title: conversation.title },
+        )}
         accessibilityHint="Long press for more actions"
         accessibilityState={{ selected: active }}
         style={{
@@ -603,17 +607,17 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             AGI
           </Text>
           {/* Icon-only at a fixed 34pt so search never widens the header. */}
-          <HeaderIconButton label="Search" icon={Search} onPress={handleOpenSearch} />
+          <HeaderIconButton label={t('search')} icon={Search} onPress={handleOpenSearch} />
           {/* New-chat sits in the header beside the profile symbol (its original,
               thumb-and-eye-level home), not dropped to a bottom pill. */}
           <HeaderIconButton
-            label="Organize chats"
+            label={t('drawer.organizeChats')}
             icon={SlidersHorizontal}
             onPress={() => setOrganizeOpen(true)}
           />
-          <HeaderIconButton label="New chat" icon={SquarePen} onPress={handleNewChat} />
+          <HeaderIconButton label={t('drawer.newChat')} icon={SquarePen} onPress={handleNewChat} />
           <HeaderIconButton
-            label="Open profile"
+            label={t('drawer.openProfile')}
             icon={UserCircle}
             onPress={() => navigate('/(app)/profile')}
           />
@@ -643,10 +647,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             {visiblePrimaryItems.map((item) => (
               <NavRow
                 key={item.key}
-                label={item.label}
+                label={item.labelKey ? t(item.labelKey) : (item.label ?? '')}
                 icon={item.icon}
                 active={activeKey(item.key)}
-                tag={item.cloud ? 'Cloud' : undefined}
+                tag={item.cloud ? t('chat:sidebar.cloud') : undefined}
                 onPress={() => {
                   if (item.route) navigate(item.route);
                 }}
@@ -665,7 +669,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                   paddingHorizontal: 2,
                 }}
               >
-                Projects
+                {t('navProjects')}
               </Text>
               <View style={{ gap: 1 }}>
                 {displayedProjects.map((project) => {
@@ -677,7 +681,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                         <PressableBox
                           onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
                           accessibilityRole="button"
-                          accessibilityLabel={`Open project: ${project.name}`}
+                          accessibilityLabel={t('drawer.openProject', { name: project.name })}
                           style={{
                             flex: 1,
                             minHeight: 44,
@@ -697,7 +701,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                           <PressableBox
                             onPress={() => toggleProject(project.id)}
                             accessibilityRole="button"
-                            accessibilityLabel={`${expanded ? 'Hide' : 'Show'} chats in ${project.name}`}
+                            accessibilityLabel={t(
+                              expanded ? 'drawer.hideChatsIn' : 'drawer.showChatsIn',
+                              { name: project.name },
+                            )}
                             accessibilityState={{ expanded }}
                             style={{
                               width: 44,
@@ -723,7 +730,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                             <PressableBox
                               onPress={() => navigate('/(app)/projects/[id]', { id: project.id })}
                               accessibilityRole="button"
-                              accessibilityLabel={`See all chats in ${project.name}`}
+                              accessibilityLabel={t('drawer.seeAllChatsIn', { name: project.name })}
                               style={{
                                 minHeight: 44,
                                 paddingLeft: 24,
@@ -734,7 +741,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                               <Text
                                 style={{ color: colors.textMuted, fontSize: typeScale.subhead }}
                               >
-                                See all
+                                {t('drawer.seeAll')}
                               </Text>
                             </PressableBox>
                           ) : null}
@@ -757,7 +764,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 paddingHorizontal: 2,
               }}
             >
-              Recents
+              {t('drawer.recents')}
             </Text>
 
             {displayedConversations.length > 0 ? (
@@ -772,13 +779,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                   paddingHorizontal: 10,
                 }}
               >
-                No recent chats
+                {t('drawer.noRecentChats')}
               </Text>
             )}
             <PressableBox
               onPress={() => navigate('/(app)/chats')}
               accessibilityRole="button"
-              accessibilityLabel="See all chats"
+              accessibilityLabel={t('drawer.seeAllChats')}
               style={{
                 minHeight: 44,
                 marginTop: 4,
@@ -789,7 +796,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               }}
             >
               <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
-                See all chats
+                {t('drawer.seeAllChats')}
               </Text>
               <ChevronRight size={16} color={colors.textMuted} />
             </PressableBox>
@@ -809,7 +816,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       >
         {workspace.activeName ? (
           <NavRow
-            label={`Workspace: ${workspace.activeName}`}
+            label={t('newChat.workspace', { name: workspace.activeName })}
             icon={Building2}
             onPress={workspace.open}
           />
@@ -824,13 +831,21 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           ) : null
         ) : (
           <NavRow
-            label={`Usage remaining${remainingUsage ? ` · ${remainingUsage}` : usageLoading ? ' · Checking…' : usageError ? ' · Unavailable' : ''}`}
+            label={
+              remainingUsage
+                ? t('drawer.usageRemainingValue', { value: remainingUsage })
+                : usageLoading
+                  ? t('drawer.usageRemainingChecking')
+                  : usageError
+                    ? t('drawer.usageRemainingUnavailable')
+                    : t('drawer.usageRemaining')
+            }
             icon={BarChart3}
             onPress={() => navigate('/(app)/settings/cloud-usage')}
           />
         )}
         <NavRow
-          label="Settings"
+          label={t('settings')}
           icon={Settings}
           active={pathname.includes('/settings')}
           onPress={() => navigate('/(app)/(tabs)/settings')}
@@ -838,13 +853,17 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         {/* The unread pip on the drawer button cannot be a 44pt control without
             swallowing the drawer's own taps, so the way in lives here. */}
         <NavRow
-          label="Notifications"
+          label={t('drawer.notifications')}
           icon={Bell}
           active={pathname.includes('/notifications')}
           tag={unreadCount > 0 ? String(unreadCount) : undefined}
           onPress={() => navigate('/(app)/notifications')}
         />
-        <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
+        <NavRow
+          label={t('drawer.helpAndAbout')}
+          icon={HelpCircle}
+          onPress={() => navigate('/(app)/about')}
+        />
       </View>
       <RenameConversationModal rename={rename} inline />
       <ActionMenuSheet menu={workspace.menu} />

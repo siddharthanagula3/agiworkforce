@@ -579,4 +579,49 @@ describe('DrawerContent', () => {
     fireEvent.press(getByLabelText('Notifications'));
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/notifications');
   });
+
+  describe('with Spanish selected', () => {
+    beforeEach(async () => {
+      await act(async () => {
+        await i18n.changeLanguage('es');
+      });
+    });
+
+    afterEach(async () => {
+      await act(async () => {
+        await i18n.changeLanguage('en');
+      });
+    });
+
+    it('renders every drawer label from the Spanish catalog', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
+      const { getByLabelText, queryByLabelText, getByText } = renderDrawer();
+      const es = resources.es;
+      const cloud = es.chat.sidebar.cloud;
+
+      expect(getByLabelText(`${es.chat.sidebar.chats}`)).toBeTruthy();
+      expect(getByLabelText(es.common.navProjects)).toBeTruthy();
+      expect(getByLabelText(es.common.navLibrary)).toBeTruthy();
+      expect(getByLabelText(`${es.common.drawer.schedules}. ${cloud}`)).toBeTruthy();
+      expect(getByLabelText(`${es.common.navAgents}. ${cloud}`)).toBeTruthy();
+      expect(getByLabelText(`${es.common.drawer.reports}. ${cloud}`)).toBeTruthy();
+      expect(getByLabelText(`${es.common.drawer.customize}. ${cloud}`)).toBeTruthy();
+      expect(getByLabelText(`${es.common.drawer.publishedSites}. ${cloud}`)).toBeTruthy();
+      expect(getByLabelText(es.common.settings)).toBeTruthy();
+      expect(getByLabelText(es.common.drawer.notifications)).toBeTruthy();
+      expect(getByLabelText(es.common.drawer.helpAndAbout)).toBeTruthy();
+      expect(getByLabelText(es.common.search)).toBeTruthy();
+      expect(getByLabelText(es.common.drawer.newChat)).toBeTruthy();
+      expect(getByLabelText(es.common.drawer.seeAllChats)).toBeTruthy();
+      expect(getByText(es.common.drawer.recents)).toBeTruthy();
+
+      expect(es.common.navAgents).toBe('Agentes');
+      expect(es.common.drawer.schedules).toBe('Programaciones');
+      expect(queryByLabelText('Schedules. Cloud')).toBeNull();
+      expect(queryByLabelText('Agents. Cloud')).toBeNull();
+      expect(queryByLabelText('Notifications')).toBeNull();
+      expect(queryByLabelText('Help & About')).toBeNull();
+    });
+  });
 });

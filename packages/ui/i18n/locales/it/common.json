@@ -216,5 +216,32 @@
       "p3": "Trasforma i miei thread Slack non letti in una lista di cose da fare",
       "p4": "Aggiorna la presentazione del progetto con i dati più recenti di Drive"
     }
+  },
+  "drawer": {
+    "publishedSites": "Siti pubblicati",
+    "schedules": "Pianificazioni",
+    "reports": "Report",
+    "customize": "Personalizza",
+    "organizeChats": "Organizza chat",
+    "newChat": "Nuova chat",
+    "openProfile": "Apri profilo",
+    "inOneList": "In un unico elenco",
+    "byProject": "Per progetto",
+    "recents": "Recenti",
+    "noRecentChats": "Nessuna chat recente",
+    "seeAllChats": "Vedi tutte le chat",
+    "seeAll": "Vedi tutto",
+    "seeAllChatsIn": "Vedi tutte le chat in {{name}}",
+    "openProject": "Apri progetto: {{name}}",
+    "openConversation": "Apri conversazione: {{title}}",
+    "openConversationUnread": "Apri conversazione: {{title}}, non letta",
+    "showChatsIn": "Mostra le chat in {{name}}",
+    "hideChatsIn": "Nascondi le chat in {{name}}",
+    "notifications": "Notifiche",
+    "helpAndAbout": "Guida e info",
+    "usageRemaining": "Utilizzo rimanente",
+    "usageRemainingValue": "Utilizzo rimanente · {{value}}",
+    "usageRemainingChecking": "Utilizzo rimanente · Verifica in corso…",
+    "usageRemainingUnavailable": "Utilizzo rimanente · Non disponibile"
   }
 }

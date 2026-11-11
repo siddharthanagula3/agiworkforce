@@ -3259,13 +3259,13 @@
       "doc": "troubleshooting",
       "section": "Search did not run",
       "kind": "prose",
-      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search failed. Please try again.\" If the search window itself cannot open, it shows \"Search unavailable\" instead; close it and open it again.",
+      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search could not be completed\" with a Retry button and never as no matches; if the search window itself cannot open, it shows \"Search unavailable\" instead, so close it and open it again.",
       "implementation": ["apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
-          "text": "toast.error('Search failed. Please try again.')"
+          "text": "<p className=\"text-sm text-muted-foreground\">Search could not be completed</p>"
         },
         {
           "kind": "copy",
@@ -3485,7 +3485,7 @@
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"Extension\""
+          "text": "\"name\": \"AGI Extension\""
         },
         {
           "kind": "test",

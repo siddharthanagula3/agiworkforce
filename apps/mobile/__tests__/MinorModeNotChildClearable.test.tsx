@@ -103,6 +103,20 @@ describe('minor-safe mode cannot be cleared by the device it protects', () => {
     expect(getByTestId('age-gate-refused')).toBeTruthy();
   });
 
+  it('says erasing the app data resets the recorded age, not only reinstalling', () => {
+    confirmAgeGate(12);
+    const refused = render(<AgeGateScreen />);
+    expect(refused.getByText(/only erasing AGI’s data on this\s+device can reset/)).toBeTruthy();
+    expect(refused.queryByText(/reinstall/i)).toBeNull();
+    refused.unmount();
+
+    const parental = render(<ParentalControlsScreen />);
+    expect(
+      parental.getByText('An adult can lift it only by erasing AGI’s data on this device.'),
+    ).toBeTruthy();
+    expect(parental.queryByText(/reinstall/i)).toBeNull();
+  });
+
   it('shows the age input while no minor record exists', () => {
     const { getByTestId } = render(<AgeGateScreen />);
     expect(getByTestId('age-gate-input')).toBeTruthy();

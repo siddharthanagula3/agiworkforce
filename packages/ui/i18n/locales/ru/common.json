@@ -268,5 +268,32 @@
       "p3": "Преврати мои непрочитанные треды в Slack в список дел",
       "p4": "Обнови презентацию проекта последними цифрами из Drive"
     }
+  },
+  "drawer": {
+    "publishedSites": "Опубликованные сайты",
+    "schedules": "Расписания",
+    "reports": "Отчёты",
+    "customize": "Настроить",
+    "organizeChats": "Упорядочить чаты",
+    "newChat": "Новый чат",
+    "openProfile": "Открыть профиль",
+    "inOneList": "Одним списком",
+    "byProject": "По проектам",
+    "recents": "Недавние",
+    "noRecentChats": "Нет недавних чатов",
+    "seeAllChats": "Все чаты",
+    "seeAll": "Показать все",
+    "seeAllChatsIn": "Все чаты в {{name}}",
+    "openProject": "Открыть проект: {{name}}",
+    "openConversation": "Открыть беседу: {{title}}",
+    "openConversationUnread": "Открыть беседу: {{title}}, не прочитана",
+    "showChatsIn": "Показать чаты в {{name}}",
+    "hideChatsIn": "Скрыть чаты в {{name}}",
+    "notifications": "Уведомления",
+    "helpAndAbout": "Справка и сведения",
+    "usageRemaining": "Остаток использования",
+    "usageRemainingValue": "Остаток использования · {{value}}",
+    "usageRemainingChecking": "Остаток использования · Проверка…",
+    "usageRemainingUnavailable": "Остаток использования · Недоступно"
   }
 }

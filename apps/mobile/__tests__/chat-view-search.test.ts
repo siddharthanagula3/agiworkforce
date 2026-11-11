@@ -177,6 +177,43 @@ describe('chatViewStore.searchConversations, mode routing', () => {
     expect(ids).not.toContain('c1');
   });
 
+  it('marks a Cloud search that fell back to the device as failed, and clears it on the next attempt', async () => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    useAuthStore.setState({ isClerkSignedIn: true });
+    activateCloudAccount('search-user');
+    mockApiGet.mockRejectedValueOnce(new Error('network'));
+
+    useChatViewStore.getState().searchConversations('rust');
+    expect(useChatViewStore.getState().searchFailed).toBe(false);
+    await flushDebounce();
+
+    expect(useChatViewStore.getState().searchFailed).toBe(true);
+    expect(useChatViewStore.getState().isSearching).toBe(false);
+
+    mockApiGet.mockResolvedValueOnce({ results: [], projects: [] });
+    useChatViewStore.getState().searchConversations('rust');
+    expect(useChatViewStore.getState().searchFailed).toBe(false);
+    await flushDebounce();
+
+    expect(useChatViewStore.getState().searchFailed).toBe(false);
+  });
+
+  it('does not mark a successful Cloud search, or a Local search, as failed', async () => {
+    useChatAppModeStore.getState().setAppMode('cloud');
+    useAuthStore.setState({ isClerkSignedIn: true });
+    activateCloudAccount('search-user');
+    mockApiGet.mockResolvedValue({ results: [], projects: [] });
+
+    useChatViewStore.getState().searchConversations('nothing here');
+    await flushDebounce();
+    expect(useChatViewStore.getState().searchFailed).toBe(false);
+
+    useChatAppModeStore.getState().setAppMode('local');
+    useChatViewStore.getState().searchConversations('nothing here');
+    await flushDebounce();
+    expect(useChatViewStore.getState().searchFailed).toBe(false);
+  });
+
   it('does not search a cached Cloud account after sign-out', async () => {
     useChatAppModeStore.getState().setAppMode('cloud');
     activateCloudAccount('signed-out-user');

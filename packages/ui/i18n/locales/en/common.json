@@ -216,5 +216,32 @@
       "p3": "Turn my unread Slack threads into a to-do list",
       "p4": "Update the project deck with the latest numbers from Drive"
     }
+  },
+  "drawer": {
+    "publishedSites": "Published sites",
+    "schedules": "Schedules",
+    "reports": "Reports",
+    "customize": "Customize",
+    "organizeChats": "Organize chats",
+    "newChat": "New chat",
+    "openProfile": "Open profile",
+    "inOneList": "In one list",
+    "byProject": "By project",
+    "recents": "Recents",
+    "noRecentChats": "No recent chats",
+    "seeAllChats": "See all chats",
+    "seeAll": "See all",
+    "seeAllChatsIn": "See all chats in {{name}}",
+    "openProject": "Open project: {{name}}",
+    "openConversation": "Open conversation: {{title}}",
+    "openConversationUnread": "Open conversation: {{title}}, unread",
+    "showChatsIn": "Show chats in {{name}}",
+    "hideChatsIn": "Hide chats in {{name}}",
+    "notifications": "Notifications",
+    "helpAndAbout": "Help & About",
+    "usageRemaining": "Usage remaining",
+    "usageRemainingValue": "Usage remaining · {{value}}",
+    "usageRemainingChecking": "Usage remaining · Checking…",
+    "usageRemainingUnavailable": "Usage remaining · Unavailable"
   }
 }

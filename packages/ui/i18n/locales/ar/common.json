@@ -320,5 +320,32 @@
       "p3": "حوّل سلاسل Slack غير المقروءة إلى قائمة مهام",
       "p4": "حدّث عرض المشروع بأحدث الأرقام من Drive"
     }
+  },
+  "drawer": {
+    "publishedSites": "المواقع المنشورة",
+    "schedules": "الجداول",
+    "reports": "التقارير",
+    "customize": "تخصيص",
+    "organizeChats": "تنظيم المحادثات",
+    "newChat": "محادثة جديدة",
+    "openProfile": "فتح الملف الشخصي",
+    "inOneList": "في قائمة واحدة",
+    "byProject": "حسب المشروع",
+    "recents": "الأخيرة",
+    "noRecentChats": "لا توجد محادثات حديثة",
+    "seeAllChats": "عرض كل المحادثات",
+    "seeAll": "عرض الكل",
+    "seeAllChatsIn": "عرض كل المحادثات في {{name}}",
+    "openProject": "فتح المشروع: {{name}}",
+    "openConversation": "فتح المحادثة: {{title}}",
+    "openConversationUnread": "فتح المحادثة: {{title}}، غير مقروءة",
+    "showChatsIn": "عرض المحادثات في {{name}}",
+    "hideChatsIn": "إخفاء المحادثات في {{name}}",
+    "notifications": "الإشعارات",
+    "helpAndAbout": "المساعدة وحول التطبيق",
+    "usageRemaining": "الاستخدام المتبقي",
+    "usageRemainingValue": "الاستخدام المتبقي · {{value}}",
+    "usageRemainingChecking": "الاستخدام المتبقي · جارٍ التحقق…",
+    "usageRemainingUnavailable": "الاستخدام المتبقي · غير متاح"
   }
 }
