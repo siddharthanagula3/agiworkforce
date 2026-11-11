@@ -2552,16 +2552,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1687,
+      "files": 1683,
       "roles": {
         "asset": 4,
         "config": 11,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 915,
+        "source": 913,
         "style": 1,
-        "test": 705
+        "test": 703
       }
     },
     {
@@ -2616,7 +2616,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8299,
+      "files": 8300,
       "roles": {
         "asset": 57,
         "config": 83,
@@ -2624,7 +2624,7 @@
         "generated": 2,
         "migration": 740,
         "other": 37,
-        "source": 3515,
+        "source": 3516,
         "style": 35,
         "test": 3779
       }
@@ -2695,12 +2695,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 227,
+      "files": 225,
       "roles": {
         "asset": 1,
         "config": 19,
         "doc": 159,
-        "generated": 47,
+        "generated": 45,
         "other": 1
       }
     },

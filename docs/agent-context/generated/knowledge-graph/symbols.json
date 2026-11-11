@@ -2249,13 +2249,9 @@
       "apps/extension/src/types.ts"
     ],
     "AddToChatSheet": [
-      "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
-      "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
       "apps/mobile/src/features/chat/components/AddToChatSheet.tsx"
     ],
     "AddToChatSheetProps": [
-      "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
-      "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
       "apps/mobile/src/features/chat/components/AddToChatSheet.tsx"
     ],
     "addToolSpend": [
@@ -90432,7 +90428,7 @@
       "apps/mobile/src/features/tasks/service.ts"
     ],
     "PAUSED_SANDBOX_MAX_AGE_MS": [
-      "apps/web/lib/e2b/reclaim.ts"
+      "apps/web/lib/e2b/reclaim-schedule.ts"
     ],
     "PausedConfirmation": [
       "apps/desktop/src/stores/computerUseStore.ts"
@@ -102667,6 +102663,9 @@
       "packages/platform/data-layer/src/search/index.ts",
       "packages/platform/data-layer/src/search/rank.ts"
     ],
+    "RECLAIM_SWEEP_INTERVAL_MS": [
+      "apps/web/lib/e2b/reclaim-schedule.ts"
+    ],
     "reclaimAbandonedE2BSandboxes": [
       "apps/web/lib/e2b/reclaim.ts"
     ],
@@ -114660,7 +114659,7 @@
       "crates/agiworkforce-sandbox-policy/src/lib.rs"
     ],
     "SANDBOX_MAX_AGE_MS": [
-      "apps/web/lib/e2b/reclaim.ts"
+      "apps/web/lib/e2b/reclaim-schedule.ts"
     ],
     "SANDBOX_MCP_ENV": [
       "apps/cli/src/sandbox.rs"
