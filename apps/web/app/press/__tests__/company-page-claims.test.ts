@@ -89,9 +89,12 @@ describe('unreleased Desktop is never described as a public product', () => {
     const source = page('enterprise');
     expect(source).toMatch(
       new RegExp(
-        `${PRODUCT_NAMES.desktop} is ${CLOUD.toLowerCase()} only and is \\$\\{SURFACE_STATUS\\.desktop\\.toLowerCase\\(\\)\\}\\.`,
+        `${PRODUCT_NAMES.desktop} chat is ${CLOUD.toLowerCase()} only, its local coding sessions run the ${PRODUCT_NAMES.cli}, and ${PRODUCT_NAMES.desktop} is \\$\\{SURFACE_STATUS\\.desktop\\.toLowerCase\\(\\)\\}\\.`,
         'u',
       ),
+    );
+    expect(source).not.toMatch(
+      new RegExp(`${PRODUCT_NAMES.desktop} is ${CLOUD.toLowerCase()} only`, 'iu'),
     );
     expect(source).not.toMatch(/current public Desktop/iu);
   });

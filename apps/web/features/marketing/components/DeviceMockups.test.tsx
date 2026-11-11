@@ -232,7 +232,11 @@ describe('cloud-only surfaces never show a Local or own-key route', () => {
   });
 
   it.each([
-    ['apps/desktop/electron/config.ts', 'This shell has no Local mode'],
+    ['apps/desktop/electron/config.ts', 'return isLocalhost(host) || isFirstPartyHost(host);'],
+    [
+      'apps/desktop/electron/config.ts',
+      'if (!trimmed || !isAllowedApiBaseUrl(trimmed)) return null;',
+    ],
     ['apps/desktop/electron/runtime/dispatcher.ts', 'localModels: false'],
     [
       'apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts',

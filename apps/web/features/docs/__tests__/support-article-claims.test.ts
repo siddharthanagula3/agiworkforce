@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const WEB_ROOT = join(__dirname, '..', '..', '..');
 const REPO_ROOT = join(WEB_ROOT, '..', '..');
@@ -460,11 +461,13 @@ describe('current CLI help articles distinguish implementation from release avai
       ['fix', 'Fix Issue'],
       ['refactor', 'Refactor Code'],
       ['generateTests', 'Generate Tests'],
+      ['setApiKey', 'Set API Key'],
+      ['clearApiKey', 'Clear API Key'],
     ]) {
       expect(manifest.contributes.commands).toContainEqual(
         expect.objectContaining({
           command: `agi-workforce.${command}`,
-          title: `AGI Code: ${label}`,
+          title: `${PRODUCT_NAMES.code}: ${label}`,
         }),
       );
       expect(setup).toContain(`register('agi-workforce.${command}',`);
