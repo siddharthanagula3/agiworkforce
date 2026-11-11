@@ -52,15 +52,23 @@ test('credits the shared platform administrator guard only when the route calls 
     "getUserScopedDb } from '@/lib/server/rls-db'",
     "requirePlatformAdmin } from '@/lib/auth-guards'",
   ).replace('await getUserScopedDb(request)', 'await requirePlatformAdmin(request)');
-  assert.equal(run(fixture({ 'operator/route.ts': source })).code, 0);
+  const gate = `
+export async function requirePlatformAdmin(request) {
+  return getClerkAuthUser(request);
+}
+`;
+  assert.equal(run(withGateModule(fixture({ 'operator/route.ts': source }), gate)).code, 0);
   assert.equal(
     run(
-      fixture({
-        'operator/route.ts': source.replace(
-          'await requirePlatformAdmin(request)',
-          "{ userId: 'unverified' }",
-        ),
-      }),
+      withGateModule(
+        fixture({
+          'operator/route.ts': source.replace(
+            'await requirePlatformAdmin(request)',
+            "{ userId: 'unverified' }",
+          ),
+        }),
+        gate,
+      ),
     ).code,
     1,
   );

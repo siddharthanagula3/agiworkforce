@@ -47,7 +47,8 @@ vi.mock('../settingsStore', () => ({
 
 const shownNotifications: { title: string; body: string }[] = [];
 
-vi.mock('../runtime/nativeSurface', () => ({
+vi.mock('../runtime/nativeSurface', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/nativeSurface')>()),
   createNativeNotification: (options: { title: string; body: string }) => ({
     show: () => {
       shownNotifications.push(options);
@@ -62,7 +63,8 @@ const changeGarnishShortcuts = vi.fn((patch: Partial<GarnishShortcuts>, _handler
 });
 let statuses: { key: keyof GarnishShortcuts; accelerator: string; status: string }[] = [];
 
-vi.mock('../shortcuts', () => ({
+vi.mock('../shortcuts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../shortcuts')>()),
   changeGarnishShortcuts: (patch: Partial<GarnishShortcuts>, handlers: unknown) =>
     changeGarnishShortcuts(patch, handlers),
   shortcutRegistrations: () => statuses,

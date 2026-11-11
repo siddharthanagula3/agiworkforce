@@ -3,19 +3,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const roots = [{ id: 'root-1', path: '/work/project', name: 'project' }];
 
-vi.mock('node:child_process', () => ({
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('node:child_process')>()),
   spawn: vi.fn(() => new EventEmitter()),
 }));
-vi.mock('../browser/bridgeServer', () => ({ pairingState: () => ({ paired: false }) }));
-vi.mock('../remote/remoteControlService', () => ({
+vi.mock('../browser/bridgeServer', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../browser/bridgeServer')>()),
+  pairingState: () => ({ paired: false }),
+}));
+vi.mock('../remote/remoteControlService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../remote/remoteControlService')>()),
   remoteControlState: () => ({ status: 'idle' }),
   stopRemoteControl: vi.fn(),
 }));
-vi.mock('../runtime/computerUseSession', () => ({
+vi.mock('../runtime/computerUseSession', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/computerUseSession')>()),
   computerUsePhase: () => 'idle',
   stopComputerUse: vi.fn(),
 }));
-vi.mock('../runtime/developerSessionService', () => ({
+vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/developerSessionService')>()),
   answerDeveloperApproval: vi.fn(),
   interruptDeveloperTurn: vi.fn(),
   listDeveloperSessions: vi.fn(),
@@ -25,11 +32,13 @@ vi.mock('../runtime/developerSessionService', () => ({
   startRemoteDeveloperTurn: vi.fn(),
   stopDeveloperRuntime: vi.fn(),
 }));
-vi.mock('../runtime/shellService', () => ({
+vi.mock('../runtime/shellService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/shellService')>()),
   cancelShellRun: vi.fn(),
   listShellRuns: () => [],
 }));
-vi.mock('../runtime/workspaceStore', () => ({
+vi.mock('../runtime/workspaceStore', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/workspaceStore')>()),
   WorktreeRootRefused: class WorktreeRootRefused extends Error {},
   admitWorktreeRoot: vi.fn(),
   forgetWorktreeRoot: vi.fn(),

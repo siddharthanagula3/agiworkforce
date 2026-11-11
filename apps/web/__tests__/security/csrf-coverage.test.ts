@@ -114,6 +114,10 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
     call: /verifyGitHubWebhookSignature\s*\(/,
     reason: 'GitHub signs the payload; there is no browser and no cookie principal.',
   },
+  'llm/v1/chat/completions/resume-caller/route.ts': {
+    call: BEARER_GATE,
+    reason: 'runAuthGate refuses any request without a Bearer header before identity resolves.',
+  },
   'llm/v1/chat/completions/resume-device/route.ts': {
     call: BEARER_GATE,
     reason: 'runAuthGate refuses any request without a Bearer header before identity resolves.',

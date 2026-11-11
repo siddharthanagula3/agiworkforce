@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('electron', () => ({}));
-vi.mock('../runtime/computerUseService', () => ({
+vi.mock('../runtime/computerUseService', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/computerUseService')>()),
   ComputerUseRefused: class extends Error {
     readonly reason: string;
     constructor(reason: string, message: string) {
@@ -28,7 +29,8 @@ vi.mock('../runtime/computerUseService', () => ({
   applicationAt: vi.fn(async () => mocks.at),
   readFrontWindow: vi.fn(async () => ({ front: null, secureInput: false })),
 }));
-vi.mock('../runtime/computerUseSession', () => ({
+vi.mock('../runtime/computerUseSession', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/computerUseSession')>()),
   askUserDuringRun: vi.fn(async (_window: unknown, ask: () => Promise<unknown>) => ask()),
   computerUsePhase: vi.fn(() => 'active'),
   computerUseStatus: vi.fn(),
@@ -36,7 +38,8 @@ vi.mock('../runtime/computerUseSession', () => ({
   handBackComputerUse: vi.fn(),
   withoutInputWatch: vi.fn(async (action: () => Promise<unknown>) => action()),
 }));
-vi.mock('../runtime/permissionManager', () => ({
+vi.mock('../runtime/permissionManager', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/permissionManager')>()),
   getPermissionState: vi.fn(
     (capability: string, scope: { target?: string }) =>
       mocks.states.get(`${capability}:${scope.target ?? ''}`) ?? 'prompt',
@@ -50,13 +53,17 @@ vi.mock('../runtime/permissionManager', () => ({
   ),
   consumeSingleUse: vi.fn(),
 }));
-vi.mock('../runtime/devicePrompts', () => ({
+vi.mock('../runtime/devicePrompts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/devicePrompts')>()),
   showDevicePrompt: vi.fn(async () => {
     mocks.whileAsking?.();
     return { response: 1 };
   }),
 }));
-vi.mock('../runtime/nativeSurface', () => ({ showNativeMessage: vi.fn() }));
+vi.mock('../runtime/nativeSurface', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../runtime/nativeSurface')>()),
+  showNativeMessage: vi.fn(),
+}));
 
 const { runScreenAction } = await import('../runtime/computerUseSteps');
 

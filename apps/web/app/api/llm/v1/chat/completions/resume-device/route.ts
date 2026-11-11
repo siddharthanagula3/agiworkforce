@@ -5,7 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withCorsRoute } from '@/lib/cors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import type { AuthGateSuccess } from '../lib/auth-gate';
+import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 import {
   claimCloudAgentDeviceCheckpoint,
@@ -21,8 +21,8 @@ import {
   admitToolResultResume,
   continueToolResultResume,
   toolResultResumeError,
-} from '../lib/tool-result-resume';
-export { toolResultResumeOptions as OPTIONS } from '../lib/tool-result-resume';
+} from '@/app/api/llm/v1/chat/completions/lib/tool-result-resume';
+export { toolResultResumeOptions as OPTIONS } from '@/app/api/llm/v1/chat/completions/lib/tool-result-resume';
 
 export const maxDuration = 300;
 
@@ -126,7 +126,11 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
 }
 
 export const POST = withCorsRoute(
-  withErrorHandler((request: NextRequest) =>
-    admitToolResultResume(request, (authResult) => handleDeviceStepResume(request, authResult)),
-  ),
+  withErrorHandler(async (request: NextRequest) => {
+    const authResult = await runAuthGate(request);
+    if (!authResult.ok) return authResult.response;
+    return admitToolResultResume(request, authResult, () =>
+      handleDeviceStepResume(request, authResult),
+    );
+  }),
 );

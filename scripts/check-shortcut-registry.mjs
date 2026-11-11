@@ -48,9 +48,8 @@ function read(repoRoot, relativePath) {
   return readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-/** Tab navigation keeps physical Control; Command+Tab belongs to the macOS app switcher. */
+/** `CommandOrControl` is the one spelling that gives both platforms a variant. */
 export function crossPlatformAccelerator(accelerator) {
-  if (/^(?:Control|Ctrl)\+(?:Shift\+)?Tab$/i.test(accelerator)) return true;
   return !/(^|\+)(Command|Cmd|Super|Meta|Control|Ctrl)(\+|$)/i.test(accelerator);
 }
 
