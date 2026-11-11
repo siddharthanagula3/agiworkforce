@@ -606,7 +606,10 @@ function CatalogError({ message, onRetry }: { message: string; onRetry: () => vo
 
 export function SkillsScreen() {
   const router = useRouter();
-  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+  const { returnTo, conversationId } = useLocalSearchParams<{
+    returnTo?: string;
+    conversationId?: string;
+  }>();
   const { colors, isDark } = useTheme();
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const appMode = useChatAppModeStore((state) => state.appMode);
@@ -635,10 +638,20 @@ export function SkillsScreen() {
   const cloudActive = appMode === 'cloud';
   const canLoad = FEATURES.skills && isClerkLoaded && isClerkSignedIn && cloudActive;
 
+  const returnToConversation = useCallback((): boolean => {
+    if (!conversationId) return false;
+    router.navigate({
+      pathname: '/(app)/chat/[id]',
+      params: { id: conversationId },
+    } as Parameters<typeof router.navigate>[0]);
+    return true;
+  }, [conversationId, router]);
+
   const handleBack = useCallback(() => {
+    if (returnToConversation()) return;
     if (router.canGoBack()) router.back();
     else router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
-  }, [router]);
+  }, [returnToConversation, router]);
 
   const handleContinue = useCallback(() => {
     if (!isClerkSignedIn) {
@@ -652,13 +665,14 @@ export function SkillsScreen() {
     (skill: ManagedSkillSummary) => {
       if (!clerkUserId || !isSkillInstalled(skill, installed)) return;
       selectSkill({ ownerId: clerkUserId, name: skill.name });
+      if (returnToConversation()) return;
       if (returnTo === 'composer' && router.canGoBack()) {
         router.back();
         return;
       }
       router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
     },
-    [clerkUserId, installed, returnTo, router, selectSkill],
+    [clerkUserId, installed, returnTo, returnToConversation, router, selectSkill],
   );
 
   const handleToggleInstall = useCallback(

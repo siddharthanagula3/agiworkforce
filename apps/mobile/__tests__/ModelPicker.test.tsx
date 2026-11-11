@@ -300,6 +300,26 @@ describe('ModelPickerSheet', () => {
     ).toBeNull();
   });
 
+  it('keeps the Free catalogue notices away from a paid plan', () => {
+    activateCloudAccount('account-a');
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' } as never);
+    useFreeQuotaCatalogueStore.setState({
+      account: captureCloudAccountEpoch(),
+      catalogue: null,
+      loading: false,
+      error: 'Sign in again to check provider-funded Free models.',
+    });
+
+    try {
+      const screen = renderPicker({ modelScope: 'cloud' });
+      expect(screen.queryByText(/provider-funded Free/)).toBeNull();
+      expect(screen.queryByLabelText('Retry loading provider-funded Free models')).toBeNull();
+    } finally {
+      useTierStore.setState({ tier: 'free' } as never);
+    }
+  });
+
   it('explains a checked catalogue whose chat offers are all unavailable', () => {
     const chatOffering = Object.entries(getProviderOfferings()).find(
       ([, offering]) => offering.category === 'chat' && offering.quotaProbeProtocol === 'chat',

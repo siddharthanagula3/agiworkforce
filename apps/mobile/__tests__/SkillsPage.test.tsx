@@ -6,6 +6,8 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
+const mockNavigate = jest.fn();
+let mockSearchParams: Record<string, string> = {};
 const mockSetAppMode = jest.fn();
 const mockFetchManagedSkills = jest.fn();
 const mockFetchInstalledSkillNames = jest.fn();
@@ -23,10 +25,12 @@ let mockIsDark = false;
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
+  useLocalSearchParams: () => mockSearchParams,
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
     back: mockBack,
+    navigate: mockNavigate,
     canGoBack: () => true,
   }),
 }));
@@ -236,6 +240,27 @@ describe('Mobile Skills screen', () => {
     expect(screen.getByLabelText('Release helper status: Coming later')).toBeTruthy();
     expect(screen.getByText('Needs create_office_file')).toBeTruthy();
     expect(screen.queryByLabelText('Use Release helper in chat')).toBeNull();
+  });
+
+  it('goes back to the conversation that opened Skills, not to a new chat', async () => {
+    mockSearchParams = { returnTo: 'composer', conversationId: 'conversation-7' };
+    try {
+      const screen = render(<SkillsScreen />);
+      expect(await screen.findByText('Documents')).toBeTruthy();
+
+      fireEvent.press(screen.getByLabelText('Go back'));
+      expect(mockNavigate).toHaveBeenCalledWith({
+        pathname: '/(app)/chat/[id]',
+        params: { id: 'conversation-7' },
+      });
+      expect(mockBack).not.toHaveBeenCalled();
+
+      fireEvent.press(screen.getByLabelText('Use Documents in chat'));
+      expect(mockNavigate).toHaveBeenCalledTimes(2);
+      expect(mockPush).not.toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    } finally {
+      mockSearchParams = {};
+    }
   });
 
   it('keeps each card compact: a clamped description, its status on its own line, wrapping actions', async () => {
