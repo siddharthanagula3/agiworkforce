@@ -6,6 +6,7 @@ use crate::terminal_text::sanitize_terminal_text;
 use agiworkforce_worktree::config_guard::ConfigUse;
 use anyhow::Result;
 use colored::Colorize;
+use std::path::Path;
 
 #[derive(Debug, Clone, Default)]
 pub struct ReviewOptions {
@@ -268,11 +269,58 @@ async fn gather_diff(opts: &ReviewOptions) -> Result<String> {
     let mut unstaged = agiworkforce_worktree::host_git_async();
     unstaged.arg("diff").args(NO_DRIVERS);
     let unstaged = review_git(unstaged).await?;
+    let mut untracked = agiworkforce_worktree::host_git_async();
+    untracked.args(["ls-files", "--others", "--exclude-standard", "-z"]);
+    let untracked = review_git(untracked).await?;
     Ok(format!(
-        "{}{}",
+        "{}{}{}",
         String::from_utf8_lossy(&staged.stdout),
-        String::from_utf8_lossy(&unstaged.stdout)
+        String::from_utf8_lossy(&unstaged.stdout),
+        untracked_as_additions(&cwd, &untracked.stdout)
     ))
+}
+
+/// Files git does not track yet, named NUL-separated in `listing` relative to
+/// `root`, as the diff that would add them. A link is never followed, and a
+/// file the credential policy covers is named without its contents.
+fn untracked_as_additions(root: &Path, listing: &[u8]) -> String {
+    let mut diff = String::new();
+    for name in listing
+        .split(|byte| *byte == 0)
+        .filter(|name| !name.is_empty())
+    {
+        let name = String::from_utf8_lossy(name);
+        diff.push_str(&format!(
+            "diff --git a/{name} b/{name}\nnew file, not yet tracked by git\n"
+        ));
+        if crate::sensitive_files::is_sensitive_file(&name) {
+            diff.push_str("[contents not sent: the credential-file policy covers this file]\n");
+            continue;
+        }
+        let path = root.join(&*name);
+        let text = std::fs::symlink_metadata(&path)
+            .ok()
+            .filter(|found| found.is_file() && found.len() <= REVIEW_DIFF_LIMIT_BYTES as u64)
+            .and_then(|_| std::fs::read(&path).ok())
+            .and_then(|bytes| String::from_utf8(bytes).ok());
+        let Some(text) = text else {
+            diff.push_str(&format!(
+                "[contents not sent: a link, binary, unreadable or larger than \
+                 {REVIEW_DIFF_LIMIT_BYTES} bytes]\n"
+            ));
+            continue;
+        };
+        diff.push_str(&format!(
+            "--- /dev/null\n+++ b/{name}\n@@ -0,0 +1,{} @@\n",
+            text.lines().count()
+        ));
+        for line in text.lines() {
+            diff.push('+');
+            diff.push_str(line);
+            diff.push('\n');
+        }
+    }
+    diff
 }
 
 async fn review_git(command: tokio::process::Command) -> Result<std::process::Output> {
@@ -385,6 +433,19 @@ fn format_review(review: &ReviewOutput) -> String {
             line,
             clean(&issue.description)
         ));
+        if let Some(suggestion) = issue
+            .suggestion
+            .as_deref()
+            .filter(|text| !text.trim().is_empty())
+        {
+            out.push_str(&format!("\n     Suggestion: {}", clean(suggestion)));
+        }
+    }
+    if !review.suggestions.is_empty() {
+        out.push_str("\nSuggestions:");
+        for suggestion in &review.suggestions {
+            out.push_str(&format!("\n  - {}", clean(suggestion)));
+        }
     }
     out
 }
@@ -542,5 +603,82 @@ mod tests {
         assert!(out.contains("summary"));
         assert!(out.contains("src/lib.rs"));
         assert!(out.contains("looks fine"));
+    }
+
+    #[test]
+    fn the_terminal_review_shows_every_suggestion() {
+        let review = ReviewOutput {
+            overall_explanation: "One issue.".to_string(),
+            severity: "minor".to_string(),
+            issues: vec![issue_with("")],
+            suggestions: vec!["add a test for the empty case".to_string()],
+        };
+
+        let out = format_review(&review);
+
+        assert!(out.contains("Suggestion: do this"), "{out}");
+        assert!(out.contains("add a test for the empty case"), "{out}");
+    }
+
+    #[tokio::test]
+    async fn a_new_untracked_file_is_reviewed_as_an_addition() {
+        let repository = tempfile::tempdir().expect("temp dir");
+        let mut init = agiworkforce_worktree::host_git_async();
+        init.current_dir(repository.path())
+            .args(["init", "--quiet"]);
+        review_git(init).await.expect("git init");
+        std::fs::create_dir(repository.path().join("src")).expect("src");
+        std::fs::write(
+            repository.path().join("src").join("new_feature.rs"),
+            "pub fn added() {}\n",
+        )
+        .expect("new file");
+        std::fs::write(
+            repository.path().join(".env"),
+            "TOKEN=EXAMPLE-NOT-A-SECRET\n",
+        )
+        .expect("env file");
+
+        let mut listing = agiworkforce_worktree::host_git_async();
+        listing.current_dir(repository.path()).args([
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "-z",
+        ]);
+        let listing = review_git(listing).await.expect("ls-files");
+        let diff = untracked_as_additions(repository.path(), &listing.stdout);
+
+        assert!(diff.contains("+++ b/src/new_feature.rs"), "{diff}");
+        assert!(diff.contains("+pub fn added() {}"), "{diff}");
+        assert!(!diff.contains("EXAMPLE-NOT-A-SECRET"), "{diff}");
+
+        let credential = untracked_as_additions(repository.path(), b".env\0");
+        assert!(
+            credential.contains("diff --git a/.env b/.env"),
+            "{credential}"
+        );
+        assert!(!credential.contains("EXAMPLE-NOT-A-SECRET"), "{credential}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_untracked_link_is_named_but_never_followed() {
+        let repository = tempfile::tempdir().expect("temp dir");
+        let outside = tempfile::tempdir().expect("outside");
+        std::fs::write(outside.path().join("private.txt"), "OUTSIDE-THE-REPO\n").expect("target");
+        std::os::unix::fs::symlink(
+            outside.path().join("private.txt"),
+            repository.path().join("linked.txt"),
+        )
+        .expect("link");
+
+        let diff = untracked_as_additions(repository.path(), b"linked.txt\0");
+
+        assert!(
+            diff.contains("diff --git a/linked.txt b/linked.txt"),
+            "{diff}"
+        );
+        assert!(!diff.contains("OUTSIDE-THE-REPO"), "{diff}");
     }
 }

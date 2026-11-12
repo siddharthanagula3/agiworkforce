@@ -227,6 +227,7 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
 
     if (subcommand == "push" && git_push_has_force_arg(sub_args))
         || normalized_sub.starts_with("reset --hard")
+        || git_discards_work(subcommand, sub_args)
     {
         return CommandSafety::Dangerous;
     }
@@ -261,6 +262,38 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
     }
 
     CommandSafety::Unknown
+}
+
+fn git_discards_work(subcommand: &str, args: &[&str]) -> bool {
+    let short_flag = |flag: char| {
+        args.iter()
+            .any(|arg| arg.starts_with('-') && !arg.starts_with("--") && arg.contains(flag))
+    };
+    match subcommand {
+        "stash" => matches!(args.first(), Some(&"drop") | Some(&"clear")),
+        "branch" => {
+            short_flag('D')
+                || ((short_flag('d') || args.contains(&"--delete"))
+                    && (short_flag('f') || args.contains(&"--force")))
+        }
+        "clean" => short_flag('f') || args.contains(&"--force"),
+        "restore" => {
+            let staged_only = (args.contains(&"--staged") || short_flag('S'))
+                && !(args.contains(&"--worktree") || short_flag('W'));
+            !staged_only
+        }
+        "checkout" => {
+            short_flag('f')
+                || args.contains(&"--force")
+                || args.contains(&".")
+                || args
+                    .iter()
+                    .position(|arg| *arg == "--")
+                    .is_some_and(|at| at + 1 < args.len())
+        }
+        "reset" => args.contains(&"--hard"),
+        _ => false,
+    }
 }
 
 fn git_push_has_force_arg(args: &[&str]) -> bool {
@@ -345,6 +378,45 @@ pub(super) fn classify_mv(command: &str) -> CommandSafety {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn git_commands_that_discard_work_are_dangerous() {
+        for command in [
+            "git stash drop",
+            "git stash clear",
+            "git branch -D feature",
+            "git branch --delete --force feature",
+            "git clean -fd",
+            "git clean --force",
+            "git restore src/app.rs",
+            "git restore --staged --worktree .",
+            "git checkout -- .",
+            "git checkout main -- src/app.rs",
+            "git checkout -f main",
+            "git reset HEAD~1 --hard",
+        ] {
+            assert_eq!(
+                super::super::classify_command(command),
+                CommandSafety::Dangerous,
+                "{command}"
+            );
+        }
+        for command in [
+            "git stash",
+            "git stash list",
+            "git branch -d feature",
+            "git clean -n",
+            "git restore --staged src/app.rs",
+            "git checkout main",
+            "git checkout -b feature",
+        ] {
+            assert_ne!(
+                super::super::classify_command(command),
+                CommandSafety::Dangerous,
+                "{command}"
+            );
+        }
+    }
 
     #[test]
     fn force_push_arguments_require_dangerous_classification() {

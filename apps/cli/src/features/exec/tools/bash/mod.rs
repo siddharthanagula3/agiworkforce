@@ -50,7 +50,7 @@ pub(super) async fn execute_run_command(
     if let Some(dir) = &working_dir {
         details.push(format!("in {}", dir.display()));
     }
-    let require_confirmation = match approve_command(
+    if let Err(refusal) = approve_command(
         "run_command",
         command,
         details,
@@ -59,9 +59,8 @@ pub(super) async fn execute_run_command(
     )
     .await?
     {
-        Ok(require_confirmation) => require_confirmation,
-        Err(refusal) => return Ok(refusal),
-    };
+        return Ok(refusal);
+    }
 
     // Most command strings are a program and its operands, and handing those to
     // `sh -c` is the only reason an operand can be read as syntax. When the
@@ -101,17 +100,20 @@ pub(super) async fn execute_run_command(
             }
         }
     };
-    let result: std::io::Result<std::process::Output> = {
-        if !unrestricted {
-            if let Some(refusal) = internal_destination_refusal(command) {
-                return Ok(refusal);
-            }
+    if !unrestricted {
+        if let Some(refusal) = internal_destination_refusal(command) {
+            return Ok(refusal);
         }
-        let network = if unrestricted {
-            crate::sandbox::NetworkPolicy::Allow
-        } else {
-            sandbox_network_policy(command, require_confirmation, approval_callback).await
-        };
+    }
+    let network = if unrestricted {
+        crate::sandbox::NetworkPolicy::Allow
+    } else {
+        sandbox_network_policy(command, require_confirmation, approval_callback).await
+    };
+    let network_notice = (network == crate::sandbox::NetworkPolicy::Deny
+        && command_requests_network(command))
+    .then(|| network_blocked_notice(require_confirmation));
+    let result: std::io::Result<std::process::Output> = {
         let run_in = working_dir.clone().unwrap_or_else(|| cwd.clone());
         let cmd = command.to_string();
         let structured = structured.clone();
@@ -196,16 +198,18 @@ pub(super) async fn execute_run_command(
             }
 
             let combined = truncate_output_with_save("run_command", combined);
-            let notice = workspace_notice
+            let notice: String = workspace_notice
+                .into_iter()
+                .chain(network_notice)
                 .map(|notice| format!("{notice}\n"))
-                .unwrap_or_default();
+                .collect();
 
             Ok(ToolResult {
                 tool_name: "run_command".to_string(),
                 success: output.status.success(),
                 output: format!(
                     "{notice}Exit code: {}\n{}",
-                    output.status.code().unwrap_or(-1),
+                    exit_description(output.status),
                     combined
                 ),
             })
@@ -224,6 +228,32 @@ pub(super) async fn execute_run_command(
             ),
         }),
     }
+}
+
+fn network_blocked_notice(could_ask: bool) -> String {
+    if could_ask {
+        "The sandbox blocked network access for this command because it was not allowed; \
+         a failure to resolve or connect below comes from that."
+            .to_string()
+    } else {
+        "The sandbox blocked network access for this command: this session runs without \
+         prompts, so no one could allow it. A failure to resolve or connect below comes from that."
+            .to_string()
+    }
+}
+
+fn exit_description(status: std::process::ExitStatus) -> String {
+    if let Some(code) = status.code() {
+        return code.to_string();
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return format!("none, killed by signal {signal}");
+        }
+    }
+    "none".to_string()
 }
 
 fn internal_destination_refusal(command: &str) -> Option<ToolResult> {
@@ -1536,5 +1566,84 @@ mod tests {
         let evaluation =
             crate::features::exec::exec_policy::evaluate_command(&policy, "echo 'open");
         assert!(!evaluation.explicit_prompt_rule);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_command_killed_by_a_signal_names_the_signal() {
+        use std::os::unix::process::ExitStatusExt;
+        assert_eq!(
+            exit_description(std::process::ExitStatus::from_raw(11)),
+            "none, killed by signal 11"
+        );
+        assert_eq!(
+            exit_description(std::process::ExitStatus::from_raw(256)),
+            "1"
+        );
+    }
+
+    #[test]
+    fn a_saved_allow_does_not_cover_a_longer_command_that_discards_work() {
+        let mut perms = crate::permissions::PermissionStore::default();
+        perms.allow_always("git stash");
+        perms.allow_always("git checkout main");
+        for command in [
+            "git stash clear",
+            "git stash drop",
+            "git checkout main -- .",
+        ] {
+            assert_eq!(
+                saved_command_decision(&perms, command, classify_command(command)),
+                None,
+                "{command}"
+            );
+        }
+        assert_eq!(
+            saved_command_decision(&perms, "git stash", classify_command("git stash")),
+            Some(true)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_network_command_says_when_the_sandbox_blocked_its_network() {
+        if !sandbox_available() || !sandbox_executes().await {
+            return;
+        }
+        let mut args = HashMap::new();
+        args.insert("command".to_string(), "curl --version".to_string());
+
+        let unasked = execute_run_command(&args, false, None)
+            .await
+            .expect("tool result");
+        assert!(
+            unasked.output.contains("no one could allow it"),
+            "{}",
+            unasked.output
+        );
+
+        let network_requests = Arc::new(Mutex::new(0usize));
+        let seen = Arc::clone(&network_requests);
+        let callback: ApprovalCallback = Arc::new(move |request: ApprovalRequest| {
+            let network = matches!(request.kind, ApprovalRequestKind::Network { .. });
+            if network {
+                *seen.lock().expect("count") += 1;
+            }
+            Box::pin(async move {
+                if network {
+                    ApprovalDecision::Deny
+                } else {
+                    ApprovalDecision::AllowOnce
+                }
+            })
+        });
+        let declined = execute_run_command(&args, true, Some(&callback))
+            .await
+            .expect("tool result");
+        assert_eq!(*network_requests.lock().expect("count"), 1);
+        assert!(
+            declined.output.contains("because it was not allowed"),
+            "{}",
+            declined.output
+        );
     }
 }
