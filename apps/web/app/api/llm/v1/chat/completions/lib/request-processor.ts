@@ -5324,13 +5324,13 @@ async function processAdmittedRequest(
     !checkModelTierAccess(chatRequest.model, subscription.plan_tier)
   ) {
     const requiredTierKey = getMinimumRequiredTier(chatRequest.model) ?? 'pro';
-    const requiredTier = requiredTierKey?.toUpperCase() ?? 'PRO';
+    const requiredPlan = BILLING_PLAN_PRICING[requiredTierKey].label;
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: {
-            message: `Model ${chatRequest.model} is on the ${requiredTier} plan, not yours. Choose a model your plan includes. ${PAID_UPGRADE_ACCESS_NOTE}`,
+            message: `Model ${chatRequest.model} is on the ${requiredPlan} plan, not yours. Choose a model your plan includes. ${PAID_UPGRADE_ACCESS_NOTE}`,
             type: 'invalid_request_error',
             code: 'model_not_available',
             requiredTier: requiredTierKey,
