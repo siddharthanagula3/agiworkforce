@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -11,75 +12,96 @@ import {
   NATIVE_RECONNECT_MAX_DELAY_MS,
 } from '../src/features/native-bridge/reconnect';
 
-interface Tab {
-  id?: number;
-}
-
-class ConnectionStateBroadcaster {
-  private readonly sendToTab: (tabId: number, msg: Record<string, unknown>) => Promise<void>;
-  private readonly queryTabs: () => Promise<Tab[]>;
-
-  constructor(opts: {
-    sendToTab: (tabId: number, msg: Record<string, unknown>) => Promise<void>;
-    queryTabs: () => Promise<Tab[]>;
-  }) {
-    this.sendToTab = opts.sendToTab;
-    this.queryTabs = opts.queryTabs;
-  }
-
-  async broadcast(connected: boolean): Promise<void> {
-    const tabs = await this.queryTabs();
-    await Promise.all(
-      tabs
-        .filter((t) => t.id != null)
-        .map((t) =>
-          this.sendToTab(t.id!, {
-            type: 'CONNECTION_STATUS_CHANGED',
-            connected,
-            timestamp: Date.now(),
-          }).catch(() => {}),
-        ),
-    );
-  }
-}
-
-async function withConnectionTimeout<T>(
-  connectFn: () => Promise<T>,
-  timeoutMs: number,
-): Promise<T> {
-  let timerId: ReturnType<typeof setTimeout> | undefined;
-
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timerId = setTimeout(
-      () => reject(new Error(`Connection timed out after ${timeoutMs}ms`)),
-      timeoutMs,
-    );
-  });
-
-  try {
-    const result = await Promise.race([connectFn(), timeoutPromise]);
-    return result;
-  } finally {
-    if (timerId !== undefined) clearTimeout(timerId);
-  }
-}
-
-interface ConnectionStatusResponse {
-  nativeConnected: boolean;
+type WorkerState = {
+  nativePort: { disconnect: () => void } | null;
+  isNativeConnected: boolean;
   connectionStatus: 'connected' | 'disconnected' | 'connecting' | 'error';
-  tabId?: number;
-  bridgeUrl?: string;
-}
+  lastNativeError: string | null;
+};
 
-function buildStatusResponse(
-  connected: boolean,
-  extra: Partial<ConnectionStatusResponse> = {},
-): ConnectionStatusResponse {
-  return {
-    nativeConnected: connected,
-    connectionStatus: connected ? 'connected' : 'disconnected',
-    ...extra,
+function workerConnection(options: {
+  tabs?: Array<{ id?: number }>;
+  queryFails?: boolean;
+  connectsAfterPolls?: number | null;
+}) {
+  const source = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+    'utf8',
+  );
+  const program = ts.createSourceFile('background.ts', source, ts.ScriptTarget.Latest, true);
+  const wanted = [
+    'notifyConnectionStatusChange',
+    'waitForNativeConnection',
+    'triggerManualReconnect',
+  ];
+  const found = new Map<string, string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name && wanted.includes(node.name.text))
+      found.set(node.name.text, node.getText(program));
+    ts.forEachChild(node, visit);
   };
+  visit(program);
+  expect([...found.keys()].sort()).toEqual([...wanted].sort());
+  const compiled = ts.transpileModule(
+    `${[...found.values()].join('\n')}\nreturn { notifyConnectionStatusChange, waitForNativeConnection, triggerManualReconnect };`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+  );
+  const state: WorkerState = {
+    nativePort: null,
+    isNativeConnected: false,
+    connectionStatus: 'disconnected',
+    lastNativeError: null,
+  };
+  const runtimeMessages: unknown[] = [];
+  const tabMessages: Array<[number, unknown]> = [];
+  let polls = 0;
+  const previousPort = { disconnect: vi.fn() };
+  const dependencies = {
+    state,
+    chrome: {
+      runtime: {
+        lastError: undefined,
+        sendMessage: vi.fn(async (message: unknown) => {
+          runtimeMessages.push(message);
+        }),
+      },
+      tabs: {
+        query: vi.fn(async () => {
+          if (options.queryFails) throw new Error('Tabs unavailable');
+          return options.tabs ?? [];
+        }),
+        sendMessage: vi.fn((tabId: number, message: unknown, callback: () => void) => {
+          tabMessages.push([tabId, message]);
+          callback();
+        }),
+      },
+    },
+    logger: { debug: vi.fn(), warn: vi.fn() },
+    sleep: vi.fn(async () => {
+      polls += 1;
+      if (options.connectsAfterPolls != null && polls >= options.connectsAfterPolls) {
+        state.nativePort = { disconnect: vi.fn() };
+        state.isNativeConnected = true;
+      }
+    }),
+    NATIVE_CONNECT_POLL_INTERVAL_MS: 0,
+    NATIVE_CONNECT_MAX_WAIT_MS: 50,
+    activePairedBrowserCommand: null,
+    resetNativeReconnectState: vi.fn(),
+    nativeSessionSecret: 'secret',
+    _bgCtx: { nativeHandshakeInFlight: true },
+    rejectPendingNativeRequests: vi.fn(),
+    connectToNativeHost: vi.fn(),
+  };
+  // llm-guardrail-allow: executes repository-owned worker code inside this isolated test fixture.
+  const worker = new Function(...Object.keys(dependencies), compiled.outputText)(
+    ...Object.values(dependencies),
+  ) as {
+    notifyConnectionStatusChange: () => Promise<void>;
+    waitForNativeConnection: (timeoutMs: number) => Promise<boolean>;
+    triggerManualReconnect: () => Promise<Record<string, unknown>>;
+  };
+  return { worker, state, runtimeMessages, tabMessages, dependencies, previousPort };
 }
 
 describe('isPermanentNativeDisconnect', () => {
@@ -158,131 +180,89 @@ describe('nativeReconnectDelayMs', () => {
   });
 });
 
-describe('ConnectionStateBroadcaster', () => {
-  it('broadcasts to all tabs with a valid id', async () => {
-    const sendToTab = vi.fn().mockResolvedValue(undefined);
-    const queryTabs = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 3 }]);
+describe('notifyConnectionStatusChange (service worker)', () => {
+  it('tells the extension pages and every tab with an id', async () => {
+    const test = workerConnection({ tabs: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+    test.state.isNativeConnected = true;
+    test.state.connectionStatus = 'connected';
+    await test.worker.notifyConnectionStatusChange();
 
-    const broadcaster = new ConnectionStateBroadcaster({ sendToTab, queryTabs });
-    await broadcaster.broadcast(true);
-
-    expect(sendToTab).toHaveBeenCalledTimes(3);
-    expect(sendToTab).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({ type: 'CONNECTION_STATUS_CHANGED', connected: true }),
-    );
+    const payload = { type: 'CONNECTION_STATUS_CHANGED', connected: true, status: 'connected' };
+    expect(test.runtimeMessages).toEqual([payload]);
+    expect(test.tabMessages).toEqual([
+      [1, payload],
+      [2, payload],
+      [3, payload],
+    ]);
   });
 
   it('skips tabs that do not have an id', async () => {
-    const sendToTab = vi.fn().mockResolvedValue(undefined);
-    const queryTabs = vi.fn().mockResolvedValue([{ id: 1 }, { id: undefined }, { id: 3 }]);
-
-    const broadcaster = new ConnectionStateBroadcaster({ sendToTab, queryTabs });
-    await broadcaster.broadcast(false);
-
-    expect(sendToTab).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not reject when a tab throws on sendMessage (closed tab)', async () => {
-    const sendToTab = vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error('Tab closed'));
-    const queryTabs = vi.fn().mockResolvedValue([{ id: 1 }, { id: 2 }]);
-
-    const broadcaster = new ConnectionStateBroadcaster({ sendToTab, queryTabs });
-    await expect(broadcaster.broadcast(true)).resolves.toBeUndefined();
+    const test = workerConnection({ tabs: [{ id: 1 }, { id: undefined }, { id: 3 }] });
+    await test.worker.notifyConnectionStatusChange();
+    expect(test.tabMessages.map(([tabId]) => tabId)).toEqual([1, 3]);
   });
 
   it('broadcasts connected=false on disconnect', async () => {
-    const sendToTab = vi.fn().mockResolvedValue(undefined);
-    const queryTabs = vi.fn().mockResolvedValue([{ id: 5 }]);
-
-    const broadcaster = new ConnectionStateBroadcaster({ sendToTab, queryTabs });
-    await broadcaster.broadcast(false);
-
-    expect(sendToTab).toHaveBeenCalledWith(5, expect.objectContaining({ connected: false }));
+    const test = workerConnection({ tabs: [{ id: 5 }] });
+    await test.worker.notifyConnectionStatusChange();
+    expect(test.tabMessages).toEqual([
+      [5, { type: 'CONNECTION_STATUS_CHANGED', connected: false, status: 'disconnected' }],
+    ]);
   });
 
-  it('includes a timestamp in each broadcast message', async () => {
-    const sendToTab = vi.fn().mockResolvedValue(undefined);
-    const queryTabs = vi.fn().mockResolvedValue([{ id: 1 }]);
-
-    const before = Date.now();
-    const broadcaster = new ConnectionStateBroadcaster({ sendToTab, queryTabs });
-    await broadcaster.broadcast(true);
-    const after = Date.now();
-
-    const msg = sendToTab.mock.calls[0][1] as { timestamp: number };
-    expect(msg.timestamp).toBeGreaterThanOrEqual(before);
-    expect(msg.timestamp).toBeLessThanOrEqual(after);
+  it('does not reject when the tabs cannot be listed', async () => {
+    const test = workerConnection({ queryFails: true });
+    await expect(test.worker.notifyConnectionStatusChange()).resolves.toBeUndefined();
+    expect(test.dependencies.logger.warn).toHaveBeenCalled();
+    expect(test.runtimeMessages).toHaveLength(1);
   });
 
-  it('handles empty tab list without error', async () => {
-    const sendToTab = vi.fn();
-    const queryTabs = vi.fn().mockResolvedValue([]);
-
-    const broadcaster = new ConnectionStateBroadcaster({ sendToTab, queryTabs });
-    await expect(broadcaster.broadcast(true)).resolves.toBeUndefined();
-    expect(sendToTab).not.toHaveBeenCalled();
+  it('handles an empty tab list without error', async () => {
+    const test = workerConnection({ tabs: [] });
+    await expect(test.worker.notifyConnectionStatusChange()).resolves.toBeUndefined();
+    expect(test.tabMessages).toHaveLength(0);
   });
 });
 
-describe('withConnectionTimeout', () => {
-  it('resolves with the result of a fast connect fn', async () => {
-    const result = await withConnectionTimeout(() => Promise.resolve('ok'), 1000);
-    expect(result).toBe('ok');
+describe('waitForNativeConnection (service worker)', () => {
+  it('resolves true once the native port is connected', async () => {
+    const test = workerConnection({ connectsAfterPolls: 2 });
+    await expect(test.worker.waitForNativeConnection(1_000)).resolves.toBe(true);
   });
 
-  it('rejects with a timeout error when connect fn is too slow', async () => {
-    vi.useFakeTimers();
-
-    const slow = new Promise<string>((resolve) => setTimeout(() => resolve('late'), 5000));
-    const race = withConnectionTimeout(() => slow, 100);
-
-    vi.advanceTimersByTime(100);
-
-    await expect(race).rejects.toThrow('Connection timed out after 100ms');
-    vi.useRealTimers();
-  });
-
-  it('propagates rejection from the connect fn', async () => {
-    const failing = withConnectionTimeout(() => Promise.reject(new Error('host crashed')), 1000);
-    await expect(failing).rejects.toThrow('host crashed');
-  });
-
-  it('clears the timer after success to avoid memory leaks', async () => {
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
-    await withConnectionTimeout(() => Promise.resolve(42), 5000);
-    expect(clearTimeoutSpy).toHaveBeenCalled();
-    clearTimeoutSpy.mockRestore();
-  });
-
-  it('clears the timer after failure to avoid memory leaks', async () => {
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout');
-    await withConnectionTimeout(() => Promise.reject(new Error('fail')), 5000).catch(() => {});
-    expect(clearTimeoutSpy).toHaveBeenCalled();
-    clearTimeoutSpy.mockRestore();
+  it('resolves false when the host never connects within the wait', async () => {
+    const test = workerConnection({ connectsAfterPolls: null });
+    await expect(test.worker.waitForNativeConnection(20)).resolves.toBe(false);
   });
 });
 
-describe('buildStatusResponse', () => {
-  it('sets nativeConnected=true and connectionStatus="connected" for connected', () => {
-    const resp = buildStatusResponse(true);
-    expect(resp.nativeConnected).toBe(true);
-    expect(resp.connectionStatus).toBe('connected');
+describe('triggerManualReconnect status response (service worker)', () => {
+  it('reports connected after the host answers', async () => {
+    const test = workerConnection({ connectsAfterPolls: 1 });
+    test.state.nativePort = test.previousPort;
+    const response = await test.worker.triggerManualReconnect();
+    expect(response).toEqual({
+      success: true,
+      nativeConnected: true,
+      connectionStatus: 'connected',
+    });
+    expect(test.previousPort.disconnect).toHaveBeenCalled();
+    expect(test.dependencies.rejectPendingNativeRequests).toHaveBeenCalledWith(
+      test.previousPort,
+      'The AGI Desktop connection was replaced.',
+    );
+    expect(test.dependencies.connectToNativeHost).toHaveBeenCalledTimes(1);
+    expect(test.runtimeMessages[0]).toMatchObject({ status: 'connecting', connected: false });
   });
 
-  it('sets nativeConnected=false and connectionStatus="disconnected" for disconnected', () => {
-    const resp = buildStatusResponse(false);
-    expect(resp.nativeConnected).toBe(false);
-    expect(resp.connectionStatus).toBe('disconnected');
-  });
-
-  it('allows extra fields to be merged in', () => {
-    const resp = buildStatusResponse(true, { tabId: 42, bridgeUrl: 'http://localhost:8787' });
-    expect(resp.tabId).toBe(42);
-    expect(resp.bridgeUrl).toBe('http://localhost:8787');
+  it('reports the still-pending status when the host does not answer', async () => {
+    const test = workerConnection({ connectsAfterPolls: null });
+    const response = await test.worker.triggerManualReconnect();
+    expect(response).toEqual({
+      success: true,
+      nativeConnected: false,
+      connectionStatus: 'connecting',
+    });
   });
 });
 

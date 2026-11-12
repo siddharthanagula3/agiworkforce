@@ -149,7 +149,10 @@ Each line is one approval; engineering edits the page and its claim test after i
   `apps/web/app/acceptable-use/page.tsx` (about line 118) says connector tools are "capped by plan",
   while Free now has none.
 - Chrome extension history search is built opt-in (`apps/extension/src/features/computer-use/historySearch.ts`)
-  and neither `/privacy` nor `/agent-permissions` mentions it; whether it stays is in `open-questions.md`.
+  and both policy pages now describe it: `/privacy` since commit `6ade64b7b9` (with the console and
+  network lines the extension reads during browser control), and `/agent-permissions` in a Browsing
+  history row of "Computer use in Chrome" dated 2026-11-11. Approve that wording or send it to counsel;
+  whether the feature stays is in `open-questions.md`.
 
 ## [Release] GitHub environments and variables the release workflows read (F3, F4, F6 to F10)
 
@@ -158,21 +161,21 @@ Every release workflow is correct but reads configuration that does not exist: e
 `vscode-marketplace` and `chrome-web-store` are missing (`mobile-store-release` and `production-fly` exist as of
 2026-11-10), the only repository variables are the mobile ones, and repository secrets cannot be listed with the
 agent token. This entry is the configuration half of
-"Cut signed releases", "Chrome Web Store public key", "Signed protocol-7 CLI release" and the mobile store entry.
+"Cut signed releases", "Chrome Web Store public key", "Signed CLI release before the Marketplace listing" and the mobile store entry.
 **Exact action**
 
 1. Run `gh secret list` with admin rights and share the names present.
 2. Create the five environments above, each allowing its tag pattern (`v-cloud-desktop-*`/`v-desktop-*`, `v-vscode-*`, `v-ext-*`, `v-mobile-*`).
 3. `macos-release`: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`; repository `VITE_CLERK_PUBLISHABLE_KEY`.
 4. Windows signing variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` and secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`.
-5. `vscode-marketplace`: `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`; an Open VSX token.
+5. `vscode-marketplace`: `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`. Open VSX needs no token: it uses trusted publishing through an `open-vsx` environment and the repository variable `OPEN_VSX_PUBLISH` (`docs/runbooks/vscode-marketplace-publish.md`).
 6. Repository variables `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`; `chrome-web-store`: `CWS_PUBLISHER_ID`, `CWS_EXTENSION_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `CWS_SERVICE_ACCOUNT`.
 7. `mobile-store-release`: still missing secret `EXPO_TOKEN` and variable `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`; the App Store Connect and Play secrets, `ASC_APP_ID` and the live `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` are set (checked 2026-11-10). Steps: `docs/runbooks/mobile-store-first-release.md`.
-8. `NPM_TOKEN` able to publish `@agiworkforce/cli`; make the Homebrew tap public or give the release job write access.
+8. CLI: repository secret `AGI_CLI_RELEASE_SIGNING_KEY` (a P-256 key whose public half is pinned in `apps/web/public/install.sh`); optional `SENTRY_DSN_CLI`. The CLI ships only through the signed install script, so it needs no npm token or Homebrew tap. Steps: `docs/runbooks/cli-release.md`.
 
 **Where** GitHub repository settings (environments, secrets, variables); Apple, Azure, Microsoft Entra, Google Cloud, Expo, npm.
 **Needed input** Accounts and about two hours.
-**How to verify completion** Tags `v-cli-1.7.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-0.3.0`, `v-ext-1.2.0`, `v-mobile-0.0.1` each produce a green release run.
+**How to verify completion** Tags `v-cli-0.0.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-<version in apps/extension-vscode/package.json>`, `v-ext-1.2.0`, `v-mobile-0.0.1` each produce a green release run.
 **What remains after founder action** Pushing the tags and verifying each release (agent).
 **Impact** RELEASE-BLOCKING (CLI, both desktops, VS Code, Chrome, mobile)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
@@ -549,15 +552,15 @@ The published item's key is visible only in the Web Store dashboard.
 **Impact** FEATURE-BLOCKING (store-exact release only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [VS Code] Signed protocol-7 CLI release
+## [VS Code] Signed CLI release before the Marketplace listing
 
 **Why founder assistance is required**
 Publishing a signed multi-platform binary needs signing and distribution
 credentials that are not in the repository.
-**Exact action** Provide code-signing credentials and a release channel for the `agi` CLI (protocol 7, 1.7.1 or later) across the Marketplace platforms.
+**Exact action** Provide code-signing credentials and a release channel for the `agi` CLI, version `MINIMUM_SUPPORTED_RUNTIME_VERSION` or later speaking `DEVELOPER_SESSION_PROTOCOL_VERSION` (both in `packages/contracts/types/src/developer-session-versioning.ts`; 0.0.1 and protocol 8 on 2026-11-11), on every platform the Marketplace listing serves. The extension is published only after this (`docs/runbooks/vscode-marketplace-publish.md`, "Before the first submission").
 **Where** Signing accounts, release infrastructure.
 **Needed input** Credentials and a channel decision.
-**How to verify completion** The VS Code extension completes a developer-session turn against the published CLI.
+**How to verify completion** In a clean VS Code profile, **Code: Install AGI CLI** installs the published CLI and the extension completes a developer-session turn against it.
 **What remains after founder action** The release pipeline (engineering).
 **Impact** FEATURE-BLOCKING (VS Code developer sessions)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
@@ -845,21 +848,19 @@ carries a `.sig` beside each artifact and a notarized macOS build, and
 **What remains after founder action** Nothing. The download controls already
 resolve against the live release API, so they start offering the platforms the
 moment assets exist.
-**The concrete consequence, measured 2026-09-12** Both documented CLI install
-routes fail for the public right now, so this is not only about verification:
+**The concrete consequence, re-measured 2026-11-11** The CLI has no release
+at all (`gh release list` shows none), so the one documented install route,
+`apps/web/public/install.sh`, stops with "No signed AGI CLI release is
+published yet". `install.sh` also pins no release key yet, so a tag pushed
+today stops at the workflow's pinned-key check before building. Homebrew is not
+a documented route (D-2026-09-15-24) and the tap repository is still private.
+The CLI steps, including a manual build run that proves every platform before
+a key exists, are in `docs/runbooks/cli-release.md`.
 
-1. `apps/web/public/install.sh` fetches `SHA256SUMS` and `SHA256SUMS.sigstore.json`
-   before it will unpack anything. The only published CLI release carries
-   neither, so the script exits 1 with "Release signature metadata is missing;
-   refusing to install unverified bytes." The guard is correct; there is simply
-   nothing signed to verify against.
-2. The Homebrew tap repository `siddharthanagula3/homebrew-tap` is private
-   (`gh api repos/siddharthanagula3/homebrew-tap --jq .private` returns `true`),
-   so `brew install` cannot resolve it for anyone outside the account.
-
-**Impact** LAUNCH-BLOCKING (both published install paths fail, and on the
-verification path a missing file is indistinguishable from a tampered one to
-the user who is checking precisely because they do not trust the download)
+**Impact** LAUNCH-BLOCKING (the documented CLI install route has nothing to
+install, and on the verification path a missing file is indistinguishable from
+a tampered one to the user who is checking precisely because they do not trust
+the download)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 Decided 2026-09-15 (D-2026-09-15-24): public CLI and Electron releases use the signed workflows and no install path is advertised while its assets or signatures are missing; engineering removes the dangling paths from the docs now.

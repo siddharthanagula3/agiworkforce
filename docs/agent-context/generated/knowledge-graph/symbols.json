@@ -629,6 +629,9 @@
       "apps/mobile/src/ui/theme/tokens.ts",
       "apps/web/shared/components/__tests__/theme-contrast.test.ts"
     ],
+    "accentTokenFrom": [
+      "apps/mobile/src/ui/theme/tokens.ts"
+    ],
     "accept": [
       "apps/desktop/src-tauri/src/automation/computer_use/consent.rs",
       "crates/agiworkforce-mcp/src/elicitation.rs",
@@ -1213,6 +1216,9 @@
       "apps/mobile/src/features/notifications/accountFeed.ts"
     ],
     "AccountNotificationDestination": [
+      "apps/mobile/src/features/notifications/accountFeed.ts"
+    ],
+    "AccountNotificationPage": [
       "apps/mobile/src/features/notifications/accountFeed.ts"
     ],
     "AccountPersonalizationScope": [
@@ -2522,6 +2528,9 @@
     "adoptConversationDraftRevision": [
       "apps/web/features/chat/services/conversation-draft.ts"
     ],
+    "AdoptedChatToolHandoff": [
+      "apps/extension/src/types.ts"
+    ],
     "AdoptedChatTurn": [
       "apps/extension/src/types.ts"
     ],
@@ -2553,6 +2562,9 @@
     ],
     "advancedStages": [
       "scripts/probe-models.mjs"
+    ],
+    "advanceErasureTombstone": [
+      "apps/web/lib/server/account-erasure.ts"
     ],
     "AdvanceRequest": [
       "packages/ai/routing/src/promotion/index.ts",
@@ -2632,6 +2644,9 @@
     ],
     "AGENT_COLORS": [
       "apps/cli/src/agents.rs"
+    ],
+    "AGENT_COMMAND_NOT_SENT_MESSAGES": [
+      "apps/mobile/services/companion.ts"
     ],
     "AGENT_CONTEXT_FILE_CHARS": [
       "apps/web/lib/agents/agent-turn-config.ts"
@@ -2938,6 +2953,9 @@
     ],
     "AgentCommand": [
       "apps/desktop/src-tauri/src/core/agent/background_agent.rs"
+    ],
+    "AgentCommandResult": [
+      "apps/mobile/services/companion.ts"
     ],
     "agentCommandSandboxStatus": [
       "apps/desktop/src/features/settings/AgentExecutionSettings.tsx"
@@ -14775,6 +14793,9 @@
     "canReplyToTicket": [
       "apps/mobile/src/features/support/service.ts"
     ],
+    "canRerunCloudRun": [
+      "apps/mobile/src/features/tasks/taskActions.ts"
+    ],
     "canResumeScheduledTaskRunJournal": [
       "apps/extension/src/features/background/scheduled-task-runs.ts"
     ],
@@ -17877,6 +17898,9 @@
     "ChromeExtensionAuthCompletePage": [
       "apps/web/app/auth/chrome-extension/page.tsx"
     ],
+    "chromeExtensionIdFromPublicKey": [
+      "apps/extension/scripts/manifest-config.mjs"
+    ],
     "ChromeExtensionPage": [
       "apps/web/app/chrome-extension/page.tsx"
     ],
@@ -18341,6 +18365,9 @@
     ],
     "claimManualPairingToken": [
       "apps/mobile/services/manualPairing.ts"
+    ],
+    "claimModelSelection": [
+      "apps/mobile/src/features/model-picker/selectionIntent.ts"
     ],
     "ClaimOfferRequest": [
       "apps/web/lib/validations/claim-offer.ts"
@@ -19189,6 +19216,9 @@
     ],
     "clearSnapshotRefs": [
       "packages/tools/browser-tool/src/snapshot.ts"
+    ],
+    "clearStoppedImageGenerations": [
+      "apps/mobile/src/features/image/services/imageGenerationStops.ts"
     ],
     "CLERK_AUTHORIZED_PARTIES_ENV": [
       "packages/platform/identity/src/adapters/clerk.ts",
@@ -21537,6 +21567,9 @@
     "CloudCredentialUnavailableError": [
       "apps/mobile/services/apiErrors.ts"
     ],
+    "CloudDataExportDocument": [
+      "apps/mobile/services/cloudDataExport.ts"
+    ],
     "CloudDataSection": [
       "apps/desktop/src/features/settings/Privacy/CloudDataSection.tsx"
     ],
@@ -21558,6 +21591,9 @@
     "CloudError": [
       "apps/cli/src/cloud/client.rs",
       "apps/cli/src/cloud/mod.rs"
+    ],
+    "CloudExportSharingUnavailableError": [
+      "apps/mobile/services/cloudDataExport.ts"
     ],
     "cloudFailureProjection": [
       "apps/desktop/src/runtime/cloudStreamDeltas.ts"
@@ -26996,6 +27032,9 @@
       "apps/extension-vscode/src/features/connectors/connectorsClient.ts",
       "apps/extension-vscode/src/features/connectors/index.ts"
     ],
+    "connectorsComingSoon": [
+      "apps/extension/src/features/cloud-bridge/capabilityDocument.ts"
+    ],
     "connectorsComingSoonError": [
       "apps/web/lib/connectors/connector-capability.ts"
     ],
@@ -31430,6 +31469,9 @@
     "csvField": [
       "packages/ui/unified-chat/src/index.ts"
     ],
+    "CsvRecords": [
+      "apps/mobile/services/csvRecords.ts"
+    ],
     "csvSha256": [
       "scripts/ui-gaps-lib.mjs"
     ],
@@ -31928,6 +31970,9 @@
     "DATA_EXPORT_BUILD_ARCHIVE_JOB": [
       "apps/web/lib/server/data-export-archive.ts"
     ],
+    "DATA_EXPORT_COMPLETENESS_STATUSES": [
+      "packages/contracts/cloud-contracts/src/data-export.ts"
+    ],
     "DATA_EXPORT_DELIVERY_METHODS": [
       "packages/contracts/cloud-contracts/src/data-export.ts"
     ],
@@ -32082,11 +32127,26 @@
     "DataExportArchiveVolumeSchema": [
       "packages/contracts/cloud-contracts/src/data-export.ts"
     ],
+    "DataExportCompleteness": [
+      "packages/contracts/cloud-contracts/src/data-export.ts"
+    ],
+    "DataExportCompletenessSchema": [
+      "packages/contracts/cloud-contracts/src/data-export.ts"
+    ],
+    "DataExportCompletenessStatus": [
+      "packages/contracts/cloud-contracts/src/data-export.ts"
+    ],
     "DataExportDelivery": [
       "packages/contracts/cloud-contracts/src/data-export.ts"
     ],
     "DataExportReadyEmailInput": [
       "apps/web/lib/services/notification-email-service.ts"
+    ],
+    "DataExportResponse": [
+      "packages/contracts/cloud-contracts/src/data-export.ts"
+    ],
+    "DataExportResponseSchema": [
+      "packages/contracts/cloud-contracts/src/data-export.ts"
     ],
     "DataExportRow": [
       "apps/web/features/settings/components/DataExportRow.tsx"
@@ -35632,6 +35692,9 @@
     ],
     "describeOutboundRefusal": [
       "apps/extension-vscode/src/core/outboundContentGuard.ts"
+    ],
+    "describePartialCloudDataExport": [
+      "apps/mobile/services/cloudDataExport.ts"
     ],
     "describePasswordPolicy": [
       "apps/desktop/src/features/settings/masterPasswordVault.ts"
@@ -41986,6 +42049,15 @@
       "packages/contracts/compliance/src/index.ts",
       "packages/contracts/compliance/src/media-provenance.ts"
     ],
+    "EMERGENCY_STOP_NOT_SENT_MESSAGES": [
+      "apps/mobile/services/companion.ts"
+    ],
+    "EMERGENCY_STOP_OFFLINE_NOTICE": [
+      "apps/mobile/src/features/companion/components/EmergencyStopButton.tsx"
+    ],
+    "EmergencyStopButton": [
+      "apps/mobile/src/features/companion/components/EmergencyStopButton.tsx"
+    ],
     "emit": [
       "apps/cli/src/agent_events.rs",
       "apps/cli/src/sdk_io/ndjson.rs",
@@ -43101,6 +43173,9 @@
     ],
     "ErasureReplayReport": [
       "apps/web/lib/server/erasure-tombstones.ts"
+    ],
+    "ErasureScope": [
+      "apps/web/lib/server/account-erasure.ts"
     ],
     "ErasureTombstoneResult": [
       "apps/web/lib/server/account-erasure.ts"
@@ -48280,6 +48355,9 @@
     "first_billable_token": [
       "apps/cli/src/model_catalog.rs"
     ],
+    "FIRST_DRAFT_ARCHIVE_SUFFIX": [
+      "apps/extension/scripts/manifest-config.mjs"
+    ],
     "FIRST_LOAD_GIVE_UP_AFTER_MS": [
       "apps/desktop/electron/firstLoadGuard.ts"
     ],
@@ -51819,6 +51897,9 @@
     ],
     "GeneratedVideo": [
       "apps/mobile/src/features/chat/components/GeneratedVideo.tsx",
+      "apps/mobile/src/features/video/services/videogen.ts"
+    ],
+    "generatedVideoFromStatus": [
       "apps/mobile/src/features/video/services/videogen.ts"
     ],
     "GeneratedVideoProps": [
@@ -59365,6 +59446,9 @@
     "IMAGE_QUALITIES": [
       "apps/cli/src/cloud/image.rs"
     ],
+    "IMAGE_REFERENCE_UNAVAILABLE_MESSAGE": [
+      "apps/mobile/src/features/chat/actions/mediaGenerationError.ts"
+    ],
     "IMAGE_RETRY_PATH": [
       "apps/cli/src/cloud/image.rs"
     ],
@@ -59551,6 +59635,9 @@
       "apps/web/app/api/media/image/lib/managed-image-generation.ts",
       "apps/web/features/media/services/media-api-service.ts"
     ],
+    "ImageGenerationStoppedError": [
+      "apps/mobile/src/features/image/services/imagegen.ts"
+    ],
     "ImageGenerationTurnDependencies": [
       "apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts"
     ],
@@ -59671,6 +59758,9 @@
     ],
     "ImageResultTranscriptRecovery": [
       "apps/web/features/chat/stores/image-transcript-recovery-store.ts"
+    ],
+    "ImageRetryFallback": [
+      "apps/mobile/src/features/chat/actions/imageRetryFallback.ts"
     ],
     "ImageRevisionRequest": [
       "apps/web/features/chat/components/ImageGenerationCard.tsx",
@@ -63851,6 +63941,9 @@
     "isImageGenerationJobRetryable": [
       "apps/web/lib/server/image-generation-jobs.ts"
     ],
+    "isImageGenerationStopped": [
+      "apps/mobile/src/features/image/services/imageGenerationStops.ts"
+    ],
     "isImageJobAttemptDue": [
       "apps/web/app/api/media/image/lib/image-job-executor.ts"
     ],
@@ -65472,6 +65565,9 @@
     "isTicketStatus": [
       "packages/contracts/cloud-contracts/src/support.ts"
     ],
+    "isTimestampUuidCursor": [
+      "apps/web/lib/identity/pagination.ts"
+    ],
     "isToolApprovalPolicy": [
       "apps/web/shared/types/toolApprovalPolicy.ts",
       "packages/contracts/types/src/tool-approval-policy.ts"
@@ -66836,6 +66932,9 @@
     ],
     "LauncherPosition": [
       "apps/extension/src/features/content/in-page-panel/launcher.ts"
+    ],
+    "launchExtension": [
+      "apps/extension/e2e/extension-harness.mjs"
     ],
     "LaunchHookTests": [
       ".codex/hooks/test_launch.py"
@@ -70127,6 +70226,9 @@
       "scripts/check-concept-registry.mjs",
       "scripts/check-domain-ownership.mjs",
       "scripts/check-migration-table-privileges.mjs"
+    ],
+    "loadRerunGoal": [
+      "apps/mobile/src/features/tasks/taskActions.ts"
     ],
     "loadRetiredModels": [
       "packages/ai/model-registry/scripts/compile.mjs"
@@ -75880,6 +75982,9 @@
     "MAX_HISTORY_CONTENT_CHARS": [
       "apps/extension/src/features/background/conversation-history.ts"
     ],
+    "MAX_HISTORY_ERROR_TEXT_CHARS": [
+      "apps/extension/src/features/background/conversation-history.ts"
+    ],
     "MAX_HISTORY_QUERY_CHARS": [
       "apps/extension/src/features/computer-use/historySearch.ts"
     ],
@@ -79973,6 +80078,9 @@
     "MicrophoneRow": [
       "apps/extension/src/features/options/microphone-section.ts"
     ],
+    "MICROSECOND_SORT_KEY_FORMAT": [
+      "apps/web/lib/identity/pagination.ts"
+    ],
     "MICROUSD_PER_CENT": [
       "packages/contracts/types/src/rate-card.ts"
     ],
@@ -80722,6 +80830,9 @@
       "apps/mobile/src/features/research/index.ts",
       "apps/mobile/src/features/research/service.ts"
     ],
+    "MobileResearchReportsPage": [
+      "apps/mobile/src/features/research/service.ts"
+    ],
     "MobileSessionLabelInput": [
       "apps/mobile/src/features/chat/utils/sessionLabeling.ts"
     ],
@@ -81360,6 +81471,9 @@
       "crates/agiworkforce-protocol/src/openai_models.rs"
     ],
     "ModelInstallJob": [
+      "apps/mobile/src/features/model-picker/installStore.ts"
+    ],
+    "ModelInstallObserver": [
       "apps/mobile/src/features/model-picker/installStore.ts"
     ],
     "ModelInstallStatus": [
@@ -88975,6 +89089,9 @@
     "parseCsv": [
       "scripts/ui-gaps-lib.mjs"
     ],
+    "parseCsvRecords": [
+      "apps/mobile/services/csvRecords.ts"
+    ],
     "parseCursor": [
       "apps/web/features/plugins/server/directory/query.ts"
     ],
@@ -89911,6 +90028,9 @@
     ],
     "PartialArtifactFields": [
       "apps/desktop/src/runtime/partialArtifactArgs.ts"
+    ],
+    "PartialCloudDataExportError": [
+      "apps/mobile/services/cloudDataExport.ts"
     ],
     "partialResponseOf": [
       "tools/evals/src/provider.ts"
@@ -92175,6 +92295,12 @@
     ],
     "PlanChangeSummary": [
       "apps/web/features/billing/lib/plan-display.ts"
+    ],
+    "PlanCheck": [
+      "apps/mobile/src/features/billing/planCheck.ts"
+    ],
+    "planCheckOf": [
+      "apps/mobile/src/features/billing/planCheck.ts"
     ],
     "planCheckoutReady": [
       "apps/web/features/billing/lib/localized-pricing.ts"
@@ -100656,6 +100782,9 @@
     "readCookiePreferences": [
       "apps/web/shared/lib/cookie-consent.ts"
     ],
+    "readCopyrightName": [
+      "scripts/check-product-names.mjs"
+    ],
     "readCostOperations": [
       "apps/web/lib/services/cost-rollups.ts"
     ],
@@ -101517,6 +101646,9 @@
     ],
     "readPngRenderIdentity": [
       "apps/web/lib/e2b/png-render-identity.ts"
+    ],
+    "readPngSize": [
+      "apps/extension/store-assets/png-size.mjs"
     ],
     "readPolicyDefaults": [
       "scripts/check-retry-semantics.mjs"
@@ -105309,6 +105441,9 @@
     "rememberShownTo": [
       "apps/web/features/chat/lib/account-notice.ts"
     ],
+    "rememberStoppedImageGeneration": [
+      "apps/mobile/src/features/image/services/imageGenerationStops.ts"
+    ],
     "rememberTypedText": [
       "apps/extension-vscode/src/features/sidebar-webview/typedMessages.ts"
     ],
@@ -106346,6 +106481,9 @@
     "renderRetentionMatrixMarkdown": [
       "apps/web/lib/services/deletion-manifest.ts"
     ],
+    "renderSamplePage": [
+      "apps/extension/store-assets/src/sample-site.mjs"
+    ],
     "renderShortcutPrompt": [
       "apps/extension/src/features/side-panel/pageCommands.ts"
     ],
@@ -106381,6 +106519,9 @@
     ],
     "reopen": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
+    ],
+    "reopenBrowserActivity": [
+      "apps/extension/src/features/side-panel/chat-state.ts"
     ],
     "reopenClosedChatTab": [
       "apps/web/features/desktop-host/lib/chat-tab-strip.ts"
@@ -107607,9 +107748,6 @@
       "packages/platform/data-layer/src/search/rank.ts",
       "packages/platform/data-layer/src/search/types.ts"
     ],
-    "rerunGoalFromRun": [
-      "apps/mobile/src/features/tasks/taskActions.ts"
-    ],
     "resample": [
       "apps/desktop/src-tauri/src/features/speech/vad.rs"
     ],
@@ -107935,6 +108073,9 @@
     ],
     "ResearchReportNotice": [
       "apps/web/lib/services/agent-notification-service.ts"
+    ],
+    "ResearchReportPage": [
+      "apps/web/lib/services/research-report-service.ts"
     ],
     "ResearchReportPreview": [
       "apps/web/features/marketing/components/app-preview/ScenePreviews.tsx"
@@ -109213,6 +109354,9 @@
     "resolveExistingPrefix": [
       "apps/desktop/electron/runtime/shellSandbox.ts"
     ],
+    "resolveExtensionDirectory": [
+      "apps/extension/e2e/extension-harness.mjs"
+    ],
     "resolveFailoverBreakerView": [
       "apps/web/app/api/llm/v1/chat/completions/lib/route-breaker.ts"
     ],
@@ -109378,6 +109522,9 @@
     ],
     "resolveImageRefBytes": [
       "apps/web/app/api/media/image/lib/image-generation-provider.ts"
+    ],
+    "resolveImageRetryFallback": [
+      "apps/mobile/src/features/chat/actions/imageRetryFallback.ts"
     ],
     "resolveIndexedElement": [
       "apps/extension/src/features/computer-use/cdpDriver.ts"
@@ -111044,6 +111191,9 @@
     "ResumeChromeManagedRunRequest": [
       "apps/extension/src/features/cloud-bridge/managedRunControl.ts"
     ],
+    "RESUMED_RUN_BROWSER_STEP_MESSAGE": [
+      "apps/extension/src/features/cloud-bridge/managedRunControl.ts"
+    ],
     "resumeDeferredPush": [
       "apps/web/lib/services/push-notification-service.ts"
     ],
@@ -111353,6 +111503,9 @@
     "RETRY_POLICY_DEFAULTS": [
       "packages/platform/utils/src/index.ts",
       "packages/platform/utils/src/retryPolicy.ts"
+    ],
+    "RetryableRead": [
+      "apps/mobile/src/shared/hooks/useRetryableRead.ts"
     ],
     "RetryableTurnMessage": [
       "apps/web/features/chat/lib/retryable-turn.ts"
@@ -113300,6 +113453,9 @@
     "runChain": [
       "scripts/run-cross-surface-chain.mjs"
     ],
+    "runChecked": [
+      "apps/extension/e2e/extension-harness.mjs"
+    ],
     "runChecks": [
       "scripts/check-cross-version-matrix.mjs"
     ],
@@ -114501,6 +114657,9 @@
     "sample_rate": [
       "apps/desktop/src-tauri/src/features/speech/local_tts.rs",
       "apps/desktop/src-tauri/src/features/speech/vad.rs"
+    ],
+    "SAMPLE_SITE_PATHS": [
+      "apps/extension/store-assets/src/sample-site.mjs"
     ],
     "sandbox": [
       "apps/cli/src/lib.rs",
@@ -121062,7 +121221,8 @@
       "apps/web/lib/services/auto-reload-service.ts"
     ],
     "settleBrowserActivity": [
-      "apps/desktop/electron/browser/bridgeServer.ts"
+      "apps/desktop/electron/browser/bridgeServer.ts",
+      "apps/extension/src/features/side-panel/chat-state.ts"
     ],
     "settleConsent": [
       "apps/web/e2e/lib/settle-consent.ts"
@@ -121094,6 +121254,9 @@
     ],
     "settleEventSpend": [
       "apps/web/lib/server/event-budget.ts"
+    ],
+    "settleFailedAgentActivity": [
+      "apps/extension/src/features/side-panel/chat-state.ts"
     ],
     "settleFreeModelPromotionTurn": [
       "apps/web/lib/server/free-model-promotion-ledger.ts"
@@ -121392,6 +121555,9 @@
     ],
     "ShareAudience": [
       "apps/web/features/chat/hooks/use-share-conversation.ts"
+    ],
+    "shareCloudDataExport": [
+      "apps/mobile/services/cloudDataExport.ts"
     ],
     "shareCloudRun": [
       "apps/mobile/src/features/tasks/taskActions.ts"
@@ -126815,6 +126981,9 @@
     ],
     "stopPushPreferenceSync": [
       "apps/mobile/services/pushPreferenceSync.ts"
+    ],
+    "stopReconnectRecovery": [
+      "apps/mobile/services/companion.ts"
     ],
     "StopRecordingMessage": [
       "apps/extension/src/types.ts"
@@ -140002,6 +140171,9 @@
     ],
     "useResponsiveLayout": [
       "apps/mobile/src/shared/hooks/useResponsiveLayout.ts"
+    ],
+    "useRetryableRead": [
+      "apps/mobile/src/shared/hooks/useRetryableRead.ts"
     ],
     "useRevokeTeamInvitation": [
       "apps/web/features/settings/hooks/use-settings-queries.ts"

@@ -856,7 +856,7 @@ export function ResearchScenePreview({ className }: { className?: string }) {
 }
 
 export const RESEARCH_STEPS_QUESTION =
-  'What is the current official guidance on password length for staff accounts? Cite the sources.';
+  'What is the official guidance on staff password length? Cite the sources.';
 
 export const RESEARCH_STEPS_PLAN = [
   {

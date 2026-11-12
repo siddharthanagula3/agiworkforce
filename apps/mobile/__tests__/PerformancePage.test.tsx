@@ -128,7 +128,13 @@ jest.mock('react-native-svg', () => {
   const { View, Text } = require('react-native');
   return {
     __esModule: true,
-    default: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    default: ({
+      children,
+      accessibilityLabel,
+    }: {
+      children: React.ReactNode;
+      accessibilityLabel?: string;
+    }) => <View accessibilityLabel={accessibilityLabel}>{children}</View>,
     Polyline: () => null,
     Line: () => null,
     Circle: () => null,
@@ -403,6 +409,21 @@ describe('PerformanceScreen rendering', () => {
   it('shows no benchmark block when none has been stored', async () => {
     const { queryByText } = await renderSettledPerformanceScreen();
     expect(queryByText(/Last benchmark result/)).toBeNull();
+  });
+
+  it('announces the newest sample as the most recent value on both charts', async () => {
+    const now = Date.now();
+    recordPerfEvent(
+      makePerfEvent({ ts: now - 60_000, tokensPerSecond: 11, firstTokenLatencyMs: 900 }),
+    );
+    recordPerfEvent(makePerfEvent({ ts: now, tokensPerSecond: 47, firstTokenLatencyMs: 130 }));
+    const { getByLabelText } = await renderSettledPerformanceScreen();
+    expect(
+      getByLabelText(/Tokens per second over the last 7 days\..*Most recent: 47 t\/s/),
+    ).toBeTruthy();
+    expect(
+      getByLabelText(/First-token latency over the last 7 days\..*Most recent: 130 ms/),
+    ).toBeTruthy();
   });
 
   it('renders the Device Tier card heading', async () => {

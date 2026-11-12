@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('react-native-webrtc', () => ({
   RTCPeerConnection: jest.fn().mockImplementation(() => ({
@@ -119,6 +119,7 @@ jest.mock('@/src/shared/components/ApprovalModal', () => ({
 jest.mock('@/services/companion', () => ({
   startHealthChecks: jest.fn(),
   stopHealthChecks: jest.fn(),
+  stopReconnectRecovery: jest.fn(),
   requestAgentRefresh: jest.fn(),
   manualReconnect: jest.fn(),
 }));
@@ -127,6 +128,7 @@ jest.mock('@/services/companionNotifications', () => ({
 }));
 
 import CompanionScreen from '../app/(app)/companion/index';
+import { stopHealthChecks, stopReconnectRecovery } from '@/services/companion';
 import { useAgentStore } from '../stores/agentStore';
 import { useConnectionStore } from '../stores/connectionStore';
 
@@ -189,5 +191,36 @@ describe('CompanionScreen, PAR-M28 first-run setup gate', () => {
 
     expect(screen.getByTestId('disconnected-view')).toBeTruthy();
     expect(screen.queryByTestId('dispatch-setup-checklist')).toBeNull();
+  });
+});
+
+describe('CompanionScreen, reconnect ownership', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useAgentStore.setState({ pendingApprovals: [] });
+    mockHasSeenDispatchSetup = true;
+    useConnectionStore.setState({ status: 'connected' });
+  });
+
+  it('stops health checks on a status change without stopping the reconnect countdown', () => {
+    const screen = render(<CompanionScreen />);
+    (stopHealthChecks as jest.Mock).mockClear();
+
+    act(() => {
+      useConnectionStore.setState({ status: 'reconnecting', reconnectCountdown: 15 });
+    });
+
+    expect(stopHealthChecks).toHaveBeenCalled();
+    expect(stopReconnectRecovery).not.toHaveBeenCalled();
+    screen.unmount();
+  });
+
+  it('stops the reconnect countdown when the screen goes away', () => {
+    const screen = render(<CompanionScreen />);
+    expect(stopReconnectRecovery).not.toHaveBeenCalled();
+
+    screen.unmount();
+
+    expect(stopReconnectRecovery).toHaveBeenCalledTimes(1);
   });
 });

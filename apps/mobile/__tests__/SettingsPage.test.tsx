@@ -154,6 +154,14 @@ describe('Settings page', () => {
     expect(queryByText(/byok/i)).toBeNull();
   });
 
+  it('keeps each row label at its own width so a long value truncates instead of hiding it', () => {
+    const screen = render(<SettingsTabScreen />);
+    const label = screen.getByTestId('settings-row-label-account-email');
+
+    expect(label).toHaveStyle({ flexGrow: 1, flexShrink: 0 });
+    expect(label).not.toHaveStyle({ flex: 1 });
+  });
+
   it('opens Remote control from Settings and names the paired computer', () => {
     const screen = render(<SettingsTabScreen />);
 
@@ -499,6 +507,21 @@ describe('Settings page', () => {
 
     expect(loaded.queryByTestId('settings-row-loading-account-subscription')).toBeNull();
     expect(loaded.getByLabelText(/^Subscription\. /)).toBeTruthy();
+  });
+
+  it('never names a plan the account was not confirmed to hold', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useTierStore.setState({ isRefreshing: false, lastRefreshedAt: null } as never);
+    const unconfirmed = render(<SettingsTabScreen />);
+
+    expect(unconfirmed.getByLabelText('Subscription. Not confirmed')).toBeTruthy();
+    expect(unconfirmed.queryByLabelText('Subscription. Free')).toBeNull();
+    unconfirmed.unmount();
+
+    useTierStore.setState({ lastRefreshedAt: '2026-11-11T00:00:00.000Z' } as never);
+    const confirmed = render(<SettingsTabScreen />);
+
+    expect(confirmed.getByLabelText('Subscription. Free')).toBeTruthy();
   });
 
   it('renders version in About row', () => {

@@ -529,3 +529,150 @@ describe('Voice conversation PTT + hands-free', () => {
     expect(removeListener).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Voice route, imported recording and Close', () => {
+  const transcribe = VoiceInput.transcribeAudioFile as jest.Mock;
+  const realTranscribe = jest.requireActual('@/src/features/voice/services/voiceInput')
+    .transcribeAudioFile as typeof VoiceInput.transcribeAudioFile;
+  const recognizer = ExpoSpeechRecognitionModule as unknown as Record<string, unknown>;
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((accept) => {
+      resolve = accept;
+    });
+    return { promise, resolve };
+  }
+
+  function pressClose(screen: ReturnType<typeof render>) {
+    return act(async () => fireEvent.press(screen.getByLabelText('Close voice companion')));
+  }
+
+  beforeEach(async () => {
+    await VoiceInput.cancelCapture();
+    speechRecognitionMock.__clearListeners();
+    jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    mockAudioUri = 'file:///recording.m4a';
+    transcribe.mockReset();
+    const state = chatState();
+    state.messages = {};
+    state.error = null;
+    state.createConversation.mockReset().mockResolvedValue('voice-conv-1');
+    state.sendMessage.mockReset().mockResolvedValue(true);
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useSettingsStore.setState({
+      hapticsEnabled: false,
+      voiceEnabled: true,
+      voicePushToTalk: false,
+      selectedVoiceId: null,
+      speechRate: 1,
+    });
+  });
+
+  afterEach(() => {
+    delete recognizer['getSupportedLocales'];
+    mockAudioUri = undefined;
+  });
+
+  it('cancels the recognizer and sends nothing when Close is pressed while transcribing', async () => {
+    transcribe.mockImplementation(realTranscribe);
+    const state = chatState();
+    const screen = render(<VoiceScreen />);
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+
+    await pressClose(screen);
+
+    expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      speechRecognitionMock.__fireResult({
+        results: [{ transcript: 'words after close', confidence: 1 }],
+        isFinal: true,
+      });
+    });
+    expect(state.createConversation).not.toHaveBeenCalled();
+    expect(state.sendMessage).not.toHaveBeenCalled();
+    expect(VoiceInput.isCapturing()).toBe(false);
+  });
+
+  it('never starts the recognizer when Close is pressed while it is being prepared', async () => {
+    const locales = deferred<{ installedLocales: string[] }>();
+    recognizer['getSupportedLocales'] = jest.fn(() => locales.promise);
+    transcribe.mockImplementation(realTranscribe);
+    const state = chatState();
+    const screen = render(<VoiceScreen />);
+    await waitFor(() => expect(recognizer['getSupportedLocales']).toHaveBeenCalledTimes(1));
+
+    await pressClose(screen);
+    await act(async () => locales.resolve({ installedLocales: ['en-US'] }));
+
+    expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
+    expect(state.createConversation).not.toHaveBeenCalled();
+    expect(state.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('drops a transcript that arrives after Close even from a recognizer that ignores the signal', async () => {
+    const transcript = deferred<{ text: string }>();
+    transcribe.mockReturnValue(transcript.promise);
+    const state = chatState();
+    const screen = render(<VoiceScreen />);
+    await waitFor(() => expect(transcribe).toHaveBeenCalledTimes(1));
+    const options = transcribe.mock.calls[0][1] as { signal: AbortSignal };
+    expect(options.signal.aborted).toBe(false);
+
+    await pressClose(screen);
+    expect(options.signal.aborted).toBe(true);
+    await act(async () => transcript.resolve({ text: 'recorded request' }));
+
+    expect(state.createConversation).not.toHaveBeenCalled();
+    expect(state.sendMessage).not.toHaveBeenCalled();
+    expect(screen.queryByText('Retry sending')).toBeNull();
+  });
+
+  it('sends nothing when Close is pressed while the conversation is being created', async () => {
+    transcribe.mockResolvedValue({ text: 'recorded request' });
+    const conversation = deferred<string>();
+    const state = chatState();
+    state.createConversation.mockReturnValue(conversation.promise);
+    const screen = render(<VoiceScreen />);
+    await waitFor(() => expect(state.createConversation).toHaveBeenCalledTimes(1));
+
+    await pressClose(screen);
+    await act(async () => conversation.resolve('voice-conv-1'));
+
+    expect(state.sendMessage).not.toHaveBeenCalled();
+    expect(screen.queryByText('Retry sending')).toBeNull();
+  });
+
+  it('cancels the recognizer and sends nothing when the screen goes away mid-transcription', async () => {
+    transcribe.mockImplementation(realTranscribe);
+    const state = chatState();
+    const screen = render(<VoiceScreen />);
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+
+    screen.unmount();
+
+    expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      speechRecognitionMock.__fireResult({
+        results: [{ transcript: 'words after leaving', confidence: 1 }],
+        isFinal: true,
+      });
+    });
+    expect(state.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('still sends the recording when Close is never pressed', async () => {
+    transcribe.mockResolvedValue({ text: 'recorded request' });
+    const state = chatState();
+    render(<VoiceScreen />);
+
+    await waitFor(() =>
+      expect(state.sendMessage).toHaveBeenCalledWith(
+        'voice-conv-1',
+        'recorded request',
+        expect.any(String),
+      ),
+    );
+  });
+});

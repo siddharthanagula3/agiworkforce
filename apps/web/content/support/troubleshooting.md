@@ -87,8 +87,9 @@ search as off for the model you picked, that model has no search path here, so
 pick one that has.
 
 Searching your own conversations with Cmd/Ctrl+K reports a failed request as
-"Search failed. Please try again." If the search window itself cannot open, it
-shows "Search unavailable" instead; close it and open it again.
+"Search could not be completed" with a Retry button and never as no matches; if
+the search window itself cannot open, it shows "Search unavailable" instead, so
+close it and open it again.
 
 The help centre's search tells an index that could not be loaded apart from a
 query that matched nothing, so "nothing matched" really means nothing matched.

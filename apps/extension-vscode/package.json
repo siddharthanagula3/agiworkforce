@@ -1,7 +1,7 @@
 {
   "name": "agi-workforce",
-  "displayName": "Code",
-  "description": "Multi-provider AI coding assistant for VS Code",
+  "displayName": "AGI Code",
+  "description": "AI pair programming in VS Code, run by the AGI CLI on your machine with local models, your own provider keys, or AGI Cloud.",
   "version": "0.0.1",
   "publisher": "agiworkforce",
   "license": "SEE LICENSE IN LICENSE",
@@ -35,7 +35,6 @@
     "ai",
     "llm",
     "chat",
-    "copilot",
     "assistant",
     "coding",
     "agent",
@@ -877,7 +876,7 @@
         "id": "agiworkforce.agi",
         "name": "agi",
         "fullName": "AGI Code",
-        "description": "Multi-provider AI coding assistant for VS Code",
+        "description": "Ask about the code in this workspace",
         "isSticky": true,
         "commands": [
           {
@@ -1238,12 +1237,19 @@
           "type": "boolean",
           "default": false,
           "scope": "machine",
-          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them. Also subject to VS Code's telemetry setting."
+          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them. Also subject to VS Code's telemetry setting.",
+          "tags": [
+            "telemetry",
+            "usesOnlineServices"
+          ]
         },
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Include your saved workspace memory facts with chat turns. Turn this off to stop sending them without deleting them; the Memory view keeps showing what is stored."
+          "description": "Include the memory facts saved to your AGI account with chat turns. Turn this off to stop sending them without deleting them; Code: Memory keeps showing what is stored.",
+          "tags": [
+            "usesOnlineServices"
+          ]
         },
         "agiWorkforce.hoverEnabled": {
           "type": "boolean",
@@ -1263,7 +1269,10 @@
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key."
+          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key.",
+          "tags": [
+            "usesOnlineServices"
+          ]
         },
         "agiWorkforce.inlineCompletions.debounceMs": {
           "type": "number",
@@ -1332,7 +1341,10 @@
         "agiWorkforce.activateOnStartup": {
           "type": "boolean",
           "default": false,
-          "description": "Start AGI Code background work (device heartbeat, plan lookup) as soon as the window opens. Off by default, so nothing leaves the machine until you open the AGI view, run an AGI command or reopen an AGI session."
+          "description": "Start AGI Code background work (device heartbeat, plan lookup) as soon as the window opens. Off by default, so nothing leaves the machine until you open the AGI view, run an AGI command or reopen an AGI session.",
+          "tags": [
+            "usesOnlineServices"
+          ]
         },
         "agiWorkforce.useTerminal": {
           "type": "boolean",
@@ -1429,7 +1441,7 @@
     "watch": "node esbuild.js --watch",
     "package": "pnpm run clean && node esbuild.js --production && node scripts/vsce-package.js package --no-dependencies",
     "verify:package": "node scripts/verify-vsix.mjs",
-    "lint": "eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
+    "lint": "node scripts/check-vscode-theme-tokens.mjs && eslint src --ext ts --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "test": "vitest run",
     "test:webview": "vitest run --config vitest.webview.config.ts",
     "test:integration": "tsc -p tsconfig.test.json --noEmit && node esbuild.js --tests && node esbuild.js && node out/test/runTests.js",

@@ -1,6 +1,7 @@
 import {
   ManagedCloudAgentRunAlreadyResumingError,
   ManagedCloudAgentRunApprovalExpiredError,
+  ManagedCloudAgentRunHttpError,
   type CloudAgentRun,
   type CloudAgentRunListPage,
   type ManagedCloudAgentRunApprovalDecision,
@@ -20,6 +21,8 @@ export const CLOUD_RUN_PAUSE_ERROR = 'This task could not be paused';
 export const CLOUD_RUN_RESUME_ERROR = 'This task could not be resumed';
 
 const ALREADY_RESUMING_MESSAGE = 'Another device already answered this one';
+const RUN_UNAVAILABLE_MESSAGE = 'This task is no longer available';
+const RUN_UNAVAILABLE_STATUSES: ReadonlySet<number> = new Set([403, 404, 410]);
 const APPROVAL_EXPIRED_MESSAGE = 'This approval expired, so the task cannot continue from it';
 
 export interface CloudRunListOptions {
@@ -72,6 +75,12 @@ export function resumePausedCloudRun(runId: string, signal?: AbortSignal): Promi
 export function describeCloudRunError(error: unknown, fallback: string): string {
   if (error instanceof ManagedCloudAgentRunAlreadyResumingError) return ALREADY_RESUMING_MESSAGE;
   if (error instanceof ManagedCloudAgentRunApprovalExpiredError) return APPROVAL_EXPIRED_MESSAGE;
+  if (
+    error instanceof ManagedCloudAgentRunHttpError &&
+    RUN_UNAVAILABLE_STATUSES.has(error.status)
+  ) {
+    return RUN_UNAVAILABLE_MESSAGE;
+  }
   return fallback;
 }
 

@@ -24,7 +24,11 @@ import { readRestrictedUserExportSections } from '@/lib/server/restricted-user-e
 import { BETA_INVITE_EXPORT_SECTION } from '@/lib/server/beta-invite-export-section';
 import { requestDataExportArchive } from '@/lib/server/data-export-archive';
 import { requireCsrfToken } from '@/lib/csrf';
-import type { DataExportArchiveResponse } from '@agiworkforce/cloud-contracts';
+import type {
+  DataExportArchiveResponse,
+  DataExportCompleteness,
+  DataExportCompletenessStatus,
+} from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { z } from 'zod';
 
@@ -743,15 +747,9 @@ const securityAuditLogExportSchema = z.object({
   created_at: timestampSchema,
 });
 
-export type ExportCompletenessStatus = 'complete' | 'partial';
+export type ExportCompletenessStatus = DataExportCompletenessStatus;
 
-export interface ExportCompleteness {
-  status: ExportCompletenessStatus;
-  unavailable_sections: string[];
-  skipped_rows: Array<{ section: string; count: number }>;
-  truncated_sections: Array<{ section: string; limit: number }>;
-  retry: string;
-}
+export type ExportCompleteness = DataExportCompleteness;
 
 /**
  * Row cap for the two highest-cardinality sections. An uncapped read of either

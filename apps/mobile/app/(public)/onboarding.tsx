@@ -16,12 +16,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import {
-  appAuthoredDownloadMessage,
-  cancelDownload,
-  downloadModel,
-  ModelDownloadError,
-} from '@/services/modelDownload';
+import { appAuthoredDownloadMessage, ModelDownloadError } from '@/services/modelDownload';
 import { getInstalledModel } from '@/storage/installedModels';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
@@ -141,8 +136,15 @@ export default function OnboardingScreen() {
   const [downloadSpeedMBs, setDownloadSpeedMBs] = useState(0);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const downloadAbandonedRef = useRef(false);
+  const onboardingOpenRef = useRef(true);
   const modelPickerRef = useRef<BottomSheet>(null);
+
+  useEffect(() => {
+    onboardingOpenRef.current = true;
+    return () => {
+      onboardingOpenRef.current = false;
+    };
+  }, []);
 
   const handlePickModel = useCallback(() => {
     modelPickerRef.current?.snapToIndex(0);
@@ -232,22 +234,21 @@ export default function OnboardingScreen() {
     [router],
   );
 
-  const abandonDownload = useCallback(() => {
-    downloadAbandonedRef.current = true;
+  const leaveDownloadScreen = useCallback(() => {
+    onboardingOpenRef.current = false;
     if (downloadTimerRef.current) {
       clearInterval(downloadTimerRef.current);
       downloadTimerRef.current = null;
     }
-    cancelDownload(recommendedModel.id);
-    useModelInstallStore.getState().cancelModelDownload(recommendedModel.id);
-  }, [recommendedModel.id]);
+  }, []);
 
   const handleContinueToCloud = useCallback(() => {
-    abandonDownload();
+    leaveDownloadScreen();
+    useModelInstallStore.getState().cancelModelDownload(recommendedModel.id);
     storage.set('onboarding-done', 'true');
     storage.delete('onboarding-mode');
     router.replace(beginCloudPostAuthIntent());
-  }, [abandonDownload, router]);
+  }, [leaveDownloadScreen, recommendedModel.id, router]);
 
   const handleHeroCTA = useCallback(() => {
     const alreadySatisfied = isDisclosureSatisfied(mmkvDisclosureLedger, false);
@@ -309,7 +310,6 @@ export default function OnboardingScreen() {
       setDownloadProgress(0);
       setDownloadSpeedMBs(0);
       setDownloadError(null);
-      downloadAbandonedRef.current = false;
 
       const presetModel = recommendedModel.executorchPreset
         ? getSelectableModelById(recommendedModel.id)
@@ -324,10 +324,10 @@ export default function OnboardingScreen() {
           .getState()
           .prepareModel(presetModel)
           .then(() => {
-            if (!downloadAbandonedRef.current) finishOnboarding(modelId);
+            if (onboardingOpenRef.current) finishOnboarding(modelId);
           })
           .catch((err: unknown) => {
-            if (downloadAbandonedRef.current) return;
+            if (!onboardingOpenRef.current) return;
             if (err instanceof ModelDownloadError && err.kind === 'cancelled') return;
             setDownloadError(appAuthoredDownloadMessage(err) ?? DOWNLOAD_FAILED_MESSAGE);
           })
@@ -335,25 +335,24 @@ export default function OnboardingScreen() {
         return;
       }
 
-      if (recommendedModel.downloadUrl && recommendedModel.checksum && recommendedModel.format) {
-        downloadModel({
-          modelId: recommendedModel.id,
-          displayName: recommendedModel.displayName,
-          downloadUrl: recommendedModel.downloadUrl,
-          checksum: recommendedModel.checksum,
-          fileSizeBytes: recommendedModel.fileSizeBytes,
-          runtime: 'local',
-          format: recommendedModel.format,
-          mmprojUrl: recommendedModel.mmprojUrl,
-          mmprojChecksum: recommendedModel.mmprojChecksum,
-          mmprojSizeBytes: recommendedModel.mmprojSizeBytes,
-          wifiOnly: !cellularEnabled,
-          onProgress(downloaded, total, speedBps) {
-            setDownloadProgress((downloaded / total) * 100);
-            setDownloadSpeedMBs(Math.round(speedBps / (1024 * 1024)));
-          },
-        })
-          .then(() => finishOnboarding(recommendedModel.id))
+      const modelDef = getSelectableModelById(recommendedModel.id);
+      if (
+        modelDef &&
+        recommendedModel.downloadUrl &&
+        recommendedModel.checksum &&
+        recommendedModel.format
+      ) {
+        useModelInstallStore
+          .getState()
+          .prepareModel(modelDef, {
+            onProgress(downloaded, total, speedBps) {
+              setDownloadProgress((downloaded / total) * 100);
+              setDownloadSpeedMBs(Math.round(speedBps / (1024 * 1024)));
+            },
+          })
+          .then(() => {
+            if (onboardingOpenRef.current) finishOnboarding(recommendedModel.id);
+          })
           .catch((err: unknown) => {
             const kind = err instanceof ModelDownloadError ? err.kind : 'network_error';
             if (kind === 'cancelled') {
@@ -379,9 +378,9 @@ export default function OnboardingScreen() {
   }, [handleStartDownload]);
 
   const handleSkipToChat = useCallback(() => {
-    abandonDownload();
+    leaveDownloadScreen();
     finishOnboarding();
-  }, [abandonDownload, finishOnboarding]);
+  }, [leaveDownloadScreen, finishOnboarding]);
 
   return (
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>

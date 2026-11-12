@@ -133,13 +133,25 @@ describe('AccountSection delete account while a paid plan is live', () => {
     expect(screen.queryByText(/Schedule permanent account deletion/)).toBeNull();
   });
 
-  it('says when a plan already cancelled at period end stops blocking deletion', () => {
+  it('lets a plan already cancelled at period end be deleted now and says what ends', async () => {
     billing.subscription = proPlan({ cancel_at_period_end: true });
+    renderAccountSection();
+
+    await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
+    expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
+      new RegExp(
+        `Your ${PRO_LABEL} plan is already cancelled\\. Deleting your account ends it when erasure runs instead of on .+, and the unused time is not refunded\\.`,
+      ),
+    );
+  });
+
+  it('still blocks a cancelled plan whose payment is outstanding', () => {
+    billing.subscription = proPlan({ status: 'past_due', cancel_at_period_end: true });
     renderAccountSection();
 
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
     expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
-      new RegExp(`You can delete your account once your ${PRO_LABEL} plan ends on .+\\.`),
+      `A payment for your ${PRO_LABEL} plan is still being collected.`,
     );
   });
 

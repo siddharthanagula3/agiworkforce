@@ -91,6 +91,40 @@ describe('new cloud code session', () => {
     expect(onCreated).toHaveBeenCalledWith(session, 'Add a dark mode toggle');
   });
 
+  it('keeps a session created after the sheet was closed from navigating or starting its task', async () => {
+    const session = { id: 'session-2', state: 'provisioning' };
+    let finishCreate: (value: unknown) => void = () => undefined;
+    mockCloudCodeApi.create.mockReturnValue(
+      new Promise((resolve) => {
+        finishCreate = resolve;
+      }),
+    );
+    const onCreated = jest.fn();
+    const onCreatedInBackground = jest.fn();
+    const sheet = (visible: boolean) => (
+      <NewCloudCodeSessionSheet
+        visible={visible}
+        onClose={jest.fn()}
+        onCreated={onCreated}
+        onCreatedInBackground={onCreatedInBackground}
+      />
+    );
+    const { getByTestId, rerender } = render(sheet(true));
+
+    fireEvent.changeText(getByTestId('new-cloud-code-task'), 'Add a dark mode toggle');
+    await act(async () => {
+      fireEvent.press(getByTestId('new-cloud-code-start'));
+    });
+    rerender(sheet(false));
+    rerender(sheet(true));
+    await act(async () => {
+      finishCreate({ session, terminalEntries: [] });
+    });
+
+    expect(onCreated).not.toHaveBeenCalled();
+    expect(onCreatedInBackground).toHaveBeenCalledWith(session);
+  });
+
   it('does not start without a task', async () => {
     const { getByTestId } = render(
       <NewCloudCodeSessionSheet visible onClose={jest.fn()} onCreated={jest.fn()} />,

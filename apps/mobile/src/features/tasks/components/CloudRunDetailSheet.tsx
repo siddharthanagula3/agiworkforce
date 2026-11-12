@@ -477,7 +477,7 @@ export function CloudRunDetailSheet({
                 title="Run again"
                 variant="outline"
                 loading={rerunning}
-                accessibilityHint="Starts a new task with the same goal"
+                accessibilityHint="Opens a new task with the original request, ready to review before it starts"
                 onPress={onRerun}
               />
             ) : null}

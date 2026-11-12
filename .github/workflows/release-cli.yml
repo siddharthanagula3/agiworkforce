@@ -4,6 +4,10 @@ name: Release CLI
 # Builds 6 platform archives, signs their checksum manifest, and publishes a
 # GitHub release that https://agiworkforce.com/install.sh installs from.
 #
+# A manual run (workflow_dispatch) validates the source and builds and smokes
+# every archive, then stops: it never signs, tags or publishes. It proves the
+# matrix before a tag exists. Procedure: docs/runbooks/cli-release.md.
+#
 # Required GitHub Secrets:
 #   AGI_CLI_RELEASE_SIGNING_KEY, the PEM EC P-256 private key whose public half
 #   is pinned in RELEASE_SIGNING_KEY in apps/web/public/install.sh
@@ -15,6 +19,7 @@ on:
   push:
     tags:
       - 'v-cli-*'
+  workflow_dispatch:
 
 concurrency:
   group: release-cli-${{ github.ref_name }}
@@ -31,6 +36,7 @@ jobs:
   validate-version:
     name: Validate CLI release version
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.release-metadata.outputs.version }}
       prerelease: ${{ steps.release-metadata.outputs.prerelease }}
@@ -48,7 +54,22 @@ jobs:
           node --test scripts/lib/rollout/channels.test.mjs
 
       - name: Require a pinned release signing key
+        if: github.event_name == 'push'
         run: node scripts/release/check-pinned-release-key.mjs
+
+      # The migration guard reads the route table through the TypeScript
+      # compiler, so it needs the workspace's installed packages.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       # A migration that cannot be reversed, or destroys rows without saying
       # so, must not reach a released version number.
@@ -58,12 +79,14 @@ jobs:
           node scripts/check-neon-migrations.mjs
 
       - name: Resolve the release channel this tag publishes to
+        if: github.event_name == 'push'
         id: channel
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: node scripts/release/resolve-channel.mjs cli "$RELEASE_TAG"
 
       - name: Require tag and package versions to match
+        if: github.event_name == 'push'
         id: release-metadata
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -117,10 +140,16 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt,clippy
 
+      # The CLI tests run sandboxed commands through bubblewrap, so they get
+      # the host of the CI lane that keeps them green (ci.yml rust-desktop-cli):
+      # bubblewrap with its AppArmor profile, and a virtual display.
       - name: Install Linux system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
+          sudo apt-get install -y pkg-config xvfb apparmor-profiles bubblewrap
+
+      - name: Prepare unprivileged Linux sandbox
+        run: /usr/bin/python3 -I -S scripts/prepare-linux-sandbox.py
 
       - name: Install Node for the notices check
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -137,12 +166,19 @@ jobs:
         run: cargo clippy --locked -p agiworkforce-cli --lib -- -D warnings
 
       - name: Test CLI
-        run: cargo test --locked -p agiworkforce-cli
+        env:
+          RUSTFLAGS: ''
+          CARGO_INCREMENTAL: '0'
+        run: xvfb-run --auto-servernum cargo test --locked -p agiworkforce-cli
 
+  # A tag builds only source that passed validation. A manual run builds
+  # either way, so a red test never hides whether the six archives compile.
   build:
     name: Build ${{ matrix.target }}
     needs: [validate-version, validate]
+    if: ${{ !cancelled() && needs.validate-version.result == 'success' && (needs.validate.result == 'success' || github.event_name == 'workflow_dispatch') }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -194,35 +230,19 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # Linux-only: install ALSA + udev dev headers so cpal (voice) and any
-      # other linux-system-lib crate can compile. Required because the cli
-      # binary statically links cpal regardless of feature flags.
-      - name: Install linux system deps (libasound2-dev, libudev-dev)
-        if: runner.os == 'Linux' && !matrix.cross
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
-
+      # Linux builds leave out the voice feature, the only part of the CLI
+      # that links a system library (ALSA), so they need no -dev packages.
       - name: Install cross (for aarch64 linux)
         if: matrix.cross
         run: cargo install cross --version 0.2.5 --locked
 
-      # Cross runs builds in a Docker container, system deps need to be
-      # installed inside the container via Cross.toml's pre-build hook.
-      # Generate it on the fly (kept out of git so the file doesn't apply
-      # to local cargo invocations).
-      - name: Configure cross with linux deps
+      # Generated on the fly so it never applies to local cargo invocations.
+      - name: Configure cross
         if: matrix.cross
         run: |
           cat > Cross.toml <<'EOF'
           [build.env]
           passthrough = ["AGI_CLI_SENTRY_DSN"]
-
-          [target.aarch64-unknown-linux-gnu]
-          pre-build = [
-              "dpkg --add-architecture $CROSS_DEB_ARCH",
-              "apt-get update && apt-get install -y libasound2-dev:$CROSS_DEB_ARCH libudev-dev:$CROSS_DEB_ARCH pkg-config",
-          ]
           EOF
 
       - name: Build (cross)
@@ -324,7 +344,9 @@ jobs:
   sign-release-assets:
     name: Sign CLI release assets
     needs: build
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -401,6 +423,7 @@ jobs:
     name: Create GitHub Release
     needs: [validate-version, sign-release-assets]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:

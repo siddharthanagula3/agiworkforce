@@ -96,14 +96,16 @@ export default function MemoryExclusionsScreen() {
 
   const retryLoad = useCallback(() => setLoadAttempt((attempt) => attempt + 1), []);
 
-  const persist = useCallback(async (next: MemoryExclusions) => {
+  const persist = useCallback(async (next: MemoryExclusions): Promise<boolean> => {
     setSaving(true);
     try {
       await patchPreferenceNamespace(PREFERENCE_NAMESPACE, next);
       setExclusions(next);
       setError(null);
+      return true;
     } catch (cause) {
       setError(toUserMessage(cause, 'Could not save that change.'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -125,8 +127,11 @@ export default function MemoryExclusionsScreen() {
       setError(`You can store up to ${MAX_TERMS} exclusions.`);
       return;
     }
-    setDraft('');
-    void persist({ ...exclusions, excludedTerms: [...exclusions.excludedTerms, term] });
+    void persist({ ...exclusions, excludedTerms: [...exclusions.excludedTerms, term] }).then(
+      (saved) => {
+        if (saved) setDraft((current) => (current.trim().toLowerCase() === term ? '' : current));
+      },
+    );
   }, [draft, exclusions, persist]);
 
   const removeTerm = useCallback(

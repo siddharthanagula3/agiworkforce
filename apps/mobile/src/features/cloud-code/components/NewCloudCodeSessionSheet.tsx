@@ -205,6 +205,7 @@ interface NewCloudCodeSessionSheetProps {
   runtimes?: CloudCodeRuntime[];
   onClose: () => void;
   onCreated: (session: CloudCodeSession, goal: string) => void;
+  onCreatedInBackground?: (session: CloudCodeSession) => void;
 }
 
 export function NewCloudCodeSessionSheet({
@@ -213,6 +214,7 @@ export function NewCloudCodeSessionSheet({
   runtimes = [],
   onClose,
   onCreated,
+  onCreatedInBackground,
 }: NewCloudCodeSessionSheetProps) {
   const colors = useThemeColors();
   const [task, setTask] = useState('');
@@ -237,6 +239,14 @@ export function NewCloudCodeSessionSheet({
   const [error, setError] = useState<string | null>(null);
   const searchRequest = useRef(0);
   const creatingRef = useRef(false);
+  const sheetOpenings = useRef(0);
+
+  useEffect(() => {
+    sheetOpenings.current += 1;
+    return () => {
+      sheetOpenings.current += 1;
+    };
+  }, [visible]);
 
   useEffect(() => {
     if (!visible || urlMode) return undefined;
@@ -357,6 +367,7 @@ export function NewCloudCodeSessionSheet({
   const handleCreate = useCallback(async () => {
     if (!canCreate || creatingRef.current) return;
     creatingRef.current = true;
+    const opening = sheetOpenings.current;
     setCreating(true);
     setError(null);
     const hosts = networkAccess === 'full' ? [] : parseExtraHosts(extraHosts);
@@ -380,7 +391,8 @@ export function NewCloudCodeSessionSheet({
         ...(hosts.length > 0 ? { extraHosts: hosts } : {}),
       });
       reset();
-      onCreated(body.session, goal);
+      if (opening === sheetOpenings.current) onCreated(body.session, goal);
+      else onCreatedInBackground?.(body.session);
     } catch (createError) {
       setError(describeCloudCodeError(createError, NEW_CLOUD_CODE_SESSION_ERROR));
     } finally {
@@ -395,6 +407,7 @@ export function NewCloudCodeSessionSheet({
     goal,
     networkAccess,
     onCreated,
+    onCreatedInBackground,
     repository,
     repositoryUrl,
     reset,

@@ -6,10 +6,10 @@ import { Text } from '@/components/ui/Text';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import type { ColorScheme } from '@/src/ui/theme';
 import { chatTypography, radii, spacing, typeScale } from '@/src/ui/theme/tokens';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { checklistProgress, type AssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
 import { AnswerFormSurface } from './AnswerFormSurface';
 import { CarouselSurface, GallerySurface } from './AnswerMediaSurfaces';
+import { openAssistantLink } from './MarkdownInline';
 import {
   ChoiceRow,
   PanelHeader,
@@ -646,7 +646,7 @@ function LinkText({ href, colors }: { href: string; colors: ColorScheme }) {
     <PressableBox
       accessibilityRole="link"
       accessibilityLabel={`Open ${href}`}
-      onPress={() => void openUntrustedUrlInAppBrowser(href)}
+      onPress={() => openAssistantLink(href)}
       style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
     >
       <Text

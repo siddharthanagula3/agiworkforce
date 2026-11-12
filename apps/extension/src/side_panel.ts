@@ -105,6 +105,8 @@ import {
   PROVIDERS_IN_ORDER,
   productLinkPath,
   resolveModelEffort,
+  CONNECTORS_COMING_SOON_LABEL,
+  CONNECTORS_COMING_SOON_MESSAGE,
   type ClarifyState,
   type Effort,
   type InteractiveCard,
@@ -267,6 +269,9 @@ import {
   type StreamFailureDetail,
   hydrateStoredChatMessage,
   reconcileManagedRunActivity,
+  reopenBrowserActivity,
+  settleBrowserActivity,
+  settleFailedAgentActivity,
   requestsCurrentFormFill,
   requestsSavedApplicationProfile,
   requestsImmediateSavedApplicationProfileFill,
@@ -397,6 +402,7 @@ import {
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
   capabilityAllowed,
+  connectorsComingSoon,
   fetchAccountSummary,
   type AccountSummary,
   type CapabilityDocument,
@@ -545,6 +551,7 @@ let cloudHistoryOwnerAbort = new AbortController();
 window.addEventListener('pagehide', () => cloudHistoryOwnerAbort.abort());
 let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
+let historyLoadedForOwner: ManagedCloudOwner | null = null;
 let activePersistenceEntry: ConversationEntry | undefined;
 let activePersistenceReadGeneration = 0;
 
@@ -1630,8 +1637,9 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
   }
   if (resumable.cloudAgentRun) {
     resumable.streaming = true;
-    queueMicrotask(() => {
+    void adoptClosedPanelTurn(expectedGeneration, ownerAtAdmission, false).then((adopted) => {
       if (
+        adopted ||
         _ctx.conversationGeneration !== expectedGeneration ||
         !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtAdmission) ||
         !resumable.cloudAgentRun ||
@@ -1652,7 +1660,8 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
 async function adoptClosedPanelTurn(
   expectedGeneration: number,
   owner: ManagedCloudOwner,
-): Promise<void> {
+  restoreSettledTurn = true,
+): Promise<boolean> {
   const conversationId = _ctx.conversationId;
   const pending = _ctx.messages[_ctx.messages.length - 1];
   if (
@@ -1662,7 +1671,7 @@ async function adoptClosedPanelTurn(
     pending.interrupted !== true ||
     pending.streamCancellation !== undefined
   )
-    return;
+    return false;
   const isCurrent = (): boolean =>
     _ctx.conversationGeneration === expectedGeneration &&
     _ctx.conversationId === conversationId &&
@@ -1677,20 +1686,22 @@ async function adoptClosedPanelTurn(
       historyConversationId: conversationId,
     })
     .catch(() => null)) as AdoptChatTurnResponse | null;
-  if (!isCurrent()) return;
+  if (!isCurrent()) return false;
   const adopted = response?.adopted;
   if (!adopted) {
+    if (!restoreSettledTurn) return false;
     const storedMessages = (await getConversation(owner, conversationId))?.messages ?? [];
     const stored = storedMessages[storedMessages.length - 1];
-    if (!isCurrent() || stored?.role !== 'assistant' || stored.streaming) return;
+    if (!isCurrent() || stored?.role !== 'assistant' || stored.streaming) return false;
     _ctx.messages[_ctx.messages.length - 1] = hydrateStoredChatMessage(stored, pending.id);
     _ctx.needsMessageRebuild = true;
     renderMessages();
-    return;
+    return false;
   }
   pending.id = adopted.id;
   pending.interrupted = false;
   pending.streaming = true;
+  reopenBrowserActivity(pending);
   if (adopted.text.length >= pending.content.length) pending.content = adopted.text;
   if (adopted.cloudRun) {
     pending.cloudAgentRun = { ...adopted.cloudRun };
@@ -1709,6 +1720,16 @@ async function adoptClosedPanelTurn(
   updateSendButton();
   _ctx.needsMessageRebuild = true;
   renderMessages();
+  for (const handoff of adopted.toolHandoffs ?? []) {
+    void handleChatToolHandoff({
+      ...handoff,
+      type: 'CHAT_TOOL_HANDOFF',
+      owner,
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+      id: adopted.id,
+    });
+  }
+  return true;
 }
 
 let newChatModelSelection = 'auto';
@@ -1807,6 +1828,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   clearAnswerFilePreviews();
   historyRestoreToken += 1;
   historyRestoreInProgress = false;
+  historyLoadedForOwner = null;
   openChatRefreshAbort?.abort();
   openChatRefreshAbort = null;
   clearActivePersistenceState();
@@ -4726,8 +4748,7 @@ function injectStyles(): void {
     .sp-model-option { padding: 9px; }
 
     #sp-cloud-gate,
-    #sp-blocked,
-    .sp-agent-approval { border-radius: var(--corner-panel); }
+    #sp-blocked { border-radius: var(--corner-panel); }
     #sp-cloud-gate.visible {
       flex-direction: column;
       align-items: center;
@@ -4911,6 +4932,7 @@ function injectStyles(): void {
     .sp-attach-menu-label { flex: 1; min-width: 0; }
     .sp-attach-menu-label > span { display: block; }
     .sp-attach-menu-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-attach-menu-item[aria-disabled='true'] { color: var(--agi-ext-text-muted); cursor: not-allowed; }
     .sp-attach-menu-check {
       display: inline-flex;
       align-items: center;
@@ -5281,6 +5303,7 @@ function injectStyles(): void {
     .sp-title-text {
       flex: 0 1 auto;
       min-width: 0;
+      max-width: calc(100% - var(--control-sm) - 4px);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -6567,6 +6590,7 @@ async function requestStreamCancellation(streamId: string): Promise<void> {
           cloudRunsByStreamId.set(streamId, { ...response.cloudRun });
         }
         reconcileManagedRunActivity(assistant);
+        settleChatToolActivity(assistant, 'cancelled');
         settleObservedStreamCancellation(streamId);
         _ctx.needsMessageRebuild = true;
         saveMessages();
@@ -6786,6 +6810,14 @@ function recordBrowserActivity(messageId: string, events: readonly AgentEvent[])
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
+}
+
+function settleChatToolActivity(
+  message: ChatMessage,
+  reason: Parameters<typeof settleBrowserActivity>[1],
+): void {
+  if (composerBrowserRun?.messageId === message.id) return;
+  settleBrowserActivity(message, reason);
 }
 
 function browserTurnControlsFor(messageId: string): BrowserTurnControls {
@@ -9283,6 +9315,7 @@ function finishVisibleChatTurn(streamId: string): void {
       existing.error = true;
       existing.errorText = t('spEmptyResponse');
     }
+    settleChatToolActivity(existing, existing.error ? 'error' : 'end-turn');
   }
   streamStartedAtById.delete(streamId);
   assistantCloudIdByStreamId.delete(streamId);
@@ -9386,6 +9419,10 @@ function handleStreamError(
   }
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
+    if (!canRetryPause) {
+      settleChatToolActivity(failedTurn, 'error');
+      settleFailedAgentActivity(failedTurn);
+    }
     if (streamUsedQuick) failedTurn.managedQuickMode = true;
     if (failedRoute) applyResolvedRoute(failedTurn, failedRoute);
     // A failed row pushed with no runtime would flip the whole conversation to
@@ -9550,6 +9587,9 @@ function updateComposerAdmissionControls(): void {
     control.disabled = !controlsReady;
     control.setAttribute('aria-disabled', String(!controlsReady));
   }
+  const connectorsControl = document.getElementById('sp-attach-connectors-item');
+  if (connectorsControl && connectorsComingSoon(capabilityDocument))
+    connectorsControl.setAttribute('aria-disabled', 'true');
   for (const control of document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
     '#sp-attach-screenshot-item, #sp-attach-file-input',
   )) {
@@ -12694,7 +12734,8 @@ function buildUI(): void {
         );
       }
       refreshPageHostname();
-      if (ownerChanged) {
+      if (!sameManagedCloudOwner(historyLoadedForOwner, _ctx.managedCloudOwner)) {
+        historyLoadedForOwner = _ctx.managedCloudOwner ? { ..._ctx.managedCloudOwner } : null;
         await loadMessages();
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
         renderMessages();
@@ -13927,12 +13968,20 @@ function buildUI(): void {
 
   const connectorsItem = el('button', {
     class: 'sp-attach-menu-item',
+    id: 'sp-attach-connectors-item',
     type: 'button',
     role: 'menuitem',
   });
   connectorsItem.appendChild(renderIcon(Plug, 16));
   connectorsItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spConnectors')));
+  const connectorsComingSoonTag = el(
+    'span',
+    { class: 'sp-attach-menu-hint' },
+    CONNECTORS_COMING_SOON_LABEL,
+  );
+  connectorsItem.appendChild(connectorsComingSoonTag);
   connectorsItem.addEventListener('click', () => {
+    if (connectorsComingSoon(capabilityDocument)) return;
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
     void chrome.tabs.create({ url: CONNECTORS_URL });
@@ -14312,7 +14361,15 @@ function buildUI(): void {
   applyCapabilityGates = () => {
     micBtn.hidden = !capabilityAllowed(capabilityDocument, 'canUseVoice');
     fileItem.hidden = !capabilityAllowed(capabilityDocument, 'canUploadFiles');
-    connectorsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseConnectors');
+    const connectorsLocked = connectorsComingSoon(capabilityDocument);
+    connectorsItem.hidden =
+      !connectorsLocked && !capabilityAllowed(capabilityDocument, 'canUseConnectors');
+    connectorsItem.setAttribute(
+      'aria-disabled',
+      String(connectorsLocked || connectorsItem.disabled),
+    );
+    connectorsItem.title = connectorsLocked ? CONNECTORS_COMING_SOON_MESSAGE : '';
+    connectorsComingSoonTag.hidden = !connectorsLocked;
     skillsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseSkills');
     if (skillsItem.hidden && composerSkill) {
       composerSkill = null;

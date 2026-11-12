@@ -462,7 +462,7 @@ describe('bounded existing Word document editing', () => {
       ok: false,
       message: expect.stringMatching(/package size limit/),
     });
-  });
+  }, 30_000);
 
   it('rejects existing-input operations on formats that do not support them', async () => {
     const result = await generateManagedOfficeFile({

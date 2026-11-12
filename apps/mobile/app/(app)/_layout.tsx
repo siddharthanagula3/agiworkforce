@@ -24,6 +24,7 @@ export default function AppLayout() {
   return (
     <>
       <Drawer
+        backBehavior="history"
         drawerContent={(props) => <DrawerContent {...props} />}
         screenOptions={{
           headerShown: false,

@@ -124,6 +124,7 @@ const HTML_INLINE_TAGS = [
 type HtmlInlineTag = (typeof HTML_INLINE_TAGS)[number];
 
 type InlineRule =
+  | 'math'
   | 'strongEm'
   | 'strong'
   | 'em'
@@ -137,6 +138,7 @@ type InlineRule =
   | `html:${HtmlInlineTag}`;
 
 const INLINE_RULES: ReadonlyArray<readonly [InlineRule, string]> = [
+  ['math', INLINE_MATH.source],
   ['strongEm', String.raw`\*\*\*(?![\s*])(.+?)(?<![\s*])\*\*\*`],
   ['strong', String.raw`\*\*(?![\s*])(.+?)(?<!\s)\*\*`],
   ['strong', String.raw`(?<![A-Za-z0-9_])__(?![\s_])(.+?)(?<!\s)__(?![A-Za-z0-9_])`],
@@ -380,6 +382,9 @@ export function renderInlineMarkdown(
     }
 
     switch (rule) {
+      case 'math':
+        parts.push(...renderInlineMath(match[0], `${keyBase}-math-${inlineKey++}`));
+        break;
       case 'strongEm':
         parts.push(nested(first, { fontWeight: '700', fontStyle: 'italic' }));
         break;

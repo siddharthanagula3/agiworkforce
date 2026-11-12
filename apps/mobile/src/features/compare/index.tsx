@@ -461,8 +461,9 @@ export default function CompareScreen() {
               {!lastPrompt && !stateA.isStreaming && !stateB.isStreaming && (
                 <View className="flex-1 items-center justify-center py-16 px-8">
                   <Text className="text-fg-muted text-center text-sm leading-5">
-                    Type a prompt below to send to both models simultaneously and compare the
-                    responses.
+                    {oneAnswerAtATime
+                      ? 'Type a prompt below to compare two models. Your plan runs one answer at a time, so the second starts when the first finishes.'
+                      : 'Type a prompt below to send to both models simultaneously and compare the responses.'}
                   </Text>
                 </View>
               )}

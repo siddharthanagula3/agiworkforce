@@ -8,6 +8,12 @@ import {
   type DeveloperRequestLogStep,
 } from '@agiworkforce/cloud-contracts';
 import { creditsFromMicrousd } from '@agiworkforce/types';
+import {
+  MICROSECOND_SORT_KEY_FORMAT,
+  buildPage,
+  decodeKeysetCursor,
+  keysetSql,
+} from '@/lib/identity/pagination';
 
 interface RequestLogRow {
   id: string;
@@ -23,6 +29,7 @@ interface RequestLogRow {
   finalized_at: string | Date | null;
   key_name: string | null;
   key_prefix: string | null;
+  page_sort_key?: string;
 }
 
 function iso(value: string | Date | null): string | null {
@@ -85,25 +92,48 @@ export async function listDeveloperRequestLogs(
   userId: string,
   before: string | null,
 ): Promise<DeveloperRequestLogPage> {
+  const cursor = decodeKeysetCursor(before);
+  const params: unknown[] = [userId];
+  const keyset = keysetSql({
+    sortColumn: 'created_at',
+    idColumn: 'id',
+    ...(cursor ? { cursor } : {}),
+    firstParamIndex: params.length + 1,
+  });
+  let startClause = '';
+  if (keyset.where) {
+    params.push(...keyset.params);
+    startClause = `and ${keyset.where}`;
+  } else if (before) {
+    params.push(before);
+    startClause = `and created_at < $${params.length}::timestamptz + interval '1 millisecond'`;
+  }
+  params.push(DEVELOPER_REQUEST_LOGS_PAGE_SIZE + 1);
   const rows = await db.query<RequestLogRow>(
-    `select r.id, r.created_at, r.status, r.model, r.final_error_code, r.actual_cost_microusd,
-            r.usage, r.provider_started_at, r.provider_succeeded_at, r.client_delivered_at,
-            r.finalized_at, k.name as key_name, k.key_prefix
-       from public.managed_usage_requests r
-       left join public.api_keys k
-         on k.id = r.api_key_id
-        and k.user_id = r.user_id
-      where r.user_id = $1
-        and r.api_key_id is not null
-        and ($2::timestamptz is null or r.created_at < $2::timestamptz)
-      order by r.created_at desc
-      limit $3`,
-    [userId, before, DEVELOPER_REQUEST_LOGS_PAGE_SIZE + 1],
+    `select * from (
+       select r.id, r.created_at, r.status, r.model, r.final_error_code, r.actual_cost_microusd,
+              r.usage, r.provider_started_at, r.provider_succeeded_at, r.client_delivered_at,
+              r.finalized_at, k.name as key_name, k.key_prefix,
+              to_char(r.created_at at time zone 'utc', ${MICROSECOND_SORT_KEY_FORMAT}) as page_sort_key
+         from public.managed_usage_requests r
+         left join public.api_keys k
+           on k.id = r.api_key_id
+          and k.user_id = r.user_id
+        where r.user_id = $1
+          and r.api_key_id is not null
+     ) logs
+      where true
+        ${startClause}
+      ${keyset.orderBy}
+      limit $${params.length}`,
+    params,
   );
-  const logs = rows.slice(0, DEVELOPER_REQUEST_LOGS_PAGE_SIZE).map(toDeveloperRequestLog);
+  const page = buildPage(rows, DEVELOPER_REQUEST_LOGS_PAGE_SIZE, (row) => ({
+    sortValue: row.page_sort_key ?? '',
+    id: row.id,
+  }));
   return {
-    logs,
-    nextBefore:
-      rows.length > DEVELOPER_REQUEST_LOGS_PAGE_SIZE ? (logs.at(-1)?.createdAt ?? null) : null,
+    logs: page.items.map(toDeveloperRequestLog),
+    nextBefore: page.nextCursor,
   };
 }

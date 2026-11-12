@@ -255,9 +255,9 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
             style={
               {
                 "color": "#111111",
-                "fontSize": 20,
+                "fontSize": 24,
                 "fontWeight": "600",
-                "lineHeight": 28,
+                "lineHeight": 32,
                 "marginBottom": 4,
                 "marginTop": 8,
               }
@@ -312,7 +312,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
             style={
               {
                 "color": "#111111",
-                "fontSize": 18,
+                "fontSize": 20,
                 "fontWeight": "600",
                 "lineHeight": 28,
                 "marginBottom": 4,

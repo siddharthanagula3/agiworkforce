@@ -101,8 +101,11 @@ jest.mock('../services/api', () => ({
 }));
 
 const mockExportCloudUserData = jest.fn();
+const mockShareCloudDataExport = jest.fn();
 jest.mock('../services/cloudDataExport', () => ({
+  ...jest.requireActual('../services/cloudDataExport'),
   exportCloudUserData: (...args: unknown[]) => mockExportCloudUserData(...args),
+  shareCloudDataExport: (...args: unknown[]) => mockShareCloudDataExport(...args),
 }));
 
 const mockSyncNow = jest.fn().mockResolvedValue(undefined);
@@ -367,6 +370,57 @@ describe('Cloud Account destructive action ownership', () => {
     );
   });
 
+  it('explains a partial export and saves it only when asked, never as a connection retry', async () => {
+    const { PartialCloudDataExportError } = jest.requireActual('../services/cloudDataExport');
+    const completeness = {
+      status: 'partial',
+      unavailable_sections: [],
+      skipped_rows: [],
+      truncated_sections: [{ section: 'security_audit_logs', limit: 1000 }],
+      retry: 'repeating this bounded export does not retrieve the omitted rows',
+    };
+    const document = { export_metadata: { completeness } };
+    mockExportCloudUserData.mockRejectedValueOnce(
+      new PartialCloudDataExportError(completeness, document),
+    );
+    mockShareCloudDataExport.mockResolvedValue(undefined);
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Export Cloud Data'));
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Your export is incomplete',
+        expect.stringContaining('security audit logs'),
+        expect.any(Array),
+      ),
+    );
+    expect(Alert.alert).not.toHaveBeenCalledWith('Export failed', expect.anything());
+    expect(mockShareCloudDataExport).not.toHaveBeenCalled();
+
+    const call = (Alert.alert as jest.Mock).mock.calls.findLast(
+      ([title]) => title === 'Your export is incomplete',
+    );
+    const buttons = call?.[2] as Array<{ text: string; onPress?: () => void }>;
+    expect(buttons.map((button) => button.text)).toEqual([
+      'Cancel',
+      'Get help',
+      'Save what’s included',
+    ]);
+    await act(async () => {
+      buttons.find((button) => button.text === 'Save what’s included')?.onPress?.();
+    });
+
+    expect(mockShareCloudDataExport).toHaveBeenCalledWith(
+      { ownerId: 'account-a', epoch: 1 },
+      document,
+      'partial',
+    );
+  });
+
   it('requires an explicit mode switch before contacting AGI Cloud', async () => {
     mockAppMode = 'local';
     render(<CloudAccountScreen />);
@@ -567,10 +621,11 @@ describe('Cloud Account destructive action ownership', () => {
     expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
   });
 
-  it('shows why a paid plan blocks deletion and offers Billing', async () => {
+  it('shows why a renewing paid plan blocks deletion and offers the plan view', async () => {
     const refusal =
-      'Cancel your pro plan before deleting your account. Nothing was deleted, and billing ' +
-      'continues until you cancel in Settings > Billing. Email support@agiworkforce.com if you need help.';
+      'Your Premium plan renews automatically, so nothing was deleted. Cancel it on the web in ' +
+      'Settings > Billing first: it then stays active until 2026-09-01 and is not charged again. ' +
+      'After that you can delete your account right away, without waiting for the plan to end.';
     mockDeleteAccount.mockRejectedValueOnce(
       httpErrorFrom(
         409,
@@ -595,13 +650,13 @@ describe('Cloud Account destructive action ownership', () => {
 
     expect(Alert.alert).toHaveBeenLastCalledWith('Could not delete account', refusal, [
       { text: 'OK', style: 'cancel' },
-      { text: 'Open Billing', onPress: expect.any(Function) },
+      { text: 'View plan', onPress: expect.any(Function) },
     ]);
     const buttons = (Alert.alert as jest.Mock).mock.lastCall?.[2] as Array<{
       text?: string;
       onPress?: () => void;
     }>;
-    buttons.find((button) => button.text === 'Open Billing')?.onPress?.();
+    buttons.find((button) => button.text === 'View plan')?.onPress?.();
     expect(router.push).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
     expect(mockSignOut).not.toHaveBeenCalled();
   });

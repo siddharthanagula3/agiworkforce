@@ -23,7 +23,7 @@ const LEGACY_PAYLOAD_PREFIX = 'agiw:';
 export const PAIRING_UPDATE_REQUIRED_MESSAGE =
   'This QR code was made by an older Desktop version. Update AGI Workforce on Desktop, generate a new code, and scan it again.';
 
-export const PAIRING_SECRET_REQUIRED_MESSAGE = `The ${PAIRING_CODE_LENGTH}-character code alone can no longer secure this connection. Scan the QR code on Desktop, or use Copy pairing link and paste it here.`;
+export const PAIRING_SECRET_REQUIRED_MESSAGE = `The ${PAIRING_CODE_LENGTH}-character code alone can no longer secure this connection. Scan the QR code in the pairing window on Desktop.`;
 
 export class ManualPairingClaimError extends Error {}
 

@@ -393,12 +393,19 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     expect(queryByTestId('download-retry-btn')).toBeNull();
   });
 
-  it('cancels the running download when the user skips to chat', async () => {
+  it('keeps the download running when the user skips to chat and finishes it quietly', async () => {
     const { _setExecutorchResourcesForTesting } = require('../services/executorchModels');
     const { useModelInstallStore } = require('../src/features/model-picker/installStore');
+    const { useModelStore } = require('../src/features/model-picker/store');
     const cancelFetching = jest.fn().mockResolvedValue(undefined);
     _setExecutorchResourcesForTesting({ cancelFetching, deleteResources: jest.fn() });
-    mockTier2LoadModel.mockImplementation(() => new Promise<void>(() => undefined));
+    let finishDownload: () => void = () => undefined;
+    mockTier2LoadModel.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDownload = resolve;
+        }),
+    );
 
     const { getByTestId } = await renderAtDeviceTier();
     await act(async () => {
@@ -408,15 +415,28 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     await waitFor(() => {
       expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]?.status).toBe('downloading');
     });
+    const selectedBefore = useModelStore.getState().selectedModel;
 
     await act(async () => {
       fireEvent.press(getByTestId('download-skip-btn'));
       await Promise.resolve();
     });
 
-    expect(cancelFetching).toHaveBeenCalledWith('https://models.example/fixture-model.pte');
-    expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]).toBeUndefined();
+    expect(cancelFetching).not.toHaveBeenCalled();
+    expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]?.status).toBe('downloading');
+    expect(mockReplace).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(app)' }));
+
+    await act(async () => {
+      finishDownload();
+    });
+
+    await waitFor(() => {
+      expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]?.status).toBe('ready');
+    });
+    expect(useModelInstallStore.getState().installedModelIds).toContain(DEFAULT_MODEL_ID);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(useModelStore.getState().selectedModel).toBe(selectedBefore);
     _setExecutorchResourcesForTesting(null);
   });
 

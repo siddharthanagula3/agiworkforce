@@ -207,5 +207,32 @@
       "dismiss": "앱 추천 숨기기",
       "optionalLink": "앱 연결(선택 사항)"
     }
+  },
+  "drawer": {
+    "publishedSites": "게시된 사이트",
+    "schedules": "일정",
+    "reports": "보고서",
+    "customize": "맞춤 설정",
+    "organizeChats": "채팅 정리",
+    "newChat": "새 채팅",
+    "openProfile": "프로필 열기",
+    "inOneList": "하나의 목록으로",
+    "byProject": "프로젝트별",
+    "recents": "최근",
+    "noRecentChats": "최근 채팅이 없습니다",
+    "seeAllChats": "모든 채팅 보기",
+    "seeAll": "모두 보기",
+    "seeAllChatsIn": "{{name}}의 모든 채팅 보기",
+    "openProject": "프로젝트 열기: {{name}}",
+    "openConversation": "대화 열기: {{title}}",
+    "openConversationUnread": "대화 열기: {{title}}, 읽지 않음",
+    "showChatsIn": "{{name}}의 채팅 표시",
+    "hideChatsIn": "{{name}}의 채팅 숨기기",
+    "notifications": "알림",
+    "helpAndAbout": "도움말 및 정보",
+    "usageRemaining": "남은 사용량",
+    "usageRemainingValue": "남은 사용량 · {{value}}",
+    "usageRemainingChecking": "남은 사용량 · 확인 중…",
+    "usageRemainingUnavailable": "남은 사용량 · 사용할 수 없음"
   }
 }

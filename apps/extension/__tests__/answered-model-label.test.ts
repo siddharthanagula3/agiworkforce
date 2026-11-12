@@ -14,7 +14,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getModelMetadataById, getPickerModels, resolveModelEffort } from '@agiworkforce/types';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  getModelMetadataById,
+  getPickerModels,
+  resolveModelEffort,
+} from '@agiworkforce/types';
 import { BrowserTaskSiteGrants } from '../src/features/computer-use/taskSiteGrants';
 import { ROUTING_TASK_TYPES } from '../src/features/cloud-bridge/managedChatRouting';
 import { normalizeAnsweredModel } from '../src/features/cloud-bridge/answeredModel';
@@ -72,8 +77,13 @@ const { executeChromeManagedChat, normalizeChromeManagedRoutingMetadata } =
 const { applyResolvedRoute, resolvedRouteFrom } =
   await import('../src/features/side-panel/answeredModel');
 const { buildBubbleWithTools } = await import('../src/features/side-panel/bubbles');
-const { applyStreamFailure, hydrateStoredChatMessage } =
-  await import('../src/features/side-panel/chat-state');
+const {
+  applyStreamFailure,
+  hydrateStoredChatMessage,
+  projectCanonicalAgentActivity,
+  settleBrowserActivity,
+  settleFailedAgentActivity,
+} = await import('../src/features/side-panel/chat-state');
 const { appendBackgroundTurn } = await import('../src/features/background/conversation-history');
 
 type FreeTrialChunk = import('../src/features/cloud-bridge/freeTrialClient').FreeTrialChunk;
@@ -395,6 +405,7 @@ describe('a reply that failed before streaming keeps the answered model', () => 
     'previousAnswerModel',
     'captureResolvedRoute',
     'stampResolvedRoute',
+    'settleChatToolActivity',
     'handleStreamError',
   ];
   const functions = program.statements
@@ -417,6 +428,9 @@ describe('a reply that failed before streaming keeps the answered model', () => 
       resolvedRouteFrom,
       applyResolvedRoute,
       applyStreamFailure,
+      settleBrowserActivity,
+      settleFailedAgentActivity,
+      composerBrowserRun: null,
       resolvedRouteByStreamId: new Map(),
       quickModeByStreamId: new Map(),
       ownerByStreamId: new Map(),
@@ -477,5 +491,44 @@ describe('a reply that failed before streaming keeps the answered model', () => 
     );
     expect(answerLabel(render(reloaded))).toContain(ANSWERED_NAME);
     expect(answerLabel(render(reloaded))).not.toContain(PICKED_NAME);
+  });
+
+  it('marks the steps a failed reply left working as failed', () => {
+    const panel = harness();
+    const started = (sessionId: string, toolCallId: string) => ({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId,
+      turnId: sessionId,
+      sequence: 0,
+      emittedAtMs: 1,
+      event: {
+        type: 'tool-execution-start' as const,
+        toolCallId,
+        name: 'browser_read_page',
+        category: 'computer-use' as const,
+        summary: 'Reading the page',
+        input: null,
+      },
+    });
+    const agentEvents = [started('run-1', 'call-1')];
+    const browserEvents = [started('browser:stream-1', 'read-1')];
+    panel.context.messages.push({
+      id: 'stream-1',
+      role: 'assistant',
+      content: '',
+      streaming: true,
+      timestamp: 1,
+      agentEvents,
+      agentActivity: projectCanonicalAgentActivity(agentEvents),
+      browserEvents,
+      browserActivity: projectCanonicalAgentActivity(browserEvents),
+    });
+
+    panel.handleStreamError('stream-1', 'AGI Cloud is temporarily unavailable.', 'server_error');
+
+    const failed = panel.context.messages.find((message) => message.id === 'stream-1')!;
+    expect(failed.agentActivity?.status).toBe('failed');
+    expect(failed.browserActivity?.status).toBe('failed');
+    expect(failed.browserEvents?.at(-1)?.event).toEqual({ type: 'stop', reason: 'error' });
   });
 });

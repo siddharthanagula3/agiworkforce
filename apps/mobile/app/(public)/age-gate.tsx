@@ -152,7 +152,8 @@ export default function AgeGateScreen() {
           </Text>
 
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            This device recorded an age under {threshold}, which only reinstalling AGI can reset.
+            This device recorded an age under {threshold}, which only erasing AGI’s data on this
+            device can reset.
           </Text>
 
           {isClerkSignedIn ? (

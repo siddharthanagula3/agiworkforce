@@ -1772,7 +1772,14 @@ export const MessageBubble = memo(function MessageBubble({
                 }}
               >
                 <AlertCircle size={13} color={themeColors.agentError} />
-                <Text style={{ fontSize: typeScale.caption, color: themeColors.textSecondary }}>
+                <Text
+                  testID="stream-failure-notice-text"
+                  style={{
+                    flexShrink: 1,
+                    fontSize: typeScale.caption,
+                    color: themeColors.textSecondary,
+                  }}
+                >
                   {streamFailureNoticeText(message)}
                 </Text>
                 {onRetryMessage && (

@@ -131,6 +131,7 @@ export interface ChromeManagedChatRequest {
   memoryCommand?: ManagedMemoryCommandTurn;
   skillName?: string;
   tools?: readonly ToolDefinition[];
+  callerToolContinuation?: boolean;
   signal?: AbortSignal;
 }
 
@@ -558,6 +559,17 @@ export async function executeChromeManagedChat(
   } catch {
     return { status: 'error', code: 'invalid_request', message: 'Invalid browser tool offering.' };
   }
+  if (
+    request.callerToolContinuation !== undefined &&
+    (typeof request.callerToolContinuation !== 'boolean' ||
+      (request.callerToolContinuation && (!initialTools.length || !dependencies.callerCustody)))
+  ) {
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'Browser recovery state is unavailable for this turn. Send it again.',
+    };
+  }
 
   const userContent = buildUserContent(request.text.trim(), request.pageContext);
   const uploadedAttachments = ManagedCloudUploadedChatAttachmentsSchema.parse(
@@ -812,6 +824,9 @@ export async function executeChromeManagedChat(
           }),
       ...(legTools.length > 0 ? { tools: structuredClone(legTools) } : {}),
       ...(callerResume ? { callerResume: structuredClone(callerResume) } : {}),
+      ...(request.callerToolContinuation === true && !callerResume && legTools.length > 0
+        ? { callerToolContinuation: true }
+        : {}),
     };
     let legText = '';
     let handoff: ToolCall[] | null = null;

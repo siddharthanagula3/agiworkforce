@@ -160,11 +160,27 @@ describe('Auto acts without asking and stops for crucial actions', () => {
     await expect(asks('auto', input)).resolves.toBe(false);
   });
 
-  it('keeps approval for closing a tab that can contain unsaved changes', async () => {
-    await expect(
-      asks('full', { toolName: 'close_tab', args: { tabId: 7 }, pageUrl: PAGE }, true),
-    ).resolves.toBe(true);
-  });
+  it.each(['auto', 'ask', 'full'] as const)(
+    'keeps approval in %s for closing a tab that can contain unsaved changes',
+    async (mode) => {
+      const input = { toolName: 'close_tab', args: { tabId: 7 }, pageUrl: PAGE };
+      expect(crucialActionCategory(approvalRequirement(input))).toBe('destructive');
+      await expect(asks(mode, input, true)).resolves.toBe(true);
+    },
+  );
+
+  it.each(['auto', 'ask', 'full'] as const)(
+    'asks in %s before every tool the website supplies, whatever it declares',
+    async (mode) => {
+      const input = {
+        toolName: 'call_site_tool',
+        args: { name: 'save_draft', arguments: {} },
+        pageUrl: PAGE,
+      };
+      expect(crucialActionCategory(approvalRequirement(input))).toBe('unverified_effect');
+      await expect(asks(mode, input, true)).resolves.toBe(true);
+    },
+  );
 
   it('keeps Ask first asking for everything and Full access on approved sites only', async () => {
     const navigate = {

@@ -120,6 +120,26 @@ describe('GlobalSearchDialog', () => {
     expect(screen.getByText('Try different keywords or clear filters')).toBeInTheDocument();
   });
 
+  it('says the search failed and retries it instead of reporting no results', async () => {
+    service.search.mockRejectedValue(new Error('Search failed: offline'));
+    const user = userEvent.setup();
+
+    render(<GlobalSearchDialog open onOpenChange={() => {}} />);
+    await user.type(
+      screen.getByRole('textbox', { name: /search messages and conversations/i }),
+      'older chat',
+    );
+
+    expect(await screen.findByText('Search could not be completed')).toBeInTheDocument();
+    expect(screen.queryByText('No results found')).not.toBeInTheDocument();
+
+    service.search.mockResolvedValue(EMPTY_RESULTS);
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(await screen.findByText('No results found')).toBeInTheDocument();
+    expect(screen.queryByText('Search could not be completed')).not.toBeInTheDocument();
+  });
+
   it('asks before clearing the search history, naming what cannot be undone', async () => {
     service.getRecentSearches.mockResolvedValue([
       { query: 'quarterly forecast', resultCount: 3, searchedAt: '2026-09-01T00:00:00.000Z' },

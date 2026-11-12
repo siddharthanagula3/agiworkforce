@@ -20,6 +20,10 @@ import {
 } from '@/src/features/image/services/imagegen';
 
 import {
+  clearStoppedImageGenerations,
+  isImageGenerationStopped,
+} from '@/src/features/image/services/imageGenerationStops';
+import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
@@ -90,6 +94,7 @@ export interface ImageGenerationTurnDependencies {
   getUri: (image: GeneratedImage | undefined) => string | null;
   getDurablePath?: (image: GeneratedImage | undefined) => string | null;
   readReferenceImage?: (uri: string) => Promise<string>;
+  isStopped?: (operationId: string) => boolean;
   timeoutMs?: number;
 }
 
@@ -116,6 +121,7 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
 export type ImageGenerationTurnOutcome = {
   status: 'completed' | 'failed' | 'paywall' | 'cancelled';
   assistantMessageId: string | null;
+  stopped?: true;
 };
 
 let cloudImageGeneration = 0;
@@ -146,6 +152,7 @@ export function takeImageEditRetry(
 export function clearCloudImageGenerationState(): void {
   cloudImageGeneration += 1;
   imageEditRetries.clear();
+  clearStoppedImageGenerations();
 }
 
 const defaultDependencies: ImageGenerationTurnDependencies = {
@@ -161,7 +168,11 @@ export async function runImageGenerationTurn(
 ): Promise<ImageGenerationTurnOutcome> {
   const outcome = await executeImageGenerationTurn(input, dependencies);
   const editOperation = imageEditOperation(input);
-  if (outcome.status === 'failed' && outcome.assistantMessageId && editOperation) {
+  if (
+    (outcome.status === 'failed' || outcome.stopped === true) &&
+    outcome.assistantMessageId &&
+    editOperation
+  ) {
     rememberImageEditRetry(outcome.assistantMessageId, {
       conversationId: input.conversationId,
       displayText: input.displayText,
@@ -216,6 +227,12 @@ async function executeImageGenerationTurn(
       ])
     : input.begin(input.conversationId, input.displayText, input.prompt, input.model);
   input.onStarted?.();
+  const isStopped = () => (dependencies.isStopped ?? isImageGenerationStopped)(assistantMessageId);
+  const stoppedOutcome = (): ImageGenerationTurnOutcome => ({
+    status: 'cancelled',
+    assistantMessageId,
+    stopped: true,
+  });
 
   try {
     const referenceOperation = imageEditOperation(input);
@@ -230,6 +247,7 @@ async function executeImageGenerationTurn(
         );
       } catch (error) {
         if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+        if (isStopped()) return stoppedOutcome();
         input.onUnexpectedError?.(error);
         input.fail(
           input.conversationId,
@@ -240,6 +258,7 @@ async function executeImageGenerationTurn(
       }
     }
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+    if (isStopped()) return stoppedOutcome();
     const result = await withTimeout(
       dependencies.generate(
         {
@@ -265,6 +284,7 @@ async function executeImageGenerationTurn(
       dependencies.timeoutMs ?? IMAGE_GENERATION_TIMEOUT_MS,
     );
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+    if (isStopped()) return stoppedOutcome();
     const image = result.images?.[0];
     const imageUrl = dependencies.getUri(image);
     if (result.success === false || !imageUrl) {
@@ -294,6 +314,7 @@ async function executeImageGenerationTurn(
     return { status: 'completed', assistantMessageId };
   } catch (error) {
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
+    if (isStopped()) return stoppedOutcome();
     if (error instanceof ApiPaywallError) {
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);

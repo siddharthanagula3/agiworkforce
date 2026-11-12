@@ -179,10 +179,10 @@ describe('PAR-M27, QR viewfinder stays visible over the camera feed', () => {
     }
   });
 
-  it('labels the on-camera manual-entry pill with the camera overlay token', () => {
+  it('labels the on-camera scan instruction with the camera overlay token', () => {
     const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
 
-    const label = screen.getByText('Enter code manually');
+    const label = screen.getByText(/Point your camera at the QR code/);
     expect(label.props.style).toMatchObject({ color: lightColors.cameraOverlayText });
     expect(label.props.style).not.toMatchObject({ color: lightColors.teal });
   });

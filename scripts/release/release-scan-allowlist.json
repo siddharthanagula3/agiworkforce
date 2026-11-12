@@ -1,4 +1,9 @@
 {
   "description": "Literals scan-release-artifact.mjs may find in a shipped bundle. Every entry states why the value is public. A provider secret never belongs here.",
-  "allowed": []
+  "allowed": [
+    {
+      "value": "http://localhost:8787",
+      "why": "Loopback address of the Desktop browser bridge (BROWSER_BRIDGE_DEFAULT_PORT in packages/contracts/types/src/browser-bridge.ts). The Chrome extension pairs with it on the user's own machine and its manifest declares http://localhost/* for that purpose; no remote host is reachable through it."
+    }
+  ]
 }

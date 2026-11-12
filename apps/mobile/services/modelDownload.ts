@@ -25,6 +25,7 @@ import {
   deleteInstalledModel,
   insertInstalledModel,
   getInstalledModel,
+  removeInstalledModel,
 } from '@/storage/installedModels';
 import {
   deleteExecutorchPresetFiles,
@@ -243,7 +244,7 @@ function base64ChunkToBytes(b64: string): Uint8Array {
   return out.subarray(0, outIdx);
 }
 
-async function sha256OfFile(fileUri: string): Promise<string> {
+async function sha256OfFile(fileUri: string, assertNotCancelled?: () => void): Promise<string> {
   const info = await getInfoAsync(fileUri);
   if (!info.exists) throw new Error(`File not found: ${fileUri}`);
   const fileSizeBytes = (info as FileInfo & { size?: number }).size ?? 0;
@@ -254,6 +255,7 @@ async function sha256OfFile(fileUri: string): Promise<string> {
   let offset = 0;
 
   while (offset < fileSizeBytes) {
+    assertNotCancelled?.();
     const length = Math.min(CHUNK_BYTES, fileSizeBytes - offset);
     const b64Chunk = await readAsStringAsync(fileUri, {
       encoding: EncodingType.Base64,
@@ -301,9 +303,10 @@ async function downloadFileWithResume(params: {
   activeKey: string;
   url: string;
   destPath: string;
+  assertNotCancelled: () => void;
   onBytes?: (written: number, total: number) => void;
 }): Promise<void> {
-  const { activeKey, url, destPath, onBytes } = params;
+  const { activeKey, url, destPath, assertNotCancelled, onBytes } = params;
   const resumePath = `${destPath}.partial`;
 
   let resumeData: string | undefined;
@@ -313,6 +316,7 @@ async function downloadFileWithResume(params: {
       encoding: EncodingType.UTF8,
     }).catch(() => undefined);
   }
+  assertNotCancelled();
 
   const progressCallback = onBytes
     ? ({ totalBytesWritten, totalBytesExpectedToWrite }: DownloadProgressData) => {
@@ -372,16 +376,17 @@ async function downloadFileWithResume(params: {
   await deleteAsync(resumePath, { idempotent: true });
 }
 
-function expoFileSystemDeps(modelId: string): FileSystemDeps {
+function expoFileSystemDeps(modelId: string, assertNotCancelled: () => void): FileSystemDeps {
   return {
     fileExists: async (path) => (await getInfoAsync(path)).exists === true,
-    sha256OfFile,
+    sha256OfFile: (path) => sha256OfFile(path, assertNotCancelled),
     deleteFile: async (path) => deleteAsync(path, { idempotent: true }),
     downloadToFile: async (url, dest, onFraction) => {
       await downloadFileWithResume({
         activeKey: `${modelId}::${dest}`,
         url,
         destPath: dest,
+        assertNotCancelled,
         onBytes: (written, total) => {
           if (total > 0) onFraction?.(written / total);
         },
@@ -495,7 +500,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
         },
         modelPath: destPath,
         mmprojPath,
-        deps: cancellableDeps(expoFileSystemDeps(modelId), assertNotCancelled),
+        deps: cancellableDeps(expoFileSystemDeps(modelId, assertNotCancelled), assertNotCancelled),
         onProgress: (fraction) => reportBytes(Math.round(fraction * totalBytes), totalBytes),
       });
     } catch (err) {
@@ -512,12 +517,13 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
       activeKey: modelId,
       url: downloadUrl,
       destPath,
+      assertNotCancelled,
       onBytes: (written, total) => reportBytes(written, total > 0 ? total : fileSizeBytes),
     });
 
     assertNotCancelled();
 
-    const actualChecksum = await sha256OfFile(destPath);
+    const actualChecksum = await sha256OfFile(destPath, assertNotCancelled);
     assertNotCancelled();
     if (actualChecksum.toLowerCase() !== checksum.toLowerCase()) {
       await deleteAsync(destPath, { idempotent: true });
@@ -544,6 +550,10 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   };
 
   await insertInstalledModel(record);
+  if (installGeneration(modelId) !== generation) {
+    await removeInstalledModel(modelId).catch(() => undefined);
+    throw new ModelDownloadError('cancelled', 'Download was cancelled.');
+  }
 
   return record;
 }

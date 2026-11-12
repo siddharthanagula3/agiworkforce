@@ -1541,8 +1541,11 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
       }
 
       const json = (await res.json()) as Partial<AuditLogPage>;
+      if (!Array.isArray(json.entries)) {
+        throw new Error('The security activity history could not be read.');
+      }
       return {
-        entries: Array.isArray(json.entries) ? json.entries : [],
+        entries: json.entries,
         hasMore: json.hasMore === true,
       };
     },

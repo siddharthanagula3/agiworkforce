@@ -36,7 +36,11 @@ Original assessment: the local window claim allocated a new conversation but hyd
 
 ## EXT-MIXED-HOSTED-TOOL-HANDOFF-01
 
-Status: partial implementation with source/component qualification. First-party caller negotiation remains off. The finding and its supplied outer audit folder remain open.
+Status: partial implementation with source/component qualification. First-party caller negotiation is on for scoped admissions only (2026-11-11, below). Native acceptance is still missing. The finding and its supplied outer audit folder remain open.
+
+2026-11-11 activation for scoped admissions: Chrome now sends `caller_tool_handoff_version` (through `ChromeManagedChatRequest.callerToolContinuation`, set in background `handleChatMessage`) only when the admission already proves every binding the owned-action path checks later: an acknowledged account conversation scope (`captureCallerConversationContext`), a page with a document id, a local chat id, durable custody, and an interactive (not background-delivery) turn. `executeChromeManagedChat` negotiates on non-receipt legs only, and it refuses a negotiation request that has no custody or no browser tools, before any request is sent. Any other admission keeps the legacy protocol unchanged. With negotiation, a reply that pauses for a hosted approval or input and then asks for a browser tool continues through the existing custody recovery (`handleResolveChatApproval` with `onCallerCheckpoint`, then `resumeOwnedManagedRun`). Approval and resume streams now record their stream and local chat ids, so a reopened side panel adopts them, together with their waiting browser handoff, instead of a durable replay aborting them. No server change was needed: the approve route replays the checkpoint request with the negotiation fields (`buildApprovalCheckpointRequest`/`checkpointRequestForResume`), and `tool-loop.client-tools.test.ts` already covers approved and rejected hosted siblings followed by a caller boundary. Source evidence: managed-chat-handler (negotiation, legacy default, two refusals), background-stream-cancellation (three admission cases), managed-chat-panel-close (approval-stream adoption). Each fails without its change. 17 extension files (359 tests) and 5 web files (98 tests) pass. This is not native acceptance.
+
+Still on the legacy protocol, where approval-then-browser-tool still ends with "This run has more browser work...": the first turn of a new chat (no acknowledged cloud conversation yet), temporary chats, chats with account mirroring off, and pages admitted without a readable document id (no site access at send time). Those need the scope-proof item below.
 
 The original report traced hosted and caller siblings being handed wholesale to Chrome, whose allowlist correctly rejected the hosted functions. Current server source creates a persisted caller-only boundary after hosted obligations and their normal approval/input/device gates. Strict caller-resume schemas, original private provider context, cumulative budgets, result inspection, checkpoint leases and context-policy checks remain server-owned.
 
@@ -3916,22 +3920,6 @@ Verification: Three real-hook/store assertions fail as expected; this particular
 
 Resolution/acceptance: Construct an otherwise admitted request with adequate budget and an allowed model; require the exact managed_compute_disabled code when the policy is off, then enable the policy and require that this gate permits the same request. Inject a broken managed-compute gate and prove the test fails even if another refusal remains.
 
-## VSCODE-CLI-HANDOFF-NOT-ACTIVATED-01
-
-Severity: Medium. Status: opening corrected in source (`895d49809b`); replay-receipt ordering open. Original: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-Continue CLI Session accepts the chosen thread but never opens it in VS Code. continueCliSessionHere selects newest/requested ID, validates and accepts its handoff, then only executes agi-workforce.chat. That command reveals native chat or the sidebar; it does not resume the accepted thread. The existing fork command explicitly calls sidebarProvider.resumeConversation(forkedId), demonstrating the required activation is separate. Deep links reach the same command.
-
-Impact/trigger: With a different sidebar thread active, invoke Continue CLI Session or a developer-session deep link for a specific CLI thread and confirm Continue here.
-
-Start at `apps/extension-vscode/src/core/commandSetup.ts:498` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
-
-Verification: Read complete command consumer and target command. Limit: No mounted VS Code invocation; existing admission helper tests do not exercise this command-to-sidebar activation.
-
-Resolution/acceptance: After acceptance, reveal first-party chat and resume newest.id; only record acceptance once backend admission and activation succeed. Add a command test with a different active thread.
-
-Update 2026-11-10: `895d49809b` makes `continueCliSessionHere` call `revealFirstPartyChat` and `sidebarProvider.resumeConversation` after `acceptHandoff` (`apps/extension-vscode/src/core/commandSetup.ts:528-571,1404-1413`); `sessionHandoffCommands.test.ts:170,197` covers an accepted and a declined review. Open: the replay receipt is still recorded (`accepted.add`) before the backend accepts and the thread is opened, so a failed accept consumes the link; no mounted VS Code invocation was run.
-
 ## CLI-INTERRUPT-RELEASE-BEFORE-CLEANUP-01
 
 Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
@@ -4369,18 +4357,6 @@ In a separate temporary Git repository, apps/unregistered/AGENTS.md passes while
 Source: `scripts/check-agent-docs.mjs:79`. Exact evidence (`audit/checklist/evidence/coverage-agent-doc-enumeration-2026-10-09.json`, untracked) and bounded review (`audit/checklist/reviews/coverage-ecosystem-instruments-2026-10-09-001.md`, untracked). No current production privilege bypass demonstrated; scoped contract guard misses pre-staging changes.
 
 Resolution/acceptance: Enumerate tracked plus current nonignored untracked scoped files, retain vendored ownership exclusions, and test both untracked and staged fixtures. No implementation fix was made, per the documentation-only audit scope.
-
-## EXT-MIRROR-TEST-FAKE-COVERAGE-01
-
-Severity: Low. Status: existing open instrument defect; additional concrete instances recorded 2026-10-09. The original `security-fixes.test.ts` scope and prior evidence remain open; it was not freshly read or closed in this wave.
-
-The full-file specialist review found two additional instruments with the same tracking concern. `autofill-escalation-agent-integration.test.ts` describes real content/background handler coverage but imports neither; its composed helper test calls `runAgentLoop` directly and itself emits `AGI_CU_STEP` from its supplied callback. Removing the runtime handoff/broadcast does not exercise that purported handler subject. `connection-lifecycle.test.ts` imports reconnect helpers, while broadcaster, timeout and status groups exercise implementations local to the test. Those groups cannot settle corresponding worker execution.
-
-Full-file review, exact locations and separate source claims (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-001.json`, untracked). Local report identities `CHROME-AUTOFILL-INTEGRATION-HANDLERS-UNEXERCISED-01` and `CHROME-LIFECYCLE-TEST-LOCAL-REPLICAS-01` remain preserved instances under this existing canonical tracking owner, rather than duplicate register rows. Lead independently inspected the handler claims, local lifecycle subjects and manual progress emission. Neither case was newly run or mutated; missing production behavior is not inferred.
-
-Resolution/acceptance: Exercise the real message handlers and native worker lifecycle with controlled dependencies, or accurately qualify helper-only coverage. Adverse controls must detect removing the actual producer/consumer behavior. The October9 fourth Chrome packet separately re-read the original security-fixes file through EOF: its private test subjects remain disconnected, while real gateway/Markdown/redactor groups are distinguished. No test or implementation edits were made.
-
-October9 further instances: recorder-redaction.test.ts declares its own patterns and sanitizer; screenshot-tab-restriction.test.ts tests a private tab/window resolver and never captures pixels. The lead independently read the screenshot file fully and recorder subject ranges, and the specialist read both through EOF. Fourth packet current-source receipts (`audit/checklist/reviews/coverage-chrome-tests-2026-10-09-004.json`, untracked). These remain instrument-coverage instances under this existing ID; screenshot capture against the real handler is covered by `apps/extension/__tests__/background-screenshot-capture.test.ts`. Production recorder behavior and full browser tests were not run.
 
 ## AUDIT-CODEOWNERS-COMMENT-ONLY-01
 
@@ -8600,33 +8576,6 @@ and user-visible resolution before deciding whether to invalidate or migrate
 records. Blind version adoption, deleting snapshots, or claiming a normal pull
 already reconciles content is not justified. Accepted new conflict handling and
 its unexecuted fixtures do not resolve this legacy-state boundary.
-
-## EXT-SITE-TOOL-AUTO-APPROVAL-CONTRACT-01
-
-Severity: Medium. Status: OPEN source-backed product-policy contract discrepancy,
-2026-11-04. No exploit, deployed behavior or universal consent bypass established.
-
-`apps/extension/src/features/computer-use/browserToolDefinitions.ts` describes
-`call_site_tool` as requiring approval on every call. `approvalPolicy.ts` returns
-`alwaysAsk: true, reason: 'site_tool'`, but `crucialActions.ts` maps that reason to
-null. `askBeforeActing.ts::actionNeedsApproval` ignores noncrucial `alwaysAsk` in
-Auto, the default mode, and returns false; the production `background.ts`
-`onBeforeAction` callback consequently returns true without an extension prompt.
-This is a concrete mismatch between the declared per-call contract and mode
-resolution, not evidence that every site call runs without consent.
-
-`webmcp.ts::callTool` independently plans against the actual page and retains
-`window.confirm` when its policy requires approval; form submission also confirms.
-Ask/Full and other crucial-action requirements remain separate. Accepted alias
-retirement `73709c77c6839814c86ae8fe16ff6632a0522334` routes production site tools
-through the existing canonical bound service but does not change this policy.
-
-Required decision: establish whether every canonical site invocation must prompt
-in Auto, or whether the declared contract should describe mode-dependent consent.
-Then align driver policy, tool description and user-facing permission semantics
-without weakening actual-page sensitive/authentication/form controls. No policy
-change is approved or implemented by this note; fixtures are unexecuted and
-runtime/deployment acceptance remains open.
 
 ## WEB-VIDEO-DELIVERY-RECOVERY-01
 

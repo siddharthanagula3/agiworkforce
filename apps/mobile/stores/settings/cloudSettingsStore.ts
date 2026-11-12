@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { RESPONSE_LANGUAGE_AUTO } from '@agiworkforce/types';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, storage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import { accentTokenFrom } from '@/src/ui/theme/tokens';
 import {
   SPEECH_LANGUAGE_AUTO,
   speechLanguageFromLegacy,
@@ -139,6 +140,7 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
         return {
           ...current,
           ...persistedState,
+          accentColor: accentTokenFrom(persistedState.accentColor ?? current.accentColor),
           personalization: {
             ...current.personalization,
             ...(persistedState.personalization ?? {}),
@@ -158,7 +160,7 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
               const s = parsed?.state ?? {};
               useCloudSettingsStore.setState({
                 themeMode: s.themeMode ?? 'system',
-                accentColor: s.accentColor ?? 'neutral',
+                accentColor: accentTokenFrom(s.accentColor),
                 fontPreference: s.fontPreference ?? 'default',
                 notificationsEnabled: s.notificationsEnabled ?? true,
                 speechLanguage: speechLanguageFromLegacy(s.speechLanguage),

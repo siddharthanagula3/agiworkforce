@@ -72,6 +72,7 @@ import {
   stageSharedFileAttachments,
 } from '@/src/features/share-preview/sharedAttachments';
 import {
+  beginCloudPostAuthIntent,
   clearPostAuthIntent,
   consumePostAuthDestination,
 } from '@/src/features/auth/services/postAuthIntent';
@@ -483,7 +484,7 @@ export default function RootLayout() {
       isAgeGateConfirmed() &&
       segments[0] !== '(auth)'
     ) {
-      router.replace('/(auth)/login');
+      router.replace(beginCloudPostAuthIntent());
       return;
     }
     const redirect = resolveRootRedirect({

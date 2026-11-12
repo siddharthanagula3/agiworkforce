@@ -258,6 +258,31 @@ describe('downloadGeneratedFile', () => {
     );
   });
 
+  it.each([
+    ['gif', 'com.compuserve.gif', 'image/gif'],
+    ['webp', 'org.webmproject.webp', 'image/webp'],
+    ['mp3', 'public.mp3', 'audio/mpeg'],
+    ['wav', 'com.microsoft.waveform-audio', 'audio/wav'],
+    ['m4a', 'public.mpeg-4-audio', 'audio/mp4'],
+    ['txt', 'public.plain-text', 'text/plain'],
+  ])('shares a .%s file with its own type', async (extension, uti, mimeType) => {
+    await shareFile(`file:///docs/exports/export-1/file.${extension}`);
+
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      `file:///docs/exports/export-1/file.${extension}`,
+      { UTI: uti, mimeType },
+    );
+  });
+
+  it('does not claim a type it does not know when sharing', async () => {
+    await shareFile('file:///docs/exports/export-1/notes.unknownext');
+
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      'file:///docs/exports/export-1/notes.unknownext',
+      {},
+    );
+  });
+
   it.each([true, false])(
     'does not share or throw after retired availability resolves %s',
     async (available) => {

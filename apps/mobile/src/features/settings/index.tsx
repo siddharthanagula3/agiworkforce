@@ -47,6 +47,7 @@ import {
   type PostAuthDestination,
 } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
+import { planCheckOf } from '@/src/features/billing/planCheck';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
@@ -183,9 +184,11 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
     >
       <Icon size={19} color={tint} strokeWidth={1.8} />
       <Text
+        testID={`settings-row-label-${row.key}`}
         numberOfLines={1}
         style={{
-          flex: 1,
+          flexGrow: 1,
+          flexShrink: 0,
           color: row.tone === 'danger' ? colors.agentError : colors.textPrimary,
           fontSize: typeScale.body,
         }}
@@ -390,7 +393,10 @@ export default function SettingsTabScreen() {
   const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const billingTier = useTierStore((s) => s.billingTier);
-  const billingLoading = useTierStore((s) => s.isRefreshing && s.lastRefreshedAt === null);
+  const planCheck = useTierStore(planCheckOf);
+  const billingLoading = planCheck === 'checking';
+  const planValue =
+    planCheck === 'confirmed' ? getBillingPlanPricing(billingTier).label : 'Not confirmed';
   const remoteStatus = useConnectionStore((s) => s.status);
   const remoteDesktopName = useConnectionStore((s) => s.desktopName);
   const { user: clerkUser } = useUser();
@@ -474,7 +480,7 @@ export default function SettingsTabScreen() {
             key: 'account-subscription',
             label: 'Subscription',
             icon: CreditCard,
-            value: accountValue ?? getBillingPlanPricing(billingTier).label,
+            value: accountValue ?? planValue,
             loading: accountValue === undefined && billingLoading,
             onPress: openCloudRoute('/(app)/settings/cloud-billing'),
           },
@@ -739,7 +745,7 @@ export default function SettingsTabScreen() {
       remoteDesktopName,
       themeMode,
       billingLoading,
-      billingTier,
+      planValue,
       clerkUser,
     ],
   );

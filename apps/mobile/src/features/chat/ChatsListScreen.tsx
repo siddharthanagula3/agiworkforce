@@ -192,6 +192,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   const { openActions, rename } = useConversationActions();
   const serverChatMatches = useChatViewStore((state) => state.remoteSearchChats);
   const serverProjectMatches = useChatViewStore((state) => state.remoteSearchProjects);
+  const searchFailed = useChatViewStore((state) => state.searchFailed);
   const localProjects = useProjectStore((state) => state.projects);
   const cloudProjects = useCloudProjectStore((state) => state.projects);
   const storedArtifacts = useArtifactStore((state) => state.artifacts);
@@ -316,6 +317,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   );
 
   const isSearching = query.trim().length > 0;
+  const cloudSearchFailed = isSearching && searchIsCurrent && searchFailed && appMode === 'cloud';
   const sections = useMemo<ChatsListSection[]>(() => {
     if (!isSearching) return searchOnly ? [] : groupHistory(filteredHistory);
     return [
@@ -589,7 +591,29 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          appMode === 'cloud' && conversationLoadError && !hasMoreCloudConversations ? (
+          cloudSearchFailed ? (
+            <View
+              accessibilityRole="alert"
+              style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
+            >
+              <Text style={{ color: colors.agentError, fontSize: typeScale.footnote }}>
+                {hasResults
+                  ? 'Search could not be completed. Showing matches already on this device.'
+                  : 'Search could not be completed. Check your connection and try again.'}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Retry search"
+                onPress={() => searchConversations(query)}
+              >
+                <Text
+                  style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                >
+                  Retry
+                </Text>
+              </Pressable>
+            </View>
+          ) : appMode === 'cloud' && conversationLoadError && !hasMoreCloudConversations ? (
             <View
               accessibilityRole="alert"
               style={{ paddingHorizontal: 18, paddingVertical: 14, gap: 8 }}
@@ -641,7 +665,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           ) : null
         }
         ListEmptyComponent={
-          appMode === 'cloud' && conversationLoadError ? null : (
+          (appMode === 'cloud' && conversationLoadError) || cloudSearchFailed ? null : (
             <View
               style={{
                 flex: 1,

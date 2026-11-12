@@ -918,7 +918,7 @@ export function getWebviewContent(
       display: block;
       width: 1em;
       height: 1em;
-      background: url("${markUri}") center / contain no-repeat;
+      background-image: url("${markUri}"); background-position: center; background-size: contain; background-repeat: no-repeat;
     }
 
     /* ── Input area / composer (design-spec §7) ── */

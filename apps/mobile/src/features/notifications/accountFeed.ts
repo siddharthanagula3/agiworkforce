@@ -22,11 +22,13 @@ function isFeedItem(value: unknown): value is NotificationFeedItem {
   return NotificationFeedItemSchema.safeParse(value).success;
 }
 
-export async function fetchAccountNotifications(
-  before?: string,
-): Promise<NotificationFeedResponse> {
+export interface AccountNotificationPage extends NotificationFeedResponse {
+  nextCursor: string | null;
+}
+
+export async function fetchAccountNotifications(cursor?: string): Promise<AccountNotificationPage> {
   const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
-  if (before) query.set('before', before);
+  if (cursor) query.set('cursor', cursor);
   const response = await api.get<Partial<NotificationFeedResponse>>(
     `${ACCOUNT_NOTIFICATIONS_PATH}?${query.toString()}`,
   );
@@ -37,7 +39,11 @@ export async function fetchAccountNotifications(
     typeof response.unreadCount === 'number' && response.unreadCount >= 0
       ? response.unreadCount
       : notifications.filter((item) => !item.read).length;
-  return { notifications, unreadCount };
+  const nextCursor =
+    typeof response.nextCursor === 'string' && response.nextCursor.length > 0
+      ? response.nextCursor
+      : null;
+  return { notifications, unreadCount, nextCursor };
 }
 
 export async function markAccountNotificationsRead(
@@ -79,6 +85,7 @@ interface AccountFeedState {
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
+  nextCursor: string | null;
   error: string | null;
   refresh: () => Promise<void>;
   loadMore: () => Promise<void>;
@@ -93,6 +100,7 @@ const EMPTY_FEED = {
   loading: false,
   loadingMore: false,
   hasMore: false,
+  nextCursor: null as string | null,
   error: null as string | null,
 };
 
@@ -134,7 +142,7 @@ export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) 
 
     refresh: async () => {
       const generation = ++feedGeneration;
-      set({ loading: true, error: null });
+      set({ loading: true, loadingMore: false, error: null });
       try {
         const page = await fetchAccountNotifications();
         if (generation !== feedGeneration) return;
@@ -142,7 +150,8 @@ export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) 
         set({
           items: page.notifications,
           unreadCount: page.unreadCount,
-          hasMore: page.notifications.length === PAGE_SIZE,
+          hasMore: page.nextCursor !== null,
+          nextCursor: page.nextCursor,
           loading: false,
         });
       } catch {
@@ -152,20 +161,20 @@ export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) 
     },
 
     loadMore: async () => {
-      const { items, hasMore, loading, loadingMore } = get();
-      const last = items.at(-1);
-      if (!hasMore || loading || loadingMore || !last) return;
+      const { hasMore, loading, loadingMore, nextCursor } = get();
+      if (!hasMore || loading || loadingMore || !nextCursor) return;
       const generation = feedGeneration;
-      set({ loadingMore: true });
+      set({ loadingMore: true, error: null });
       try {
-        const page = await fetchAccountNotifications(last.createdAt);
+        const page = await fetchAccountNotifications(nextCursor);
         if (generation !== feedGeneration) return;
         const known = new Set(get().items.map((item) => item.id));
         unreadSyncRevision += 1;
         set({
           items: [...get().items, ...page.notifications.filter((item) => !known.has(item.id))],
           unreadCount: page.unreadCount,
-          hasMore: page.notifications.length === PAGE_SIZE,
+          hasMore: page.nextCursor !== null,
+          nextCursor: page.nextCursor,
           loadingMore: false,
         });
       } catch {

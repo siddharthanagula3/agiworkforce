@@ -187,7 +187,7 @@ export default function CameraScreen() {
     );
   }
 
-  if (!permission) {
+  if (!capturedUri && !permission) {
     return (
       <View style={styles.centered}>
         <LoadingIndicator />
@@ -195,7 +195,7 @@ export default function CameraScreen() {
     );
   }
 
-  if (!permission.granted) {
+  if (!capturedUri && !permission?.granted) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
         <View style={styles.permissionContent}>

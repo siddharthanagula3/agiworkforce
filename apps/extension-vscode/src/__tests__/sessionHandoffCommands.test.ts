@@ -194,6 +194,45 @@ describe('taking a session somewhere else', () => {
     expect(sidebar.resumeConversation).toHaveBeenCalledWith('thread-cli');
   });
 
+  it('records the handoff only once it is accepted and opened, so a failed attempt can be retried', async () => {
+    const handoff = {
+      protocolVersion: DEVELOPER_SESSION_PROTOCOL_VERSION,
+      threadId: 'thread-cli',
+      origin: 'developer_session',
+      issuedBy: 'cli',
+      issuedAt: new Date().toISOString(),
+      fromEnvironment: 'local',
+      toEnvironment: 'local',
+      workspace: { cwd: vscode.Uri.file('/repo').fsPath },
+      posture: { agentMode: 'agent', trustMode: 'local', permissionProfileId: 'default' },
+    };
+    runtime.listThreads.mockResolvedValue({
+      threads: [{ id: 'thread-cli', updatedAt: '2026-09-20T12:00:00.000Z' }],
+    });
+    runtime.handOffThread.mockResolvedValue(handoff);
+    runtime.acceptHandoff.mockRejectedValueOnce(new Error('runtime handshake failed'));
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue('Continue here' as never);
+
+    await handlers.get('agi-workforce.continueCliSession')?.();
+
+    expect(sidebar.resumeConversation).not.toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showErrorMessage).mock.calls.at(-1)?.[0]).toContain(
+      'runtime handshake failed',
+    );
+
+    await handlers.get('agi-workforce.continueCliSession')?.();
+
+    expect(runtime.acceptHandoff).toHaveBeenCalledTimes(2);
+    expect(sidebar.resumeConversation).toHaveBeenCalledWith('thread-cli');
+
+    await handlers.get('agi-workforce.continueCliSession')?.();
+
+    expect(runtime.acceptHandoff).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(vscode.window.showWarningMessage).mock.calls.at(-1)?.[0]).toContain(
+      'already taken that session',
+    );
+  });
+
   it('does not touch the sidebar thread when the handoff review is declined', async () => {
     runtime.listThreads.mockResolvedValue({
       threads: [{ id: 'thread-cli', updatedAt: '2026-09-20T12:00:00.000Z' }],

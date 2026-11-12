@@ -420,16 +420,31 @@ no card form, and none of the links above reaches one.
 
 ## Account deletion and data export
 
-In-app, no support ticket and no website visit:
+Requested in the app, with no support ticket:
 
-**Settings → Account → Delete Account** → confirmation alert → `DELETE
-/api/user/delete-account`. The confirmation states that the AGI Cloud account and
-all cloud data, chats, projects, memory, artifacts, are permanently deleted
-within 24 hours, that it cannot be undone, and that on-device Local Mode data
-stays on the device and must be removed separately. Source:
-`src/features/settings/cloud-account/index.tsx`. The deletion is bound to the
+**Settings → Account → Delete Account** → confirmation alert → identity check →
+`DELETE /api/user/delete-account`. The request schedules deletion of the AGI
+Cloud account and its cloud data (chats, projects, memory, artifacts) and
+returns a cancellation deadline 24 hours later; the app shows it and signs out,
+and signing back in before the deadline lets the person cancel. After the
+deadline a daily job ends any Stripe billing still live, erases the data and
+deletes the sign-in identity, so erasure can finish later than the deadline.
+Data under an active legal hold, and the records the privacy policy lists as
+kept, are kept. On-device Local Mode data stays on the device and is removed
+separately. Sources: `src/features/settings/cloud-account/index.tsx`,
+`src/features/settings/cloud-account/deleteAccountConfirmation.ts`,
+`apps/web/app/api/user/delete-account/route.ts`. The deletion is bound to the
 account epoch captured when the dialog opened, so a mid-flight account switch
 cannot delete the wrong account.
+
+When the server refuses, nothing is scheduled and the app shows why. A paid plan
+that still renews (bought on the web, since this version sells nothing) has to
+be cancelled where it was bought first, so a renewal cannot charge after the
+account is gone; the app names where but does not link to the billing page.
+Once the plan is cancelled, deletion is scheduled straight away, the remaining
+paid time ends when erasure runs, and the confirmation says the unused time is
+not refunded. A cancelled plan with a payment still being collected, and the
+only owner of a workspace, are also refused, with the reason shown.
 
 **Settings → Data Controls** offers **Export Local Data**, chats, memory,
 settings and installed model details, which runs entirely on the device

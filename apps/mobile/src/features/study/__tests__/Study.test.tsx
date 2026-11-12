@@ -81,6 +81,21 @@ describe('StudyScreen', () => {
     expect(mockCreateConversation).not.toHaveBeenCalled();
   });
 
+  it('says the recent sessions could not be loaded, then shows them after a retry', async () => {
+    (api.get as jest.Mock)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({ sessions: [session()] });
+    render(<StudyScreen />);
+
+    expect(await screen.findByText('Your recent study sessions could not be loaded.')).toBeTruthy();
+    expect(screen.queryByText('RECENT')).toBeNull();
+
+    fireEvent.press(screen.getByTestId('study-history-retry'));
+
+    expect(await screen.findByText('Spanish past tense')).toBeTruthy();
+    expect(screen.queryByTestId('study-history-error')).toBeNull();
+  });
+
   it('asks a Local Mode user to switch to Cloud instead of starting', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     useWaitlistStore.setState({ cloudUnlocked: true });

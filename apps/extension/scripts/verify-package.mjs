@@ -1,38 +1,69 @@
 #!/usr/bin/env node
 
+import { Buffer } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
+import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { readChromeBuildConfiguration, validateReleaseManifest } from './manifest-config.mjs';
+import {
+  FIRST_DRAFT_ARCHIVE_SUFFIX,
+  readChromeBuildConfiguration,
+  validateReleaseManifest,
+} from './manifest-config.mjs';
+
+const STORE_SUMMARY_MAX_CHARACTERS = 132;
+const STORE_ICON_SIZE = '128';
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourceManifest = JSON.parse(
   fs.readFileSync(path.join(extensionRoot, 'manifest.json'), 'utf8'),
 );
-const requestedPath = process.argv[2];
+const cliArguments = process.argv.slice(2);
+const firstDraft = cliArguments.includes('--first-draft');
+const requestedPath = cliArguments.find((argument) => !argument.startsWith('--'));
 const packagePath = requestedPath
   ? path.resolve(process.cwd(), requestedPath)
-  : path.join(extensionRoot, 'extension.zip');
+  : path.join(
+      extensionRoot,
+      firstDraft ? `extension${FIRST_DRAFT_ARCHIVE_SUFFIX}` : 'extension.zip',
+    );
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
   process.exit(1);
 }
 
-function unzip(args) {
+function runUnzip(args, encoding) {
   const result = spawnSync('unzip', args, {
-    encoding: 'utf8',
+    encoding,
     maxBuffer: 16 * 1024 * 1024,
   });
   if (result.error?.code === 'ENOENT') {
     fail('unzip is required to inspect the Chrome Web Store package');
   }
   if (result.status !== 0) {
-    fail(result.stderr?.trim() || `unzip ${args[0]} failed`);
+    fail(String(result.stderr ?? '').trim() || `unzip ${args[0]} failed`);
   }
   return result.stdout;
+}
+
+function unzip(args) {
+  return runUnzip(args, 'utf8');
+}
+
+function unzipBytes(entry) {
+  return runUnzip(['-p', packagePath, entry], 'buffer');
+}
+
+if (firstDraft !== path.basename(packagePath).endsWith(FIRST_DRAFT_ARCHIVE_SUFFIX)) {
+  fail(
+    firstDraft
+      ? `a first-draft package must be named *${FIRST_DRAFT_ARCHIVE_SUFFIX} so it is never mistaken for a release`
+      : `${path.basename(packagePath)} is a first-draft package; only a release package may be submitted`,
+  );
 }
 
 if (!fs.existsSync(packagePath) || !fs.statSync(packagePath).isFile()) {
@@ -71,7 +102,10 @@ const invalidPaths = entries.filter((entry) => {
     entry !== normalized ||
     normalized.startsWith('/') ||
     normalized.split('/').includes('..') ||
-    /[\u0000-\u001f\u007f]/u.test(normalized)
+    [...normalized].some((character) => {
+      const code = character.codePointAt(0);
+      return code < 0x20 || code === 0x7f;
+    })
   );
 });
 if (invalidPaths.length > 0) {
@@ -146,9 +180,67 @@ for (const field of ['name', 'version', 'manifest_version', 'minimum_chrome_vers
 }
 
 try {
-  validateReleaseManifest(packagedManifest, readChromeBuildConfiguration(process.env));
+  validateReleaseManifest(packagedManifest, readChromeBuildConfiguration(process.env), {
+    firstDraft,
+  });
 } catch (error) {
   fail(error.message);
+}
+
+function localizedManifestText(field) {
+  const value = packagedManifest[field];
+  if (typeof value !== 'string') return undefined;
+  const placeholder = /^__MSG_([A-Za-z0-9_@]+)__$/u.exec(value);
+  if (!placeholder) return value;
+  const messagesPath = `_locales/${packagedManifest.default_locale}/messages.json`;
+  if (!entries.includes(messagesPath)) {
+    fail(`manifest ${field} names ${value} but ${messagesPath} is not packaged`);
+  }
+  let messages;
+  try {
+    messages = JSON.parse(unzip(['-p', packagePath, messagesPath]));
+  } catch (error) {
+    fail(`${messagesPath} is invalid JSON: ${error.message}`);
+  }
+  const key = placeholder[1].toLowerCase();
+  const match = Object.entries(messages).find(([name]) => name.toLowerCase() === key);
+  return typeof match?.[1]?.message === 'string' ? match[1].message : undefined;
+}
+
+const storeSummary = localizedManifestText('description')?.trim();
+if (!storeSummary) {
+  fail('packaged manifest description is empty; the store listing reads its summary from it');
+}
+if ([...storeSummary].length > STORE_SUMMARY_MAX_CHARACTERS) {
+  fail(
+    `packaged manifest description has ${[...storeSummary].length} characters; the limit is ${STORE_SUMMARY_MAX_CHARACTERS}`,
+  );
+}
+
+function pngDimensions(bytes) {
+  if (bytes.length < 24 || !bytes.subarray(0, 8).equals(PNG_SIGNATURE)) return null;
+  if (bytes.subarray(12, 16).toString('latin1') !== 'IHDR') return null;
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
+const declaredIcons = [
+  ...Object.entries(packagedManifest.icons ?? {}),
+  ...Object.entries(packagedManifest.action?.default_icon ?? {}),
+];
+if (typeof packagedManifest.icons?.[STORE_ICON_SIZE] !== 'string') {
+  fail(`packaged manifest declares no ${STORE_ICON_SIZE}x${STORE_ICON_SIZE} icon`);
+}
+for (const [size, iconPath] of declaredIcons) {
+  if (typeof iconPath !== 'string' || !entries.includes(iconPath)) {
+    fail(`packaged icon ${size} is missing: ${iconPath ?? '<unset>'}`);
+  }
+  const dimensions = pngDimensions(unzipBytes(iconPath));
+  if (!dimensions) fail(`packaged icon ${iconPath} is not a PNG`);
+  if (String(dimensions.width) !== size || String(dimensions.height) !== size) {
+    fail(
+      `packaged icon ${iconPath} is ${dimensions.width}x${dimensions.height}, declared as ${size}x${size}`,
+    );
+  }
 }
 
 for (const entry of [
@@ -163,5 +255,5 @@ for (const entry of [
 }
 
 console.log(
-  `Verified ${path.basename(packagePath)}: ${packagedManifest.name} ${packagedManifest.version}, MV${packagedManifest.manifest_version}, ${entries.length} archive entries.`,
+  `Verified ${firstDraft ? 'first-draft ' : ''}${path.basename(packagePath)}: ${packagedManifest.name} ${packagedManifest.version}, MV${packagedManifest.manifest_version}, ${entries.length} archive entries.`,
 );

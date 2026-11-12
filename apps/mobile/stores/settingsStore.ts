@@ -9,9 +9,10 @@ import {
 } from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { isAudioRoute, type AudioRoute } from '@/src/features/voice/services/audioRoute';
+import type { AccentToken } from '@/src/ui/theme/tokens';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
-export type AccentColor = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
+export type AccentColor = AccentToken;
 export type FontPreference = 'default' | 'system' | 'dyslexic';
 export const LIST_ARRANGEMENTS = ['by-project', 'one-list'] as const;
 export type ListArrangement = (typeof LIST_ARRANGEMENTS)[number];

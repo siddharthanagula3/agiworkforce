@@ -335,6 +335,38 @@ describe('Mobile Account Security screen', () => {
     expect(screen.getByText('Login success')).toBeTruthy();
   });
 
+  it('says activity is unavailable when only the history request fails, and retries it', async () => {
+    mockFetchAuditLog.mockRejectedValue(new Error('offline'));
+
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByLabelText('Activity. Unavailable · Retry')).toBeTruthy(),
+    );
+    expect(screen.queryByText('No activity recorded yet')).toBeNull();
+
+    mockFetchAuditLog.mockResolvedValue([
+      {
+        id: 'a1',
+        action: 'login_success',
+        ipAddress: null,
+        createdAt: '2026-07-31T18:00:00.000Z',
+      },
+    ]);
+    fireEvent.press(screen.getByLabelText('Activity. Unavailable · Retry'));
+
+    await waitFor(() => expect(screen.getByText('Login success')).toBeTruthy());
+    expect(screen.queryByLabelText('Activity. Unavailable · Retry')).toBeNull();
+  });
+
+  it('still reports a genuinely empty history as no recorded activity', async () => {
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('No activity recorded yet')).toBeTruthy());
+    expect(screen.queryByLabelText('Activity. Unavailable · Retry')).toBeNull();
+  });
+
   it('reloads the timeout after an unconfirmed save', async () => {
     mockSaveSessionTimeout.mockRejectedValue(new Error('nope'));
     const screen = render(<AccountSecurityScreen />);

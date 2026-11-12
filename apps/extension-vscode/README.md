@@ -1,13 +1,15 @@
 <!--
   This file is the VS Code Marketplace "Details" page, it ships byte-identical
   inside the VSIX. Keep it user-facing; every claim here must be true of the
-  packaged extension. Contributor and architecture notes live in AGENTS.md,
-  which .vscodeignore excludes from the VSIX.
+  packaged extension. Contributor and architecture notes live in
+  docs/CONTRIBUTING-NOTES.md, which .vscodeignore excludes from the VSIX.
+  Links must be absolute https URLs: vsce resolves relative links against the
+  repository root, not this folder, so a relative link breaks on the listing.
 
   Status: Current
   Owner: Extension lead
   Purpose: Marketplace listing copy for AGI Code.
-  Last updated: 2026-10-18
+  Last updated: 2026-11-11
 -->
 
 # AGI Code for VS Code
@@ -21,20 +23,22 @@ driven by the AGI CLI running on your own machine.
 ## Requirements
 
 - VS Code 1.100 or newer.
-- **AGI CLI 0.0.1 or newer** available as `agi` on your `PATH`, chat, agent runs, and
-  session history all run through the local `agi app-server` process. If the
-  binary lives elsewhere, point `agiWorkforce.cliPath` at it.
-- A trusted workspace. In a restricted workspace, agent file writes are
-  disabled and trust-boundary, endpoint, CLI-path, and Desktop-bridge settings
-  cannot be overridden by workspace settings.
+- **AGI CLI 0.0.1 or newer** available as `agi` on your `PATH`. Chat, agent
+  runs, and session history all run through the local `agi app-server`
+  process. Run **Code: Install AGI CLI** to install it, or point
+  `agiWorkforce.cliPath` at a binary you already have.
+- A trusted workspace. In a restricted workspace, agent file writes, git and
+  terminal commands, and inline completions are disabled, and endpoint, CLI
+  path, model, and startup settings cannot be overridden by workspace settings.
 - An AGI Cloud account only when you choose Managed Cloud or cloud-backed
-  editor extras such as inline completions. Local models and provider BYOK stay
-  available through the AGI CLI without an AGI subscription.
+  editor extras such as inline completions, memory, and feedback. Local models
+  and provider API keys stay available through the AGI CLI without an AGI
+  subscription.
 
 ## Quick start
 
 1. Install the extension and open a folder you trust.
-2. Make sure `agi` runs from your terminal, or set `agiWorkforce.cliPath`.
+2. Make sure `agi` runs from your terminal, or run **Code: Install AGI CLI**.
 3. Click the **AGI Code** icon in the Activity Bar, or press
    `Ctrl+Shift+A` (`Cmd+Shift+A` on macOS).
 4. Ask a question, or type `@agi` in VS Code's own Chat view.
@@ -45,44 +49,47 @@ walkthrough.
 ## Features
 
 **Chat where you are working.** A sidebar chat view, a full-width
-`Code: Open Chat in Editor` panel, and an `@agi` participant in VS
-Code's native Chat with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, and
+**Code: Open Chat in Editor** panel, and an `@agi` participant in VS Code's
+native Chat with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, and
 `/model`.
 
-**Repository context you choose.** Attach workspace files from the Context
-view or with `Code: Mention File in Chat`. Attachments are
-validated against path traversal, symlinks, folders, and sensitive filenames
-before anything is sent, and the current editor selection can be included as
-context.
+**Repository context you choose.** Mention workspace files with `@` in the
+composer or **Code: Mention File in Chat**, and review what is attached with
+**Code: Show Context Files**. Attachments are validated against path
+traversal, symlinks, folders, and sensitive filenames before anything is sent,
+and the current editor selection can be included as context.
 
-**Reviewable edits, never surprise writes.** Proposed changes open in VS
-Code's native diff view. Accept or reject per hunk, per file, or globally.
-`Ctrl/Cmd+Shift+A` accepts and `Ctrl/Cmd+Shift+R` rejects the diff under the
-cursor. `agiWorkforce.autoApplyFixes` is off by default.
+**Reviewable edits.** Proposed changes open in VS Code's native diff view.
+Accept or reject per hunk, per file, or globally. `Ctrl/Cmd+Shift+A` accepts
+and `Ctrl/Cmd+Shift+R` rejects the diff under the cursor.
+`agiWorkforce.autoApplyFixes` is off by default.
 
-**Agent modes with explicit approval.** `ask` confirms writes and commands,
-`auto` (the default) runs read-only work on its own while writes and commands
-still ask, `plan` proposes a plan before editing, and `bypass` skips prompts
-only after you confirm the risk. Use the composer control or
-**Code: Choose Agent Mode**; normal Tab and Shift+Tab focus traversal is
-never repurposed to change authority.
+**Agent modes with explicit approval.** `ask` confirms edits and commands.
+`auto` (the default) reads and edits workspace files without asking, while
+running commands and changing git hooks or MCP settings still ask first.
+`plan` proposes a plan before editing, and `bypass` skips approval prompts only
+after you confirm the risk. Use the composer control or
+**Code: Choose Agent Mode**; normal Tab and Shift+Tab focus traversal is never
+repurposed to change authority.
 
 **Model selection that reflects what you can actually use.**
-`Code: Select Model` lists the models available to the resolved plan
-and providers; the default `auto` routes each turn by task. The status bar
-shows the active model and non-default agent mode.
+**Code: Select Model** lists the models available to the resolved plan and
+providers; the default `auto` routes each turn by task. The status bar shows
+the active model and non-default agent mode.
 
-**Session history per workspace.** The History view lists developer sessions
-owned by the local runtime, so you can reopen or delete earlier conversations.
+**Session history per workspace.** **Code: Show Sessions History** lists the
+developer sessions the local runtime owns for this folder, so you can reopen
+or delete earlier conversations.
 
 **Editor utilities.** Explain selection, fix, refactor, generate tests,
 generate docs, code review with diagnostics, explain error, terminal command
 suggestion and output explanation, hover actions, CodeLens actions, and a token
 counter. Hover, CodeLens, and inline completions are each opt-in.
 
-**Workspace memory.** Curate short facts in the Memory view; they are stored
-only in this VS Code workspace and injected as bounded, untrusted context on
-later developer turns.
+**Memory.** When you are signed in to AGI Cloud, **Code: Memory** manages short
+facts saved to your AGI account, shared with the AGI web app, CLI and mobile
+app. While `agiWorkforce.memory.enabled` is on, those facts are added to your
+turns as bounded, untrusted context; turn it off and nothing saved is sent.
 
 ## Commands
 
@@ -92,17 +99,17 @@ The most used ones:
 | Command                     | Default keybinding                     |
 | --------------------------- | -------------------------------------- |
 | Code: Open Chat             | `Ctrl+Shift+A` / `Cmd+Shift+A`         |
-| Code: Open Chat in Editor   | ,                                      |
+| Code: Open Chat in Editor   | None                                   |
 | Code: New Conversation      | `Ctrl+Shift+Alt+N` / `Cmd+Shift+Alt+N` |
 | Code: Explain Selection     | `Ctrl+Shift+Alt+E` / `Cmd+Shift+Alt+E` |
 | Code: Ask About Code        | `Ctrl+Shift+Alt+A` / `Cmd+Shift+Alt+A` |
 | Code: Explain Error         | `Ctrl+Shift+Alt+X` / `Cmd+Shift+Alt+X` |
 | Code: Choose Agent Mode     | `Ctrl+Shift+Alt+G` / `Cmd+Shift+Alt+G` |
 | Code: Run Terminal Command  | `Ctrl+Shift+Alt+T` / `Cmd+Shift+Alt+T` |
-| Code: Select Model          | ,                                      |
-| Code: Restart Local Runtime | ,                                      |
-| Code: Account & Usage       | ,                                      |
-| Code: Send Feedback         | ,                                      |
+| Code: Select Model          | None                                   |
+| Code: Restart Local Runtime | None                                   |
+| Code: Account & Usage       | None                                   |
+| Code: Send Feedback         | None                                   |
 
 ## Settings
 
@@ -111,7 +118,7 @@ The most used ones:
 | `agiWorkforce.cliPath`                      | `agi`                                 | Executable used to start the local `app-server`. Changing it restarts running runtimes.          |
 | `agiWorkforce.model`                        | `auto`                                | Default model. `auto` routes each turn by task across the models your plan can reach.            |
 | `agiWorkforce.agent.mode`                   | `auto`                                | `ask`, `auto`, `plan`, or `bypass` for new conversations.                                        |
-| `agiWorkforce.agent.effort`                 | `medium`                              | Reasoning effort (`low`–`max`) for providers with an explicit effort axis.                       |
+| `agiWorkforce.agent.effort`                 | `medium`                              | Reasoning effort, from `none` to `max`, for providers with an explicit effort axis.              |
 | `agiWorkforce.agent.thinking`               | `false`                               | Extended thinking for cloud-backed editor utilities only.                                        |
 | `agiWorkforce.composer.followUpBehavior`    | `queue`                               | Whether a message sent mid-turn queues or steers. `Ctrl/Cmd+Enter` uses the other behavior once. |
 | `agiWorkforce.contextLines`                 | `50`                                  | Surrounding lines included as context.                                                           |
@@ -121,6 +128,8 @@ The most used ones:
 | `agiWorkforce.inlineCompletions.enabled`    | `false`                               | Ghost-text completions. Sends surrounding code to AGI Cloud; sensitive files are excluded.       |
 | `agiWorkforce.inlineCompletions.debounceMs` | `300`                                 | Delay before requesting a completion.                                                            |
 | `agiWorkforce.inlineCompletions.maxLength`  | `500`                                 | Maximum completion length in characters.                                                         |
+| `agiWorkforce.memory.enabled`               | `true`                                | Add the memory facts saved to your AGI account to your turns.                                    |
+| `agiWorkforce.activateOnStartup`            | `false`                               | Start account and device background work when the window opens instead of on first use.          |
 | `agiWorkforce.apiEndpoint`                  | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
 | `agiWorkforce.telemetryEnabled`             | `false`                               | Product usage events, also subject to VS Code's own telemetry setting.                           |
 
@@ -130,36 +139,45 @@ explanations.
 ## Privacy
 
 - The developer-session host runs through the AGI CLI on your machine. Local
-  models stay on-device, provider BYOK sends directly to the named provider,
-  and Managed Cloud sends to AGI infrastructure. The header identifies the
-  active boundary before the request is sent.
+  models stay on-device, provider API keys send directly to the named
+  provider, and Managed Cloud sends to AGI infrastructure. The chat header
+  names the boundary in use, Local, BYOK, or Managed Cloud, before a request
+  is sent, and switching a live session across a provider boundary starts a
+  new thread instead of forwarding the earlier transcript.
 - VS Code sessions stay workspace scoped and are not synced into AGI Web,
   Mobile, or Desktop chat history.
-- Telemetry is **off** by default and honors VS Code's global telemetry
-  setting.
+- Account, plan and device checks wait until you open the AGI view, run an
+  AGI command, or reopen an AGI session, unless you turn on
+  `agiWorkforce.activateOnStartup`.
 - Inline completions are **off** by default; enabling them sends surrounding
   code to AGI Cloud, and files matching the sensitive-file denylist (`.env`,
   `.pem`, `.ssh/`, credentials, `secrets.json`, and similar) are excluded.
-- Credentials from browser sign-in are stored in VS Code `SecretStorage` and
-  can be revoked with **AGI: Sign out of AGI Cloud**.
-- The chat header always names the boundary in use, Local, BYOK, or Managed
-  Cloud, and switching a live session across a provider boundary starts a new
-  thread instead of forwarding the earlier transcript.
+- Memory facts are stored in your AGI account, not in this workspace. See
+  **Memory** above for when they are sent.
+- **Code: Send Feedback** sends what you type, with your VS Code, operating
+  system and extension versions, to AGI from your signed-in account.
+- Credentials from browser sign-in are stored in VS Code `SecretStorage`.
+  **Code: Sign Out of AGI Cloud** removes them and also signs out the AGI CLI
+  on this machine.
+- Privacy policy: <https://agiworkforce.com/privacy>.
 
 ## Usage events
 
-Usage events use the product analytics vocabulary shared by every AGI
-Workforce app and go to your account at `/api/analytics/events`. They are sent
-only when this setting, VS Code's telemetry setting and your account's privacy
-choices all allow product analytics, and carry no prompt, code or file names.
+Usage events are **off** by default. When `agiWorkforce.telemetryEnabled` is
+on, VS Code's telemetry setting allows it, and your account's privacy choices
+allow product analytics, the extension sends a few named events from Managed
+Cloud work (for example, stopping a response or accepting a suggested edit) to
+your account at `/api/analytics/events`. Events carry no prompt, code, or file
+names, and nothing is sent for Local or BYOK sessions.
 
 ## Support
 
 - Documentation: <https://agiworkforce.com/docs>
-- Bug reports and feature requests: run **Code: Send Feedback**, which
-  opens a pre-filled issue with your environment details.
+- Bug reports and feature requests: run **Code: Send Feedback** while signed
+  in to AGI Cloud.
 - Questions: use the Marketplace Q&A tab for this extension.
 
 ## License
 
-Proprietary. © 2026 AGI Workforce. See `LICENSE`.
+Proprietary. © 2026 AGI Workforce. The license terms ship with the extension
+in its `LICENSE` file.

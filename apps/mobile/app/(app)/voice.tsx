@@ -177,6 +177,13 @@ export default function VoiceScreen() {
 
   const conversationPromiseRef = useRef<Promise<string> | null>(null);
   const transcribedUriRef = useRef<string | null>(null);
+  const importAbortRef = useRef<AbortController | null>(null);
+  const importClosedRef = useRef(false);
+
+  const abortImport = useCallback(() => {
+    importAbortRef.current?.abort();
+    importAbortRef.current = null;
+  }, []);
 
   const getConversationId = useCallback(() => {
     if (!conversationPromiseRef.current) {
@@ -194,9 +201,11 @@ export default function VoiceScreen() {
   }, [createConversation]);
 
   const sendVoiceMessage = useCallback(
-    async (text: string) => {
+    async (text: string, signal?: AbortSignal) => {
       if (!modelForSend) throw new Error('No model is available for this voice session.');
+      if (signal?.aborted) throw new VoiceCaptureError('aborted', 'Voice session closed');
       const convId = await getConversationId();
+      if (signal?.aborted) throw new VoiceCaptureError('aborted', 'Voice session closed');
       const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[convId] ?? []);
       const accepted = await sendMessage(convId, text, modelForSend);
       if (!accepted) {
@@ -249,32 +258,56 @@ export default function VoiceScreen() {
   // it as the first turn instead of opening a microphone the user did not ask for.
   useEffect(() => {
     const audioUri = params.audioUri;
-    if (!voiceAllowed || !audioUri || transcribedUriRef.current === audioUri) return;
+    if (
+      !voiceAllowed ||
+      !audioUri ||
+      importClosedRef.current ||
+      transcribedUriRef.current === audioUri
+    ) {
+      return;
+    }
     transcribedUriRef.current = audioUri;
+    const controller = new AbortController();
+    importAbortRef.current = controller;
+    const { signal } = controller;
     setFileSendError(false);
     setFileTranscription('Transcribing the recording…');
-    transcribeAudioFile(audioUri, { lang: activeSpeechLanguage() })
+    transcribeAudioFile(audioUri, { lang: activeSpeechLanguage(), signal })
       .then(async ({ text }) => {
+        if (signal.aborted) return;
         const trimmed = text.trim();
         if (!trimmed) {
           setFileTranscription('No speech was found in that recording.');
           return;
         }
         setFileTranscription(trimmed);
-        await sendVoiceMessage(trimmed).catch(() => {
-          setFileSendError(true);
+        await sendVoiceMessage(trimmed, signal).catch(() => {
+          if (!signal.aborted) setFileSendError(true);
         });
       })
       .catch((err: unknown) => {
-        setFileTranscription(voiceCaptureErrorMessage(err));
+        if (!signal.aborted) setFileTranscription(voiceCaptureErrorMessage(err));
       });
   }, [params.audioUri, sendVoiceMessage, voiceAllowed]);
 
+  useEffect(() => {
+    if (!voiceAllowed) abortImport();
+  }, [voiceAllowed, abortImport]);
+
+  useEffect(
+    () => () => {
+      abortImport();
+      transcribedUriRef.current = null;
+    },
+    [abortImport],
+  );
+
   const handleRetryFileSend = useCallback(async () => {
     if (!fileTranscription || retryingFileSend) return;
+    if (importClosedRef.current) return;
     setRetryingFileSend(true);
     try {
-      await sendVoiceMessage(fileTranscription);
+      await sendVoiceMessage(fileTranscription, importAbortRef.current?.signal);
       setFileSendError(false);
     } catch {
       setFileSendError(true);
@@ -309,13 +342,19 @@ export default function VoiceScreen() {
 
   const handleClose = useCallback(() => {
     if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    importClosedRef.current = true;
+    if (importAbortRef.current) {
+      abortImport();
+      setFileTranscription(null);
+      setFileSendError(false);
+    }
     void endConversation();
     if (params.returnTo === '/(app)/settings/voice') {
       router.replace('/(app)/settings/voice' as Parameters<typeof router.replace>[0]);
       return;
     }
     if (router.canGoBack()) router.back();
-  }, [hapticsEnabled, endConversation, params.returnTo, router]);
+  }, [hapticsEnabled, abortImport, endConversation, params.returnTo, router]);
 
   const isCloudModel = appMode === 'cloud';
   const localModelReady =
