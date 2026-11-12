@@ -99,6 +99,7 @@ const config = {
     },
     entitlements: {
       'com.apple.developer.declared-age-range': true,
+      'com.apple.developer.kernel.increased-memory-limit': true,
       'com.apple.security.application-groups': [iosShareAppGroupIdentifier],
     },
     privacyManifests: {

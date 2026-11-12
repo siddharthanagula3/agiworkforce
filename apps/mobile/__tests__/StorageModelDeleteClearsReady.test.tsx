@@ -46,6 +46,8 @@ jest.mock('@/storage/installedModels', () => ({
 jest.mock('@/services/modelDownload', () => ({
   modelRemovalUnsupportedReason: jest.requireActual('@/services/modelDownload')
     .modelRemovalUnsupportedReason,
+  MODEL_BUSY_REMOVAL_MESSAGE: jest.requireActual('@/services/modelDownload')
+    .MODEL_BUSY_REMOVAL_MESSAGE,
   deleteDownloadedModel: jest.fn().mockResolvedValue(undefined),
   getModelStorageBytes: jest.fn().mockResolvedValue(2_000_000_000),
   downloadModel: jest.fn(),

@@ -16,6 +16,7 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import {
   deleteDownloadedModel,
   getModelStorageBytes,
+  MODEL_BUSY_REMOVAL_MESSAGE,
   modelRemovalUnsupportedReason,
 } from '@/services/modelDownload';
 import { wipeAllLocalData, type DsarExportProgress } from '@/services/dsarExport';
@@ -155,10 +156,12 @@ export default function StorageManagerScreen() {
                     ? { status: 'ready', value: prev.value.filter((m) => m.id !== model.id) }
                     : prev,
                 );
-              } catch {
+              } catch (error) {
                 Alert.alert(
                   'Model removal failed',
-                  'Could not remove the model. Refresh Storage and try again.',
+                  error instanceof Error && error.name === 'ModelRemovalError'
+                    ? MODEL_BUSY_REMOVAL_MESSAGE
+                    : 'Could not remove the model. Refresh Storage and try again.',
                 );
                 return;
               }

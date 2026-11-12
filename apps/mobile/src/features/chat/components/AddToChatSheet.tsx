@@ -101,6 +101,8 @@ interface AddToChatSheetProps {
 
 const SNAP_POINTS = ['75%'];
 const LIBRARY_PICKER_SIZE = 12;
+export const LOCAL_ATTACH_NOTE =
+  'On-device models read the text in photos, not the picture itself.';
 const CLOUD_ATTACH_RETENTION_NOTE =
   'Files you attach are uploaded to AGI Cloud and kept in your Library until you delete them.';
 const TEMPORARY_ATTACH_RETENTION_NOTE =
@@ -619,20 +621,22 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           ) : null}
         </View>
 
-        {appMode === 'cloud' ? (
-          <Text
-            style={{
-              paddingHorizontal: 20,
-              marginTop: -8,
-              paddingBottom: 16,
-              fontSize: typeScale.caption,
-              lineHeight: 17,
-              color: themeColors.textMuted,
-            }}
-          >
-            {isTemporaryChat ? TEMPORARY_ATTACH_RETENTION_NOTE : CLOUD_ATTACH_RETENTION_NOTE}
-          </Text>
-        ) : null}
+        <Text
+          style={{
+            paddingHorizontal: 20,
+            marginTop: -8,
+            paddingBottom: 16,
+            fontSize: typeScale.caption,
+            lineHeight: 17,
+            color: themeColors.textMuted,
+          }}
+        >
+          {appMode !== 'cloud'
+            ? LOCAL_ATTACH_NOTE
+            : isTemporaryChat
+              ? TEMPORARY_ATTACH_RETENTION_NOTE
+              : CLOUD_ATTACH_RETENTION_NOTE}
+        </Text>
 
         {libraryPicks.length > 0 ||
         (appMode === 'cloud' &&

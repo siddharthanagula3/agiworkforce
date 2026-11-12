@@ -23,8 +23,9 @@ AGI is an AI assistant with two independent modes.
 Apple Intelligence on the device without a model download. Other devices use a
 quantized open-weight model downloaded on first run and executed through
 ExecuTorch or llama.rn. Inference happens entirely on-device; no prompt or
-response leaves the phone. Chats are stored in a local SQLite database that is encrypted at rest with
-SQLCipher; the key lives in the iOS Keychain.
+response leaves the phone. Chats are stored in an encrypted on-device store
+(MMKV with a 256-bit key held in the iOS Keychain); on-device memory and model
+records use a local SQLite database encrypted with SQLCipher.
 
 **AGI Cloud (optional, requires sign-in).** Signing in with an AGI account
 enables server-side chat and web search on the Free plan, which is open to

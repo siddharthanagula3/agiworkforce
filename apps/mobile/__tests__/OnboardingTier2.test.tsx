@@ -157,16 +157,27 @@ jest.mock('@agiworkforce/local-llm', () => {
     },
   ];
 
+  const capabilities = {
+    totalRAMMB: 6144,
+    tier1Available: false,
+    tier1Runtime: null,
+    tier2Available: true,
+    tier3Available: true,
+    osVersion: '18.2',
+    thermalThrottled: false,
+  };
+  const allModels = [defaultModelWithPreset, ...systemModels];
+
   return {
-    detectCapabilities: jest.fn().mockResolvedValue({
-      totalRAMMB: 6144,
-      tier1Available: false,
-      tier1Runtime: null,
-      tier2Available: true,
-      tier3Available: true,
-      osVersion: '18.2',
-      thermalThrottled: false,
-    }),
+    detectCapabilities: jest.fn().mockResolvedValue(capabilities),
+    getCapabilities: jest.fn().mockResolvedValue(capabilities),
+    getModelById: jest.fn((id: string) => allModels.find((model) => model.id === id)),
+    hasRunnableGgufArtifacts: jest.fn().mockReturnValue(false),
+    hasSufficientRAMForMultimodal: jest.fn().mockReturnValue(true),
+    isMultimodalModel: jest.fn().mockReturnValue(false),
+    loadedLocalModel: jest.fn().mockReturnValue(null),
+    tier2IsPresetDownloaded: jest.fn().mockResolvedValue(true),
+    tier2Release: jest.fn(),
     getDefaultModel: jest.fn().mockReturnValue(defaultModelWithPreset),
     getShippableModels: jest.fn().mockReturnValue([defaultModelWithPreset, ...systemModels]),
     getSystemModelForTier1Runtime: jest.fn((runtime: string | null) =>
@@ -380,6 +391,33 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     });
     await waitFor(() => getByTestId('onboarding-download-screen'));
     expect(queryByTestId('download-retry-btn')).toBeNull();
+  });
+
+  it('cancels the running download when the user skips to chat', async () => {
+    const { _setExecutorchResourcesForTesting } = require('../services/executorchModels');
+    const { useModelInstallStore } = require('../src/features/model-picker/installStore');
+    const cancelFetching = jest.fn().mockResolvedValue(undefined);
+    _setExecutorchResourcesForTesting({ cancelFetching, deleteResources: jest.fn() });
+    mockTier2LoadModel.mockImplementation(() => new Promise<void>(() => undefined));
+
+    const { getByTestId } = await renderAtDeviceTier();
+    await act(async () => {
+      fireEvent.press(getByTestId('device-tier-download-btn'));
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]?.status).toBe('downloading');
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId('download-skip-btn'));
+      await Promise.resolve();
+    });
+
+    expect(cancelFetching).toHaveBeenCalledWith('https://models.example/fixture-model.pte');
+    expect(useModelInstallStore.getState().jobs[DEFAULT_MODEL_ID]).toBeUndefined();
+    expect(mockReplace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(app)' }));
+    _setExecutorchResourcesForTesting(null);
   });
 
   it('does NOT silently fall through to finishOnboarding when no preset and no downloadUrl', async () => {

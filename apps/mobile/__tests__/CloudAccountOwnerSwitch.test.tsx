@@ -59,8 +59,13 @@ jest.mock('expo-router', () => ({
 
 const mockSignOut = jest.fn();
 jest.mock('../src/features/auth/store', () => ({
-  useAuthStore: (selector: (state: { signOut: typeof mockSignOut }) => unknown) =>
-    selector({ signOut: mockSignOut }),
+  useAuthStore: (
+    selector: (state: {
+      signOut: typeof mockSignOut;
+      isClerkLoaded: boolean;
+      isClerkSignedIn: boolean;
+    }) => unknown,
+  ) => selector({ signOut: mockSignOut, isClerkLoaded: true, isClerkSignedIn: true }),
 }));
 
 let mockUseRealStepUp = false;

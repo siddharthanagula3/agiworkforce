@@ -30,16 +30,17 @@ on-device ML Kit Prompt API over AICore, no model file is downloaded at all
 (`native/android/withAGIAICore.cjs` pulls in `com.google.mlkit:genai-prompt`;
 its catalog entry carries `fileSizeBytes: 0` because nothing is fetched). On every
 other device the default is **AGI Standard**, an Apache-2.0 open-weights model of
-roughly 2 GB at Q4, downloaded once and run through ExecuTorch or llama.rn. Both
+about 2.7 GB, downloaded once and run through ExecuTorch or llama.rn. Both
 entries, with their exact model identifiers, licences and sizes, are defined in
 `packages/platform/local-llm/src/catalog.ts`, that file is the single source of
 truth for what can run on a device, and this document deliberately points at it
 rather than restating identifiers that would then drift.
 
-Local chats are stored in a local SQLite database encrypted with SQLCipher
-(`app.config.js` → `['expo-sqlite', { useSQLCipher: true }]`). The 256-bit key is
-generated with `expo-crypto` and held by `expo-secure-store`, which is
-Android Keystore-backed (`storage/db.ts`).
+Local chats are stored in an encrypted MMKV store whose 256-bit key is held by
+`expo-secure-store`, which is Android Keystore-backed (`lib/mmkv.ts`). On-device
+memory and model records use a local SQLite database encrypted with SQLCipher
+(`app.config.js` → `['expo-sqlite', { useSQLCipher: true }]`, key handling in
+`storage/db.ts`).
 
 Local Mode does not merely _avoid_ our servers, it is prevented from reaching
 them: `lib/egressGuard.ts` throws `EgressBlockedError` on any outbound request to
