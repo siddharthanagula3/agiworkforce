@@ -32,6 +32,7 @@ import {
 } from './features/background/scheduled-task-transport';
 import { renderShortcutPrompt } from './features/side-panel/pageCommands';
 import type {
+  AdoptedChatToolHandoff,
   BrowserContextTabReference,
   ChatChunkMessage,
   ChatToolHandoffMessage,
@@ -441,7 +442,7 @@ interface PendingChatToolHandoff {
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   streamId: string;
-  handoff: import('./types').AdoptedChatToolHandoff;
+  handoff: AdoptedChatToolHandoff;
   callIds: readonly string[];
   callNames: readonly string[];
   signal: AbortSignal;
@@ -630,7 +631,7 @@ function requestChatToolHandoff(
       onAbort();
       return;
     }
-    const handoff: import('./types').ChatToolHandoffMessage = {
+    const handoff: ChatToolHandoffMessage = {
       type: 'CHAT_TOOL_HANDOFF',
       owner: active.owner,
       clientInstanceId: active.clientInstanceId,
@@ -687,7 +688,7 @@ function adoptPendingChatToolHandoffs(
   active: ActiveChatStream,
   streamId: string,
   clientInstanceId: string,
-): import('./types').AdoptedChatToolHandoff[] {
+): AdoptedChatToolHandoff[] {
   return waitingChatToolHandoffs(active, streamId).map((pending) => {
     pending.clientInstanceId = clientInstanceId;
     return structuredClone(pending.handoff);
