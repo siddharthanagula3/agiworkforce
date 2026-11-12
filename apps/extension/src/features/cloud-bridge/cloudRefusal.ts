@@ -1,3 +1,5 @@
+import { ErrorCode } from '@agiworkforce/types';
+
 export type CloudRefusalKind =
   | 'auth'
   | 'unavailable'
@@ -27,7 +29,7 @@ const MAX_MESSAGE_CHARS = 500;
 const MAX_RETRY_AFTER_SECONDS = 86_400;
 
 const ORGANIZATION_POLICY_TYPE = 'organization_policy';
-const LOCKDOWN_CODE = 'FORBIDDEN';
+const LOCKDOWN_CODE = ErrorCode.FORBIDDEN;
 
 const POLICY_CODES: ReadonlySet<string> = new Set([
   'surface_not_allowed',
@@ -39,7 +41,7 @@ const POLICY_CODES: ReadonlySet<string> = new Set([
 ]);
 
 const PLAN_CODES: ReadonlySet<string> = new Set([
-  'SUBSCRIPTION_REQUIRED',
+  ErrorCode.SUBSCRIPTION_REQUIRED,
   'plan_upgrade_required',
   'developer_surface_plan_required',
   'schedules_not_in_plan',
@@ -47,10 +49,10 @@ const PLAN_CODES: ReadonlySet<string> = new Set([
 ]);
 
 const ACCOUNT_GATE_CODES: ReadonlySet<string> = new Set([
-  'MFA_REQUIRED',
-  'IP_NOT_ALLOWED',
-  'PASSKEY_REQUIRED',
-  'ACCOUNT_UNAVAILABLE',
+  ErrorCode.MFA_REQUIRED,
+  ErrorCode.IP_NOT_ALLOWED,
+  ErrorCode.PASSKEY_REQUIRED,
+  ErrorCode.ACCOUNT_UNAVAILABLE,
 ]);
 
 function record(value: unknown): Record<string, unknown> | undefined {

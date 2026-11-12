@@ -145,7 +145,21 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
         subscriptionStatus: 'active',
         modelIds: [],
         allowedAutoModes: [],
-        usage: null,
+        usage: {
+          plan_tier: 'pro',
+          usage_percentage: 10,
+          usage_reset_at: null,
+          has_usage_remaining: true,
+          period_start: null,
+          period_end: null,
+          subscription_status: 'active',
+          session_usage_percentage: 10,
+          session_reset_at: null,
+          weekly_usage_percentage: 10,
+          weekly_reset_at: null,
+          flagship_weekly_usage_percentage: 0,
+          flagship_weekly_reset_at: null,
+        },
       } as unknown as import('../src/features/cloud-bridge/freeTrialClient').ManagedModelAccess;
     },
   };

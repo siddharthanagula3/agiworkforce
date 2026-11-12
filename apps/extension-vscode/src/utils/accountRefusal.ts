@@ -1,24 +1,26 @@
+import { ErrorCode } from '@agiworkforce/types';
+
 export type AccountRefusalKind = 'account' | 'policy' | 'plan' | 'unavailable';
 
 const ACCOUNT_REFUSAL_KINDS: ReadonlyMap<string, AccountRefusalKind> = new Map([
-  ['ACCOUNT_UNAVAILABLE', 'account'],
-  ['PASSKEY_REQUIRED', 'account'],
-  ['MFA_REQUIRED', 'account'],
-  ['IP_NOT_ALLOWED', 'account'],
-  ['FORBIDDEN', 'policy'],
+  [ErrorCode.ACCOUNT_UNAVAILABLE, 'account'],
+  [ErrorCode.PASSKEY_REQUIRED, 'account'],
+  [ErrorCode.MFA_REQUIRED, 'account'],
+  [ErrorCode.IP_NOT_ALLOWED, 'account'],
+  [ErrorCode.FORBIDDEN, 'policy'],
   ['SURFACE_NOT_ALLOWED', 'policy'],
   ['REGION_NOT_ALLOWED', 'policy'],
   ['FEATURE_DISABLED', 'policy'],
   ['SURFACE_SYNC_DISABLED', 'policy'],
   ['WORKSPACE_NOT_ACCESSIBLE', 'policy'],
-  ['SUBSCRIPTION_REQUIRED', 'plan'],
+  [ErrorCode.SUBSCRIPTION_REQUIRED, 'plan'],
   ['SUBSCRIPTION_INACTIVE', 'plan'],
   ['DEVELOPER_SURFACE_PLAN_REQUIRED', 'plan'],
   ['MANAGED_API_PLAN_REQUIRED', 'plan'],
   ['MANAGED_CHAT_PLAN_REQUIRED', 'plan'],
   ['PLAN_UPGRADE_REQUIRED', 'plan'],
   ['MODEL_NOT_AVAILABLE', 'plan'],
-  ['SERVICE_UNAVAILABLE', 'unavailable'],
+  [ErrorCode.SERVICE_UNAVAILABLE, 'unavailable'],
   ['WORKSPACE_POLICY_UNAVAILABLE', 'unavailable'],
 ]);
 
