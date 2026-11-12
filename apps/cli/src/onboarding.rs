@@ -46,9 +46,24 @@ fn multi_model_fallback_example() -> String {
     let fallback = model_catalog::fast_completion_model("openai");
     let local = model_catalog::models_for("ollama")
         .first()
-        .map(|m| m.id.clone())
-        .unwrap_or_else(|| fallback.clone());
-    format!("-m {primary},{fallback},{local}")
+        .map(|m| m.id.clone());
+    fallback_example_arg(primary, fallback, local)
+}
+
+fn fallback_example_arg(primary: String, fallback: String, local: Option<String>) -> String {
+    let mut chain: Vec<String> = Vec::new();
+    for id in [Some(primary), Some(fallback), local].into_iter().flatten() {
+        if !chain.contains(&id) {
+            chain.push(id);
+        }
+    }
+    format!("-m {}", chain.join(","))
+}
+
+fn config_folder_label() -> String {
+    crate::config::CliConfig::config_dir()
+        .map(|dir| dir.display().to_string())
+        .unwrap_or_else(|_| "your AGI config folder".to_string())
 }
 
 fn local_pull_hint() -> String {
@@ -763,7 +778,7 @@ fn print_safety_notes() {
     );
     eprintln!();
     eprintln!(
-        "  {}  Tool calls (file edits, shell commands) require your approval.",
+        "  {}  File edits and shell commands ask for your approval; read-only commands like ls run without asking.",
         ts::warning("•")
     );
     eprintln!(
@@ -774,7 +789,7 @@ fn print_safety_notes() {
 }
 
 const PERMISSION_MODE_CHOICES: [&str; 3] = [
-    "Ask            Ask before every file edit and command (safest, recommended)",
+    "Ask            Asks before file edits and commands, except read-only ones like ls (recommended)",
     "Auto           File edits and safe commands run, unknown and dangerous ones ask",
     "Plan first     Read-only until you approve a plan",
 ];
@@ -1016,9 +1031,10 @@ pub async fn run_onboarding() -> Result<bool> {
     eprintln!(
         "\n  {} {}",
         ts::accent_header("Memory"),
-        ts::muted(
-            "Lasting instructions live in ~/.agiworkforce (one file per mode: Local, BYOK and Managed) and a project's AGENTS.md or CLAUDE.md. Ask the agent to remember something and it saves it there; /memory shows what this session loads."
-        )
+        ts::muted(format!(
+            "Lasting instructions live in {} (one file per mode: Local, BYOK and Managed) and a project's AGENTS.md or CLAUDE.md. Ask the agent to remember something and it saves it there; /memory shows what this session loads.",
+            config_folder_label()
+        ))
     );
     let bell = crate::output::confirm("  Ring the terminal bell when a long turn finishes?", false);
     let saved = crate::config::CliConfig::load().and_then(|mut config| {
@@ -1201,6 +1217,31 @@ mod tests {
         assert!(auto.contains("safe commands run"), "{auto}");
         assert!(auto.contains("unknown and dangerous ones ask"), "{auto}");
         assert!(!auto.contains("commands still ask"), "{auto}");
+    }
+
+    #[test]
+    fn the_fallback_example_never_repeats_a_model() {
+        let example = multi_model_fallback_example();
+        let ids: Vec<&str> = example.trim_start_matches("-m ").split(',').collect();
+        let mut seen = std::collections::HashSet::new();
+        assert!(ids.iter().all(|id| seen.insert(*id)), "{example}");
+        assert_eq!(
+            fallback_example_arg("a".into(), "b".into(), Some("b".into())),
+            "-m a,b"
+        );
+        assert_eq!(fallback_example_arg("a".into(), "a".into(), None), "-m a");
+        assert_eq!(
+            fallback_example_arg("a".into(), "b".into(), Some("c".into())),
+            "-m a,b,c"
+        );
+    }
+
+    #[test]
+    fn the_default_permission_choice_names_what_runs_without_asking() {
+        let ask = PERMISSION_MODE_CHOICES[0];
+        assert!(ask.starts_with("Ask"), "{ask}");
+        assert!(ask.contains("read-only"), "{ask}");
+        assert!(!ask.contains("every"), "{ask}");
     }
 
     #[test]

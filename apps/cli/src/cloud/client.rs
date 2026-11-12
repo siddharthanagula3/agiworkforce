@@ -94,6 +94,19 @@ impl CloudError {
         )
     }
 
+    /// What to say after a chat turn that could not reach the account, where
+    /// the per-command wording would leave "use this" without a referent.
+    pub fn turn_notice(&self) -> String {
+        match self {
+            CloudError::NotManaged(mode) => format!(
+                "{}: this chat stays on this device and is not saved to your account history. \
+                 Choose Cloud mode in /model to sync it.",
+                mode.trust_word()
+            ),
+            other => other.to_string(),
+        }
+    }
+
     pub fn into_anyhow(self) -> anyhow::Error {
         match self {
             CloudError::UpgradeRequired(error) => anyhow::Error::new(*error),
@@ -856,6 +869,23 @@ mod tests {
 
         let local = CloudError::NotManaged(PrivacyMode::Local).to_string();
         assert!(local.starts_with("Local:"));
+    }
+
+    #[test]
+    fn the_post_turn_notice_says_what_did_not_happen_and_how_to_change_it() {
+        let local = CloudError::NotManaged(PrivacyMode::Local).turn_notice();
+        assert_eq!(
+            local,
+            "Local: this chat stays on this device and is not saved to your account history. \
+             Choose Cloud mode in /model to sync it."
+        );
+        let byok = CloudError::NotManaged(PrivacyMode::Byok).turn_notice();
+        assert!(byok.starts_with("Your key:"), "{byok}");
+        assert!(!byok.to_lowercase().contains("byok"), "{byok}");
+        assert_eq!(
+            CloudError::SignedOut.turn_notice(),
+            CloudError::SignedOut.to_string()
+        );
     }
 
     /// A 426 is not an API failure to report as one: the build is what is out
