@@ -215,6 +215,18 @@ export async function listStoredSessionCodes(
   return { data: data.map((row) => String(row.code)), error: null };
 }
 
+export async function deleteExpiredSessions(
+  expiredBefore: number,
+  limit: number,
+): Promise<QueryResultWrapper<number>> {
+  const { data, error } = await queryRows<{ code: string }>(
+    'DELETE FROM signaling_sessions WHERE code IN (SELECT code FROM signaling_sessions WHERE expires_at < $1 ORDER BY expires_at LIMIT $2) RETURNING code',
+    [expiredBefore, limit],
+  );
+  if (error || !data) return { data: null, error };
+  return { data: data.length, error: null };
+}
+
 export async function extendSessionExpiry(
   code: string,
   expiresAt: number,

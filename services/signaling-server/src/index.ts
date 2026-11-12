@@ -28,6 +28,7 @@ import {
 import {
   rotatePairCredential,
   deleteSessionByCode,
+  deleteExpiredSessions,
   deleteSessionsForDevice,
   getSessionByCode,
   extendSessionExpiry,
@@ -42,7 +43,12 @@ import {
   pairingDeviceIds,
   withPairingDevice,
 } from './pairing-device.js';
-import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from './client-ip.js';
+import {
+  forwardedChain,
+  isProxyTrusted,
+  resolveClientIp,
+  resolveTrustedProxyHops,
+} from './client-ip.js';
 import { logger, generateCorrelationId, logUnhandledRejection } from './logger.js';
 import { DEVICE_REVOKED_REASON, connectionManager } from './connection-manager.js';
 import { metrics } from './metrics.js';
@@ -102,11 +108,23 @@ import {
   STALE_SESSION_HEARTBEAT_THRESHOLD_MS,
   MAX_PENDING_APPROVALS_PER_SESSION,
   PENDING_APPROVAL_TTL_MS,
+  PAIRING_MAX_LIFETIME_MS_DEFAULT,
+  PAIRING_STANDING_BATCH_SIZE,
+  EXPIRED_PAIRING_PRUNE_BATCH,
+  EXPIRED_PAIRING_PRUNE_GRACE_MS,
+  EXPIRED_PAIRING_PRUNE_INTERVAL_MS,
 } from './constants.js';
 import { controlPayloadSchema } from './control-payload.js';
 import { envPositiveInteger, envText } from './env.js';
 import { createDatabaseCheck, registerProbeRoutes } from './probes.js';
+import { createExpiredPairingPruner } from './expired-pairings.js';
 import { lookupSession } from './rehydration.js';
+import {
+  fetchPairingStanding,
+  pairingWorkspaceSelector,
+  standingConfig,
+  type StandingQuery,
+} from './standing.js';
 
 type Role = 'desktop' | 'mobile';
 
@@ -117,6 +135,12 @@ interface Participant {
   metadata: Record<string, unknown> | null;
 }
 
+interface PairingStandingState {
+  checkedAt: number;
+  activeAt: number;
+  pending: Promise<void> | null;
+}
+
 interface Session {
   code: string;
   createdAt: number;
@@ -124,6 +148,8 @@ interface Session {
   participants: Partial<Record<Role, Participant>>;
   metadata: Record<string, unknown> | null;
   lastHeartbeatAt: number;
+  standing: PairingStandingState;
+  previousCredentials: Partial<Record<Role, PairCredential>>;
 }
 
 interface PendingApproval {
@@ -215,6 +241,11 @@ const publicHttpUrl = envText('SIGNALING_HTTP_URL') ?? `http://${host}:${port}`;
 const publicWsUrl =
   envText('SIGNALING_WS_URL') ??
   `${publicHttpUrl.startsWith('https') ? 'wss' : 'ws'}://${host}:${port}${wsPath}`;
+const pairingMaxLifetimeMs = envPositiveInteger(
+  'SIGNALING_PAIRING_MAX_LIFETIME_MS',
+  PAIRING_MAX_LIFETIME_MS_DEFAULT,
+);
+const standing = standingConfig();
 const release = releaseIdentity();
 const canonicalUrl = canonicalEndpoint();
 
@@ -279,6 +310,14 @@ if (allowedOrigins.length === 0) {
     'ALLOWED_ORIGINS resolved to an empty allow-list (unset in production, or set to no usable ' +
       'value). Every WebSocket connection presenting an Origin header is rejected, and only ' +
       'clients presenting a valid x-signaling-internal-secret can connect, until it is configured.',
+  );
+}
+
+if (standing.mode === 'unconfigured') {
+  logger.error(
+    'SIGNALING_STANDING_URL is unset or not an https URL in production. The relay cannot ask ' +
+      'whether a pairing is still allowed, so every pairing registration is refused until it is ' +
+      'configured.',
   );
 }
 
@@ -847,6 +886,7 @@ app.post('/pairings/:code/claim', pairingClaimLimiter, async (req, res) => {
           return res.status(403).json({ error: 'device_revoked' });
         }
         if (live) {
+          delete live.previousCredentials.mobile;
           live.metadata = withPairCredential(live.metadata, 'mobile', credential);
           if (deviceId !== null)
             live.metadata = withPairingDevice(live.metadata, 'mobile', deviceId);
@@ -1003,7 +1043,17 @@ wss.on('connection', (socket, request) => {
     return;
   }
 
-  const ip = resolveClientIp(request);
+  const resolvedIp = resolveClientIp(request);
+  if (resolvedIp === null) {
+    logger.warn(
+      { forwardedEntries: forwardedChain(request).length, hops: resolveTrustedProxyHops() },
+      'WebSocket connection refused: no trusted proxy recorded the client address',
+    );
+    metrics.recordError('client_address_unknown');
+    socket.close(1008, 'client_address_unknown');
+    return;
+  }
+  const ip = resolvedIp;
 
   const blacklistStatus = wsRateLimiter.isBlacklisted(ip);
   if (blacklistStatus.blacklisted) {
@@ -1079,10 +1129,13 @@ wss.on('connection', (socket, request) => {
   socket.on('message', (raw) => {
     connectionManager.updateActivity(socket);
 
-    const messageResult = wsRateLimiter.checkMessage(ip);
+    const sender = clients.get(socket);
+    const messageResult = sender
+      ? wsRateLimiter.checkParticipantMessage(participantKey(sender.code, sender.role))
+      : wsRateLimiter.checkMessage(ip);
     if (!messageResult.allowed) {
       logger.warn(
-        { ip, correlationId, reason: messageResult.reason },
+        { ip, correlationId, registered: Boolean(sender), reason: messageResult.reason },
         'Message rate limit exceeded',
       );
       metrics.recordError('ws_message_rate_limited');
@@ -1248,6 +1301,8 @@ const cleanupInterval = setInterval(() => {
 
   cleanupAuthFailures();
   void endPairingsDeletedElsewhere();
+  recheckLiveStanding(now);
+  void pruneExpiredPairings(now);
 
   if (expiredCount > 0 || staleCount > 0) {
     logger.info({ expiredCount, staleCount }, 'Cleaned up expired/stale sessions');
@@ -1462,16 +1517,25 @@ async function registerWithCredential(
     return;
   }
 
-  if (
-    !verifyPairToken(
+  const presentedCurrent = verifyPairToken(
+    message.pairToken,
+    message.code,
+    message.role,
+    session.createdAt,
+    pairingAccountId(session.metadata),
+    pairCredential(session.metadata, message.role),
+  );
+  const presentedPrevious =
+    !presentedCurrent &&
+    verifyPairToken(
       message.pairToken,
       message.code,
       message.role,
       session.createdAt,
       pairingAccountId(session.metadata),
-      pairCredential(session.metadata, message.role),
-    )
-  ) {
+      session.previousCredentials[message.role] ?? null,
+    );
+  if (!presentedCurrent && !presentedPrevious) {
     logger.warn(
       {
         correlationId,
@@ -1512,33 +1576,45 @@ async function registerWithCredential(
     return;
   }
 
-  if (session.participants[message.role]) {
+  const admission = await admitStanding(session);
+  if (socket.readyState !== WebSocket.OPEN) return;
+  if (admission === 'unknown') {
     logger.warn(
       { correlationId, code: message.code, role: message.role },
-      'Role already connected',
+      'Registration deferred: the pairing could not be confirmed as still allowed',
     );
-    socket.send(JSON.stringify({ type: 'error', error: 'role_already_connected' }));
+    metrics.recordError('pairing_standing_unknown');
+    refuseRetryably(socket);
+    return;
+  }
+  if (admission === 'ended' || activeSessions.get(message.code) !== session) {
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
     socket.close();
     return;
   }
 
   const accountId = pairingAccountId(session.metadata);
-  const previous = pairCredential(session.metadata, message.role);
-  if (!accountId || !previous || (deviceId !== null && previous.deviceId !== deviceId)) {
+  const current = pairCredential(session.metadata, message.role);
+  if (!accountId || !current || (deviceId !== null && current.deviceId !== deviceId)) {
     socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
     socket.close();
     return;
   }
-  const credential = freshPairCredential(previous.deviceId);
+  const credential = freshPairCredential(current.deviceId);
   invalidatePairingSnapshot(message.code);
   const rotated = await rotatePairCredential(
     { code: session.code, created_at: session.createdAt },
     message.role,
     accountId,
-    previous,
+    current,
     credential,
     deviceId,
   );
+  const unrevealed = presentedCurrent ? current : session.previousCredentials[message.role];
+  if (rotated.data) {
+    session.metadata = withPairCredential(session.metadata, message.role, credential);
+    if (unrevealed) session.previousCredentials[message.role] = unrevealed;
+  }
   if (socket.readyState !== WebSocket.OPEN) return;
   if (rotated.error) {
     refuseRetryably(socket);
@@ -1559,13 +1635,11 @@ async function registerWithCredential(
     socket.close();
     return;
   }
-  if (session.participants[message.role]) {
-    socket.send(JSON.stringify({ type: 'error', error: 'role_already_connected' }));
-    socket.close();
-    return;
+  const occupant = session.participants[message.role];
+  if (occupant && occupant.socket !== socket) {
+    displaceParticipant(session, occupant, correlationId);
   }
   if (deviceId !== null && !connectionManager.bindDevice(socket, deviceId)) return;
-  session.metadata = withPairCredential(session.metadata, message.role, credential);
 
   const participant: Participant = {
     socket,
@@ -1584,6 +1658,7 @@ async function registerWithCredential(
 
   session.lastHeartbeatAt = Date.now();
 
+  delete session.previousCredentials[message.role];
   socket.send(
     JSON.stringify({
       type: 'registered',
@@ -1599,11 +1674,21 @@ async function registerWithCredential(
       expiresAt: session.expiresAt,
       peerConnected: Boolean(getPeer(session, message.role)),
     }),
+    (error) => {
+      if (!error || !unrevealed) return;
+      const stored = pairCredential(session.metadata, message.role);
+      if (stored?.generation === credential.generation) {
+        session.previousCredentials[message.role] = unrevealed;
+      }
+    },
   );
 
   const peer = getPeer(session, message.role);
   if (peer) {
-    const longExpiry = Date.now() + SESSION_LONG_TTL_MS;
+    const longExpiry = Math.min(
+      Date.now() + SESSION_LONG_TTL_MS,
+      session.createdAt + pairingMaxLifetimeMs,
+    );
     if (session.expiresAt < longExpiry) {
       session.expiresAt = longExpiry;
       const { error } = await extendSessionExpiry(message.code, longExpiry);
@@ -1615,7 +1700,7 @@ async function registerWithCredential(
       } else {
         logger.info(
           { code: message.code, newExpiresAt: longExpiry },
-          'Session TTL extended to 24h (both peers connected)',
+          'Session TTL extended (both peers connected)',
         );
       }
     }
@@ -1659,6 +1744,8 @@ function handleSignal(socket: WebSocket, message: SignalMessage, correlationId: 
     socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
     return;
   }
+
+  maybeRecheckStanding(session);
 
   const peer = getPeer(session, client.role);
 
@@ -1778,6 +1865,8 @@ async function loadSession(
     participants: {},
     metadata: lookup.row.metadata,
     lastHeartbeatAt: Date.now(),
+    standing: { checkedAt: lookup.row.created_at, activeAt: lookup.row.created_at, pending: null },
+    previousCredentials: {},
   };
   activeSessions.set(code, session);
   return { kind: 'session', session };
@@ -1965,6 +2054,141 @@ async function endPairingsDeletedElsewhere(): Promise<void> {
     ended++;
   }
   if (ended > 0) logger.info({ ended }, 'Ended live pairings deleted by another instance');
+}
+
+function participantKey(code: string, role: Role): string {
+  return `${code}:${role}`;
+}
+
+function displaceParticipant(session: Session, occupant: Participant, correlationId: string): void {
+  logger.info(
+    { correlationId, code: session.code, role: occupant.role },
+    'Registration with the current credential replaced the connection holding the role',
+  );
+  metrics.recordError('participant_replaced');
+  clients.delete(occupant.socket);
+  if (session.participants[occupant.role] === occupant) delete session.participants[occupant.role];
+  try {
+    occupant.socket.terminate();
+  } catch (error) {
+    logger.warn({ error, role: occupant.role }, 'Failed to terminate a replaced connection');
+  }
+}
+
+type StandingAdmission = 'active' | 'ended' | 'unknown';
+
+async function admitStanding(session: Session): Promise<StandingAdmission> {
+  if (standing.mode === 'disabled') return 'active';
+  if (standing.mode === 'unconfigured') return 'unknown';
+  if (Date.now() - session.standing.activeAt < standing.recheckMs) return 'active';
+  await recheckStanding([session]);
+  if (activeSessions.get(session.code) !== session) return 'ended';
+  return Date.now() - session.standing.activeAt < standing.maxStaleMs ? 'active' : 'unknown';
+}
+
+function maybeRecheckStanding(session: Session): void {
+  if (standing.mode !== 'enforced' || session.standing.pending) return;
+  if (Date.now() - session.standing.checkedAt < standing.recheckMs) return;
+  void recheckStanding([session]);
+}
+
+function recheckLiveStanding(now: number): void {
+  if (standing.mode !== 'enforced') return;
+  const due = [...activeSessions.values()].filter(
+    (session) =>
+      (session.participants.desktop || session.participants.mobile) &&
+      !session.standing.pending &&
+      now - session.standing.checkedAt >= standing.recheckMs,
+  );
+  for (let start = 0; start < due.length; start += PAIRING_STANDING_BATCH_SIZE) {
+    void recheckStanding(due.slice(start, start + PAIRING_STANDING_BATCH_SIZE));
+  }
+}
+
+async function recheckStanding(sessions: readonly Session[]): Promise<void> {
+  const inFlight = sessions
+    .map((session) => session.standing.pending)
+    .filter((pending): pending is Promise<void> => pending !== null);
+  const due = sessions.filter((session) => session.standing.pending === null);
+  if (due.length > 0) {
+    const run = applyStanding(due);
+    for (const session of due) session.standing.pending = run;
+    inFlight.push(run);
+  }
+  await Promise.all(inFlight);
+}
+
+async function applyStanding(sessions: readonly Session[]): Promise<void> {
+  try {
+    const askedAt = Date.now();
+    const queries: StandingQuery[] = [];
+    for (const session of sessions) {
+      session.standing.checkedAt = askedAt;
+      const userId = pairingAccountId(session.metadata);
+      if (!userId) continue;
+      queries.push({
+        code: session.code,
+        userId,
+        deviceIds: pairingDeviceIds(session.metadata),
+        workspace: pairingWorkspaceSelector(session.metadata),
+      });
+    }
+    const verdicts = await fetchPairingStanding(standing, queries);
+    if (verdicts === null) metrics.recordError('pairing_standing_unavailable');
+
+    const endings: Array<ReturnType<typeof deleteStoredPairing>> = [];
+    for (const session of sessions) {
+      if (activeSessions.get(session.code) !== session) continue;
+      const verdict = pairingAccountId(session.metadata)
+        ? (verdicts?.get(session.code) ?? 'unknown')
+        : 'ended';
+      if (verdict === 'active') {
+        session.standing.activeAt = Date.now();
+        continue;
+      }
+      if (verdict === 'ended') {
+        logger.info({ code: session.code }, 'Pairing ended: it is no longer allowed');
+        metrics.recordError('pairing_standing_ended');
+        endings.push(deleteStoredPairing(session.code));
+        continue;
+      }
+      if (Date.now() - session.standing.activeAt >= standing.maxStaleMs) {
+        suspendParticipants(session);
+      }
+    }
+    for (const { error } of await Promise.all(endings)) {
+      if (error) logger.error({ error }, 'Failed to delete a pairing that is no longer allowed');
+    }
+  } finally {
+    for (const session of sessions) session.standing.pending = null;
+  }
+}
+
+function suspendParticipants(session: Session): void {
+  logger.warn(
+    { code: session.code },
+    'Disconnecting a pairing whose standing could not be confirmed in time',
+  );
+  for (const role of ['desktop', 'mobile'] as const) {
+    const participant = session.participants[role];
+    if (participant) refuseRetryably(participant.socket);
+  }
+}
+
+const pruneExpired = createExpiredPairingPruner({
+  prune: deleteExpiredSessions,
+  intervalMs: EXPIRED_PAIRING_PRUNE_INTERVAL_MS,
+  graceMs: EXPIRED_PAIRING_PRUNE_GRACE_MS,
+  batch: EXPIRED_PAIRING_PRUNE_BATCH,
+});
+
+async function pruneExpiredPairings(now: number): Promise<void> {
+  const outcome = await pruneExpired(now);
+  if (outcome.kind === 'failed') {
+    logger.warn({ error: outcome.error }, 'Failed to prune expired pairings');
+  } else if (outcome.kind === 'pruned' && outcome.deleted > 0) {
+    logger.info({ deleted: outcome.deleted }, 'Pruned expired pairings');
+  }
 }
 
 function queuePendingApproval(code: string, payload: Record<string, unknown>): void {

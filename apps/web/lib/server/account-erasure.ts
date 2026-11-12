@@ -38,6 +38,8 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   column: string;
   /** A second column naming the same person, ORed into the delete. */
   alsoColumn?: string;
+  /** The key inside a jsonb `column` that holds the person's id. */
+  jsonKey?: string;
 }> = [
   { table: 'retrieval_chunks', column: 'user_id' },
   { table: 'retrieval_documents', column: 'user_id' },
@@ -131,6 +133,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'event_triggers', column: 'user_id' },
   { table: 'background_jobs', column: 'user_id' },
   { table: 'device_pairings', column: 'user_id' },
+  { table: 'signaling_sessions', column: 'metadata', jsonKey: 'userId' },
   { table: 'device_refresh_tokens', column: 'user_id' },
   { table: 'device_refresh_token_families', column: 'user_id' },
   { table: 'revoked_jwts', column: 'user_id' },
@@ -997,7 +1000,7 @@ export async function eraseUserAccountData(
       }
     }
 
-    for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
+    for (const { table, column, alsoColumn, jsonKey } of USER_SCOPED_TABLES) {
       if (table === PROFILE_TABLE) continue;
       if (
         table === 'user_projects' &&
@@ -1014,8 +1017,9 @@ export async function eraseUserAccountData(
         continue;
       }
       const retainExportJobs = table === 'background_jobs' && exportArchives.failed > 0;
+      const target = jsonKey === undefined ? column : `${column} ->> '${jsonKey}'`;
       const subject =
-        alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
+        alsoColumn === undefined ? `${target} = $1` : `(${target} = $1 or ${alsoColumn} = $1)`;
       try {
         await db.execute(
           `delete from public.${table} where ${subject}${retainExportJobs ? ' and kind <> $2' : ''}`,

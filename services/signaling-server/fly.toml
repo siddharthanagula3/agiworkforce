@@ -35,7 +35,13 @@ kill_timeout = 35
 
 [env]
   TRUST_PROXY = 'true'
+  # Fly's proxy appends the client address and then the app's own address to
+  # X-Forwarded-For (docs.fly.io/networking/request-headers), so the client is the
+  # second entry from the right. A request without it is refused, never keyed on the proxy.
   TRUSTED_PROXY_HOPS = '2'
+  WS_MESSAGE_LIMIT = '100'
+  WS_PARTICIPANT_MESSAGES_PER_SECOND = '200'
+  WS_PARTICIPANT_MESSAGE_BURST = '2000'
   # Required before this app can serve any WebSocket client.
   # ALLOWED_ORIGINS is a comma-separated allow-list of the exact Origin headers the
   # desktop and mobile clients send. It is intentionally NOT defaulted: with an empty
@@ -45,4 +51,6 @@ kill_timeout = 35
   #   fly secrets set ALLOWED_ORIGINS="https://app.example,https://other.example"
   # Also required as secrets (never in this file):
   #   NEON_DATABASE_URL, SIGNALING_INTERNAL_SECRET
+  # Required before this relay serves any pairing: SIGNALING_STANDING_URL, the web app's
+  # https /api/pair/standing URL. Without it every registration is refused.
   # Optional: SIGNALING_HTTP_URL, SIGNALING_WS_URL, ADMIN_API_KEY

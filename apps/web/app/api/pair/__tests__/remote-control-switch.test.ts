@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
+import {
+  CLIENT_VERSION_HEADER,
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+} from '@agiworkforce/cloud-contracts';
 import {
   billingPlanCapabilityUpgradeMessage,
   billingPlanCapabilityWireTiers,
@@ -165,6 +168,24 @@ describe('Remote Control pairing under the screen share switch', () => {
 
     await initiate(initiateRequest({ [CLIENT_VERSION_HEADER]: '2.4.2' }));
     expect(mocks.signaling).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the workspace a pairing is rechecked under', () => {
+  it('records the workspace the creating request selected', async () => {
+    await initiate(initiateRequest({ [MANAGED_CLOUD_ORGANIZATION_HEADER]: 'personal' }));
+
+    const [, init] = mocks.signaling.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as { metadata: Record<string, unknown> };
+    expect(body.metadata['workspaceSelector']).toBe('personal');
+  });
+
+  it('records no workspace when the request selected none', async () => {
+    await initiate(initiateRequest());
+
+    const [, init] = mocks.signaling.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as { metadata: Record<string, unknown> };
+    expect(body.metadata).not.toHaveProperty('workspaceSelector');
   });
 });
 

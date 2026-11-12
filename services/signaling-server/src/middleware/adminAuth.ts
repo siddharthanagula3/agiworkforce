@@ -86,6 +86,13 @@ function clearAuthFailure(ip: string): void {
 
 export function adminAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
   const ip = resolveClientIp(req);
+  if (ip === null) {
+    res.status(403).json({
+      error: 'CLIENT_ADDRESS_UNKNOWN',
+      message: 'The client address could not be established.',
+    });
+    return;
+  }
 
   const lockoutStatus = isLockedOut(ip);
   if (lockoutStatus.locked) {

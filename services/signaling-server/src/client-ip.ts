@@ -11,23 +11,25 @@ export function resolveTrustedProxyHops(env: NodeJS.ProcessEnv = process.env): n
   return Number.isInteger(configured) && configured > 0 ? configured : TRUSTED_PROXY_HOPS_DEFAULT;
 }
 
-export function resolveClientIp(
-  req: IncomingMessage,
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  const socketIp = req.socket.remoteAddress;
-  if (!isProxyTrusted(env)) return socketIp ?? 'unknown';
-
+export function forwardedChain(req: IncomingMessage): string[] {
   const forwardedFor = req.headers['x-forwarded-for'];
-  const chain = (Array.isArray(forwardedFor) ? forwardedFor.join(',') : (forwardedFor ?? ''))
+  return (Array.isArray(forwardedFor) ? forwardedFor.join(',') : (forwardedFor ?? ''))
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean);
+}
+
+export function resolveClientIp(
+  req: IncomingMessage,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (!isProxyTrusted(env)) return req.socket.remoteAddress ?? null;
+
+  const chain = forwardedChain(req);
 
   // Each proxy appends the peer it observed, so only the entry `hops` from the right was written
-  // by a trusted proxy; everything left of it is client-supplied and spoofable.
+  // by a trusted proxy; everything left of it is client-supplied and spoofable. Without that
+  // entry the socket peer is the proxy itself, which every client shares, so there is no answer.
   const claimed = chain[chain.length - resolveTrustedProxyHops(env)];
-  if (claimed && isIP(claimed) !== 0) return claimed;
-
-  return socketIp ?? 'unknown';
+  return claimed && isIP(claimed) !== 0 ? claimed : null;
 }

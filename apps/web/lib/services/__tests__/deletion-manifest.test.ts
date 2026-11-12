@@ -63,6 +63,21 @@ describe('the matrix covers every store the erasure paths know about', () => {
   });
 });
 
+describe('the relay pairing store', () => {
+  it('is erased with its account and swept by the relay once expired', () => {
+    expect(entry('signaling_sessions')).toMatchObject({
+      kind: 'table',
+      dataClass: 'operational_record',
+      erasedWithSubject: true,
+      erasedWithTenant: false,
+    });
+    expect(entry('signaling_sessions').deletionPath).toContain('lib/server/account-erasure.ts');
+    expect(entry('signaling_sessions').deletionPath).toContain(
+      'services/signaling-server src/expired-pairings.ts',
+    );
+  });
+});
+
 describe('what a data class buys', () => {
   it('erases every conversation store with its subject', () => {
     for (const store of ['web_conversations', 'web_artifacts', 'research_reports', 'user_memories'])

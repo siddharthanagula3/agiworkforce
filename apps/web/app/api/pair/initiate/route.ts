@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { isSecureRelayUrl, isSecureRelayHttpUrl } from '@agiworkforce/types';
+import { readPairingWorkspaceSelector } from '@/lib/device-steps/pairing-standing';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -11,12 +12,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
-import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import {
-  remoteControlPlanRefusal,
-  remoteControlRefusal,
-} from '@/lib/feature-flags/remote-control-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { remoteControlStandingRefusal } from '@/lib/feature-flags/remote-control-gate';
 import { readRequestingDeviceId } from '@/lib/device-steps/requesting-device';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
@@ -65,19 +61,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const rateLimited = await withRateLimit(request, 'device-link', userId);
   if (rateLimited) return rateLimited;
 
-  const featureGate = await buildWorkspaceFeatureGateResponse(
-    userId,
-    request,
-    'remote_control',
-    resolveCloudChatSurface(request),
-  );
-  if (featureGate) return featureGate;
-
-  const planRefusal = await remoteControlPlanRefusal(db, userId);
-  if (planRefusal) return planRefusal;
-
-  const switchedOff = await remoteControlRefusal(request, userId);
-  if (switchedOff) return switchedOff;
+  const refusal = await remoteControlStandingRefusal(db, userId, request);
+  if (refusal) return refusal.response;
 
   const signalingUrl = process.env['SIGNALING_HTTP_URL'];
   const signalingSecret = process.env['SIGNALING_INTERNAL_SECRET'];
@@ -118,7 +103,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       body: JSON.stringify({
         initiator,
         ttlSeconds: ttlSeconds ?? DEFAULT_TTL_SECONDS,
-        metadata: { userId, desktopId: desktopId ?? null, initiator },
+        metadata: {
+          userId,
+          desktopId: desktopId ?? null,
+          initiator,
+          ...readPairingWorkspaceSelector(request),
+        },
         ...(deviceId ? { device: { role: initiator, id: deviceId } } : {}),
       }),
       signal: AbortSignal.timeout(SIGNALING_TIMEOUT_MS),

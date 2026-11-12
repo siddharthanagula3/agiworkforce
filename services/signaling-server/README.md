@@ -29,6 +29,38 @@ tokens; an unused current token remains a bearer credential and must be kept
 private. Registration and recovery admission are process-local, so peer matching
 requires one serving relay process.
 
+When the connection drops after the replacement is stored but before
+`registered` is written, the relay keeps accepting the presented credential
+until a replacement is written to a client; a replacement that was written
+consumes it. A registration with the current credential replaces a socket that
+still holds the role, so a client that changed networks does not wait for the
+old socket to time out. The relay pings every socket every `WS_PING_INTERVAL_MS`
+and terminates one that misses two pongs.
+
+## Pairing lifetime and standing
+
+Once both peers connect, a pairing's expiry moves to 24 hours ahead, but never
+past `SIGNALING_PAIRING_MAX_LIFETIME_MS` after creation. At each registration
+and at most every `SIGNALING_STANDING_RECHECK_MS` while messages flow, the relay
+asks the web app at `SIGNALING_STANDING_URL` whether the pairing may continue:
+the account, its workspace policy, its plan, the Remote Control switch and the
+sign-in of each paired device. A pairing that may not continue is ended and
+deleted. While the web app cannot answer, a pairing runs on its last confirmed
+standing for at most `SIGNALING_STANDING_MAX_STALE_MS`, then its sockets are
+closed retryably. In production an unset URL refuses every registration.
+Pairings that expired more than an hour ago are deleted from the store.
+
+## Message limits
+
+Before a socket registers, its messages and connections count against its
+client IP (`WS_MESSAGE_LIMIT`, `WS_CONNECTION_LIMIT`), and repeated violations
+blacklist the IP. A registered participant is limited per pairing role by a
+token bucket (`WS_PARTICIPANT_MESSAGE_BURST`, refilled at
+`WS_PARTICIPANT_MESSAGES_PER_SECOND`) and is never blacklisted, so a streamed
+reply, one message per output delta, cannot block the address a phone shares.
+Behind Fly the client IP is the second `X-Forwarded-For` entry from the right; a
+connection without it is refused rather than keyed on the proxy.
+
 ## Canonical endpoint
 
 Two deploy targets exist (`fly.toml` and `railway.toml`). Exactly one hostname
