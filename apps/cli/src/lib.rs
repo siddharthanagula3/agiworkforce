@@ -685,7 +685,7 @@ pub fn init_tracing(verbose: bool, debug: Option<&Option<String>>) -> String {
     // (raw/JSON one-shot output, SDK JSONL streams).
     let _ = fmt()
         .with_env_filter(filter)
-        .with_writer(std::io::stderr)
+        .with_writer(|| output::DiagnosticWriter)
         .try_init();
 
     directive
@@ -6057,6 +6057,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                     // 130 = 128 + SIGINT, the conventional exit code.
                     terminals::stop_all();
+                    end_process_cleanly();
                     std::process::exit(130);
                 };
                 match result {
@@ -6823,7 +6824,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 let policy = features::exec::exec_policy::load_policy()?;
                 let prefixes = policy.get_allowed_prefixes();
                 if prefixes.is_empty() {
-                    println!("No rules. Add .rules files to ~/.agiworkforce/rules/");
+                    let rules_dir = config::CliConfig::config_dir()?.join("rules");
+                    println!("No rules. Add .rules files to {}", rules_dir.display());
                 } else {
                     println!("{} allowed command prefix(es):", prefixes.len());
                     for prefix in prefixes {
@@ -8108,7 +8110,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
         )
         .await
     } else {
-        tui::run(
+        let outcome = tui::run(
             &mut app_config,
             &model,
             &sys_context,
@@ -8132,7 +8134,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
             cli.agent.clone(),
             auto_route_seed,
         )
-        .await
+        .await;
+        output::release_held_diagnostics();
+        outcome
     }
 }
 
@@ -8335,7 +8339,13 @@ pub fn build_final_prompt(
 }
 
 pub fn exit_with_error(e: &anyhow::Error) -> ! {
+    end_process_cleanly();
     std::process::exit(exit_code_for(e))
+}
+
+fn end_process_cleanly() {
+    runtime::writer_lease::release_process_leases();
+    output::release_held_diagnostics();
 }
 
 pub fn run_to_exit_code() -> std::process::ExitCode {
@@ -8352,6 +8362,7 @@ pub fn run_to_exit_code() -> std::process::ExitCode {
         .build()
         .map_err(anyhow::Error::from)
         .and_then(|runtime| runtime.block_on(run_main()));
+    end_process_cleanly();
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) if broken_pipe::is_broken_pipe_error(&error) => {

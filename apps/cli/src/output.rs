@@ -561,6 +561,97 @@ pub fn print_block(text: &str) {
     eprintln!("{text}");
 }
 
+const HELD_DIAGNOSTICS_LIMIT_BYTES: usize = 256 * 1024;
+
+/// Log lines written while the full-screen TUI owns the terminal. A raw
+/// stderr write there lands outside ratatui's buffer exactly as a notice
+/// would, so the lines wait here, oldest dropped first past the limit, until
+/// the TUI has left the screen.
+struct HeldDiagnostics {
+    lines: std::collections::VecDeque<Vec<u8>>,
+    bytes: usize,
+    dropped: usize,
+}
+
+impl HeldDiagnostics {
+    const fn new() -> Self {
+        Self {
+            lines: std::collections::VecDeque::new(),
+            bytes: 0,
+            dropped: 0,
+        }
+    }
+
+    fn hold(&mut self, line: &[u8], limit: usize) {
+        self.bytes += line.len();
+        self.lines.push_back(line.to_vec());
+        while self.bytes > limit {
+            let Some(oldest) = self.lines.pop_front() else {
+                break;
+            };
+            self.bytes -= oldest.len();
+            self.dropped += 1;
+        }
+    }
+
+    fn release_into(&mut self, sink: &mut impl std::io::Write) -> std::io::Result<()> {
+        if self.lines.is_empty() && self.dropped == 0 {
+            return Ok(());
+        }
+        if self.dropped > 0 {
+            writeln!(
+                sink,
+                "Log lines dropped while the full-screen interface was open: {}",
+                self.dropped
+            )?;
+        }
+        for line in self.lines.drain(..) {
+            sink.write_all(&line)?;
+        }
+        self.bytes = 0;
+        self.dropped = 0;
+        sink.flush()
+    }
+}
+
+static HELD_DIAGNOSTICS: std::sync::Mutex<HeldDiagnostics> =
+    std::sync::Mutex::new(HeldDiagnostics::new());
+
+fn held_diagnostics() -> std::sync::MutexGuard<'static, HeldDiagnostics> {
+    HELD_DIAGNOSTICS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// Write the log lines held while the TUI was up to stderr.
+pub fn release_held_diagnostics() {
+    let mut stderr = std::io::stderr().lock();
+    let _ = held_diagnostics().release_into(&mut stderr);
+}
+
+/// The `tracing` writer: stderr, except while the TUI is drawing on the same
+/// terminal, when lines are held for [`release_held_diagnostics`].
+pub(crate) struct DiagnosticWriter;
+
+impl std::io::Write for DiagnosticWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        use std::io::Write;
+        if crate::tui::tui_active() && std::io::stderr().is_terminal() {
+            held_diagnostics().hold(buf, HELD_DIAGNOSTICS_LIMIT_BYTES);
+            return Ok(buf.len());
+        }
+        let mut stderr = std::io::stderr().lock();
+        held_diagnostics().release_into(&mut stderr)?;
+        stderr.write_all(buf)?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        use std::io::Write;
+        std::io::stderr().flush()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Cost display
 // ---------------------------------------------------------------------------
@@ -870,6 +961,37 @@ pub fn flush_markdown(renderer: &mut MarkdownRenderer) {
 mod tests {
     use super::*;
     use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    #[test]
+    fn log_lines_held_while_the_tui_is_up_reach_stderr_in_order_once_it_leaves() {
+        let mut held = HeldDiagnostics::new();
+        held.hold(b"first\n", 1024);
+        held.hold(b"second\n", 1024);
+        let mut sink = Vec::new();
+
+        held.release_into(&mut sink).expect("release");
+        assert_eq!(sink, b"first\nsecond\n");
+
+        let mut again = Vec::new();
+        held.release_into(&mut again).expect("second release");
+        assert!(again.is_empty());
+    }
+
+    #[test]
+    fn held_log_lines_past_the_limit_drop_the_oldest_and_say_how_many() {
+        let mut held = HeldDiagnostics::new();
+        let lines: [&[u8]; 3] = [b"one\n", b"two\n", b"three\n"];
+        for line in lines {
+            held.hold(line, 9);
+        }
+        let mut sink = Vec::new();
+
+        held.release_into(&mut sink).expect("release");
+        assert_eq!(
+            String::from_utf8(sink).expect("utf8"),
+            "Log lines dropped while the full-screen interface was open: 2\nthree\n"
+        );
+    }
 
     /// Assistant text must only reach stdout through this module, because only
     /// this module flushes.
