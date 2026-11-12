@@ -9,6 +9,9 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type UtilsModule = typeof import('../src/utils');
+type WebMcpModule = typeof import('../src/webmcp');
+
 if (typeof globalThis.CSS === 'undefined') {
   (globalThis as Record<string, unknown>).CSS = {};
 }
@@ -38,14 +41,14 @@ const harness = vi.hoisted(() => {
 });
 
 vi.mock('../src/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/utils')>()),
+  ...(await importOriginal<UtilsModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock('../src/jobAutofill', () => ({ runPlatformJobAutofill: vi.fn() }));
 
 vi.mock('../src/webmcp', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/webmcp')>()),
+  ...(await importOriginal<WebMcpModule>()),
   discoverAllTools: harness.discoverAllTools,
   callTool: vi.fn(),
   startToolChangeReporting: vi.fn(),
