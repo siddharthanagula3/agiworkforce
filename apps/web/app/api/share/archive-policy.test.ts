@@ -74,6 +74,7 @@ beforeEach(() => {
   mocks.rateLimit.mockResolvedValue(null);
   mocks.query.mockImplementation(async (sql: unknown) => {
     if (/from web_conversations/i.test(String(sql))) return [{ is_temporary: false }];
+    if (/from web_messages/i.test(String(sql))) return [MESSAGE];
     if (/insert into shared_sessions/i.test(String(sql))) {
       return [{ token: 'tok-new', expires_at: FUTURE, total_messages: 1, visibility: 'link' }];
     }

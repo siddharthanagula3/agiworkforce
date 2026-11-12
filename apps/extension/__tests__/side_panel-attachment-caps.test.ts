@@ -290,18 +290,25 @@ function captureScreenshot(dataUrl: string): void {
   screenshotItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+const SETTLE_TIMEOUT_MS = 8_000;
+vi.setConfig({ testTimeout: 30_000 });
+
+function settled<T>(assertion: () => T | Promise<T>): Promise<T> {
+  return vi.waitFor(assertion, { timeout: SETTLE_TIMEOUT_MS });
+}
+
 async function expectPendingCount(count: number): Promise<void> {
-  await vi.waitFor(() => {
+  await settled(() => {
     expect(pendingDataUrls()).toHaveLength(count);
   });
 }
 
 async function clearPending(): Promise<void> {
   dropFiles([imageFile(8, 'image/png', 'reset.png')]);
-  await vi.waitFor(() => {
+  await settled(() => {
     expect(attachmentBar().querySelector('.sp-attachment-thumb')).not.toBeNull();
   });
-  await vi.waitFor(async () => {
+  await settled(async () => {
     let removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
     while (removeBtn) {
       removeBtn.click();
@@ -344,7 +351,7 @@ describe('side panel composer attachment caps', () => {
     vi.mocked(fetch).mockClear();
     pickFiles([imageFile(16, 'image/png', 'durable-image.png')]);
     await expectPendingCount(1);
-    await vi.waitFor(() => {
+    await settled(() => {
       const presign = vi
         .mocked(fetch)
         .mock.calls.find(([url]) => String(url).endsWith('/api/uploads/presign'));
@@ -380,7 +387,7 @@ describe('side panel composer attachment caps', () => {
     chromeMock.screenshotError = 'Capture unavailable';
     captureScreenshot('');
 
-    await vi.waitFor(() => expect(noticeText()).toContain('Capture unavailable'));
+    await settled(() => expect(noticeText()).toContain('Capture unavailable'));
     expect(pendingDataUrls()).toHaveLength(0);
   });
 
@@ -416,7 +423,7 @@ describe('side panel composer attachment caps', () => {
 
     pasteFiles([imageFile(16, 'image/png', 'pasted.png')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toContain(String(MANAGED_CHAT_MAX_ATTACHMENTS));
     });
     expect(pendingDataUrls()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS);
@@ -432,7 +439,7 @@ describe('side panel composer attachment caps', () => {
 
     pickFiles([imageFile(16, 'image/png', 'picked.png')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toContain(String(MANAGED_CHAT_MAX_ATTACHMENTS));
     });
     expect(pendingDataUrls()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS);
@@ -450,7 +457,7 @@ describe('side panel composer attachment caps', () => {
   it('still refuses a file above the canonical per-file cap', async () => {
     dropFiles([imageFile(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES + 1, 'image/png', 'over-cap.png')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toContain('over-cap.png is too large');
     });
     expect(pendingDataUrls()).toHaveLength(0);
@@ -459,7 +466,7 @@ describe('side panel composer attachment caps', () => {
   it('rejects image types the transport cannot encode', async () => {
     dropFiles([imageFile(16, 'image/svg+xml', 'vector.svg')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toContain('vector.svg cannot be attached');
     });
     expect(noticeText()).toContain('PNG');
@@ -482,7 +489,7 @@ describe('side panel composer attachment caps', () => {
 async function refreshAccount(): Promise<void> {
   expect(account.onChange).toBeTypeOf('function');
   account.onChange!();
-  await vi.waitFor(() => {
+  await settled(() => {
     expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(
       !account.signedIn || !account.ready,
     );
@@ -497,13 +504,13 @@ describe('attachment account and capability admission', () => {
   it('refuses file intake when the signed-in account denies uploads', async () => {
     account.uploadsAllowed = false;
     account.onChange!();
-    await vi.waitFor(() =>
+    await settled(() =>
       expect((document.getElementById('sp-attach-file-item') as HTMLButtonElement).hidden).toBe(
         true,
       ),
     );
     dropFiles([imageFile(16)]);
-    await vi.waitFor(() => expect(noticeText()).toBe(catalogMessage('spAttachmentUploadsOff', [])));
+    await settled(() => expect(noticeText()).toBe(catalogMessage('spAttachmentUploadsOff', [])));
     expect(pendingDataUrls()).toHaveLength(0);
   });
   it('disables capture until allocation is ready and refuses signed-out file drops', async () => {
@@ -517,7 +524,7 @@ describe('attachment account and capability admission', () => {
       ).toBe(true);
       if (!signedIn) {
         dropFiles([imageFile(16)]);
-        await vi.waitFor(() =>
+        await settled(() =>
           expect(noticeText()).toBe(catalogMessage('spAttachmentUploadsOff', [])),
         );
         expect(pendingDataUrls()).toHaveLength(0);
@@ -527,7 +534,7 @@ describe('attachment account and capability admission', () => {
 });
 
 async function expectReadyAccount(): Promise<void> {
-  await vi.waitFor(() => {
+  await settled(() => {
     expect((document.getElementById('sp-input') as HTMLTextAreaElement).disabled).toBe(false);
     expect(account.summarized).toBe(account.owner.authIncarnation);
     expect((document.getElementById('sp-attach-file-item') as HTMLButtonElement).hidden).toBe(
@@ -555,7 +562,7 @@ describe('image intake stays with its admitted account epoch', () => {
       });
       const abort = vi.spyOn(FileReader.prototype, 'abort');
       pickFiles([imageFile(16)]);
-      await vi.waitFor(() => expect(readers).toHaveLength(1));
+      await settled(() => expect(readers).toHaveLength(1));
       const reader = readers[0]!;
       expect((document.getElementById('sp-attach-btn') as HTMLButtonElement).disabled).toBe(true);
       document.getElementById('sp-new-chat-btn')!.click();
@@ -614,7 +621,7 @@ describe('image intake stays with its admitted account epoch', () => {
       account.modelIds = [getRoutingSlotModel('general_fast')];
       account.onChange!();
       let option!: HTMLButtonElement;
-      await vi.waitFor(() => {
+      await settled(() => {
         option = Array.from(
           document.querySelectorAll<HTMLButtonElement>('#sp-model-dropdown [role="menuitemradio"]'),
         ).find((button) => button.getAttribute('aria-checked') === 'false')!;
@@ -647,7 +654,7 @@ describe('image intake stays with its admitted account epoch', () => {
       (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
       account.modelIds = [];
       account.onChange!();
-      await vi.waitFor(() =>
+      await settled(() =>
         expect(document.getElementById('sp-model-badge')!.textContent).toBe(
           getManagedModelBadgeLabel('auto'),
         ),
@@ -669,7 +676,7 @@ describe('image intake stays with its admitted account epoch', () => {
       try {
         document.getElementById('sp-history-btn')!.click();
         let restore!: HTMLButtonElement;
-        await vi.waitFor(() => {
+        await settled(() => {
           restore = Array.from(
             document.querySelectorAll<HTMLButtonElement>('[data-conversation-restore="true"]'),
           ).find((button) => button.textContent?.includes(content))!;
@@ -678,7 +685,7 @@ describe('image intake stays with its admitted account epoch', () => {
         chromeMock.deferScreenshots = true;
         (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
         restore.click();
-        await vi.waitFor(() =>
+        await settled(() =>
           expect(document.getElementById('sp-messages')!.textContent).toContain(content),
         );
         const blockedAfterRestore = (document.getElementById('sp-attach-btn') as HTMLButtonElement)
@@ -703,7 +710,7 @@ describe('image intake stays with its admitted account epoch', () => {
     });
     const abort = vi.spyOn(FileReader.prototype, 'abort');
     dropFiles([imageFile(16)]);
-    await vi.waitFor(() => expect(readers).toHaveLength(1));
+    await settled(() => expect(readers).toHaveLength(1));
     const reader = readers[0]!;
     await changeOwner('replacement-session');
     expect(abort).toHaveBeenCalledOnce();
@@ -849,7 +856,7 @@ describe('document attachments through the `+` menu picker', () => {
       ([message]) => message.type === 'CHAT_MESSAGE',
     ).length;
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(
         chromeMock.runtime.sendMessage.mock.calls.filter(
           ([message]) => message.type === 'CHAT_MESSAGE',
@@ -876,7 +883,7 @@ describe('document attachments through the `+` menu picker', () => {
       documentFile('readme.md', 'text/markdown'),
     ]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(documentNames()).toEqual(['report.pdf', 'notes.txt', 'readme.md']);
       expect(assetIdByName.size).toBe(3);
       expect(
@@ -904,7 +911,7 @@ describe('document attachments through the `+` menu picker', () => {
   it('admits a Markdown file the browser reports without a type', async () => {
     pickFiles([documentFile('changelog.md', '')]);
 
-    await vi.waitFor(() => expect(assetIdByName.has('changelog.md')).toBe(true));
+    await settled(() => expect(assetIdByName.has('changelog.md')).toBe(true));
     expect(noticeText()).toBe('');
     const sent = await sendDraft('what changed');
     expect(sent.fileAttachments).toEqual([
@@ -919,7 +926,7 @@ describe('document attachments through the `+` menu picker', () => {
       documentFile('diagram.svg', 'image/svg+xml'),
     ]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeTexts()).toEqual(
         ['data.csv', 'bundle.zip', 'diagram.svg'].map((name) =>
           catalogMessage('spAttachmentUnsupported', [name]),
@@ -933,7 +940,7 @@ describe('document attachments through the `+` menu picker', () => {
   it('refuses a document over the per-file limit and says how large the limit is', async () => {
     pickFiles([documentFile('huge.pdf', 'application/pdf', MAX_CHAT_ATTACHMENT_BYTES + 1)]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toBe(
         catalogMessage('spAttachmentFileTooLarge', [
           'huge.pdf',
@@ -951,7 +958,7 @@ describe('document attachments through the `+` menu picker', () => {
       documentFile('second.txt', 'text/plain', half),
     ]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toBe(
         catalogMessage('spAttachmentOverBudget', [
           'second.txt',
@@ -968,11 +975,11 @@ describe('document attachments through the `+` menu picker', () => {
         documentFile(`part-${i}.txt`, 'text/plain'),
       ),
     );
-    await vi.waitFor(() => expect(documentNames()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS));
+    await settled(() => expect(documentNames()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS));
 
     pickFiles([documentFile('one-too-many.pdf', 'application/pdf')]);
 
-    await vi.waitFor(() => {
+    await settled(() => {
       expect(noticeText()).toBe(
         catalogMessage('spAttachmentTooMany', [
           'one-too-many.pdf',

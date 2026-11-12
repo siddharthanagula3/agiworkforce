@@ -110,15 +110,26 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     expect([...SETTINGS_PANEL_SETTING_KEYS].sort()).toEqual(activeMutableKeys);
   });
 
+  it.each(['agiWorkforce.agent.mode', 'agiWorkforce.agent.effort'])(
+    'declares %s user-only and inherited by remote windows (application scope)',
+    (key) => {
+      expect(pkgSettings[key]?.scope).toBe('application');
+    },
+  );
+
   it.each([
-    'agiWorkforce.agent.mode',
-    'agiWorkforce.agent.effort',
     'agiWorkforce.autoApplyFixes',
     'agiWorkforce.memory.enabled',
     'agiWorkforce.inlineCompletions.enabled',
-  ])('declares %s user-only and inherited by remote windows (application scope)', (key) => {
-    expect(pkgSettings[key]?.scope).toBe('application');
-  });
+  ])(
+    'lets a workspace or folder deliver a value for %s, and gates it behind workspace trust',
+    (key) => {
+      expect(pkgSettings[key]?.scope).toBe('resource');
+      expect(
+        readPackageJson().capabilities?.untrustedWorkspaces?.restrictedConfigurations,
+      ).toContain(key);
+    },
+  );
 
   it('requires an explicit opt-in before sending editor context for inline completions', () => {
     expect(__CONFIG_DEFAULTS.inlineCompletionsEnabled).toBe(false);

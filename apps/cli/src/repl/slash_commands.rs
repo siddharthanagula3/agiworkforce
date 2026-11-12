@@ -378,17 +378,21 @@ pub(super) async fn handle_slash_command(
             );
         }
         "/plan" if arg == "off" => {
-            session.permission_mode = session
-                .plan_return_mode
-                .take()
-                .unwrap_or(crate::cli_options::PermissionMode::Default)
-                .within(session.pinned_permission_mode);
-            session.plan_mode = false;
-            session.reset_plan_state();
-            output::print_info(&format!(
-                "Plan mode OFF. Back to {} mode.",
-                session.permission_mode.name()
-            ));
+            session.permission_mode = session.plan_exit_mode();
+            if session.permission_mode == crate::cli_options::PermissionMode::Plan {
+                if !session.plan_mode {
+                    session.plan_approved = false;
+                }
+                session.plan_mode = true;
+                output::print_warn(&session.pinned_mode_notice());
+            } else {
+                session.plan_mode = false;
+                session.reset_plan_state();
+                output::print_info(&format!(
+                    "Plan mode OFF. Back to {} mode.",
+                    session.permission_mode.name()
+                ));
+            }
         }
         "/plan" if arg == "accept" || arg == "approve" => {
             if !matches!(
@@ -983,6 +987,25 @@ mod tests {
         session.permission_mode = PermissionMode::Default;
         handle_slash_command("/plan off", &mut session, &mut config).await;
         assert_eq!(session.permission_mode, PermissionMode::Default);
+    }
+
+    #[tokio::test]
+    async fn leaving_plan_mode_under_a_plan_pin_stays_in_plan() {
+        use crate::cli_options::PermissionMode;
+        let mut session = crate::agent::AgentSession::new(
+            crate::model_catalog::default_model(),
+            &crate::context::gather_system_context(),
+            None,
+        );
+        session.pinned_permission_mode = Some(PermissionMode::Plan);
+        session.permission_mode = PermissionMode::Default;
+        let mut config = crate::config::CliConfig::default();
+
+        handle_slash_command("/plan", &mut session, &mut config).await;
+        handle_slash_command("/plan off", &mut session, &mut config).await;
+        assert_eq!(session.permission_mode, PermissionMode::Plan);
+        assert!(session.plan_mode);
+        assert_eq!(session.plan_return_mode, None);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { buildWorkspaceAccessGateResponse } from '@/lib/managed-compute-gate';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   CONNECTOR_REF_PATTERN,
@@ -84,7 +84,11 @@ async function handleGet(
   const limited = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (limited) return limited;
 
-  const { userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { userId, surface } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
+
   const target = await requireTarget(context);
   const [spec, existing] = await Promise.all([
     resolveConnectorCredentialSpec(target),
@@ -112,7 +116,11 @@ async function handlePost(
   const limited = await withRateLimit(request, RATE_LIMIT_BUCKET);
   if (limited) return limited;
 
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, surface } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
+
   const target = await requireTarget(context);
 
   if (!isConnectorTokenStorageAvailable()) {
@@ -130,7 +138,7 @@ async function handlePost(
     connectorId: target.serverId,
     isCustom: true,
     request,
-    surface: resolveCloudChatSurface(request),
+    surface: surface ?? 'unknown',
   });
   if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason).asUserSafe();
 

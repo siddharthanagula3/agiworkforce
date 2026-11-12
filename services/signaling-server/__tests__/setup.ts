@@ -24,6 +24,7 @@ vi.mock('../src/db.js', () => ({
   getSessionByCode: vi.fn().mockResolvedValue({ data: null, error: null }),
   deleteSessionByCode: vi.fn().mockResolvedValue({ error: null }),
   deleteSessionsForDevice: vi.fn().mockResolvedValue({ data: [], error: null }),
+  deleteExpiredSessions: vi.fn().mockResolvedValue({ data: 0, error: null }),
   rotatePairCredential: vi.fn().mockResolvedValue({ data: null, error: null }),
   extendSessionExpiry: vi.fn().mockResolvedValue({ error: null }),
   insertSession: vi.fn().mockResolvedValue({ error: null }),

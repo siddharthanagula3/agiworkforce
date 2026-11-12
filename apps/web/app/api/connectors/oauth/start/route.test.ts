@@ -1,4 +1,22 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+const WORKSPACE_ACCESS_ALLOWED = {
+  allowed: true,
+  code: 'allowed',
+  reason: 'Allowed by workspace policy.',
+  obligations: [],
+  organizationId: null,
+};
+const { mockEvaluateWorkspaceAccess } = vi.hoisted(() => ({
+  mockEvaluateWorkspaceAccess: vi.fn(),
+}));
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  evaluateWorkspaceAccess: mockEvaluateWorkspaceAccess,
+}));
 import { NextRequest } from 'next/server';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
@@ -36,8 +54,11 @@ vi.mock('@/lib/server/rls-db', async () => ({
   ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
 
   getUserScopedDb: async (...a: unknown[]) => {
-    const { userId } = (await mocks.authUser(...a)) as { userId: string };
-    return { db: { query: vi.fn(), execute: vi.fn() }, userId, organizationId: null };
+    const { userId, surface } = (await mocks.authUser(...a)) as {
+      userId: string;
+      surface?: string;
+    };
+    return { db: { query: vi.fn(), execute: vi.fn() }, userId, organizationId: null, surface };
   },
 }));
 vi.mock('@/lib/rate-limit', async () => ({
@@ -100,6 +121,7 @@ function request(query: string): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockEvaluateWorkspaceAccess.mockResolvedValue(WORKSPACE_ACCESS_ALLOWED);
   mocks.authUser.mockResolvedValue({ userId: 'user-1' });
   mocks.listAccounts.mockResolvedValue([]);
   mocks.createPending.mockResolvedValue(undefined);
@@ -133,6 +155,43 @@ describe('GET /api/connectors/oauth/start', () => {
       fetchMock.mockRestore();
     },
   );
+
+  it('refuses a client the workspace does not allow before any authorization is started', async () => {
+    configureLinear();
+    mocks.authUser.mockResolvedValue({ userId: 'user-1', surface: 'chrome' });
+    mockEvaluateWorkspaceAccess.mockResolvedValue({
+      allowed: false,
+      code: 'surface_not_allowed',
+      reason:
+        'Your workspace administrator does not allow access to this workspace from the Chrome extension.',
+      obligations: [],
+      organizationId: 'org-1',
+    });
+
+    const response = await GET(request('?connectorId=linear&mode=json'));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ status: 'policy_blocked' });
+    expect(mockEvaluateWorkspaceAccess).toHaveBeenCalledWith('user-1', expect.anything(), 'chrome');
+    expect(mocks.createPending).not.toHaveBeenCalled();
+  });
+
+  it('answers an unreadable workspace policy as unavailable, not as allowed', async () => {
+    configureLinear();
+    mockEvaluateWorkspaceAccess.mockResolvedValue({
+      allowed: false,
+      code: 'workspace_policy_unavailable',
+      reason: 'We could not confirm your workspace security settings.',
+      obligations: [],
+      organizationId: null,
+    });
+
+    const response = await GET(request('?connectorId=linear&mode=json'));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ status: 'unavailable' });
+    expect(mocks.createPending).not.toHaveBeenCalled();
+  });
 
   it('refuses to start a flow for a provider with no OAuth app configured', async () => {
     const response = await GET(request('?connectorId=trello'));

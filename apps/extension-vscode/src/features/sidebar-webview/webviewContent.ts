@@ -23,7 +23,12 @@ import {
 } from '@agiworkforce/design-tokens';
 import type { ComposerFollowUpBehavior } from '../../platform/config';
 import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
-import type { SessionBinding } from '../../protocol/webviewMessages';
+import {
+  MAX_SEND_MESSAGE_CHARS,
+  MAX_SEND_MESSAGE_REFERENCES,
+  MAX_SIDE_QUESTION_CHARS,
+  type SessionBinding,
+} from '../../protocol/webviewMessages';
 import { webviewStringsScript } from './webviewStrings';
 import { t } from '../../l10n';
 import { FILE_WRITE_TOOL_NAMES } from './turnChanges';
@@ -5148,8 +5153,33 @@ export function getWebviewContent(
       });
     }
 
+    var MAX_SEND_MESSAGE_CHARS = ${MAX_SEND_MESSAGE_CHARS};
+    var MAX_SEND_MESSAGE_REFERENCES = ${MAX_SEND_MESSAGE_REFERENCES};
+    var MAX_SIDE_QUESTION_CHARS = ${MAX_SIDE_QUESTION_CHARS};
+    var composerLimitShown = false;
+
+    function refuseOverLimit(label, count, limit, unit) {
+      composerLimitShown = true;
+      showFollowUpStatus(
+        label + ' (' + count.toLocaleString('en-US') + ' / ' + limit.toLocaleString('en-US') + ' ' + unit + ')',
+        'error',
+        true
+      );
+    }
+
+    function clearComposerLimit() {
+      if (!composerLimitShown) return;
+      composerLimitShown = false;
+      showFollowUpStatus('', 'queued', false);
+    }
+
     function askSideQuestion(question) {
       if (!sideQuestionEl || !sideQuestionTextEl || !sideQuestionAnswerEl) return;
+      if (question.length > MAX_SIDE_QUESTION_CHARS) {
+        refuseOverLimit('Side question too long to send', question.length, MAX_SIDE_QUESTION_CHARS, 'characters');
+        return;
+      }
+      clearComposerLimit();
       sideQuestionRequestId = 'side-' + Date.now() + '-' + (++sideQuestionSeq);
       sideQuestionContent = '';
       sideQuestionTextEl.textContent = question;
@@ -5183,6 +5213,23 @@ export function getWebviewContent(
           ? 'Please analyze the attached files.'
           : '');
       if (!text) return;
+      if (text.length > MAX_SEND_MESSAGE_CHARS) {
+        refuseOverLimit('Too long to send', text.length, MAX_SEND_MESSAGE_CHARS, 'characters');
+        return;
+      }
+      var activeFileReferences = generated ? [] : pendingFileReferences
+        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
+        .map(function(ref) { return ref.reference; });
+      if (activeFileReferences.length > MAX_SEND_MESSAGE_REFERENCES) {
+        refuseOverLimit(
+          'Too many files mentioned to send',
+          activeFileReferences.length,
+          MAX_SEND_MESSAGE_REFERENCES,
+          'files'
+        );
+        return;
+      }
+      if (!generated) clearComposerLimit();
 
       hideEmptyState();
       closeSlashMenu();
@@ -5214,9 +5261,6 @@ export function getWebviewContent(
         activePlanCard = null;
       }
 
-      var activeFileReferences = generated ? [] : pendingFileReferences
-        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
-        .map(function(ref) { return ref.reference; });
       var sendPayload = {
         text: text,
         browseWeb: generated ? false : browseWebEnabled,
@@ -5336,6 +5380,7 @@ export function getWebviewContent(
     }
 
     userInput.addEventListener('input', function() {
+      clearComposerLimit();
       autoResize();
       detectMention();
       saveComposerDraft();

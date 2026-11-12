@@ -4,6 +4,7 @@ import {
   click,
   getTargetSignature,
   inspectSelectorActivation,
+  isProtectedFieldTarget,
   INPUT_CLEANUP_TIMEOUT_MS,
   navigate,
   navigateHistoryTarget,
@@ -15,6 +16,7 @@ import {
   unregisterActiveTab,
   type ActiveTabRegistration,
 } from '../computer-use/cdpDriver';
+import { pairedActionRefusal } from '../computer-use/approvalPolicy';
 import {
   acquireDebugger,
   awaitCdpOperation,
@@ -216,6 +218,14 @@ export class NativeBrowserDriver {
     await this.assertOwnership(tabId);
     const signature = await getTargetSignature(tabId, selector, this.signal);
     if (!signature) throw new Error('The paired click target is unavailable or ambiguous.');
+    const refusal = pairedActionRefusal({
+      toolName: 'click',
+      selector,
+      pageUrl: this.sourceUrl,
+      targetSignature: signature,
+      protectedField: false,
+    });
+    if (refusal) throw new Error(refusal);
     const activation = await inspectSelectorActivation(tabId, selector, this.signal);
     if (activation.kind === 'navigation' && activation.url) this.destination = activation.url;
     await click(tabId, selector, this.signal, { expectedSignature: signature });
@@ -233,7 +243,17 @@ export class NativeBrowserDriver {
 
   async type(tabId: number, selector: string, text: string, clear: boolean) {
     await this.assertOwnership(tabId);
-    const receipt = await typeIntoSelector(tabId, selector, text, clear, this.signal);
+    const signature = await getTargetSignature(tabId, selector, this.signal);
+    if (!signature) throw new Error('The paired typing target could not be verified.');
+    const refusal = pairedActionRefusal({
+      toolName: 'type',
+      selector,
+      pageUrl: this.sourceUrl,
+      targetSignature: signature,
+      protectedField: await isProtectedFieldTarget(tabId, selector, signature, this.signal),
+    });
+    if (refusal) throw new Error(refusal);
+    const receipt = await typeIntoSelector(tabId, selector, text, clear, this.signal, signature);
     await this.assertOwnership(tabId);
     return receipt;
   }

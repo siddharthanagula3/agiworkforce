@@ -5145,8 +5145,33 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       });
     }
 
+    var MAX_SEND_MESSAGE_CHARS = 100000;
+    var MAX_SEND_MESSAGE_REFERENCES = 50;
+    var MAX_SIDE_QUESTION_CHARS = 20000;
+    var composerLimitShown = false;
+
+    function refuseOverLimit(label, count, limit, unit) {
+      composerLimitShown = true;
+      showFollowUpStatus(
+        label + ' (' + count.toLocaleString('en-US') + ' / ' + limit.toLocaleString('en-US') + ' ' + unit + ')',
+        'error',
+        true
+      );
+    }
+
+    function clearComposerLimit() {
+      if (!composerLimitShown) return;
+      composerLimitShown = false;
+      showFollowUpStatus('', 'queued', false);
+    }
+
     function askSideQuestion(question) {
       if (!sideQuestionEl || !sideQuestionTextEl || !sideQuestionAnswerEl) return;
+      if (question.length > MAX_SIDE_QUESTION_CHARS) {
+        refuseOverLimit('Side question too long to send', question.length, MAX_SIDE_QUESTION_CHARS, 'characters');
+        return;
+      }
+      clearComposerLimit();
       sideQuestionRequestId = 'side-' + Date.now() + '-' + (++sideQuestionSeq);
       sideQuestionContent = '';
       sideQuestionTextEl.textContent = question;
@@ -5180,6 +5205,23 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           ? 'Please analyze the attached files.'
           : '');
       if (!text) return;
+      if (text.length > MAX_SEND_MESSAGE_CHARS) {
+        refuseOverLimit('Too long to send', text.length, MAX_SEND_MESSAGE_CHARS, 'characters');
+        return;
+      }
+      var activeFileReferences = generated ? [] : pendingFileReferences
+        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
+        .map(function(ref) { return ref.reference; });
+      if (activeFileReferences.length > MAX_SEND_MESSAGE_REFERENCES) {
+        refuseOverLimit(
+          'Too many files mentioned to send',
+          activeFileReferences.length,
+          MAX_SEND_MESSAGE_REFERENCES,
+          'files'
+        );
+        return;
+      }
+      if (!generated) clearComposerLimit();
 
       hideEmptyState();
       closeSlashMenu();
@@ -5211,9 +5253,6 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         activePlanCard = null;
       }
 
-      var activeFileReferences = generated ? [] : pendingFileReferences
-        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
-        .map(function(ref) { return ref.reference; });
       var sendPayload = {
         text: text,
         browseWeb: generated ? false : browseWebEnabled,
@@ -5333,6 +5372,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     userInput.addEventListener('input', function() {
+      clearComposerLimit();
       autoResize();
       detectMention();
       saveComposerDraft();
@@ -13503,8 +13543,33 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       });
     }
 
+    var MAX_SEND_MESSAGE_CHARS = 100000;
+    var MAX_SEND_MESSAGE_REFERENCES = 50;
+    var MAX_SIDE_QUESTION_CHARS = 20000;
+    var composerLimitShown = false;
+
+    function refuseOverLimit(label, count, limit, unit) {
+      composerLimitShown = true;
+      showFollowUpStatus(
+        label + ' (' + count.toLocaleString('en-US') + ' / ' + limit.toLocaleString('en-US') + ' ' + unit + ')',
+        'error',
+        true
+      );
+    }
+
+    function clearComposerLimit() {
+      if (!composerLimitShown) return;
+      composerLimitShown = false;
+      showFollowUpStatus('', 'queued', false);
+    }
+
     function askSideQuestion(question) {
       if (!sideQuestionEl || !sideQuestionTextEl || !sideQuestionAnswerEl) return;
+      if (question.length > MAX_SIDE_QUESTION_CHARS) {
+        refuseOverLimit('Side question too long to send', question.length, MAX_SIDE_QUESTION_CHARS, 'characters');
+        return;
+      }
+      clearComposerLimit();
       sideQuestionRequestId = 'side-' + Date.now() + '-' + (++sideQuestionSeq);
       sideQuestionContent = '';
       sideQuestionTextEl.textContent = question;
@@ -13538,6 +13603,23 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           ? 'Please analyze the attached files.'
           : '');
       if (!text) return;
+      if (text.length > MAX_SEND_MESSAGE_CHARS) {
+        refuseOverLimit('Too long to send', text.length, MAX_SEND_MESSAGE_CHARS, 'characters');
+        return;
+      }
+      var activeFileReferences = generated ? [] : pendingFileReferences
+        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
+        .map(function(ref) { return ref.reference; });
+      if (activeFileReferences.length > MAX_SEND_MESSAGE_REFERENCES) {
+        refuseOverLimit(
+          'Too many files mentioned to send',
+          activeFileReferences.length,
+          MAX_SEND_MESSAGE_REFERENCES,
+          'files'
+        );
+        return;
+      }
+      if (!generated) clearComposerLimit();
 
       hideEmptyState();
       closeSlashMenu();
@@ -13569,9 +13651,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         activePlanCard = null;
       }
 
-      var activeFileReferences = generated ? [] : pendingFileReferences
-        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
-        .map(function(ref) { return ref.reference; });
       var sendPayload = {
         text: text,
         browseWeb: generated ? false : browseWebEnabled,
@@ -13691,6 +13770,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     userInput.addEventListener('input', function() {
+      clearComposerLimit();
       autoResize();
       detectMention();
       saveComposerDraft();
@@ -21861,8 +21941,33 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       });
     }
 
+    var MAX_SEND_MESSAGE_CHARS = 100000;
+    var MAX_SEND_MESSAGE_REFERENCES = 50;
+    var MAX_SIDE_QUESTION_CHARS = 20000;
+    var composerLimitShown = false;
+
+    function refuseOverLimit(label, count, limit, unit) {
+      composerLimitShown = true;
+      showFollowUpStatus(
+        label + ' (' + count.toLocaleString('en-US') + ' / ' + limit.toLocaleString('en-US') + ' ' + unit + ')',
+        'error',
+        true
+      );
+    }
+
+    function clearComposerLimit() {
+      if (!composerLimitShown) return;
+      composerLimitShown = false;
+      showFollowUpStatus('', 'queued', false);
+    }
+
     function askSideQuestion(question) {
       if (!sideQuestionEl || !sideQuestionTextEl || !sideQuestionAnswerEl) return;
+      if (question.length > MAX_SIDE_QUESTION_CHARS) {
+        refuseOverLimit('Side question too long to send', question.length, MAX_SIDE_QUESTION_CHARS, 'characters');
+        return;
+      }
+      clearComposerLimit();
       sideQuestionRequestId = 'side-' + Date.now() + '-' + (++sideQuestionSeq);
       sideQuestionContent = '';
       sideQuestionTextEl.textContent = question;
@@ -21896,6 +22001,23 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           ? 'Please analyze the attached files.'
           : '');
       if (!text) return;
+      if (text.length > MAX_SEND_MESSAGE_CHARS) {
+        refuseOverLimit('Too long to send', text.length, MAX_SEND_MESSAGE_CHARS, 'characters');
+        return;
+      }
+      var activeFileReferences = generated ? [] : pendingFileReferences
+        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
+        .map(function(ref) { return ref.reference; });
+      if (activeFileReferences.length > MAX_SEND_MESSAGE_REFERENCES) {
+        refuseOverLimit(
+          'Too many files mentioned to send',
+          activeFileReferences.length,
+          MAX_SEND_MESSAGE_REFERENCES,
+          'files'
+        );
+        return;
+      }
+      if (!generated) clearComposerLimit();
 
       hideEmptyState();
       closeSlashMenu();
@@ -21927,9 +22049,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         activePlanCard = null;
       }
 
-      var activeFileReferences = generated ? [] : pendingFileReferences
-        .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
-        .map(function(ref) { return ref.reference; });
       var sendPayload = {
         text: text,
         browseWeb: generated ? false : browseWebEnabled,
@@ -22049,6 +22168,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     userInput.addEventListener('input', function() {
+      clearComposerLimit();
       autoResize();
       detectMention();
       saveComposerDraft();

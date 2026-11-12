@@ -514,6 +514,20 @@ function buildRecordingRows(
     }
   };
 
+  const awaitName = (status: string): void => {
+    recording = false;
+    stopPoll();
+    draftGeneration += 1;
+    awaitingName = true;
+    saveConfirm.disabled = false;
+    saveDiscard.disabled = false;
+    button.textContent = t('optRecordStart');
+    saveBox.hidden = false;
+    saveName.value = '';
+    saveName.focus();
+    announce(status);
+  };
+
   button.addEventListener('click', () => {
     button.disabled = true;
     void (async () => {
@@ -541,20 +555,24 @@ function buildRecordingRows(
           button.textContent = t('optRecordStop');
           const host = new URL(tab.origin).host;
           announce(t('optRecordRecording', [host]));
+          const generation = draftGeneration;
           pollTimer = setInterval(() => {
-            void send<SuccessResponse & { actions?: unknown[] }>({
+            void send<SuccessResponse & { actions?: unknown[]; stoppedBy?: unknown }>({
               type: 'GET_RECORDED_ACTIONS',
               tabId: tab.id,
             })
               .then((response) => {
-                if (response?.success) {
-                  announce(
-                    t('optRecordCount', [
-                      new URL(tab.origin).host,
-                      String(response.actions?.length ?? 0),
-                    ]),
-                  );
+                if (!response?.success || !recording || generation !== draftGeneration) return;
+                if (response.stoppedBy === 'navigation') {
+                  awaitName(t('optRecordStoppedByNavigation'));
+                  return;
                 }
+                announce(
+                  t('optRecordCount', [
+                    new URL(tab.origin).host,
+                    String(response.actions?.length ?? 0),
+                  ]),
+                );
               })
               .catch(() => undefined);
           }, 1500);
@@ -568,17 +586,11 @@ function buildRecordingRows(
           announce(response?.error ?? t('optRecordStopFailed'), true);
           return;
         }
-        recording = false;
-        stopPoll();
-        draftGeneration += 1;
-        awaitingName = true;
-        saveConfirm.disabled = false;
-        saveDiscard.disabled = false;
-        button.textContent = t('optRecordStart');
-        saveBox.hidden = false;
-        saveName.value = '';
-        saveName.focus();
-        announce(t('optRecordNameIt'));
+        awaitName(
+          (response as { stoppedBy?: unknown }).stoppedBy === 'navigation'
+            ? t('optRecordStoppedByNavigation')
+            : t('optRecordNameIt'),
+        );
       } catch {
         announce(recording ? t('optRecordStopFailed') : t('optRecordStartFailed'), true);
       } finally {

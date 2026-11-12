@@ -169,6 +169,18 @@ export function getAlarmPeriod(task: ScheduledTask): number {
   }
 }
 
+const OVERDUE_TASK_DELAY_MS = 60_000;
+
+export function nextTaskRunAt(task: ScheduledTask, nowMs = Date.now()): number {
+  const anchor =
+    typeof task.lastRun === 'number' && Number.isFinite(task.lastRun) && task.lastRun <= nowMs
+      ? task.lastRun
+      : Number.isFinite(task.createdAt) && task.createdAt <= nowMs
+        ? task.createdAt
+        : nowMs;
+  return Math.max(anchor + getAlarmPeriod(task) * 60_000, nowMs + OVERDUE_TASK_DELAY_MS);
+}
+
 export async function registerTaskAlarm(task: ScheduledTask): Promise<void> {
   if (!task.enabled) return;
   const alarmName = `${TASK_ALARM_PREFIX}${task.id}`;
@@ -176,7 +188,7 @@ export async function registerTaskAlarm(task: ScheduledTask): Promise<void> {
   if (existing) return;
   await chrome.alarms.create(alarmName, {
     periodInMinutes: getAlarmPeriod(task),
-    delayInMinutes: getAlarmPeriod(task),
+    when: nextTaskRunAt(task),
   });
 }
 

@@ -3,6 +3,10 @@ import * as vscode from 'vscode';
 import { AgiCodeActionProvider, CODE_ACTION_KINDS } from '../providers/codeActionProvider';
 import { AgiHoverProvider } from '../features/hover';
 import { AgiInlineCompletionProvider } from '../features/inline-completions';
+import {
+  discloseInlineCompletions,
+  inlineCompletionsDisclosed,
+} from '../features/inline-completions/firstRunNotice';
 import { AgiCodeLensProvider } from '../features/code-lens';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { DiffDecorationProvider } from '../providers/diffDecorationProvider';
@@ -77,6 +81,7 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
   }
 
   let inlineCompletionRegistration: vscode.Disposable | undefined;
+  let inlineCompletionDisclosure: Promise<void> | undefined;
 
   const syncInlineCompletionProvider = (): void => {
     if (!Config.inlineCompletionsEnabled()) {
@@ -85,9 +90,21 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
       return;
     }
     if (inlineCompletionRegistration !== undefined) return;
-    inlineCompletionRegistration = vscode.languages.registerInlineCompletionItemProvider(
-      { pattern: '**' },
-      new AgiInlineCompletionProvider(context.secrets),
+    if (!inlineCompletionsDisclosed(context.globalState)) {
+      inlineCompletionDisclosure ??= discloseInlineCompletions(context.globalState)
+        .catch((err: unknown) => {
+          console.warn(`[${PRODUCT_NAMES.code}] Inline completion notice failed:`, err);
+        })
+        .finally(() => {
+          inlineCompletionDisclosure = undefined;
+          if (inlineCompletionsDisclosed(context.globalState)) syncInlineCompletionProvider();
+        });
+      return;
+    }
+    const provider = new AgiInlineCompletionProvider(context.secrets);
+    inlineCompletionRegistration = vscode.Disposable.from(
+      vscode.languages.registerInlineCompletionItemProvider({ scheme: 'file' }, provider),
+      provider,
     );
     context.subscriptions.push(inlineCompletionRegistration);
   };

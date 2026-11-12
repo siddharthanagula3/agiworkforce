@@ -32,6 +32,27 @@ interface PackagedTestArtifact {
 }
 
 const DEFAULT_VSCODE_E2E_VERSION = '1.131.0';
+const VSCODE_DOWNLOAD_IDLE_TIMEOUT_MS = 60_000;
+const VSCODE_DOWNLOAD_ATTEMPTS = 3;
+
+async function downloadVsCode(version: string, extensionDevelopmentPath: string): Promise<string> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= VSCODE_DOWNLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      return await downloadAndUnzipVSCode({
+        version,
+        extensionDevelopmentPath,
+        timeout: VSCODE_DOWNLOAD_IDLE_TIMEOUT_MS,
+      });
+    } catch (error) {
+      lastError = error;
+      console.error(
+        `[vsix-e2e] VS Code download attempt ${attempt} of ${VSCODE_DOWNLOAD_ATTEMPTS} failed: ${String(error)}`,
+      );
+    }
+  }
+  throw lastError;
+}
 
 const CLEARED_PROVIDER_CREDENTIALS: NodeJS.ProcessEnv = {
   AGI_ACCESS_TOKEN: '',
@@ -350,10 +371,10 @@ async function main(): Promise<void> {
     const requestedExecutablePath = argumentValue('--vscode-executable');
     const downloadedExecutablePath = requestedExecutablePath
       ? path.resolve(requestedExecutablePath)
-      : await downloadAndUnzipVSCode({
-          version: process.env.AGI_VSCODE_E2E_VERSION ?? DEFAULT_VSCODE_E2E_VERSION,
-          extensionDevelopmentPath: packagedTestRunner?.extensionDevelopmentPath ?? extensionRoot,
-        });
+      : await downloadVsCode(
+          process.env.AGI_VSCODE_E2E_VERSION ?? DEFAULT_VSCODE_E2E_VERSION,
+          packagedTestRunner?.extensionDevelopmentPath ?? extensionRoot,
+        );
     const vscodeExecutablePath = resolveVsCodeExecutablePath(downloadedExecutablePath);
     let expectedExtensionRoot: string | undefined;
     let extensionDevelopmentPath = extensionRoot;

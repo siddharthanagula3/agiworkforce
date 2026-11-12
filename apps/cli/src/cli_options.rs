@@ -136,6 +136,35 @@ impl EffectivePermissions {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LaunchPermissionMode {
+    pub mode: PermissionMode,
+    pub requested: bool,
+    pub repository: Option<PermissionMode>,
+}
+
+impl LaunchPermissionMode {
+    pub(crate) fn after_load(
+        self,
+        before_load: PermissionMode,
+        saved: Option<PermissionMode>,
+        pinned: Option<PermissionMode>,
+    ) -> PermissionMode {
+        match saved {
+            Some(saved) if !self.requested => {
+                let narrowed_since_launch =
+                    self.mode.is_looser_than(before_load).then_some(before_load);
+                saved
+                    .storable(None)
+                    .within(self.repository)
+                    .within(narrowed_since_launch)
+            }
+            _ => before_load,
+        }
+        .within(pinned)
+    }
+}
+
 impl CliOptions {
     pub(crate) fn from_cli(cli: &crate::Cli) -> Self {
         Self {
@@ -254,6 +283,85 @@ mod tests {
         assert_eq!(
             PermissionMode::Plan.storable(Some(PermissionMode::AcceptEdits)),
             PermissionMode::Plan
+        );
+    }
+
+    #[test]
+    fn a_saved_session_never_loosens_the_mode_a_launch_asked_for() {
+        use super::PermissionMode::{AcceptEdits, Plan};
+        let default = PermissionMode::Default;
+        let flag = |mode| LaunchPermissionMode {
+            mode,
+            requested: true,
+            repository: None,
+        };
+        let no_flag = |mode| LaunchPermissionMode {
+            mode,
+            requested: false,
+            repository: None,
+        };
+
+        assert_eq!(flag(Plan).after_load(Plan, Some(AcceptEdits), None), Plan);
+        assert_eq!(
+            flag(AcceptEdits).after_load(AcceptEdits, Some(Plan), None),
+            AcceptEdits
+        );
+        assert_eq!(
+            flag(AcceptEdits).after_load(AcceptEdits, Some(Plan), Some(Plan)),
+            Plan
+        );
+        assert_eq!(
+            no_flag(default).after_load(default, Some(AcceptEdits), None),
+            AcceptEdits
+        );
+        assert_eq!(no_flag(default).after_load(default, Some(Plan), None), Plan);
+        assert_eq!(no_flag(default).after_load(default, None, None), default);
+        assert_eq!(
+            no_flag(Plan).after_load(Plan, Some(AcceptEdits), Some(Plan)),
+            Plan
+        );
+        assert_eq!(
+            flag(AcceptEdits).after_load(AcceptEdits, None, Some(Plan)),
+            Plan
+        );
+        assert_eq!(
+            no_flag(default).after_load(default, Some(PermissionMode::BypassPermissions), None),
+            default
+        );
+    }
+
+    #[test]
+    fn a_repository_or_agent_narrowing_holds_a_saved_session_without_a_flag() {
+        use super::PermissionMode::{AcceptEdits, Plan};
+        let default = PermissionMode::Default;
+        let repository_plan = LaunchPermissionMode {
+            mode: Plan,
+            requested: false,
+            repository: Some(Plan),
+        };
+        assert_eq!(
+            repository_plan.after_load(Plan, Some(AcceptEdits), None),
+            Plan
+        );
+
+        let narrowed_by_agent = LaunchPermissionMode {
+            mode: AcceptEdits,
+            requested: false,
+            repository: None,
+        };
+        assert_eq!(
+            narrowed_by_agent.after_load(default, Some(AcceptEdits), None),
+            default
+        );
+
+        let flag_over_repository = LaunchPermissionMode {
+            mode: AcceptEdits,
+            requested: true,
+            repository: Some(Plan),
+        };
+        assert_eq!(
+            flag_over_repository.after_load(AcceptEdits, Some(Plan), None),
+            AcceptEdits
         );
     }
 

@@ -8,7 +8,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { selectNextCursor } from '@agiworkforce/sync';
 import { z } from 'zod';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { accountRequestHeaders } from '../platform/accountHeaders';
+import { t } from '../l10n';
+import type { RejectedAccountTokenReview } from '../utils/api';
 
 export const MEMORY_SYNC_PATH = '/api/memory/sync';
 export const MEMORY_PATH = '/api/memory';
@@ -50,8 +53,10 @@ export class AccountMemoryHttpError extends Error {
 }
 
 export class AccountMemoryUnauthorizedError extends AccountMemoryHttpError {
-  constructor() {
-    super('Your AGI Cloud session expired or was revoked. Sign in again to continue.', 401);
+  constructor(
+    message = 'Your AGI Cloud session expired or was revoked. Sign in again to continue.',
+  ) {
+    super(message, 401);
     this.name = 'AccountMemoryUnauthorizedError';
   }
 }
@@ -61,6 +66,8 @@ export type MemoryFetch = (input: string, init?: RequestInit) => Promise<Respons
 export interface AccountMemoryClientConfig {
   baseUrl: string;
   getAuthToken: () => Promise<string | undefined>;
+  reviewRejectedToken?: (token: string) => Promise<RejectedAccountTokenReview>;
+  confirmRejectedToken?: (token: string) => Promise<void>;
   fetchImpl?: MemoryFetch;
 }
 
@@ -89,13 +96,9 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
   const baseUrl = config.baseUrl.replace(/\/+$/u, '');
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
-  async function request(path: string, init: RequestInit): Promise<unknown> {
-    const token = await config.getAuthToken();
-    if (token === undefined || token === '') throw new AccountMemoryUnauthorizedError();
-
-    let response: Response;
+  async function send(path: string, init: RequestInit, token: string): Promise<Response> {
     try {
-      response = await fetchImpl(`${baseUrl}${path}`, {
+      return await fetchImpl(`${baseUrl}${path}`, {
         ...init,
         headers: {
           ...(init.headers as Record<string, string> | undefined),
@@ -107,6 +110,29 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
         `Could not reach your AGI Cloud account: ${error instanceof Error ? error.message : String(error)}`,
         0,
       );
+    }
+  }
+
+  async function request(path: string, init: RequestInit): Promise<unknown> {
+    const token = await config.getAuthToken();
+    if (token === undefined || token === '') throw new AccountMemoryUnauthorizedError();
+
+    let response = await send(path, init, token);
+    if (response.status === 401) {
+      const review = (await config.reviewRejectedToken?.(token)) ?? { kind: 'rejected' as const };
+      if (review.kind === 'account-refused') {
+        throw new AccountMemoryUnauthorizedError(review.message);
+      }
+      if (review.kind === 'unconfirmed') {
+        throw new AccountMemoryHttpError(
+          t('chatError.couldNotReach', { provider: PRODUCT_BRAND }),
+          0,
+        );
+      }
+      if (review.kind === 'retry') {
+        response = await send(path, init, review.token);
+        if (response.status === 401) await config.confirmRejectedToken?.(review.token);
+      }
     }
 
     if (response.status === 401) throw new AccountMemoryUnauthorizedError();

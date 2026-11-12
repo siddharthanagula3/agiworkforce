@@ -17,6 +17,7 @@ describe('a model refused by privacy settings or workspace policy', () => {
       'account_suspended',
       'terms_required',
       'plan_required',
+      'policy_blocked',
     ])
       expect(block).toContain(`'${withheld}'`);
   });

@@ -10,8 +10,11 @@ export type ComputerUseCancellationReason =
   | 'superseded'
   | 'tab_intent_changed'
   | 'tab_removed'
+  | 'takeover_expired'
   | 'user_cleared'
   | 'user_stopped';
+
+export const USER_TAKEOVER_MAX_MS = 15 * 60_000;
 
 export interface ComputerUseRunLease {
   readonly runId: string;

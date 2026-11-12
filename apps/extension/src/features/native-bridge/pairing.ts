@@ -16,25 +16,20 @@ import { normalizeManagedCloudOwner } from '../cloud-bridge/managedCloudAuthorit
 
 // SEC-11: two separate credentials, two separate keys. The bridge secret is
 // pasted by the operator and only ever leaves as X-Bridge-Token; the pair token
-// is issued by Desktop and never travels back to it as authorization.
+// is issued by Desktop and goes back to it only over native messaging.
 const STORAGE_KEY_BRIDGE_SECRET = 'agi_bridge_secret';
-const STORAGE_KEY_PAIR_TOKEN = 'agi_pair_token';
-const STORAGE_KEY_FINGERPRINT = 'agi_pairing_fingerprint';
 const STORAGE_KEY_PAIR_REQUEST = 'agi_pair_request';
-// The account the pairing was issued to. A pair token authorises Desktop to act
-// for whoever is signed in, so it must not outlive that sign-in.
-const STORAGE_KEY_PAIR_ACCOUNT = 'agi_pair_account';
 // Owned by the background worker, which reads it to decide whether a worker
 // start should attempt connectNative at all.
 const STORAGE_KEY_DESKTOP_PAIRED = 'connectedToDesktop';
-// The session-scoped token is gone after a browser restart, but the pairing is
-// not: Desktop keeps its record and the native host keeps answering. This
-// record holds only what the settings page shows (fingerprint and account), so
-// the paired state survives a restart without putting a credential on disk.
+// Every Chrome profile shares the extension ID, so the pair token is the only
+// thing that tells Desktop which profile it paired. It has to outlive a browser
+// restart, so it is kept in local storage, which the worker restricts to
+// extension pages: content scripts cannot read it.
 const STORAGE_KEY_PAIRED_DESKTOP = 'agi_paired_desktop';
 export const STORAGE_KEY_PENDING_DESKTOP_REVOCATION = 'agi_pending_desktop_revocation';
 const PENDING_REVOCATION_NOTICE =
-  'Unpaired in this browser, but Desktop could not be reached to remove the pairing. Open Desktop and reconnect to finish, or remove the pairing from Desktop.';
+  "Unpaired in this browser, but Desktop could not be reached to remove the pairing. It is removed the next time Desktop is open while Chrome is running, or you can remove it in Desktop's settings now.";
 
 const PAIRING_TOKEN_RE = /^[A-Za-z0-9_-]{32,128}$/;
 const PAIRING_FINGERPRINT_RE = /^[A-Za-z0-9_-]{4,32}$/;
@@ -77,40 +72,16 @@ export function getPairingState(): PairingState {
   return { ..._state };
 }
 
-function readSession(keys: string[]): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.session.get(keys, (r) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve(r as Record<string, unknown>);
-      }
-    });
-  });
+async function readSession(keys: string[]): Promise<Record<string, unknown>> {
+  return (await chrome.storage.session.get(keys)) as Record<string, unknown>;
 }
 
 function writeSession(items: Record<string, unknown>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.session.set(items, () => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve();
-      }
-    });
-  });
+  return chrome.storage.session.set(items);
 }
 
 function removeSession(keys: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.session.remove(keys, () => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
-      } else {
-        resolve();
-      }
-    });
-  });
+  return chrome.storage.session.remove(keys);
 }
 
 async function readStoredBridgeSecret(): Promise<string | null> {
@@ -168,95 +139,76 @@ async function readSignedInAccountId(): Promise<string | null | undefined> {
 interface PairedDesktopRecord {
   fingerprint: string;
   accountId: string | null;
+  token: string;
+}
+
+function parsePairedDesktopRecord(stored: unknown): PairedDesktopRecord | null {
+  const record = stored as Partial<PairedDesktopRecord> | null | undefined;
+  const fingerprint = record?.fingerprint;
+  const token = record?.token;
+  if (typeof fingerprint !== 'string' || !isValidPairingFingerprint(fingerprint)) return null;
+  if (typeof token !== 'string' || !isValidPairingToken(token)) return null;
+  const accountId =
+    typeof record?.accountId === 'string' && record.accountId !== '' ? record.accountId : null;
+  return { fingerprint, accountId, token };
 }
 
 async function readPairedDesktopRecord(): Promise<PairedDesktopRecord | null> {
   try {
-    const stored = await new Promise<Record<string, unknown>>((resolve, reject) => {
-      chrome.storage.local.get([STORAGE_KEY_PAIRED_DESKTOP, STORAGE_KEY_DESKTOP_PAIRED], (r) => {
-        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-        else resolve(r as Record<string, unknown>);
-      });
-    });
-    if (stored[STORAGE_KEY_DESKTOP_PAIRED] !== true) return null;
-    const record = stored[STORAGE_KEY_PAIRED_DESKTOP] as Partial<PairedDesktopRecord> | undefined;
-    const fingerprint = record?.fingerprint;
-    if (typeof fingerprint !== 'string' || !isValidPairingFingerprint(fingerprint)) return null;
-    const accountId =
-      typeof record?.accountId === 'string' && record.accountId !== '' ? record.accountId : null;
-    return { fingerprint, accountId };
+    return parsePairedDesktopRecord(await readLocal(STORAGE_KEY_PAIRED_DESKTOP));
   } catch {
     return null;
   }
 }
 
-async function writePairedDesktopRecord(
-  fingerprint: string,
-  accountId: string | undefined | null,
-): Promise<void> {
-  const record: PairedDesktopRecord = {
-    fingerprint,
-    accountId: typeof accountId === 'string' ? accountId : null,
-  };
-  await new Promise<void>((resolve, reject) => {
-    chrome.storage.local.set({ [STORAGE_KEY_PAIRED_DESKTOP]: record }, () => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve();
-    });
-  });
+async function writePairedDesktopRecord(record: PairedDesktopRecord): Promise<void> {
+  await writeLocal({ [STORAGE_KEY_PAIRED_DESKTOP]: record });
+}
+
+/** The token this profile proves its pairing with, or `null` when it is not paired. */
+export async function readDesktopPairToken(): Promise<string | null> {
+  return (await readPairedDesktopRecord())?.token ?? null;
 }
 
 async function releasePairedCredentials(): Promise<void> {
   try {
-    await removeSession([
-      STORAGE_KEY_PAIR_TOKEN,
-      STORAGE_KEY_FINGERPRINT,
-      STORAGE_KEY_PAIR_ACCOUNT,
-    ]);
-  } catch {
-    // A storage failure must still leave this worker refusing the pairing.
-  }
-  try {
-    await chrome.storage.local.remove([STORAGE_KEY_DESKTOP_PAIRED, STORAGE_KEY_PAIRED_DESKTOP]);
+    await removeLocal([STORAGE_KEY_DESKTOP_PAIRED, STORAGE_KEY_PAIRED_DESKTOP]);
   } catch {
     // The background falls back to a failed connect attempt.
   }
 }
 
-function readLocal(key: string): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.get([key], (r) => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve((r as Record<string, unknown>)[key]);
-    });
-  });
+async function readLocal(key: string): Promise<unknown> {
+  return ((await chrome.storage.local.get([key])) as Record<string, unknown>)[key];
 }
 
 function writeLocal(items: Record<string, unknown>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.set(items, () => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve();
-    });
-  });
+  return chrome.storage.local.set(items);
 }
 
 function removeLocal(keys: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    chrome.storage.local.remove(keys, () => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve();
-    });
-  });
+  return chrome.storage.local.remove(keys);
 }
 
-/** The id of the unpair Desktop never acknowledged, or `null` when none is owed. */
-export function parsePendingDesktopRevocation(stored: unknown): string | null {
-  const id = (stored as { id?: unknown } | null | undefined)?.id;
-  return typeof id === 'string' && id !== '' ? id : null;
+/**
+ * An unpair Desktop has not acknowledged. It keeps the token, because Desktop
+ * accepts the unpair only from the profile that can present it.
+ */
+export interface PendingDesktopRevocation {
+  id: string;
+  token: string;
 }
 
-export async function readPendingDesktopRevocation(): Promise<string | null> {
+export function parsePendingDesktopRevocation(stored: unknown): PendingDesktopRevocation | null {
+  const candidate = stored as Partial<PendingDesktopRevocation> | null | undefined;
+  const id = candidate?.id;
+  const token = candidate?.token;
+  if (typeof id !== 'string' || id === '') return null;
+  if (typeof token !== 'string' || !isValidPairingToken(token)) return null;
+  return { id, token };
+}
+
+export async function readPendingDesktopRevocation(): Promise<PendingDesktopRevocation | null> {
   try {
     return parsePendingDesktopRevocation(await readLocal(STORAGE_KEY_PENDING_DESKTOP_REVOCATION));
   } catch {
@@ -264,31 +216,39 @@ export async function readPendingDesktopRevocation(): Promise<string | null> {
   }
 }
 
+/** Records that Desktop still holds the pairing `token` opened. False when it could not be stored. */
+export async function oweDesktopRevocation(token: string): Promise<boolean> {
+  try {
+    await writeLocal({
+      [STORAGE_KEY_PENDING_DESKTOP_REVOCATION]: { id: crypto.randomUUID(), token },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function settlePendingDesktopRevocation(id: string): Promise<void> {
+  if ((await readPendingDesktopRevocation())?.id !== id) return;
+  await removeLocal([STORAGE_KEY_PENDING_DESKTOP_REVOCATION]);
+}
+
+export function watchDesktopPairingRelease(onRelease: () => void): void {
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (area !== 'local' || !(STORAGE_KEY_PAIRED_DESKTOP in changes)) return;
+    if (changes[STORAGE_KEY_PAIRED_DESKTOP]?.newValue === undefined) onRelease();
+  });
+}
+
 export async function releaseStoredDesktopPairing(): Promise<void> {
   await releasePairedCredentials();
   _state = { ...IDLE_STATE };
 }
 
-/**
- * The account a stored desktop pairing is bound to.
- * `undefined` means there is no pairing, or storage could not be read.
- * `null` means a pairing exists and was issued with no account.
- */
-async function readStoredPairingAccount(): Promise<string | null | undefined> {
-  let sessionData: Record<string, unknown>;
-  try {
-    sessionData = await readSession([STORAGE_KEY_PAIR_TOKEN, STORAGE_KEY_PAIR_ACCOUNT]);
-  } catch {
-    return undefined;
-  }
-  const token = sessionData[STORAGE_KEY_PAIR_TOKEN];
-  if (typeof token === 'string' && token !== '') {
-    const stored = sessionData[STORAGE_KEY_PAIR_ACCOUNT];
-    return typeof stored === 'string' && stored !== '' ? stored : null;
-  }
-  const durable = await readPairedDesktopRecord();
-  if (!durable) return undefined;
-  return durable.accountId;
+export async function releaseStoredDesktopPairingOf(token: string): Promise<boolean> {
+  if ((await readDesktopPairToken()) !== token) return false;
+  await releaseStoredDesktopPairing();
+  return true;
 }
 
 /**
@@ -299,54 +259,43 @@ async function readStoredPairingAccount(): Promise<string | null | undefined> {
 export async function desktopPairingRejectsAccount(
   signedInAccountId: string | null,
 ): Promise<boolean> {
-  const boundAccountId = await readStoredPairingAccount();
-  if (boundAccountId === undefined) return false;
-  return !pairingBelongsTo(boundAccountId, signedInAccountId);
+  const record = await readPairedDesktopRecord();
+  if (!record) return false;
+  return !pairingBelongsTo(record.accountId, signedInAccountId);
+}
+
+/**
+ * Binds a pairing made while signed out to the first account seen afterwards,
+ * on disk, so a later sign-out or switch releases it even after a restart.
+ */
+export async function bindUnboundDesktopPairing(accountId: string): Promise<void> {
+  const record = await readPairedDesktopRecord();
+  if (!record || record.accountId !== null) return;
+  await writePairedDesktopRecord({ ...record, accountId });
 }
 
 export async function loadPairingState(): Promise<PairingState> {
   try {
-    const sessionData = await readSession([
-      STORAGE_KEY_PAIR_TOKEN,
-      STORAGE_KEY_FINGERPRINT,
-      STORAGE_KEY_PAIR_REQUEST,
-      STORAGE_KEY_PAIR_ACCOUNT,
-    ]);
-
-    const token = sessionData[STORAGE_KEY_PAIR_TOKEN] as string | undefined;
-    const fingerprint = sessionData[STORAGE_KEY_FINGERPRINT] as string | undefined;
-
-    if (token) {
-      const stored = sessionData[STORAGE_KEY_PAIR_ACCOUNT];
-      const boundAccountId = typeof stored === 'string' && stored !== '' ? stored : null;
-      const signedInAccountId = await readSignedInAccountId();
-      if (signedInAccountId !== undefined && !pairingBelongsTo(boundAccountId, signedInAccountId)) {
-        await releasePairedCredentials();
-        _state = { ...IDLE_STATE };
-        return getPairingState();
-      }
-      if (boundAccountId === null && typeof signedInAccountId === 'string') {
-        await writeSession({ [STORAGE_KEY_PAIR_ACCOUNT]: signedInAccountId });
-      }
-      _state = { ...IDLE_STATE, phase: 'paired', fingerprint: fingerprint ?? null };
-      return getPairingState();
-    }
-
+    const signedInAccountId = await readSignedInAccountId();
     const durable = await readPairedDesktopRecord();
     if (durable) {
-      const signedInAccountId = await readSignedInAccountId();
       if (
         signedInAccountId !== undefined &&
         !pairingBelongsTo(durable.accountId, signedInAccountId)
       ) {
+        const owed = await oweDesktopRevocation(durable.token);
         await releasePairedCredentials();
-        _state = { ...IDLE_STATE };
+        _state = { ...IDLE_STATE, error: owed ? PENDING_REVOCATION_NOTICE : null };
         return getPairingState();
+      }
+      if (durable.accountId === null && typeof signedInAccountId === 'string') {
+        await bindUnboundDesktopPairing(signedInAccountId);
       }
       _state = { ...IDLE_STATE, phase: 'paired', fingerprint: durable.fingerprint };
       return getPairingState();
     }
 
+    const sessionData = await readSession([STORAGE_KEY_PAIR_REQUEST]);
     const pending = readStoredPairRequest(sessionData);
     _state = pending
       ? {
@@ -368,16 +317,7 @@ export async function loadPairingState(): Promise<PairingState> {
 
 async function getBridgeBaseUrl(): Promise<string> {
   try {
-    const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
-      chrome.storage.local.get('agi_bridge_url', (r) => {
-        if (chrome.runtime.lastError) {
-          reject(new Error(chrome.runtime.lastError.message));
-        } else {
-          resolve(r as Record<string, unknown>);
-        }
-      });
-    });
-    const stored = (result['agi_bridge_url'] as string | undefined)?.trim();
+    const stored = ((await readLocal('agi_bridge_url')) as string | undefined)?.trim();
     return stored || DEFAULT_BRIDGE_URL;
   } catch {
     return DEFAULT_BRIDGE_URL;
@@ -431,16 +371,13 @@ async function storeIssuedPairToken(data: Record<string, unknown>): Promise<Pair
   }
 
   const signedInAccountId = await readSignedInAccountId();
-  await writeSession({
-    [STORAGE_KEY_PAIR_TOKEN]: token,
-    [STORAGE_KEY_FINGERPRINT]: rawFingerprint,
-    ...(typeof signedInAccountId === 'string'
-      ? { [STORAGE_KEY_PAIR_ACCOUNT]: signedInAccountId }
-      : {}),
+  await writePairedDesktopRecord({
+    fingerprint: rawFingerprint,
+    accountId: typeof signedInAccountId === 'string' ? signedInAccountId : null,
+    token,
   });
   await removeSession([STORAGE_KEY_PAIR_REQUEST]);
   await removeLocal([STORAGE_KEY_PENDING_DESKTOP_REVOCATION]);
-  await writePairedDesktopRecord(rawFingerprint, signedInAccountId);
 
   _state = { ...IDLE_STATE, phase: 'paired', fingerprint: rawFingerprint };
 
@@ -568,27 +505,33 @@ export async function beginPairing(): Promise<PairingState> {
   return bridgeSecret ? requestPairing() : startPairing();
 }
 
+interface UnpairReceipt {
+  success?: unknown;
+  revocationOwed?: unknown;
+}
+
 export async function unpair(): Promise<PairingState> {
-  // Tell the desktop first, while the pairing still exists to authorise the
-  // message. Without this the two sides disagree: this extension forgets the
-  // pairing and the desktop keeps its record, so every local client goes on
-  // offering browser tools that can never answer.
+  // The background tells Desktop while the pairing still exists to authorise
+  // the message, and records the unpair as owed when Desktop cannot be reached.
+  // Without that the two sides disagree: Desktop keeps its record and every
+  // local client goes on offering browser tools that can never answer.
   const receipt =
     typeof chrome.runtime?.sendMessage === 'function'
       ? ((await chrome.runtime.sendMessage({ type: 'UNPAIR_NATIVE' }).catch(() => undefined)) as
-          { success?: unknown } | undefined)
+          UnpairReceipt | undefined)
       : undefined;
 
-  if (receipt?.success !== true) {
-    try {
-      await writeLocal({
-        [STORAGE_KEY_PENDING_DESKTOP_REVOCATION]: { id: crypto.randomUUID() },
-      });
-    } catch {
-      return {
-        ..._state,
-        error: 'Desktop could not be reached, so the pairing was kept. Try again.',
-      };
+  let owed = receipt?.revocationOwed === true;
+  if (receipt?.success !== true && !owed) {
+    const record = await readPairedDesktopRecord();
+    if (record) {
+      if (!(await oweDesktopRevocation(record.token))) {
+        return {
+          ..._state,
+          error: 'Desktop could not be reached, so the pairing was kept. Try again.',
+        };
+      }
+      owed = true;
     }
   }
 
@@ -598,7 +541,7 @@ export async function unpair(): Promise<PairingState> {
     // Storage removal failure should not block state reset
   }
   await releaseStoredDesktopPairing();
-  if (receipt?.success !== true) _state = { ...IDLE_STATE, error: PENDING_REVOCATION_NOTICE };
+  if (owed) _state = { ...IDLE_STATE, error: PENDING_REVOCATION_NOTICE };
   return getPairingState();
 }
 
@@ -638,14 +581,11 @@ export async function confirmPairing(token: string, fingerprint?: string): Promi
 
   try {
     const signedInAccountId = await readSignedInAccountId();
-    await writeSession({
-      [STORAGE_KEY_PAIR_TOKEN]: trimmed,
-      [STORAGE_KEY_FINGERPRINT]: fp,
-      ...(typeof signedInAccountId === 'string'
-        ? { [STORAGE_KEY_PAIR_ACCOUNT]: signedInAccountId }
-        : {}),
+    await writePairedDesktopRecord({
+      fingerprint: fp,
+      accountId: typeof signedInAccountId === 'string' ? signedInAccountId : null,
+      token: trimmed,
     });
-    await writePairedDesktopRecord(fp, signedInAccountId);
     _state = { ...IDLE_STATE, phase: 'paired', fingerprint: fp };
   } catch (err) {
     return fail(err instanceof Error ? err.message : 'Failed to store token');

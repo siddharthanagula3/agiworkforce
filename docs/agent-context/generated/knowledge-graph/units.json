@@ -2458,15 +2458,15 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 598,
+      "files": 608,
       "roles": {
         "asset": 12,
         "config": 6,
         "doc": 3,
         "other": 31,
-        "source": 239,
+        "source": 243,
         "style": 3,
-        "test": 304
+        "test": 310
       }
     },
     {
@@ -2505,14 +2505,14 @@
       "lanes": [
         "vscode-extension"
       ],
-      "files": 393,
+      "files": 398,
       "roles": {
         "asset": 3,
         "config": 5,
         "doc": 8,
         "other": 4,
-        "source": 190,
-        "test": 183
+        "source": 191,
+        "test": 187
       }
     },
     {
@@ -2616,7 +2616,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8301,
+      "files": 8309,
       "roles": {
         "asset": 57,
         "config": 83,
@@ -2624,9 +2624,9 @@
         "generated": 2,
         "migration": 740,
         "other": 37,
-        "source": 3515,
+        "source": 3518,
         "style": 35,
-        "test": 3781
+        "test": 3786
       }
     },
     {
@@ -5056,13 +5056,13 @@
       "lanes": [
         "backend-services"
       ],
-      "files": 79,
+      "files": 91,
       "roles": {
         "config": 6,
         "doc": 1,
         "other": 4,
-        "source": 28,
-        "test": 40
+        "source": 31,
+        "test": 49
       }
     },
     {

@@ -1,4 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+const { mockWorkspaceAccessGate } = vi.hoisted(() => ({
+  mockWorkspaceAccessGate: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+}));
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildWorkspaceAccessGateResponse: mockWorkspaceAccessGate,
+}));
 type ScanModule0 = typeof import('@/lib/services/org-sharing-service');
 
 vi.mock('server-only', () => ({}));
@@ -58,6 +69,27 @@ function listRequest(query = ''): never {
 beforeEach(() => {
   vi.clearAllMocks();
   mockResolveSharedProjectScope.mockResolvedValue(null);
+});
+
+describe('GET /api/projects · which clients may reach the workspace', () => {
+  it('asks about the client the credential is bound to and reads nothing when it is refused', async () => {
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockRlsQuery(...args) },
+      userId: 'member-1',
+      organizationId: null,
+      surface: 'chrome',
+    } as never);
+    mockWorkspaceAccessGate.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'surface_not_allowed' } }), { status: 403 }),
+    );
+
+    const response = await LIST_PROJECTS(listRequest());
+
+    expect(response.status).toBe(403);
+    expect(mockWorkspaceAccessGate).toHaveBeenCalledWith('member-1', expect.anything(), 'chrome');
+    expect(mockRlsQuery).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/projects · keyset pagination', () => {

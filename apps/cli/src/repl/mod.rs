@@ -61,7 +61,7 @@ pub async fn run_repl(
     auto_approve_safe: bool,
     quiet: bool,
     provider_override: Option<&str>,
-    permission_mode: crate::cli_options::PermissionMode,
+    permission_mode: crate::cli_options::LaunchPermissionMode,
     auto_approve_plan: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
@@ -107,10 +107,13 @@ pub async fn run_repl(
         session.fallback_chain = Some(fallback_chain);
     }
     session.session_name = session_name;
-    session.permission_mode = permission_mode;
+    session.permission_mode = permission_mode.mode;
     session.auto_approve_plan = auto_approve_plan;
     session.apply_tool_filters(&allowed_tools, &disallowed_tools);
-    if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
+    if matches!(
+        permission_mode.mode,
+        crate::cli_options::PermissionMode::Plan
+    ) {
         session.plan_mode = true;
     }
     // Wire --agent: load the named agent definition and apply overrides to the session.
@@ -146,10 +149,12 @@ pub async fn run_repl(
         );
     }
 
+    let mode_before_load = session.permission_mode;
     match (resume_messages, resume_managed_session) {
         (Some(messages), Some((mut managed_session, path))) => {
             managed_session.messages = messages;
             session.load_managed_conversation(managed_session, path)?;
+            session.settle_loaded_permission_mode(permission_mode, mode_before_load);
             reset_loaded_session_stats(&mut session);
         }
         (Some(messages), None) => {
@@ -158,6 +163,7 @@ pub async fn run_repl(
         }
         (None, Some((managed_session, path))) => {
             session.load_managed_conversation(managed_session, path)?;
+            session.settle_loaded_permission_mode(permission_mode, mode_before_load);
             reset_loaded_session_stats(&mut session);
         }
         (None, None) => {

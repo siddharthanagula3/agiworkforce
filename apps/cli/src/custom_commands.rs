@@ -202,18 +202,23 @@ fn discover_custom_slash_commands_from_roots(
                 }
                 continue;
             }
-            seen.insert(name.clone(), (path.clone(), root.source));
             let raw = if root.source.is_project() {
                 root.path
                     .parent()
                     .and_then(Path::parent)
-                    .and_then(|project| crate::project_text::read_within(project, &path))
+                    .and_then(|project| {
+                        crate::project_text::try_read_within(project, &path).unwrap_or_else(|why| {
+                            report_refused_project_command(&name, &path, why);
+                            None
+                        })
+                    })
             } else {
                 std::fs::read_to_string(&path).ok()
             };
             let Some(raw) = raw else {
                 continue;
             };
+            seen.insert(name.clone(), (path.clone(), root.source));
             let parsed = parse_command_markdown(&raw);
             commands.push(CustomSlashCommand {
                 name,
@@ -228,6 +233,26 @@ fn discover_custom_slash_commands_from_roots(
 
     commands.sort_by(|left, right| left.name.cmp(&right.name));
     (commands, shadowed)
+}
+
+fn report_refused_project_command(name: &str, path: &Path, why: &str) {
+    use std::io::Write as _;
+    static REPORTED: std::sync::Mutex<Option<std::collections::HashSet<PathBuf>>> =
+        std::sync::Mutex::new(None);
+    let first = REPORTED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_or_insert_with(std::collections::HashSet::new)
+        .insert(path.to_path_buf());
+    if first {
+        let mut sink = crate::output::DiagnosticWriter;
+        let _ = writeln!(
+            sink,
+            "note: the project command /{} was not loaded because {why}: {}",
+            crate::terminal_text::sanitize_terminal_text(name),
+            crate::terminal_text::sanitize_terminal_text(&path.display().to_string())
+        );
+    }
 }
 
 fn markdown_files_recursive(root: &Path) -> Vec<PathBuf> {
@@ -558,6 +583,33 @@ mod tests {
         assert_eq!(commands.len(), 1);
         assert_eq!(commands[0].name, "bench");
         assert_eq!(commands[0].content, "Project bench");
+        assert_eq!(commands[0].source, CustomCommandSource::ProjectClaude);
+        assert!(shadowed.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_project_command_refused_by_containment_does_not_claim_its_name() {
+        let home = tempfile::tempdir().unwrap();
+        let cwd = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("ship.md"), "Shared ship").unwrap();
+        let agi_dir = cwd.path().join(".agiworkforce").join("commands");
+        let claude_dir = cwd.path().join(".claude").join("commands");
+        std::fs::create_dir_all(&agi_dir).unwrap();
+        std::fs::create_dir_all(&claude_dir).unwrap();
+        std::os::unix::fs::symlink(outside.path().join("ship.md"), agi_dir.join("ship.md"))
+            .unwrap();
+        std::fs::write(claude_dir.join("ship.md"), "Project ship").unwrap();
+
+        let (commands, shadowed) = discover_custom_slash_commands_from_roots(roots_for(
+            Some(cwd.path().to_path_buf()),
+            Some(home.path().to_path_buf()),
+        ));
+
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0].name, "ship");
+        assert_eq!(commands[0].content, "Project ship");
         assert_eq!(commands[0].source, CustomCommandSource::ProjectClaude);
         assert!(shadowed.is_empty());
     }

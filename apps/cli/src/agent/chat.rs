@@ -2620,7 +2620,36 @@ impl TurnHostAdapter<'_> {
     }
 
     async fn run_batch(&mut self, call: &ToolCallResponse, args: &serde_json::Value) -> ExecResult {
-        let inner_calls = match crate::tools::batch_calls(&value_to_legacy_args(args)) {
+        let legacy_args = value_to_legacy_args(args);
+        let workspace_root = self.session.workspace_root();
+        let approval_callback = self.session.recorded_approval_callback();
+        match crate::tools::workspace_policy_gate(
+            &call.name,
+            &legacy_args,
+            workspace_root.as_deref(),
+            approval_callback.as_ref(),
+        )
+        .await
+        {
+            Ok(crate::tools::WorkspacePolicyGate::Refused(refusal)) => {
+                return ExecResult {
+                    ok: false,
+                    output: refusal.output,
+                }
+            }
+            Err(error) => {
+                return ExecResult {
+                    ok: false,
+                    output: format!("tool error: {error:#}"),
+                }
+            }
+            Ok(
+                crate::tools::WorkspacePolicyGate::Unruled
+                | crate::tools::WorkspacePolicyGate::Allowed
+                | crate::tools::WorkspacePolicyGate::Approved,
+            ) => {}
+        }
+        let inner_calls = match crate::tools::batch_calls(&legacy_args) {
             Ok(inner_calls) => inner_calls,
             Err(output) => return ExecResult { ok: false, output },
         };
@@ -5360,6 +5389,92 @@ mod tests {
             !created.exists(),
             "rewind must undo a write made inside the batch"
         );
+    }
+
+    fn batch_policy_session(decision: &str) -> (tempfile::TempDir, AgentSession) {
+        let scratch = workspace_scratch();
+        let policy_dir = scratch.path().join(".agiworkforce");
+        std::fs::create_dir_all(&policy_dir).unwrap();
+        std::fs::write(
+            policy_dir.join("policy.toml"),
+            format!("[[rules]]\ntool = \"batch\"\ndecision = \"{decision}\"\n"),
+        )
+        .unwrap();
+        let mut session = live_session();
+        session.install_workspace_file_authority(
+            crate::path_security::WorkspaceFileAuthority::new(scratch.path()).expect("authority"),
+        );
+        (scratch, session)
+    }
+
+    async fn run_one_batched_write(session: &mut AgentSession, path: &std::path::Path) {
+        run_live_turn(
+            session,
+            LiveTurnTools {
+                available: &["batch", "write_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "writing",
+                    vec![live_call(
+                        "batch-1",
+                        "batch",
+                        serde_json::json!({"calls": [
+                            {"name": "write_file", "args": {"path": path, "content": "written"}}
+                        ]}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn live_turn_stops_a_batch_the_policy_denies_before_any_call_in_it_runs() {
+        let (scratch, mut session) = batch_policy_session("deny");
+        let written = scratch.path().join("written.txt");
+
+        run_one_batched_write(&mut session, &written).await;
+
+        assert!(!written.exists(), "a denied batch must not run its calls");
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(content.contains("Tool `batch` is denied by"), "{content}");
+        assert!(content.contains(".agiworkforce/policy.toml"), "{content}");
+        assert!(is_error);
+    }
+
+    #[tokio::test]
+    async fn live_turn_asks_once_for_a_batch_the_policy_asks_about() {
+        let (scratch, mut session) = batch_policy_session("ask");
+        let written = scratch.path().join("written.txt");
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = asked.clone();
+        let callback: crate::tools::ApprovalCallback = std::sync::Arc::new(move |request| {
+            let seen = seen.clone();
+            Box::pin(async move {
+                seen.lock().expect("asked").push(request.kind);
+                crate::tui::approval_broker::ApprovalDecision::Deny
+            })
+        });
+        session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
+
+        run_one_batched_write(&mut session, &written).await;
+
+        assert!(!written.exists(), "a refused batch must not run its calls");
+        assert!(matches!(
+            asked.lock().expect("asked").as_slice(),
+            [crate::tui::approval_broker::ApprovalRequestKind::WorkspacePolicy { tool_name, .. }]
+                if tool_name == "batch"
+        ));
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(
+            content.contains("was not approved under the workspace policy"),
+            "{content}"
+        );
+        assert!(is_error);
     }
 
     #[tokio::test]

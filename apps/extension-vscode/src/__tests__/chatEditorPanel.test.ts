@@ -276,6 +276,40 @@ describe('agi-workforce.openChatInEditor', () => {
     expect(panels[0]!.postMessage).not.toHaveBeenCalledWith({ type: 'conversationCleared' });
   });
 
+  it('tells the chat a message it cannot accept was not sent, instead of leaving it sending', async () => {
+    handlers.get('agi-workforce.openChatInEditor')!();
+    panels[0]!.postMessage.mockClear();
+
+    await post(panels[0]!, {
+      type: 'sendMessage',
+      payload: { text: 'x'.repeat(100_001), clientMessageId: 'msg-too-long' },
+    });
+
+    expect(panels[0]!.postMessage).toHaveBeenCalledWith({
+      type: 'error',
+      payload: expect.objectContaining({
+        headline: expect.stringContaining('This message could not be sent'),
+      }),
+    });
+  });
+
+  it('logs the kind of a dropped message, never what the user wrote', async () => {
+    handlers.get('agi-workforce.openChatInEditor')!();
+    const stale = bindingOf(panels[0]!);
+    await post(panels[0]!, { type: 'newChat' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await panels[0]!.receiveMessage?.({
+      type: 'sendMessage',
+      payload: { text: 'PRIVATE_PROMPT_TEXT' },
+      ...stale,
+    });
+
+    expect(warn).toHaveBeenCalledOnce();
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('PRIVATE_PROMPT_TEXT');
+    expect(JSON.stringify(warn.mock.calls)).toContain('sendMessage');
+  });
+
   it('lets chat webviews read only the codicon and render script folders', () => {
     handlers.get('agi-workforce.openChatInEditor')!();
     const [, provider] = vi

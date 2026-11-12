@@ -1,4 +1,4 @@
-import { settingsWithholdReason } from '../../data/contextExclusion';
+import { ContextResolutionCache, settingsWithholdReason } from '../../data/contextExclusion';
 import { codeBlockTargetRefusal } from '../../platform/codeBlockTarget';
 import * as path from 'node:path';
 import { realpath } from 'node:fs/promises';
@@ -164,10 +164,12 @@ import {
   type EditorContextSnapshot,
 } from '../../data/composerContext';
 import { searchMentionTargets } from '../../data/mentionSearch';
-import type {
-  ApprovalDecision,
-  ComposerBinding,
-  ContextAttachmentKind,
+import {
+  MAX_SEND_MESSAGE_CHARS,
+  MAX_SEND_MESSAGE_REFERENCES,
+  type ApprovalDecision,
+  type ComposerBinding,
+  type ContextAttachmentKind,
 } from '../../protocol/webviewMessages';
 import {
   approvalAllowsSessionScope,
@@ -239,6 +241,7 @@ const RUNTIME_SETUP_ERROR_MAX_LENGTH = 320;
 const RECENT_CONVERSATION_LIMIT = 5;
 const TEXT_ATTACHMENT_CHAR_LIMIT = 40_000;
 const MAX_QUEUED_SENDS = 20;
+const EDITOR_CONTEXT_DEBOUNCE_MS = 150;
 const MAX_PRE_START_TURN_EVENTS = 1_024;
 const WEB_SEARCH_LOGIN_LABELS: Readonly<Record<string, string>> = {
   brave: 'Brave Search',
@@ -966,6 +969,11 @@ export class ChatStateManager {
     }
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
+  private _editorContextTracking?: {
+    cache: ContextResolutionCache;
+    listeners: vscode.Disposable[];
+    timer?: ReturnType<typeof setTimeout>;
+  };
   private _editorContextSequence = 0;
   private _answerRatings: Promise<void> = Promise.resolve();
   private readonly _activeModelChanged = new vscode.EventEmitter<string>();
@@ -983,9 +991,6 @@ export class ChatStateManager {
     this._activeModel = Config.model();
     this._cliCapabilities = new CliCapabilityAdapter(this._localRuntimes);
     this._editorContextListeners.push(
-      vscode.window.onDidChangeActiveTextEditor(() => void this.pushEditorContext()),
-      vscode.window.onDidChangeTextEditorSelection(() => void this.pushEditorContext()),
-      vscode.languages.onDidChangeDiagnostics(() => void this.pushEditorContext()),
       onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('agiWorkforce.agent.effort')) {
@@ -1107,6 +1112,7 @@ export class ChatStateManager {
 
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
     this._rebindThreadRuntime();
+    this.setEditorContextTracking(true);
     switch (msg.type) {
       case 'composerState': {
         this._composerBinding = msg.payload;
@@ -1238,6 +1244,10 @@ export class ChatStateManager {
         this._resumeAttemptSeq++;
         this._dropSteeringSends('Steer cancelled by Stop.');
         trackProductEvent('generation_stopped', this._thread?.trustMode);
+        if (!this._turnLifecycleActive && this._activeTurn === undefined) {
+          this._post({ type: 'done' });
+          break;
+        }
         await this._interruptActiveTurn();
         break;
       }
@@ -3007,14 +3017,82 @@ export class ChatStateManager {
     };
   }
 
+  setEditorContextTracking(active: boolean): void {
+    const tracking = this._editorContextTracking;
+    if (!active) {
+      if (tracking === undefined) return;
+      if (tracking.timer !== undefined) clearTimeout(tracking.timer);
+      for (const listener of tracking.listeners) listener.dispose();
+      delete this._editorContextTracking;
+      this._editorContextSequence++;
+      return;
+    }
+    if (tracking !== undefined) return;
+    const cache = new ContextResolutionCache();
+    const schedule = (): void => this._scheduleEditorContext();
+    this._editorContextTracking = {
+      cache,
+      listeners: [
+        cache,
+        vscode.window.onDidChangeActiveTextEditor(schedule),
+        vscode.window.onDidChangeTextEditorSelection(schedule),
+        vscode.languages.onDidChangeDiagnostics((event) => {
+          const shown = workingTextEditor()?.document.uri.toString();
+          if (shown !== undefined && event.uris.some((uri) => uri.toString() === shown)) {
+            schedule();
+          }
+        }),
+      ],
+    };
+  }
+
+  private _scheduleEditorContext(): void {
+    const tracking = this._editorContextTracking;
+    if (tracking === undefined) return;
+    if (tracking.timer !== undefined) clearTimeout(tracking.timer);
+    tracking.timer = setTimeout(() => {
+      tracking.timer = undefined;
+      void this.pushEditorContext();
+    }, EDITOR_CONTEXT_DEBOUNCE_MS);
+  }
+
   async pushEditorContext(): Promise<void> {
+    const tracking = this._editorContextTracking;
+    if (tracking === undefined) return;
     const sequence = ++this._editorContextSequence;
-    const snapshot = await captureEditorContext(new Set(this._dismissedEditorContext));
+    const snapshot = await captureEditorContext(
+      new Set(this._dismissedEditorContext),
+      tracking.cache.resolve,
+    );
     if (sequence !== this._editorContextSequence) return;
     this._post({ type: 'editorContext', payload: { chips: snapshot.chips } });
   }
 
+  rejectUnreadableSend(clientMessageId: string | undefined): void {
+    const message = `This message could not be sent. A message can hold up to ${MAX_SEND_MESSAGE_CHARS.toLocaleString('en-US')} characters and ${MAX_SEND_MESSAGE_REFERENCES} file references; shorten it, or attach long text as a file.`;
+    if (this._turnLifecycleActive && clientMessageId !== undefined) {
+      this._post({
+        type: 'followUpStatus',
+        payload: {
+          kind: 'error',
+          message,
+          queueDepth: this._sendQueue.size(),
+          attachmentIds: [],
+          clientMessageId,
+        },
+      });
+      return;
+    }
+    if (!this._turnLifecycleActive) this._postError(message);
+  }
+
+  refreshEditorContext(): void {
+    this._editorContextTracking?.cache.clear();
+    void this.pushEditorContext();
+  }
+
   dispose(): void {
+    this.setEditorContextTracking(false);
     for (const listener of this._editorContextListeners) listener.dispose();
     this._editorContextListeners.length = 0;
     this._planDocumentListener?.dispose();

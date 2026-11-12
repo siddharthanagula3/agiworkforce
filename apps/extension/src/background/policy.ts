@@ -61,6 +61,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   AGI_START_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_COMPUTER_USE_STATE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  AGI_CU_APPROVE_RESPONSE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   PAUSE_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   RESUME_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   ADD_COMPUTER_USE_GUIDANCE: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -77,6 +78,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   GET_CLOUD_AUTH_TOKEN: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   SYNC_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  SAVE_CONVERSATION_NOW: { senderClass: 'extension-page-only', allowsCrossTab: true },
   ENSURE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
@@ -101,6 +103,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   OPEN_SIDE_PANEL: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   OPEN_EXTENSION_SETTINGS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   GET_SIDE_PANEL_OPEN: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  SIDE_PANEL_CLOSED: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_PAGE_ACCESS: { senderClass: 'discovery', allowsCrossTab: false },
   GET_AUTOFILL_PROFILE: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   AUTHORIZE_SITE_TOOL_DESTINATION: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
@@ -110,6 +113,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   START_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   GET_RECORDED_ACTIONS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  RECORDING_ACTION: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   LIST_SHORTCUTS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   AGI_CU_USER_INPUT: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   LIST_SCHEDULED_TASKS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },

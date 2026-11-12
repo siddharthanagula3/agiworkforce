@@ -155,6 +155,78 @@ describe('projects drawer client', () => {
     expect(result).toMatchObject({ status: 'error', code: 'auth_required' });
   });
 
+  it.each([
+    [
+      'a workspace policy',
+      403,
+      {
+        error: {
+          type: 'organization_policy',
+          code: 'feature_disabled',
+          message: 'Your workspace administrator has turned off Projects for your account.',
+        },
+      },
+      {
+        code: 'policy_blocked',
+        message: 'Your workspace administrator has turned off Projects for your account.',
+      },
+    ],
+    [
+      'an incident lockdown',
+      403,
+      {
+        error: {
+          code: 'FORBIDDEN',
+          message:
+            'This workspace is locked down while an incident is investigated. Contact support.',
+        },
+      },
+      {
+        code: 'policy_blocked',
+        message:
+          'This workspace is locked down while an incident is investigated. Contact support.',
+      },
+    ],
+    [
+      'a 403 without a reason it may show',
+      403,
+      { error: { code: 'insufficient_scope', message: 'scope projects:read missing' } },
+      { code: 'refused', message: 'Projects are not available for this account.' },
+    ],
+  ])(
+    'shows %s by its reason code, never as a sign-in prompt',
+    async (_label, status, body, expected) => {
+      const fetchImpl = vi.fn(async () => Response.json(body, { status }));
+      const result = await listChromeProjects(
+        {},
+        { getAuthToken: vi.fn(async () => 'token-1'), fetchImpl },
+      );
+
+      expect(result).toEqual({ status: 'error', ...expected });
+      expect(fetchImpl).toHaveBeenCalled();
+    },
+  );
+
+  it('treats a slow server as a temporary failure with its retry hint, never a sign-out', async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json(
+        { error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' } },
+        { status: 503, headers: { 'retry-after': '5' } },
+      ),
+    );
+    const result = await listChromeProjects(
+      {},
+      { getAuthToken: vi.fn(async () => 'token-1'), fetchImpl },
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      code: 'unavailable',
+      message: 'Projects are temporarily unavailable. Try again in 5 seconds.',
+      retryAfterSeconds: 5,
+    });
+  });
+
   it('reports the signed-out state when no account token is held at all', async () => {
     const result = await listChromeProjects({}, projectsDependencies(projectsClient(), null));
 
@@ -191,4 +263,94 @@ describe('schedules section client', () => {
 
     expect(result).toMatchObject({ status: 'error', code: 'auth_required' });
   });
+
+  it('shows a plan limit as the server worded it, with the upgrade path, never a sign-in', async () => {
+    const plan = 'Free plans do not include scheduled tasks. Upgrade to schedule unattended runs.';
+    const fetchImpl = vi.fn(async () =>
+      Response.json(
+        {
+          error: {
+            code: 'SUBSCRIPTION_REQUIRED',
+            message: plan,
+            details: {
+              code: 'schedules_not_in_plan',
+              limit: 0,
+              recovery: { action: 'upgrade', href: '/pricing' },
+            },
+          },
+        },
+        { status: 403 },
+      ),
+    );
+    const result = await listChromeSchedules(
+      {},
+      { getAuthToken: vi.fn(async () => 'token-1'), fetchImpl, newIdempotencyKey: () => 'key-1' },
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      code: 'plan_required',
+      message: plan,
+      upgradePath: '/pricing',
+    });
+  });
+
+  it.each([
+    [
+      'a workspace policy',
+      403,
+      {
+        error: {
+          type: 'organization_policy',
+          code: 'surface_not_allowed',
+          message:
+            'Your workspace administrator does not allow access to this workspace from the Chrome extension.',
+        },
+      },
+      {
+        code: 'policy_blocked',
+        message:
+          'Your workspace administrator does not allow access to this workspace from the Chrome extension.',
+      },
+    ],
+    [
+      'an unreadable workspace policy',
+      503,
+      {
+        error: {
+          type: 'organization_policy',
+          code: 'workspace_policy_unavailable',
+          message: 'We could not confirm your workspace security settings. Try again in a moment.',
+        },
+      },
+      {
+        code: 'unavailable',
+        message: 'We could not confirm your workspace security settings. Try again in a moment.',
+        retryAfterSeconds: 5,
+      },
+    ],
+    [
+      'a slow account check',
+      503,
+      { error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' } },
+      {
+        code: 'unavailable',
+        message: 'Schedules are temporarily unavailable. Try again in 5 seconds.',
+        retryAfterSeconds: 5,
+      },
+    ],
+  ])(
+    'shows %s by its reason code, never as a sign-in prompt',
+    async (_label, status, body, expected) => {
+      const fetchImpl = vi.fn(async () =>
+        Response.json(body, { status, headers: status === 503 ? { 'retry-after': '5' } : {} }),
+      );
+      const result = await listChromeSchedules(
+        {},
+        { getAuthToken: vi.fn(async () => 'token-1'), fetchImpl, newIdempotencyKey: () => 'key-1' },
+      );
+
+      expect(result).toEqual({ status: 'error', ...expected });
+    },
+  );
 });

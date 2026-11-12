@@ -104,6 +104,9 @@ import {
   clearAuthToken,
   signOutOfAccount,
   getManagedModelAccess,
+  ManagedAccessAuthRequiredError,
+  ManagedAccessRefusedError,
+  ManagedAccessUnavailableError,
   parseQuotaWarningHeader,
   streamFreeChat,
   streamManagedChatApproval,
@@ -413,6 +416,77 @@ describe('getManagedModelAccess', () => {
     await expect(getManagedModelAccess('token')).rejects.toThrow('Invalid model-access response');
   });
 
+  it('tells a rejected credential, a policy refusal and an unavailable server apart', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(activeUsageResponse());
+    await expect(getManagedModelAccess('token')).rejects.toBeInstanceOf(
+      ManagedAccessAuthRequiredError,
+    );
+
+    const policy = 'This workspace is locked down while an incident is investigated.';
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'FORBIDDEN', message: policy } }), {
+        status: 403,
+      }),
+    );
+    const refused = getManagedModelAccess('token');
+    await expect(refused).rejects.toBeInstanceOf(ManagedAccessRefusedError);
+    await expect(refused).rejects.toThrow(policy);
+
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 503, headers: { 'Retry-After': '5' } }))
+      .mockResolvedValueOnce(activeUsageResponse());
+    const unavailable = getManagedModelAccess('token').catch((error: unknown) => error);
+    const error = await unavailable;
+    expect(error).not.toBeInstanceOf(ManagedAccessAuthRequiredError);
+    expect(error).not.toBeInstanceOf(ManagedAccessRefusedError);
+    expect(error).toBeInstanceOf(ManagedAccessUnavailableError);
+    expect((error as ManagedAccessUnavailableError).retryAfterSeconds).toBe(5);
+  });
+
+  it('tells a plan refusal from a workspace policy by the reason the server gives', async () => {
+    const plan = 'Your plan does not include Cloud in the CLI and VS Code.';
+    fetchMock
+      .mockResolvedValueOnce(activeUsageResponse())
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ error: { code: 'developer_surface_plan_required', message: plan } }),
+          { status: 403 },
+        ),
+      );
+    const planRefusal = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(planRefusal).toBeInstanceOf(ManagedAccessRefusedError);
+    expect(planRefusal).toMatchObject({ kind: 'plan', message: plan });
+
+    const policy = 'Your workspace administrator does not allow access from the Chrome extension.';
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: { type: 'organization_policy', code: 'surface_not_allowed', message: policy },
+        }),
+        { status: 403 },
+      ),
+    );
+    const policyRefusal = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(policyRefusal).toMatchObject({ kind: 'policy', message: policy });
+
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'organization_policy',
+            code: 'workspace_policy_unavailable',
+            message: 'We could not confirm your workspace security settings.',
+          },
+        }),
+        { status: 503, headers: { 'retry-after': '5' } },
+      ),
+    );
+    const policyOutage = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(policyOutage).toBeInstanceOf(ManagedAccessUnavailableError);
+  });
+
   it('propagates an abort without retrying or converting it into admission', async () => {
     const controller = new AbortController();
     const abort = new DOMException('Aborted', 'AbortError');
@@ -470,15 +544,18 @@ describe('clearAuthToken', () => {
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
   });
 
-  it('erases the saved autofill profile so sign-out reaches the stored PII', async () => {
-    chromeMock._localStore['agi_autofill_profile'] = {
+  it('keeps the saved autofill profile, which only a sign-out the user chose removes', async () => {
+    const profile = {
       firstName: 'Ada',
       email: 'ada@example.test',
       currentCompany: 'Analytical Engines',
     };
+    chromeMock._localStore['agi_autofill_profile'] = profile;
 
     await clearAuthToken();
+    expect(chromeMock._localStore['agi_autofill_profile']).toEqual(profile);
 
+    await signOutOfAccount();
     expect(chromeMock._localStore['agi_autofill_profile']).toBeUndefined();
   });
 
@@ -651,11 +728,25 @@ describe('streamFreeChat, a refusal that names its reason', () => {
     },
   );
 
-  it('shows an administrator refusal in the server words instead of an account problem', async () => {
+  it('shows an administrator refusal in the server words as a policy, not a plan', async () => {
     const message = 'Your workspace administrator has turned off web search.';
     fetchMock.mockResolvedValueOnce(refusal('feature_disabled', message));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required', message });
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'policy_blocked', message });
+  });
+
+  it('labels any 403 the workspace policy sends as a policy, whatever its code', async () => {
+    const message = 'Your workspace administrator does not allow access from the Chrome extension.';
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(
+        403,
+        JSON.stringify({
+          error: { type: 'organization_policy', code: 'surface_not_allowed', message },
+        }),
+      ),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'policy_blocked', message });
   });
 
   it('falls back to the fixed sentence when the server gave no reason', async () => {

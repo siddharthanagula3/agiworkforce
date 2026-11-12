@@ -85,7 +85,7 @@ confidence-threshold = 0.8
 # `licenses.private.ignore = true` below therefore excludes them as intended;
 # no invalid SPDX exception or text-based clarification is needed.
 #
-# `sqlcipher-src` is the SQLCipher source carrier that libsqlite3-sys 0.39
+# `sqlcipher-src` is the SQLCipher source carrier that libsqlite3-sys 0.40
 # builds from. It declares `MIT AND BSD-3-Clause AND blessing AND WTFPL`:
 # `blessing` is SQLite's public-domain dedication and `WTFPL` is the
 # alternative libtomcrypt offers beside public domain. Both are permissive,

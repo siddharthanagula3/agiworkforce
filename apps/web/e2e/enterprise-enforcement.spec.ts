@@ -138,9 +138,17 @@ test.describe('external sharing and model policy bind the same way', () => {
   test('public sharing stops minting links when the workspace turns it off', async ({ page }) => {
     await signIn(page);
 
+    const created = await api(page, '/api/chat/conversations', {
+      method: 'POST',
+      body: { title: 'enforcement probe' },
+    });
+    expect(created.status, created.body).toBe(201);
+    const conversationId = (JSON.parse(created.body) as { conversation: { id: string } })
+      .conversation.id;
+
     const allowed = await api(page, '/api/share', {
       method: 'POST',
-      body: { title: 'enforcement probe', messages: [] },
+      body: { conversation_id: conversationId, messages: [] },
     });
     expect(
       [200, 201],
@@ -155,7 +163,7 @@ test.describe('external sharing and model policy bind the same way', () => {
 
     const refused = await api(page, '/api/share', {
       method: 'POST',
-      body: { title: 'enforcement probe 2', messages: [] },
+      body: { conversation_id: conversationId, messages: [] },
     });
     expect(refused.status, 'a new anonymous link must be refused once sharing is off').toBe(403);
 
@@ -176,8 +184,7 @@ test.describe('external sharing and model policy bind the same way', () => {
       const res = await fetch('/api/models');
       if (!res.ok) return null;
       const parsed = (await res.json()) as
-        | { models?: Array<{ id?: string }> }
-        | Array<{ id?: string }>;
+        { models?: Array<{ id?: string }> } | Array<{ id?: string }>;
       const list = Array.isArray(parsed) ? parsed : (parsed.models ?? []);
       return list.find((m) => typeof m.id === 'string')?.id ?? null;
     });
