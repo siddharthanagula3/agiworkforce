@@ -74,6 +74,7 @@ const harness = vi.hoisted(() => {
       return Promise.resolve();
     }),
     clear: vi.fn(() => Promise.resolve()),
+    setAccessLevel: vi.fn(() => Promise.resolve()),
   });
 
   const debuggerMock = {
@@ -122,6 +123,7 @@ const harness = vi.hoisted(() => {
       local: area(localStore),
       sync: area({}),
       session: area({}),
+      managed: area({}),
       onChanged: {
         addListener: vi.fn((listener: (typeof storageListeners)[number]) => {
           storageListeners.push(listener);
@@ -438,6 +440,69 @@ describe('background service worker security guards', () => {
     await dispatch({ type: 'REVOKE_SITE_ONCE', grantId });
     expect(await dispatch({ type: 'CHECK_SITE_ONCE', grantId, origin: SITE_A })).toMatchObject({
       success: false,
+    });
+  });
+
+  it('closes every storage area to content scripts when the worker starts', () => {
+    for (const name of ['local', 'session', 'sync', 'managed'] as const) {
+      expect(harness.chromeMock.storage[name].setAccessLevel).toHaveBeenCalledWith({
+        accessLevel: 'TRUSTED_CONTEXTS',
+      });
+    }
+  });
+
+  describe('what a content script may learn about its own page', () => {
+    const contentSender = (url: string, frameId = 0) => ({
+      id: EXTENSION_ID,
+      url,
+      origin: new URL(url).origin,
+      frameId,
+      tab: { id: RUN_TAB_ID, url },
+    });
+
+    it('answers whether the sending page is approved, and nothing about other sites', async () => {
+      await expect(
+        dispatch({ type: 'GET_PAGE_ACCESS' }, contentSender(`${SITE_A}/start`)),
+      ).resolves.toEqual({ success: true, approved: true, inPagePanel: true });
+      putStorage('in_page_panel_enabled', false);
+      await expect(
+        dispatch({ type: 'GET_PAGE_ACCESS' }, contentSender(`${SITE_A}/start`)),
+      ).resolves.toEqual({ success: true, approved: true, inPagePanel: false });
+      delete harness.localStore['in_page_panel_enabled'];
+      await expect(
+        dispatch({ type: 'GET_PAGE_ACCESS' }, contentSender('https://elsewhere.example/a')),
+      ).resolves.toEqual({ success: true, approved: false, inPagePanel: false });
+    });
+
+    it('refuses a frame, another extension or a page without a tab', async () => {
+      for (const sender of [
+        contentSender(`${SITE_A}/start`, 3),
+        { ...contentSender(`${SITE_A}/start`), id: 'another-extension' },
+        { id: EXTENSION_ID, url: `${SITE_A}/start`, frameId: 0 },
+      ]) {
+        const reply = await dispatch({ type: 'GET_PAGE_ACCESS' }, sender);
+        expect(reply['success']).toBe(false);
+        expect(reply).not.toHaveProperty('approved');
+      }
+    });
+
+    it('hands the form-fill profile only to an approved job-application page', async () => {
+      harness.localStore['agi_autofill_profile'] = { firstName: 'Jane' };
+      try {
+        await expect(
+          dispatch({ type: 'GET_AUTOFILL_PROFILE' }, contentSender(`${SITE_A}/apply`)),
+        ).resolves.toMatchObject({ success: false });
+        const board = 'https://boards.greenhouse.io';
+        putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B, board]);
+        await expect(
+          dispatch({ type: 'GET_AUTOFILL_PROFILE' }, contentSender(`${board}/acme/jobs/1`)),
+        ).resolves.toEqual({ success: true, profile: { firstName: 'Jane' } });
+        await expect(
+          dispatch({ type: 'GET_AUTOFILL_PROFILE' }, contentSender(`${board}/acme/jobs/1`, 2)),
+        ).resolves.toMatchObject({ success: false });
+      } finally {
+        delete harness.localStore['agi_autofill_profile'];
+      }
     });
   });
 

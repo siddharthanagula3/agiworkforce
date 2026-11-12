@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   BROWSER_CONTROL_CONSENT_STORAGE_KEY,
   browserControlConsentRequiredMessage,
@@ -15,6 +15,18 @@ import {
   type BrowserControlConsentStorage,
   type BrowserControlPermissions,
 } from '../src/features/computer-use/browserControlConsent';
+import {
+  ACCOUNT_ORIGIN_REFUSAL,
+  isExtensionAccountOrigin,
+  isLoopbackOrigin,
+} from '../src/features/computer-use/accountOrigins';
+import { authorizeBrowserToolCapability } from '../src/features/browser-tools/tabAuthority';
+import sourceManifest from '../manifest.json';
+import { packagedManifest } from './fixtures/packaged-manifest';
+
+vi.stubGlobal('chrome', {
+  runtime: { getManifest: packagedManifest },
+});
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(resolve(here, '..', rel), 'utf8');
@@ -148,6 +160,64 @@ describe('browser control consent record', () => {
     expect(message).toContain('Grant full browser control');
     expect(message).toContain('site-access prompt Chrome shows');
   });
+});
+
+describe('origins Chrome grants at install', () => {
+  it.each([
+    'https://agiworkforce.com',
+    'https://api.agiworkforce.com',
+    'https://clerk.agiworkforce.com',
+    'https://accounts.agiworkforce.com',
+  ])(
+    'refuses browser control on the account origin %s whatever the record says',
+    async (origin) => {
+      const storage = fakeStorage({ [BROWSER_CONTROL_CONSENT_STORAGE_KEY]: [origin] });
+      const permissions = fakePermissions([`${origin}/*`]);
+      expect(isExtensionAccountOrigin(origin)).toBe(true);
+      await expect(hasBrowserControlConsent(origin, storage, permissions)).resolves.toBe(false);
+      await expect(grantBrowserControlConsent(origin, fakeStorage())).rejects.toThrow(
+        ACCOUNT_ORIGIN_REFUSAL,
+      );
+      await expect(
+        authorizeBrowserToolCapability(`${origin}/settings`, 'automation'),
+      ).rejects.toThrow(ACCOUNT_ORIGIN_REFUSAL);
+    },
+  );
+
+  it('reads the account origins from the packaged manifest, not a list of its own', () => {
+    expect(isExtensionAccountOrigin('https://accounts.agiworkforce.com')).toBe(true);
+    expect(
+      isExtensionAccountOrigin('https://accounts.agiworkforce.com', () => ({
+        host_permissions: sourceManifest.host_permissions,
+      })),
+    ).toBe(false);
+    expect(
+      isExtensionAccountOrigin('http://localhost:3000', () => ({
+        host_permissions: ['http://localhost:3000/*'],
+      })),
+    ).toBe(true);
+    expect(
+      isExtensionAccountOrigin('https://acme.example', () => {
+        throw new Error('manifest unavailable');
+      }),
+    ).toBe(true);
+    expect(isExtensionAccountOrigin('https://sandbox.agiworkforce.com')).toBe(false);
+  });
+
+  it.each(['http://localhost:8888', 'http://127.0.0.1:5173'])(
+    'controls %s only with the stored approval, since Chrome grants every loopback port',
+    async (origin) => {
+      const permissions = fakePermissions([`${origin}/*`]);
+      expect(isLoopbackOrigin(origin)).toBe(true);
+      expect(isExtensionAccountOrigin(origin)).toBe(false);
+      await expect(hasBrowserControlConsent(origin, fakeStorage(), permissions)).resolves.toBe(
+        false,
+      );
+      const storage = fakeStorage();
+      await grantBrowserControlConsent(origin, storage);
+      await expect(hasBrowserControlConsent(origin, storage, permissions)).resolves.toBe(true);
+    },
+  );
 });
 
 describe('computer-use start refuses an unconfirmed origin', () => {

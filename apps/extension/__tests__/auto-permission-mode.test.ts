@@ -5,7 +5,10 @@ import {
   actionNeedsApproval,
   type BrowserPermissionMode,
 } from '../src/features/computer-use/askBeforeActing';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
+  asksInAutoMode,
   crucialActionCategory,
   isCrucialAction,
 } from '../src/features/computer-use/crucialActions';
@@ -24,7 +27,7 @@ function asks(
   const requirement = approvalRequirement(input);
   return actionNeedsApproval({
     alwaysAsk: requirement.alwaysAsk,
-    crucial: isCrucialAction(requirement),
+    crucial: asksInAutoMode(requirement),
     mode,
     allowedForTask: false,
     readsOnly: false,
@@ -65,8 +68,52 @@ describe('Auto acts without asking and stops for crucial actions', () => {
         toolName: 'select_option',
         args: { index: 2, matchBy: 'value', option: 'M' },
         pageUrl: PAGE,
+        targetSignature: 'select|||size|Size',
       }),
     ).resolves.toBe(false);
+  });
+
+  it.each([
+    ['a point inside a frame from another site', { x: 10, y: 10 }],
+    ['an index whose element is gone', { index: 4 }],
+  ])('asks before clicking %s, whose target cannot be identified', async (_label, args) => {
+    const input = { toolName: 'click', args, pageUrl: PAGE, targetSignature: null };
+    expect(approvalRequirement(input)).toEqual({ alwaysAsk: true, reason: 'unidentified_input' });
+    expect(isCrucialAction(approvalRequirement(input))).toBe(false);
+    await expect(asks('auto', input)).resolves.toBe(true);
+    await expect(asks('full', input, true)).resolves.toBe(true);
+  });
+
+  it.each(['hover', 'drag', 'swipe'])(
+    'asks before a %s whose target cannot be identified',
+    async (toolName) => {
+      await expect(
+        asks('auto', {
+          toolName,
+          args: { x: 10, y: 10 },
+          pageUrl: PAGE,
+          targetSignature: null,
+          sourceSignature: null,
+          destinationSignature: null,
+        }),
+      ).resolves.toBe(true);
+    },
+  );
+
+  it('asks before clicking a control that has no readable label', async () => {
+    await expect(
+      asks('auto', {
+        toolName: 'click',
+        args: { x: 10, y: 10 },
+        pageUrl: PAGE,
+        targetSignature: 'canvas||||',
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it('is the classification the background passes as the Auto stop', () => {
+    const background = readFileSync(resolve(process.cwd(), 'src/background.ts'), 'utf8');
+    expect(background).toMatch(/crucial: asksInAutoMode\(requirement\)/);
   });
 
   it.each([

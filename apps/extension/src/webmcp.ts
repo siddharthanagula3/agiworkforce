@@ -7,7 +7,7 @@ import {
   planSiteToolCall,
   type SiteToolEffect,
 } from './features/tools/siteToolRegistry';
-import { authorizeBrowserToolUrl } from './features/browser-tools/tabAuthority';
+import { authorizeSiteToolDestination } from './features/content/workerAccess';
 
 function escapeAttrValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -429,7 +429,7 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
   let assertFormCurrent: (() => void) | undefined;
   if (request.assertCurrent) {
     const destination = resolveFormDestination(fallbackForm);
-    await authorizeBrowserToolUrl(destination);
+    await authorizeSiteToolDestination(destination);
     assertFormCurrent = (): void => {
       request.assertCurrent!();
       if (

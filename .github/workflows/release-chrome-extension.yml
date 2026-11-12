@@ -35,6 +35,7 @@ jobs:
       tag: ${{ steps.metadata.outputs.tag }}
       version: ${{ steps.metadata.outputs.version }}
       archive: ${{ steps.metadata.outputs.archive }}
+      archive_sha256: ${{ steps.store-zip.outputs.sha256 }}
     env:
       CLERK_PUBLISHABLE_KEY: ${{ vars.CLERK_PUBLISHABLE_KEY }}
       CLERK_FRONTEND_API: ${{ vars.CLERK_FRONTEND_API }}
@@ -54,6 +55,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          persist-credentials: false
 
       - name: Require an exact stable tag and matching source versions
         id: metadata
@@ -127,6 +129,7 @@ jobs:
           __tests__/service-worker-lifecycle.test.ts
 
       - name: Build and verify the store ZIP
+        id: store-zip
         env:
           ARCHIVE_NAME: ${{ steps.metadata.outputs.archive }}
         run: |
@@ -136,6 +139,7 @@ jobs:
           cp apps/extension/extension.zip "dist/chrome/${ARCHIVE_NAME}"
           node apps/extension/scripts/verify-package.mjs "dist/chrome/${ARCHIVE_NAME}"
           sha256sum "dist/chrome/${ARCHIVE_NAME}" > "dist/chrome/${ARCHIVE_NAME}.sha256"
+          echo "sha256=$(cut -d ' ' -f 1 "dist/chrome/${ARCHIVE_NAME}.sha256")" >> "$GITHUB_OUTPUT"
 
       - name: Scan the packaged extension for secrets and dev endpoints
         env:
@@ -149,6 +153,55 @@ jobs:
           node scripts/release/scan-release-artifact.mjs dist/chrome-unpacked
           rm -rf dist/chrome-unpacked
 
+      - name: Upload the extension build for the Sentry job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chrome-extension-sourcemaps-${{ steps.metadata.outputs.version }}
+          path: apps/extension/dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Install Chromium for packaged-byte smoke
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Exercise the exact store ZIP in Chromium
+        env:
+          ARCHIVE_NAME: ${{ steps.metadata.outputs.archive }}
+        run: node apps/extension/e2e/smoke.mjs "dist/chrome/${ARCHIVE_NAME}"
+
+      - name: Upload verified Chrome package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chrome-extension-${{ steps.metadata.outputs.version }}
+          path: dist/chrome/
+          if-no-files-found: error
+          retention-days: 30
+
+  # npm resolves this install fresh from the registry, so it runs in a job of
+  # its own that holds a read token and the build output, never the store ZIP
+  # job or the publish identity. The publish job checks the ZIP against the
+  # package job's output, so an artifact replaced from here is refused.
+  sentry:
+    name: Register the Sentry release and upload the extension sourcemaps
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the exact packaged release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.package.outputs.tag }}
+          persist-credentials: false
+
+      - name: Download the extension build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: chrome-extension-sourcemaps-${{ needs.package.outputs.version }}
+          path: apps/extension/dist
+
       # errorReporting.ts tags every event with the manifest version, so that
       # bare version is the release name a crash arrives under and the one the
       # maps have to be filed against. The ZIP already excludes *.map (the
@@ -159,7 +212,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_CHROME_EXTENSION }}
-          SENTRY_RELEASE: ${{ steps.metadata.outputs.version }}
+          SENTRY_RELEASE: ${{ needs.package.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
@@ -180,26 +233,10 @@ jobs:
           sentry-cli releases finalize "$SENTRY_RELEASE"
           echo "uploaded $maps extension sourcemaps for $SENTRY_RELEASE"
 
-      - name: Install Chromium for packaged-byte smoke
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Exercise the exact store ZIP in Chromium
-        env:
-          ARCHIVE_NAME: ${{ steps.metadata.outputs.archive }}
-        run: node apps/extension/e2e/smoke.mjs "dist/chrome/${ARCHIVE_NAME}"
-
-      - name: Upload verified Chrome package
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: chrome-extension-${{ steps.metadata.outputs.version }}
-          path: dist/chrome/
-          if-no-files-found: error
-          retention-days: 30
-
   publish:
     name: Submit verified ZIP to Chrome Web Store
     if: github.event_name == 'push' || inputs.publish == true
-    needs: package
+    needs: [package, sentry]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
@@ -218,6 +255,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.package.outputs.tag }}
+          persist-credentials: false
 
       - name: Download the verified Chrome package
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -231,9 +269,15 @@ jobs:
           CLERK_FRONTEND_API: ${{ vars.CLERK_FRONTEND_API }}
           CLERK_SYNC_HOST: ${{ vars.CLERK_SYNC_HOST }}
           CHROME_EXTENSION_PUBLIC_KEY: ${{ vars.CHROME_EXTENSION_PUBLIC_KEY }}
+          PACKAGED_SHA256: ${{ needs.package.outputs.archive_sha256 }}
         run: |
           set -euo pipefail
           sha256sum --check "${ARCHIVE_PATH}.sha256"
+          ACTUAL_SHA256=$(sha256sum "$ARCHIVE_PATH" | cut -d ' ' -f 1)
+          if [ -z "$PACKAGED_SHA256" ] || [ "$ACTUAL_SHA256" != "$PACKAGED_SHA256" ]; then
+            echo "ERROR: $ARCHIVE_PATH is not the ZIP the package job built (package job: ${PACKAGED_SHA256:-none}, artifact: $ACTUAL_SHA256)" >&2
+            exit 1
+          fi
           node apps/extension/scripts/verify-package.mjs "$ARCHIVE_PATH"
 
       - name: Require Chrome Web Store workload identity configuration

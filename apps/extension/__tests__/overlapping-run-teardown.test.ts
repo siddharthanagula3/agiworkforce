@@ -12,6 +12,7 @@ import {
   debuggerHoldCount,
   releaseDebugger,
 } from '../src/features/computer-use/debuggerSession';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 const tabId = 42;
 const site = 'https://run.example';
@@ -30,7 +31,7 @@ it('keeps successor guards and its watch when an overlapping cancelled run final
   );
   const detach = vi.fn((_t: unknown, callback: () => void) => callback());
   vi.stubGlobal('chrome', {
-    runtime: { lastError: null },
+    runtime: { lastError: null, getManifest: packagedManifest },
     tabs: { get: async (id: number) => ({ id, url: site + '/test' }) },
     permissions: { contains: async () => true },
     storage: {

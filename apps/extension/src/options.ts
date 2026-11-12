@@ -58,6 +58,10 @@ import {
   revokeBrowserControlConsent,
 } from './features/computer-use/browserControlConsent';
 import {
+  ACCOUNT_ORIGIN_REFUSAL,
+  isExtensionAccountOrigin,
+} from './features/computer-use/accountOrigins';
+import {
   AUTOFILL_PROFILE_STORAGE_KEY as AUTOFILL_PROFILE_KEY,
   clearAutofillProfile,
   saveAutofillProfile,
@@ -1519,6 +1523,11 @@ function buildPage(): void {
   consentGrantBtn.addEventListener('click', async () => {
     const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
     if (!origin) return;
+    if (isExtensionAccountOrigin(origin)) {
+      closeConsentPrompt();
+      setAllowlistStatus(ACCOUNT_ORIGIN_REFUSAL, true);
+      return;
+    }
     // Chrome spends the user gesture on the first await, so the site-access
     // prompt has to be raised before any storage read. Nothing is recorded
     // unless Chrome itself grants the host, the extension's own record must
@@ -1556,6 +1565,10 @@ function buildPage(): void {
     const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
     if (!origin) return;
     const list = await loadAllowlist();
+    if (!list.includes(origin) && isExtensionAccountOrigin(origin)) {
+      setAllowlistStatus(ACCOUNT_ORIGIN_REFUSAL, true);
+      return;
+    }
     if (!list.includes(origin)) {
       consentOriginLine.textContent = origin;
       consentPrompt.hidden = false;

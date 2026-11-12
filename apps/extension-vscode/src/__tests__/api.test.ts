@@ -43,6 +43,8 @@ vi.mock('https', () => ({ request: vi.fn() }));
 const { refreshDeviceSession } = vi.hoisted(() => ({ refreshDeviceSession: vi.fn() }));
 vi.mock('../features/account-auth/deviceAuth', () => ({ refreshDeviceSession }));
 import { Config } from '../platform/config';
+import { LocalModelSelectedError } from '../core/cloudModelBoundary';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -927,6 +929,35 @@ describe('cloud utility completion contract', () => {
     expect(request).not.toHaveProperty('metadata');
     expect(request).not.toHaveProperty('temperature');
     expect(request).not.toHaveProperty('max_tokens');
+  });
+});
+
+describe('a Local default model and the cloud utilities', () => {
+  beforeEach(() => {
+    vi.mocked(https.request).mockReset();
+  });
+
+  it('refuses before any credential or network use instead of substituting Auto', async () => {
+    vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    await setApiKey(secrets, 'agi-test-key');
+    const source = new vscode.CancellationTokenSource();
+
+    const sent = streamChatCompletion(
+      secrets,
+      [{ role: 'user', content: 'const secret = 1;' }],
+      { onToken: vi.fn(), onDone: vi.fn() },
+      source.token,
+    );
+
+    await expect(sent).rejects.toBeInstanceOf(LocalModelSelectedError);
+    await expect(sent).rejects.toThrow(`your default model, ${SYNTHETIC_LOCAL_MODEL_ID}`);
+    expect(https.request).not.toHaveBeenCalled();
+  });
+
+  it('still sends a selectable AGI Cloud default as itself', () => {
+    vi.spyOn(Config, 'model').mockReturnValue('auto');
+    expect(buildCloudUtilityChatCompletionRequest([]).model).toBe('auto');
   });
 });
 

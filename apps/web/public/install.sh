@@ -165,6 +165,20 @@ sha256_of() {
   fi
 }
 
+# The signed manifest names archives, not versions, so an older signed build
+# could be served under a newer version. The binary's own version is covered by
+# the signature, so it is what binds the archive to the version requested.
+require_reported_version() {
+  local binary="$1" name="$2" expected="$3" output reported shown
+  output=$(AGIWORKFORCE_NO_UPDATE_CHECK=1 "$binary" --version </dev/null 2>/dev/null) \
+    || fail "The downloaded ${name} did not run, so nothing was installed."
+  reported=$(printf '%s\n' "$output" | tr -d '\r' | awk 'NF { print $NF; exit }')
+  if [ "$reported" != "$expected" ]; then
+    shown=$(printf '%s' "$reported" | LC_ALL=C tr -cd '0-9A-Za-z.+-' | cut -c 1-64)
+    fail "Release ${expected} contains a ${name} that reports version ${shown:-none}; refusing to install it under another version. Nothing was installed."
+  fi
+}
+
 extract_archive() {
   local archive="$1" destination="$2"
   case "$archive" in
@@ -217,16 +231,22 @@ install_binaries() {
   echo -e "${GREEN}Verified the release signature and the archive's SHA-256 checksum.${NC}"
 
   local unpacked="${WORK_DIR}/unpacked"
-  mkdir -p "$unpacked" "$INSTALL_DIR"
+  mkdir -p "$unpacked"
   extract_archive "${WORK_DIR}/${filename}" "$unpacked"
   [ -f "${unpacked}/${BINARY_NAME}${exe_suffix}" ] \
     || fail "The release archive does not contain ${BINARY_NAME}${exe_suffix}."
 
-  echo -e "${BLUE}Installing to ${INSTALL_DIR}...${NC}"
   local name
   for name in "$BINARY_NAME" "$LEGACY_BINARY_NAME"; do
     [ -f "${unpacked}/${name}${exe_suffix}" ] || continue
     chmod +x "${unpacked}/${name}${exe_suffix}"
+    require_reported_version "${unpacked}/${name}${exe_suffix}" "${name}${exe_suffix}" "${version#"$TAG_PREFIX"}"
+  done
+
+  echo -e "${BLUE}Installing to ${INSTALL_DIR}...${NC}"
+  mkdir -p "$INSTALL_DIR"
+  for name in "$BINARY_NAME" "$LEGACY_BINARY_NAME"; do
+    [ -f "${unpacked}/${name}${exe_suffix}" ] || continue
     mv -f "${unpacked}/${name}${exe_suffix}" "${INSTALL_DIR}/${name}${exe_suffix}"
   done
 }

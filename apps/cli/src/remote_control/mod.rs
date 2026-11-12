@@ -19,7 +19,7 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::platform::runtime::session::PrivacyMode;
 use envelope::{DispatchSession, VerifyError};
-use host::{CodeHost, Outgoing};
+use host::{relayable_thread, CodeHost, Outgoing};
 
 const PAIR_PATH: &str = "/api/pair/initiate";
 const ACTIVITY_PATH: &str = "/api/code/local-sessions/activity";
@@ -598,7 +598,8 @@ fn session_title(thread_id: &str) -> Option<String> {
         .title
 }
 
-async fn report_activity(
+async fn report_activity<H: DeveloperSessionHost>(
+    host: Arc<H>,
     mut notifications: tokio::sync::broadcast::Receiver<
         agiworkforce_protocol::developer_session::AppServerNotification,
     >,
@@ -620,6 +621,12 @@ async fn report_activity(
         let Some(activity) = activity_of(&root_id, &notification, session_title) else {
             continue;
         };
+        let Some(thread_id) = activity["threadId"].as_str() else {
+            continue;
+        };
+        if !relayable_thread(&*host, thread_id).await {
+            continue;
+        }
         if let Err(error) = client.post::<_, Value>(ACTIVITY_PATH, &activity).await {
             tracing::debug!("[remote-control] session activity was not reported: {error}");
         }
@@ -684,6 +691,7 @@ fn print_status(status: RemoteControlStatus) {
             println!("  {pairing_line}");
             println!();
             println!("Anyone with this code can control sessions in this folder until you stop. Press Ctrl+C to stop.");
+            println!("Only Managed sessions are shared over Remote Control. Local and Your key sessions stay off the phone.");
         }
         RemoteControlStatus::Connected { phone } => {
             println!("Remote Control: connected to {phone}.")
@@ -732,6 +740,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
         .unwrap_or_else(|| workspace.to_string_lossy().to_string());
     let mut notifications = host.subscribe();
     let activity_notifications = host.subscribe();
+    let activity_host = Arc::clone(&host);
     let mut relay = Relay {
         code_host: CodeHost::new(
             host,
@@ -756,6 +765,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
     crate::device_registry::set_remote_control(true);
     let heartbeat = crate::device_registry::spawn_heartbeat_loop(privacy);
     let activity = tokio::spawn(report_activity(
+        activity_host,
         activity_notifications,
         root_id(workspace),
         privacy,

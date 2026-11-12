@@ -9,6 +9,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BROWSER_COMMAND_PROTOCOL_VERSION, type BrowserCommandRequest } from '@agiworkforce/types';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 const SITE = 'https://allowed.example';
 const TAB_ID = 41;
@@ -18,7 +19,7 @@ const grantedOrigins = new Set<string>();
 const tabs = new Map<number, { id: number; url: string }>();
 
 vi.stubGlobal('chrome', {
-  runtime: { id: 'desktop-commands-test', lastError: undefined },
+  runtime: { id: 'desktop-commands-test', lastError: undefined, getManifest: packagedManifest },
   storage: {
     local: {
       get: vi.fn((keys?: unknown) => {

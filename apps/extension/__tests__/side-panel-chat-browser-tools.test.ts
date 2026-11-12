@@ -18,6 +18,11 @@ import {
   sameManagedCloudOwner,
 } from '../src/features/cloud-bridge/managedCloudAuthority';
 import { normalizeApprovedSiteOrigin } from '../src/features/options/site-allowlist';
+import {
+  ACCOUNT_ORIGIN_REFUSAL,
+  isExtensionAccountOrigin,
+} from '../src/features/computer-use/accountOrigins';
+import { packagedManifest } from './fixtures/packaged-manifest';
 import { BrowserTaskSiteGrants } from '../src/features/computer-use/taskSiteGrants';
 import { originApprovedForBrowserControl } from '../src/features/computer-use/browserControlConsent';
 import {
@@ -198,6 +203,9 @@ function harness(
     },
     isRestrictedPageUrl: () => false,
     normalizeApprovedSiteOrigin,
+    isExtensionAccountOrigin: (origin: string) =>
+      isExtensionAccountOrigin(origin, packagedManifest),
+    ACCOUNT_ORIGIN_REFUSAL,
     hasBrowserControlHostPermission: vi.fn(async () => hostPermission),
     hasBrowserControlConsent: vi.fn(async () => options.approved === true),
     readUserSiteAllowlist: vi.fn(async () => [...allowlist]),

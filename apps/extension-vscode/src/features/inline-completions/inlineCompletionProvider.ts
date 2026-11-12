@@ -9,7 +9,12 @@ import {
 } from '../../utils/api';
 import { Config } from '../../platform/config';
 import { isCredentialPath } from '../../utils/pathSafety';
-import { limitResetAt, showCloudUtilityErrorActions } from '../../core/cloudUtilityErrorActions';
+import {
+  limitResetAt,
+  showCloudUtilityErrorActions,
+  showLocalModelRefusal,
+} from '../../core/cloudUtilityErrorActions';
+import { cloudUtilityModel, LocalModelSelectedError } from '../../core/cloudModelBoundary';
 import { describeOutboundRefusal } from '../../core/outboundContentGuard';
 
 const SECRETY_NAME_PATTERN =
@@ -86,6 +91,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
   private pendingResolve: (() => void) | undefined;
   private paywallSuppressed = false;
   private limitPausedUntilMs: number | undefined;
+  private localModelNoticeShown = false;
 
   constructor(private readonly secrets: vscode.SecretStorage) {}
 
@@ -106,6 +112,16 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     if (describeOutboundRefusal(document) !== null) return [];
     const fsPath = document.uri.fsPath;
     if (isCredentialPath(fsPath) || SECRETY_NAME_PATTERN.test(fsPath)) {
+      return [];
+    }
+    const selected = cloudUtilityModel();
+    if (selected.route === 'local') {
+      if (!this.localModelNoticeShown) {
+        this.localModelNoticeShown = true;
+        void showLocalModelRefusal(
+          new LocalModelSelectedError(selected.model, 'Inline completion'),
+        );
+      }
       return [];
     }
 

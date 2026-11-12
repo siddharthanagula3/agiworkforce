@@ -27,9 +27,11 @@ driven by the AGI CLI running on your own machine.
   runs, and session history all run through the local `agi app-server`
   process. Run **Code: Install AGI CLI** to install it, or point
   `agiWorkforce.cliPath` at a binary you already have.
-- A trusted workspace. In a restricted workspace, agent file writes, git and
-  terminal commands, and inline completions are disabled, and endpoint, CLI
-  path, model, and startup settings cannot be overridden by workspace settings.
+- A trusted workspace. In a restricted workspace, the local `agi app-server`
+  process is not started, so chat, agent runs, and session history wait until
+  you trust the folder; git and terminal commands and inline completions are
+  disabled; and endpoint, CLI path, model, and startup settings cannot be
+  overridden by workspace settings.
 - An AGI Cloud account only when you choose Managed Cloud or cloud-backed
   editor extras such as inline completions, memory, and feedback. Local models
   and provider API keys stay available through the AGI CLI without an AGI
@@ -151,9 +153,16 @@ explanations.
   `agiWorkforce.activateOnStartup`.
 - Inline completions are **off** by default; enabling them sends surrounding
   code to AGI Cloud, and files matching the sensitive-file denylist (`.env`,
-  `.pem`, `.ssh/`, credentials, `secrets.json`, and similar) are excluded.
+  `.pem`, `.ssh/`, credentials, `secrets.json`, and similar) are excluded. A
+  restricted workspace cannot turn them on from its own settings.
+- A Local default model is never swapped for an AGI Cloud model. With one
+  selected, Fix, Refactor, Generate Tests and Generate Docs run in the chat on
+  that model, and Code Review, Suggest Terminal Command and inline completions,
+  which run only on AGI Cloud, send nothing and say so.
 - Memory facts are stored in your AGI account, not in this workspace. See
-  **Memory** above for when they are sent.
+  **Memory** above for when they are sent. Notes an earlier version saved in a
+  workspace are copied to your account only while memory is on and after you
+  choose to copy them.
 - **Code: Send Feedback** sends what you type, with your VS Code, operating
   system and extension versions, to AGI from your signed-in account.
 - Credentials from browser sign-in are stored in VS Code `SecretStorage`.

@@ -11,6 +11,7 @@ mod shimmer;
 #[allow(dead_code, unused_imports)]
 pub(crate) mod terminal_palette;
 pub(crate) mod transcript_cell;
+mod turn_transcript;
 
 mod composer_edits;
 pub(crate) mod markdown_renderer;

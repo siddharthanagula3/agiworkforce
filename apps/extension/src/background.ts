@@ -32,7 +32,6 @@ import {
 } from './features/background/scheduled-task-transport';
 import { renderShortcutPrompt } from './features/side-panel/pageCommands';
 import type {
-  AdoptedChatToolHandoff,
   BrowserContextTabReference,
   ChatChunkMessage,
   ChatToolHandoffMessage,
@@ -47,7 +46,8 @@ import type {
   InPagePromptResponse,
   ScheduledTask,
 } from './types';
-import { logger, originOfUrl, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
+import { logger, originOfUrl, RateLimiter, withTimeout, sleep } from './utils';
+import { storageUtils } from './features/background/storageUtils';
 import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
 import { openAssistantPanel, sidePanelAvailable } from './features/surface/assistantPanel';
@@ -148,7 +148,10 @@ import {
   actionNeedsApproval,
   readBrowserPermissionMode,
 } from './features/computer-use/askBeforeActing';
-import { isCrucialAction } from './features/computer-use/crucialActions';
+import { asksInAutoMode } from './features/computer-use/crucialActions';
+import { restrictStorageToTrustedContexts } from './features/background/storageAccess';
+import { desktopTabSummary } from './features/native-bridge/tabListing';
+import { isExtensionAccountOrigin } from './features/computer-use/accountOrigins';
 import { TaskTabs, admitSelectedContextTabs } from './features/browser-tools/taskTabs';
 import { BrowserAgentSiteTools } from './features/tools/browserAgentSiteTools';
 import { ensureOnDetachListener, getTargetSignature } from './features/computer-use/cdpDriver';
@@ -327,8 +330,13 @@ import {
 import { readConsoleEntries } from './features/browser-tools/consoleCapture';
 import {
   authorizeBrowserToolTab,
+  authorizeBrowserToolUrl,
   readAuthorizedBrowserTab,
 } from './features/browser-tools/tabAuthority';
+import { CONTENT_SENDER_REFUSAL, contentScriptPageUrl } from './features/background/contentAccess';
+import { loadAutofillProfile } from './features/content/autofill/profile-storage';
+import { isJobApplicationHostUrl } from './features/content/autofill/detector';
+import { IN_PAGE_PANEL_ENABLED_STORAGE_KEY } from './features/options/preference-rows';
 import { parseContactAutofillProfile } from './features/content/autofill/contactProfile';
 import { parseFormFillPlan } from './features/content/formFillPlan';
 import { UUID_PATTERN } from './lib/uuid';
@@ -361,6 +369,52 @@ import {
   parsePendingDesktopRevocation,
   STORAGE_KEY_PENDING_DESKTOP_REVOCATION,
 } from './features/native-bridge/pairing';
+import type {
+  AdoptChatTurnMessage,
+  AdoptedChatToolHandoff,
+  ApproveContextHandoffMessage,
+  BridgeUrlChangedMessage,
+  CancelComputerUseMessage,
+  CancelContextHandoffMessage,
+  CancelStreamMessage,
+  ChatMessageMessage,
+  ComputerUseGuidanceMessage,
+  ComputerUseTakeoverMessage,
+  CreateScheduledTaskMessage,
+  DeleteCloudConversationMessage,
+  DeleteScheduledTaskMessage,
+  DeleteShortcutMessage,
+  EnsureCloudConversationMessage,
+  GrantSiteOnceMessage,
+  ListScheduledTasksMessage,
+  ManagedCloudAuthChangedMessage,
+  ReadPageConsoleMessage,
+  ReadPageNetworkMessage,
+  ReplayShortcutMessage,
+  ResolveChatApprovalMessage,
+  ResolveChatInputMessage,
+  ResolveChatToolsMessage,
+  ResumeChatRunMessage,
+  RevealDownloadMessage,
+  RevokeSiteOnceMessage,
+  SaveShortcutMessage,
+  SetPageWatchMessage,
+  SetQuickModeMessage,
+  StartComputerUseMessage,
+  StartDownloadMessage,
+  SyncConversationMessage,
+  UpdateScheduledTaskMessage,
+  UpdateShortcutMessage,
+  WebMCPDiscoverToolsMessage,
+  WebMCPToolsChangedMessage,
+} from './types';
+import type { CallerToolContinuation } from './features/computer-use/toolHandoff';
+import type {
+  CallerToolResumeRequest,
+  ManagedCloudAgentRunReference,
+  WebDomainRules,
+} from '@agiworkforce/cloud-contracts';
+import type { PageDocumentReference } from './features/browser-tools/documentBridge';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -401,7 +455,7 @@ interface ActiveChatStream {
   cancelNotified: boolean;
   cancellation?: Promise<ExtensionResponse>;
   requestId?: string;
-  cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
+  cloudRun?: ManagedCloudAgentRunReference;
   streamId?: string;
   historyConversationId?: string;
   assistantMessageId?: string;
@@ -582,7 +636,7 @@ function requestChatToolHandoff(
   active: ActiveChatStream,
   streamId: string,
   calls: ToolCall[],
-  checkpoint?: import('./features/computer-use/toolHandoff').CallerToolContinuation,
+  checkpoint?: CallerToolContinuation,
   recoveryContext?: ChatToolHandoffMessage['recoveryContext'],
 ): Promise<ChromeManagedToolHandoffOutcome> {
   const callerCheckpoint = checkpoint
@@ -706,7 +760,7 @@ async function notifyWaitingBrowserStep(active: ActiveChatStream): Promise<void>
   );
 }
 
-function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessage): boolean {
+function resolveChatToolHandoff(message: ResolveChatToolsMessage): boolean {
   const pending = pendingChatToolHandoffs.get(message.handoffId);
   const owner = normalizeManagedCloudOwner(message.owner);
   if (
@@ -804,7 +858,7 @@ async function sweepTransientHostPermissions(expiredOnly: boolean): Promise<void
   for (const origin of plan.removeOrigins) await removeBrowserControlHostPermission(origin);
 }
 
-function grantSiteOnce(message: import('./types').GrantSiteOnceMessage): boolean {
+function grantSiteOnce(message: GrantSiteOnceMessage): boolean {
   for (const expired of expiredOneTimeSiteGrants()) void revokeOneTimeSiteGrant(expired.grantId);
   if (!isOneTimeSiteGrantId(message.grantId) || typeof message.origin !== 'string') return false;
   const grant = addOneTimeSiteGrant(
@@ -826,7 +880,7 @@ interface ActiveScheduledRecovery {
   owner: ManagedCloudOwner;
   token: string;
   controller: AbortController;
-  cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
+  cloudRun?: ManagedCloudAgentRunReference;
 }
 const activeScheduledRecoveries = new Map<string, ActiveScheduledRecovery>();
 const scheduledTaskCancellationAttempts = new ScheduledTaskCancellationAttemptCoordinator();
@@ -1501,6 +1555,9 @@ async function waitForNativeConnection(timeoutMs: number): Promise<boolean> {
 }
 
 function initialize(): void {
+  void restrictStorageToTrustedContexts(chrome.storage, (area, error) => {
+    logger.error('Failed to restrict Chrome storage to extension pages', { area, error });
+  });
   chrome.runtime.onMessage.addListener(handleMessage);
   chrome.runtime.onConnect.addListener(handleManagedChatKeepalivePort);
   chrome.runtime.onConnect.addListener(handleSidePanelPresencePort);
@@ -2204,7 +2261,7 @@ async function markComputerUseTab(tabId: number): Promise<() => Promise<void>> {
 }
 
 async function handleReplayShortcut(
-  message: import('./types').ReplayShortcutMessage,
+  message: ReplayShortcutMessage,
   expectedOwner?: ManagedCloudOwner,
   notify = true,
 ): Promise<ExtensionResponse> {
@@ -2234,7 +2291,7 @@ async function handleReplayShortcut(
     await handleDeleteShortcut({
       type: 'DELETE_SHORTCUT',
       shortcutId: shortcut.id,
-    } as import('./types').DeleteShortcutMessage);
+    } as DeleteShortcutMessage);
     return {
       success: false,
       error: 'Shortcut origin is no longer on your allowlist; the shortcut was removed.',
@@ -2249,7 +2306,7 @@ async function handleReplayShortcut(
   }
   if (plan.kind === 'prompt') {
     const safePrompt = renderShortcutPrompt(plan.prompt).slice(0, TASK_PROMPT_MAX_CHARS);
-    const chatMsg: Omit<import('./types').ChatMessageMessage, 'owner'> & {
+    const chatMsg: Omit<ChatMessageMessage, 'owner'> & {
       owner?: ManagedCloudOwner;
     } = {
       type: 'CHAT_MESSAGE',
@@ -3108,7 +3165,7 @@ async function completeScheduledTaskRun(
 function abandonScheduledTaskRun(
   journal: ScheduledTaskRunJournal,
   currentCredential?: { token: string; owner: ManagedCloudOwner } | null,
-  knownRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference,
+  knownRun?: ManagedCloudAgentRunReference,
 ): Promise<boolean> {
   markScheduledTaskRequestAbandoned(journal.requestId);
   let cancellationCredential = selectScheduledTaskCancellationCredential(
@@ -3544,7 +3601,7 @@ async function executeScheduledTask(
         {
           type: 'DELETE_SCHEDULED_TASK',
           taskId: task.id,
-        } as import('./types').DeleteScheduledTaskMessage,
+        } as DeleteScheduledTaskMessage,
         task.managedCloudAccountId,
         () => {
           deletionGeneration = scheduledTaskExecutions.invalidate(task.id);
@@ -4229,6 +4286,7 @@ async function resolveBrowserToolTabId(explicitTabId: number | undefined): Promi
  * tab, or the desktop would check one tab while the command acted on another.
  */
 async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
+  await siteAllowlistReady;
   const [focused] = await chrome.tabs.query({ active: true, currentWindow: true });
   const target = await resolveBrowserToolTabId(undefined);
   const tabs = await chrome.tabs.query({});
@@ -4240,12 +4298,13 @@ async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
         a.index - b.index,
     )
     .slice(0, MAX_LISTED_BROWSER_TABS)
-    .map((tab) => ({
-      tabId: tab.id as number,
-      title: tab.title ?? '',
-      url: tab.url as string,
-      active: tab.id === target,
-    }));
+    .map((tab) =>
+      desktopTabSummary(
+        { id: tab.id as number, url: tab.url as string, title: tab.title },
+        tab.id === target,
+        (origin) => isOriginApprovedForAutomation(origin) && !isExtensionAccountOrigin(origin),
+      ),
+    );
 }
 
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
@@ -4419,8 +4478,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
               const download = await startBrowserToolDownload(
                 tabId,
                 message['url'],
-                message['siteRules'] as
-                  import('@agiworkforce/cloud-contracts').WebDomainRules | undefined,
+                message['siteRules'] as WebDomainRules | undefined,
                 { signal: driver.signal, assertCurrent: () => assertTabOwnership(tabId) },
               );
               await assertTabOwnership(tabId);
@@ -4549,7 +4607,7 @@ async function handleMessageAsync(
         return { success: false, error: 'The application page changed before autofill.' };
       if (isRetiredManagedCloudOwner(owner))
         return { success: false, error: 'The application autofill account changed.' };
-      let document: import('./features/browser-tools/documentBridge').PageDocumentReference;
+      let document: PageDocumentReference;
       try {
         document = await readPageDocument(target.tabId, target.url, message.documentId);
       } catch {
@@ -4607,7 +4665,7 @@ async function handleMessageAsync(
 
     case 'MANAGED_CLOUD_AUTH_CHANGED': {
       const previousOwner = normalizeManagedCloudOwner(
-        (message as import('./types').ManagedCloudAuthChangedMessage).previousOwner,
+        (message as ManagedCloudAuthChangedMessage).previousOwner,
       );
       if (!previousOwner) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
@@ -4690,7 +4748,7 @@ async function handleMessageAsync(
     }
 
     case 'APPROVE_CONTEXT_HANDOFF': {
-      const approval = message as import('./types').ApproveContextHandoffMessage;
+      const approval = message as ApproveContextHandoffMessage;
       if (!/^ctx_[A-Za-z0-9_-]{8,80}$/.test(approval.handoffId)) {
         return {
           success: false,
@@ -4790,7 +4848,7 @@ async function handleMessageAsync(
     }
 
     case 'CANCEL_CONTEXT_HANDOFF': {
-      const cancellation = message as import('./types').CancelContextHandoffMessage;
+      const cancellation = message as CancelContextHandoffMessage;
       if (!/^ctx_[A-Za-z0-9_-]{8,80}$/.test(cancellation.handoffId)) {
         return {
           success: false,
@@ -4817,7 +4875,7 @@ async function handleMessageAsync(
     }
 
     case 'CHAT_MESSAGE': {
-      const chatMsg = message as import('./types').ChatMessageMessage;
+      const chatMsg = message as ChatMessageMessage;
       const owner = normalizeManagedCloudOwner(chatMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
@@ -4830,7 +4888,7 @@ async function handleMessageAsync(
     }
 
     case 'RESUME_CHAT_RUN': {
-      const resumeMsg = message as import('./types').ResumeChatRunMessage;
+      const resumeMsg = message as ResumeChatRunMessage;
       const owner = normalizeManagedCloudOwner(resumeMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
@@ -4850,7 +4908,7 @@ async function handleMessageAsync(
     }
 
     case 'ADOPT_CHAT_TURN': {
-      const adoptMsg = message as import('./types').AdoptChatTurnMessage;
+      const adoptMsg = message as AdoptChatTurnMessage;
       const owner = normalizeManagedCloudOwner(adoptMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       if (typeof adoptMsg.historyConversationId !== 'string') {
@@ -4898,7 +4956,7 @@ async function handleMessageAsync(
     }
 
     case 'RESOLVE_CHAT_APPROVAL': {
-      const approvalMsg = message as import('./types').ResolveChatApprovalMessage;
+      const approvalMsg = message as ResolveChatApprovalMessage;
       const owner = normalizeManagedCloudOwner(approvalMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
@@ -4911,7 +4969,7 @@ async function handleMessageAsync(
     }
 
     case 'RESOLVE_CHAT_INPUT': {
-      const inputMsg = message as import('./types').ResolveChatInputMessage;
+      const inputMsg = message as ResolveChatInputMessage;
       const owner = normalizeManagedCloudOwner(inputMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       try {
@@ -4924,7 +4982,7 @@ async function handleMessageAsync(
     }
 
     case 'RESOLVE_CHAT_TOOLS': {
-      const resolved = resolveChatToolHandoff(message as import('./types').ResolveChatToolsMessage);
+      const resolved = resolveChatToolHandoff(message as ResolveChatToolsMessage);
       return (
         resolved
           ? { success: true }
@@ -4933,14 +4991,14 @@ async function handleMessageAsync(
     }
 
     case 'GRANT_SITE_ONCE': {
-      const granted = grantSiteOnce(message as import('./types').GrantSiteOnceMessage);
+      const granted = grantSiteOnce(message as GrantSiteOnceMessage);
       return (
         granted ? { success: true } : { success: false, error: 'Invalid one-time site grant.' }
       ) as ExtensionResponse;
     }
 
     case 'REVOKE_SITE_ONCE': {
-      const revokeMsg = message as import('./types').RevokeSiteOnceMessage;
+      const revokeMsg = message as RevokeSiteOnceMessage;
       if (!isOneTimeSiteGrantId(revokeMsg.grantId))
         return { success: false, error: 'Invalid one-time site grant.' } as ExtensionResponse;
       await revokeOneTimeSiteGrant(revokeMsg.grantId);
@@ -4960,7 +5018,7 @@ async function handleMessageAsync(
     }
 
     case 'CANCEL_STREAM': {
-      const cancelMsg = message as import('./types').CancelStreamMessage;
+      const cancelMsg = message as CancelStreamMessage;
       const owner = normalizeManagedCloudOwner(cancelMsg.owner);
       if (!owner) return { success: false, error: 'Invalid Managed Cloud owner' };
       let streamKey: string;
@@ -5081,6 +5139,53 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
+    case 'GET_PAGE_ACCESS': {
+      const pageUrl = contentScriptPageUrl(sender, chrome.runtime.id);
+      if (!pageUrl) return { success: false, error: CONTENT_SENDER_REFUSAL } as ExtensionResponse;
+      await siteAllowlistReady;
+      const approved = isOriginApprovedForAutomation(new URL(pageUrl).origin);
+      const preference = approved
+        ? await chrome.storage.local.get(IN_PAGE_PANEL_ENABLED_STORAGE_KEY)
+        : {};
+      return {
+        success: true,
+        approved,
+        inPagePanel: approved && preference[IN_PAGE_PANEL_ENABLED_STORAGE_KEY] !== false,
+      } as ExtensionResponse;
+    }
+
+    case 'GET_AUTOFILL_PROFILE': {
+      const pageUrl = contentScriptPageUrl(sender, chrome.runtime.id);
+      if (
+        !pageUrl ||
+        !isOriginApprovedForAutomation(new URL(pageUrl).origin) ||
+        !isJobApplicationHostUrl(pageUrl)
+      )
+        return {
+          success: false,
+          error: 'Autofill is blocked here, this site is not on your approved-site allowlist',
+        } as ExtensionResponse;
+      return {
+        success: true,
+        profile: await loadAutofillProfile({ throwOnError: true }),
+      } as ExtensionResponse;
+    }
+
+    case 'AUTHORIZE_SITE_TOOL_DESTINATION': {
+      const pageUrl = contentScriptPageUrl(sender, chrome.runtime.id);
+      const destination = (message as { url?: unknown }).url;
+      const senderTabId = sender.tab?.id;
+      if (!pageUrl || typeof senderTabId !== 'number' || typeof destination !== 'string')
+        return { success: false, error: CONTENT_SENDER_REFUSAL } as ExtensionResponse;
+      try {
+        await authorizeBrowserToolTab(senderTabId);
+        await authorizeBrowserToolUrl(destination);
+        return { success: true } as ExtensionResponse;
+      } catch (error) {
+        return { success: false, error: errorText(error) } as ExtensionResponse;
+      }
+    }
+
     case 'CAPTURE_SCREENSHOT': {
       const requestedTab =
         sender.tab ?? (tabId ? await chrome.tabs.get(tabId).catch(() => undefined) : undefined);
@@ -5190,7 +5295,7 @@ async function handleMessageAsync(
     }
 
     case 'WEBMCP_DISCOVER_TOOLS': {
-      const discoveryRequest = message as import('./types').WebMCPDiscoverToolsMessage;
+      const discoveryRequest = message as WebMCPDiscoverToolsMessage;
       const pageGeneration = discoveryRequest.pageGeneration;
       if (
         pageGeneration !== undefined &&
@@ -5259,7 +5364,7 @@ async function handleMessageAsync(
     }
 
     case 'WEBMCP_TOOLS_CHANGED': {
-      const toolsMsg = message as import('./types').WebMCPToolsChangedMessage;
+      const toolsMsg = message as WebMCPToolsChangedMessage;
       const toolsTabId = sender?.tab?.id;
       if (typeof toolsTabId !== 'number') {
         return { success: false, error: 'WebMCP discovery requires a sender tab' };
@@ -5344,22 +5449,22 @@ async function handleMessageAsync(
     }
 
     case 'SAVE_SHORTCUT':
-      return handleSaveShortcut(message as import('./types').SaveShortcutMessage);
+      return handleSaveShortcut(message as SaveShortcutMessage);
 
     case 'LIST_SHORTCUTS':
       return handleListShortcuts();
 
     case 'DELETE_SHORTCUT':
-      return handleDeleteShortcut(message as import('./types').DeleteShortcutMessage);
+      return handleDeleteShortcut(message as DeleteShortcutMessage);
 
     case 'UPDATE_SHORTCUT':
-      return handleUpdateShortcut(message as import('./types').UpdateShortcutMessage);
+      return handleUpdateShortcut(message as UpdateShortcutMessage);
 
     case 'REPLAY_SHORTCUT':
-      return handleReplayShortcut(message as import('./types').ReplayShortcutMessage);
+      return handleReplayShortcut(message as ReplayShortcutMessage);
 
     case 'CREATE_SCHEDULED_TASK': {
-      const createMessage = message as import('./types').CreateScheduledTaskMessage;
+      const createMessage = message as CreateScheduledTaskMessage;
       const requiresManagedCloud = await scheduledTaskUsesManagedCloud(createMessage.task);
       const requestedOwner = requiresManagedCloud
         ? normalizeManagedCloudOwner(createMessage.owner)
@@ -5382,7 +5487,7 @@ async function handleMessageAsync(
     }
 
     case 'LIST_SCHEDULED_TASKS': {
-      const listMessage = message as import('./types').ListScheduledTasksMessage;
+      const listMessage = message as ListScheduledTasksMessage;
       const requestedOwner = normalizeManagedCloudOwner(listMessage.owner);
       const credential = requestedOwner
         ? await getExactManagedMutationCredential(requestedOwner)
@@ -5393,7 +5498,7 @@ async function handleMessageAsync(
     }
 
     case 'UPDATE_SCHEDULED_TASK': {
-      const updateMessage = message as import('./types').UpdateScheduledTaskMessage;
+      const updateMessage = message as UpdateScheduledTaskMessage;
       const changesExecution =
         Object.prototype.hasOwnProperty.call(updateMessage.updates, 'prompt') ||
         Object.prototype.hasOwnProperty.call(updateMessage.updates, 'shortcutId');
@@ -5462,7 +5567,7 @@ async function handleMessageAsync(
     }
 
     case 'DELETE_SCHEDULED_TASK': {
-      const deleteMessage = message as import('./types').DeleteScheduledTaskMessage;
+      const deleteMessage = message as DeleteScheduledTaskMessage;
       const existing = (await loadScheduledTasks()).find(
         (task) => task.id === deleteMessage.taskId,
       );
@@ -5591,14 +5696,14 @@ async function handleMessageAsync(
     }
 
     case 'SET_QUICK_MODE': {
-      const qmMsg = message as import('./types').SetQuickModeMessage;
+      const qmMsg = message as SetQuickModeMessage;
       quickModeCache = qmMsg.enabled === true;
       await chrome.storage.local.set({ agi_quick_mode: quickModeCache });
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
     }
 
     case 'SYNC_CONVERSATION': {
-      const syncMsg = message as import('./types').SyncConversationMessage;
+      const syncMsg = message as SyncConversationMessage;
       const syncOwner = normalizeManagedCloudOwner(syncMsg.owner);
       if (!syncOwner || isRetiredManagedCloudOwner(syncOwner)) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
@@ -5614,7 +5719,7 @@ async function handleMessageAsync(
     }
 
     case 'ENSURE_CLOUD_CONVERSATION': {
-      const ensureMsg = message as import('./types').EnsureCloudConversationMessage;
+      const ensureMsg = message as EnsureCloudConversationMessage;
       const ensureOwner = normalizeManagedCloudOwner(ensureMsg.owner);
       if (!ensureOwner || isRetiredManagedCloudOwner(ensureOwner)) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
@@ -5635,7 +5740,7 @@ async function handleMessageAsync(
     }
 
     case 'DELETE_CLOUD_CONVERSATION': {
-      const delCloudMsg = message as import('./types').DeleteCloudConversationMessage;
+      const delCloudMsg = message as DeleteCloudConversationMessage;
       const delOwner = normalizeManagedCloudOwner(delCloudMsg.owner);
       if (!delOwner || isRetiredManagedCloudOwner(delOwner)) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
@@ -5652,7 +5757,7 @@ async function handleMessageAsync(
     }
 
     case 'AGI_START_COMPUTER_USE': {
-      const cuMsg = message as import('./types').StartComputerUseMessage;
+      const cuMsg = message as StartComputerUseMessage;
       const cuTabId = cuMsg.tabId;
       const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.trim() : '';
       const cuRunId =
@@ -5902,7 +6007,7 @@ async function handleMessageAsync(
       ): Promise<boolean> => {
         const needsApproval = await actionNeedsApproval({
           alwaysAsk: requirement.alwaysAsk,
-          crucial: isCrucialAction(requirement),
+          crucial: asksInAutoMode(requirement),
           mode: permissionMode,
           allowedForTask: allowedForTask.has(toolName),
           readsOnly: readsWithoutActing(toolName),
@@ -6249,7 +6354,7 @@ async function handleMessageAsync(
     }
 
     case 'START_DOWNLOAD': {
-      const downloadMsg = message as import('./types').StartDownloadMessage;
+      const downloadMsg = message as StartDownloadMessage;
       const downloadTabId = await resolveBrowserToolTabId(tabId);
       if (downloadTabId === null) {
         return { success: false, error: 'No tab to download from' } as ExtensionResponse;
@@ -6274,7 +6379,7 @@ async function handleMessageAsync(
     }
 
     case 'REVEAL_DOWNLOAD': {
-      const revealMsg = message as import('./types').RevealDownloadMessage;
+      const revealMsg = message as RevealDownloadMessage;
       if (typeof revealMsg.downloadId !== 'number') {
         return {
           success: false,
@@ -6290,7 +6395,7 @@ async function handleMessageAsync(
     }
 
     case 'SET_PAGE_WATCH': {
-      const watchMsg = message as import('./types').SetPageWatchMessage;
+      const watchMsg = message as SetPageWatchMessage;
       const watchTabId = await resolveBrowserToolTabId(tabId);
       if (watchTabId === null) {
         return { success: false, error: 'No tab to watch' } as ExtensionResponse;
@@ -6308,7 +6413,7 @@ async function handleMessageAsync(
     }
 
     case 'READ_PAGE_CONSOLE': {
-      const consoleMsg = message as import('./types').ReadPageConsoleMessage;
+      const consoleMsg = message as ReadPageConsoleMessage;
       const consoleTabId = await resolveBrowserToolTabId(tabId);
       if (consoleTabId === null) {
         return { success: false, error: 'No tab to read the console of' } as ExtensionResponse;
@@ -6331,7 +6436,7 @@ async function handleMessageAsync(
     }
 
     case 'READ_PAGE_NETWORK': {
-      const networkMsg = message as import('./types').ReadPageNetworkMessage;
+      const networkMsg = message as ReadPageNetworkMessage;
       const networkTabId = await resolveBrowserToolTabId(tabId);
       if (networkTabId === null) {
         return { success: false, error: 'No tab to read requests for' } as ExtensionResponse;
@@ -6402,7 +6507,7 @@ async function handleMessageAsync(
           error: 'This action requires the extension UI.',
         } as ExtensionResponse;
       }
-      const guidanceMessage = message as import('./types').ComputerUseGuidanceMessage;
+      const guidanceMessage = message as ComputerUseGuidanceMessage;
       const lease = computerUseRuns.getActive();
       const queue = lease ? computerUseGuidance.get(lease.runId) : undefined;
       if (!lease || lease.runId !== guidanceMessage.runId || !queue) {
@@ -6443,7 +6548,7 @@ async function handleMessageAsync(
 
     case 'PAUSE_COMPUTER_USE':
     case 'RESUME_COMPUTER_USE': {
-      const takeoverMessage = message as import('./types').ComputerUseTakeoverMessage;
+      const takeoverMessage = message as ComputerUseTakeoverMessage;
       const lease = computerUseRuns.getActive();
       if (!lease || lease.runId !== takeoverMessage.runId) {
         return {
@@ -6501,7 +6606,7 @@ async function handleMessageAsync(
     }
 
     case 'CANCEL_COMPUTER_USE': {
-      const cancelMessage = message as import('./types').CancelComputerUseMessage;
+      const cancelMessage = message as CancelComputerUseMessage;
       const rawExpectedRunId = cancelMessage.runId;
       if (
         rawExpectedRunId !== undefined &&
@@ -6562,7 +6667,7 @@ async function handleMessageAsync(
     }
 
     case 'BRIDGE_URL_CHANGED': {
-      const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
+      const newUrl = (message as BridgeUrlChangedMessage).url?.trim();
       if (newUrl) {
         const validated = validateBridgeUrl(newUrl);
         if (!validated) {
@@ -7050,7 +7155,7 @@ async function captureCurrentPage(): Promise<void> {
 }
 
 async function handleChatMessage(
-  message: Omit<import('./types').ChatMessageMessage, 'owner'> & {
+  message: Omit<ChatMessageMessage, 'owner'> & {
     owner?: ManagedCloudOwner;
   },
   _sender: chrome.runtime.MessageSender,
@@ -7539,7 +7644,7 @@ async function handleChatMessage(
   }
 }
 
-async function handleResumeChatRun(message: import('./types').ResumeChatRunMessage): Promise<void> {
+async function handleResumeChatRun(message: ResumeChatRunMessage): Promise<void> {
   const { clientInstanceId, id } = message;
   let streamKey: string;
   try {
@@ -7613,7 +7718,7 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
 
 async function assertOwnedCallerBrowserAction(
   saved: NonNullable<Awaited<ReturnType<typeof readChromeCallerToolCustody>>>,
-  checkpoint: import('./features/computer-use/toolHandoff').CallerToolContinuation,
+  checkpoint: CallerToolContinuation,
   historyConversationId: string | undefined,
   streamKey: string,
   active: ActiveChatStream,
@@ -7659,7 +7764,7 @@ async function assertOwnedCallerBrowserAction(
 }
 
 async function resumeOwnedManagedRun(
-  message: import('./types').ResumeChatRunMessage,
+  message: ResumeChatRunMessage,
   streamKey: string,
   activeStream: ActiveChatStream,
   routing?: Exclude<ReturnType<typeof normalizeChromeManagedRoutingMetadata>, null>,
@@ -7729,9 +7834,7 @@ async function resumeOwnedManagedRun(
     };
     let visibleText = message.alreadyVisibleText;
     const replayPublicJournal = (
-      onCallerCheckpoint?: (
-        checkpoint: import('./features/computer-use/toolHandoff').CallerToolContinuation,
-      ) => void,
+      onCallerCheckpoint?: (checkpoint: CallerToolContinuation) => void,
     ) =>
       resumeChromeManagedRun(
         {
@@ -7765,9 +7868,7 @@ async function resumeOwnedManagedRun(
           },
         },
       );
-    const postReceipt = async (
-      receipt: import('@agiworkforce/cloud-contracts').CallerToolResumeRequest,
-    ) =>
+    const postReceipt = async (receipt: CallerToolResumeRequest) =>
       await executeChromeManagedCallerResume(
         {
           id,
@@ -7834,8 +7935,7 @@ async function resumeOwnedManagedRun(
       | Awaited<ReturnType<typeof executeChromeManagedCallerResume>> = { status: 'success' };
     const posted = new Set<number>();
     for (let step = 0; step <= MAX_CALLER_TOOL_STEPS; step += 1) {
-      let checkpoint:
-        import('./features/computer-use/toolHandoff').CallerToolContinuation | undefined;
+      let checkpoint: CallerToolContinuation | undefined;
       result = await replayPublicJournal(
         savedCaller
           ? (value) => {
@@ -7996,7 +8096,7 @@ async function resumeOwnedManagedRun(
 }
 
 async function handleResolveChatApproval(
-  message: import('./types').ResolveChatApprovalMessage | import('./types').ResolveChatInputMessage,
+  message: ResolveChatApprovalMessage | ResolveChatInputMessage,
 ): Promise<void> {
   const { clientInstanceId, id } = message;
   let streamKey: string;

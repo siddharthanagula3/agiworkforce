@@ -39,3 +39,7 @@ export function crucialActionCategory(
 export function isCrucialAction(requirement: ActionApprovalRequirement): boolean {
   return crucialActionCategory(requirement) !== null;
 }
+
+export function asksInAutoMode(requirement: ActionApprovalRequirement): boolean {
+  return isCrucialAction(requirement) || requirement.reason === 'unidentified_input';
+}

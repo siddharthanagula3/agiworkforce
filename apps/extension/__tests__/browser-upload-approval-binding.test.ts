@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { actionNeedsApproval } from '../src/features/computer-use/askBeforeActing';
-import { isCrucialAction } from '../src/features/computer-use/crucialActions';
+import { asksInAutoMode } from '../src/features/computer-use/crucialActions';
 import { readsWithoutActing } from '../src/features/computer-use/approvalPolicy';
 import { normalizeApprovedSiteOrigin } from '../src/features/options/site-allowlist';
 import { isTrustedExtensionPageSender } from '../src/background/policy';
@@ -81,7 +81,7 @@ function harness() {
     chrome: chromeMock,
     APPROVAL_TIMEOUT_MS,
     permissionMode: 'full',
-    isCrucialAction,
+    asksInAutoMode,
     allowedForTask: new Set<string>(),
     readsWithoutActing,
     actionNeedsApproval,

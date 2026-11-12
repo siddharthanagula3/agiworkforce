@@ -11,7 +11,7 @@ import { randomUUID } from 'crypto';
 import * as https from 'https';
 import { URL } from 'url';
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
-import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
+import { cloudUtilityModel, LocalModelSelectedError } from '../core/cloudModelBoundary';
 import {
   TierInfoSchema,
   TurnSettlementSchema,
@@ -541,7 +541,9 @@ export function getCloudWebOrigin(): string {
 }
 
 function getModel(): string {
-  return normalizeConfiguredModelId(Config.model());
+  const selected = cloudUtilityModel();
+  if (selected.route === 'local') throw new LocalModelSelectedError(selected.model);
+  return selected.model;
 }
 
 export function buildCloudUtilityChatCompletionRequest(
@@ -782,6 +784,7 @@ export async function streamChatCompletion(
   overrideModel?: string,
   billing: ManagedRequestBilling = 'settle-now',
 ): Promise<void> {
+  const requestBody = buildCloudUtilityChatCompletionRequest(messages, overrideModel);
   const credential = await getCloudCredential(secrets);
   if (credential.kind === 'none') {
     throw new AgiWorkforceApiError(
@@ -794,7 +797,6 @@ export async function streamChatCompletion(
   }
 
   const endpoint = getCloudApiEndpoint();
-  const requestBody = buildCloudUtilityChatCompletionRequest(messages, overrideModel);
   const model = requestBody.model;
 
   const bodyStr = JSON.stringify(requestBody);

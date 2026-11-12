@@ -1067,10 +1067,10 @@ there, and `agi update --install` verifies it against the same pins, which
 A `v-cli-*` tag stops in `validate-version`, before the build matrix runs,
 unless every key pinned there is a readable P-256 public key.
 
-| Location                                            | Role               | Holder     |
-| --------------------------------------------------- | ------------------ | ---------- |
-| GitHub Actions secret `AGI_CLI_RELEASE_SIGNING_KEY` | deployment copy    | CI         |
-| _unfilled_, offline escrow                          | recovery authority | _unfilled_ |
+| Location                                                       | Role               | Holder     |
+| -------------------------------------------------------------- | ------------------ | ---------- |
+| `cli-release` environment secret `AGI_CLI_RELEASE_SIGNING_KEY` | deployment copy    | CI         |
+| _unfilled_, offline escrow                                     | recovery authority | _unfilled_ |
 
 `BLOCKED_BY_HUMAN`: the key pair does not exist yet, so every install and every
 `agi update --install` refuses until the owner generates it offline, stores the

@@ -14,7 +14,7 @@ import {
   actionNeedsApproval,
   type BrowserPermissionMode,
 } from '../src/features/computer-use/askBeforeActing';
-import { isCrucialAction } from '../src/features/computer-use/crucialActions';
+import { asksInAutoMode } from '../src/features/computer-use/crucialActions';
 import { describeComputerUseAction } from '../src/features/computer-use/describeAction';
 import { APPROVAL_TIMEOUT_MS } from '../src/features/computer-use/agentLoop';
 import { normalizeApprovedSiteOrigin } from '../src/features/options/site-allowlist';
@@ -78,7 +78,7 @@ function harness(permissionMode: BrowserPermissionMode, siteApproved = true) {
     },
     APPROVAL_TIMEOUT_MS,
     permissionMode,
-    isCrucialAction,
+    asksInAutoMode,
     allowedForTask: new Set<string>(),
     readsWithoutActing,
     actionNeedsApproval,

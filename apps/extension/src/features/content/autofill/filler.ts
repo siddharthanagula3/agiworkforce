@@ -574,10 +574,3 @@ export async function autofillAshby(
     errors,
   };
 }
-
-export {
-  AUTOFILL_PROFILE_STORAGE_KEY,
-  clearAutofillProfile,
-  loadAutofillProfile,
-  saveAutofillProfile,
-} from './profile-storage';

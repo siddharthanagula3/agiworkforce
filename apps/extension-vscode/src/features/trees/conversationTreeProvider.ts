@@ -4,6 +4,8 @@ import type { ThreadListParams, ThreadReadResponse, ThreadSummary } from '@agiwo
 import {
   CLI_NOT_EXECUTABLE_MARKER,
   CLI_NOT_FOUND_MARKER,
+  MANAGE_WORKSPACE_TRUST_COMMAND,
+  WorkspaceNotTrustedError,
   type LocalRuntimeClient,
   type ThreadSearchResults,
 } from '../../integrations/localRuntimeClient';
@@ -46,23 +48,29 @@ export class ConversationTreeErrorItem extends vscode.TreeItem {
   constructor(
     public readonly folderName: string,
     public readonly reason: string,
+    public readonly restricted = false,
   ) {
-    super(SESSION_LISTING_FAILURE_LABEL, vscode.TreeItemCollapsibleState.None);
+    const label = restricted ? t('webview.restrictedMode') : SESSION_LISTING_FAILURE_LABEL;
+    super(label, vscode.TreeItemCollapsibleState.None);
     this.description = folderName;
     this.tooltip = new vscode.MarkdownString(
-      `${reason}\n\nThe AGI CLI could not list this workspace's developer sessions, so this list is incomplete. Select this item to open runtime setup.`,
+      restricted
+        ? `${reason}\n\nSelect this item to manage workspace trust.`
+        : `${reason}\n\nThe AGI CLI could not list this workspace's developer sessions, so this list is incomplete. Select this item to open runtime setup.`,
     );
-    this.iconPath = new vscode.ThemeIcon('warning');
+    this.iconPath = new vscode.ThemeIcon(restricted ? 'shield' : 'warning');
     this.accessibilityInformation = {
-      label: `${SESSION_LISTING_FAILURE_LABEL} for ${folderName}: ${reason}`,
+      label: `${label} for ${folderName}: ${reason}`,
       role: 'treeitem',
     };
     this.contextValue = 'conversationListingFailure';
-    this.command = {
-      command: 'agi-workforce.openSettings',
-      title: 'Open Runtime Setup',
-      arguments: ['configuration'],
-    };
+    this.command = restricted
+      ? { command: MANAGE_WORKSPACE_TRUST_COMMAND, title: t('webview.manageTrust') }
+      : {
+          command: 'agi-workforce.openSettings',
+          title: 'Open Runtime Setup',
+          arguments: ['configuration'],
+        };
   }
 }
 
@@ -75,6 +83,7 @@ export interface ResolvedDeveloperSession {
 export interface SessionListingFailure {
   folderName: string;
   reason: string;
+  restricted?: boolean;
 }
 
 export type SessionSearchHit = ThreadSearchResults['hits'][number];
@@ -131,7 +140,12 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     const threads = await this.getThreads();
     return [
       ...this.listingFailures.map(
-        (failure) => new ConversationTreeErrorItem(failure.folderName, failure.reason),
+        (failure) =>
+          new ConversationTreeErrorItem(
+            failure.folderName,
+            failure.reason,
+            failure.restricted === true,
+          ),
       ),
       ...threads.map((thread) => new ConversationTreeItem(thread)),
     ];
@@ -174,6 +188,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
           this.listingFailures.push({
             folderName: folder.name,
             reason: describeListingFailure(error),
+            ...(error instanceof WorkspaceNotTrustedError ? { restricted: true } : {}),
           });
           return [];
         }
