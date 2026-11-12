@@ -860,6 +860,27 @@ the first signed build as a stable 1.0 rather than a preview.
 **Impact** NON-BLOCKING (either choice can ship)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [CLI] Copilot sign-in: stay removed, or add a real route
+
+**Why founder assistance is required** Whether the CLI offers a provider at
+all is a product call, and sending requests to GitHub's service with a Copilot
+sign-in from a third-party tool is a terms question only the owner can accept.
+**What changed** Until 2026-11-12 a Copilot sign-in silently took every turn
+addressed to another provider, even with `--provider` set and a working key
+for that provider (finding MR-03 in the 2026-11-11 model routing review). That
+capture is removed. The model catalog has no Copilot provider, so nothing
+could then use the sign-in; first-run setup no longer offers it and
+`agi login copilot` says it is not available. `agi logout --all` still deletes
+a token saved by an earlier build.
+**The consequence either way** Leaving it removed means a user with only a
+Copilot subscription has no way to use it in the CLI. Adding it back properly
+means a catalog provider entry with its own model list and trust label, an
+explicit `--provider` route, and the owner's acceptance of GitHub's terms for
+that use.
+**Exact action** Choose "stay removed" (no change) or "add a Copilot route".
+**Impact** NON-BLOCKING (the CLI ships either way)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
 ## [Release] Cut signed releases so the verification instructions work
 
 **Why founder assistance is required**
