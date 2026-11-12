@@ -23,6 +23,7 @@ import {
   validateWorkspaceContextFile,
 } from '../features/trees';
 import { MemoryTreeProvider, MemoryFactItem } from '../memory/memoryTreeProvider';
+import { type MemoryFact } from '../memory/memoryStore';
 import {
   APPROVE_CLOUD_TASK_COMMAND,
   CloudTasksTreeProvider,
@@ -811,6 +812,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     );
     return picked?.thread;
   };
+  const pickMemoryFact = async (placeHolder: string): Promise<MemoryFact | undefined> => {
+    const store = getAccountMemoryStore();
+    if (store === undefined) {
+      vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
+      return undefined;
+    }
+    const facts = store.cachedFacts();
+    if (facts.length === 0) {
+      vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: no memories are saved yet.`);
+      return undefined;
+    }
+    const picked = await vscode.window.showQuickPick(
+      facts.map((fact) => ({ label: fact.text.slice(0, 120), fact })),
+      { placeHolder, ignoreFocusOut: true },
+    );
+    return picked?.fact;
+  };
   const revealFirstPartyChat = async (): Promise<void> => {
     try {
       await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
@@ -1209,6 +1227,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       }
       await clearAccountTierCache(context);
+      await getAccountMemoryStore()?.forgetLocalCache();
       artifactContentProvider.clear();
       artifactsTreeProvider.refresh();
       sidebarProvider.refreshAccountPresentation();
@@ -1346,8 +1365,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     ),
     register('agi-workforce.addTerminalOutputToChat', () => sidebarProvider.attachTerminalOutput()),
 
-    register('agi-workforce.openConversation', async (idOrItem: string | ConversationTreeItem) => {
-      const id = typeof idOrItem === 'string' ? idOrItem : idOrItem.thread.id;
+    register('agi-workforce.openConversation', async (idOrItem?: string | ConversationTreeItem) => {
+      const id =
+        typeof idOrItem === 'string'
+          ? idOrItem
+          : (idOrItem?.thread ?? (await pickDeveloperSession('Open which session?')))?.id;
+      if (id === undefined) return;
       await revealFirstPartyChat();
       await sidebarProvider.resumeConversation(id);
     }),
@@ -1395,6 +1418,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.forkConversation', async (item?: ConversationTreeItem) => {
+      const requestingChat = focusedChat();
       const thread = item?.thread ?? (await pickDeveloperSession('Fork which session?'));
       if (thread === undefined) return;
       const title = await vscode.window.showInputBox({
@@ -1409,6 +1433,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
       if (forkedId === null) {
         vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Developer session not found.`);
+        return;
+      }
+      if (requestingChat !== undefined && requestingChat !== sidebarProvider) {
+        await requestingChat.resumeConversation(forkedId);
         return;
       }
       await revealFirstPartyChat();
@@ -2023,10 +2051,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
     }),
 
-    register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
+    register('agi-workforce.memory.edit', async (item?: MemoryFactItem) => {
+      const fact = item?.fact ?? (await pickMemoryFact('Edit which memory?'));
+      if (fact === undefined) return;
       const newText = await vscode.window.showInputBox({
         title: `${PRODUCT_NAMES.code}, Edit Memory Fact`,
-        value: item.fact.text,
+        value: fact.text,
         prompt: 'Update this fact in your AGI Cloud account. The change reaches every AGI client.',
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -2034,13 +2064,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           return read.ok ? undefined : read.message;
         },
       });
-      if (!newText || newText.trim() === item.fact.text) return;
+      if (!newText || newText.trim() === fact.text) return;
       const store = getAccountMemoryStore();
       if (store === undefined) {
         vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
         return;
       }
-      const updated = await store.update(item.fact.id, newText.trim());
+      const updated = await store.update(fact.id, newText.trim());
       if (updated.applied) {
         vscode.window.showInformationMessage('Updated in your account, on every client.');
       } else {
@@ -2050,9 +2080,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
 
-    register('agi-workforce.memory.delete', async (item: MemoryFactItem) => {
+    register('agi-workforce.memory.delete', async (item?: MemoryFactItem) => {
+      const fact = item?.fact ?? (await pickMemoryFact('Delete which memory?'));
+      if (fact === undefined) return;
       const confirm = await vscode.window.showWarningMessage(
-        `Delete this memory from your AGI Cloud account? It disappears from the web app, the CLI and mobile too, and cannot be recovered.\n\n"${item.fact.text.slice(0, 80)}${item.fact.text.length > 80 ? '…' : ''}"`,
+        `Delete this memory from your AGI Cloud account? It disappears from the web app, the CLI and mobile too, and cannot be recovered.\n\n"${fact.text.slice(0, 80)}${fact.text.length > 80 ? '…' : ''}"`,
         { modal: true },
         'Delete',
       );
@@ -2062,7 +2094,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
           return;
         }
-        const removed = await store.remove(item.fact.id);
+        const removed = await store.remove(fact.id);
         vscode.window.showInformationMessage(
           removed.applied
             ? 'Deleted from your account, on every client.'

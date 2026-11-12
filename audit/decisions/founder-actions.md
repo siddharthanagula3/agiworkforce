@@ -860,6 +860,27 @@ the first signed build as a stable 1.0 rather than a preview.
 **Impact** NON-BLOCKING (either choice can ship)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
+## [CLI] Copilot sign-in: stay removed, or add a real route
+
+**Why founder assistance is required** Whether the CLI offers a provider at
+all is a product call, and sending requests to GitHub's service with a Copilot
+sign-in from a third-party tool is a terms question only the owner can accept.
+**What changed** Until 2026-11-12 a Copilot sign-in silently took every turn
+addressed to another provider, even with `--provider` set and a working key
+for that provider (finding MR-03 in the 2026-11-11 model routing review). That
+capture is removed. The model catalog has no Copilot provider, so nothing
+could then use the sign-in; first-run setup no longer offers it and
+`agi login copilot` says it is not available. `agi logout --all` still deletes
+a token saved by an earlier build.
+**The consequence either way** Leaving it removed means a user with only a
+Copilot subscription has no way to use it in the CLI. Adding it back properly
+means a catalog provider entry with its own model list and trust label, an
+explicit `--provider` route, and the owner's acceptance of GitHub's terms for
+that use.
+**Exact action** Choose "stay removed" (no change) or "add a Copilot route".
+**Impact** NON-BLOCKING (the CLI ships either way)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
 ## [Release] Cut signed releases so the verification instructions work
 
 **Why founder assistance is required**
@@ -1112,3 +1133,32 @@ been pushed.
 **What remains after founder action** The Preview browser pass for the rows registered in `audit/prior-audits/signed-in-web-audit-2026-10-03.md` and `audit/prior-audits/public-comparison-2026-10-04.md`, and the signed-in Preview session of Study that gates `L18-D3`.
 **Impact** EXTERNAL-APPROVAL
 **Status** FOUNDER ACTION REQUIRED
+
+## [Chrome extension] Confirm the 2026-11-12 store-policy calls before the first submission
+
+**Why founder assistance is required**
+A Chrome Web Store policy review on 2026-11-12 found four places where the listing or the privacy
+text could be read as untrue. The lead settled them with reversible calls so the listing could be
+fixed now; each is a product or disclosure call the founder reserves.
+**Decisions taken, reversible**
+
+1. Homepage URL is the site root, `https://agiworkforce.com`, for the first submission, because
+   `/chrome-extension` says the extension is coming soon. It moves to `/chrome-extension` after
+   approval (`docs/runbooks/chrome-web-store-publish.md`, First submission step 14).
+2. A page attach keeps sending the current contents of the page's visible form fields (except
+   password, payment card, one-time code, PIN and Social Security number fields), and this is now
+   disclosed in the extension's Data handling text, the listing and `/privacy`, instead of removed.
+3. Stricter wins on the Privacy tab: Personal communications and Location are ticked (page content
+   the user attaches or approves for browser control; time-zone name only).
+4. `/privacy` takes the change as a further, material revision of its unpublished 2026-11-11
+   version rather than a new 2026-11-12 version (`docs/compliance/policy-versions.json`).
+   **Exact action** Say yes, or name the call to reverse. To stop sending the time zone instead of
+   ticking Location, or to stop sending form contents instead of disclosing them, ask for the code
+   change; the listing and `/privacy` then change back with it.
+   **Where** `apps/extension/docs/chrome-web-store-listing.md` (Data use disclosures, Listing fields).
+   **Needed input** One answer.
+   **How to verify completion** The Dashboard's Privacy tab matches the listing document when the item
+   is submitted.
+   **What remains after founder action** Nothing in engineering unless a call is reversed.
+   **Impact** NON-BLOCKING
+   **Status** FOUNDER ACTION REQUIRED

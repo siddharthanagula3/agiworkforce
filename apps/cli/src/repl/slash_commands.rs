@@ -367,6 +367,9 @@ pub(super) async fn handle_slash_command(
             }
         }
         "/plan" if arg.is_empty() || arg == "on" => {
+            if session.permission_mode != crate::cli_options::PermissionMode::Plan {
+                session.plan_return_mode = Some(session.permission_mode);
+            }
             session.permission_mode = crate::cli_options::PermissionMode::Plan;
             session.plan_mode = true;
             session.plan_approved = false;
@@ -375,10 +378,17 @@ pub(super) async fn handle_slash_command(
             );
         }
         "/plan" if arg == "off" => {
-            session.permission_mode = crate::cli_options::PermissionMode::Default;
+            session.permission_mode = session
+                .plan_return_mode
+                .take()
+                .unwrap_or(crate::cli_options::PermissionMode::Default)
+                .within(session.pinned_permission_mode);
             session.plan_mode = false;
             session.reset_plan_state();
-            output::print_info("Plan mode OFF. All tools available.");
+            output::print_info(&format!(
+                "Plan mode OFF. Back to {} mode.",
+                session.permission_mode.name()
+            ));
         }
         "/plan" if arg == "accept" || arg == "approve" => {
             if !matches!(
@@ -949,6 +959,30 @@ mod tests {
             }
             _ => panic!("expected a workflow prompt"),
         }
+    }
+
+    #[tokio::test]
+    async fn leaving_plan_mode_restores_the_mode_it_was_entered_from() {
+        use crate::cli_options::PermissionMode;
+        let mut session = crate::agent::AgentSession::new(
+            crate::model_catalog::default_model(),
+            &crate::context::gather_system_context(),
+            None,
+        );
+        session.permission_mode = PermissionMode::AcceptEdits;
+        let mut config = crate::config::CliConfig::default();
+
+        handle_slash_command("/plan", &mut session, &mut config).await;
+        assert_eq!(session.permission_mode, PermissionMode::Plan);
+        handle_slash_command("/plan on", &mut session, &mut config).await;
+        handle_slash_command("/plan off", &mut session, &mut config).await;
+        assert_eq!(session.permission_mode, PermissionMode::AcceptEdits);
+        assert!(!session.plan_mode);
+        assert_eq!(session.plan_return_mode, None);
+
+        session.permission_mode = PermissionMode::Default;
+        handle_slash_command("/plan off", &mut session, &mut config).await;
+        assert_eq!(session.permission_mode, PermissionMode::Default);
     }
 
     #[test]

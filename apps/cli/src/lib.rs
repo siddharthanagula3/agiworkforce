@@ -241,8 +241,8 @@ pub struct Cli {
     #[arg(long)]
     stdin: bool,
 
-    /// Continue conversation from last session
-    #[arg(short = 'c', long)]
+    /// Continue the newest session started in this project
+    #[arg(short = 'c', long, alias = "continue")]
     continue_session: bool,
 
     /// Print output without any formatting (raw text only)
@@ -343,7 +343,9 @@ pub struct Cli {
     #[arg(long)]
     team: bool,
 
-    /// Effort level preset: low (fast/cheap), medium (default), high (thorough), max (exhaustive)
+    /// Reasoning effort for this run, plus a run preset: low (at most 3 turns, 2048 output
+    /// tokens), medium (no preset), high (at most 50 turns, 16384 tokens), max (at most 100
+    /// turns, 32768 tokens). --max-turns and --max-tokens win over the preset.
     #[arg(long, value_name = "LEVEL", value_enum)]
     effort: Option<EffortLevel>,
 
@@ -503,17 +505,43 @@ pub struct Cli {
     dump_system_prompt: bool,
 }
 
-/// Effort level presets that bundle max_turns + max_tokens + temperature.
+/// Reasoning effort, with the turn and output limits each level presets.
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum EffortLevel {
-    /// Fast responses, minimal tool use (max_turns=3, max_tokens=2048)
+    /// Low reasoning effort, at most 3 turns and 2048 output tokens
     Low,
-    /// Default balanced settings
+    /// Medium reasoning effort, no turn or output preset
     Medium,
-    /// Thorough analysis and implementation (max_turns=50, max_tokens=16384)
+    /// High reasoning effort, at most 50 turns and 16384 output tokens
     High,
-    /// Exhaustive, use all available context (max_turns=100, max_tokens=32768)
+    /// Maximum reasoning effort, at most 100 turns and 32768 output tokens
     Max,
+}
+
+impl EffortLevel {
+    fn effort(self) -> design_system::Effort {
+        match self {
+            EffortLevel::Low => design_system::Effort::Low,
+            EffortLevel::Medium => design_system::Effort::Medium,
+            EffortLevel::High => design_system::Effort::High,
+            EffortLevel::Max => design_system::Effort::Max,
+        }
+    }
+}
+
+fn saved_effort(config: &config::CliConfig) -> Option<design_system::Effort> {
+    config
+        .default
+        .reasoning_effort
+        .as_deref()
+        .and_then(design_system::Effort::from_config_value)
+}
+
+pub(crate) fn apply_saved_effort(session: &mut agent::AgentSession, config: &config::CliConfig) {
+    let effort = saved_effort(config);
+    session.effort = effort;
+    session.thinking_budget_tokens =
+        effort.and_then(design_system::Effort::thinking_budget_for_anthropic);
 }
 
 /// Coding CLI whose settings `agi migrate` can import.
@@ -954,14 +982,20 @@ enum Command {
     },
     /// Sign in to your AGI account, or store a provider API key.
     Login {
-        /// Omit for your AGI account; name a provider (anthropic, openai, google, …) to enter its API key under Your Key; copilot uses its device flow.
+        /// Omit for your AGI account; name a provider (anthropic, openai, google, …) to enter its API key under Your Key.
         provider: Option<String>,
     },
-    /// Logout from AGI cloud.
+    /// Sign out of your account on this machine. Saved provider API keys stay.
     Logout {
-        /// Sign out of your AGI account only; provider API keys you saved stay.
+        /// Also remove every saved provider API key and any GitHub Copilot sign-in an earlier version saved, and run first-time setup again on the next start.
         #[arg(long)]
+        all: bool,
+        /// Kept for scripts that pass it; signing out of the account only is the default.
+        #[arg(long, hide = true, conflicts_with = "all")]
         account_only: bool,
+        /// With --all, remove everything without asking.
+        #[arg(long, requires = "all")]
+        yes: bool,
     },
     /// Show authentication status for all configured providers.
     AuthStatus,
@@ -1730,7 +1764,11 @@ fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
         }
         BackgroundSubcommand::Stop { id } => {
             let run = background::stop(id)?;
-            println!("Stopping background run {}.", run.id);
+            println!(
+                "Stopped background run {} ({}).",
+                run.id,
+                background::state(&run).label()
+            );
             Ok(())
         }
         BackgroundSubcommand::Rm { id } => {
@@ -1776,6 +1814,11 @@ fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
         }
         BackgroundSubcommand::Supervise { id } => background::supervise(id),
     }
+}
+
+/// The commands that diagnose or repair a config file the CLI cannot read.
+fn runs_without_a_valid_config(cli: &Cli) -> bool {
+    matches!(cli.command, Some(Command::Doctor { .. } | Command::Init))
 }
 
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
@@ -2103,6 +2146,16 @@ enum McpSubcommand {
         /// Registry name of the server to show.
         name: String,
     },
+    /// Turn a registered MCP server back on for new sessions.
+    Enable {
+        /// Registry name of the server to turn on.
+        name: String,
+    },
+    /// Turn a registered MCP server off without removing it.
+    Disable {
+        /// Registry name of the server to turn off.
+        name: String,
+    },
     /// Let a server's tools, or one tool, run without asking.
     Allow {
         /// Registry name of the server.
@@ -2380,6 +2433,11 @@ fn resolve_resume_payload(reference: &str, fork: bool) -> Result<ResumePayload> 
             // Validate the source before creating a fork so unknown legacy
             // authority cannot be copied into an executable session.
             managed_resume_payload_from_resolved(source.clone())?;
+            if let Some(notice) = sessions::open_db().ok().and_then(|conn| {
+                sessions::kept_copies_notice(&conn, &source.summary.session_id)
+            }) {
+                eprintln!("{notice}");
+            }
             if fork {
                 managed_resume_payload_from_resolved(
                     runtime::session_control::fork_managed_session(reference)?,
@@ -2417,8 +2475,51 @@ fn resumed_model(managed: Option<&ManagedResumeSession>, fallback: &str) -> Stri
         .unwrap_or_else(|| fallback.to_string())
 }
 
+async fn open_resume_subcommands_interactively(cli: &mut Cli) -> Result<()> {
+    match cli.command.take() {
+        Some(Command::Resume {
+            session_id,
+            cloud,
+            teleport,
+        }) => match resume_subcommand_target(session_id.as_deref(), cloud, teleport).await? {
+            Some(id) => cli.resume = Some(id),
+            None => cli.continue_session = true,
+        },
+        Some(Command::Fork { session_id }) => {
+            cli.resume = Some(session_id);
+            cli.fork_session = true;
+        }
+        other => cli.command = other,
+    }
+    Ok(())
+}
+
+async fn resume_subcommand_target(
+    session_id: Option<&str>,
+    cloud: bool,
+    teleport: bool,
+) -> Result<Option<String>> {
+    if teleport {
+        return Ok(Some(teleport_code_session(session_id).await?));
+    }
+    let Some(id) = session_id else {
+        return Ok(None);
+    };
+    if cloud {
+        return Ok(Some(adopt_hosted_conversation(id).await?));
+    }
+    match resolve_resume_payload(id, false) {
+        Ok(_) => Ok(Some(id.to_string())),
+        Err(local_error) => match adopt_hosted_conversation(id).await {
+            Ok(adopted) => Ok(Some(adopted)),
+            Err(_) => Err(local_error),
+        },
+    }
+}
+
 fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
-    if let Some(resolved) = runtime::session_control::latest_managed_session()? {
+    let project_dir = std::env::current_dir()?;
+    if let Some(resolved) = runtime::session_control::latest_project_session(&project_dir)? {
         let session_id = resolved.summary.session_id.clone();
         return Ok(Some((
             session_id,
@@ -4736,24 +4837,6 @@ async fn models_json_with_discovery(config: &config::CliConfig) -> serde_json::V
     serde_json::Value::Array(models)
 }
 
-/// The URL of a registered remote MCP server, or an error naming why the
-/// OAuth commands do not apply to it.
-fn remote_server_url(registry: &crate::mcp::registry::McpRegistry, name: &str) -> Result<String> {
-    let Some(row) = registry.list().into_iter().find(|row| row.name == name) else {
-        anyhow::bail!(
-            "no MCP server named '{}' in the registry",
-            terminal_text::sanitize_terminal_text(name)
-        )
-    };
-    if row.kind == "stdio" {
-        anyhow::bail!(
-            "'{}' is a stdio server; OAuth applies to remote (--url) servers only",
-            terminal_text::sanitize_terminal_text(name)
-        );
-    }
-    Ok(row.target)
-}
-
 fn run_hooks_command(action: Option<&HooksSubcommand>) -> Result<()> {
     // One implementation for `agi hooks` and the TUI's `/hooks`, so a hook
     // added from either lands in the same file under the same event name.
@@ -4789,7 +4872,12 @@ async fn run_update_install(
     let executable = std::env::current_exe()
         .and_then(std::fs::canonicalize)
         .context("could not tell where this agi is installed")?;
-    let plan = update_check::InstallPlan::new(running, release, &executable);
+    let mut plan = update_check::InstallPlan::new(running, release, &executable);
+    if plan.has_work() {
+        plan.target = plan
+            .target
+            .and_then(update_check::writable_install_directory);
+    }
     for line in plan.render() {
         println!("{line}");
     }
@@ -4816,6 +4904,32 @@ async fn run_update_install(
         release.version
     );
     Ok(())
+}
+
+fn account_sign_out_message(signed_out: &str) -> String {
+    format!("{signed_out} Saved provider API keys stay; `agi logout --all` removes them.")
+}
+
+/// The in-session `/logout`: the account only, as a bare `agi logout` does.
+pub(crate) async fn sign_out_of_account_keeping_keys() -> Result<String> {
+    let signed_out = crate::app_server::account::sign_out_of_account().await?;
+    Ok(account_sign_out_message(&signed_out.message()))
+}
+
+fn mcp_switch_message(name: &str, enabled: bool, changed: bool) -> String {
+    let shown = terminal_text::sanitize_terminal_text(name);
+    match (enabled, changed) {
+        (true, true) => {
+            format!("Turned on MCP server '{shown}'. New sessions start it; `/mcp restart` starts it in a running one.")
+        }
+        (true, false) => format!("MCP server '{shown}' is already on."),
+        (false, true) => {
+            format!(
+                "Turned off MCP server '{shown}'. A running session keeps it until `/mcp restart`."
+            )
+        }
+        (false, false) => format!("MCP server '{shown}' is already off."),
+    }
 }
 
 async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
@@ -5040,6 +5154,12 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             let _ = connection.shutdown().await;
             Ok(())
         }
+        McpSubcommand::Enable { name } | McpSubcommand::Disable { name } => {
+            let enabled = matches!(action, McpSubcommand::Enable { .. });
+            let changed = crate::mcp::registry::set_server_enabled(name, enabled)?;
+            println!("{}", mcp_switch_message(name, enabled, changed));
+            Ok(())
+        }
         McpSubcommand::Allow { server, tool }
         | McpSubcommand::Ask { server, tool }
         | McpSubcommand::Block { server, tool }
@@ -5080,13 +5200,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             Ok(())
         }
         McpSubcommand::Login { name } => {
-            remote_server_url(&registry_file, name)?;
-            let entry = registry_file
-                .entry(name)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
-            let config: crate::mcp::McpServerConfig = serde_json::from_value(entry)
-                .with_context(|| format!("registry entry for '{name}' is not a server config"))?;
+            let (config, _) = find_sign_in_target(name, &registry_file)?;
             crate::mcp::login_to_remote_server(name, &config).await?;
             println!(
                 "Authorized MCP server '{}'. The token is stored in the OS credential store.",
@@ -5095,12 +5209,8 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             Ok(())
         }
         McpSubcommand::Logout { name } => {
-            let url = remote_server_url(&registry_file, name)?;
-            let config: Option<crate::mcp::McpServerConfig> = registry_file
-                .entry(name)
-                .cloned()
-                .and_then(|entry| serde_json::from_value(entry).ok());
-            let outcome = crate::mcp::logout_from_remote_server(&url, config.as_ref()).await?;
+            let (config, url) = find_sign_in_target(name, &registry_file)?;
+            let outcome = crate::mcp::logout_from_remote_server(&url, Some(&config)).await?;
             let shown = terminal_text::sanitize_terminal_text(name);
             match outcome.revocation {
                 None => println!("No OAuth token was stored for '{shown}'."),
@@ -5302,6 +5412,20 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
 // Session subcommand handler, replay / branch points
 // ---------------------------------------------------------------------------
 
+fn kept_session_copy_lines(copies: &[std::path::PathBuf]) -> Vec<String> {
+    copies
+        .iter()
+        .map(|copy| {
+            format!(
+                "kept copy, open it with: agi --resume {}",
+                terminal_text::sanitize_terminal_text(&sandbox::shell_quote(
+                    &copy.to_string_lossy()
+                ))
+            )
+        })
+        .collect()
+}
+
 async fn handle_session_action(action: SessionAction) -> Result<()> {
     match action {
         SessionAction::List { limit, archived } => {
@@ -5342,30 +5466,46 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                     output::format_message_count(s.message_count as i64),
                     s.created_at.format("%Y-%m-%d %H:%M:%S"),
                 );
+                for line in
+                    kept_session_copy_lines(&runtime::session_control::kept_copies_of(&s.path))
+                {
+                    println!("    {line}");
+                }
             }
             Ok(())
         }
         SessionAction::Show { session_id } => {
             // Inspection remains available for legacy/unknown sessions even
             // though executing them is fail-closed.
-            let messages =
+            let (messages, kept_copies) =
                 match runtime::session_control::resolve_managed_session_reference(&session_id) {
                     Ok(resolved) => {
-                        runtime::session::ManagedSession::load_from_path(resolved.path)?.messages
+                        let kept_copies = kept_session_copy_lines(
+                            &runtime::session_control::kept_copies_of(&resolved.path),
+                        );
+                        (
+                            runtime::session::ManagedSession::load_from_path(resolved.path)?
+                                .messages,
+                            kept_copies,
+                        )
                     }
-                    Err(managed_error) => {
+                    Err(managed_error) => (
                         load_legacy_session_messages(&session_id).map_err(|legacy_error| {
                             managed_error.context(format!(
                                 "Legacy JSON conversation fallback also failed: {legacy_error:#}"
                             ))
-                        })?
-                    }
+                        })?,
+                        Vec::new(),
+                    ),
                 };
             println!(
                 "{}: {} messages",
                 ts::accent_header(session_id),
                 messages.len()
             );
+            for line in kept_copies {
+                println!("  {line}");
+            }
             for (i, msg) in messages.iter().enumerate() {
                 let preview: String = msg.text_content().chars().take(120).collect();
                 println!(
@@ -5388,27 +5528,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             let source = runtime::session::ManagedSession::load_from_path(&source_resolved.path)?;
             source.require_model()?;
             source.require_routing_authority()?;
-            let mut messages = source.messages.clone();
-            if let Some(turn) = at_turn {
-                // Truncate to the first `turn` user→assistant pairs.
-                let mut user_seen = 0usize;
-                let mut keep_to = messages.len();
-                for (i, m) in messages.iter().enumerate() {
-                    if m.role == "user" {
-                        if user_seen == turn {
-                            keep_to = i + 1;
-                            if let Some(next) = messages.get(i + 1) {
-                                if next.role == "assistant" {
-                                    keep_to = i + 2;
-                                }
-                            }
-                            break;
-                        }
-                        user_seen += 1;
-                    }
-                }
-                messages.truncate(keep_to);
-            }
+            let messages = fork_transcript(source.messages.clone(), at_turn);
             // Derive a safe session ID from --as (slugify) or auto-generate.
             let new_id = if let Some(ref name) = as_name {
                 // Slugify: lowercase, replace non-alphanumeric with '-', collapse runs.
@@ -5620,7 +5740,12 @@ pub async fn run_main() -> Result<()> {
         ));
     }
 
-    if let Some(reason) = crate::app_server::account::renew_managed_session_if_expiring().await {
+    let renewal = if cloud::CloudClient::admit(account_privacy_mode()).is_ok() {
+        crate::app_server::account::renew_managed_session_if_expiring().await
+    } else {
+        None
+    };
+    if let Some(reason) = renewal {
         output::print_info(&reason);
     }
 
@@ -5629,8 +5754,14 @@ pub async fn run_main() -> Result<()> {
         enter_repo_directory(repo)?;
     }
 
-    let interactive = cli.prompt.is_none() && cli.command.is_none() && !cli.stdin;
+    let interactive = cli.prompt.is_none()
+        && matches!(
+            cli.command,
+            None | Some(Command::Resume { .. } | Command::Fork { .. })
+        )
+        && !cli.stdin;
     output::set_screen_reader(screen_reader && interactive);
+    crate::platform::runtime::git::use_git_state_dir();
     let session_worktree = match cli.worktree.as_deref() {
         Some(requested) => Some(enter_session_worktree(requested).await?),
         None => None,
@@ -5677,8 +5808,9 @@ async fn settle_session_worktree(worktree: &runtime::worktree::SessionWorktree) 
             }
         }
         Ok(_) => eprintln!(
-            "Kept the worktree {path} on branch {}. Return to it with: agi --worktree {} --continue. Remove it with: git worktree remove {path}",
-            worktree.branch, worktree.name
+            "Kept the worktree {path} on branch {}. Return to it with: {}. Remove it with: git worktree remove {path}",
+            worktree.branch,
+            worktree_return_hint(&worktree.name)
         ),
         Err(error) => eprintln!(
             "Kept the worktree {path} because its state could not be checked: {error:#}"
@@ -5686,7 +5818,7 @@ async fn settle_session_worktree(worktree: &runtime::worktree::SessionWorktree) 
     }
 }
 
-async fn run_cli(cli: Cli) -> Result<()> {
+async fn run_cli(mut cli: Cli) -> Result<()> {
     // Install the single logging owner before anything else runs so `-v/--verbose`
     // and `--debug[=categories]` actually change what `tracing` emits. Without
     // this, every `tracing::{debug,info,warn}` call in the crate went nowhere and
@@ -5823,11 +5955,22 @@ async fn run_cli(cli: Cli) -> Result<()> {
 
     // Commands outside a trusted project still get global config and explicit
     // environment overrides, but repository-controlled config remains unread.
-    let mut app_config = if project_trusted {
-        config::CliConfig::load_merged()?
+    let loaded_config = if project_trusted {
+        config::CliConfig::load_merged()
     } else {
-        config::CliConfig::load_without_project()?
+        config::CliConfig::load_without_project()
     };
+    let mut app_config = match loaded_config {
+        Ok(config) => config,
+        Err(error) if runs_without_a_valid_config(&cli) => {
+            output::print_warn(&format!("{error:#}. Continuing with built-in defaults."));
+            config::CliConfig::default()
+        }
+        Err(error) => return Err(error),
+    };
+    if app_config.default.keep_history == Some(false) {
+        cli_options::set_session_persistence_enabled(false);
+    }
     let user_sandbox_mode = config::CliConfig::load()
         .ok()
         .and_then(|config| config.default.sandbox_mode);
@@ -5860,6 +6003,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
         }
     }
 
+    open_resume_subcommands_interactively(&mut cli).await?;
+
     // --- Subcommand dispatch ---
     if let Some(ref command) = cli.command {
         let sys_ctx = context::gather_system_context();
@@ -5872,6 +6017,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 json,
             } => {
                 crate::tools::forbid_terminal_questions();
+                let exec_stdin = read_piped_stdin(cli.stdin || prompt.as_str() == "-")?;
+                let exec_files = launch_file_context(&cli)?;
+                let exec_prompt = build_final_prompt(
+                    Some(prompt.as_str()),
+                    exec_stdin.as_deref(),
+                    &exec_files.text,
+                )
+                .unwrap_or_default();
+                let exec_system_prompt = resolve_system_prompt(&cli)?;
+                let effort_max_turns = apply_run_overrides(&cli, &mut app_config);
                 // Honor an explicit model: exec-level --model first, then the
                 // top-level --model, then config. Mirrors the provider fallback
                 // below, without this, `agi --model X exec` silently dropped X
@@ -5902,13 +6057,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 let mut session = agent::AgentSession::new_checked(
                     &m,
                     &sys_ctx,
-                    None,
+                    exec_system_prompt.as_deref(),
                     exec_provider_override.as_deref(),
                 )?;
                 session.set_additional_context_dirs(
                     crate::path_security::registered_additional_workspace_roots(),
                 )?;
                 session.apply_ui_config(&app_config);
+                apply_saved_effort(&mut session, &app_config);
                 session.apply_tool_filters(
                     &normalized_cli_options.allowed_tools,
                     &normalized_cli_options.disallowed_tools,
@@ -5936,7 +6092,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     session.plan_mode = true;
                 }
                 session.quiet = true;
-                session.enable_managed_session()?;
+                session.max_turns = cli.max_turns.or(effort_max_turns);
+                session.max_budget_usd = cli.max_budget_usd;
+                apply_named_agent(&mut session, cli.agent.as_deref());
+                session.enable_managed_session_as(cli.session_id_override.as_deref())?;
                 attach_mcp_manager_for_session(
                     &mut session,
                     &normalized_cli_options.mcp_config_load_options(),
@@ -5944,6 +6103,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     false,
                 )
                 .await?;
+                if !exec_files.images.is_empty() {
+                    session.pending_image_blocks = exec_files.images;
+                }
                 let is_json = *json;
                 let json_events = cli.json_events;
                 let session_id = session
@@ -5973,6 +6135,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             .emit_stdout();
                         })));
                 }
+                if json_events && session.max_budget_usd.is_some() {
+                    session.on_budget_exhausted = Some(budget_exhausted_events(session_id.clone()));
+                }
                 let provider_label = format!("{:?}", session.provider).to_lowercase();
 
                 if json_events {
@@ -5990,75 +6155,39 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 }
 
                 let session_id_for_chunks = session_id.clone();
-                // Accumulate streamed text so a SIGINT can reconcile session
-                // history with the partial reply (the TUI does the same via its
-                // shared stream buffer on the Esc/Ctrl-C cancel path).
-                let partial_buffer = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-                let partial_sink = std::sync::Arc::clone(&partial_buffer);
-                // Race the turn against Ctrl-C. Cancellation reuses the TUI's
-                // mechanism: dropping the `send()` future aborts the in-flight
-                // provider stream and tool loop (tokio::select! drops the losing
-                // branch), then `finalize_cancelled_turn` repairs history.
-                let outcome = tokio::select! {
-                    result = session.send(
-                        &app_config,
-                        prompt,
-                        Box::new(move |chunk| {
-                            if let Ok(mut buf) = partial_sink.lock() {
-                                buf.push_str(chunk);
+                let turn = send_until_interrupted(
+                    &mut session,
+                    &app_config,
+                    &exec_prompt,
+                    Box::new(move |chunk| {
+                        if json_events {
+                            agent_events::AgentEvent::MessageDelta {
+                                session_id: session_id_for_chunks.clone(),
+                                text: chunk.to_string(),
                             }
-                            if json_events {
-                                agent_events::AgentEvent::MessageDelta {
-                                    session_id: session_id_for_chunks.clone(),
-                                    text: chunk.to_string(),
-                                }
-                                .emit_stdout();
-                            } else if !is_json {
-                                output::print_assistant_chunk(chunk);
-                            }
-                        }),
-                    ) => Some(result),
-                    _ = tokio::signal::ctrl_c() => None,
-                };
-                let Some(result) = outcome else {
-                    // First SIGINT: the send future was dropped above, which
-                    // cancelled the stream. A second Ctrl-C during shutdown
-                    // exits immediately.
-                    tokio::spawn(async {
-                        let _ = tokio::signal::ctrl_c().await;
-                        terminals::stop_all();
-                        std::process::exit(130);
-                    });
-                    let partial = partial_buffer
-                        .lock()
-                        .map(|buf| buf.clone())
-                        .unwrap_or_default();
-                    session.cancel_turn(&partial).await;
-                    // The repair `finalize_cancelled_turn` just made lives only
-                    // in memory, and the turn-end persist never runs on this
-                    // path. Without this write the session file ends on a lone
-                    // user message, so `agi resume` reopens it with two user
-                    // turns in a row. Report and continue: a failed write must
-                    // not change the interrupt's exit code.
-                    if let Err(error) = session.persist_managed_session() {
-                        tracing::warn!("failed to persist the cancelled turn: {error:#}");
-                    }
-                    use std::io::Write as _;
-                    let _ = io::stdout().flush();
-                    if json_events {
-                        agent_events::AgentEvent::Finished {
-                            session_id: session_id.clone(),
-                            reason: "interrupted",
+                            .emit_stdout();
+                        } else if !is_json {
+                            output::print_assistant_chunk(chunk);
                         }
-                        .emit_stdout();
-                    } else {
-                        eprintln!();
-                        eprintln!("Interrupted, turn cancelled before completion.");
+                    }),
+                )
+                .await;
+                let result = match turn {
+                    OneShotTurn::Finished(result) => result,
+                    OneShotTurn::Interrupted(partial) => {
+                        cancel_interrupted_turn(&mut session, &partial).await;
+                        if json_events {
+                            agent_events::AgentEvent::Finished {
+                                session_id: session_id.clone(),
+                                reason: "interrupted",
+                            }
+                            .emit_stdout();
+                        } else {
+                            eprintln!();
+                            eprintln!("Interrupted, turn cancelled before completion.");
+                        }
+                        exit_interrupted()
                     }
-                    // 130 = 128 + SIGINT, the conventional exit code.
-                    terminals::stop_all();
-                    end_process_cleanly();
-                    std::process::exit(130);
                 };
                 match result {
                     Ok(turn) => {
@@ -6134,105 +6263,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 }
             }
             Command::Background { action } => run_background_command(action),
-            Command::Resume {
-                session_id,
-                cloud,
-                teleport,
-            } => {
-                let resolved_id = match (session_id, cloud) {
-                    _ if *teleport => Some(teleport_code_session(session_id.as_deref()).await?),
-                    (Some(id), true) => Some(adopt_hosted_conversation(id).await?),
-                    (Some(id), false) => Some(match resolve_resume_payload(id, false) {
-                        Ok(_) => id.clone(),
-                        Err(local_error) => match adopt_hosted_conversation(id).await {
-                            Ok(adopted) => adopted,
-                            Err(_) => return Err(local_error),
-                        },
-                    }),
-                    (None, _) => None,
-                };
-                let (session_label, (mut messages, managed_session)) = match resolved_id.as_ref() {
-                    Some(id) => (id.clone(), resolve_resume_payload(id, false)?),
-                    None => resolve_latest_resume_payload()?
-                        .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
-                };
-                let interrupted = agent::mark_interrupted_tool_calls(&mut messages);
-                if interrupted > 0 {
-                    eprintln!(
-                        "The last turn stopped while {interrupted} tool {} still running. The assistant is told {} result is unknown and checks before relying on {}.",
-                        if interrupted == 1 { "call was" } else { "calls were" },
-                        if interrupted == 1 { "its" } else { "their" },
-                        if interrupted == 1 { "it" } else { "them" }
-                    );
-                }
-                if messages.is_empty() {
-                    eprintln!("Warning: session '{}' has no messages.", session_label);
-                } else {
-                    eprintln!(
-                        "Resuming session '{}' ({} messages).",
-                        session_label,
-                        messages.len()
-                    );
-                }
-                let model = resumed_model(managed_session.as_ref(), &app_config.default.model);
-                repl::run_repl(
-                    &mut app_config,
-                    &model,
-                    &sys_ctx,
-                    None,
-                    Some(messages),
-                    managed_session,
-                    None,
-                    false,
-                    routing::fallback::FallbackChain::default(),
-                    None,
-                    false,
-                    false,
-                    false,
-                    None,
-                    cli_options::PermissionMode::Default,
-                    false,
-                    normalized_cli_options.allowed_tools.clone(),
-                    normalized_cli_options.disallowed_tools.clone(),
-                    normalized_cli_options.mcp_config_load_options(),
-                    None,
-                    None,
-                )
-                .await
-            }
-            Command::Fork { session_id } => {
-                let (messages, managed_session) = resolve_resume_payload(session_id, true)?;
-                eprintln!(
-                    "{} Forked session '{}' ({} messages)",
-                    ts::accent_header("fork:"),
-                    session_id,
-                    messages.len()
-                );
-                let model = resumed_model(managed_session.as_ref(), &app_config.default.model);
-                repl::run_repl(
-                    &mut app_config,
-                    &model,
-                    &sys_ctx,
-                    None,
-                    Some(messages),
-                    managed_session,
-                    None,
-                    false,
-                    routing::fallback::FallbackChain::default(),
-                    None,
-                    false,
-                    false,
-                    false,
-                    None,
-                    cli_options::PermissionMode::Default,
-                    false,
-                    normalized_cli_options.allowed_tools.clone(),
-                    normalized_cli_options.disallowed_tools.clone(),
-                    normalized_cli_options.mcp_config_load_options(),
-                    None,
-                    None,
-                )
-                .await
+            Command::Resume { .. } | Command::Fork { .. } => {
+                unreachable!("resume and fork open the interactive session above")
             }
             Command::Session { action } => handle_session_action(action.clone()).await,
             Command::Review {
@@ -6268,15 +6300,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     apply_patch::print_patch_result(&r);
                     Some(r)
                 } else {
-                    let conn = sessions::open_db()?;
-                    if let Some(s) = sessions::list_sessions(&conn, 1)?.first() {
-                        let r = apply_patch::apply_from_session(&s.id).await?;
-                        apply_patch::print_patch_result(&r);
-                        Some(r)
-                    } else {
-                        eprintln!("No sessions found.");
-                        None
-                    }
+                    let r = apply_patch::apply_latest_in_folder(&std::env::current_dir()?).await?;
+                    apply_patch::print_patch_result(&r);
+                    Some(r)
                 };
                 match result {
                     Some(r) if r.exit_code != 0 => {
@@ -6943,7 +6969,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         println!("No sessions on this device.");
                     } else {
                         println!("On this device:");
-                        println!("{}", sessions::format_session_list(&list));
+                        println!(
+                            "{}",
+                            sessions::format_session_list_with_kept_copies(&conn, &list)
+                        );
                         println!();
                     }
                 }
@@ -7013,11 +7042,21 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Logout ---
-            Command::Logout { account_only } => {
-                let signed_out = if *account_only {
-                    crate::app_server::account::sign_out_of_account().await?
-                } else {
+            Command::Logout {
+                all,
+                account_only,
+                yes,
+            } => {
+                let signed_out = if *all && !*account_only {
+                    if !confirm_destructive(
+                        "Remove every saved provider API key, and any GitHub Copilot sign-in an earlier version saved, from this machine and sign out of your account? You will have to enter the keys again.",
+                        *yes,
+                    ) {
+                        return Ok(());
+                    }
                     crate::app_server::account::sign_out_of_every_provider().await?
+                } else {
+                    crate::app_server::account::sign_out_of_account().await?
                 };
                 println!("{}", signed_out.message());
                 Ok(())
@@ -7713,17 +7752,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
 
     // Detect piped stdin early (before --cost check, since cost+stdin should work)
     let is_piped = !io::stdin().is_terminal();
-    let stdin_content = if is_piped || cli.stdin || cli.prompt.as_deref() == Some("-") {
-        let mut buf = String::new();
-        io::stdin().read_to_string(&mut buf)?;
-        if buf.is_empty() {
-            None
-        } else {
-            Some(buf)
-        }
-    } else {
-        None
-    };
+    let stdin_content = read_piped_stdin(cli.stdin || cli.prompt.as_deref() == Some("-"))?;
 
     // --cost with no prompt and no stdin: just show pricing info
     if cli.cost && cli.prompt.is_none() && stdin_content.is_none() {
@@ -7732,35 +7761,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
         return Ok(());
     }
 
-    // Apply --effort preset (before individual overrides so explicit flags win)
-    let effort_max_turns = match cli.effort {
-        Some(EffortLevel::Low) => {
-            app_config.default.max_tokens = 2048;
-            app_config.default.temperature = Some(0.3);
-            Some(3usize)
-        }
-        Some(EffortLevel::Medium) => None, // use defaults
-        Some(EffortLevel::High) => {
-            app_config.default.max_tokens = 16384;
-            Some(50usize)
-        }
-        Some(EffortLevel::Max) => {
-            app_config.default.max_tokens = 32768;
-            Some(100usize)
-        }
-        None => None,
-    };
-
-    // Apply CLI overrides to config (explicit flags override effort presets)
-    if let Some(ref max_tokens) = cli.max_tokens {
-        app_config.default.max_tokens = *max_tokens;
-    }
-    if cli.no_stream {
-        app_config.default.stream = false;
-    }
-    if let Some(temp) = cli.temperature {
-        app_config.default.temperature = Some(temp);
-    }
+    let effort_max_turns = apply_run_overrides(&cli, &mut app_config);
 
     // Resolve model.
     //
@@ -7853,15 +7854,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
         );
     }
 
-    // Read file contents for -f flag, text files and images are handled separately
-    let mut file_context_result = read_file_contexts(&cli.files)?;
-
-    if let Some(ref handoff_url) = cli.context_url {
-        let handoff = context_handoff::parse_context_handoff_url(handoff_url)?;
-        file_context_result
-            .text
-            .insert_str(0, &handoff.to_prompt_context());
-    }
+    let file_context_result = launch_file_context(&cli)?;
 
     // Gather system context
     let sys_context = context::gather_system_context();
@@ -7873,51 +7866,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
         &file_context_result.text,
     );
 
-    // --system-prompt-file: read base system prompt from file (wins over --system-prompt).
-    let file_base_prompt: Option<String> = if let Some(ref path) = cli.system_prompt_file {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => Some(contents),
-            Err(e) => {
-                anyhow::bail!("--system-prompt-file: cannot read '{}': {}", path, e);
-            }
-        }
-    } else {
-        None
-    };
-
-    // --append-system-prompt-file: read append content from file.
-    let file_append_prompt: Option<String> = if let Some(ref path) = cli.append_system_prompt_file {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => Some(contents),
-            Err(e) => {
-                anyhow::bail!("--append-system-prompt-file: cannot read '{}': {}", path, e);
-            }
-        }
-    } else {
-        None
-    };
-
-    // Build effective system prompt (base + append).
-    // Priority: file contents win over inline flags when both are provided.
-    let resolved_base = file_base_prompt.as_deref().or(cli.system_prompt.as_deref());
-    let resolved_append = {
-        // Combine inline append and file append with a newline separator when both present.
-        match (
-            cli.append_system_prompt.as_deref(),
-            file_append_prompt.as_deref(),
-        ) {
-            (Some(inline), Some(from_file)) => Some(format!("{}\n\n{}", inline, from_file)),
-            (Some(inline), None) => Some(inline.to_string()),
-            (None, Some(from_file)) => Some(from_file.to_string()),
-            (None, None) => None,
-        }
-    };
-    let effective_system_prompt = match (resolved_base, resolved_append.as_deref()) {
-        (Some(base), Some(append)) => Some(format!("{}\n\n{}", base, append)),
-        (Some(base), None) => Some(base.to_string()),
-        (None, Some(append)) => Some(append.to_string()),
-        (None, None) => None,
-    };
+    let effective_system_prompt = resolve_system_prompt(&cli)?;
 
     // --dump-system-prompt: assemble the system prompt the way AgentSession::new
     // would for this route, print it to stdout, and exit. No API call.
@@ -7988,6 +7937,13 @@ async fn run_cli(cli: Cli) -> Result<()> {
         crate::tools::forbid_terminal_questions();
         let oneshot_resume = match cli.session.as_ref().or(cli.resume.as_ref()) {
             Some(reference) => resolve_resume_payload(reference, cli.fork_session)?.1,
+            None if cli.continue_session => match resolve_latest_resume_payload()? {
+                Some((_, (_, managed_session))) => managed_session,
+                None => {
+                    eprintln!("No saved session in this project to continue; starting a new one.");
+                    None
+                }
+            },
             None => None,
         };
         return run_oneshot(
@@ -8069,15 +8025,30 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
             Some(payload)
         } else {
-            eprintln!("No saved sessions to continue.");
+            eprintln!("No saved session in this project to continue.");
             None
         }
     } else {
         None
     };
-    let (resume_messages, resume_managed_session) = match resume_payload {
+    let (mut resume_messages, resume_managed_session) = match resume_payload {
         Some((messages, managed_session)) => (Some(messages), managed_session),
         None => (None, None),
+    };
+    if let Some(messages) = resume_messages.as_mut() {
+        let interrupted = agent::mark_interrupted_tool_calls(messages);
+        if interrupted > 0 {
+            eprintln!(
+                "The last turn stopped while {interrupted} tool {} still running. The assistant is told {} result is unknown and checks before relying on {}.",
+                if interrupted == 1 { "call was" } else { "calls were" },
+                if interrupted == 1 { "its" } else { "their" },
+                if interrupted == 1 { "it" } else { "them" }
+            );
+        }
+    }
+    let model = match (&cli.model, cli.auto) {
+        (None, false) => resumed_model(resume_managed_session.as_ref(), &model),
+        _ => model,
     };
 
     // Resolve team mode from --team flag or AGI_TEAM env var
@@ -8348,6 +8319,243 @@ fn end_process_cleanly() {
     output::release_held_diagnostics();
 }
 
+enum OneShotTurn {
+    Finished(Result<agent::TurnResult>),
+    Interrupted(String),
+}
+
+async fn interrupt_or_terminate() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        if let Ok(mut terminate) = signal(SignalKind::terminate()) {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = terminate.recv() => {}
+            }
+            return;
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+/// Race a non-interactive turn against Ctrl-C. Losing the race drops the
+/// `send` future, which stops the provider stream and the tool loop; the text
+/// streamed so far comes back so the cancelled turn can be repaired.
+async fn send_until_interrupted(
+    session: &mut agent::AgentSession,
+    config: &config::CliConfig,
+    prompt: &str,
+    mut on_chunk: models::StreamCallback,
+) -> OneShotTurn {
+    let streamed = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let sink = std::sync::Arc::clone(&streamed);
+    let finished = tokio::select! {
+        result = session.send(
+            config,
+            prompt,
+            Box::new(move |chunk| {
+                if let Ok(mut buffer) = sink.lock() {
+                    buffer.push_str(chunk);
+                }
+                on_chunk(chunk);
+            }),
+        ) => Some(result),
+        () = interrupt_or_terminate() => None,
+    };
+    match finished {
+        Some(result) => OneShotTurn::Finished(result),
+        None => OneShotTurn::Interrupted(
+            streamed
+                .lock()
+                .map(|buffer| buffer.clone())
+                .unwrap_or_default(),
+        ),
+    }
+}
+
+/// The turn-end save never runs for a cancelled turn, so without this write
+/// the session file ends on a lone prompt and a resume shows two prompts in a
+/// row. A failed write must not change the interrupt's exit code.
+async fn cancel_interrupted_turn(session: &mut agent::AgentSession, partial: &str) {
+    tokio::spawn(async {
+        let _ = tokio::signal::ctrl_c().await;
+        exit_interrupted();
+    });
+    session.cancel_turn(partial).await;
+    if let Err(error) = session.persist_managed_session() {
+        tracing::warn!("failed to persist the cancelled turn: {error:#}");
+    }
+    use std::io::Write as _;
+    let _ = io::stdout().flush();
+}
+
+/// Commands the agent started lead their own process group, so the terminal's
+/// SIGINT never reaches them; they are killed here before the process leaves.
+fn exit_interrupted() -> ! {
+    process_tree::kill_all_process_trees();
+    terminals::stop_all();
+    end_process_cleanly();
+    std::process::exit(130)
+}
+
+fn budget_exhausted_events(session_id: String) -> agent::BudgetSink {
+    agent::BudgetSink(Box::new(move |cumulative, limit| {
+        agent_events::AgentEvent::BudgetExhausted {
+            session_id: session_id.clone(),
+            cumulative_dollars: cumulative,
+            limit_dollars: limit,
+        }
+        .emit_stdout();
+    }))
+}
+
+fn apply_named_agent(session: &mut agent::AgentSession, agent_name: Option<&str>) {
+    let Some(name) = agent_name else {
+        return;
+    };
+    match agents::find_agent(name) {
+        Some(agent_def) => agent_def.apply_to_session(session),
+        None => eprintln!(
+            "Warning: agent '{}' not found. Continuing without agent.",
+            name
+        ),
+    }
+}
+
+fn read_piped_stdin(requested: bool) -> Result<Option<String>> {
+    if !requested && io::stdin().is_terminal() {
+        return Ok(None);
+    }
+    let mut buf = String::new();
+    io::stdin().read_to_string(&mut buf)?;
+    Ok((!buf.is_empty()).then_some(buf))
+}
+
+fn launch_file_context(cli: &Cli) -> Result<FileContextResult> {
+    let mut file_context = read_file_contexts(&cli.files)?;
+    if let Some(ref handoff_url) = cli.context_url {
+        let handoff = context_handoff::parse_context_handoff_url(handoff_url)?;
+        file_context
+            .text
+            .insert_str(0, &handoff.to_prompt_context());
+    }
+    Ok(file_context)
+}
+
+/// `--system-prompt-file` wins over `--system-prompt`; inline and file appends
+/// are joined in that order.
+fn resolve_system_prompt(cli: &Cli) -> Result<Option<String>> {
+    let file_base_prompt = match cli.system_prompt_file.as_deref() {
+        Some(path) => Some(std::fs::read_to_string(path).map_err(|error| {
+            anyhow::anyhow!("--system-prompt-file: cannot read '{}': {}", path, error)
+        })?),
+        None => None,
+    };
+    let file_append_prompt = match cli.append_system_prompt_file.as_deref() {
+        Some(path) => Some(std::fs::read_to_string(path).map_err(|error| {
+            anyhow::anyhow!(
+                "--append-system-prompt-file: cannot read '{}': {}",
+                path,
+                error
+            )
+        })?),
+        None => None,
+    };
+    let base = file_base_prompt.as_deref().or(cli.system_prompt.as_deref());
+    let append = match (
+        cli.append_system_prompt.as_deref(),
+        file_append_prompt.as_deref(),
+    ) {
+        (Some(inline), Some(from_file)) => Some(format!("{}\n\n{}", inline, from_file)),
+        (Some(inline), None) => Some(inline.to_string()),
+        (None, Some(from_file)) => Some(from_file.to_string()),
+        (None, None) => None,
+    };
+    Ok(match (base, append.as_deref()) {
+        (Some(base), Some(append)) => Some(format!("{}\n\n{}", base, append)),
+        (Some(base), None) => Some(base.to_string()),
+        (None, Some(append)) => Some(append.to_string()),
+        (None, None) => None,
+    })
+}
+
+/// `--effort`, then the explicit `--max-tokens`, `--no-stream` and
+/// `--temperature` over it. Returns the turn limit the effort preset implies.
+fn apply_run_overrides(cli: &Cli, config: &mut config::CliConfig) -> Option<usize> {
+    if let Some(level) = cli.effort {
+        config.default.reasoning_effort = Some(level.effort().wire_value().to_string());
+    }
+    let effort_max_turns = match cli.effort {
+        Some(EffortLevel::Low) => {
+            config.default.max_tokens = 2048;
+            config.default.temperature = Some(0.3);
+            Some(3usize)
+        }
+        Some(EffortLevel::Medium) => None,
+        Some(EffortLevel::High) => {
+            config.default.max_tokens = 16384;
+            Some(50usize)
+        }
+        Some(EffortLevel::Max) => {
+            config.default.max_tokens = 32768;
+            Some(100usize)
+        }
+        None => None,
+    };
+    if let Some(max_tokens) = cli.max_tokens {
+        config.default.max_tokens = max_tokens;
+    }
+    if cli.no_stream {
+        config.default.stream = false;
+    }
+    if let Some(temperature) = cli.temperature {
+        config.default.temperature = Some(temperature);
+    }
+    effort_max_turns
+}
+
+fn worktree_return_hint(name: &str) -> String {
+    format!("agi --worktree {name} -c")
+}
+
+fn user_prompt(message: &models::Message) -> bool {
+    message.role == "user"
+        && match &message.content {
+            models::MessageContent::Text(_) => true,
+            models::MessageContent::Blocks(blocks) => !blocks
+                .iter()
+                .any(|block| matches!(block, models::ContentBlock::ToolResult { .. })),
+        }
+}
+
+/// `--at-turn N` keeps user prompts 0 through N with everything that answered
+/// them, tool calls included. Tool results travel as user messages, so they
+/// are never counted as turns, and a call the source left unanswered is closed.
+fn fork_transcript(
+    mut messages: Vec<models::Message>,
+    at_turn: Option<usize>,
+) -> Vec<models::Message> {
+    if let Some(at_turn) = at_turn {
+        let mut prompts_seen = 0usize;
+        let cut = messages.iter().position(|message| {
+            if !user_prompt(message) {
+                return false;
+            }
+            if prompts_seen > at_turn {
+                return true;
+            }
+            prompts_seen += 1;
+            false
+        });
+        if let Some(cut) = cut {
+            messages.truncate(cut);
+        }
+    }
+    agent::mark_interrupted_tool_calls(&mut messages);
+    messages
+}
+
 pub fn run_to_exit_code() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some(documents::EXTRACT_COMMAND) {
@@ -8364,6 +8572,7 @@ pub fn run_to_exit_code() -> std::process::ExitCode {
         .and_then(|runtime| runtime.block_on(run_main()));
     end_process_cleanly();
     match result {
+        Ok(()) if crate::tools::headless_change_was_refused() => std::process::ExitCode::FAILURE,
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) if broken_pipe::is_broken_pipe_error(&error) => {
             std::process::ExitCode::from(broken_pipe::BROKEN_PIPE_EXIT_CODE)
@@ -8400,17 +8609,29 @@ pub(crate) async fn attach_mcp_manager_for_session(
     include_default_configs: bool,
     include_plugin_configs: bool,
 ) -> Result<()> {
-    if let Some(mgr) = build_mcp_manager(
+    let rebuilt = build_mcp_manager(
         mcp_config_options,
         include_default_configs,
         include_plugin_configs,
         session.privacy_mode,
     )
-    .await?
-    {
-        session.set_mcp_manager(mgr);
-    }
+    .await?;
+    replace_session_mcp_manager(session, rebuilt).await;
     Ok(())
+}
+
+async fn replace_session_mcp_manager(
+    session: &mut agent::AgentSession,
+    rebuilt: Option<mcp::McpManager>,
+) {
+    match rebuilt {
+        Some(manager) => session.set_mcp_manager(manager),
+        None => {
+            if let Some(mut previous) = session.take_mcp_manager() {
+                previous.shutdown_all().await;
+            }
+        }
+    }
 }
 
 /// Load MCP configs, connect all servers, and return the connected manager.
@@ -8486,38 +8707,12 @@ async fn build_mcp_manager_inner(
     elicitation: Option<std::sync::Arc<dyn agiworkforce_mcp::ElicitationHandler>>,
     project: Option<&std::path::Path>,
 ) -> Result<Option<mcp::McpManager>> {
-    if !include_default_configs && !mcp_config_options.has_explicit_sources() {
-        return Ok(None);
-    }
-
-    let mut load_options = mcp_config_options.clone();
-    if !include_default_configs {
-        load_options.strict = true;
-    }
-
-    let mut mcp_configs = mcp::McpManager::load_configs_in(&load_options, project)?;
-    if include_plugin_configs && !load_options.strict {
-        let project = project
-            .map(std::path::Path::to_path_buf)
-            .or_else(|| std::env::current_dir().ok());
-        let mut plugin_mgr = plugins::PluginsManager::new();
-        if plugin_mgr.load_all(project.as_deref()).is_ok() {
-            let (installed, mut from_project) = plugin_mgr.mcp_configs_by_scope();
-            mcp_configs.extend(installed);
-            // A project plugin is repository content a sandboxed command can
-            // write, so its servers start only with the same approval
-            // a project's MCP file needs.
-            if let Some(project) = project.as_deref() {
-                let withheld =
-                    mcp::consent::retain_consented_plugin_servers(project, &mut from_project);
-                if !withheld.is_empty() {
-                    tracing::warn!(project = %project.display(), servers = ?withheld, "project plugin MCP servers withheld until approved");
-                }
-            }
-            mcp_configs.extend(from_project);
-        }
-    }
-
+    let mcp_configs = session_mcp_configs(
+        mcp_config_options,
+        include_default_configs,
+        include_plugin_configs,
+        project,
+    )?;
     if mcp_configs.is_empty() {
         return Ok(None);
     }
@@ -8545,6 +8740,122 @@ async fn build_mcp_manager_inner(
         }
     }
     Ok(Some(mcp_mgr))
+}
+
+/// The servers a session started in `project` (or the current folder) would
+/// connect to, after project approval, with project and user servers winning
+/// a name a plugin also declares, as [`mcp::discover_servers`] orders them.
+fn session_mcp_configs(
+    mcp_config_options: &mcp::McpConfigLoadOptions,
+    include_default_configs: bool,
+    include_plugin_configs: bool,
+    project: Option<&std::path::Path>,
+) -> Result<std::collections::HashMap<String, mcp::McpServerConfig>> {
+    if !include_default_configs && !mcp_config_options.has_explicit_sources() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let mut load_options = mcp_config_options.clone();
+    if !include_default_configs {
+        load_options.strict = true;
+    }
+
+    let mut mcp_configs = mcp::McpManager::load_configs_in(&load_options, project)?;
+    if !load_options.strict {
+        report_mcp_config_problems(&mcp::McpManager::default_config_problems(project));
+    }
+    if include_plugin_configs && !load_options.strict {
+        let project = project
+            .map(std::path::Path::to_path_buf)
+            .or_else(|| std::env::current_dir().ok());
+        let mut plugin_mgr = plugins::PluginsManager::new();
+        if plugin_mgr.load_all(project.as_deref()).is_ok() {
+            let (installed, mut from_project) = plugin_mgr.mcp_configs_by_scope();
+            // A project plugin is repository content a sandboxed command can
+            // write, so its servers start only with the same approval
+            // a project's MCP file needs.
+            if let Some(project) = project.as_deref() {
+                let withheld =
+                    mcp::consent::retain_consented_plugin_servers(project, &mut from_project);
+                if !withheld.is_empty() {
+                    tracing::warn!(project = %project.display(), servers = ?withheld, "project plugin MCP servers withheld until approved");
+                }
+            }
+            for (name, config) in installed.into_iter().chain(from_project) {
+                mcp_configs.entry(name).or_insert(config);
+            }
+        }
+    }
+    Ok(mcp_configs)
+}
+
+fn mcp_config_problem_notice(problem: &str) -> String {
+    format!(
+        "MCP: servers in this file were not loaded: {}",
+        terminal_text::sanitize_terminal_text(problem)
+    )
+}
+
+fn report_mcp_config_problems(problems: &[String]) {
+    for problem in problems {
+        let notice = mcp_config_problem_notice(problem);
+        if crate::tui::tui_active() {
+            crate::tui::push_tui_notice(notice);
+        } else {
+            output::print_warn(&notice);
+        }
+    }
+}
+
+/// The remote server `agi mcp login` and `logout` act on, found among the
+/// servers a session here would load, then among the registry's turned-off
+/// servers, and its URL.
+fn sign_in_target(
+    name: &str,
+    session_servers: &std::collections::HashMap<String, mcp::McpServerConfig>,
+    registry: &crate::mcp::registry::McpRegistry,
+    awaits_approval: bool,
+) -> Result<(mcp::McpServerConfig, String)> {
+    let shown = terminal_text::sanitize_terminal_text(name);
+    let config: mcp::McpServerConfig = match (session_servers.get(name), registry.entry(name)) {
+        (Some(config), _) => config.clone(),
+        (None, Some(entry)) => serde_json::from_value(entry.clone())
+            .with_context(|| format!("registry entry for '{shown}' is not a server config"))?,
+        (None, None) if awaits_approval => anyhow::bail!(
+            "MCP server '{shown}' is named by this project and its launch is not approved yet, so nothing connects to it. Start `agi` in this folder to review it, then sign in."
+        ),
+        (None, None) => anyhow::bail!(
+            "no MCP server named '{shown}' is configured here. Servers from this project's MCP files, your own, imported ones and plugins count; `agi doctor` names a file that could not be read."
+        ),
+    };
+    match config.as_transport() {
+        mcp::McpTransport::Stdio { .. } => anyhow::bail!(
+            "'{shown}' is a stdio server; OAuth applies to remote (--url) servers only"
+        ),
+        mcp::McpTransport::Sse { url, .. } | mcp::McpTransport::Http { url, .. } => {
+            Ok((config, url))
+        }
+    }
+}
+
+fn find_sign_in_target(
+    name: &str,
+    registry: &crate::mcp::registry::McpRegistry,
+) -> Result<(mcp::McpServerConfig, String)> {
+    let project = std::env::current_dir().context("could not read the current folder")?;
+    let session_servers = session_mcp_configs(
+        &mcp::McpConfigLoadOptions::default(),
+        true,
+        true,
+        Some(project.as_path()),
+    )?;
+    let awaits_approval = !session_servers.contains_key(name)
+        && registry.entry(name).is_none()
+        && mcp::discover_servers(&project).into_iter().any(|server| {
+            server.name == name
+                && mcp::consent::server_awaits_approval(&project, server.origin, &server.name)
+        });
+    sign_in_target(name, &session_servers, registry, awaits_approval)
 }
 
 fn sdk_tool_lifecycle_event(
@@ -8636,6 +8947,7 @@ pub async fn run_oneshot(
         crate::path_security::registered_additional_workspace_roots(),
     )?;
     session.apply_ui_config(config);
+    apply_saved_effort(&mut session, config);
     session.max_turns = max_turns;
     session.max_budget_usd = max_budget_usd;
     session.skip_permissions = skip_permissions;
@@ -8656,31 +8968,12 @@ pub async fn run_oneshot(
     if matches!(permission_mode, cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }
-    // Wire --agent: load the named agent definition and apply overrides to the session.
-    if let Some(ref name) = agent_name {
-        match agents::find_agent(name) {
-            Some(agent_def) => {
-                agent_def.apply_to_session(&mut session);
-            }
-            None => {
-                eprintln!(
-                    "Warning: agent '{}' not found. Continuing without agent.",
-                    name
-                );
-            }
-        }
-    }
+    apply_named_agent(&mut session, agent_name.as_deref());
     let resuming = resume_session.is_some();
     if let Some((managed, path)) = resume_session {
         session.load_managed_conversation(managed, path)?;
     }
-    session.enable_managed_session()?;
-    // Wire --session-id: override the auto-generated session UUID with the
-    // caller-supplied one.  Must be called after enable_managed_session so
-    // the managed session object exists.
-    if let Some(sid) = session_id_override.as_ref().filter(|_| !resuming) {
-        session.override_session_id(sid)?;
-    }
+    session.enable_managed_session_as(session_id_override.as_deref().filter(|_| !resuming))?;
     if let Some(seed) = auto_route_seed {
         session.auto_routing_tier = Some(seed.tier);
         session.set_managed_auto_routing(Some(seed.state));
@@ -8689,8 +8982,8 @@ pub async fn run_oneshot(
     // managed session entirely, so an explicit `--session-id` has to be read
     // straight from the flag, otherwise a caller that opted out of disk
     // persistence would silently lose the id it correlates events by. When
-    // persistence is on this is the same value `override_session_id` just
-    // wrote, so the two paths agree.
+    // persistence is on this is the id the session was created under, so the
+    // two paths agree.
     let event_session_id = wire_session_id(
         session_id_override.as_deref(),
         resuming,
@@ -8710,15 +9003,7 @@ pub async fn run_oneshot(
         let managed_id = event_session_id
             .clone()
             .unwrap_or_else(|| "(no session)".to_string());
-        session.on_budget_exhausted =
-            Some(agent::BudgetSink(Box::new(move |cumulative, limit| {
-                agent_events::AgentEvent::BudgetExhausted {
-                    session_id: managed_id.clone(),
-                    cumulative_dollars: cumulative,
-                    limit_dollars: limit,
-                }
-                .emit_stdout();
-            })));
+        session.on_budget_exhausted = Some(budget_exhausted_events(managed_id));
     }
     attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
 
@@ -8802,14 +9087,29 @@ pub async fn run_oneshot(
 
         let start = std::time::Instant::now();
         let delta_context = stream_context.clone();
-        let result = session
-            .send(
-                config,
-                prompt,
-                Box::new(move |chunk| delta_context.emit_text_delta(chunk)),
-            )
-            .await;
+        let turn = send_until_interrupted(
+            &mut session,
+            config,
+            prompt,
+            Box::new(move |chunk| delta_context.emit_text_delta(chunk)),
+        )
+        .await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        let result = match turn {
+            OneShotTurn::Finished(result) => result,
+            OneShotTurn::Interrupted(partial) => {
+                cancel_interrupted_turn(&mut session, &partial).await;
+                writer
+                    .emit(&SdkEvent::StatusUpdate(StatusUpdateEvent {
+                        session_id,
+                        reason: StatusUpdateReason::SessionEnd,
+                        detail: Some(format!("{}ms (interrupted)", duration_ms)),
+                    }))
+                    .await
+                    .ok();
+                exit_interrupted()
+            }
+        };
 
         match result {
             Ok(turn) => {
@@ -8823,16 +9123,17 @@ pub async fn run_oneshot(
                         // turn cut at the model's output limit is `max_tokens`
                         // there, and announcing it as `end_turn` is how a
                         // reader is told a truncated answer finished.
-                        stop_reason: Some(
-                            match turn.incomplete {
-                                Some(errors::IncompleteTurnCause::OutputLimitReached) => {
-                                    "max_tokens"
-                                }
-                                Some(errors::IncompleteTurnCause::RefusedBySafety) => "refusal",
-                                Some(errors::IncompleteTurnCause::NoResponse) | None => "end_turn",
+                        stop_reason: match turn.incomplete {
+                            Some(errors::IncompleteTurnCause::OutputLimitReached) => {
+                                Some("max_tokens")
                             }
-                            .to_string(),
-                        ),
+                            Some(errors::IncompleteTurnCause::RefusedBySafety) => Some("refusal"),
+                            Some(errors::IncompleteTurnCause::StreamEndedEarly) => None,
+                            Some(errors::IncompleteTurnCause::NoResponse) | None => {
+                                Some("end_turn")
+                            }
+                        }
+                        .map(str::to_string),
                         input_tokens: turn.input_tokens,
                         output_tokens: turn.output_tokens,
                     }))
@@ -8871,8 +9172,17 @@ pub async fn run_oneshot(
         // Pretty-printed single JSON object, non-streaming, for shell users
         // running `agi -p '...' --output-format json`.
         let start = std::time::Instant::now();
-        let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
+        let turn =
+            send_until_interrupted(&mut session, config, prompt, Box::new(|_chunk| {})).await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        let result = match turn {
+            OneShotTurn::Finished(result) => result,
+            OneShotTurn::Interrupted(partial) => {
+                cancel_interrupted_turn(&mut session, &partial).await;
+                eprintln!("Interrupted, turn cancelled before completion.");
+                exit_interrupted()
+            }
+        };
 
         match result {
             Ok(turn) => {
@@ -8907,25 +9217,30 @@ pub async fn run_oneshot(
             }
         }
     } else if output_mode == OneShotOutputMode::RawText {
-        // Raw text mode: no spinner, no cost, no formatting
-        let result = session
-            .send(
-                config,
-                prompt,
-                Box::new(|chunk| {
-                    output::print_assistant_chunk(chunk);
-                }),
-            )
-            .await;
+        let turn = send_until_interrupted(
+            &mut session,
+            config,
+            prompt,
+            Box::new(|chunk| {
+                output::print_assistant_chunk(chunk);
+            }),
+        )
+        .await;
 
-        match result {
-            Ok(_turn) => {
+        match turn {
+            OneShotTurn::Finished(Ok(_turn)) => {
                 output::print_assistant_end();
             }
-            Err(e) => {
+            OneShotTurn::Finished(Err(e)) => {
                 output::print_assistant_end();
-                eprintln!("{}", e);
+                eprintln!("{}", errors::terminal_text(&e));
                 exit_with_error(&e);
+            }
+            OneShotTurn::Interrupted(partial) => {
+                cancel_interrupted_turn(&mut session, &partial).await;
+                output::print_assistant_end();
+                eprintln!("Interrupted, turn cancelled before completion.");
+                exit_interrupted();
             }
         }
     } else {
@@ -8933,22 +9248,38 @@ pub async fn run_oneshot(
         let spinner = output::create_spinner("Thinking...");
         let md = std::sync::Arc::new(std::sync::Mutex::new(markdown::MarkdownRenderer::new()));
         let md_cb = std::sync::Arc::clone(&md);
+        let spinner_cb = spinner.clone();
         session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
-        let result = session
-            .send(
-                config,
-                prompt,
-                Box::new(move |chunk| {
-                    if let Ok(mut renderer) = md_cb.lock() {
-                        output::print_assistant_chunk_formatted(&mut renderer, chunk);
-                    }
-                }),
-            )
-            .await;
+        let turn = send_until_interrupted(
+            &mut session,
+            config,
+            prompt,
+            Box::new(move |chunk| {
+                if !spinner_cb.is_finished() {
+                    spinner_cb.finish_and_clear();
+                }
+                if let Ok(mut renderer) = md_cb.lock() {
+                    output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                }
+            }),
+        )
+        .await;
         session.transcript_renderer = None;
 
         spinner.finish_and_clear();
+        let result = match turn {
+            OneShotTurn::Finished(result) => result,
+            OneShotTurn::Interrupted(partial) => {
+                cancel_interrupted_turn(&mut session, &partial).await;
+                if let Ok(mut renderer) = md.lock() {
+                    output::flush_markdown(&mut renderer);
+                }
+                output::print_assistant_end();
+                eprintln!("Interrupted, turn cancelled before completion.");
+                exit_interrupted()
+            }
+        };
 
         // Flush remaining markdown buffer
         if let Ok(mut renderer) = md.lock() {
@@ -8982,6 +9313,47 @@ pub async fn run_oneshot(
 
 #[cfg(test)]
 mod tests {
+
+    #[tokio::test]
+    async fn resume_and_fork_open_the_interactive_session_with_the_given_flags() {
+        let mut fork = Cli::try_parse_from([
+            "agiworkforce",
+            "--permission-mode",
+            "plan",
+            "-m",
+            "fixture-model",
+            "fork",
+            "abc",
+        ])
+        .expect("fork parses");
+        open_resume_subcommands_interactively(&mut fork)
+            .await
+            .expect("fork routes without a lookup");
+        assert!(fork.command.is_none());
+        assert_eq!(fork.resume.as_deref(), Some("abc"));
+        assert!(fork.fork_session);
+        assert_eq!(
+            fork.permission_mode,
+            Some(cli_options::PermissionMode::Plan)
+        );
+        assert_eq!(fork.model.as_deref(), Some("fixture-model"));
+
+        let mut latest =
+            Cli::try_parse_from(["agiworkforce", "--no-tui", "resume"]).expect("resume parses");
+        open_resume_subcommands_interactively(&mut latest)
+            .await
+            .expect("resume without an id needs no lookup");
+        assert!(latest.command.is_none());
+        assert!(latest.continue_session);
+        assert!(latest.resume.is_none());
+        assert!(latest.no_tui);
+
+        let mut other = Cli::try_parse_from(["agiworkforce", "doctor"]).expect("doctor parses");
+        open_resume_subcommands_interactively(&mut other)
+            .await
+            .expect("other commands pass through");
+        assert!(matches!(other.command, Some(Command::Doctor { .. })));
+    }
 
     #[test]
     fn a_resumed_conversation_keeps_the_model_it_was_held_on() {
@@ -9134,24 +9506,40 @@ mod tests {
         assert!(confirm_destructive_when("Delete it?", true, true));
     }
 
-    /// Desktop signs the machine out of its own account with `--account-only`;
-    /// a bare `logout` keeps forgetting every provider.
+    /// A bare `logout` leaves saved provider keys alone; removing them is `--all`.
     #[test]
-    fn logout_account_only_is_opt_in() {
-        let scoped = Cli::try_parse_from(["agi", "logout", "--account-only"])
-            .expect("logout --account-only parses");
-        assert!(matches!(
-            scoped.command,
-            Some(Command::Logout { account_only: true })
-        ));
-
+    fn logout_removes_provider_keys_only_when_asked() {
         let bare = Cli::try_parse_from(["agi", "logout"]).expect("logout parses");
         assert!(matches!(
             bare.command,
             Some(Command::Logout {
-                account_only: false
+                all: false,
+                account_only: false,
+                yes: false
             })
         ));
+        let desktop = Cli::try_parse_from(["agi", "logout", "--account-only"])
+            .expect("the desktop flag still parses");
+        assert!(matches!(
+            desktop.command,
+            Some(Command::Logout {
+                all: false,
+                account_only: true,
+                ..
+            })
+        ));
+        let everything =
+            Cli::try_parse_from(["agi", "logout", "--all", "--yes"]).expect("logout --all parses");
+        assert!(matches!(
+            everything.command,
+            Some(Command::Logout {
+                all: true,
+                yes: true,
+                ..
+            })
+        ));
+        assert!(Cli::try_parse_from(["agi", "logout", "--yes"]).is_err());
+        assert!(Cli::try_parse_from(["agi", "logout", "--all", "--account-only"]).is_err());
     }
 
     #[test]
@@ -9451,6 +9839,106 @@ mod tests {
             }) => assert_eq!(transport, RemoteMcpTransport::Http),
             other => panic!("expected mcp add, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn mcp_login_finds_every_server_a_session_here_would_load() {
+        let tmp = tempfile::tempdir().unwrap();
+        let registry = crate::mcp::registry::McpRegistry::load_from(tmp.path().join("mcp.json"))
+            .expect("an empty registry");
+        let mut session_servers = std::collections::HashMap::new();
+        session_servers.insert(
+            "linear".to_string(),
+            mcp::McpServerConfig::http("https://mcp.example.test/mcp", Default::default()),
+        );
+        session_servers.insert(
+            "local".to_string(),
+            mcp::McpServerConfig::stdio("notes-mcp", Vec::new(), Default::default()),
+        );
+
+        let (_, url) = sign_in_target("linear", &session_servers, &registry, false)
+            .expect("a project, imported or plugin server can be signed in to");
+        assert_eq!(url, "https://mcp.example.test/mcp");
+
+        let stdio = sign_in_target("local", &session_servers, &registry, false).unwrap_err();
+        assert!(format!("{stdio:#}").contains("stdio"), "{stdio:#}");
+
+        let waiting = sign_in_target("pending", &session_servers, &registry, true).unwrap_err();
+        assert!(
+            format!("{waiting:#}").contains("not approved"),
+            "{waiting:#}"
+        );
+
+        let unknown = sign_in_target("nowhere", &session_servers, &registry, false).unwrap_err();
+        assert!(format!("{unknown:#}").contains("nowhere"), "{unknown:#}");
+    }
+
+    #[test]
+    fn mcp_login_still_reaches_a_server_turned_off_in_the_registry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("mcp.json");
+        let mut registry = crate::mcp::registry::McpRegistry::load_from(&path).unwrap();
+        let entry = crate::mcp::registry::build_server_entry(
+            crate::mcp::registry::TransportKind::Http,
+            "https://off.example.test/mcp",
+            &[],
+        )
+        .unwrap();
+        registry.add("off", entry, false).unwrap();
+        registry.disable("off").unwrap();
+        let (_, url) =
+            sign_in_target("off", &std::collections::HashMap::new(), &registry, false).unwrap();
+        assert_eq!(url, "https://off.example.test/mcp");
+    }
+
+    #[test]
+    fn mcp_enable_and_disable_parse_and_say_what_changed() {
+        for (verb, enabled) in [("enable", true), ("disable", false)] {
+            let cli = Cli::try_parse_from(["agi", "mcp", verb, "github"])
+                .unwrap_or_else(|error| panic!("agi mcp {verb} parses: {error}"));
+            match cli.command {
+                Some(Command::Mcp {
+                    action: McpSubcommand::Enable { name },
+                }) if enabled => assert_eq!(name, "github"),
+                Some(Command::Mcp {
+                    action: McpSubcommand::Disable { name },
+                }) if !enabled => assert_eq!(name, "github"),
+                other => panic!("expected mcp {verb}, got {other:?}"),
+            }
+        }
+        assert!(mcp_switch_message("github", true, true).contains("Turned on"));
+        assert!(mcp_switch_message("github", false, false).contains("already off"));
+    }
+
+    #[tokio::test]
+    async fn restarting_mcp_with_no_server_left_disconnects_the_last_one() {
+        let sys_ctx = context::gather_system_context();
+        let mut session = agent::AgentSession::new(model_catalog::default_model(), &sys_ctx, None);
+        session.set_mcp_manager(mcp::McpManager::with_discovered_stdio_tool_for_test(
+            "github", "search",
+        ));
+        assert!(session.mcp_info().is_some());
+        replace_session_mcp_manager(&mut session, None).await;
+        assert!(session.mcp_info().is_none());
+        assert!(session.take_mcp_manager().is_none());
+    }
+
+    #[test]
+    fn notices_name_what_was_kept_or_not_loaded() {
+        let signed_out = account_sign_out_message("Logged out from 1 provider.");
+        assert!(signed_out.starts_with("Logged out from 1 provider."));
+        assert!(signed_out.contains("agi logout --all"));
+
+        let problem = mcp_config_problem_notice("/home/u/.mcp.json: invalid JSON: trailing comma");
+        assert!(problem.contains("/home/u/.mcp.json"));
+        assert!(problem.contains("invalid JSON"));
+
+        let copies = kept_session_copy_lines(&[std::path::PathBuf::from(
+            "/tmp/sessions/abc.json.conflict-1",
+        )]);
+        assert_eq!(copies.len(), 1);
+        assert!(copies[0].contains("agi --resume"));
+        assert!(copies[0].contains("abc.json.conflict-1"));
     }
 
     #[test]
@@ -9878,44 +10366,150 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn session_id_override_wires_to_managed_session() {
-        // Behavioral test: override_session_id() actually mutates the managed
-        // session's session_id so managed_session_id() returns the caller value.
-        //
-        // Takes the session-persistence policy lock because this test depends on
-        // the default (persistence on) while the `--no-session-persistence`
-        // tests flip that process-wide policy.
+    async fn a_requested_session_id_is_the_id_resume_and_show_find() {
         let _policy = cli_options::session_persistence_policy_lock();
         let sys_ctx = context::gather_system_context();
-        // Source the model ID from the canonical catalog (models.json) rather than
-        // a hardcoded literal, per the locked no-hardcoded-model-IDs rule.
         let model = model_catalog::default_model();
+        let requested = format!("requested-{}", uuid::Uuid::new_v4());
         let mut session = agent::AgentSession::new(model, &sys_ctx, None);
         session
-            .enable_managed_session()
-            .expect("enable_managed_session should succeed");
-        let auto_id = session
-            .managed_session_id()
-            .expect("session should exist after enable")
-            .to_string();
-        assert!(
-            !auto_id.is_empty(),
-            "auto-generated session id should not be empty"
-        );
+            .enable_managed_session_as(Some(requested.as_str()))
+            .expect("a new session takes the requested id");
+        assert_eq!(session.managed_session_id(), Some(requested.as_str()));
 
-        let custom = "test-override-id-behavioral";
-        session
-            .override_session_id(custom)
-            .expect("override_session_id should succeed");
+        let resolved = runtime::session_control::resolve_managed_session_reference(&requested)
+            .expect("the requested id resolves the way --resume and session show resolve it");
+        assert_eq!(resolved.summary.session_id, requested);
         assert_eq!(
-            session.managed_session_id(),
-            Some(custom),
-            "managed_session_id should reflect the overridden id"
+            resolved.path.file_stem().and_then(|stem| stem.to_str()),
+            Some(requested.as_str())
         );
-        assert_ne!(
-            session.managed_session_id(),
-            Some(auto_id.as_str()),
-            "id should have changed from the auto-generated value"
+    }
+
+    fn transcript_message(role: &str, blocks: Vec<models::ContentBlock>) -> models::Message {
+        models::Message::blocks(role, blocks)
+    }
+
+    fn prompt_and_tool_transcript() -> Vec<models::Message> {
+        vec![
+            models::Message::text("system", "system"),
+            models::Message::text("user", "first prompt"),
+            transcript_message(
+                "assistant",
+                vec![models::ContentBlock::ToolUse {
+                    id: "call-1".to_string(),
+                    name: "run_command".to_string(),
+                    input: serde_json::json!({ "command": "true" }),
+                }],
+            ),
+            transcript_message(
+                "user",
+                vec![models::ContentBlock::ToolResult {
+                    tool_use_id: "call-1".to_string(),
+                    content: "ok".to_string(),
+                    is_error: false,
+                }],
+            ),
+            models::Message::text("assistant", "DONE"),
+            models::Message::text("user", "second prompt"),
+            models::Message::text("assistant", "TWO"),
+        ]
+    }
+
+    #[test]
+    fn forking_at_a_turn_counts_prompts_and_keeps_the_whole_answer() {
+        let at_first = fork_transcript(prompt_and_tool_transcript(), Some(0));
+        assert_eq!(at_first.len(), 5, "cut after the first prompt's answer");
+        assert_eq!(at_first[4].text_content(), "DONE");
+
+        let at_second = fork_transcript(prompt_and_tool_transcript(), Some(1));
+        assert_eq!(at_second.len(), 7, "the second prompt and its answer stay");
+        assert_eq!(at_second[6].text_content(), "TWO");
+
+        assert_eq!(fork_transcript(prompt_and_tool_transcript(), None).len(), 7);
+    }
+
+    #[test]
+    fn a_fork_never_ends_on_an_unanswered_tool_call() {
+        let mut interrupted = prompt_and_tool_transcript();
+        interrupted.truncate(3);
+
+        let forked = fork_transcript(interrupted, Some(0));
+
+        let last = forked.last().expect("transcript");
+        assert_eq!(last.role, "user");
+        assert!(matches!(
+            &last.content,
+            models::MessageContent::Blocks(blocks)
+                if matches!(blocks.as_slice(), [models::ContentBlock::ToolResult { tool_use_id, .. }] if tool_use_id == "call-1")
+        ));
+    }
+
+    #[test]
+    fn the_worktree_return_hint_is_a_command_that_parses_and_continues() {
+        let hint = worktree_return_hint("feature-x");
+        let cli = Cli::try_parse_from(hint.split_whitespace()).expect("the printed hint parses");
+        assert!(cli.continue_session);
+        assert_eq!(cli.worktree.as_deref(), Some("feature-x"));
+        let long = Cli::try_parse_from(["agi", "--continue"]).expect("--continue is accepted");
+        assert!(long.continue_session);
+    }
+
+    #[test]
+    fn exec_takes_the_run_limits_and_effort_the_top_level_run_takes() {
+        let cli = Cli::try_parse_from([
+            "agi",
+            "--effort",
+            "low",
+            "--max-tokens",
+            "1024",
+            "--max-budget-usd",
+            "1",
+            "exec",
+            "go",
+        ])
+        .expect("parses");
+        let mut config = config::CliConfig::default();
+        let effort_turns = apply_run_overrides(&cli, &mut config);
+        assert_eq!(cli.max_turns.or(effort_turns), Some(3));
+        assert_eq!(config.default.max_tokens, 1024, "an explicit flag wins");
+        assert_eq!(cli.max_budget_usd, Some(1.0));
+        assert_eq!(saved_effort(&config), Some(design_system::Effort::Low));
+    }
+
+    #[test]
+    fn the_effort_flag_sets_the_reasoning_effort_over_the_saved_one() {
+        let mut config = config::CliConfig::default();
+        config.default.reasoning_effort = Some("low".to_string());
+        let unflagged = Cli::try_parse_from(["agi"]).expect("parses");
+        apply_run_overrides(&unflagged, &mut config);
+        assert_eq!(saved_effort(&config), Some(design_system::Effort::Low));
+        let flagged = Cli::try_parse_from(["agi", "--effort", "max"]).expect("parses");
+        apply_run_overrides(&flagged, &mut config);
+        assert_eq!(saved_effort(&config), Some(design_system::Effort::Max));
+    }
+
+    #[test]
+    fn system_prompt_files_win_over_inline_flags_and_appends_join() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path().join("base.txt");
+        std::fs::write(&base, "from file").expect("write");
+        let base_arg = base.display().to_string();
+        let cli = Cli::try_parse_from([
+            "agi",
+            "--system-prompt",
+            "inline",
+            "--system-prompt-file",
+            base_arg.as_str(),
+            "--append-system-prompt",
+            "extra",
+            "exec",
+            "go",
+        ])
+        .expect("parses");
+        assert_eq!(
+            resolve_system_prompt(&cli).expect("resolves").as_deref(),
+            Some("from file\n\nextra")
         );
     }
 

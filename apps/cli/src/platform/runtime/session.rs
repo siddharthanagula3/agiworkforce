@@ -177,6 +177,18 @@ pub(crate) fn session_fingerprint(path: &Path) -> Option<SessionFingerprint> {
     fingerprint_of(path)
 }
 
+/// What follows a session's file name in the name of a copy kept when two
+/// writers collided on it.
+pub const SESSION_KEPT_COPY_MARKER: &str = ".conflict-";
+
+fn kept_copy_notice(kept: &Path) -> String {
+    format!(
+        "[session] Another agi process saved this session too. Its turns were kept at {}. Open them with: agi --resume {}",
+        kept.display(),
+        crate::sandbox::shell_quote(&kept.to_string_lossy())
+    )
+}
+
 /// Make an exclusively-created recovery COPY; never move the original and
 /// never replace an older recovery file. Failure leaves the original in place.
 fn preserve_conflicting_session(path: &Path, contents: &[u8]) -> Result<PathBuf> {
@@ -187,7 +199,7 @@ fn preserve_conflicting_session(path: &Path, contents: &[u8]) -> Result<PathBuf>
         .file_name()
         .context("Managed session path has no filename")?
         .to_os_string();
-    prefix.push(".conflict-");
+    prefix.push(SESSION_KEPT_COPY_MARKER);
     let mut copy = tempfile::Builder::new()
         .prefix(&prefix)
         .tempfile_in(dir)
@@ -1595,9 +1607,9 @@ impl ManagedSession {
                 if known
                     .is_none_or(|known| !known.complete || known.digest != session_digest(&current))
                 {
-                    preserve_conflicting_session(&target, &current)
+                    let kept = preserve_conflicting_session(&target, &current)
                         .context("Could not preserve changed session; refusing to overwrite it")?;
-                    eprintln!("[session] Previous session contents were preserved in the session directory");
+                    eprintln!("{}", kept_copy_notice(&kept));
                 }
             }
             None if known.is_some() => {
@@ -3344,6 +3356,38 @@ mod tests {
         assert!(mine.save_to_path(&path).is_err());
         assert!(mine.persistence.baseline.lock().unwrap().is_none());
         assert!(path.is_dir());
+    }
+
+    #[test]
+    fn the_notice_for_a_kept_copy_names_it_and_how_to_open_it() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("s1.jsonl");
+        let mut mine = ManagedSession::new("s1", Utc::now());
+        mine.messages.push(Message::text("user", "mine"));
+        mine.save_to_path(&path).expect("first save");
+        let mut theirs = ManagedSession::load_from_path(&path).expect("load second writer");
+        theirs.messages.push(Message::text("user", "theirs"));
+        theirs.save_to_path(&path).expect("foreign save");
+        mine.save_to_path(&path).expect("second save");
+        let kept = std::fs::read_dir(dir.path())
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .find(|path| path.to_string_lossy().contains(".conflict-"))
+            .expect("a kept copy");
+
+        let notice = super::kept_copy_notice(&kept);
+
+        assert!(notice.contains(&*kept.to_string_lossy()), "{notice}");
+        assert!(notice.contains("agi --resume "), "{notice}");
+        assert!(
+            ManagedSession::load_from_path(&kept)
+                .expect("the named copy opens")
+                .messages
+                .iter()
+                .any(|message| message.text_content() == "theirs"),
+            "{notice}"
+        );
     }
 
     #[test]

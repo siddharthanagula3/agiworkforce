@@ -18,8 +18,8 @@ describe('computer-use default = Auto, crucial actions still ask', () => {
     expect(background).toMatch(/crucial: asksInAutoMode\(requirement\)/);
   });
 
-  it('the Ask before acting checkbox is off by default, which is Auto', () => {
-    expect(panel).toMatch(/askCheckbox\.checked\s*=\s*false;/);
+  it('the permission mode control starts on the default mode, which is Auto', () => {
+    expect(panel).toContain('showMode(DEFAULT_BROWSER_PERMISSION_MODE)');
   });
 });
 
@@ -28,20 +28,16 @@ describe('computer-use ask gate persists and rehydrates', () => {
 
   it('rehydrates the stored gate instead of always rendering the default', () => {
     expect(panel).toMatch(/storage\?\.local\?\.get\(ASK_BEFORE_ACTING_KEY/);
-    expect(panel).toMatch(
-      /askCheckbox\.checked\s*=\s*readBrowserPermissionMode\(items\?\.\[ASK_BEFORE_ACTING_KEY\]\) === 'ask'/,
-    );
+    expect(panel).toContain('showMode(readBrowserPermissionMode(items?.[ASK_BEFORE_ACTING_KEY]))');
   });
 
-  it('writes the gate on toggle: on is Ask first, off is Auto, never Full access', () => {
-    expect(panel).toMatch(/askCheckbox\.addEventListener\('change'/);
-    expect(panel).toContain(
-      "[ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(next ? 'ask' : 'auto')",
-    );
+  it('writes the mode the user chose, and only when the user changes the control', () => {
+    expect(panel).toMatch(/modeSelect\.addEventListener\('change'/);
+    expect(panel).toContain('[ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(next)');
   });
 
   it('rolls the control back when the authoritative storage write fails', () => {
-    expect(panel).toContain('askCheckbox.checked = !next');
+    expect(panel).toContain('showMode(previousMode)');
     expect(panel).toContain('The previous setting is still active.');
   });
 });

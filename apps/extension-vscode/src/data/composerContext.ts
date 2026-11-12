@@ -6,7 +6,9 @@ import { Config } from '../platform/config';
 import { tPlural } from '../l10n';
 import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
 import { latestTerminalOutput } from './terminalOutput';
+import { workingTextEditor } from '../platform/lastTextEditor';
 import {
+  gitWithholdReason,
   isGitIgnored,
   settingsWithholdReason,
   resolvedContextWithholdReason,
@@ -355,6 +357,7 @@ const WITHHELD_BECAUSE: Record<ContextWithholdReason, string> = {
   credential: 'matches the credential-file policy',
   excluded: 'matches the files.exclude or search.exclude setting',
   gitignored: 'is ignored by git',
+  unchecked: 'could not be checked against the git ignore rules',
   unavailable: 'could not be safely resolved inside the workspace',
 };
 
@@ -381,7 +384,9 @@ function pathOnlyContext(
 
 export async function withholdGitIgnoredContext(
   snapshot: EditorContextSnapshot,
-  ignoredByGit: (filePath: string) => Promise<boolean> = isGitIgnored,
+  ignoreReason: (
+    filePath: string,
+  ) => Promise<'gitignored' | 'unchecked' | undefined> = gitWithholdReason,
 ): Promise<EditorContextSnapshot> {
   const source = snapshot.source;
   if (source === undefined) return snapshot;
@@ -395,8 +400,8 @@ export async function withholdGitIgnoredContext(
   if (snapshot.texts.length > 0 && resolved.resolvedPath !== source.filePath) {
     return pathOnlyContext(keepFile, source.relativePath, 'unavailable');
   }
-  if (await ignoredByGit(source.filePath))
-    return pathOnlyContext(keepFile, source.relativePath, 'gitignored');
+  const ignored = await ignoreReason(source.filePath);
+  if (ignored !== undefined) return pathOnlyContext(keepFile, source.relativePath, ignored);
   return {
     ...snapshot,
     contextFiles: snapshot.contextFiles.map((file) =>
@@ -409,7 +414,7 @@ export async function withholdGitIgnoredContext(
 export async function captureEditorContext(
   dismissed: ReadonlySet<string>,
 ): Promise<EditorContextSnapshot> {
-  const editor = vscode.window.activeTextEditor;
+  const editor = workingTextEditor();
   if (editor === undefined || !Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
   const relative = vscode.workspace.asRelativePath(editor.document.uri);
   const keepFile = !dismissed.has(editorContextChipId('active-file', relative));

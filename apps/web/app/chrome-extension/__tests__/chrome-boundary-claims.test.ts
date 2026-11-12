@@ -167,6 +167,13 @@ describe('/chrome-extension, transmission claims', () => {
     expect(inference![1]!).toMatch(new RegExp(`${CLOUD}`, 'u'));
   });
 
+  it('keeps native messaging apart from the loopback pairing port', () => {
+    const source = collapsed();
+    expect(source).not.toMatch(/native messaging[^.'`]*localhost port/iu);
+    expect(source).not.toMatch(/\b8787\b/u);
+    expect(source).toMatch(/Pairing runs over loopback[^.]*\$\{BROWSER_BRIDGE_DEFAULT_PORT\}/u);
+  });
+
   it('sends the reader to the page that details the residual screenshot risk', () => {
     expect(collapsed()).toMatch(/href="\/agent-permissions"/u);
   });

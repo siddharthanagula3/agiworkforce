@@ -123,7 +123,7 @@ export default function FeaturesAgentsPage() {
                 {
                   label: 'Your answer',
                   value:
-                    'Yes allows one call. Allow Session lasts until you quit. Always Allow writes to disk and /permissions reset clears it.',
+                    'Yes allows one call. Allow Session lasts until you quit. Always allow writes to disk and /permissions reset clears it.',
                 },
                 {
                   label: 'Sandbox',

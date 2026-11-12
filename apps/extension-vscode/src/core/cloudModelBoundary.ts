@@ -20,6 +20,10 @@ export function cloudUtilityModel(): CloudUtilityModel {
   return cloud === null ? { route: 'local', model: configured } : { route: 'cloud', model: cloud };
 }
 
+export function localModelNotRunningMessage(model: string): string {
+  return `${modelDisplayLabel(model)} is not an AGI Cloud model and no running Local model has that name, so nothing was sent. Start that Local model and try again, or choose another model.`;
+}
+
 export class LocalModelSelectedError extends Error {
   readonly code = LOCAL_MODEL_SELECTED_CODE;
 

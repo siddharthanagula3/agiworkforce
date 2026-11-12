@@ -34,7 +34,10 @@ import { resolveTierSync } from './integrations/tierResolver';
 import { Config, resolveConfiguredCli } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
-import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
+import {
+  normalizeConfiguredModelId,
+  normalizeSelectableConfiguredModelId,
+} from './features/model-picker/modelConstants';
 import { initSubsystemHealth, runBoot, recordFailure } from './core/subsystemHealth';
 import { validateAdvancedFeatureFlags } from './core/advancedFeatures';
 import { buildExtensionStatusBarText } from './core/statusBar';
@@ -47,6 +50,7 @@ import {
 import { setupCommands } from './core/commandSetup';
 import { announceExtensionUpdate, announceMissingNativeChat } from './core/hostNotices';
 import { markInUse, whenInUse } from './core/startupWork';
+import { trackLastTextEditor } from './platform/lastTextEditor';
 import { activateProductAnalytics } from './features/analytics/productAnalytics';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
@@ -394,7 +398,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar);
 
   function updateStatusBar(): void {
-    const model = normalizeConfiguredModelId(sidebarProvider?.activeModel() ?? Config.model());
+    const active = sidebarProvider?.activeModel() ?? Config.model();
+    const model = normalizeSelectableConfiguredModelId(active) ?? active;
     statusBar.text = buildExtensionStatusBarText(model, Config.agentMode());
     statusBar.show();
   }
@@ -493,6 +498,7 @@ export function activate(context: vscode.ExtensionContext): void {
   void checkInlineCompletionsFirstRun(context);
 
   watchAccountTierInvalidation(context);
+  context.subscriptions.push(trackLastTextEditor());
   whenInUse(() => {
     void refreshAccountTierCache(context).catch(() => {});
   });
@@ -508,11 +514,6 @@ export async function deactivate(): Promise<void> {
 
 async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext): Promise<void> {
   if (!Config.inlineCompletionsEnabled()) return;
-
-  const inspected = vscode.workspace
-    .getConfiguration()
-    .inspect('agiWorkforce.inlineCompletions.enabled');
-  if (inspected?.globalValue !== undefined) return;
 
   const alreadyShown = context.globalState.get<boolean>('inlineCompletions.firstRunNoticeShown');
   if (alreadyShown === true) return;

@@ -3302,13 +3302,13 @@
       "doc": "troubleshooting",
       "section": "The CLI will not sign in",
       "kind": "prose",
-      "sentence": "If the wait stops with \"Device code expired. Please run /login again.\" or \"Authorization timed out\", the code was not approved in time: run `agi login` again for a fresh one.",
+      "sentence": "If the wait stops with \"The sign-in code expired.\" or \"Authorization timed out\", the code was not approved in time: run `agi login` again for a fresh one.",
       "implementation": ["apps/cli/src/oauth.rs#device_code_login"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/cli/src/oauth.rs",
-          "text": "Device code expired. Please run /login again."
+          "text": "The sign-in code expired."
         },
         {
           "kind": "copy",
@@ -5279,6 +5279,26 @@
           "kind": "copy",
           "file": "apps/cli/src/config.rs",
           "text": "`AGIWORKFORCE_MAX_TOKENS` -> `default.max_tokens`"
+        }
+      ]
+    },
+    {
+      "id": "config-repository-layer-only-narrows",
+      "doc": "configuration",
+      "section": "Which setting wins",
+      "kind": "prose",
+      "sentence": "The repository's file can only narrow your own privacy mode, permission mode and model route: a looser value is ignored and the session says so when it starts.",
+      "implementation": ["apps/cli/src/config.rs#fn narrow_repository_layer"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "a_repository_layer_can_only_narrow_privacy_and_permissions"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "a_repository_model_that_leaves_a_local_boundary_is_not_applied"
         }
       ]
     },

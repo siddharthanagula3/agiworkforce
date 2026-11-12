@@ -501,6 +501,9 @@ pub(crate) fn git_state_dir() -> Option<PathBuf> {
 /// Point the shared crate at [`git_state_dir`]. Every entry into host git
 /// calls this first; the first call in a process names the directory.
 pub(crate) fn use_git_state_dir() {
+    if let Ok(dir) = crate::config::CliConfig::config_dir() {
+        agiworkforce_worktree::set_host_git_config_dir(dir.join("git"));
+    }
     if let Some(dir) = git_state_dir() {
         agiworkforce_worktree::set_host_state_dir(dir);
     }

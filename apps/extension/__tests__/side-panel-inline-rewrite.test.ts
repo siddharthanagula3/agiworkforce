@@ -191,9 +191,11 @@ describe('rewrite handoff during panel startup', () => {
       .filter(
         (node) =>
           ts.isFunctionDeclaration(node) &&
-          ['pendingChatInvocationCurrent', 'pendingChatIdentity'].includes(node.name?.text ?? ''),
+          ['pendingChatInvocationCurrent', 'pendingChatIdentity', 'handlePendingRewrite'].includes(
+            node.name?.text ?? '',
+          ),
       )
-      .map((node) => node.getText(program))
+      .map((node) => node.getText(program).replaceAll('managedCloudChatState', 'state.cloud'))
       .join('\n');
     const dependencies = {
       document,

@@ -1,4 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
+import { Config } from '../platform/config';
+import { applyProjectToChat, projectEdit } from '../features/projects/projectActions';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 import type { ManagedCloudProject } from '@agiworkforce/cloud-contracts';
 import {
   OPEN_PROJECT_COMMAND,
@@ -166,5 +170,40 @@ describe('active project prelude', () => {
 
   it('is empty when no project is applied to this workspace', () => {
     expect(formatActiveProjectPrelude(getActiveCloudProject(memento()))).toBe('');
+  });
+});
+
+describe('project default model with a Local default', () => {
+  it('does not offer Auto as the model this chat uses when the default is a Local model', async () => {
+    const configured = vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
+    try {
+      await projectEdit(makeProject(), 'edit-default-model');
+    } finally {
+      configured.mockRestore();
+    }
+    const [items, options] = vi.mocked(vscode.window.showQuickPick).mock.calls.at(-1) ?? [];
+    expect((items as vscode.QuickPickItem[]).map((item) => item.label)).toEqual([
+      '$(close) No default model',
+    ]);
+    expect((options as vscode.QuickPickOptions).placeHolder).toContain(SYNTHETIC_LOCAL_MODEL_ID);
+  });
+
+  it('offers the project default when the user default is a Local model', async () => {
+    const configured = vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValueOnce(undefined);
+    try {
+      await applyProjectToChat(makeProject({ defaultModelId: 'auto' }), {
+        onChanged: vi.fn(),
+        webOrigin: 'https://example.test',
+        workspaceState: memento(),
+      });
+    } finally {
+      configured.mockRestore();
+    }
+    expect(vscode.window.showInformationMessage).toHaveBeenLastCalledWith(
+      expect.stringContaining('Its default model is'),
+      expect.anything(),
+    );
   });
 });

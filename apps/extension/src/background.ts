@@ -31,6 +31,8 @@ import {
   type ScheduledTaskFetch,
 } from './features/background/scheduled-task-transport';
 import { renderShortcutPrompt } from './features/side-panel/pageCommands';
+import { streamFailureText } from './features/side-panel/chat-state';
+import { IN_PAGE_PROMPT_PORT_PREFIX } from './features/content/in-page-panel/promptPort';
 import type {
   BrowserContextTabReference,
   ChatChunkMessage,
@@ -333,9 +335,16 @@ import {
   authorizeBrowserToolUrl,
   readAuthorizedBrowserTab,
 } from './features/browser-tools/tabAuthority';
-import { CONTENT_SENDER_REFUSAL, contentScriptPageUrl } from './features/background/contentAccess';
+import {
+  AUTOFILL_NOT_APPROVED_ERROR,
+  AUTOFILL_PROFILE_UNREADABLE_ERROR,
+  AUTOFILL_UNSUPPORTED_PAGE_ERROR,
+  CONTENT_SENDER_REFUSAL,
+  contentScriptPageUrl,
+} from './features/background/contentAccess';
 import { loadAutofillProfile } from './features/content/autofill/profile-storage';
 import { isJobApplicationHostUrl } from './features/content/autofill/detector';
+import { changedOrigins, notifyPageAccessChanged } from './features/background/pageAccessNotifier';
 import { IN_PAGE_PANEL_ENABLED_STORAGE_KEY } from './features/options/preference-rows';
 import { parseContactAutofillProfile } from './features/content/autofill/contactProfile';
 import { parseFormFillPlan } from './features/content/formFillPlan';
@@ -462,6 +471,9 @@ interface ActiveChatStream {
   visibleText?: string;
   panelDetached?: boolean;
   settlement?: Promise<void>;
+  inPageTabId?: number;
+  inPageOrigin?: string;
+  inPageRequestId?: string;
 }
 
 const activeChatStreams = new Map<string, ActiveChatStream>();
@@ -1561,6 +1573,7 @@ function initialize(): void {
   chrome.runtime.onMessage.addListener(handleMessage);
   chrome.runtime.onConnect.addListener(handleManagedChatKeepalivePort);
   chrome.runtime.onConnect.addListener(handleSidePanelPresencePort);
+  chrome.runtime.onConnect.addListener(handleInPagePromptPort);
   void sweepTransientHostPermissions(false);
   void initializeSyncedPreferences(chrome.storage, (error) => {
     logger.warn('Failed to mirror a cross-device preference', error);
@@ -3860,8 +3873,20 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY]) return;
   siteAllowlistPublication.claim();
   const next = changes[SITE_ALLOWLIST_STORAGE_KEY].newValue;
+  const previous = changes[SITE_ALLOWLIST_STORAGE_KEY].oldValue;
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
   cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+  const changed = changedOrigins(
+    new Set(Array.isArray(previous) ? (previous as string[]) : []),
+    siteAllowlistCache,
+  );
+  cancelInPagePromptsOnUnapprovedOrigins();
+  void notifyPageAccessChanged((origin) => changed.has(origin));
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes[IN_PAGE_PANEL_ENABLED_STORAGE_KEY]) return;
+  void siteAllowlistReady.then(() => notifyPageAccessChanged(isOriginApprovedForAutomation));
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
@@ -3873,6 +3898,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
       adminSitePolicyPublication.publish(owner, () => {
         adminSitePolicyCache = policy;
         cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+        cancelInPagePromptsOnUnapprovedOrigins();
+        void notifyPageAccessChanged(() => true);
       });
     });
 });
@@ -4133,6 +4160,29 @@ function handleMessage(
     });
     sendResponse({ success: false, error: 'Invalid message format' } as ExtensionResponse);
     return false;
+  }
+
+  if (
+    msg.type === 'OPEN_SIDE_PANEL' &&
+    !siteAllowlistLoaded &&
+    sender.id === chrome.runtime.id &&
+    sender.tab?.id != null
+  ) {
+    // Chrome allows sidePanel.open only in the synchronous turn of the user's
+    // click, and a dormant worker has not read the allowlist yet. Opening the
+    // panel reveals nothing about any site, so the open comes first and the
+    // allowlist decides the reply.
+    openAssistantPanel({ tabId: sender.tab.id, windowId: sender.tab.windowId }).catch((err) => {
+      logger.warn('OPEN_SIDE_PANEL synchronous open failed', err);
+    });
+    void siteAllowlistReady.then(() => {
+      sendResponse(
+        isAllowlistedSender(sender, msg.type)
+          ? ({ success: true } as ExtensionResponse)
+          : ({ success: false, error: SITE_NOT_APPROVED_MESSAGE } as ExtensionResponse),
+      );
+    });
+    return true;
   }
 
   if (!isAllowlistedSender(sender, msg.type)) {
@@ -5156,19 +5206,20 @@ async function handleMessageAsync(
 
     case 'GET_AUTOFILL_PROFILE': {
       const pageUrl = contentScriptPageUrl(sender, chrome.runtime.id);
-      if (
-        !pageUrl ||
-        !isOriginApprovedForAutomation(new URL(pageUrl).origin) ||
-        !isJobApplicationHostUrl(pageUrl)
-      )
+      if (!pageUrl) return { success: false, error: CONTENT_SENDER_REFUSAL } as ExtensionResponse;
+      if (!isOriginApprovedForAutomation(new URL(pageUrl).origin))
+        return { success: false, error: AUTOFILL_NOT_APPROVED_ERROR } as ExtensionResponse;
+      if (!isJobApplicationHostUrl(pageUrl))
+        return { success: false, error: AUTOFILL_UNSUPPORTED_PAGE_ERROR } as ExtensionResponse;
+      try {
         return {
-          success: false,
-          error: 'Autofill is blocked here, this site is not on your approved-site allowlist',
+          success: true,
+          profile: await loadAutofillProfile({ throwOnError: true }),
         } as ExtensionResponse;
-      return {
-        success: true,
-        profile: await loadAutofillProfile({ throwOnError: true }),
-      } as ExtensionResponse;
+      } catch (error) {
+        logger.warn('Autofill profile could not be read', error);
+        return { success: false, error: AUTOFILL_PROFILE_UNREADABLE_ERROR } as ExtensionResponse;
+      }
     }
 
     case 'AUTHORIZE_SITE_TOOL_DESTINATION': {
@@ -5619,7 +5670,16 @@ async function handleMessageAsync(
         typeof prompt === 'string' ? prompt : '',
         typeof pageContext === 'string' ? pageContext : undefined,
         sender.tab?.url ?? sender.url,
+        sender.tab?.id,
+        typeof (message as InPagePromptMessage).requestId === 'string'
+          ? (message as InPagePromptMessage).requestId
+          : undefined,
       );
+    }
+
+    case 'CANCEL_IN_PAGE_PROMPT': {
+      if (typeof sender.tab?.id === 'number') cancelInPagePrompts(sender.tab.id);
+      return { success: true } as ExtensionResponse;
     }
 
     case 'LIST_MEMORIES': {
@@ -6818,6 +6878,11 @@ const CONTEXT_MENU_ITEMS: ReadonlyArray<chrome.contextMenus.CreateProperties> = 
   { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
   { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
 ];
+const pendingChatWindowStamp = (tab: chrome.tabs.Tab) => ({
+  tabId: tab.id,
+  windowId: tab.windowId,
+});
+
 const pendingEditableCaptures = new Map<number, string>();
 
 /**
@@ -6913,7 +6978,7 @@ function handleContextMenuClick(
           type: 'ask-selection',
           text: info.selectionText,
           url: info.pageUrl ?? tab.url ?? '',
-          tabId: tab.id,
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -6964,6 +7029,7 @@ function handleContextMenuClick(
           type: 'explain',
           text: info.selectionText,
           url: info.pageUrl ?? '',
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -6978,6 +7044,7 @@ function handleContextMenuClick(
           type: 'translate',
           text: info.selectionText,
           url: info.pageUrl ?? '',
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -6992,6 +7059,7 @@ function handleContextMenuClick(
           type: 'ask-page',
           text: '',
           url: info.pageUrl ?? '',
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -7006,6 +7074,7 @@ function handleContextMenuClick(
           type: 'summarize',
           text: '',
           url: info.pageUrl ?? '',
+          ...pendingChatWindowStamp(tab),
           timestamp: Date.now(),
         },
       })
@@ -7042,6 +7111,7 @@ function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
 }
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  cancelInPagePrompts(tabId);
   const lease = computerUseRuns.getActive();
   if (lease?.tabId === tabId) {
     computerUseStartGeneration += 1;
@@ -7144,6 +7214,7 @@ async function captureCurrentPage(): Promise<void> {
       },
       writeActionCount: (actionCount) => storageUtils.setItem('stats', { actionCount }),
       notify: showNotification,
+      sent: { title: t('pageCaptureSentTitle'), message: t('pageCaptureSentMessage') },
     });
   } catch (error) {
     logger.error('Failed to capture page', error);
@@ -7382,10 +7453,15 @@ async function handleChatMessage(
         )
       : undefined;
     let systemPrompt: string | undefined;
-    if (!delivery) {
+    const turnCarriesPage =
+      (typeof message.pageContext === 'string' && message.pageContext.length > 0) ||
+      isChatBrowserToolTier(message.browserToolTier) ||
+      browserContext !== undefined;
+    if (!delivery && turnCarriesPage) {
       try {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (activeTab?.url) systemPrompt = getPlatformPrompt(activeTab.url) ?? undefined;
+        const turnUrl = browserContext?.url ?? activeTab?.url;
+        if (turnUrl) systemPrompt = getPlatformPrompt(turnUrl) ?? undefined;
       } catch {
         // Platform context is optional; inference remains Managed Cloud only.
       }
@@ -8342,10 +8418,7 @@ function mapInPagePromptFailure(
     case 'auth_required':
       return inPagePromptFailure('signed_out', 'Sign in to use AGI Managed Cloud.');
     case 'plan_required':
-      return inPagePromptFailure(
-        'plan_required',
-        'Managed Cloud chat is not available for this AGI account.',
-      );
+      return inPagePromptFailure('plan_required', result.message);
     case 'quota_exceeded':
       return inPagePromptFailure('quota_exceeded', result.message);
     case 'account_unavailable':
@@ -8355,24 +8428,77 @@ function mapInPagePromptFailure(
     case 'terms_required':
       return inPagePromptFailure('terms_required', result.message);
     case 'rate_limited':
-      return inPagePromptFailure('rate_limited', result.message, true);
+      return inPagePromptFailure(
+        'rate_limited',
+        streamFailureText(result.message, {
+          ...(result.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: result.retryAfterSeconds }
+            : {}),
+        }),
+        true,
+      );
     case 'cancelled':
       return inPagePromptFailure('cancelled', 'Request cancelled.');
     case 'invalid_request':
     case 'model_not_admitted':
+    case 'model_refused':
       return inPagePromptFailure('request_rejected', result.message);
     default:
       return inPagePromptFailure('retryable_error', result.message, true);
   }
 }
 
+function cancelInPagePrompts(tabId: number, requestId?: string): void {
+  for (const active of activeChatStreams.values()) {
+    if (active.inPageTabId !== tabId) continue;
+    if (requestId !== undefined && active.inPageRequestId !== requestId) continue;
+    active.cancelRequested = true;
+    active.controller.abort();
+  }
+}
+
+function cancelInPagePromptsOnUnapprovedOrigins(): void {
+  for (const active of activeChatStreams.values()) {
+    if (active.inPageTabId === undefined) continue;
+    if (active.inPageOrigin && isOriginApprovedForAutomation(active.inPageOrigin)) continue;
+    active.cancelRequested = true;
+    active.controller.abort();
+  }
+}
+
+const MAX_CLOSED_IN_PAGE_REQUESTS = 50;
+const closedInPageRequests = new Set<string>();
+
+function handleInPagePromptPort(port: chrome.runtime.Port): void {
+  if (!port.name.startsWith(IN_PAGE_PROMPT_PORT_PREFIX)) return;
+  const tabId = port.sender?.tab?.id;
+  if (port.sender?.id !== chrome.runtime.id || typeof tabId !== 'number') {
+    port.disconnect();
+    return;
+  }
+  const requestId = port.name.slice(IN_PAGE_PROMPT_PORT_PREFIX.length);
+  port.onDisconnect.addListener(() => {
+    closedInPageRequests.add(requestId);
+    if (closedInPageRequests.size > MAX_CLOSED_IN_PAGE_REQUESTS) {
+      const oldest = closedInPageRequests.values().next().value;
+      if (oldest !== undefined) closedInPageRequests.delete(oldest);
+    }
+    cancelInPagePrompts(tabId, requestId);
+  });
+}
+
 async function handleInPagePrompt(
   prompt: string,
   pageContext?: string,
   senderUrl?: string,
+  senderTabId?: number,
+  requestId?: string,
 ): Promise<InPagePromptResponse> {
   if (!prompt.trim()) {
     return inPagePromptFailure('request_rejected', 'Enter a question or choose a page action.');
+  }
+  if (requestId !== undefined && closedInPageRequests.has(requestId)) {
+    return inPagePromptFailure('cancelled', 'Request cancelled.');
   }
   let credential: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
   try {
@@ -8399,6 +8525,9 @@ async function handleInPagePrompt(
     controller: new AbortController(),
     cancelRequested: false,
     cancelNotified: false,
+    ...(senderTabId !== undefined ? { inPageTabId: senderTabId } : {}),
+    ...(senderUrl ? { inPageOrigin: originOfUrl(senderUrl) } : {}),
+    ...(requestId !== undefined ? { inPageRequestId: requestId } : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
   let result: ChromeManagedChatResult;

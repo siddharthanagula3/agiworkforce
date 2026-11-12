@@ -24,6 +24,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use ratatui::text::{Line, Span};
 
+pub(crate) const MODE_DEFAULT: &str = "Default";
+pub(crate) const MODE_PLAN: &str = "Plan";
+pub(crate) const MODE_AUTO: &str = "Auto";
+pub(crate) const MODE_BYPASS: &str = "Bypass";
+pub(crate) const MODE_FULL_AUTO: &str = "FullAuto";
+
 /// True while the full-screen ratatui TUI owns the terminal (alternate screen +
 /// raw mode). Lower layers (e.g. the streaming dispatcher) check this to avoid
 /// writing raw `eprintln!` notices that would corrupt the display. In exec /

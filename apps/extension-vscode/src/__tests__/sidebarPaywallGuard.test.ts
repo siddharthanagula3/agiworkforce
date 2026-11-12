@@ -101,11 +101,7 @@ describe('resolveTier account-owned entitlement', () => {
 
     await expect(refreshAccountTierCache(context, loadTier)).resolves.toBe('team');
     expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', 'team');
-    expect(configUpdate).toHaveBeenCalledWith(
-      'currentTier',
-      'team',
-      vscode.ConfigurationTarget.Global,
-    );
+    expect(configUpdate).not.toHaveBeenCalled();
   });
 
   it('clears paid-tier reachability immediately after account sign-out', async () => {
@@ -121,11 +117,7 @@ describe('resolveTier account-owned entitlement', () => {
     await clearAccountTierCache(context);
 
     expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', undefined);
-    expect(configUpdate).toHaveBeenCalledWith(
-      'currentTier',
-      'unknown',
-      vscode.ConfigurationTarget.Global,
-    );
+    expect(configUpdate).not.toHaveBeenCalled();
   });
 
   it('fails closed instead of retaining a stale paid tier when refresh is unavailable', async () => {

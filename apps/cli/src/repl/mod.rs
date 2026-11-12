@@ -97,6 +97,7 @@ pub async fn run_repl(
         crate::path_security::registered_additional_workspace_roots(),
     )?;
     session.apply_ui_config(config);
+    crate::apply_saved_effort(&mut session, config);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
@@ -186,6 +187,7 @@ pub async fn run_repl(
     //
     // NOTE: tui_app.rs:2661 has the same (true,true) blocking call and is a
     // known sibling, it is out of scope for this fix.
+    mcp_config_options.remember_for_restart();
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
         let privacy_mode = session.privacy_mode;
@@ -280,8 +282,8 @@ pub async fn run_repl(
                             }
                         }
                         SlashResult::Logout => {
-                            match crate::app_server::account::sign_out_of_every_provider().await {
-                                Ok(signed_out) => output::print_info(&signed_out.message()),
+                            match crate::sign_out_of_account_keeping_keys().await {
+                                Ok(message) => output::print_info(&message),
                                 Err(error) => {
                                     output::print_error(&format!("Could not log out: {error:#}"))
                                 }
@@ -793,6 +795,7 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
     let spinner = output::create_spinner("Thinking...");
     let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
     let md_cb = std::sync::Arc::clone(&md);
+    let spinner_cb = spinner.clone();
     session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
     let result = session
@@ -800,6 +803,9 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
             config,
             &full_input,
             Box::new(move |chunk| {
+                if !spinner_cb.is_finished() {
+                    spinner_cb.finish_and_clear();
+                }
                 if let Ok(mut renderer) = md_cb.lock() {
                     output::print_assistant_chunk_formatted(&mut renderer, chunk);
                 }

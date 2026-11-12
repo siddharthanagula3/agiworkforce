@@ -112,16 +112,16 @@ export async function revalidateAccountTier(
 }
 
 async function writeAccountTier(context: vscode.ExtensionContext, tier: Tier): Promise<void> {
-  const configuration = vscode.workspace.getConfiguration('agiWorkforce');
   const updates: Thenable<void>[] = [];
   if (context.globalState.get<string>(CACHED_TIER_KEY) !== tier) {
     updates.push(context.globalState.update(CACHED_TIER_KEY, tier));
   }
   updates.push(context.globalState.update(CACHED_AT_KEY, Date.now()));
-  if (configuration.inspect<string>('currentTier')?.globalValue !== tier) {
-    updates.push(configuration.update('currentTier', tier, vscode.ConfigurationTarget.Global));
-  }
   await Promise.all(updates);
+}
+
+export function cachedAccountTier(context: vscode.ExtensionContext): Tier | undefined {
+  return coerceTier(context.globalState.get<string>(CACHED_TIER_KEY));
 }
 
 /**
@@ -159,7 +159,6 @@ export function accountCapabilityDecision(
 }
 
 export async function clearAccountTierCache(context: vscode.ExtensionContext): Promise<void> {
-  const configuration = vscode.workspace.getConfiguration('agiWorkforce');
   const updates: Thenable<void>[] = [];
   if (context.globalState.get<string>(CACHED_TIER_KEY) !== undefined) {
     updates.push(context.globalState.update(CACHED_TIER_KEY, undefined));
@@ -168,9 +167,6 @@ export async function clearAccountTierCache(context: vscode.ExtensionContext): P
     updates.push(context.globalState.update(CAPABILITY_DOCUMENT_KEY, undefined));
   }
   if (cachedAtMs(context) !== 0) updates.push(context.globalState.update(CACHED_AT_KEY, undefined));
-  if (configuration.inspect<string>('currentTier')?.globalValue !== 'unknown') {
-    updates.push(configuration.update('currentTier', 'unknown', vscode.ConfigurationTarget.Global));
-  }
   await Promise.all(updates);
 }
 

@@ -219,7 +219,7 @@ describe('AccountMemoryStore', () => {
 
     const offline = await store.refresh();
     expect(offline.facts.map((fact) => fact.id)).toEqual(['old']);
-    expect(store.turnFacts()).toEqual([]);
+    expect(await store.turnFacts()).toEqual([]);
     expect(pullAll).toHaveBeenLastCalledWith(INITIAL_CURSOR);
 
     pullAll.mockImplementation(async () => ({ memories: [delta()], cursor: '7', hasMore: false }));
@@ -227,7 +227,57 @@ describe('AccountMemoryStore', () => {
 
     expect(pullAll).toHaveBeenLastCalledWith(INITIAL_CURSOR);
     expect(store.cachedFacts().map((fact) => fact.id)).toEqual(['m1']);
-    expect(store.turnFacts().map((fact) => fact.id)).toEqual(['m1']);
+    expect((await store.turnFacts()).map((fact) => fact.id)).toEqual(['m1']);
+  });
+
+  it('stops adding cached memory to turns once the account is signed out', async () => {
+    let token: string | undefined = SIGNED_IN_TOKEN;
+    const secrets = {
+      get: vi.fn(async (key: string) => (key === 'agiWorkforce.accountToken' ? token : undefined)),
+      store: vi.fn(),
+      delete: vi.fn(),
+      onDidChange: vi.fn(),
+    } as unknown as vscode.SecretStorage;
+    const store = new AccountMemoryStore(
+      makeMemento(),
+      secrets,
+      makeMemento({ [WORKSPACE_MEMORY_ADOPTED_KEY]: true }),
+      makeClient({
+        pullAll: vi.fn(async () => ({ memories: [delta()], cursor: '7', hasMore: false })),
+      }),
+    );
+    await store.refresh();
+    expect(await store.turnFacts()).toHaveLength(1);
+
+    token = undefined;
+    expect(await store.turnFacts()).toEqual([]);
+
+    token = `header.${Buffer.from(JSON.stringify({ sub: 'user_other' })).toString('base64url')}.sig`;
+    expect(await store.turnFacts()).toEqual([]);
+  });
+
+  it('forgets the cached memory, its owner and its scope on sign-out', async () => {
+    const storage = makeMemento();
+    const store = new AccountMemoryStore(
+      storage,
+      makeSecrets(SIGNED_IN_TOKEN),
+      makeMemento({ [WORKSPACE_MEMORY_ADOPTED_KEY]: true }),
+      makeClient({
+        pullAll: vi.fn(async () => ({ memories: [delta()], cursor: '7', hasMore: false })),
+      }),
+    );
+    await store.refresh();
+    const changed = vi.fn();
+    store.onDidChange(changed);
+
+    await store.forgetLocalCache();
+
+    expect(store.cachedFacts()).toEqual([]);
+    expect(store.scope()).toBeUndefined();
+    expect(await store.turnFacts()).toEqual([]);
+    expect(storage.get(ACCOUNT_MEMORY_CURSOR_KEY)).toBeUndefined();
+    expect(storage.get('agiWorkforce.accountMemoryOwner')).toBeUndefined();
+    expect(changed).toHaveBeenCalled();
   });
 
   it('sends an update at the version the account last reported', async () => {
@@ -371,12 +421,12 @@ describe('AccountMemoryStore', () => {
       client,
     );
     await store.refresh();
-    expect(store.turnFacts()).toHaveLength(1);
+    expect(await store.turnFacts()).toHaveLength(1);
 
     const cleared = await store.clear();
 
     expect(cleared).toEqual({ applied: true, refusals: [] });
-    expect(store.turnFacts()).toEqual([]);
+    expect(await store.turnFacts()).toEqual([]);
     expect(store.cachedFacts()).toEqual([]);
     expect(storage.get<Record<string, string>>(ACCOUNT_MEMORY_VERSIONS_KEY)).toEqual({});
   });
@@ -409,7 +459,7 @@ describe('AccountMemoryStore', () => {
     releaseStale?.();
     await stale;
 
-    expect(store.turnFacts()).toEqual([]);
+    expect(await store.turnFacts()).toEqual([]);
   });
 
   function legacyWorkspace() {
@@ -477,8 +527,31 @@ describe('AccountMemoryStore', () => {
     expect(workspaceState.get(WORKSPACE_MEMORY_ADOPTED_KEY)).toBeUndefined();
   });
 
-  it('asks each account once and uploads nothing when the user does not agree', async () => {
+  it('asks again later when the prompt is dismissed without a choice', async () => {
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
+    const workspaceState = legacyWorkspace();
+    const push = acceptingPush();
+    const store = new AccountMemoryStore(
+      makeMemento(),
+      makeSecrets(SIGNED_IN_TOKEN),
+      workspaceState,
+      makeClient({ push }),
+    );
+
+    await store.refresh();
+    await vi.waitFor(() => expect(vscode.window.showInformationMessage).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(workspaceState.get(WORKSPACE_MEMORY_DECLINED_KEY)).toBeUndefined();
+
+    await store.refresh();
+    await vi.waitFor(() => expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('asks each account once and uploads nothing when the user does not agree', async () => {
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
+      "Don't copy" as unknown as vscode.MessageItem,
+    );
     const workspaceState = legacyWorkspace();
     const push = acceptingPush();
     const store = new AccountMemoryStore(

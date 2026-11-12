@@ -22,8 +22,10 @@ the evidence and this document must be corrected.
 - Keep Chrome chat Managed-Cloud-only. A failed cloud turn must not silently
   fall back to Desktop, Local, or BYOK inference.
 - Treat page text, page schemas, tool output, and model output as untrusted data.
-- Restrict browser automation to user-approved origins and default every
-  computer-use action to human approval.
+- Restrict browser automation to user-approved origins and keep a human in the
+  loop: Auto, the default mode, stops for crucial actions and for controls it
+  cannot identify, Ask first confirms every action, and no mode completes a
+  purchase.
 - Authenticate privileged extension messages and native-messaging envelopes at
   their respective boundaries.
 - Bound and runtime-validate data before persistence, network transmission, DOM
@@ -104,7 +106,13 @@ extension, a tab, frame 0, an http(s) page) rather than from the message:
 in-page panel is on, `GET_AUTOFILL_PROFILE` hands the form-fill profile only to
 an approved job-application page, and `AUTHORIZE_SITE_TOOL_DESTINATION` checks
 a site-tool form destination against the same gate as navigation. Each page load
-therefore wakes the worker once for that answer.
+therefore wakes the worker once for that answer. Chrome gives the outermost frame
+of a prerendered page a non-zero frame id until the page is activated, and the
+worker still answers frame 0 only, so a prerendered page asks after activation.
+When the approved-sites list, the org policy or the in-page panel preference
+changes, the worker sends `PAGE_ACCESS_CHANGED` to the top document of the
+affected open tabs and the page asks again, mounting or removing its launcher.
+The message carries no data, and a tab cannot send it.
 [`__tests__/content-storage-boundary.test.ts`](__tests__/content-storage-boundary.test.ts)
 walks the content build's imports and fails on any storage access.
 
@@ -234,7 +242,7 @@ then fences page context as untrusted data through the same Managed Cloud chat
 handler. Redaction is mitigation rather than a promise to identify every
 sensitive value. Sign-in, plan, usage, account, rate-limit, cancellation, and
 provider failures return typed UI outcomes; the panel must not render them as a
-successful assistant answer. There is no Local, BYOK, or Desktop-chat fallback.
+successful assistant answer. There is no Local, BYOK, or Desktop-chat fallback. An on-page request is cancelled when its page goes away (the port it opened for the request closes), when its tab closes, when the user closes or removes the panel, and the moment its site loses approval.
 
 Pixel screenshots and pasted images are not text-redacted. They can contain
 credentials, health information, private messages, or other sensitive pixels.
@@ -378,14 +386,22 @@ pending delete.
   replays recorded DOM actions against the active tab rather than the sender's.
   `LIST_SHORTCUTS` stays allowlisted-tab and still discloses shortcut ids and
   names to an allowlisted page; the replay gate is what makes that inert.
-- Ask-before-acting defaults on. Only an explicit stored `false` enables full
-  access. Approval requests use random ids, accept responses only from trusted
-  extension pages, and deny after 30 seconds without a response. The panel
-  rehydrates this authoritative stored preference and rolls its toggle back if
-  a write fails, so the visible gate cannot claim an opt-in or opt-out the
-  background never received. Pending approval UI is announced and focused;
-  decision or expiry returns focus to a live run control instead of leaving a
-  visually active but inert approval affordance.
+- The permission mode has three values, stored under `agi_cu_ask_before_acting`
+  and read through `readBrowserPermissionMode`: a stored `true` is Ask first
+  (every action asks), a stored `false` is Full access, and anything else,
+  including nothing stored, is Auto, the default. Auto acts on the sites of the
+  task without asking and stops for a crucial action (money, speaking for the
+  user, secrets) and for a control it cannot identify (`unidentified_input`);
+  Full access skips routine confirmations on approved sites. In every mode,
+  uploads, downloads, sign-ins and sensitive input still ask, and a purchase is
+  refused outright and handed back to the user with `ask_user_to_take_over`.
+  Approval requests use random ids, accept responses only from trusted
+  extension pages, and skip the action after five minutes without a response
+  (`APPROVAL_TIMEOUT_MS`). The panel rehydrates the authoritative stored
+  preference and rolls its control back if a write fails, so the visible gate
+  cannot claim a mode the background never received. Pending approval UI is
+  announced and focused; decision or expiry returns focus to a live run control
+  instead of leaving a visually active but inert approval affordance.
 - The background owns at most one tracked computer-use lease. The lease binds a
   random run id, a monotonic run generation, the target tab/window/exact URL
   intent, and the Managed Cloud account plus auth-session incarnation. Those
@@ -502,7 +518,7 @@ document. This file makes no retention promise for those systems.
 | Persistent sensitive browser data leaks.                                            | Sensitive categories stay out of Chrome Sync, values are bounded/redacted where implemented, and conversations expire/cap.                                                                                                                                                                                                                                                                                                                                        | Local Chrome profile compromise, extension compromise, backups, screenshots, and redaction false negatives can expose data.                                                                                                                                                                                                                              |
 | Automatic cloud mirroring copies an eligible transcript beyond the browser profile. | Every turn must carry Managed Cloud provenance; any local/unknown turn stickily disqualifies the conversation; the account owner is re-checked at the transport boundary before egress; local eviction never issues a cloud delete; egress is confined to the cloud-bridge gate and enforced by `check:no-cloud-ipc`; persistence writes force `skipLlm: true`; rich metadata is contract-validated and length-bounded.                                           | Once mirrored, the stored prompt/answer, exact per-turn model/provider, and durable descriptor/card copy are subject to server-side retention and account-deletion policy, not this extension. Request-only page context and image bytes are not part of the mirrored record. Deleting the conversation is the supported way to remove its account copy. |
 | A structured result card smuggles arbitrary outbound links into the panel.          | Chrome advertises only display-only `map-search.v1` support (`canRespond: false`); card envelopes and typed bodies are runtime-validated and bounded before persistence; unknown/newer/malformed kinds render only server-authored plain text; Chrome repeats the exact Google Maps/OpenStreetMap URL allowlist at render and click time; no card URL is fetched automatically.                                                                                   | A user who explicitly opens an allowed provider search leaves AGI for that provider, whose normal request and privacy policy then apply. Chrome has no card-response continuation path and therefore does not advertise clarification support.                                                                                                           |
-| Autonomous action proceeds without review.                                          | Ask-before-acting defaults on and times out to deny; permissive mode is visibly labeled and requires explicit opt-out.                                                                                                                                                                                                                                                                                                                                            | A user can choose Full access; model mistakes and page-driven deception are then acted on within the approved origin and action set.                                                                                                                                                                                                                     |
+| Autonomous action proceeds without review.                                          | Auto is the default and asks for crucial actions and unidentified controls; Ask first confirms every action; an unanswered approval is skipped after five minutes; a purchase is never completed; Full access is a visible, explicit choice.                                                                                                                                                                                                                      | A user can choose Full access; model mistakes and page-driven deception are then acted on within the approved origin and action set.                                                                                                                                                                                                                     |
 | A delayed computer-use run continues after Stop or as another account/tab.          | One tracked run lease, captured account/session ownership, exact foreground-tab intent, AbortSignal propagation, exact-run cancellation, and stale run-generation filtering.                                                                                                                                                                                                                                                                                      | A CDP command already accepted by Chrome at the instant of cancellation cannot be recalled; cleanup prevents subsequent commands, captures, cloud cycles, and UI events.                                                                                                                                                                                 |
 
 ## Verification and change control

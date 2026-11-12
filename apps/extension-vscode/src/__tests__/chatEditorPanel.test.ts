@@ -329,6 +329,8 @@ describe('agi-workforce.openChatInEditor', () => {
       selection,
       document: {
         uri: vscode.Uri.file('/mock/workspace/src/app.ts'),
+        languageId: 'typescript',
+        isUntitled: false,
         getText: vi.fn().mockReturnValue('x'),
       },
     } as unknown as vscode.TextEditor;

@@ -729,6 +729,7 @@ export type FreeTrialChunk =
         | 'account_suspended'
         | 'terms_required'
         | 'plan_required'
+        | 'model_refused'
         | 'rate_limited'
         | 'server_error'
         | 'protocol_error'
@@ -1193,7 +1194,47 @@ function bodyIndicatesFreeQuota(body: string): boolean {
 
 const ACCOUNT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 429]);
 
-function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, { type: 'error' }> {
+const MODEL_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  'model_may_train',
+  'no_training_model_available',
+  'model_not_available',
+]);
+
+const MODEL_REFUSED_MESSAGE =
+  'This model is not available with your current settings. Choose another model.';
+
+function retryAfterFromHeader(headers: Headers): number | undefined {
+  const raw = headers.get('retry-after')?.trim();
+  if (!raw) return undefined;
+  if (/^\d+$/.test(raw)) return statableRetryAfterSeconds(Number(raw));
+  const at = Date.parse(raw);
+  return Number.isNaN(at) ? undefined : statableRetryAfterSeconds((at - Date.now()) / 1000);
+}
+
+function retryAfterFromBody(body: string): number | undefined {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const record = parsed as Record<string, unknown>;
+    for (const holder of [record['error'], record['rateLimit']]) {
+      if (holder && typeof holder === 'object' && !Array.isArray(holder)) {
+        const seconds = statableRetryAfterSeconds(
+          (holder as Record<string, unknown>)['retry_after_seconds'],
+        );
+        if (seconds !== undefined) return seconds;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function accountRefusal(
+  status: number,
+  body: string,
+  headers: Headers,
+): Extract<FreeTrialChunk, { type: 'error' }> {
   const gatewayError = readGatewayErrorBody(body);
   if (isGatewayCode(gatewayError.code, ACCOUNT_UNAVAILABLE_CODE)) {
     return {
@@ -1232,15 +1273,28 @@ function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, {
     return { type: 'error', message: 'Sign in to use AGI Cloud chat.', code: 'auth_required' };
   }
   if (status === 429) {
+    const retryAfterSeconds = retryAfterFromHeader(headers) ?? retryAfterFromBody(body);
     return {
       type: 'error',
-      message: 'AGI Cloud is receiving too many requests. Try again shortly.',
+      message:
+        retryAfterSeconds === undefined
+          ? 'AGI Cloud is receiving too many requests. Try again shortly.'
+          : 'AGI Cloud is receiving too many requests.',
       code: 'rate_limited',
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+    };
+  }
+  if (status === 403 && gatewayError.code && MODEL_REFUSAL_CODES.has(gatewayError.code)) {
+    return {
+      type: 'error',
+      message: gatewayError.message ?? MODEL_REFUSED_MESSAGE,
+      code: 'model_refused',
     };
   }
   return {
     type: 'error',
-    message: 'This AGI Cloud capability is not available for the current account.',
+    message:
+      gatewayError.message ?? 'This AGI Cloud capability is not available for the current account.',
     code: 'plan_required',
   };
 }
@@ -1517,7 +1571,7 @@ export async function* streamFreeChat(
 
     if (ACCOUNT_REFUSAL_STATUSES.has(response.status)) {
       const body = await readBoundedErrorBody(response);
-      yield accountRefusal(response.status, body);
+      yield accountRefusal(response.status, body, response.headers);
       return;
     }
 

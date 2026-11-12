@@ -128,11 +128,11 @@ impl InteractionMode {
 
     fn label(self) -> &'static str {
         match self {
-            Self::Chat => "Default",
-            Self::Plan => "Plan",
-            Self::AcceptEdits => "Auto",
-            Self::BypassPermissions => "Bypass",
-            Self::FullAuto => "FullAuto",
+            Self::Chat => super::MODE_DEFAULT,
+            Self::Plan => super::MODE_PLAN,
+            Self::AcceptEdits => super::MODE_AUTO,
+            Self::BypassPermissions => super::MODE_BYPASS,
+            Self::FullAuto => super::MODE_FULL_AUTO,
         }
     }
 
@@ -199,6 +199,15 @@ enum ToolTiming {
 }
 
 impl ToolTiming {
+    fn stopped(self) -> Self {
+        match self {
+            ToolTiming::Running(started) => {
+                ToolTiming::Finished(started.elapsed().as_millis() as u64)
+            }
+            settled => settled,
+        }
+    }
+
     fn label(self) -> Option<String> {
         let millis = match self {
             ToolTiming::Unknown => return None,
@@ -592,6 +601,7 @@ struct TuiApp {
     composer_undo: super::composer_edits::ComposerUndo,
     pasted_texts: super::composer_edits::PastedTexts,
     queued_prompts: Vec<String>,
+    mcp_starting: bool,
     side_answers: (
         tokio::sync::mpsc::UnboundedSender<String>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
@@ -788,6 +798,7 @@ impl TuiApp {
             composer_undo: Default::default(),
             pasted_texts: Default::default(),
             queued_prompts: Vec::new(),
+            mcp_starting: false,
             side_answers: tokio::sync::mpsc::unbounded_channel(),
             team_seen: 0,
             remote: None,
@@ -2207,7 +2218,7 @@ impl StartPanel {
 
     /// A plain thread, not a runtime task: the runtime waits for its blocking
     /// tasks at exit, and a slow store must not hold up quitting.
-    fn read_recent_sessions(&self) {
+    fn read_recent_sessions(&self, current: Option<String>) {
         let slot = Arc::clone(&self.recent);
         std::thread::spawn(move || {
             let cwd = std::env::current_dir()
@@ -2216,7 +2227,12 @@ impl StartPanel {
             let rows = crate::sessions::open_db()
                 .and_then(|conn| crate::sessions::list_sessions(&conn, usize::MAX))
                 .map(|sessions| {
-                    recent_session_rows(&sessions, &cwd, chrono::Utc::now().timestamp_millis())
+                    recent_session_rows(
+                        &sessions,
+                        &cwd,
+                        current.as_deref(),
+                        chrono::Utc::now().timestamp_millis(),
+                    )
                 })
                 .unwrap_or_default();
             if let Ok(mut recent) = slot.lock() {
@@ -2226,17 +2242,24 @@ impl StartPanel {
     }
 }
 
-/// Rows for the start screen: the newest sessions that ran in `cwd`, each as
-/// how long ago it was last used and its title. Both clocks are milliseconds,
-/// the unit the session store records.
+/// Rows for the start screen: the newest earlier sessions that ran in `cwd`,
+/// each as how long ago it was last used and its title. The session this
+/// screen belongs to is not one of them. Both clocks are milliseconds, the
+/// unit the session store records.
 fn recent_session_rows(
     sessions: &[crate::sessions::SessionSummary],
     cwd: &str,
+    current: Option<&str>,
     now_millis: i64,
 ) -> Vec<String> {
     sessions
         .iter()
-        .filter(|session| session.cwd == cwd && session.message_count > 0 && !session.archived)
+        .filter(|session| {
+            session.cwd == cwd
+                && session.message_count > 0
+                && !session.archived
+                && current != Some(session.id.as_str())
+        })
         .take(START_PANEL_RECENT_SESSIONS)
         .map(|session| {
             format!(
@@ -5293,19 +5316,17 @@ fn unavailable_mode_notice(app: &TuiApp, mode: InteractionMode) -> String {
 
 fn mode_description(mode: InteractionMode) -> &'static str {
     match mode {
-        InteractionMode::Chat => "Normal conversation mode",
+        InteractionMode::Chat => {
+            "file edits and commands ask first, except read-only ones like ls."
+        }
         InteractionMode::Plan => {
-            "Plan mode, read-only tools only, no file edits. Model will plan before acting."
+            "read-only tools only, no file edits. The model plans before acting."
         }
         InteractionMode::AcceptEdits => {
-            "Auto, file edits, read-only tools and commands the safety classifier clears run; everything else asks. /auto-mode-setup reviews this repository."
+            "file edits, read-only tools and commands the safety classifier clears run; everything else asks. /auto-mode-setup reviews this repository."
         }
-        InteractionMode::BypassPermissions => {
-            "Bypass, all tool prompts skipped. Use with caution!"
-        }
-        InteractionMode::FullAuto => {
-            "FullAuto, no prompts, no confirmations. Extreme caution required!"
-        }
+        InteractionMode::BypassPermissions => "all tool prompts skipped. Use with caution!",
+        InteractionMode::FullAuto => "no prompts, no confirmations. Extreme caution required!",
     }
 }
 
@@ -5834,12 +5855,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/logout" => SlashResult::RunLogout,
 
-        "/help" | "/h" | "/?" => {
-            SlashResult::SystemMessage(crate::command_registry::format_command_help(
+        "/help" | "/h" | "/?" => SlashResult::SystemMessage(format!(
+            "{}{}",
+            crate::command_registry::format_command_help(
                 &app.command_registry,
                 crate::command_registry::ShortcutHelp::Tui,
-            ))
-        }
+            ),
+            super::widgets::approval_overlay::approval_key_help()
+        )),
 
         // ── Session management ──
         "/compact" => SlashResult::RunCompact(arg.to_string()),
@@ -5913,7 +5936,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .map(|registry| registry.list())
                 .unwrap_or_default();
             let configured = crate::mcp::McpManager::load_configs().unwrap_or_default();
-            let tokens = crate::mcp::McpOAuthStore::load().unwrap_or_default();
             let mut names: Vec<String> = configured
                 .keys()
                 .cloned()
@@ -5928,15 +5950,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     let tool_count = tools.iter().filter(|tool| &tool.server_name == name).count();
                     let disabled = registry.iter().any(|row| &row.name == name && !row.enabled);
                     let signed_out_remote = configured.get(name).is_some_and(|config| {
-                        match config.as_transport() {
-                            crate::mcp::McpTransport::Http { url, .. }
-                            | crate::mcp::McpTransport::Sse { url, .. } => {
-                                tokens.get(&url).is_none()
-                                    && tokens.get(url.trim_end_matches('/')).is_none()
-                            }
-                            crate::mcp::McpTransport::Stdio { .. } => false,
-                        }
+                        crate::mcp::credential_state(config)
+                            == crate::mcp::McpCredentialState::NeedsAuth
                     });
+                    let connected = app
+                        .session
+                        .mcp_manager
+                        .as_ref()
+                        .is_some_and(|manager| manager.has_server(name));
                     let status = if disabled {
                         McpStatus::Disabled
                     } else if configured
@@ -5945,10 +5966,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         .is_some()
                     {
                         McpStatus::Blocked
-                    } else if tool_count > 0 {
+                    } else if tool_count > 0 || connected {
                         McpStatus::Connected
                     } else if signed_out_remote {
                         McpStatus::NeedsAuth
+                    } else if app.mcp_starting {
+                        McpStatus::Starting
                     } else {
                         McpStatus::Failed
                     };
@@ -6319,13 +6342,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                             .persist_effort_project(&e.label().to_ascii_lowercase())
                             .map(|_| " and saved as this project's default")
                             .unwrap_or("");
-                        let note = if matches!(
-                            crate::model_catalog::effort_support(&app.session.model),
-                            crate::model_catalog::EffortSupport::Unsupported
+                        let note = if crate::models::effort_reaches_model(
+                            &app.session.provider,
+                            &app.session.model,
+                            e,
                         ) {
-                            ". This model has no effort control, so it applies once you switch to one that does"
-                        } else {
                             ""
+                        } else {
+                            crate::claude_parity::EFFORT_NOT_TAKEN_NOTE
                         };
                         SlashResult::SystemMessage(format!(
                             "Effort set to {}{saved}{note}",
@@ -6705,9 +6729,19 @@ fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
             if crate::agent::PrivacyMode::from_arg(arg)
                 .is_some_and(|mode| mode == app.session.privacy_mode)
             {
-                let _ = app
+                if let Err(error) = app
                     .config
-                    .persist_privacy_mode_project(app.session.privacy_mode.label());
+                    .persist_privacy_mode_project(app.session.privacy_mode.label())
+                {
+                    app.chat_messages.push(ChatMessage {
+                        role: ChatRole::System,
+                        text: format!(
+                            "Privacy mode set to {} for this session; it could not be saved for this project: {}",
+                            app.session.privacy_mode.label(),
+                            sanitize_terminal_text(&format!("{error:#}"))
+                        ),
+                    });
+                }
             }
         }
         _ => {}
@@ -6856,6 +6890,7 @@ pub async fn run(
     // OAUTH_INTERACTIVE_TIMEOUT. The event loop injects the manager once it is
     // ready; until then turns run without MCP tools.
     let mcp_elicitation_handler = Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new());
+    mcp_config_options.remember_for_restart();
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
         let privacy_mode = session.privacy_mode;
@@ -6873,11 +6908,11 @@ pub async fn run(
             {
                 Ok(mgr) => mgr,
                 Err(e) => {
-                    // Background task during a live TUI: a raw stderr warning
-                    // would corrupt the alternate screen. Swallow it here; the
-                    // user can inspect MCP state via `/mcp`.
-                    if !crate::tui::tui_active() {
-                        crate::output::print_warn(&format!("MCP config/connect error: {e:#}"));
+                    let notice = format!("MCP config/connect error: {e:#}");
+                    if crate::tui::tui_active() {
+                        crate::tui::push_tui_notice(notice);
+                    } else {
+                        crate::output::print_warn(&notice);
                     }
                     None
                 }
@@ -6931,7 +6966,8 @@ pub async fn run(
     }
     app.mcp_elicitation_handler = mcp_elicitation_handler;
     let browser_watch = spawn_browser_watch(Arc::clone(&app.browser));
-    app.start_panel.read_recent_sessions();
+    app.start_panel
+        .read_recent_sessions(app.session.managed_session_id().map(str::to_string));
     app.wire_fallback_banner();
     // Populate the picker's Local section without blocking launch: probe Ollama
     // / LM Studio in the background (2.5s timeout) and cache the catalog-shaped
@@ -7026,6 +7062,7 @@ async fn run_event_loop(
     mcp_attach_join: &mut Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>>,
 ) -> Result<()> {
     render(terminal, app)?;
+    app.mcp_starting = mcp_attach_join.is_some();
 
     loop {
         // Inject the MCP manager once the background attach finishes, without
@@ -7035,6 +7072,7 @@ async fn run_event_loop(
             .map(|h| h.is_finished())
             .unwrap_or(false)
         {
+            app.mcp_starting = false;
             if let Some(handle) = mcp_attach_join.take() {
                 if let Ok(Some(mgr)) = handle.await {
                     app.session.set_mcp_manager(mgr);
@@ -7171,7 +7209,9 @@ async fn run_event_loop(
                                     |key| format!("Press {key} again"),
                                 );
                             msg.push_str(&format!(
-                                "\n  {again} to advance to FullAuto, or cycle back to Default."
+                                "\n  {again} to advance to {}, or cycle back to {}.",
+                                InteractionMode::FullAuto.label(),
+                                InteractionMode::Chat.label()
                             ));
                         }
                         if new_mode == InteractionMode::FullAuto {
@@ -7612,13 +7652,10 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::RunLogout => {
-                                let text =
-                                    match crate::app_server::account::sign_out_of_every_provider()
-                                        .await
-                                    {
-                                        Ok(signed_out) => signed_out.message(),
-                                        Err(error) => format!("Could not log out: {error:#}"),
-                                    };
+                                let text = match crate::sign_out_of_account_keeping_keys().await {
+                                    Ok(message) => message,
+                                    Err(error) => format!("Could not log out: {error:#}"),
+                                };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
@@ -7760,6 +7797,7 @@ fn settle_running_tool_cells(cells: &mut [ToolCell]) {
     for cell in cells.iter_mut() {
         if matches!(cell.state, TranscriptCellState::Running) {
             cell.state = TranscriptCellState::Cancelled;
+            cell.timing = cell.timing.stopped();
         }
     }
 }
@@ -7867,17 +7905,20 @@ fn split_command_output(output: &str) -> (Option<i32>, &str, Option<&str>) {
     }
 }
 
+/// Long enough to keep a whole error line with the path it names, which the
+/// transcript wraps; a minified blob is still cut.
+const TOOL_PREVIEW_MAX_COLS: usize = 320;
+
 fn compact_tool_output_preview(output: &str) -> Option<String> {
     let line = output
         .lines()
         .map(str::trim)
         .find(|line| !line.is_empty())?;
-    const MAX_COLS: usize = 96;
     // Strip before truncating: `truncate_cols` measures display width, which
     // would both mis-count an escape and cut one in half.
     Some(truncate_cols(
         sanitize_terminal_text(line).as_ref(),
-        MAX_COLS,
+        TOOL_PREVIEW_MAX_COLS,
     ))
 }
 
@@ -8494,6 +8535,8 @@ async fn send_message_with_prompt(
             // and reconcile session history so the next turn stays a valid
             // user→assistant sequence.
             let partial = app.stream_buffer.clone();
+            let mut turn_entries = turn_entries;
+            super::turn_transcript::set_apart_unfinished_line(&mut turn_entries);
             commit_turn_entries(&mut app.chat_messages, &turn_entries);
             render(terminal, app)?;
             app.session.cancel_turn(&partial).await;
@@ -8967,8 +9010,31 @@ mod tests {
             "acceptEdits"
         );
         assert_eq!(
-            mode_description(InteractionMode::AcceptEdits),
+            format!(
+                "{}, {}",
+                InteractionMode::AcceptEdits.label(),
+                mode_description(InteractionMode::AcceptEdits)
+            ),
             "Auto, file edits, read-only tools and commands the safety classifier clears run; everything else asks. /auto-mode-setup reviews this repository."
+        );
+    }
+
+    #[test]
+    fn a_mode_notice_names_the_mode_once() {
+        for mode in [
+            InteractionMode::Chat,
+            InteractionMode::Plan,
+            InteractionMode::AcceptEdits,
+            InteractionMode::BypassPermissions,
+            InteractionMode::FullAuto,
+        ] {
+            let notice = format!("{}, {}", mode.label(), mode_description(mode));
+            assert_eq!(notice.matches(mode.label()).count(), 1, "{notice}");
+        }
+        assert_eq!(InteractionMode::Chat.label(), super::super::MODE_DEFAULT);
+        assert_eq!(
+            InteractionMode::AcceptEdits.label(),
+            super::super::MODE_AUTO
         );
     }
 
@@ -9171,10 +9237,20 @@ mod tests {
         );
         assert!(compact_tool_output_preview("\n  \n").is_none());
 
-        let long = "x".repeat(120);
+        let long = "x".repeat(TOOL_PREVIEW_MAX_COLS + 50);
         let preview = compact_tool_output_preview(&long).expect("preview");
-        assert_eq!(display_width(&preview), 96);
+        assert_eq!(display_width(&preview), TOOL_PREVIEW_MAX_COLS);
         assert!(preview.ends_with('…'));
+
+        let refused = format!(
+            "Path escapes project directory and additional roots: /private/tmp/{}/notes.txt",
+            "nested-folder/".repeat(8)
+        );
+        assert_eq!(
+            compact_tool_output_preview(&refused).as_deref(),
+            Some(refused.as_str()),
+            "the path that explains a refusal is kept whole"
+        );
     }
 
     /// End-to-end: a denied decision routed through callback → broker → tool
@@ -9524,6 +9600,41 @@ mod tests {
                         assert!(text.contains("MCP server 'blocked-tui-fixture' was not started"));
                         assert!(text.contains("administrator has turned MCP servers off"));
                         assert!(!text.contains("blocked-tui-fixture · △ needs authentication"));
+                    },
+                )
+            },
+        );
+    }
+
+    #[test]
+    fn an_mcp_server_still_attaching_shows_as_starting_not_failed() {
+        crate::cloud::workspace_policy::with_test_policy(
+            serde_json::json!({"schemaVersion": 3, "governed": false, "code": {"allowMcpServers": true, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
+            || {
+                crate::mcp::with_test_configs(
+                    std::collections::HashMap::from([(
+                        "starting-tui-fixture".to_string(),
+                        crate::mcp::McpServerConfig::stdio(
+                            "fixture-mcp-server",
+                            Vec::new(),
+                            std::collections::HashMap::new(),
+                        ),
+                    )]),
+                    || {
+                        let mut app = minimal_app();
+                        app.mcp_starting = true;
+                        let SlashResult::SystemMessage(text) = handle_slash("/mcp", &mut app)
+                        else {
+                            panic!("MCP list must render a system message");
+                        };
+                        assert!(text.contains("starting-tui-fixture · … starting"), "{text}");
+
+                        app.mcp_starting = false;
+                        let SlashResult::SystemMessage(text) = handle_slash("/mcp", &mut app)
+                        else {
+                            panic!("MCP list must render a system message");
+                        };
+                        assert!(text.contains("starting-tui-fixture · ✘ failed"), "{text}");
                     },
                 )
             },
@@ -12824,12 +12935,20 @@ mod tests {
             session("e", "/work/app", "", 90_000_000, 2),
         ];
         assert_eq!(
-            recent_session_rows(&sessions, "/work/app", 10_000_000),
+            recent_session_rows(&sessions, "/work/app", None, 10_000_000),
             vec![
                 "just now  newest here".to_string(),
                 "2h ago  two hours back".to_string(),
                 "1d ago  (untitled)".to_string(),
             ]
+        );
+        assert_eq!(
+            recent_session_rows(&sessions, "/work/app", Some("a"), 10_000_000),
+            vec![
+                "2h ago  two hours back".to_string(),
+                "1d ago  (untitled)".to_string(),
+            ],
+            "the session the screen belongs to is not recent activity"
         );
     }
 
@@ -12919,7 +13038,8 @@ mod tests {
             },
             "Allow this command?",
             vec!["cargo test".to_string()],
-        );
+        )
+        .saving_always_allow(true);
         let overlay = approval_overlay_for(&request);
         assert!(!overlay.always_allow_unavailable);
         let mut terminal =
@@ -13251,5 +13371,26 @@ mod tests {
             &scroll,
             &KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE)
         ));
+    }
+
+    #[test]
+    fn a_stopped_tool_row_keeps_the_time_it_stopped_at() {
+        use crate::tui::transcript_cell::TranscriptCellState;
+
+        let mut cells = vec![tool_cell_in(TranscriptCellState::Running)];
+        let started = Instant::now()
+            .checked_sub(Duration::from_secs(4))
+            .expect("the clock reaches four seconds back");
+        cells[0].timing = ToolTiming::Running(started);
+        settle_running_tool_cells(&mut cells);
+
+        assert!(matches!(cells[0].state, TranscriptCellState::Cancelled));
+        let ToolTiming::Finished(millis) = cells[0].timing else {
+            panic!("a stopped row must stop its clock: {:?}", cells[0].timing);
+        };
+        assert!(millis >= 4_000, "{millis}");
+        let shown = cells[0].timing.label();
+        std::thread::sleep(Duration::from_millis(1_100));
+        assert_eq!(cells[0].timing.label(), shown, "the time must not move on");
     }
 }

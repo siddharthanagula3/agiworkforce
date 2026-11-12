@@ -10,7 +10,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { Config } from '../../platform/config';
 import { formatTimestamp } from '../../utils/format';
-import { modelDisplayLabel, normalizeConfiguredModelId } from '../model-picker/modelConstants';
+import {
+  modelDisplayLabel,
+  normalizeSelectableConfiguredModelId,
+} from '../model-picker/modelConstants';
 import {
   describeProjectFailure,
   isRecoverableProjectFailure,
@@ -267,7 +270,7 @@ export async function showProjectDetail(
   await deleteProjectInteractively(workspace, detail.project, host);
 }
 
-async function projectEdit(
+export async function projectEdit(
   project: ManagedCloudProject,
   action: 'edit-name' | 'edit-description' | 'edit-instructions' | 'edit-default-model',
 ): Promise<ManagedCloudProjectUpdateRequest | undefined> {
@@ -312,17 +315,29 @@ async function projectEdit(
     });
     return instructions === undefined ? undefined : { instructions: instructions.trim() || null };
   }
-  const current = normalizeConfiguredModelId(Config.model());
+  const configured = Config.model();
+  const current = normalizeSelectableConfiguredModelId(configured);
   const choice = await vscode.window.showQuickPick(
     [
-      {
-        label: `$(check) Use ${modelDisplayLabel(current)}`,
-        description: 'The model this chat uses now',
-        value: current as string | null,
-      },
+      ...(current === null
+        ? []
+        : [
+            {
+              label: `$(check) Use ${modelDisplayLabel(current)}`,
+              description: 'Your default model',
+              value: current as string | null,
+            },
+          ]),
       { label: '$(close) No default model', value: null },
     ],
-    { title: `${PRODUCT_NAMES.code}, Project default model` },
+    {
+      title: `${PRODUCT_NAMES.code}, Project default model`,
+      ...(current === null
+        ? {
+            placeHolder: `Your default model, ${modelDisplayLabel(configured)}, is a Local model, so it is not offered as this project's default.`,
+          }
+        : {}),
+    },
   );
   return choice === undefined ? undefined : { defaultModelId: choice.value };
 }
@@ -388,7 +403,7 @@ export async function applyProjectToChat(
       ? `${PRODUCT_NAMES.code}: turns in this workspace now name "${projectTitle(project)}". It has no instructions to apply.`
       : `${PRODUCT_NAMES.code}: turns in this workspace now apply "${projectTitle(project)}" and its instructions.`;
   const defaultModel = project.defaultModelId;
-  if (!defaultModel || defaultModel === normalizeConfiguredModelId(Config.model())) {
+  if (!defaultModel || defaultModel === normalizeSelectableConfiguredModelId(Config.model())) {
     void vscode.window.showInformationMessage(applied);
     return;
   }

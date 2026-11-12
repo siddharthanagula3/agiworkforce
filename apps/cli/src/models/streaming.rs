@@ -8,9 +8,8 @@
 //!
 //! - `stream_completion(...)` keeps its historical signature, so the agent
 //!   loop, TUI, subagents, and memory pipeline are untouched by construction;
-//! - provider selection + key resolution (`provider_dispatch`) and
-//!   subscription auth (Copilot) stay here, the crate receives
-//!   opaque credentials via `ProviderSpec`;
+//! - provider selection + key resolution (`provider_dispatch`) stay here,
+//!   the crate receives opaque credentials via `ProviderSpec`;
 //! - Ollama-local preflight (model availability, tool-support probing, the
 //!   "running without tools" TUI notice) stays here, the crate has no TUI;
 //! - crate `LlmError`s are mapped back onto `CliError` / the historical
@@ -27,13 +26,14 @@ use agiworkforce_llm::{
 };
 
 use crate::config::CliConfig;
+use crate::design_system::Effort;
 use crate::errors::CliError;
+use crate::model_catalog::{EffortParameter, EffortSupport};
 
 use super::managed_approvals::{self, ManagedApprovalPause};
 use super::{
-    provider_dispatch::{resolve_key, try_subscription_auth},
-    CompletionResult, ContentBlock, Message, MessageContent, OllamaMode, Provider, StreamCallback,
-    ToolDefinition, STREAM_IDLE_TIMEOUT,
+    provider_dispatch::resolve_key, CompletionResult, ContentBlock, Message, MessageContent,
+    OllamaMode, Provider, StreamCallback, ToolDefinition, STREAM_IDLE_TIMEOUT,
 };
 
 pub const WEB_SEARCH_TOOL: &str = "web_search";
@@ -327,7 +327,12 @@ fn map_llm_error(err: LlmError) -> anyhow::Error {
             retry_after,
         } => CliError::rate_limited(provider, retry_after).into(),
         LlmError::Network { url, message } => CliError::network(url, message).into(),
-        LlmError::ContextOverflow { model } => CliError::context_overflow(model, 0, 0).into(),
+        LlmError::ContextOverflow { model } => {
+            let limit = crate::model_catalog::find(&model)
+                .map(|entry| entry.context_window)
+                .unwrap_or_default();
+            CliError::context_overflow(model, 0, limit).into()
+        }
         LlmError::Paywall {
             feature,
             required_tier,
@@ -525,28 +530,124 @@ fn managed_cloud_spec(jwt: &str) -> Result<ProviderSpec> {
     managed_cloud_spec_for_base(jwt, &managed_cloud_raw_base())
 }
 
-/// Subscription-auth specs (Copilot). Auth resolution happened
-/// in `provider_dispatch::try_subscription_auth`; here we only attach the
-/// provider-required extra headers.
-fn subscription_spec(sub_name: &str, url: &str, token: &str) -> ProviderSpec {
-    match sub_name {
-        "copilot" => {
-            let mut spec = openai_compat_spec("copilot", url, token);
-            spec.extra_headers = vec![
-                (
-                    "User-Agent".to_string(),
-                    concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")).to_string(),
-                ),
-                (
-                    "Openai-Intent".to_string(),
-                    "conversation-edits".to_string(),
-                ),
-                ("Copilot-Vision-Request".to_string(), "true".to_string()),
-            ];
-            spec
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReasoningRoute {
+    Anthropic,
+    Gemini,
+    Managed,
+    ChatCompletions,
+    Unsupported,
+}
+
+impl ReasoningRoute {
+    fn of_spec(spec: &ProviderSpec) -> Self {
+        if spec.id == super::provider_name(&Provider::ManagedCloud) {
+            return ReasoningRoute::Managed;
         }
-        other => openai_compat_spec(other, url, token),
+        match &spec.dialect {
+            Dialect::Anthropic => ReasoningRoute::Anthropic,
+            Dialect::Gemini => ReasoningRoute::Gemini,
+            Dialect::OpenAiCompat(_) => ReasoningRoute::ChatCompletions,
+            Dialect::OllamaNative | Dialect::OpenAiResponses => ReasoningRoute::Unsupported,
+        }
     }
+
+    fn of_provider(provider: &Provider) -> Self {
+        match provider {
+            Provider::ManagedCloud => ReasoningRoute::Managed,
+            Provider::Anthropic => ReasoningRoute::Anthropic,
+            Provider::Google => ReasoningRoute::Gemini,
+            Provider::Ollama(OllamaMode::Local) => ReasoningRoute::Unsupported,
+            Provider::Ollama(OllamaMode::Cloud)
+            | Provider::OpenAICompatible { .. }
+            | Provider::Custom { .. } => ReasoningRoute::ChatCompletions,
+        }
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+struct ReasoningWire {
+    output_config_effort: Option<String>,
+    thinking_budget: Option<u32>,
+    gemini_thinking_budget: Option<u32>,
+    body_field: Option<(&'static str, String)>,
+}
+
+impl ReasoningWire {
+    fn apply<'a>(&'a self, req: &mut ChatRequest<'a>) {
+        req.effort = self.output_config_effort.as_deref();
+        req.thinking_budget = self.thinking_budget;
+        req.gemini_thinking_budget = self.gemini_thinking_budget;
+    }
+
+    fn spec_for(&self, spec: &ProviderSpec) -> Option<ProviderSpec> {
+        self.body_field.as_ref().map(|(field, level)| {
+            let mut with_field = spec.clone();
+            with_field.extra_body.push((
+                (*field).to_string(),
+                serde_json::Value::String(level.clone()),
+            ));
+            with_field
+        })
+    }
+}
+
+fn effort_level(model: &str, effort: Effort, managed: bool) -> Option<String> {
+    match crate::model_catalog::effort_support(model) {
+        EffortSupport::Levels(levels) => {
+            crate::model_catalog::nearest_supported_effort(effort.wire_value(), &levels)
+                .map(str::to_string)
+        }
+        EffortSupport::Any => Some(effort.openai_effort_str().to_string()),
+        EffortSupport::NotInCatalog if managed => Some(effort.wire_value().to_string()),
+        EffortSupport::NotInCatalog | EffortSupport::Unsupported => None,
+    }
+}
+
+fn reasoning_wire(
+    route: ReasoningRoute,
+    model: &str,
+    effort: Option<Effort>,
+    thinking_budget: Option<u32>,
+) -> ReasoningWire {
+    let parameter = crate::model_catalog::effort_parameter(model);
+    let budget_accepted = crate::model_catalog::accepts_thinking_budget(model);
+    let level =
+        effort.and_then(|effort| effort_level(model, effort, route == ReasoningRoute::Managed));
+    match route {
+        ReasoningRoute::Anthropic => ReasoningWire {
+            output_config_effort: level
+                .filter(|_| parameter == Some(EffortParameter::OutputConfigEffort)),
+            thinking_budget: thinking_budget.filter(|_| budget_accepted),
+            ..ReasoningWire::default()
+        },
+        ReasoningRoute::Gemini => ReasoningWire {
+            gemini_thinking_budget: effort
+                .filter(|_| budget_accepted)
+                .map(Effort::gemini_thinking_budget),
+            ..ReasoningWire::default()
+        },
+        ReasoningRoute::Managed => ReasoningWire {
+            body_field: level.map(|level| ("effort", level)),
+            ..ReasoningWire::default()
+        },
+        ReasoningRoute::ChatCompletions => ReasoningWire {
+            body_field: level
+                .filter(|_| parameter == Some(EffortParameter::ReasoningEffort))
+                .map(|level| ("reasoning_effort", level)),
+            ..ReasoningWire::default()
+        },
+        ReasoningRoute::Unsupported => ReasoningWire::default(),
+    }
+}
+
+pub fn effort_reaches_model(provider: &Provider, model: &str, effort: Effort) -> bool {
+    reasoning_wire(
+        ReasoningRoute::of_provider(provider),
+        model,
+        Some(effort),
+        effort.thinking_budget_for_anthropic(),
+    ) != ReasoningWire::default()
 }
 
 /// Temperature to actually put in the request body for `model`.
@@ -623,23 +724,20 @@ async fn run_spec_observing(
     } else {
         crate::model_catalog::api_wire_id(model)
     };
-    let support = crate::model_catalog::effort_support(model);
-    let (effort, thinking_budget) = match support {
-        crate::model_catalog::EffortSupport::Unsupported => (None, None),
-        _ => (effort, thinking_budget),
-    };
-    let reasoning_effort = match (&support, effort) {
-        (crate::model_catalog::EffortSupport::Levels(levels), Some(effort)) => {
-            crate::model_catalog::nearest_supported_effort(effort.wire_value(), levels)
-        }
-        (_, effort) => effort.map(|e| e.openai_effort_str()),
-    };
+    let reasoning = reasoning_wire(
+        ReasoningRoute::of_spec(spec),
+        model,
+        effort,
+        thinking_budget,
+    );
+    let reasoning_spec = reasoning.spec_for(spec);
+    let spec = reasoning_spec.as_ref().unwrap_or(spec);
     let searching = search_turn()
         && spec.id != super::provider_name(&Provider::ManagedCloud)
         && tools.is_some_and(|tools| tools.iter().any(|tool| tool.name == WEB_SEARCH_TOOL));
     let forced_search = searching
         && crate::model_catalog::accepts_forced_tool_choice(model)
-        && !(matches!(spec.dialect, Dialect::Anthropic) && thinking_budget.is_some());
+        && !(matches!(spec.dialect, Dialect::Anthropic) && reasoning.thinking_budget.is_some());
     let nudged;
     let messages = if searching && !forced_search {
         nudged = with_search_nudge(messages);
@@ -647,29 +745,26 @@ async fn run_spec_observing(
     } else {
         messages
     };
-    let req = ChatRequest {
+    let mut req = ChatRequest {
         model: &wire_model,
         messages,
         max_tokens,
         temperature: effective_temperature(model, temperature),
         tools,
-        thinking_budget,
+        thinking_budget: None,
         tool_choice: forced_search.then(|| ToolChoice::Specific(WEB_SEARCH_TOOL.to_string())),
         anthropic_thinking: None,
         effort: None,
         top_p: None,
         top_k: None,
         metadata: None,
-        // The Effort picker used to be projected to an Anthropic thinking
-        // budget and nothing else, so catalog reasoning models silently ran at
-        // provider default no matter what the user chose. Each dialect reads
-        // only its own field and ignores the others, so all three are passed.
-        reasoning_effort,
-        gemini_thinking_budget: effort.map(|e| e.gemini_thinking_budget()),
+        reasoning_effort: None,
+        gemini_thinking_budget: None,
         num_ctx: None,
         ollama_think: None,
         idle_timeout: STREAM_IDLE_TIMEOUT,
     };
+    reasoning.apply(&mut req);
     let mut resolved_model = None;
     let mut thinking =
         (spec.id == super::provider_name(&Provider::ManagedCloud)).then(InlineThinking::default);
@@ -949,6 +1044,10 @@ fn ollama_cloud_base_url(config: &CliConfig) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
+fn renews_session_before_turn(provider: &Provider) -> bool {
+    matches!(provider, Provider::ManagedCloud)
+}
+
 // ---------------------------------------------------------------------------
 // Streaming completion (main entry point)
 // ---------------------------------------------------------------------------
@@ -970,27 +1069,15 @@ pub async fn stream_completion(
     let client = client_for_provider(provider)?.clone();
     let temperature = config.default.temperature;
 
-    // ---- Try subscription auth first (Copilot) ----
-    if let Some((token, url, sub_name)) = try_subscription_auth(provider).await {
-        let spec = subscription_spec(&sub_name, &url, &token);
-        let mut result = run_spec(
-            &client,
-            &spec,
-            model,
-            messages,
-            max_tokens,
-            temperature,
-            tools,
-            &mut on_chunk,
-            None,
-            effort,
-        )
-        .await?;
-        result.via_subscription = true;
-        return Ok(result);
+    let renewal = if renews_session_before_turn(provider) {
+        crate::app_server::account::renew_managed_session_if_expiring().await
+    } else {
+        None
+    };
+    if let Some(reason) = renewal {
+        tracing::debug!("[streaming] session renewal before the turn: {reason}");
     }
 
-    // ---- Fall through to API key auth ----
     let api_key = resolve_key(config, provider).map_err(|error| {
         match super::provider_dispatch::resolve_turn_route(
             config,
@@ -1182,6 +1269,13 @@ pub async fn stream_completion(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_managed_turn_renews_the_session_first() {
+        assert!(renews_session_before_turn(&Provider::ManagedCloud));
+        assert!(!renews_session_before_turn(&Provider::Anthropic));
+        assert!(!renews_session_before_turn(&Provider::Google));
+    }
 
     #[test]
     fn inference_client_selection_preserves_canonical_privacy_boundaries() {
@@ -1971,22 +2065,16 @@ mod tests {
     // -- Spec mapping --
 
     #[test]
-    fn subscription_specs_carry_provider_headers() {
-        let copilot = subscription_spec(
-            "copilot",
-            "https://api.githubcopilot.com/chat/completions",
-            "tok",
-        );
-        assert_eq!(copilot.id, "copilot");
-        let names: Vec<&str> = copilot
-            .extra_headers
-            .iter()
-            .map(|(n, _)| n.as_str())
-            .collect();
-        assert_eq!(
-            names,
-            vec!["User-Agent", "Openai-Intent", "Copilot-Vision-Request"]
-        );
+    fn no_turn_is_carried_by_a_sign_in_its_route_did_not_name() {
+        for source in [
+            include_str!("streaming.rs"),
+            include_str!("provider_dispatch.rs"),
+        ] {
+            let production = source.split("#[cfg(test)]").next().unwrap_or(source);
+            assert!(!production.contains("resolve_auth("));
+            assert!(!production.contains("via_subscription = true"));
+            assert!(!production.contains("githubcopilot"));
+        }
     }
 
     #[test]
@@ -2016,5 +2104,200 @@ mod tests {
             &g.auth,
             Auth::Header { name, .. } if name == "x-goog-api-key"
         ));
+    }
+
+    fn fixture_request<'a>(model: &'a str, messages: &'a [Message]) -> ChatRequest<'a> {
+        ChatRequest {
+            model,
+            messages,
+            max_tokens: 1024,
+            temperature: None,
+            tools: None,
+            tool_choice: None,
+            thinking_budget: None,
+            anthropic_thinking: None,
+            effort: None,
+            top_p: None,
+            top_k: None,
+            metadata: None,
+            reasoning_effort: None,
+            gemini_thinking_budget: None,
+            num_ctx: None,
+            ollama_think: None,
+            idle_timeout: STREAM_IDLE_TIMEOUT,
+        }
+    }
+
+    fn catalog_models_with(parameter: EffortParameter) -> Vec<&'static str> {
+        crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .filter(|model| crate::model_catalog::effort_parameter(&model.id) == Some(parameter))
+            .map(|model| model.id.as_str())
+            .collect()
+    }
+
+    fn catalog_level(model: &str, effort: Effort) -> Option<String> {
+        match crate::model_catalog::effort_support(model) {
+            EffortSupport::Levels(levels) => {
+                crate::model_catalog::nearest_supported_effort(effort.wire_value(), &levels)
+                    .map(str::to_string)
+            }
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn an_own_key_anthropic_turn_sends_the_chosen_effort_and_never_a_thinking_budget() {
+        let messages = [Message::text("user", "fixture prompt")];
+        let models = catalog_models_with(EffortParameter::OutputConfigEffort);
+        assert!(!models.is_empty());
+        let route = ReasoningRoute::of_spec(&anthropic_spec("k"));
+        for model in models {
+            for effort in Effort::ALL.iter().copied() {
+                let wire = reasoning_wire(
+                    route,
+                    model,
+                    Some(effort),
+                    effort.thinking_budget_for_anthropic(),
+                );
+                let mut req = fixture_request(model, &messages);
+                wire.apply(&mut req);
+                let body = agiworkforce_llm::build_anthropic_request_body(&req);
+                assert!(body.get("thinking").is_none(), "{model} {effort:?}: {body}");
+                let expected = catalog_level(model, effort);
+                assert!(expected.is_some(), "{model} {effort:?}");
+                assert_eq!(
+                    body.pointer("/output_config/effort")
+                        .and_then(serde_json::Value::as_str),
+                    expected.as_deref(),
+                    "{model} {effort:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_own_key_chat_completions_turn_sends_reasoning_effort_where_the_catalog_names_it() {
+        let spec = openai_compat_spec(
+            "fixture-compatible",
+            "https://provider.example/v1/chat/completions",
+            "k",
+        );
+        let route = ReasoningRoute::of_spec(&spec);
+        let models = catalog_models_with(EffortParameter::ReasoningEffort);
+        assert!(!models.is_empty());
+        for model in models {
+            let wire = reasoning_wire(route, model, Some(Effort::High), None);
+            let sent = wire
+                .spec_for(&spec)
+                .expect("reasoning effort rides in the body");
+            let level = sent
+                .extra_body
+                .iter()
+                .find(|(field, _)| field == "reasoning_effort")
+                .and_then(|(_, value)| value.as_str());
+            assert!(level.is_some(), "{model}: {:?}", sent.extra_body);
+            if let Some(expected) = catalog_level(model, Effort::High) {
+                assert_eq!(level, Some(expected.as_str()), "{model}");
+            }
+        }
+        let uncataloged = reasoning_wire(
+            route,
+            "fixture-local-model:latest",
+            Some(Effort::High),
+            None,
+        );
+        assert!(uncataloged.spec_for(&spec).is_none());
+    }
+
+    #[test]
+    fn a_managed_turn_tells_the_gateway_the_chosen_effort() {
+        let spec = managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com")
+            .expect("a trusted host resolves");
+        let route = ReasoningRoute::of_spec(&spec);
+        assert_eq!(route, ReasoningRoute::Managed);
+        let model = catalog_models_with(EffortParameter::OutputConfigEffort)
+            .into_iter()
+            .next()
+            .expect("a catalog model with effort levels");
+        let sent = reasoning_wire(route, model, Some(Effort::Max), None)
+            .spec_for(&spec)
+            .expect("effort rides in the managed body");
+        let expected = catalog_level(model, Effort::Max).expect("catalog level");
+        assert!(sent
+            .extra_body
+            .contains(&("effort".to_string(), serde_json::Value::String(expected))));
+        assert_eq!(managed_request_id(&sent), managed_request_id(&spec));
+    }
+
+    #[test]
+    fn a_gemini_turn_sends_a_thinking_budget_only_where_the_catalog_takes_one() {
+        let messages = [Message::text("user", "fixture prompt")];
+        let route = ReasoningRoute::of_spec(&gemini_spec("k"));
+        let models = catalog_models_with(EffortParameter::ThinkingLevel);
+        assert!(!models.is_empty());
+        for model in models {
+            let wire = reasoning_wire(route, model, Some(Effort::High), None);
+            let mut req = fixture_request(model, &messages);
+            wire.apply(&mut req);
+            let body = agiworkforce_llm::build_gemini_request_body(&req);
+            let budget = body.pointer("/generationConfig/thinkingConfig/thinkingBudget");
+            assert_eq!(
+                budget.is_some(),
+                crate::model_catalog::accepts_thinking_budget(model),
+                "{model}: {body}"
+            );
+        }
+    }
+
+    #[test]
+    fn effort_reaches_a_model_only_through_a_parameter_its_route_sends() {
+        for model in catalog_models_with(EffortParameter::OutputConfigEffort) {
+            assert!(effort_reaches_model(
+                &Provider::Anthropic,
+                model,
+                Effort::High
+            ));
+            assert!(effort_reaches_model(
+                &Provider::ManagedCloud,
+                model,
+                Effort::Low
+            ));
+            assert!(!effort_reaches_model(
+                &Provider::Ollama(OllamaMode::Local),
+                model,
+                Effort::High
+            ));
+        }
+        for model in catalog_models_with(EffortParameter::ThinkingLevel) {
+            assert_eq!(
+                effort_reaches_model(&Provider::Google, model, Effort::High),
+                crate::model_catalog::accepts_thinking_budget(model),
+                "{model}"
+            );
+        }
+        assert!(!effort_reaches_model(
+            &crate::models::openai_provider(),
+            "fixture-local-model:latest",
+            Effort::High
+        ));
+    }
+
+    #[test]
+    fn a_context_overflow_names_the_catalog_window_of_the_model() {
+        let entry = crate::model_catalog::catalog()
+            .all()
+            .first()
+            .expect("a catalog model");
+        let err = map_llm_error(LlmError::ContextOverflow {
+            model: entry.id.clone(),
+        });
+        match err.downcast_ref::<CliError>() {
+            Some(CliError::ContextOverflow { limit, .. }) => {
+                assert_eq!(*limit, entry.context_window)
+            }
+            other => panic!("not a context overflow: {other:?}"),
+        }
     }
 }

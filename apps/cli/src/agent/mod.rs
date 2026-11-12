@@ -199,6 +199,7 @@ impl SystemPromptParts {
             .map(|home| {
                 crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
                     home,
+                    self.memory_cwd.as_deref(),
                     privacy_mode,
                     memory_nonce,
                 )
@@ -292,6 +293,7 @@ pub struct AgentSession {
     /// any JSON event; chat.rs always writes a human-readable line to stderr.
     pub on_budget_exhausted: Option<BudgetSink>,
     pub plan_mode: bool,
+    pub plan_return_mode: Option<crate::cli_options::PermissionMode>,
     pub permission_mode: crate::cli_options::PermissionMode,
     pub(crate) pinned_permission_mode: Option<crate::cli_options::PermissionMode>,
     pub(crate) memory_enabled: bool,
@@ -818,6 +820,7 @@ impl AgentSession {
             max_budget_usd: None,
             on_budget_exhausted: None::<BudgetSink>,
             plan_mode: false,
+            plan_return_mode: None,
             permission_mode: crate::cli_options::PermissionMode::Default,
             pinned_permission_mode: crate::permissions::managed_permission_mode(),
             memory_enabled,
@@ -1914,6 +1917,14 @@ impl AgentSession {
     /// created and no session-index row is written, so the run leaves no trace
     /// under `~/.agiworkforce/`.
     pub fn enable_managed_session(&mut self) -> Result<()> {
+        self.enable_managed_session_as(None)
+    }
+
+    /// Like [`Self::enable_managed_session`], but a new session takes
+    /// `requested_id` (`--session-id`) as its id and file name, so `--resume`,
+    /// `session show` and `session fork` find it under that id. An id that
+    /// already names a stored session is refused instead of overwritten.
+    pub fn enable_managed_session_as(&mut self, requested_id: Option<&str>) -> Result<()> {
         if !self.session_persistence {
             return Ok(());
         }
@@ -1921,19 +1932,36 @@ impl AgentSession {
             return Ok(());
         }
         let store = crate::runtime::session_control::ManagedSessionStore::user_config()?;
-        self.initialize_managed_session(&store)?;
+        self.create_managed_session_in(&store, requested_id)?;
         self.sync_managed_session_metadata()
+    }
+
+    fn create_managed_session_in(
+        &mut self,
+        store: &crate::runtime::session_control::ManagedSessionStore,
+        requested_id: Option<&str>,
+    ) -> Result<()> {
+        let session_id = match requested_id {
+            Some(requested) => {
+                if store.contains(requested)? {
+                    anyhow::bail!(
+                        "A session with id '{requested}' already exists. Continue it with --resume {requested}, or choose another --session-id."
+                    );
+                }
+                requested.to_string()
+            }
+            None => uuid::Uuid::new_v4().to_string(),
+        };
+        self.initialize_managed_session(store, session_id)
     }
 
     fn initialize_managed_session(
         &mut self,
         store: &crate::runtime::session_control::ManagedSessionStore,
+        session_id: String,
     ) -> Result<()> {
-        let mut managed_session = ManagedSession::with_messages(
-            uuid::Uuid::new_v4().to_string(),
-            chrono::Utc::now(),
-            self.messages.clone(),
-        );
+        let mut managed_session =
+            ManagedSession::with_messages(session_id, chrono::Utc::now(), self.messages.clone());
         managed_session.model = Some(self.model.clone());
         managed_session.routing_authority = Some(self.current_routing_authority());
         managed_session.memory_nonce = Some(self.memory_nonce.clone());
@@ -1949,24 +1977,6 @@ impl AgentSession {
         self.current_plan_path = current_plan_path;
         self.plan_rejection_feedback = plan_rejection_feedback;
         self.checkpoint_log = carried.moved_into(std::mem::take(&mut self.checkpoint_log));
-        Ok(())
-    }
-
-    /// Override the managed session ID with a caller-supplied UUID.  This must
-    /// be called after `enable_managed_session` so the session object exists.
-    /// Useful for embedder-driven flows that pre-allocate session IDs.
-    pub fn override_session_id(&mut self, session_id: &str) -> Result<()> {
-        if !self.session_persistence {
-            return Ok(());
-        }
-        crate::runtime::session::validate_managed_session_id(session_id)?;
-        if let Some(ref mut ms) = self.managed_session {
-            ms.session_id = session_id.to_string();
-            if let Some(ref path) = self.managed_session_path {
-                ms.save_to_path(path)?;
-            }
-            self.sync_managed_session_metadata()?;
-        }
         Ok(())
     }
 
@@ -2000,6 +2010,7 @@ impl AgentSession {
             self.plan_mode = plan_mode;
         }
         self.reset_plan_state();
+        self.plan_return_mode = None;
         self.plan_approved = managed_session.plan_approved.unwrap_or(false);
         self.current_plan = managed_session.current_plan.clone();
         if let Some(fast_mode) = managed_session.fast_mode {
@@ -2110,7 +2121,7 @@ impl AgentSession {
                 Ok(LeaseClaim::HeldBy(holder)) => (
                     holder.holder_id.clone(),
                     format!(
-                        "{} is also writing this session. Both copies of the conversation are kept, but neither sees the other's turns until the session is resumed again. /control take makes this terminal the writer.",
+                        "{} is also writing this session. Neither process sees the other's turns. When one saves over the other, the version it replaces is kept in a copy beside the session, and agi history lists that copy with the command that opens it. /control take makes this terminal the writer.",
                         holder.holder_label
                     ),
                 ),
@@ -2608,6 +2619,7 @@ impl AgentSession {
         let home = CliConfig::config_dir()?;
         crate::memory_pipeline::MemoryPipeline::extract_session_summary(
             &home,
+            self.system_prompt_parts.memory_cwd.as_deref(),
             &self.runtime_session_id,
             unextracted,
             config,
@@ -3204,7 +3216,7 @@ mod tests {
         let expected_plan = serde_json::to_value(&session.current_plan).expect("plan");
 
         session
-            .initialize_managed_session(&store)
+            .create_managed_session_in(&store, None)
             .expect("initialize fixture");
 
         assert!(session.plan_approved);
@@ -3224,6 +3236,42 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&saved.current_plan).expect("saved plan"),
             expected_plan
+        );
+    }
+
+    #[test]
+    fn a_requested_session_id_names_the_session_file_and_is_never_overwritten() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let store =
+            crate::runtime::session_control::ManagedSessionStore::new(temp.path().to_path_buf());
+        let requested = "11111111-2222-4333-8444-555555555555";
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(true);
+
+        session
+            .create_managed_session_in(&store, Some(requested))
+            .expect("create under the requested id");
+
+        assert_eq!(session.managed_session_id(), Some(requested));
+        let resolved = store
+            .resolve(
+                crate::runtime::session_control::ManagedSessionReference::SessionId(
+                    requested.to_string(),
+                ),
+            )
+            .expect("the requested id resolves");
+        assert_eq!(
+            resolved.path.file_stem().and_then(|stem| stem.to_str()),
+            Some(requested)
+        );
+
+        let mut second = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        second.set_session_persistence(true);
+        assert!(
+            second
+                .create_managed_session_in(&store, Some(requested))
+                .is_err(),
+            "an id that names a stored session must not be reused"
         );
     }
 
@@ -4054,6 +4102,7 @@ mod tests {
         std::fs::write(memories.join("managed_memories.md"), "- managed fact").expect("managed");
         let memory = crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
             home.path(),
+            None,
             privacy,
             &session.memory_nonce,
         );
@@ -4221,6 +4270,50 @@ mod tests {
         assert!(!managed.contains("byok fact"), "{managed}");
         assert_eq!(session.memory_from_outside(PrivacyMode::Managed), None);
         assert_eq!(session.messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn memory_learned_in_one_project_reaches_only_sessions_in_that_project() {
+        let home = tempfile::tempdir().expect("memory home");
+        let project = tempfile::tempdir().expect("project");
+        let other = tempfile::tempdir().expect("other project");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.memory_enabled = true;
+        session.system_prompt_parts.memory_cwd = Some(project.path().to_path_buf());
+        session.messages.push(Message::text(
+            "user",
+            "I always deploy this client with the blue pipeline.",
+        ));
+        session
+            .messages
+            .push(Message::text("assistant", "Understood."));
+
+        crate::memory_pipeline::MemoryPipeline::extract_session_summary(
+            home.path(),
+            session.system_prompt_parts.memory_cwd.as_deref(),
+            &session.runtime_session_id,
+            &session.messages,
+            &CliConfig::default(),
+            None,
+        )
+        .await
+        .expect("summary");
+        crate::memory_pipeline::MemoryPipeline::consolidate(
+            home.path(),
+            &CliConfig::default(),
+            None,
+        )
+        .await
+        .expect("consolidate");
+
+        session.rebuild_system_message_for(PrivacyMode::Local, Some(home.path()));
+        let here = session.messages[0].text_content();
+        assert!(here.contains("blue pipeline"), "{here}");
+
+        session.system_prompt_parts.memory_cwd = Some(other.path().to_path_buf());
+        session.rebuild_system_message_for(PrivacyMode::Local, Some(home.path()));
+        let elsewhere = session.messages[0].text_content();
+        assert!(!elsewhere.contains("blue pipeline"), "{elsewhere}");
     }
 
     #[test]
@@ -5164,8 +5257,8 @@ mod tests {
             .persist_managed_session()
             .expect("persist_managed_session must succeed as a no-op");
         session
-            .override_session_id("attempted-rename")
-            .expect("override_session_id must succeed as a no-op");
+            .enable_managed_session_as(Some("attempted-rename"))
+            .expect("enable_managed_session_as must succeed as a no-op");
 
         let after = std::fs::read_to_string(&path).expect("read file after persist");
         assert_eq!(
