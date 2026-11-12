@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, normalize, relative } from 'node:path';
+import { baseInitOptions, resources } from '@agiworkforce/i18n';
 import { getColors, typeScale } from '@/src/ui/theme/tokens';
 import { getTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 import { drawerGestureOptions } from '@/src/features/shell/drawerGestures';
@@ -202,6 +203,12 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
     ).toMatchObject({ drawerType: 'permanent', swipeEnabled: false });
   });
 
+  it('returns Back from a settings page to the page that opened it, not to a new chat', () => {
+    const appLayout = readFileSync(join(MOBILE_ROOT, 'app', '(app)', '_layout.tsx'), 'utf8');
+
+    expect(appLayout).toMatch(/<Drawer\s+backBehavior="history"/);
+  });
+
   it('keeps secondary controls in a sheet rather than a desktop menu', () => {
     const sheet = readFileSync(
       join(MOBILE_ROOT, 'src', 'features', 'shell', 'ShellSecondarySheet.tsx'),
@@ -217,9 +224,21 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
       join(MOBILE_ROOT, 'src', 'features', 'drawer', 'components', 'DrawerContent.tsx'),
       'utf8',
     );
+    const english = (resources as Record<string, Record<string, unknown>>).en[
+      baseInitOptions.defaultNS
+    ];
     const headerActions = Array.from(
-      drawer.matchAll(/<HeaderIconButton\s+label="([^"]+)"/g),
-      (match) => match[1],
+      drawer.matchAll(/<HeaderIconButton\s+label=\{t\('([^']+)'\)\}/g),
+      (match) =>
+        match[1]!
+          .split('.')
+          .reduce<unknown>(
+            (node, part) =>
+              node && typeof node === 'object'
+                ? (node as Record<string, unknown>)[part]
+                : undefined,
+            english,
+          ),
     );
 
     expect(headerActions).toEqual(['Search', 'Organize chats', 'New chat', 'Open profile']);

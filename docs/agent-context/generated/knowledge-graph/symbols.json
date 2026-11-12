@@ -622,6 +622,9 @@
       "apps/mobile/src/ui/theme/tokens.ts",
       "apps/web/shared/components/__tests__/theme-contrast.test.ts"
     ],
+    "accentTokenFrom": [
+      "apps/mobile/src/ui/theme/tokens.ts"
+    ],
     "accept": [
       "apps/desktop/src-tauri/src/automation/computer_use/consent.rs",
       "crates/agiworkforce-mcp/src/elicitation.rs",

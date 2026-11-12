@@ -16,7 +16,6 @@ const ACCENTS: Array<{ value: AccentColor; label: string }> = [
   { value: 'blue', label: 'Blue' },
   { value: 'violet', label: 'Violet' },
   { value: 'rose', label: 'Rose' },
-  { value: 'amber', label: 'Amber' },
 ];
 
 export default function AccentColorScreen() {
