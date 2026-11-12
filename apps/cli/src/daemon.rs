@@ -1366,6 +1366,7 @@ impl QuietGate {
 }
 
 /// Process trigger events: spawn agent sessions for each fired trigger.
+#[allow(clippy::too_many_arguments)]
 async fn run_execution_loop(
     mut rx: mpsc::UnboundedReceiver<TriggerEvent>,
     quiet_periods: HashMap<String, std::time::Duration>,

@@ -1102,7 +1102,7 @@ index 0000000..e69de29\n";
     ) {
         crate::sessions::save_session(conn, id, "Patch", "", &folder.to_string_lossy(), "")
             .expect("session");
-        for (role, text) in turns {
+        for &(role, text) in turns {
             crate::sessions::save_message(conn, id, &crate::models::Message::text(role, text), 0)
                 .expect("message");
         }
