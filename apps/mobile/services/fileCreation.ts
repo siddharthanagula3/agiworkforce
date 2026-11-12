@@ -1,4 +1,6 @@
 import {
+  cacheDirectory,
+  deleteAsync,
   documentDirectory,
   getInfoAsync,
   moveAsync,
@@ -20,6 +22,7 @@ import { getAuthHeaders } from '@/services/authSession';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 import { EXPORT_CONTENT_STYLES, markdownToExportHtml } from '@/services/exportMarkdownHtml';
 import { markdownToDocxBase64 } from './docxExport';
+import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
 export const EXPORTS_DIR = `${documentDirectory}exports/`;
 
@@ -422,21 +425,54 @@ const PLAYABLE_VIDEO_EXTENSIONS: Readonly<Record<string, string>> = {
   'video/quicktime': 'mov',
 };
 
+const VIDEO_PREVIEW_DIR = `${cacheDirectory}video-previews/`;
+
+// Previews live in the cache, one directory per account and video, so replaying reuses the bytes
+// and Clear cache reclaims them; explicit exports stay in EXPORTS_DIR.
+async function videoPreviewDirectory(key: string): Promise<{ uri: string; reusable: boolean }> {
+  const owner = captureCloudAccountEpoch()?.ownerId.replace(/[^a-zA-Z0-9_-]/g, '');
+  const uri = owner
+    ? `${VIDEO_PREVIEW_DIR}${owner}/${key}/`
+    : `${VIDEO_PREVIEW_DIR}transient/${Crypto.randomUUID()}/`;
+  if (!(await getInfoAsync(uri)).exists) {
+    await makeDirectoryAsync(uri, { intermediates: true });
+  }
+  return { uri, reusable: Boolean(owner) };
+}
+
+async function cachedPreviewVideoName(directoryUri: string, key: string): Promise<string | null> {
+  for (const extension of Object.values(PLAYABLE_VIDEO_EXTENSIONS)) {
+    const name = `video-${key}.${extension}`;
+    if ((await getInfoAsync(`${directoryUri}${name}`)).exists) return name;
+  }
+  return null;
+}
+
 export async function prepareLocalVideoPlayer(
   url: string,
   background: string,
 ): Promise<LocalVideoPlayer> {
   const key = videoFileKey(url);
-  const downloaded = await fetchGeneratedFileBytes(url);
-  const extension = downloaded.contentType
-    ? PLAYABLE_VIDEO_EXTENSIONS[downloaded.contentType]
-    : undefined;
-  if (!extension) {
-    throw new Error('The saved video format is not supported.');
+  const directory = await videoPreviewDirectory(key);
+  const directoryUri = directory.uri;
+  let videoName = directory.reusable ? await cachedPreviewVideoName(directoryUri, key) : null;
+  if (!videoName) {
+    const downloaded = await fetchGeneratedFileBytes(url);
+    const extension = downloaded.contentType
+      ? PLAYABLE_VIDEO_EXTENSIONS[downloaded.contentType]
+      : undefined;
+    if (!extension) {
+      throw new Error('The saved video format is not supported.');
+    }
+    videoName = `video-${key}.${extension}`;
+    const partialUri = `${directoryUri}${Crypto.randomUUID()}.part`;
+    await writeAsStringAsync(partialUri, downloaded.base64, { encoding: EncodingType.Base64 });
+    if ((await getInfoAsync(`${directoryUri}${videoName}`)).exists) {
+      await deleteAsync(partialUri, { idempotent: true });
+    } else {
+      await moveAsync({ from: partialUri, to: `${directoryUri}${videoName}` });
+    }
   }
-  const videoUri = await writeGeneratedFileBytes(`video-${key}.${extension}`, downloaded.base64);
-  const directoryUri = videoUri.slice(0, videoUri.lastIndexOf('/') + 1);
-  const videoName = videoUri.slice(videoUri.lastIndexOf('/') + 1);
   const playerUri = `${directoryUri}player.html`;
   await writeAsStringAsync(
     playerUri,
@@ -450,7 +486,7 @@ export async function prepareLocalVideoPlayer(
     ].join(''),
     { encoding: EncodingType.UTF8 },
   );
-  return { videoUri, playerUri, directoryUri };
+  return { videoUri: `${directoryUri}${videoName}`, playerUri, directoryUri };
 }
 
 const SHAREABLE_IMAGE_TYPES: Readonly<Record<string, { extension: string; mimeType: string }>> = {

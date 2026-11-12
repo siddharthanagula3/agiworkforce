@@ -88,7 +88,11 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
             >
               {menu.title}
             </Text>
-            <ScrollView style={{ maxHeight: height * 0.6 }} bounces={false}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={{ maxHeight: height * 0.6 }}
+              bounces={false}
+            >
               {menu.actions.map((action, index) => (
                 <PressableBox
                   key={action.key}

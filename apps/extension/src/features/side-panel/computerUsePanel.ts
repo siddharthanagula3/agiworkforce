@@ -23,7 +23,7 @@ import {
 } from '../computer-use/browserControlConsent';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
 import { WORKER_RESTARTED_REASON } from '../computer-use/runMarker';
-import { USER_TAKEOVER_MAX_MS } from '../computer-use/runOwnership';
+import { USER_TAKEOVER_MAX_MINUTES } from '../computer-use/runOwnership';
 import { assistantHostWindowId } from '../surface/assistantPanel';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { t } from '../../i18n';
@@ -819,7 +819,7 @@ const CANCELLATION_REASON_COPY: Record<string, string> = {
   tab_intent_changed:
     'The tab left the page this run was approved for, so the run was stopped before acting. Go back to that page and start the task again.',
   tab_removed: 'The tab this run was driving was closed.',
-  takeover_expired: `The page was not handed back within ${USER_TAKEOVER_MAX_MS / 60_000} minutes, so the task ended and AGI let go of the tab. Start the task again to continue.`,
+  takeover_expired: `The page was not handed back within ${USER_TAKEOVER_MAX_MINUTES} minutes, so the task ended and AGI let go of the tab. Start the task again to continue.`,
   user_cleared: 'The run was stopped when the log was cleared.',
   user_stopped: 'You stopped the run.',
   [WORKER_RESTARTED_REASON]:
@@ -1221,7 +1221,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   takeOverBtn.type = 'button';
   takeOverBtn.className = 'sp-cu-takeover-btn';
   takeOverBtn.textContent = 'Take over';
-  takeOverBtn.title = 'Pause AGI and use the page yourself; it continues when you hand it back';
+  takeOverBtn.title = t('spBrowserTakeOverTitle', [USER_TAKEOVER_MAX_MINUTES]);
   takeOverBtn.hidden = true;
 
   const continueBtn = document.createElement('button');

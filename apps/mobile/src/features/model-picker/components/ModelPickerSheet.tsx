@@ -604,6 +604,7 @@ export function ModelPickerSheet({
         accessible={false}
         snapPoints={snapPoints}
         enablePanDownToClose
+        onClose={clearSearch}
         enableDynamicSizing={false}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
@@ -737,7 +738,7 @@ export function ModelPickerSheet({
             accessibilityValue={{ text: search }}
           />
           {search.length > 0 ? (
-            <PressableBox onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>
+            <PressableBox onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={15}>
               <XIcon size={14} color={colors.textMuted} />
             </PressableBox>
           ) : null}

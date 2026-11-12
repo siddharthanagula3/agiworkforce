@@ -124,7 +124,7 @@ export function SelectTextSheet({
               </View>
             </>
           ) : (
-            <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16 }}>
               <Text
                 selectable
                 style={{ fontSize: typeScale.callout, lineHeight: 24, color: colors.textPrimary }}

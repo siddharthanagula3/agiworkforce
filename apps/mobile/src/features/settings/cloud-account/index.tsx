@@ -539,7 +539,18 @@ function SignedInCloudAccount() {
                 if (!deletionIntentIsCurrent(intent)) return;
                 const receipt = parseAccountDeletionScheduleReceipt(res);
                 await signOut().catch(() => {});
-                Alert.alert('Account deletion scheduled', receipt.message);
+                const storeBilling = receipt.storeBilling;
+                if (!storeBilling) {
+                  Alert.alert('Account deletion scheduled', receipt.message);
+                  return;
+                }
+                Alert.alert('Account deletion scheduled', receipt.message, [
+                  { text: 'OK', style: 'cancel' },
+                  {
+                    text: 'Open subscriptions',
+                    onPress: () => void openExternalUrl(storeBilling.manageUrl),
+                  },
+                ]);
               })
               .catch(async (err: unknown) => {
                 if (isStepUpCancelled(err)) return;
@@ -641,7 +652,9 @@ function SignedInCloudAccount() {
                 Alert.alert(
                   receipt.cancelled ? 'Account deletion cancelled' : 'No account deletion pending',
                   receipt.cancelled
-                    ? 'Your account deletion was cancelled.'
+                    ? receipt.planRenewal
+                      ? receipt.message
+                      : 'Your account deletion was cancelled.'
                     : 'The server confirmed that no account deletion is pending.',
                 );
               })

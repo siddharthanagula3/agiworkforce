@@ -125,6 +125,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
             </View>
 
             <ScrollView
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ padding: dialogPadding, paddingBottom: 40 }}
               bounces={false}
             >

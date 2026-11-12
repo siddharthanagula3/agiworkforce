@@ -179,6 +179,7 @@ import {
   COMPUTER_USE_RUN_ID_PATTERN,
   ComputerUseRunCoordinator,
   ComputerUseStartCoordinator,
+  USER_TAKEOVER_MAX_MINUTES,
   USER_TAKEOVER_MAX_MS,
   type ComputerUseCancellationReason,
   type ComputerUseRunLease,
@@ -333,6 +334,7 @@ import {
   saveConversationNow,
   scheduleConversationSync,
   sweepConversationSync,
+  CONVERSATION_SYNC_RETRY_ALARM,
   SYNC_SWEEP_ALARM,
 } from './features/cloud-bridge/conversationSync';
 import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
@@ -1000,8 +1002,6 @@ function broadcastComputerUseForCurrentRun(
   });
 }
 
-const USER_TAKEOVER_REASON = 'You have the page. AGI waits until you hand it back.';
-const USER_INPUT_TAKEOVER_REASON = 'You started using the page, so AGI stopped acting on it.';
 const AGENT_INPUT_ECHO_MS = 750;
 
 function watchComputerUseUserInput(tabId: number, watching: boolean): void {
@@ -1048,7 +1048,10 @@ function endTakeoverAfterLimit(lease: ComputerUseRunLease, takeover: ComputerUse
 }
 
 function handComputerUseTabToUser(lease: ComputerUseRunLease, reason: string): Promise<void> {
-  const takeover = computerUseRuns.beginTakeover(lease, reason);
+  const takeover = computerUseRuns.beginTakeover(
+    lease,
+    `${reason.trim()} ${t('cuTakeoverLimit', [USER_TAKEOVER_MAX_MINUTES])}`,
+  );
   endTakeoverAfterLimit(lease, takeover);
   broadcastComputerUseForCurrentRun(lease, {
     type: 'AGI_CU_STATE',
@@ -6923,7 +6926,7 @@ async function handleMessageAsync(
         !lease.actionInFlight &&
         Date.now() - lease.lastActionEndedAt > AGENT_INPUT_ECHO_MS
       ) {
-        void handComputerUseTabToUser(lease, USER_INPUT_TAKEOVER_REASON).catch(() => undefined);
+        void handComputerUseTabToUser(lease, t('cuTakeoverByInputReason')).catch(() => undefined);
       }
       const inputTabId = sender?.tab?.id;
       if (typeof inputTabId === 'number' && lease?.tabId !== inputTabId)
@@ -7001,7 +7004,7 @@ async function handleMessageAsync(
         } as ExtensionResponse;
       }
       if (takeoverMessage.type === 'PAUSE_COMPUTER_USE') {
-        void handComputerUseTabToUser(lease, USER_TAKEOVER_REASON).catch(() => undefined);
+        void handComputerUseTabToUser(lease, t('cuTakeoverByUserReason')).catch(() => undefined);
         return {
           success: true,
           running: true,
@@ -9086,7 +9089,7 @@ chrome.runtime.onConnect.addListener(() => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === MAINTENANCE_ALARM) {
+  if (alarm.name === MAINTENANCE_ALARM || alarm.name === CONVERSATION_SYNC_RETRY_ALARM) {
     void settleMaintenanceAlarm();
     return;
   }

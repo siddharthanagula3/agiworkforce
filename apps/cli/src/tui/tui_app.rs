@@ -1571,14 +1571,14 @@ fn approval_choice_to_decision(
 /// Build the approval overlay for one request.
 ///
 /// The summary and detail lines are the model's own command line and diff
-/// hunks; they are stripped here because the overlay paints them directly
-/// above the y/n prompt they describe.
+/// hunks; every control in them is shown as a token here because the overlay
+/// paints them directly above the y/n prompt they describe.
 fn approval_overlay_for(
     request: &crate::tui::approval_broker::ApprovalRequest,
 ) -> crate::tui::widgets::approval_overlay::ApprovalOverlayState {
     let mut overlay = crate::tui::widgets::approval_overlay::ApprovalOverlayState::default();
     overlay.open(
-        sanitize_terminal_text(&request.summary).into_owned(),
+        crate::terminal_text::sanitize_approval_text(&request.summary),
         crate::approval_details::commit_line(request)
             .into_iter()
             .chain(request.shown_detail())
@@ -4303,17 +4303,23 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
                 Ok(managed) => {
                     let session_id = managed.session_id.clone();
                     let count = managed.messages.len();
-                    match app.session.load_managed_conversation(managed, resolved.path) {
-                    Ok(()) => {
+                    match app.session.load_managed_conversation_keeping_mode(managed, resolved.path) {
+                    Ok(saved_mode) => {
                         app.session.turn_count = app
                             .session
                             .messages
                             .iter()
                             .filter(|message| message.role == "user")
                             .count() as u32;
+                        show_session_mode(app);
                         app.sync_stats();
                         rebuild_transcript_from_session(app);
-                        format!("Resumed session {session_id} ({count} messages).")
+                        match kept_mode_notice(app, saved_mode) {
+                            Some(notice) => format!(
+                                "Resumed session {session_id} ({count} messages). {notice}"
+                            ),
+                            None => format!("Resumed session {session_id} ({count} messages)."),
+                        }
                     }
                     Err(error) => format!(
                         "Refusing to resume a session with unknown or incompatible routing authority: {error:#}"
@@ -4761,6 +4767,7 @@ fn start_remote_control(app: &mut TuiApp) -> String {
             relay_host,
             &workspace,
             privacy,
+            true,
             stopped,
             move |update: crate::remote_control::RemoteControlStatus| {
                 use crate::remote_control::RemoteControlStatus;
@@ -7990,6 +7997,54 @@ fn compact_tool_output_preview(output: &str) -> Option<String> {
     ))
 }
 
+fn show_session_mode(app: &mut TuiApp) {
+    let settled = InteractionMode::for_session(&app.session);
+    if !(app.mode == InteractionMode::FullAuto && settled == InteractionMode::BypassPermissions) {
+        app.mode = settled;
+    }
+}
+
+fn kept_mode_notice(
+    app: &TuiApp,
+    saved: Option<crate::cli_options::PermissionMode>,
+) -> Option<String> {
+    let saved = InteractionMode::for_permission_mode(saved?);
+    (saved != app.mode).then(|| {
+        format!(
+            "The session was saved in {} mode; this terminal stays in {} mode.",
+            saved.label(),
+            app.mode.label()
+        )
+    })
+}
+
+fn reload_changed_session(app: &mut TuiApp) {
+    match app.session.reload_if_changed_on_disk() {
+        Ok(Some(saved_mode)) => {
+            show_session_mode(app);
+            rebuild_transcript_from_session(app);
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::System,
+                text: "This conversation continued in another app, so it now shows the saved version and your message continues from there.".to_string(),
+            });
+            if let Some(text) = kept_mode_notice(app, saved_mode) {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text,
+                });
+            }
+        }
+        Ok(None) => {}
+        Err(error) => app.chat_messages.push(ChatMessage {
+            role: ChatRole::System,
+            text: format!(
+                "This conversation changed in another app and could not be reloaded: {}",
+                sanitize_terminal_text(&format!("{error:#}"))
+            ),
+        }),
+    }
+}
+
 async fn send_message(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     app: &mut TuiApp,
@@ -8027,23 +8082,7 @@ async fn send_message_with_prompt(
     )
     .await;
 
-    match app.session.reload_if_changed_on_disk() {
-        Ok(true) => {
-            rebuild_transcript_from_session(app);
-            app.chat_messages.push(ChatMessage {
-                role: ChatRole::System,
-                text: "This conversation continued in another app, so it now shows the saved version and your message continues from there.".to_string(),
-            });
-        }
-        Ok(false) => {}
-        Err(error) => app.chat_messages.push(ChatMessage {
-            role: ChatRole::System,
-            text: format!(
-                "This conversation changed in another app and could not be reloaded: {}",
-                sanitize_terminal_text(&format!("{error:#}"))
-            ),
-        }),
-    }
+    reload_changed_session(app);
     let context: Vec<String> = std::mem::take(&mut app.turn_context)
         .into_iter()
         .chain(app.staged_images.iter().cloned())
@@ -8248,7 +8287,20 @@ async fn send_message_with_prompt(
                             &|| answered_remotely().is_some(),
                         )?;
                         if let Some(host) = &remote_host {
-                            host.approval_settled(req.id);
+                            host.approval_settled(
+                                req.id,
+                                match &modal {
+                                    ApprovalModalOutcome::Chosen(choice, _) => {
+                                        approval_choice_to_decision(*choice)
+                                    }
+                                    ApprovalModalOutcome::StopTurn => {
+                                        crate::tui::approval_broker::ApprovalDecision::Cancel
+                                    }
+                                    ApprovalModalOutcome::Unanswered => {
+                                        crate::tui::approval_broker::ApprovalDecision::Timeout
+                                    }
+                                },
+                            );
                         }
                         if let Some(allowed) = answered_remotely() {
                             terminal.clear()?;
@@ -8693,6 +8745,96 @@ mod tests {
             .chat_messages
             .iter()
             .any(|message| message.text.contains("Resumed session empty-target")));
+    }
+
+    fn saved_session(
+        app: &TuiApp,
+        id: &str,
+        mode: crate::cli_options::PermissionMode,
+    ) -> crate::runtime::session::ManagedSession {
+        let mut managed = crate::runtime::session::ManagedSession::new(id, chrono::Utc::now());
+        managed.model = Some(app.session.model.clone());
+        managed.routing_authority = Some(app.session.current_routing_authority());
+        managed.permission_mode = Some(mode);
+        managed.plan_mode = Some(mode == crate::cli_options::PermissionMode::Plan);
+        managed
+    }
+
+    #[test]
+    fn a_reload_after_another_app_saved_keeps_this_terminals_mode_on_screen_and_at_the_gate() {
+        use crate::cli_options::PermissionMode;
+        let temp = tempfile::tempdir().expect("session fixture");
+        let path = temp.path().join("shared.json");
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+        app.session.set_session_persistence(true);
+        let mut managed = saved_session(&app, "shared-session", PermissionMode::Plan);
+        managed.save_to_path(&path).expect("save fixture");
+        app.session
+            .load_managed_conversation(
+                crate::runtime::session::ManagedSession::load_from_path(&path).expect("load"),
+                path.clone(),
+            )
+            .expect("adopt fixture");
+        assert!(apply_mode(&mut app, InteractionMode::Plan));
+
+        managed.permission_mode = Some(PermissionMode::AcceptEdits);
+        managed.plan_mode = Some(false);
+        managed
+            .messages
+            .push(crate::models::Message::text("user", "continued elsewhere"));
+        managed.save_to_path(&path).expect("save from another app");
+
+        reload_changed_session(&mut app);
+
+        assert_eq!(app.session.messages.len(), 1);
+        assert_eq!(app.session.permission_mode, PermissionMode::Plan);
+        assert_eq!(app.session.governed_permission_mode(), PermissionMode::Plan);
+        assert!(app.session.plan_mode);
+        assert_eq!(app.mode, InteractionMode::Plan);
+        assert_eq!(InteractionMode::for_session(&app.session), app.mode);
+        let notices: Vec<&str> = app
+            .chat_messages
+            .iter()
+            .map(|message| message.text.as_str())
+            .filter(|text| text.contains("this terminal stays in"))
+            .collect();
+        assert_eq!(notices.len(), 1, "{notices:?}");
+        assert!(notices[0].contains(InteractionMode::AcceptEdits.label()));
+        assert!(notices[0].contains(InteractionMode::Plan.label()));
+    }
+
+    #[test]
+    fn resuming_a_session_saved_in_another_mode_keeps_this_terminals_mode() {
+        use crate::cli_options::PermissionMode;
+        let temp = tempfile::tempdir().expect("session fixture");
+        let path = temp.path().join("planned.json");
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+        app.session.set_session_persistence(false);
+        assert!(apply_mode(&mut app, InteractionMode::AcceptEdits));
+        saved_session(&app, "planned-session", PermissionMode::Plan)
+            .save_to_path(&path)
+            .expect("save fixture");
+
+        resume_session(path.to_str().expect("fixture path"), &mut app);
+
+        assert_eq!(app.session.managed_session_id(), Some("planned-session"));
+        assert_eq!(app.session.permission_mode, PermissionMode::AcceptEdits);
+        assert!(!app.session.plan_mode);
+        assert_eq!(app.mode, InteractionMode::AcceptEdits);
+        assert_eq!(InteractionMode::for_session(&app.session), app.mode);
+        let resumed = app
+            .chat_messages
+            .iter()
+            .find(|message| message.text.contains("Resumed session planned-session"))
+            .expect("resume line");
+        let kept = format!(
+            "saved in {} mode; this terminal stays in {} mode",
+            InteractionMode::Plan.label(),
+            InteractionMode::AcceptEdits.label()
+        );
+        assert!(resumed.text.contains(&kept), "{}", resumed.text);
     }
 
     fn attach_remote(
@@ -12542,8 +12684,10 @@ mod tests {
 
     /// A tool-approval request carries the model's own command line and diff
     /// hunks; the overlay painted them verbatim right above the y/n prompt.
+    /// The escapes are shown as inert tokens rather than dropped, because a
+    /// shell runs the text that follows them.
     #[test]
-    fn approval_modal_strips_escape_sequences_from_summary_and_detail() {
+    fn approval_modal_shows_escape_sequences_as_inert_tokens() {
         use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
         use ratatui::backend::TestBackend;
 
@@ -12563,7 +12707,14 @@ mod tests {
                 overlay.render_into(frame, frame.area());
             })
             .expect("draw");
-        assert_no_terminal_escapes(&rendered_symbols(&terminal), "approval overlay");
+        let rendered = rendered_symbols(&terminal);
+        assert!(
+            !rendered
+                .chars()
+                .any(|ch| ch.is_control() && ch != '\n' && ch != '\t'),
+            "a control character reached the frame buffer: {rendered:?}"
+        );
+        assert!(rendered.contains("<U+001B>"), "{rendered}");
     }
 
     #[test]

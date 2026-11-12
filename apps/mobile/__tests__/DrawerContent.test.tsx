@@ -375,14 +375,14 @@ describe('DrawerContent', () => {
     });
 
     const drawer = renderDrawer();
-    fireEvent.press(drawer.getByLabelText('Usage remaining · Week 35%'));
+    fireEvent.press(drawer.getByLabelText('Usage remaining · This week 35%'));
 
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings/cloud-usage');
     drawer.unmount();
 
     useCloudUsageStore.setState({ ownerId: 'another-user' });
     const switched = renderDrawer();
-    expect(switched.queryByText('Usage remaining · Week 35%')).toBeNull();
+    expect(switched.queryByText('Usage remaining · This week 35%')).toBeNull();
     expect(switched.getByLabelText('Usage remaining')).toBeTruthy();
     switched.unmount();
 
@@ -419,7 +419,7 @@ describe('DrawerContent', () => {
     expect(i18n.t('navUpgrade', { lng: 'en' })).toBe(upgradeLabel);
     const drawer = renderDrawer();
     expect(drawer.queryByText(/Usage remaining/)).toBeNull();
-    expect(drawer.queryByText(/Week \d+%|Period \d+%/)).toBeNull();
+    expect(drawer.queryByText(/(This week|Current session|This billing period) \d+%/)).toBeNull();
     fireEvent.press(drawer.getByLabelText(upgradeLabel));
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
     drawer.unmount();

@@ -170,6 +170,27 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     expect(mockBrowseListings).toHaveBeenCalledWith({ search: '', category: null, cursor: null });
   });
 
+  it('says the directory is still being indexed instead of only No connectors found', async () => {
+    mockFetchDirectory.mockResolvedValue({ connectors: [], available: [] });
+    mockBrowseListings.mockResolvedValue({
+      ...page([]),
+      stats: { bootstrapComplete: false },
+    });
+    const { findByText, getByText } = render(<CloudConnectorsScreen />);
+
+    expect(await findByText('No connectors found')).toBeTruthy();
+    expect(getByText(/still being indexed/)).toBeTruthy();
+  });
+
+  it('shows only No connectors found once the directory is indexed', async () => {
+    mockFetchDirectory.mockResolvedValue({ connectors: [], available: [] });
+    mockBrowseListings.mockResolvedValue({ ...page([]), stats: { bootstrapComplete: true } });
+    const { findByText, queryByText } = render(<CloudConnectorsScreen />);
+
+    expect(await findByText('No connectors found')).toBeTruthy();
+    expect(queryByText(/still being indexed/)).toBeNull();
+  });
+
   it('shows the approval policy where connectors are managed and opens its controls', async () => {
     const originalPolicy = useSettingsStore.getState().toolApprovalPolicy;
     const screen = render(<CloudConnectorsScreen />);

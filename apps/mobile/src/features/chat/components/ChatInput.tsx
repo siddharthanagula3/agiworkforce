@@ -20,7 +20,6 @@ import {
   X,
   Pencil,
   Telescope,
-  Terminal,
   Sparkles,
   Clock,
 } from 'lucide-react-native';
@@ -231,7 +230,6 @@ export function ChatInput({
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
-  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
   const { colors: themeColors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -266,35 +264,16 @@ export function ChatInput({
     selectedModelMetadata?.capabilities.research === true &&
     selectedModelMetadata.capabilities.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
-  const codeExecutionActive =
-    isSignedInCloudChat &&
-    FEATURES.codeExecution &&
-    chatFeatures.codeExecution &&
-    selectedModelMetadata?.capabilities.codeExecution === true &&
-    codeExecutionAvailable &&
-    grantedCapabilities.includes('canUseCloudExecution');
-  const activeToolStatuses = [
-    ...(researchActive
-      ? [
-          {
-            key: 'research',
-            label: 'Research',
-            accessibilityLabel: 'Deep Research active',
-            Icon: Telescope,
-          },
-        ]
-      : []),
-    ...(codeExecutionActive
-      ? [
-          {
-            key: 'code',
-            label: 'Code',
-            accessibilityLabel: 'Code execution active',
-            Icon: Terminal,
-          },
-        ]
-      : []),
-  ];
+  const activeToolStatuses = researchActive
+    ? [
+        {
+          key: 'research',
+          label: 'Research',
+          accessibilityLabel: 'Deep Research active',
+          Icon: Telescope,
+        },
+      ]
+    : [];
 
   const applyTranscript = useCallback((transcript: string) => {
     if (!cleanupVoiceDictation(transcript)) {
@@ -825,19 +804,17 @@ ${current}`
   }, [sendPreview, text, attachments]);
 
   const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
-  const placeholder = isStreaming
-    ? `Reply to ${modelName}...`
-    : !isOnline
-      ? `Offline, message will send on reconnect${queueLabel}`
-      : mediaMode === 'image'
-        ? 'Describe the image to create'
-        : mediaMode === 'video'
-          ? 'Describe the video to create'
-          : isThreadActive
-            ? 'Reply to AGI'
-            : agiWorkActive
-              ? 'Work with AGI'
-              : "What's on your mind?";
+  const placeholder = !isOnline
+    ? `Offline, message will send on reconnect${queueLabel}`
+    : mediaMode === 'image'
+      ? 'Describe the image to create'
+      : mediaMode === 'video'
+        ? 'Describe the video to create'
+        : isThreadActive || isStreaming
+          ? 'Reply to AGI'
+          : agiWorkActive
+            ? 'Work with AGI'
+            : "What's on your mind?";
 
   return (
     <View

@@ -62,6 +62,7 @@ jest.mock('@/src/features/voice/services/liveVoiceAvailability', () => ({
 }));
 jest.mock('@/src/features/voice/services/voiceInput', () => ({
   requestMicPermission: async () => true,
+  requestMicrophoneOnlyPermission: async () => true,
 }));
 jest.mock('@/src/features/voice/services/audioRoute', () => ({
   ...jest.requireActual('@/src/features/voice/services/audioRoute'),

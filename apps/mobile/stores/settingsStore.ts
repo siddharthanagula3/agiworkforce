@@ -155,6 +155,12 @@ export const useSettingsStore = create<SettingsState>()(
       storage: createJSONStorage(() => mmkvStorage),
       version: 3,
       migrate: migratePersistedSettings,
+      partialize: ({ isTemporaryChat: _sessionOnly, ...persisted }) => persisted,
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<SettingsState>),
+        isTemporaryChat: false,
+      }),
       skipHydration: true,
       onRehydrateStorage: () => (state, error) => {
         if (error) console.warn('[settingsStore] Hydration failed:', error);

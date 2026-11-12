@@ -3,6 +3,7 @@ import {
   ACCOUNT_REFUSAL_TEXT_MAX_LENGTH,
   accountRefusalKind,
   accountRefusalMessage,
+  boundedRefusalText,
   parseRetryAfterMs,
   readAccountRefusal,
 } from '../utils/accountRefusal';
@@ -102,6 +103,19 @@ describe('accountRefusalMessage', () => {
       expect(text?.endsWith('\u2026')).toBe(true);
       expect(Array.from(text ?? '')).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
     }
+  });
+});
+
+describe('boundedRefusalText', () => {
+  it('breaks the link syntax a notification would turn into a clickable command', () => {
+    const shown = boundedRefusalText(
+      'Read [the policy](https://example.com/p) or [run this](command:workbench.action.terminal.new "t").',
+    );
+
+    expect(shown).toBe(
+      'Read [the policy] (https://example.com/p) or [run this] (command:workbench.action.terminal.new "t").',
+    );
+    expect(shown).not.toMatch(/\]\(/u);
   });
 });
 

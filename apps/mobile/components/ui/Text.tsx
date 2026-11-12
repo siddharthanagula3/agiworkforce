@@ -27,7 +27,11 @@ export function Text({
 }: TextProps) {
   const flattened = StyleSheet.flatten(style);
   const fontSize = typeof flattened?.fontSize === 'number' ? flattened.fontSize : null;
-  const needsLineHeight = fontSize !== null && flattened?.lineHeight == null;
+  // A nested span inherits its paragraph's line height; iOS takes the whole
+  // paragraph's line height from the first span, so a derived one here would
+  // collapse every line of a paragraph that opens with inline code.
+  const needsLineHeight =
+    variant !== 'inline' && fontSize !== null && flattened?.lineHeight == null;
   const resolvedStyle = needsLineHeight
     ? [style, { lineHeight: Math.ceil(fontSize * 1.24) }]
     : style;

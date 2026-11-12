@@ -232,16 +232,27 @@ describe('a refusal the refresh cannot recover', () => {
   });
 });
 
-describe('an account the server refuses outright', () => {
-  it('ends the session quietly and owes the person a sign-in', async () => {
-    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(403, {}));
+describe('a 403 on the account check', () => {
+  it('keeps the session and reports the reason the server gave', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(403, {
+        error: {
+          code: 'workspace_access_denied',
+          message: 'You are not a member of that workspace.',
+        },
+      }),
+    );
 
-    await expect(api.get('/api/me')).rejects.toThrow('can no longer be used');
+    await expect(api.get('/api/me?surface=mobile')).rejects.toMatchObject({
+      status: 403,
+      code: 'workspace_access_denied',
+      message: 'You are not a member of that workspace.',
+    });
 
-    expect(invalidateCloudAccount).toHaveBeenCalledTimes(1);
-    expect(clearLocalCloudAccountState).toHaveBeenCalledTimes(1);
-    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
-    expect(isSignInOwedForEndedSession()).toBe(true);
+    expect(invalidateCloudAccount).not.toHaveBeenCalled();
+    expect(clearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(isSignInOwedForEndedSession()).toBe(false);
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 });

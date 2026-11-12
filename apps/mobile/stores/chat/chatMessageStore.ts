@@ -1774,6 +1774,7 @@ async function createConversationForMode(
       title: title ?? 'New Chat',
       projectId,
       isTemporary,
+      ...(model ? { model } : {}),
     });
     assertCloudAccountEpochCurrent(account);
     const conversation: ConversationSummary = {

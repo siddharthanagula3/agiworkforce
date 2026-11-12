@@ -208,13 +208,19 @@ pub fn handle_load(arg: &str, session: &mut AgentSession) {
             Ok(managed_session) => {
                 let session_id = managed_session.session_id.clone();
                 let message_count = managed_session.messages.len();
-                match session.load_managed_conversation(managed_session, resolved.path) {
-                    Ok(()) => {
+                match session.load_managed_conversation_keeping_mode(managed_session, resolved.path) {
+                    Ok(saved_mode) => {
                         super::reset_loaded_session_stats(session);
                         output::print_info(&format!(
                             "Loaded managed session {} ({} messages)",
                             session_id, message_count
                         ));
+                        if let Some(saved) = saved_mode {
+                            output::print_info(&super::kept_mode_notice(
+                                saved,
+                                session.permission_mode,
+                            ));
+                        }
                     }
                     Err(error) => output::print_error(&format!(
                         "Refusing to load managed session with unknown or incompatible routing authority: {error:#}"
@@ -270,6 +276,30 @@ mod managed_load_tests {
         assert_eq!(session.total_output_tokens, 0);
         assert!(session.recent_tool_calls.is_empty());
         assert_eq!(session.loop_strike_count, 0);
+    }
+
+    #[test]
+    fn loading_a_session_saved_in_another_mode_keeps_this_terminals_mode() {
+        use crate::cli_options::PermissionMode;
+        let temp = tempfile::tempdir().expect("session fixture");
+        let path = temp.path().join("planned.json");
+        let mut session = test_support::test_session(false);
+        session.pinned_permission_mode = None;
+        session.permission_mode = PermissionMode::AcceptEdits;
+        session.plan_mode = false;
+        let mut managed =
+            crate::runtime::session::ManagedSession::new("planned-target", chrono::Utc::now());
+        managed.model = Some(session.model.clone());
+        managed.routing_authority = Some(session.current_routing_authority());
+        managed.permission_mode = Some(PermissionMode::Plan);
+        managed.plan_mode = Some(true);
+        managed.save_to_path(&path).expect("save fixture");
+
+        handle_load(path.to_str().expect("fixture path"), &mut session);
+
+        assert_eq!(session.managed_session_id(), Some("planned-target"));
+        assert_eq!(session.permission_mode, PermissionMode::AcceptEdits);
+        assert!(!session.plan_mode);
     }
 }
 

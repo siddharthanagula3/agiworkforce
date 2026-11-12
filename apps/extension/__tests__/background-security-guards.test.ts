@@ -13,6 +13,7 @@ interface CapturedAgentLoopOptions {
   resolveOwnedCredential: () => Promise<string>;
   onActionStateChange: (active: boolean) => Promise<void>;
   takeUserGuidance: () => readonly string[];
+  requestTakeover: (reason: string) => Promise<void>;
 }
 
 const harness = vi.hoisted(() => {
@@ -276,6 +277,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
 import { assertDestinationAllowlisted, navigate } from '../src/features/computer-use/cdpDriver';
 import { MAX_RUN_GUIDANCE_CHARS } from '../src/features/computer-use/agentLoop';
 import { USER_TAKEOVER_MAX_MS } from '../src/features/computer-use/runOwnership';
+import localeCatalog from '../_locales/en/messages.json';
 import { captureEditableTarget } from '../src/features/background/editable-selection';
 import {
   captureEditableSelection,
@@ -1678,6 +1680,80 @@ describe('background service worker security guards', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    describe('says how long it waits while the user has the page', () => {
+      const catalog = localeCatalog as Record<
+        string,
+        { message: string; placeholders?: Record<string, { content: string }> }
+      >;
+      const getMessage = (key: string, substitutions: string[] = []): string => {
+        const entry = catalog[key];
+        if (!entry) return '';
+        return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (_match, name: string) =>
+          (entry.placeholders?.[name.toLowerCase()]?.content ?? '').replace(
+            /\$(\d)/g,
+            (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
+          ),
+        );
+      };
+      const minutes = `${USER_TAKEOVER_MAX_MS / 60_000} minutes`;
+      let keyEcho: typeof harness.chromeMock.i18n.getMessage;
+
+      beforeEach(() => {
+        keyEcho = harness.chromeMock.i18n.getMessage;
+        harness.chromeMock.i18n.getMessage = getMessage;
+        harness.chromeMock.runtime.sendMessage.mockClear();
+      });
+      afterEach(() => {
+        harness.chromeMock.i18n.getMessage = keyEcho;
+      });
+
+      function pausedReasons(runId: string): string[] {
+        return (harness.chromeMock.runtime.sendMessage.mock.calls as unknown as unknown[][])
+          .map((call) => call[0] as Record<string, unknown> | undefined)
+          .filter(
+            (message) =>
+              message?.['type'] === 'AGI_CU_STATE' &&
+              message['status'] === 'paused' &&
+              message['runId'] === runId,
+          )
+          .map((message) => String(message?.['reason']));
+      }
+
+      it('when the user takes over', async () => {
+        const runId = 'cu_run_takeover_wording';
+        await startRun(runId);
+        try {
+          expect(await dispatch({ type: 'PAUSE_COMPUTER_USE', runId })).toMatchObject({
+            success: true,
+          });
+          const [reason] = pausedReasons(runId);
+          expect(reason).toContain(getMessage('cuTakeoverByUserReason'));
+          expect(reason).toContain(minutes);
+          expect(reason).not.toMatch(/until you hand it back/i);
+          expect(await dispatch({ type: 'GET_COMPUTER_USE_STATE' })).toMatchObject({
+            paused: true,
+            pauseReason: reason,
+          });
+        } finally {
+          await dispatch({ type: 'CANCEL_COMPUTER_USE', runId });
+        }
+      });
+
+      it('when the model hands the page over for a sign-in', async () => {
+        const runId = 'cu_run_model_handover_wording';
+        const options = await startRun(runId);
+        try {
+          void options.requestTakeover('Sign in to your bank.').catch(() => undefined);
+          await vi.waitFor(() => expect(pausedReasons(runId)).toHaveLength(1));
+          const [reason] = pausedReasons(runId);
+          expect(reason).toMatch(/^Sign in to your bank\. /);
+          expect(reason).toContain(minutes);
+        } finally {
+          await dispatch({ type: 'CANCEL_COMPUTER_USE', runId });
+        }
+      });
     });
 
     it('keeps waiting for nothing once the page was handed back', async () => {

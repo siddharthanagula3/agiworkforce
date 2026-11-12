@@ -28,6 +28,11 @@ import {
   subscriptionAccessRank,
 } from '@/lib/services/subscription-access-policy';
 import { formatBillingDateFromSeconds } from '@/features/billing/lib/billing-format';
+import {
+  STORE_BILLING_NAME,
+  STORE_SUBSCRIPTION_MANAGEMENT_URL,
+  isStoreBillingSource,
+} from '@/lib/billing/store-subscription-management';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
@@ -396,13 +401,18 @@ export function AccountSection({
   const billingInitialized = useBillingStore((s) => s.initialized);
   const livePaidPlan = livePaidPlanOf(useBillingStore((s) => s.subscription));
   const livePlanLabel = livePaidPlan ? planLabelOf(livePaidPlan) : null;
-  const livePlanEnds = livePaidPlan?.cancel_at_period_end
+  const livePlanEnds = livePaidPlan
     ? formatBillingDateFromSeconds(livePaidPlan.current_period_end ?? null)
     : null;
-  const endingPaidPlan =
-    livePaidPlan?.cancel_at_period_end === true &&
-    subscriptionAccessRank(livePaidPlan.status) === 2;
-  const deleteBlockedByPlan = livePaidPlan !== null && !endingPaidPlan;
+  const deleteBlockedByPlan =
+    livePaidPlan !== null && subscriptionAccessRank(livePaidPlan.status) !== 2;
+  const endingPaidPlan = !deleteBlockedByPlan && livePaidPlan?.cancel_at_period_end === true;
+  const renewingPlanSource =
+    livePaidPlan && !deleteBlockedByPlan && !endingPaidPlan
+      ? (livePaidPlan.subscription_source ?? null)
+      : null;
+  const renewingStore = isStoreBillingSource(renewingPlanSource) ? renewingPlanSource : null;
+  const deletedReceiptStore = deleteAccountMutation.data?.storeBilling ?? null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -494,28 +504,28 @@ export function AccountSection({
                 hint={
                   deleteBlockedByPlan ? (
                     <span data-testid="delete-account-plan-note">
-                      {livePaidPlan?.cancel_at_period_end ? (
-                        `A payment for your ${livePlanLabel} plan is still being collected. You can delete your account once it is settled.`
-                      ) : (
-                        <>
-                          {`Cancel your ${livePlanLabel} plan in `}
-                          <SettingsSectionLink
-                            section="billing"
-                            style={{
-                              color: 'var(--text-1)',
-                              textDecoration: 'underline',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Billing
-                          </SettingsSectionLink>
-                          {' before deleting your account.'}
-                        </>
-                      )}
+                      {`A payment for your ${livePlanLabel} plan is still being collected. You can delete your account once it is settled.`}
                     </span>
                   ) : endingPaidPlan ? (
                     <span data-testid="delete-account-plan-note">
                       {`Your ${livePlanLabel} plan is already cancelled. Deleting your account ends it when erasure runs${livePlanEnds ? ` instead of on ${livePlanEnds}` : ''}, and the unused time is not refunded. You can cancel the deletion before the cancellation deadline.`}
+                    </span>
+                  ) : renewingStore ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Your ${livePlanLabel} plan is billed by ${STORE_BILLING_NAME[renewingStore]}, and deleting your account does not cancel it. ${STORE_BILLING_NAME[renewingStore]} keeps charging you until you `}
+                      <a
+                        href={STORE_SUBSCRIPTION_MANAGEMENT_URL[renewingStore]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+                      >
+                        cancel it there
+                      </a>
+                      .
+                    </span>
+                  ) : renewingPlanSource === 'stripe' ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Deleting your account stops your ${livePlanLabel} plan from renewing. It ends when erasure runs${livePlanEnds ? ` instead of on ${livePlanEnds}` : ''}, and the unused time is not refunded. Cancelling the deletion turns renewal back on.`}
                     </span>
                   ) : (
                     'Schedule permanent account deletion. You can cancel before the cancellation deadline.'
@@ -901,6 +911,17 @@ export function AccountSection({
                   Erasure is processed after the deadline and may take longer. Choose Continue to
                   sign out.
                 </p>
+              )}
+              {deletedReceiptStore && (
+                <a
+                  data-testid="delete-account-store-billing-link"
+                  href={deletedReceiptStore.manageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 14, color: 'var(--text-1)', textDecoration: 'underline' }}
+                >
+                  {`Cancel your subscription in ${STORE_BILLING_NAME[deletedReceiptStore.store]}`}
+                </a>
               )}
               <AlertDialogFooter>
                 <AlertDialogAction

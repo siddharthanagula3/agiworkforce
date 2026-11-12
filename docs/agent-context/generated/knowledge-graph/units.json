@@ -2552,7 +2552,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1688,
+      "files": 1690,
       "roles": {
         "asset": 4,
         "config": 11,
@@ -2561,7 +2561,7 @@
         "other": 46,
         "source": 915,
         "style": 1,
-        "test": 706
+        "test": 708
       }
     },
     {
@@ -2616,7 +2616,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8309,
+      "files": 8311,
       "roles": {
         "asset": 57,
         "config": 83,
@@ -2624,7 +2624,7 @@
         "generated": 2,
         "migration": 740,
         "other": 37,
-        "source": 3518,
+        "source": 3520,
         "style": 35,
         "test": 3786
       }
@@ -5056,13 +5056,13 @@
       "lanes": [
         "backend-services"
       ],
-      "files": 91,
+      "files": 93,
       "roles": {
         "config": 6,
         "doc": 1,
         "other": 4,
         "source": 31,
-        "test": 49
+        "test": 51
       }
     },
     {

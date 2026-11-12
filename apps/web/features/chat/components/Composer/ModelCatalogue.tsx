@@ -440,7 +440,7 @@ export function ModelCatalogue({
     ...developers.map((developer) => ({
       key: developer.key,
       label: developer.label,
-      count: developer.admittedCount,
+      count: entries.filter((entry) => entry.developer === developer.key).length,
     })),
   ];
 

@@ -6445,6 +6445,18 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const handleVoiceDiscardConversation = useCallback(
+    (conversationId: string) => {
+      void deleteConversation(conversationId).then((deleted) => {
+        if (!deleted) return;
+        setBareChatSessionId(null);
+        setActiveConversation(null);
+        router.replace(surfaceRootHref);
+      });
+    },
+    [deleteConversation, setActiveConversation, router, surfaceRootHref],
+  );
+
   const handleVoiceTranscript = useCallback(
     (conversationId: string, turn: VoiceTranscriptTurn, authority: RequestAuthority) => {
       if (!authority.isCurrent()) return;
@@ -6556,6 +6568,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     onSend: handleVoiceSend,
     onStartWorkTask: handleVoiceStartWorkTask,
     onEnsureConversation: handleVoiceEnsureConversation,
+    onDiscardConversation: handleVoiceDiscardConversation,
     onTranscript: handleVoiceTranscript,
     onNewChat: handleNewChat,
     onOpenLibrary: handleVoiceOpenLibrary,

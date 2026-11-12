@@ -65,6 +65,9 @@
     "__resetSubsystemHealthForTests": [
       "apps/extension-vscode/src/core/subsystemHealth.ts"
     ],
+    "__resetTemporaryChatBannerForTests": [
+      "apps/mobile/src/features/chat/components/TemporaryChatBanner.tsx"
+    ],
     "__resetWorkspacePolicyPollersForTest": [
       "apps/web/shared/hooks/use-workspace-policy.ts"
     ],
@@ -765,6 +768,9 @@
     "ACCOUNT_COMPROMISE_SUPPORT_PATH": [
       "apps/web/lib/services/identity-events/index.ts"
     ],
+    "ACCOUNT_DELETION_RENEWAL_METADATA_KEY": [
+      "apps/web/lib/server/payments/stripe-provider.ts"
+    ],
     "ACCOUNT_DENIAL_NOTICE": [
       "apps/web/lib/auth/account-status.ts"
     ],
@@ -1083,6 +1089,9 @@
     "AccountDeletionCancellationReceiptSchema": [
       "packages/contracts/cloud-contracts/src/account-deletion.ts"
     ],
+    "AccountDeletionPlanRenewal": [
+      "apps/web/lib/server/account-deletion-plan-renewal.ts"
+    ],
     "accountDeletionRefusal": [
       "apps/mobile/src/features/settings/cloud-account/accountDeletionRefusal.ts"
     ],
@@ -1091,6 +1100,9 @@
     ],
     "AccountDeletionRefusalReason": [
       "apps/mobile/src/features/settings/cloud-account/accountDeletionRefusal.ts"
+    ],
+    "AccountDeletionRenewalStop": [
+      "apps/web/lib/server/payments/stripe-provider.ts"
     ],
     "AccountDeletionScheduleCancellationRequest": [
       "packages/contracts/cloud-contracts/src/account-deletion.ts"
@@ -4849,6 +4861,9 @@
     ],
     "announceExtensionUpdate": [
       "apps/extension-vscode/src/core/hostNotices.ts"
+    ],
+    "announcementPlainText": [
+      "packages/ui/unified-chat/src/components/markdown/StreamAnnouncer.tsx"
     ],
     "announceMissingNativeChat": [
       "apps/extension-vscode/src/core/hostNotices.ts"
@@ -11609,6 +11624,9 @@
     ],
     "BoundedRedisRead": [
       "apps/web/lib/server/bounded-redis-read.ts"
+    ],
+    "boundedRefusalText": [
+      "apps/extension-vscode/src/utils/accountRefusal.ts"
     ],
     "boundedRenderInput": [
       "apps/web/lib/server/render-cache.ts"
@@ -20623,6 +20641,9 @@
     "CLOUD_SSO_CALLBACK_PATH": [
       "apps/desktop/src/hooks/useDeepLink.ts"
     ],
+    "CLOUD_SYNC_FAILED_MESSAGE": [
+      "apps/mobile/src/features/edge-cases/components/CloudSyncErrorNotice.tsx"
+    ],
     "CLOUD_SYNC_TOMBSTONE_KEY": [
       "apps/extension/src/features/cloud-bridge/conversationSync.ts"
     ],
@@ -21936,6 +21957,9 @@
     "CloudRefusalKind": [
       "apps/extension/src/features/cloud-bridge/cloudRefusal.ts"
     ],
+    "CloudRequestAttempts": [
+      "apps/extension-vscode/src/utils/api.ts"
+    ],
     "CloudResultPullHost": [
       "apps/extension-vscode/src/features/context-handoff/index.ts"
     ],
@@ -22238,8 +22262,8 @@
     "CloudSyncBlockedBanner": [
       "apps/mobile/src/features/settings/Common.tsx"
     ],
-    "CloudSyncErrorBanner": [
-      "apps/mobile/src/features/edge-cases/components/CloudSyncErrorBanner.tsx"
+    "CloudSyncErrorNotice": [
+      "apps/mobile/src/features/edge-cases/components/CloudSyncErrorNotice.tsx"
     ],
     "CloudSyncStatus": [
       "apps/mobile/stores/chat/cloudSyncStateStore.ts"
@@ -28807,6 +28831,9 @@
       "apps/desktop/src-tauri/src/core/agi/mod.rs"
     ],
     "CONVERSATION_SYNC_CURSOR_KEY": [
+      "apps/extension/src/features/cloud-bridge/conversationSync.ts"
+    ],
+    "CONVERSATION_SYNC_RETRY_ALARM": [
       "apps/extension/src/features/cloud-bridge/conversationSync.ts"
     ],
     "CONVERSATION_TITLE_MAX_LENGTH": [
@@ -41528,6 +41555,9 @@
     "E2E_STUB_MODEL_VENDOR": [
       "apps/extension-vscode/src/test/vsixInstallation.ts"
     ],
+    "earliestCloudSyncRetryAt": [
+      "apps/extension/src/features/background/conversation-history.ts"
+    ],
     "earliestExhaustedUsageResetAt": [
       "packages/contracts/types/src/work-usage.ts"
     ],
@@ -42851,6 +42881,9 @@
     ],
     "EnqueueJobInput": [
       "apps/web/lib/jobs/job-service.ts"
+    ],
+    "EnqueueOptions": [
+      "services/signaling-server/src/batch-queue.ts"
     ],
     "enqueuePrompt": [
       "packages/ui/unified-chat/src/index.ts",
@@ -65669,6 +65702,9 @@
     "isStorageLocation": [
       "packages/contracts/types/src/trust-mode-contract.ts"
     ],
+    "isStoreBillingSource": [
+      "apps/web/lib/billing/store-subscription-management.ts"
+    ],
     "isStoreDistributionVerified": [
       "apps/mobile/src/features/release-state/index.ts"
     ],
@@ -66541,6 +66577,9 @@
     ],
     "kept_copies_of": [
       "apps/cli/src/platform/runtime/session_control.rs"
+    ],
+    "kept_mode_notice": [
+      "apps/cli/src/repl/mod.rs"
     ],
     "keptMessageContent": [
       "apps/web/lib/chat-kept-messages.ts"
@@ -70162,6 +70201,9 @@
       "apps/cli/src/features/a2a/registry.rs"
     ],
     "load_managed_conversation": [
+      "apps/cli/src/agent/mod.rs"
+    ],
+    "load_managed_conversation_keeping_mode": [
       "apps/cli/src/agent/mod.rs"
     ],
     "load_managed_hook_policy": [
@@ -87334,6 +87376,9 @@
     "OPT_IN_WORKSPACE_FEATURES": [
       "packages/contracts/types/src/enterprise/workspace-controls.ts"
     ],
+    "OPT_OUT_SETTING_KEYS": [
+      "apps/extension-vscode/src/platform/config.ts"
+    ],
     "optimize": [
       "apps/desktop/src-tauri/src/features/search/fts.rs"
     ],
@@ -87639,6 +87684,12 @@
     ],
     "OptionsStorage": [
       "apps/extension/src/features/options/destinations.ts"
+    ],
+    "OptOutFeature": [
+      "apps/extension-vscode/src/platform/config.ts"
+    ],
+    "optOutSettingFor": [
+      "apps/extension-vscode/src/platform/config.ts"
     ],
     "ORB_CANVAS_SIZE": [
       "packages/ui/unified-chat/src/index.ts",
@@ -107918,6 +107969,9 @@
     "requestMicrophoneAccess": [
       "apps/extension/src/features/options/microphone-section.ts"
     ],
+    "requestMicrophoneOnlyPermission": [
+      "apps/mobile/src/features/voice/services/voiceInput.ts"
+    ],
     "requestOrganizationRegionMove": [
       "apps/web/lib/server/data-region.ts"
     ],
@@ -111717,6 +111771,9 @@
     "restoreOwnership": [
       "scripts/public-runtime/cleanup.mjs"
     ],
+    "restorePlanRenewalAfterDeletionUndo": [
+      "apps/web/lib/server/account-deletion-plan-renewal.ts"
+    ],
     "restorePublishedArtifactRecord": [
       "apps/web/lib/services/published-artifact-service.ts"
     ],
@@ -111743,6 +111800,9 @@
     ],
     "restoreScheduledTaskAlarms": [
       "apps/extension/src/features/background/tasks.ts"
+    ],
+    "restoreStripeRenewalAfterAccountDeletion": [
+      "apps/web/lib/server/payments/stripe-provider.ts"
     ],
     "restrict_launch": [
       "apps/cli/src/session_browser.rs"
@@ -111902,6 +111962,9 @@
     ],
     "resumeQueuedContentReports": [
       "apps/mobile/services/contentReport.ts"
+    ],
+    "resumeReconnectCountdown": [
+      "apps/mobile/services/companion.ts"
     ],
     "resumeStudySession": [
       "apps/web/features/study/hooks/use-conversation-study-session.ts",
@@ -112352,6 +112415,9 @@
     ],
     "reversalErrors": [
       "scripts/check-neon-migrations.mjs"
+    ],
+    "reversePlanRenewalStop": [
+      "apps/web/lib/server/account-deletion-plan-renewal.ts"
     ],
     "revert": [
       "apps/cli/src/platform/runtime/git.rs"
@@ -123267,6 +123333,9 @@
     "show_recovery_window": [
       "apps/desktop/src-tauri/src/sys/startup_recovery.rs"
     ],
+    "show_remaining_approval_controls": [
+      "apps/cli/src/terminal_text.rs"
+    ],
     "SHOW_SCHEDULE_RUNS_COMMAND": [
       "apps/extension-vscode/src/features/schedules/index.ts",
       "apps/extension-vscode/src/features/schedules/scheduleActions.ts"
@@ -127762,6 +127831,9 @@
     "stoppedTurnUsage": [
       "apps/web/app/api/llm/v1/chat/completions/lib/stream-transform.ts"
     ],
+    "stopPlanRenewalForAccountDeletion": [
+      "apps/web/lib/server/account-deletion-plan-renewal.ts"
+    ],
     "stopPushPreferenceSync": [
       "apps/mobile/services/pushPreferenceSync.ts"
     ],
@@ -127790,6 +127862,9 @@
     ],
     "stopSpeaking": [
       "apps/extension/src/features/read-aloud/index.ts"
+    ],
+    "stopStripeRenewalForAccountDeletion": [
+      "apps/web/lib/server/payments/stripe-provider.ts"
     ],
     "stopVoiceSample": [
       "apps/mobile/src/features/voice/services/voiceSamples.ts"
@@ -127855,6 +127930,9 @@
       "packages/client/client-runtime/src/state/createStore.ts",
       "packages/client/client-runtime/src/state/index.ts"
     ],
+    "STORE_BILLING_NAME": [
+      "apps/web/lib/billing/store-subscription-management.ts"
+    ],
     "store_blob": [
       "apps/cli/src/agent/checkpoints/storage.rs"
     ],
@@ -127889,6 +127967,9 @@
     "store_secret": [
       "apps/desktop/src-tauri/src/sys/security/encryption.rs"
     ],
+    "STORE_SUBSCRIPTION_MANAGEMENT_URL": [
+      "apps/web/lib/billing/store-subscription-management.ts"
+    ],
     "STORE_TEST_PURCHASE_REFUSED": [
       "apps/web/lib/services/mobile-iap-ledger-service.ts"
     ],
@@ -127903,6 +127984,9 @@
     ],
     "StoreApproval": [
       "apps/web/lib/feature-flags/rollout-rings.ts"
+    ],
+    "StoreBillingSource": [
+      "apps/web/lib/billing/store-subscription-management.ts"
     ],
     "storeBridgeSecret": [
       "apps/extension/src/features/native-bridge/pairing.ts"
@@ -133228,6 +133312,9 @@
       "crates/agiworkforce-licensing/src/org_policy.rs",
       "packages/contracts/licensing/src/index.ts",
       "packages/contracts/licensing/src/org-policy.ts"
+    ],
+    "tightestUsageWindow": [
+      "apps/mobile/services/usage.ts"
     ],
     "tiledFrame": [
       "apps/desktop/electron/garnishCore.ts"
@@ -140867,6 +140954,9 @@
     "USER_SKILL_AUTHORING_OFF": [
       "apps/web/lib/services/user-skill-authoring.ts"
     ],
+    "USER_TAKEOVER_MAX_MINUTES": [
+      "apps/extension/src/features/computer-use/runOwnership.ts"
+    ],
     "USER_TAKEOVER_MAX_MS": [
       "apps/extension/src/features/computer-use/runOwnership.ts"
     ],
@@ -145647,6 +145737,9 @@
     ],
     "with_task_id": [
       "apps/desktop/src-tauri/src/core/research/orchestrator.rs"
+    ],
+    "with_terminal_approver": [
+      "apps/cli/src/remote_control/host.rs"
     ],
     "with_test_configs": [
       "apps/cli/src/mcp/mod.rs"

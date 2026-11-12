@@ -32,6 +32,7 @@ import { Config } from '../../platform/config';
 import { accountRequestHeaders } from '../../platform/accountHeaders';
 import { getExtensionVersion } from '../../platform/version';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
+import { boundedRefusalText } from '../../utils/accountRefusal';
 import { t } from '../../l10n';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { type LocalRuntimeClient } from '../../integrations/localRuntimeClient';
@@ -59,7 +60,9 @@ const pairingErrorSchema = z.object({
 export function pairingRefusalMessage(body: unknown): string | undefined {
   const refusal = pairingErrorSchema.safeParse(body);
   if (!refusal.success) return undefined;
-  return typeof refusal.data.error === 'string' ? refusal.data.error : refusal.data.error.message;
+  return boundedRefusalText(
+    typeof refusal.data.error === 'string' ? refusal.data.error : refusal.data.error.message,
+  );
 }
 
 interface RemoteRoot {

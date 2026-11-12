@@ -42,6 +42,7 @@ import { AgiMark } from '@/components/ui/AgiMark';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useNotificationCenter } from '@/services/notifications';
+import { tightestUsageWindow } from '@/services/usage';
 import { useProjectStore } from '@/src/features/projects/store';
 import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
@@ -397,14 +398,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
   const visibleUsage = usageOwnerId === clerkUserId ? usageSnapshot : null;
   const isFreePlan = isFreeBillingPlanTier(visibleUsage?.planTier ?? subscriptionTier);
-  const remainingUsage =
-    visibleUsage && !usageError
-      ? visibleUsage.weeklyResetAt !== null
-        ? `Week ${Math.round(100 - Math.min(100, Math.max(0, visibleUsage.weeklyUsagePercentage)))}%`
-        : visibleUsage.usageResetAt !== null
-          ? `Period ${Math.round(100 - Math.min(100, Math.max(0, visibleUsage.usagePercentage)))}%`
-          : null
-      : null;
+  const remainingUsage = visibleUsage && !usageError ? tightestUsageWindow(visibleUsage) : null;
 
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
