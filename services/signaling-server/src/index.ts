@@ -110,6 +110,13 @@ import {
   PENDING_APPROVAL_TTL_MS,
   PAIRING_MAX_LIFETIME_MS_DEFAULT,
   PAIRING_STANDING_BATCH_SIZE,
+  PAIRING_STANDING_COALESCE_MS,
+  PAIRING_STANDING_CONCURRENCY,
+  PAIRING_STANDING_FAILURE_LOG_INTERVAL_MS,
+  PAIRING_STANDING_JITTER_MS,
+  PAIRING_EXPIRY_WRITES_PER_SWEEP,
+  WS_PARTICIPANT_MIN_PAUSE_MS,
+  WS_PARTICIPANT_THROTTLE_LOG_INTERVAL_MS,
   EXPIRED_PAIRING_PRUNE_BATCH,
   EXPIRED_PAIRING_PRUNE_GRACE_MS,
   EXPIRED_PAIRING_PRUNE_INTERVAL_MS,
@@ -117,12 +124,16 @@ import {
 import { controlPayloadSchema } from './control-payload.js';
 import { envPositiveInteger, envText } from './env.js';
 import { createDatabaseCheck, registerProbeRoutes } from './probes.js';
+import { createBatchQueue } from './batch-queue.js';
 import { createExpiredPairingPruner } from './expired-pairings.js';
 import { lookupSession } from './rehydration.js';
 import {
   fetchPairingStanding,
+  pairingReference,
   pairingWorkspaceSelector,
   standingConfig,
+  type StandingAnswer,
+  type StandingFailureReason,
   type StandingQuery,
 } from './standing.js';
 
@@ -137,7 +148,8 @@ interface Participant {
 
 interface PairingStandingState {
   checkedAt: number;
-  activeAt: number;
+  confirmedAt: number;
+  holdSince: number;
   pending: Promise<void> | null;
 }
 
@@ -145,6 +157,8 @@ interface Session {
   code: string;
   createdAt: number;
   expiresAt: number;
+  persistedExpiresAt: number;
+  expiryWrite: Promise<boolean> | null;
   participants: Partial<Record<Role, Participant>>;
   metadata: Record<string, unknown> | null;
   lastHeartbeatAt: number;
@@ -246,6 +260,7 @@ const pairingMaxLifetimeMs = envPositiveInteger(
   PAIRING_MAX_LIFETIME_MS_DEFAULT,
 );
 const standing = standingConfig();
+const processStartedAt = Date.now();
 const release = releaseIdentity();
 const canonicalUrl = canonicalEndpoint();
 
@@ -1126,27 +1141,76 @@ wss.on('connection', (socket, request) => {
     metrics.recordMessage('pong');
   });
 
+  let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  let throttleLoggedAt = Number.NEGATIVE_INFINITY;
+
+  const holdBack = (sender: ConnectedClient, resumeAfterMs: number): void => {
+    const now = Date.now();
+    if (now - throttleLoggedAt >= WS_PARTICIPANT_THROTTLE_LOG_INTERVAL_MS) {
+      throttleLoggedAt = now;
+      logger.info(
+        { correlationId, role: sender.role, resumeAfterMs },
+        'Holding back a participant sending faster than its message budget',
+      );
+    }
+    if (resumeTimer !== null) return;
+    metrics.recordMessage('participant_throttled');
+    socket.pause();
+    resumeTimer = setTimeout(
+      () => {
+        resumeTimer = null;
+        socket.resume();
+      },
+      Math.max(WS_PARTICIPANT_MIN_PAUSE_MS, resumeAfterMs),
+    );
+  };
+
   socket.on('message', (raw) => {
     connectionManager.updateActivity(socket);
+    if (socket.readyState !== WebSocket.OPEN) return;
 
     const sender = clients.get(socket);
-    const messageResult = sender
-      ? wsRateLimiter.checkParticipantMessage(participantKey(sender.code, sender.role))
-      : wsRateLimiter.checkMessage(ip);
-    if (!messageResult.allowed) {
-      logger.warn(
-        { ip, correlationId, registered: Boolean(sender), reason: messageResult.reason },
-        'Message rate limit exceeded',
-      );
-      metrics.recordError('ws_message_rate_limited');
-      socket.send(
-        JSON.stringify({
-          type: 'error',
-          error: 'rate_limit_exceeded',
-          retryAfter: messageResult.retryAfter,
-        }),
-      );
+    if (socket.bufferedAmount > MAX_SOCKET_BUFFERED_BYTES) {
+      dropSlowConsumer(socket, sender?.role ?? null);
       return;
+    }
+
+    if (sender) {
+      const charge = wsRateLimiter.chargeParticipantMessage(
+        participantKey(sender.code, sender.role),
+      );
+      if (charge.kind === 'flooding') {
+        logger.warn(
+          { correlationId, role: sender.role },
+          'Closing a participant that kept sending through backpressure',
+        );
+        metrics.recordError('ws_participant_flooding');
+        if (resumeTimer !== null) {
+          clearTimeout(resumeTimer);
+          resumeTimer = null;
+        }
+        socket.resume();
+        refuseRetryably(socket);
+        return;
+      }
+      if (charge.kind === 'throttle') holdBack(sender, charge.resumeAfterMs);
+    } else {
+      const messageResult = wsRateLimiter.checkMessage(ip);
+      if (!messageResult.allowed) {
+        logger.warn(
+          { ip, correlationId, reason: messageResult.reason },
+          'Message rate limit exceeded',
+        );
+        metrics.recordError('ws_message_rate_limited');
+        socket.send(
+          JSON.stringify({
+            type: 'error',
+            error: 'rate_limit_exceeded',
+            retryAfter: messageResult.retryAfter,
+          }),
+        );
+        return;
+      }
     }
 
     const rawStr = raw.toString();
@@ -1222,6 +1286,10 @@ wss.on('connection', (socket, request) => {
   });
 
   socket.on('close', (code, reasonBuffer) => {
+    if (resumeTimer !== null) {
+      clearTimeout(resumeTimer);
+      resumeTimer = null;
+    }
     const closeReason = reasonBuffer.toString() || 'client_disconnect';
     connectionManager.removeConnection(socket, {
       trigger: 'socket_close',
@@ -1302,6 +1370,7 @@ const cleanupInterval = setInterval(() => {
   cleanupAuthFailures();
   void endPairingsDeletedElsewhere();
   recheckLiveStanding(now);
+  saveUnsavedExpiries();
   void pruneExpiredPairings(now);
 
   if (expiredCount > 0 || staleCount > 0) {
@@ -1593,6 +1662,17 @@ async function registerWithCredential(
     return;
   }
 
+  const expirySaved = await saveExpiry(session);
+  if (socket.readyState !== WebSocket.OPEN) return;
+  if (!expirySaved) {
+    logger.warn(
+      { correlationId, code: message.code, role: message.role },
+      'Registration deferred: the pairing expiry could not be saved',
+    );
+    refuseRetryably(socket);
+    return;
+  }
+
   const accountId = pairingAccountId(session.metadata);
   const current = pairCredential(session.metadata, message.role);
   if (!accountId || !current || (deviceId !== null && current.deviceId !== deviceId)) {
@@ -1691,11 +1771,11 @@ async function registerWithCredential(
     );
     if (session.expiresAt < longExpiry) {
       session.expiresAt = longExpiry;
-      const { error } = await extendSessionExpiry(message.code, longExpiry);
-      if (error) {
+      await saveExpiry(session);
+      if (session.persistedExpiresAt < longExpiry) {
         logger.error(
-          { code: message.code, newExpiresAt: longExpiry, error },
-          'Session TTL extended in memory but not persisted; a restart will expire this pair',
+          { code: message.code, newExpiresAt: longExpiry },
+          'Session TTL extended in memory but not persisted; the sweep retries until it is',
         );
       } else {
         logger.info(
@@ -1862,10 +1942,17 @@ async function loadSession(
     code: lookup.row.code,
     createdAt: lookup.row.created_at,
     expiresAt: lookup.row.expires_at,
+    persistedExpiresAt: lookup.row.expires_at,
+    expiryWrite: null,
     participants: {},
     metadata: lookup.row.metadata,
     lastHeartbeatAt: Date.now(),
-    standing: { checkedAt: lookup.row.created_at, activeAt: lookup.row.created_at, pending: null },
+    standing: {
+      checkedAt: lookup.row.created_at,
+      confirmedAt: lookup.row.created_at,
+      holdSince: Math.max(lookup.row.created_at, processStartedAt),
+      pending: null,
+    },
     previousCredentials: {},
   };
   activeSessions.set(code, session);
@@ -1882,16 +1969,20 @@ function getPeer(session: Session, role: Role): Participant | undefined {
   return role === 'desktop' ? session.participants.mobile : session.participants.desktop;
 }
 
+function dropSlowConsumer(socket: WebSocket, role: Role | null): void {
+  logger.warn(
+    { role, bufferedAmount: socket.bufferedAmount },
+    'Dropping a participant that stopped reading',
+  );
+  metrics.recordError('slow_consumer_dropped');
+  socket.terminate();
+}
+
 function notifyParticipant(participant: Participant, payload: Record<string, unknown>): void {
   const { socket } = participant;
   if (socket.readyState !== WebSocket.OPEN) return;
   if (socket.bufferedAmount > MAX_SOCKET_BUFFERED_BYTES) {
-    logger.warn(
-      { role: participant.role, bufferedAmount: socket.bufferedAmount },
-      'Dropping a participant that stopped reading',
-    );
-    metrics.recordError('slow_consumer_dropped');
-    socket.terminate();
+    dropSlowConsumer(socket, participant.role);
     return;
   }
   try {
@@ -2080,10 +2171,10 @@ type StandingAdmission = 'active' | 'ended' | 'unknown';
 async function admitStanding(session: Session): Promise<StandingAdmission> {
   if (standing.mode === 'disabled') return 'active';
   if (standing.mode === 'unconfigured') return 'unknown';
-  if (Date.now() - session.standing.activeAt < standing.recheckMs) return 'active';
+  if (Date.now() - session.standing.confirmedAt < standing.recheckMs) return 'active';
   await recheckStanding([session]);
   if (activeSessions.get(session.code) !== session) return 'ended';
-  return Date.now() - session.standing.activeAt < standing.maxStaleMs ? 'active' : 'unknown';
+  return Date.now() - session.standing.holdSince < standing.maxStaleMs ? 'active' : 'unknown';
 }
 
 function maybeRecheckStanding(session: Session): void {
@@ -2100,29 +2191,62 @@ function recheckLiveStanding(now: number): void {
       !session.standing.pending &&
       now - session.standing.checkedAt >= standing.recheckMs,
   );
-  for (let start = 0; start < due.length; start += PAIRING_STANDING_BATCH_SIZE) {
-    void recheckStanding(due.slice(start, start + PAIRING_STANDING_BATCH_SIZE));
-  }
+  if (due.length > 0) void recheckStanding(due);
 }
 
+const standingQueue = createBatchQueue<Session>({
+  batchSize: PAIRING_STANDING_BATCH_SIZE,
+  concurrency: PAIRING_STANDING_CONCURRENCY,
+  delayMs: PAIRING_STANDING_COALESCE_MS,
+  jitterMs: PAIRING_STANDING_JITTER_MS,
+  run: applyStanding,
+  onError: (error) => logger.error({ error }, 'Pairing standing check failed unexpectedly'),
+});
+
 async function recheckStanding(sessions: readonly Session[]): Promise<void> {
-  const inFlight = sessions
-    .map((session) => session.standing.pending)
-    .filter((pending): pending is Promise<void> => pending !== null);
-  const due = sessions.filter((session) => session.standing.pending === null);
-  if (due.length > 0) {
-    const run = applyStanding(due);
-    for (const session of due) session.standing.pending = run;
-    inFlight.push(run);
+  await Promise.all(
+    sessions.map((session) => {
+      session.standing.pending ??= standingQueue.enqueue(session);
+      return session.standing.pending;
+    }),
+  );
+}
+
+const standingFailureLog = new Map<
+  StandingFailureReason,
+  { loggedAt: number; suppressed: number }
+>();
+
+function reportStandingFailure(
+  failure: Extract<StandingAnswer, { kind: 'failed' }>,
+  sessions: readonly Session[],
+): void {
+  metrics.recordError('pairing_standing_unavailable');
+  metrics.recordError(`pairing_standing_${failure.reason}`);
+  const now = Date.now();
+  const previous = standingFailureLog.get(failure.reason);
+  if (previous && now - previous.loggedAt < PAIRING_STANDING_FAILURE_LOG_INTERVAL_MS) {
+    previous.suppressed += 1;
+    return;
   }
-  await Promise.all(inFlight);
+  logger.warn(
+    {
+      reason: failure.reason,
+      status: failure.status,
+      pairings: sessions.map((session) => pairingReference(session.code)),
+      suppressedSinceLastLog: previous?.suppressed ?? 0,
+    },
+    'Pairing standing check failed',
+  );
+  standingFailureLog.set(failure.reason, { loggedAt: now, suppressed: 0 });
 }
 
 async function applyStanding(sessions: readonly Session[]): Promise<void> {
   try {
+    const live = sessions.filter((session) => activeSessions.get(session.code) === session);
     const askedAt = Date.now();
     const queries: StandingQuery[] = [];
-    for (const session of sessions) {
+    for (const session of live) {
       session.standing.checkedAt = askedAt;
       const userId = pairingAccountId(session.metadata);
       if (!userId) continue;
@@ -2133,17 +2257,20 @@ async function applyStanding(sessions: readonly Session[]): Promise<void> {
         workspace: pairingWorkspaceSelector(session.metadata),
       });
     }
-    const verdicts = await fetchPairingStanding(standing, queries);
-    if (verdicts === null) metrics.recordError('pairing_standing_unavailable');
+    const answer = await fetchPairingStanding(standing, queries);
+    if (answer.kind === 'failed') reportStandingFailure(answer, live);
+    const verdicts = answer.kind === 'answered' ? answer.verdicts : null;
 
     const endings: Array<ReturnType<typeof deleteStoredPairing>> = [];
-    for (const session of sessions) {
+    for (const session of live) {
       if (activeSessions.get(session.code) !== session) continue;
       const verdict = pairingAccountId(session.metadata)
         ? (verdicts?.get(session.code) ?? 'unknown')
         : 'ended';
       if (verdict === 'active') {
-        session.standing.activeAt = Date.now();
+        const confirmedAt = Date.now();
+        session.standing.confirmedAt = confirmedAt;
+        session.standing.holdSince = confirmedAt;
         continue;
       }
       if (verdict === 'ended') {
@@ -2152,7 +2279,7 @@ async function applyStanding(sessions: readonly Session[]): Promise<void> {
         endings.push(deleteStoredPairing(session.code));
         continue;
       }
-      if (Date.now() - session.standing.activeAt >= standing.maxStaleMs) {
+      if (Date.now() - session.standing.holdSince >= standing.maxStaleMs) {
         suspendParticipants(session);
       }
     }
@@ -2175,8 +2302,44 @@ function suspendParticipants(session: Session): void {
   }
 }
 
+function saveExpiry(session: Session): Promise<boolean> {
+  if (session.persistedExpiresAt >= session.expiresAt) return Promise.resolve(true);
+  if (session.expiryWrite) return session.expiryWrite;
+  const target = session.expiresAt;
+  const write = extendSessionExpiry(session.code, target)
+    .then(
+      ({ error }) => error === null,
+      () => false,
+    )
+    .then((saved) => {
+      session.expiryWrite = null;
+      if (saved) session.persistedExpiresAt = Math.max(session.persistedExpiresAt, target);
+      else metrics.recordError('pairing_expiry_unsaved');
+      return saved;
+    });
+  session.expiryWrite = write;
+  return write;
+}
+
+function saveUnsavedExpiries(): void {
+  const unsaved = [...activeSessions.values()]
+    .filter((session) => session.persistedExpiresAt < session.expiresAt && !session.expiryWrite)
+    .slice(0, PAIRING_EXPIRY_WRITES_PER_SWEEP);
+  if (unsaved.length === 0) return;
+  void Promise.all(unsaved.map(saveExpiry)).then((results) => {
+    const failed = results.filter((saved) => !saved).length;
+    if (failed > 0) {
+      logger.warn(
+        { failed, attempted: unsaved.length },
+        'Pairing expiries still not saved; the next sweep retries them',
+      );
+    }
+  });
+}
+
 const pruneExpired = createExpiredPairingPruner({
   prune: deleteExpiredSessions,
+  live: () => [...activeSessions.keys()],
   intervalMs: EXPIRED_PAIRING_PRUNE_INTERVAL_MS,
   graceMs: EXPIRED_PAIRING_PRUNE_GRACE_MS,
   batch: EXPIRED_PAIRING_PRUNE_BATCH,

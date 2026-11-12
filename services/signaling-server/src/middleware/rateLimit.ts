@@ -70,6 +70,9 @@ export interface RateLimitResult {
   reason?: string;
 }
 
+export type ParticipantCharge =
+  { kind: 'within' } | { kind: 'throttle'; resumeAfterMs: number } | { kind: 'flooding' };
+
 export class WebSocketRateLimiter {
   private connectionLimits = new Map<string, RateLimitEntry>();
 
@@ -144,7 +147,7 @@ export class WebSocketRateLimiter {
     return this.checkLimit(ip, this.messageLimits, WS_MESSAGE_LIMIT, 'message_flood');
   }
 
-  checkParticipantMessage(participant: string, now: number = Date.now()): RateLimitResult {
+  chargeParticipantMessage(participant: string, now: number = Date.now()): ParticipantCharge {
     const bucket = this.participantBuckets.get(participant) ?? {
       tokens: WS_PARTICIPANT_MESSAGE_BURST,
       refilledAt: now,
@@ -155,18 +158,15 @@ export class WebSocketRateLimiter {
       bucket.tokens + (elapsedMs * WS_PARTICIPANT_MESSAGES_PER_SECOND) / 1000,
     );
     bucket.refilledAt = now;
+    bucket.tokens -= 1;
     this.participantBuckets.set(participant, bucket);
 
-    if (bucket.tokens < 1) {
-      return {
-        allowed: false,
-        remaining: 0,
-        retryAfter: Math.ceil((1 - bucket.tokens) / WS_PARTICIPANT_MESSAGES_PER_SECOND),
-        reason: 'Rate limit exceeded: participant_message_rate',
-      };
-    }
-    bucket.tokens -= 1;
-    return { allowed: true, remaining: Math.floor(bucket.tokens) };
+    if (bucket.tokens >= 0) return { kind: 'within' };
+    if (bucket.tokens < -WS_PARTICIPANT_MESSAGE_BURST) return { kind: 'flooding' };
+    return {
+      kind: 'throttle',
+      resumeAfterMs: Math.ceil((-bucket.tokens * 1000) / WS_PARTICIPANT_MESSAGES_PER_SECOND),
+    };
   }
 
   forgetParticipant(participant: string): void {

@@ -86,9 +86,10 @@ export class FakeStore {
       }
       return this.answer({ data: removed, error: null });
     });
-    vi.mocked(db.deleteExpiredSessions).mockImplementation((expiredBefore, limit) => {
+    vi.mocked(db.deleteExpiredSessions).mockImplementation((expiredBefore, limit, liveCodes) => {
+      const live = new Set(liveCodes);
       const expired = [...this.rows.values()]
-        .filter((row) => row.expires_at < expiredBefore)
+        .filter((row) => row.expires_at < expiredBefore && !live.has(row.code))
         .sort((a, b) => a.expires_at - b.expires_at)
         .slice(0, limit);
       for (const row of expired) this.rows.delete(row.code);

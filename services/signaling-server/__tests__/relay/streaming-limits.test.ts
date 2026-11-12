@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+import WebSocket from 'ws';
 
 import {
   WS_MESSAGE_LIMIT,
@@ -57,6 +58,17 @@ function outputDelta(index: number) {
       },
     },
   };
+}
+
+function deltasInOrder(client: RelayClient): string[] {
+  return client.frames
+    .filter((frame) => frame['type'] === 'signal')
+    .map(
+      (frame) =>
+        (frame['payload'] as { data?: { event?: { delta?: string } } } | undefined)?.data?.event
+          ?.delta ?? '',
+    )
+    .filter((delta) => delta.startsWith('token '));
 }
 
 function deltasReceived(client: RelayClient): number {
@@ -128,16 +140,18 @@ describe('a streamed reply under the default limits', () => {
     }
   });
 
-  it('holds back a participant past its burst without blocking its peer or the address', async () => {
+  it('holds a participant past its burst back and still delivers every frame in order', async () => {
     const { desktop, mobile } = await pairedOnOneAddress();
     try {
-      for (let index = 0; index < WS_PARTICIPANT_MESSAGE_BURST + 600; index++) {
+      const total = WS_PARTICIPANT_MESSAGE_BURST + 600;
+      for (let index = 0; index < total; index++) {
         desktop.send(outputDelta(index));
       }
-      await desktop.frame('error', 5_000);
-      expect(desktop.frames.find((frame) => frame['type'] === 'error')).toMatchObject({
-        error: 'rate_limit_exceeded',
-      });
+      await waitFor(() => deltasReceived(mobile) === total, 10_000);
+      expect(deltasInOrder(mobile)).toEqual(
+        Array.from({ length: total }, (_, index) => `token ${index} `),
+      );
+      expect(desktop.frames.some((frame) => frame['type'] === 'error')).toBe(false);
       expect(desktop.closed).toBeNull();
 
       mobile.send({
@@ -156,6 +170,24 @@ describe('a streamed reply under the default limits', () => {
       );
       await stillAdmitsTheAddress();
     } finally {
+      desktop.close();
+      mobile.close();
+    }
+  });
+
+  it('closes retryably a participant that keeps writing although the relay stopped reading', async () => {
+    const { desktop, mobile } = await pairedOnOneAddress();
+    const pause = vi.spyOn(WebSocket.prototype, 'pause').mockImplementation(() => undefined);
+    try {
+      for (let index = 0; index < 2 * WS_PARTICIPANT_MESSAGE_BURST + 200; index++) {
+        desktop.send({ type: 'heartbeat' });
+      }
+      expect((await desktop.closure(5_000)).code).toBe(1013);
+      expect(desktop.frames.some((frame) => frame['error'] === 'service_unavailable')).toBe(true);
+      expect(desktop.frames.some((frame) => frame['error'] === 'rate_limit_exceeded')).toBe(false);
+      await stillAdmitsTheAddress();
+    } finally {
+      pause.mockRestore();
       desktop.close();
       mobile.close();
     }

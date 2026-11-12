@@ -14,19 +14,25 @@ interface Row {
 
 function storeWith(rows: Row[]) {
   const stored = new Map(rows.map((row) => [row.code, row]));
-  const prune = vi.fn(async (expiredBefore: number, limit: number) => {
-    const doomed = [...stored.values()]
-      .filter((row) => row.expires_at < expiredBefore)
-      .slice(0, limit);
-    for (const row of doomed) stored.delete(row.code);
-    return { data: doomed.length, error: null };
-  });
+  const prune = vi.fn(
+    async (expiredBefore: number, limit: number, liveCodes: readonly string[]) => {
+      const doomed = [...stored.values()]
+        .filter((row) => row.expires_at < expiredBefore && !liveCodes.includes(row.code))
+        .slice(0, limit);
+      for (const row of doomed) stored.delete(row.code);
+      return { data: doomed.length, error: null };
+    },
+  );
   return { stored, prune };
 }
 
-function pruner(prune: Parameters<typeof createExpiredPairingPruner>[0]['prune']) {
+function pruner(
+  prune: Parameters<typeof createExpiredPairingPruner>[0]['prune'],
+  live: () => readonly string[] = () => [],
+) {
   return createExpiredPairingPruner({
     prune,
+    live,
     intervalMs: EXPIRED_PAIRING_PRUNE_INTERVAL_MS,
     graceMs: EXPIRED_PAIRING_PRUNE_GRACE_MS,
     batch: EXPIRED_PAIRING_PRUNE_BATCH,
@@ -48,7 +54,21 @@ describe('pruning expired pairings', () => {
     expect(prune).toHaveBeenCalledWith(
       now - EXPIRED_PAIRING_PRUNE_GRACE_MS,
       EXPIRED_PAIRING_PRUNE_BATCH,
+      [],
     );
+  });
+
+  it('keeps a pairing this process still serves even when its stored expiry lapsed', async () => {
+    const { stored, prune } = storeWith([
+      { code: 'SERVEDHERE01', expires_at: now - EXPIRED_PAIRING_PRUNE_GRACE_MS - 60_000 },
+      { code: 'ABANDONED001', expires_at: now - EXPIRED_PAIRING_PRUNE_GRACE_MS - 60_000 },
+    ]);
+
+    expect(await pruner(prune, () => ['SERVEDHERE01'])(now)).toEqual({
+      kind: 'pruned',
+      deleted: 1,
+    });
+    expect([...stored.keys()]).toEqual(['SERVEDHERE01']);
   });
 
   it('runs at most once per interval', async () => {

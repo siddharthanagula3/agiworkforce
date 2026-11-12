@@ -1,5 +1,10 @@
 export interface ExpiredPairingPrunerOptions {
-  prune: (expiredBefore: number, limit: number) => Promise<{ data: number | null; error: unknown }>;
+  prune: (
+    expiredBefore: number,
+    limit: number,
+    liveCodes: readonly string[],
+  ) => Promise<{ data: number | null; error: unknown }>;
+  live: () => readonly string[];
   intervalMs: number;
   graceMs: number;
   batch: number;
@@ -26,7 +31,11 @@ export function createExpiredPairingPruner(
     running = true;
     lastRunAt = now;
     try {
-      const { data, error } = await options.prune(now - options.graceMs, options.batch);
+      const { data, error } = await options.prune(
+        now - options.graceMs,
+        options.batch,
+        options.live(),
+      );
       if (error || data === null) return { kind: 'failed', error };
       return { kind: 'pruned', deleted: data };
     } catch (error) {

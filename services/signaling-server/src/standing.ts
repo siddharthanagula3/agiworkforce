@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import {
   PAIRING_STANDING_MAX_STALE_MS_DEFAULT,
@@ -84,21 +85,60 @@ const standingResponseSchema = z.object({
     .max(1_000),
 });
 
+export type StandingFailureReason =
+  | 'timeout'
+  | 'network'
+  | 'redirect'
+  | 'client_error'
+  | 'server_error'
+  | 'non_json'
+  | 'invalid_body'
+  | 'unconfigured';
+
+export type StandingAnswer =
+  | { kind: 'answered'; verdicts: Map<string, PairingStanding> }
+  | { kind: 'failed'; reason: StandingFailureReason; status: number | null };
+
+const PAIRING_REFERENCE_LENGTH = 12;
+
+export function pairingReference(code: string): string {
+  return createHash('sha256')
+    .update(`pairing:${code}`)
+    .digest('hex')
+    .slice(0, PAIRING_REFERENCE_LENGTH);
+}
+
+function statusFailure(status: number): StandingAnswer {
+  const reason: StandingFailureReason =
+    status >= 500 ? 'server_error' : status >= 400 ? 'client_error' : 'redirect';
+  return { kind: 'failed', reason, status };
+}
+
+function thrownFailure(error: unknown): StandingAnswer {
+  const name = error instanceof Error ? error.name : null;
+  const reason: StandingFailureReason =
+    name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'network';
+  return { kind: 'failed', reason, status: null };
+}
+
 /**
- * One round trip for a batch of pairings. Null means the web app could not
- * answer, which the caller treats as no news rather than as a verdict.
+ * One round trip for a batch of pairings. A failed answer is no news, never a
+ * verdict.
  */
 export async function fetchPairingStanding(
   config: StandingConfig,
   queries: readonly StandingQuery[],
   fetchImpl: typeof fetch = fetch,
-): Promise<Map<string, PairingStanding> | null> {
-  if (config.mode !== 'enforced' || !config.url || !config.secret) return null;
-  if (queries.length === 0) return new Map();
+): Promise<StandingAnswer> {
+  if (config.mode !== 'enforced' || !config.url || !config.secret) {
+    return { kind: 'failed', reason: 'unconfigured', status: null };
+  }
+  if (queries.length === 0) return { kind: 'answered', verdicts: new Map() };
+  let response: Response;
   try {
-    const response = await fetchImpl(config.url, {
+    response = await fetchImpl(config.url, {
       method: 'POST',
-      redirect: 'error',
+      redirect: 'manual',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.secret}`,
@@ -106,16 +146,27 @@ export async function fetchPairingStanding(
       body: JSON.stringify({ pairings: queries }),
       signal: AbortSignal.timeout(config.timeoutMs),
     });
-    if (!response.ok) return null;
-    const parsed = standingResponseSchema.safeParse(await response.json().catch(() => null));
-    if (!parsed.success) return null;
-    const asked = new Set(queries.map((query) => query.code));
-    const verdicts = new Map<string, PairingStanding>();
-    for (const result of parsed.data.results) {
-      if (asked.has(result.code)) verdicts.set(result.code, result.standing);
-    }
-    return verdicts;
-  } catch {
-    return null;
+  } catch (error) {
+    return thrownFailure(error);
   }
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    return statusFailure(response.status);
+  }
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch (error) {
+    return error instanceof SyntaxError
+      ? { kind: 'failed', reason: 'non_json', status: response.status }
+      : thrownFailure(error);
+  }
+  const parsed = standingResponseSchema.safeParse(body);
+  if (!parsed.success) return { kind: 'failed', reason: 'invalid_body', status: response.status };
+  const asked = new Set(queries.map((query) => query.code));
+  const verdicts = new Map<string, PairingStanding>();
+  for (const result of parsed.data.results) {
+    if (asked.has(result.code)) verdicts.set(result.code, result.standing);
+  }
+  return { kind: 'answered', verdicts };
 }
