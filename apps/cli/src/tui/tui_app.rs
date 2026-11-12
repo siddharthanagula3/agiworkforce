@@ -27,6 +27,7 @@ use crate::terminal_text::{
     sanitize_terminal_line, sanitize_terminal_lines, sanitize_terminal_text,
 };
 
+use super::turn_transcript::{TurnEntry, TurnTranscript};
 use super::{clip_cols, display_width, pad_to_cols, truncate_cols};
 
 // ---------------------------------------------------------------------------
@@ -167,13 +168,14 @@ enum ChatRole {
     System,
     Error,
     Detail,
+    Tool,
 }
 
-/// A live tool-call row in the transcript. Populated from the agent's tool
+/// A tool-call row in the transcript. Populated from the agent's tool
 /// lifecycle events so the user can see what the agent is doing (running →
-/// succeeded/failed) instead of it vanishing into swallowed stderr. Kept
-/// separate from `chat_messages` so completion events can update a row in place
-/// by `call_id`.
+/// succeeded/failed) instead of it vanishing into swallowed stderr. The n-th
+/// `ChatRole::Tool` message in `chat_messages` is drawn from the n-th cell, so
+/// completion events can update a row in place.
 struct ToolCell {
     call_id: String,
     name: String,
@@ -371,6 +373,18 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
     lines
 }
 
+fn push_tool_cell_lines<'l>(
+    lines: &mut Vec<Line<'l>>,
+    cell: &ToolCell,
+    spinner_char: &str,
+    after_tool: bool,
+) {
+    if !after_tool && !lines.is_empty() {
+        lines.push(Line::from(""));
+    }
+    lines.extend(tool_cell_lines(cell, spinner_char));
+}
+
 const EDIT_PREVIEW_LINES: usize = 12;
 
 /// The block under a finished edit: what was changed, how much, and the
@@ -491,9 +505,8 @@ struct TuiApp {
     active_overlay: Option<Box<dyn crate::tui::widgets::interactive::InteractiveView>>,
     // Scroll position for text overlays that exceed the visible modal height.
     overlay_scroll: u16,
-    // Live tool-call rows for the in-flight turn, keyed by call_id. Cleared at
-    // the start of each turn and on /clear.
     tool_cells: Vec<ToolCell>,
+    turn_first_cell: usize,
     /// Interactive MCP elicitation queue installed only for the full-screen TUI.
     mcp_elicitation_handler: Arc<crate::mcp::tui_handler::TuiElicitationHandler>,
     /// Labels for the images staged on the next turn, one per block queued in
@@ -700,6 +713,7 @@ impl TuiApp {
             active_overlay: None,
             overlay_scroll: 0,
             tool_cells: Vec::new(),
+            turn_first_cell: 0,
             mcp_elicitation_handler: Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new()),
             staged_images: Vec::new(),
             turn_context: Vec::new(),
@@ -964,8 +978,14 @@ impl TuiApp {
     fn discard_conversation(&mut self) {
         self.session.clear();
         self.chat_messages.clear();
+        self.clear_tool_cells();
         self.scroll_offset = 0;
         self.sync_stats();
+    }
+
+    fn clear_tool_cells(&mut self) {
+        self.tool_cells.clear();
+        self.turn_first_cell = 0;
     }
 
     fn spinner_char(&self) -> &str {
@@ -1937,15 +1957,20 @@ fn answer_details(
 /// register Claude Code and Codex use, not a rotating vocabulary.
 const LOADING_VERB: &str = "Thinking";
 
-/// Append a post-tool-call continuation chunk to the buffered reply. A
-/// continuation that resumes mid-sentence needs nothing; one that starts a
-/// fresh thought after a tool call needs a paragraph break, or it reads as
-/// "I'll read the file.First line:" with no separator at all.
-fn append_continuation_chunk(buf: &mut String, chunk: &str) {
-    if !buf.is_empty() && !buf.ends_with(char::is_whitespace) {
-        buf.push_str("\n\n");
+fn commit_turn_entries(chat_messages: &mut Vec<ChatMessage>, entries: &[TurnEntry]) {
+    for entry in entries {
+        match entry {
+            TurnEntry::Text(text) if !text.trim().is_empty() => chat_messages.push(ChatMessage {
+                role: ChatRole::Assistant,
+                text: text.clone(),
+            }),
+            TurnEntry::Text(_) => {}
+            TurnEntry::Tool => chat_messages.push(ChatMessage {
+                role: ChatRole::Tool,
+                text: String::new(),
+            }),
+        }
     }
-    buf.push_str(chunk);
 }
 
 /// Disjoint snapshot of the fields the header/chat/status renderers read. Built
@@ -1966,9 +1991,10 @@ struct FrameCtx<'a> {
     chrome: FrameChrome<'a>,
     chat_messages: &'a [ChatMessage],
     tool_cells: &'a [ToolCell],
+    turn_first_cell: usize,
     is_loading: bool,
     stream_start: Option<Instant>,
-    stream_buffer: &'a str,
+    turn: &'a [TurnEntry],
     spinner_char: &'a str,
     loading_verb: &'a str,
     awaiting_approval: bool,
@@ -2156,9 +2182,10 @@ impl<'a> FrameCtx<'a> {
             chrome: FrameChrome::new(&app.browser, &app.start_panel, app.chat_messages.is_empty()),
             chat_messages: &app.chat_messages,
             tool_cells: &app.tool_cells,
+            turn_first_cell: app.turn_first_cell,
             is_loading: app.is_loading,
             stream_start: app.stream_start,
-            stream_buffer: &app.stream_buffer,
+            turn: &[],
             spinner_char: app.spinner_char(),
             loading_verb: LOADING_VERB,
             awaiting_approval: false,
@@ -2273,11 +2300,16 @@ struct ActivityCounts {
     failed: usize,
 }
 
+fn turn_tool_cells<'a>(ctx: &FrameCtx<'a>) -> &'a [ToolCell] {
+    let cells: &'a [ToolCell] = ctx.tool_cells;
+    cells.get(ctx.turn_first_cell..).unwrap_or(&[])
+}
+
 fn activity_counts(ctx: &FrameCtx) -> ActivityCounts {
     use crate::tui::transcript_cell::TranscriptCellState;
 
     let count = |state: TranscriptCellState| {
-        ctx.tool_cells
+        turn_tool_cells(ctx)
             .iter()
             .filter(|cell| cell.state == state)
             .count()
@@ -2604,7 +2636,18 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             )));
         }
     } else {
+        let mut history_cell: usize = 0;
+        let mut after_tool = false;
         for msg in ctx.chat_messages {
+            if msg.role == ChatRole::Tool {
+                if let Some(cell) = ctx.tool_cells.get(history_cell) {
+                    push_tool_cell_lines(&mut lines, cell, ctx.spinner_char, after_tool);
+                    after_tool = true;
+                }
+                history_cell += 1;
+                continue;
+            }
+            after_tool = false;
             if msg.role == ChatRole::Detail {
                 lines.push(Line::from(Span::styled(
                     format!("    ↳ {}", msg.text),
@@ -2643,7 +2686,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         .fg(ui_danger())
                         .add_modifier(Modifier::BOLD),
                 ),
-                ChatRole::Detail => ("  ↳ ", Style::default().fg(ui_muted())),
+                ChatRole::Detail | ChatRole::Tool => ("  ↳ ", Style::default().fg(ui_muted())),
             };
 
             let (sender, text) = if msg.role == ChatRole::Teammate {
@@ -2669,7 +2712,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                         ChatRole::Teammate => Style::default(),
                         ChatRole::System => Style::default(),
                         ChatRole::Error => Style::default(),
-                        ChatRole::Detail => Style::default().fg(ui_muted()),
+                        ChatRole::Detail | ChatRole::Tool => Style::default().fg(ui_muted()),
                         // Assistant is handled by the outer if-branch; reaching
                         // here would be a logic error but we render it as plain
                         // default foreground rather than panicking so the TUI stays responsive.
@@ -2682,32 +2725,56 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         }
     }
 
-    // Tool-call rows: a visible record of what the agent did this turn
-    // (running → succeeded/failed), instead of vanishing into swallowed stderr.
-    if !ctx.tool_cells.is_empty() {
-        lines.push(Line::from(""));
-        let running: Vec<&ToolCell> = ctx
-            .tool_cells
+    let turn_cells = turn_tool_cells(ctx);
+    let mut turn_cell: usize = 0;
+    let mut after_tool = false;
+    let streaming_entry = ctx.turn.len().checked_sub(1).filter(|_| ctx.is_loading);
+    for (index, entry) in ctx.turn.iter().enumerate() {
+        match entry {
+            TurnEntry::Tool => {
+                if let Some(cell) = turn_cells.get(turn_cell) {
+                    push_tool_cell_lines(&mut lines, cell, ctx.spinner_char, after_tool);
+                    after_tool = true;
+                }
+                turn_cell += 1;
+            }
+            TurnEntry::Text(text) if !text.trim().is_empty() => {
+                if !lines.is_empty() {
+                    lines.push(Line::from(""));
+                }
+                lines.push(Line::from(Span::styled(
+                    "  ✦ ",
+                    Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
+                )));
+                if streaming_entry == Some(index) {
+                    lines.extend(streaming_markdown_tail(text));
+                } else {
+                    lines.extend(super::markdown_renderer::render_markdown(text));
+                }
+                after_tool = false;
+            }
+            TurnEntry::Text(_) => {}
+        }
+    }
+
+    let running: Vec<&ToolCell> = turn_cells
+        .iter()
+        .filter(|cell| cell.state == crate::tui::transcript_cell::TranscriptCellState::Running)
+        .collect();
+    if running.len() > 1 {
+        let what = if running
             .iter()
-            .filter(|cell| cell.state == crate::tui::transcript_cell::TranscriptCellState::Running)
-            .collect();
-        if running.len() > 1 {
-            let what = if running
-                .iter()
-                .all(|cell| matches!(cell.name.as_str(), "task" | "agent"))
-            {
-                "subagents"
-            } else {
-                "tools"
-            };
-            lines.push(Line::from(Span::styled(
-                format!("  ⧉ {} {what} working at once", running.len()),
-                Style::default().fg(ui_accent()),
-            )));
-        }
-        for cell in ctx.tool_cells {
-            lines.extend(tool_cell_lines(cell, ctx.spinner_char));
-        }
+            .all(|cell| matches!(cell.name.as_str(), "task" | "agent"))
+        {
+            "subagents"
+        } else {
+            "tools"
+        };
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(
+            format!("  ⧉ {} {what} working at once", running.len()),
+            Style::default().fg(ui_accent()),
+        )));
     }
 
     // Loading indicator with shimmer
@@ -2722,7 +2789,8 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         let verb = ctx.loading_verb;
         // After ~10s with no streamed output yet, add a gentle stall hint so a
         // slow first token (cold local model, network) doesn't look like a hang.
-        let stalled = ctx.stream_buffer.is_empty() && elapsed.as_secs() >= 10;
+        let stalled =
+            !super::turn_transcript::has_visible_text(ctx.turn) && elapsed.as_secs() >= 10;
         let status = if ctx.awaiting_approval {
             "Waiting for your approval".to_string()
         } else if stalled {
@@ -2736,12 +2804,6 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         )];
         spinner_line.extend(super::shimmer::shimmer_spans(&status));
         lines.push(Line::from(spinner_line));
-
-        // Live streamed output. During a turn this is redrawn each tick, so show
-        // a generous tail (not just 5 lines) for a real streaming feel.
-        if !ctx.stream_buffer.is_empty() {
-            lines.extend(streaming_markdown_tail(ctx.stream_buffer));
-        }
     }
 
     // Assistant, tool, and streamed provider text all land in these spans, and
@@ -4081,7 +4143,6 @@ fn apply_rewind(app: &mut TuiApp, arg: &str) {
         .is_some_and(|rewound| rewound.conversation_restored);
     if conversation_restored {
         rebuild_transcript_from_session(app);
-        app.tool_cells.clear();
     }
     app.chat_messages.push(ChatMessage {
         role: ChatRole::System,
@@ -4110,7 +4171,7 @@ fn rebuild_transcript_from_session(app: &mut TuiApp) {
         .iter()
         .filter_map(chat_message_from_session)
         .collect();
-    app.tool_cells.clear();
+    app.clear_tool_cells();
     app.scroll_offset = 0;
 }
 
@@ -4337,7 +4398,7 @@ fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
             ChatRole::User => "you",
             ChatRole::Assistant => "assistant",
             ChatRole::Teammate => "teammate",
-            ChatRole::System | ChatRole::Error | ChatRole::Detail => continue,
+            ChatRole::System | ChatRole::Error | ChatRole::Detail | ChatRole::Tool => continue,
         };
         for line in message.text.lines() {
             if line.to_lowercase().contains(&needle) {
@@ -5541,6 +5602,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/background" | "/bg" => match crate::background::hand_off(&mut app.session, arg) {
             Ok(message) => {
                 app.chat_messages.clear();
+                app.clear_tool_cells();
                 app.scroll_offset = 0;
                 app.sync_stats();
                 SlashResult::SystemMessage(message)
@@ -7484,10 +7546,9 @@ fn settle_running_tool_cells(cells: &mut [ToolCell]) {
 }
 
 /// Apply a tool lifecycle event to a tool-cell list: `ToolStarted` adds a
-/// running row; `ToolCompleted` updates the matching row in place by `call_id`.
-/// Operates on a plain `Vec` (not `TuiApp`) so it can run in the agent-turn
-/// `select!` loop without conflicting with the `&mut app.session` borrow the
-/// in-flight turn future holds.
+/// running row; `ToolCompleted` updates the newest running row with that
+/// `call_id`, because providers number calls per completion (`ollama_0`,
+/// `call_0`) and the same id returns in every model round.
 fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiAppEvent) {
     use crate::tui::app_event::{ToolStatus, TuiAppEvent};
     use crate::tui::transcript_cell::TranscriptCellState;
@@ -7533,7 +7594,11 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
             duration_ms,
             ..
         } => {
-            if let Some(cell) = cells.iter_mut().find(|c| c.call_id == call_id) {
+            if let Some(cell) = cells
+                .iter_mut()
+                .rev()
+                .find(|c| c.call_id == call_id && c.state == TranscriptCellState::Running)
+            {
                 cell.state = match status {
                     ToolStatus::Failed => TranscriptCellState::Failed,
                     ToolStatus::Cancelled => TranscriptCellState::Cancelled,
@@ -7673,23 +7738,22 @@ async fn send_message_with_prompt(
     app.is_loading = true;
     app.scroll_offset = 0;
     app.stream_buffer.clear();
-    app.tool_cells.clear();
+    app.turn_first_cell = app.tool_cells.len();
     app.stream_start = Some(Instant::now());
     render(terminal, app)?;
 
-    let response_buf = Arc::new(Mutex::new(String::new()));
-    let buf_for_callback = Arc::clone(&response_buf);
-    let buf_for_display = Arc::clone(&response_buf);
+    let turn_transcript = Arc::new(Mutex::new(TurnTranscript::default()));
+    let transcript_for_callback = Arc::clone(&turn_transcript);
+    let transcript_for_display = Arc::clone(&turn_transcript);
 
-    // One reply, one buffer. The agentic loop streams every completion after a
-    // tool call through its own sink, which otherwise falls back to `print!`
-    // and writes past ratatui, so the model's answer landed on the frame's
-    // borders instead of in the transcript.
+    // One reply, one transcript. The agentic loop streams every completion
+    // after a tool call through its own sink, one delta per call, which
+    // otherwise falls back to `print!` and writes past ratatui.
     {
-        let buf = Arc::clone(&response_buf);
+        let transcript = Arc::clone(&turn_transcript);
         let sink: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |chunk: &str| {
-            if let Ok(mut buf) = buf.lock() {
-                append_continuation_chunk(&mut buf, sanitize_terminal_text(chunk).as_ref());
+            if let Ok(mut transcript) = transcript.lock() {
+                transcript.push_text(sanitize_terminal_text(chunk).as_ref());
             }
         });
         app.session.on_continuation_chunk = Some(crate::agent::ContinuationSink(sink));
@@ -7718,20 +7782,23 @@ async fn send_message_with_prompt(
         host.begin_turn(broker.clone(), claimed_remote_turns);
     }
 
-    // Tool lifecycle events are drained in the select! loop below into a local
-    // Vec, never `app`, so they cannot conflict with the `&mut app.session`
-    // borrow the turn future holds; the live frame draws from that Vec.
+    // The transcript records a tool event in the same call that delivers it,
+    // so its place among the streamed text deltas is the order they happened.
     let (tool_tx, mut tool_rx) =
         tokio::sync::mpsc::unbounded_channel::<crate::tui::app_event::TuiAppEvent>();
     {
         let tx = tool_tx.clone();
+        let transcript = Arc::clone(&turn_transcript);
         let sink: std::sync::Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync> =
             std::sync::Arc::new(move |ev| {
+                if let Ok(mut transcript) = transcript.lock() {
+                    transcript.observe(&ev);
+                }
                 let _ = tx.send(ev);
             });
         app.session.on_tool_event = Some(crate::agent::ToolEventSink(sink));
     }
-    let mut tool_cells: Vec<ToolCell> = Vec::new();
+    let mut live_turn: Vec<TurnEntry> = Vec::new();
     let mut preparing = true;
 
     // Drive the agent turn while staying responsive to approval requests. The
@@ -7768,11 +7835,11 @@ async fn send_message_with_prompt(
 
     let result = {
         let callback = Box::new(move |chunk: &str| {
-            if let Ok(mut buf) = buf_for_callback.lock() {
+            if let Ok(mut transcript) = transcript_for_callback.lock() {
                 // Sanitize per chunk so a sequence split across two chunks
-                // cannot reassemble in the buffer that feeds the live frame,
+                // cannot reassemble in the text that feeds the live frame,
                 // the finalized transcript message, and cancelled-turn replay.
-                buf.push_str(sanitize_terminal_text(chunk).as_ref());
+                transcript.push_text(sanitize_terminal_text(chunk).as_ref());
             }
         });
 
@@ -7803,10 +7870,11 @@ async fn send_message_with_prompt(
                             context: turn_context,
                             chrome: FrameChrome::new(&app.browser, &app.start_panel, false),
                             chat_messages: &app.chat_messages,
-                            tool_cells: &tool_cells,
+                            tool_cells: &app.tool_cells,
+                            turn_first_cell: app.turn_first_cell,
                             is_loading: app.is_loading,
                             stream_start: app.stream_start,
-                            stream_buffer: &app.stream_buffer,
+                            turn: &live_turn,
                             spinner_char: spinner_frame(app.spinner_tick),
                             loading_verb: LOADING_VERB,
                             awaiting_approval: true,
@@ -7905,7 +7973,7 @@ async fn send_message_with_prompt(
                     if let Some(host) = &remote_host {
                         host.tool_event(&ev);
                     }
-                    apply_tool_event(&mut tool_cells, ev);
+                    apply_tool_event(&mut app.tool_cells, ev);
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_millis(80)) => {
                     // The UI is parked during a turn (the send future holds a &mut
@@ -7984,8 +8052,9 @@ async fn send_message_with_prompt(
                     // `app` field, advance the spinner, mirror tool cells, then
                     // draw a frame built entirely from fields *other* than
                     // `app.session` (still borrowed by `send_fut`).
-                    if let Ok(b) = buf_for_display.lock() {
-                        app.stream_buffer = b.clone();
+                    if let Ok(transcript) = transcript_for_display.lock() {
+                        live_turn = transcript.entries().to_vec();
+                        app.stream_buffer = transcript.reply_text();
                     }
                     if let Some(host) = &remote_host {
                         host.output(&app.stream_buffer);
@@ -8005,10 +8074,11 @@ async fn send_message_with_prompt(
                         context: turn_context,
                         chrome: FrameChrome::new(&app.browser, &app.start_panel, false),
                         chat_messages: &app.chat_messages,
-                        tool_cells: &tool_cells,
+                        tool_cells: &app.tool_cells,
+                        turn_first_cell: app.turn_first_cell,
                         is_loading: app.is_loading,
                         stream_start: app.stream_start,
-                        stream_buffer: &app.stream_buffer,
+                        turn: &live_turn,
                         spinner_char: spinner_frame(app.spinner_tick),
                         loading_verb: if preparing {
                             "Preparing context"
@@ -8052,12 +8122,13 @@ async fn send_message_with_prompt(
     // Drain any tool events still buffered in the channel, then surface the
     // collected cells in the transcript and tear down the per-turn sink.
     while let Ok(ev) = tool_rx.try_recv() {
-        apply_tool_event(&mut tool_cells, ev);
+        apply_tool_event(&mut app.tool_cells, ev);
     }
     app.session.on_tool_event = None;
     app.session.on_continuation_chunk = None;
-    settle_running_tool_cells(&mut tool_cells);
-    let mut changed_files: Vec<String> = tool_cells
+    let turn_first_cell = app.turn_first_cell.min(app.tool_cells.len());
+    settle_running_tool_cells(&mut app.tool_cells[turn_first_cell..]);
+    let mut changed_files: Vec<String> = app.tool_cells[turn_first_cell..]
         .iter()
         .filter(|cell| {
             cell.state == crate::tui::transcript_cell::TranscriptCellState::Complete
@@ -8070,12 +8141,14 @@ async fn send_message_with_prompt(
         .map(|cell| cell.summary.clone())
         .collect();
     changed_files.dedup();
-    app.tool_cells = tool_cells;
 
-    // Copy final streamed content into stream_buffer for last render
-    if let Ok(buf) = buf_for_display.lock() {
-        app.stream_buffer = buf.clone();
-    }
+    let turn_entries = match transcript_for_display.lock() {
+        Ok(transcript) => {
+            app.stream_buffer = transcript.reply_text();
+            transcript.entries().to_vec()
+        }
+        Err(_) => Vec::new(),
+    };
 
     app.is_loading = false;
     app.stream_start = None;
@@ -8104,16 +8177,13 @@ async fn send_message_with_prompt(
 
     match result {
         Some(Ok(turn)) => {
-            let response_text = if app.stream_buffer.is_empty() {
-                turn.response.clone()
-            } else {
-                app.stream_buffer.clone()
-            };
-
-            app.chat_messages.push(ChatMessage {
-                role: ChatRole::Assistant,
-                text: response_text,
-            });
+            commit_turn_entries(&mut app.chat_messages, &turn_entries);
+            if !super::turn_transcript::has_visible_text(&turn_entries) {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::Assistant,
+                    text: turn.response.clone(),
+                });
+            }
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::Detail,
                 text: answer_details(&app.session.model, &turn, turn_started.elapsed()),
@@ -8172,6 +8242,7 @@ async fn send_message_with_prompt(
             }
         }
         Some(Err(e)) => {
+            commit_turn_entries(&mut app.chat_messages, &turn_entries);
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::Error,
                 text: crate::errors::terminal_text(&e),
@@ -8182,6 +8253,7 @@ async fn send_message_with_prompt(
             // and reconcile session history so the next turn stays a valid
             // user→assistant sequence.
             let partial = app.stream_buffer.clone();
+            commit_turn_entries(&mut app.chat_messages, &turn_entries);
             render(terminal, app)?;
             app.session.cancel_turn(&partial).await;
             crate::cloud::product_analytics::record(
@@ -8190,12 +8262,6 @@ async fn send_message_with_prompt(
                 "generation_stopped",
             );
             app.status_notice = Some(("stopped the turn".to_string(), Instant::now()));
-            if !partial.is_empty() {
-                app.chat_messages.push(ChatMessage {
-                    role: ChatRole::Assistant,
-                    text: partial,
-                });
-            }
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
                 text: "⊘ Stopped".to_string(),
@@ -8340,34 +8406,6 @@ mod tests {
                 ViewAction::Continue
             }
         }
-    }
-
-    /// Regression: a post-tool-call continuation landed on the same line as
-    /// the pre-tool sentence with no separator at all
-    /// ("I'll read the file.First line:").
-    #[test]
-    fn continuation_chunk_starts_a_new_paragraph() {
-        let mut buf = "I'll read the file.".to_string();
-        append_continuation_chunk(&mut buf, "First line:");
-        assert_eq!(buf, "I'll read the file.\n\nFirst line:");
-    }
-
-    #[test]
-    fn continuation_chunk_skips_the_blank_line_when_already_whitespace() {
-        let mut buf = "Reading the file.\n".to_string();
-        append_continuation_chunk(&mut buf, "Done.");
-        assert_eq!(buf, "Reading the file.\nDone.");
-
-        let mut buf = "Reading the file. ".to_string();
-        append_continuation_chunk(&mut buf, "Done.");
-        assert_eq!(buf, "Reading the file. Done.");
-    }
-
-    #[test]
-    fn continuation_chunk_into_an_empty_buffer_adds_no_leading_blank_line() {
-        let mut buf = String::new();
-        append_continuation_chunk(&mut buf, "First line:");
-        assert_eq!(buf, "First line:");
     }
 
     struct SlashActionView;
@@ -8780,6 +8818,45 @@ mod tests {
             },
         );
         assert_eq!(cells.len(), 2);
+    }
+
+    /// Regression: Ollama numbers tool calls per completion, so the second
+    /// round's call reused `ollama_0` and its completion updated the first
+    /// round's row, leaving the new row running until the turn settled it.
+    #[test]
+    fn a_reused_call_id_completes_the_call_of_its_own_round() {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+        use crate::tui::transcript_cell::TranscriptCellState;
+
+        let mut cells: Vec<ToolCell> = Vec::new();
+        for output in ["first", "second"] {
+            apply_tool_event(
+                &mut cells,
+                TuiAppEvent::ToolStarted {
+                    call_id: "ollama_0".into(),
+                    name: "read_file".into(),
+                    summary: "a.rs".into(),
+                    input: serde_json::json!({ "path": "a.rs" }),
+                },
+            );
+            apply_tool_event(
+                &mut cells,
+                TuiAppEvent::ToolCompleted {
+                    call_id: "ollama_0".into(),
+                    name: "read_file".into(),
+                    status: ToolStatus::Succeeded,
+                    output: output.into(),
+                    duration_ms: 1,
+                },
+            );
+        }
+
+        assert_eq!(cells.len(), 2);
+        assert!(cells
+            .iter()
+            .all(|cell| cell.state == TranscriptCellState::Complete));
+        assert_eq!(cells[0].output_preview.as_deref(), Some("first"));
+        assert_eq!(cells[1].output_preview.as_deref(), Some("second"));
     }
 
     /// Regression: a tool whose completion event never arrived kept a `Running`
@@ -10851,9 +10928,10 @@ mod tests {
             chrome: quiet_chrome(),
             chat_messages: &chat_messages,
             tool_cells: &tool_cells,
+            turn_first_cell: 0,
             is_loading: true,
             stream_start: None,
-            stream_buffer: "",
+            turn: &[],
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
@@ -10956,9 +11034,10 @@ mod tests {
             chrome: quiet_chrome(),
             chat_messages,
             tool_cells,
+            turn_first_cell: 0,
             is_loading: false,
             stream_start: None,
-            stream_buffer: "",
+            turn: &[],
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
@@ -11411,7 +11490,10 @@ mod tests {
             stderr: None,
             edits: Vec::new(),
         }];
-        let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
+        let turn = vec![
+            TurnEntry::Tool,
+            TurnEntry::Text(format!("streaming {ESCAPE_PAYLOAD}tokens")),
+        ];
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
             workspace_pane: None,
@@ -11432,9 +11514,10 @@ mod tests {
             chrome: quiet_chrome(),
             chat_messages: &chat_messages,
             tool_cells: &tool_cells,
+            turn_first_cell: 0,
             is_loading: true,
             stream_start: None,
-            stream_buffer: &stream_buffer,
+            turn: &turn,
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
@@ -11461,6 +11544,156 @@ mod tests {
             rendered.contains("streaming") && rendered.contains("tokens"),
             "streamed text must still be shown: {rendered:?}"
         );
+        assert!(
+            rendered.contains("echo") && rendered.contains("safe"),
+            "the tool row must still be shown: {rendered:?}"
+        );
+    }
+
+    fn written_file_cell() -> ToolCell {
+        ToolCell {
+            call_id: "ollama_0".into(),
+            name: "write_file".into(),
+            summary: "hello.txt".into(),
+            state: crate::tui::transcript_cell::TranscriptCellState::Complete,
+            output_preview: None,
+            timing: ToolTiming::default(),
+            full_output: None,
+            accent: None,
+            exit_code: None,
+            stderr: None,
+            edits: Vec::new(),
+        }
+    }
+
+    fn row_of(rows: &str, needle: &str) -> usize {
+        rows.lines()
+            .position(|row| row.contains(needle))
+            .unwrap_or_else(|| panic!("{needle:?} was not drawn:\n{rows}"))
+    }
+
+    /// Regression: after a tool call each streamed token of the reply was drawn
+    /// as its own paragraph, and the tool row was drawn below the finished
+    /// reply instead of between the request and the answer.
+    #[test]
+    fn a_finished_tool_turn_draws_the_tool_row_between_request_and_reply() {
+        use crate::tui::app_event::TuiAppEvent;
+        use ratatui::backend::TestBackend;
+
+        let mut transcript = TurnTranscript::default();
+        transcript.observe(&TuiAppEvent::ToolStarted {
+            call_id: "ollama_0".into(),
+            name: "write_file".into(),
+            summary: "hello.txt".into(),
+            input: serde_json::json!({ "path": "hello.txt", "content": "hi" }),
+        });
+        for delta in ["The", " file", " is", " ready", " and", " says", " hi", "."] {
+            transcript.push_text(delta);
+        }
+        let mut messages = vec![ChatMessage {
+            role: ChatRole::User,
+            text: "create hello.txt with hi".into(),
+        }];
+        commit_turn_entries(&mut messages, transcript.entries());
+
+        let roles: Vec<ChatRole> = messages.iter().map(|message| message.role).collect();
+        assert!(
+            roles == [ChatRole::User, ChatRole::Tool, ChatRole::Assistant],
+            "one tool row, then one reply"
+        );
+        assert_eq!(messages[2].text, "The file is ready and says hi.");
+
+        let cells = vec![written_file_cell()];
+        let statusline = shipped_statusline();
+        let ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        let mut terminal = Terminal::new(TestBackend::new(100, 40)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                draw_turn_chrome(frame, &ctx);
+            })
+            .expect("draw");
+        let rows = buffer_rows(&terminal, 100);
+
+        let request = row_of(&rows, "create hello.txt with hi");
+        let tool = row_of(&rows, "write_file");
+        let reply = row_of(&rows, "The file is ready and says hi.");
+        assert!(request < tool && tool < reply, "{rows}");
+    }
+
+    #[test]
+    fn a_live_tool_turn_draws_each_round_around_its_tool_row() {
+        use ratatui::backend::TestBackend;
+
+        let messages = vec![ChatMessage {
+            role: ChatRole::User,
+            text: "create hello.txt with hi".into(),
+        }];
+        let cells = vec![written_file_cell()];
+        let turn = vec![
+            TurnEntry::Text("I'll create the file.".into()),
+            TurnEntry::Tool,
+            TurnEntry::Text("The file is ready.".into()),
+        ];
+        let statusline = shipped_statusline();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.is_loading = true;
+        ctx.turn = turn.as_slice();
+        let mut terminal = Terminal::new(TestBackend::new(100, 40)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                draw_turn_chrome(frame, &ctx);
+            })
+            .expect("draw");
+        let rows = buffer_rows(&terminal, 100);
+
+        let before = row_of(&rows, "I'll create the file.");
+        let tool = row_of(&rows, "write_file");
+        let after = row_of(&rows, "The file is ready.");
+        let spinner = row_of(&rows, "Reasoning…");
+        assert!(before < tool && tool < after && after < spinner, "{rows}");
+    }
+
+    #[test]
+    fn tool_rows_of_earlier_turns_stay_where_they_ran() {
+        use ratatui::backend::TestBackend;
+
+        let messages = vec![
+            ChatMessage {
+                role: ChatRole::User,
+                text: "first request".into(),
+            },
+            ChatMessage {
+                role: ChatRole::Tool,
+                text: String::new(),
+            },
+            ChatMessage {
+                role: ChatRole::Assistant,
+                text: "first answer".into(),
+            },
+            ChatMessage {
+                role: ChatRole::User,
+                text: "second request".into(),
+            },
+            ChatMessage {
+                role: ChatRole::Assistant,
+                text: "second answer".into(),
+            },
+        ];
+        let cells = vec![written_file_cell()];
+        let statusline = shipped_statusline();
+        let ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        let mut terminal = Terminal::new(TestBackend::new(100, 40)).expect("terminal");
+        terminal
+            .draw(|frame| {
+                draw_turn_chrome(frame, &ctx);
+            })
+            .expect("draw");
+        let rows = buffer_rows(&terminal, 100);
+
+        let tool = row_of(&rows, "write_file");
+        assert!(row_of(&rows, "first request") < tool, "{rows}");
+        assert!(tool < row_of(&rows, "first answer"), "{rows}");
+        assert_eq!(rows.matches("write_file").count(), 1, "{rows}");
     }
 
     /// The approval and elicitation modals composite an overlay over the chrome;
@@ -11493,9 +11726,10 @@ mod tests {
             chrome: quiet_chrome(),
             chat_messages: &chat_messages,
             tool_cells: &tool_cells,
+            turn_first_cell: 0,
             is_loading: false,
             stream_start: None,
-            stream_buffer: "",
+            turn: &[],
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
@@ -11783,9 +12017,10 @@ mod tests {
             chrome: quiet_chrome(),
             chat_messages: &chat_messages,
             tool_cells: &tool_cells,
+            turn_first_cell: 0,
             is_loading: true,
             stream_start: None,
-            stream_buffer: "",
+            turn: &[],
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
