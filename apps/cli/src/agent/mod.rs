@@ -2010,6 +2010,7 @@ impl AgentSession {
             self.plan_mode = plan_mode;
         }
         self.reset_plan_state();
+        self.plan_return_mode = None;
         self.plan_approved = managed_session.plan_approved.unwrap_or(false);
         self.current_plan = managed_session.current_plan.clone();
         if let Some(fast_mode) = managed_session.fast_mode {

@@ -3198,6 +3198,7 @@ mod tests {
 
     #[test]
     fn host_git_configuration_stays_read_only_even_in_a_managed_worktree() {
+        crate::platform::runtime::git::use_git_state_dir();
         let Some(git_config) = agiworkforce_worktree::host_git_config_dir() else {
             return;
         };

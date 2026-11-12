@@ -381,7 +381,8 @@ pub(super) async fn handle_slash_command(
             session.permission_mode = session
                 .plan_return_mode
                 .take()
-                .unwrap_or(crate::cli_options::PermissionMode::Default);
+                .unwrap_or(crate::cli_options::PermissionMode::Default)
+                .within(session.pinned_permission_mode);
             session.plan_mode = false;
             session.reset_plan_state();
             output::print_info(&format!(
