@@ -2808,6 +2808,9 @@
     "AGENT_TASK_STATE_LABELS": [
       "packages/contracts/types/src/cross-device.ts"
     ],
+    "AGENT_THREAD_STACK_BYTES": [
+      "apps/cli/src/subagent.rs"
+    ],
     "agent_tool_catalog": [
       "apps/cli/src/agents.rs"
     ],
