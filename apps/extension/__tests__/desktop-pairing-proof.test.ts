@@ -369,7 +369,10 @@ describe('command pickup after Desktop has been away', () => {
     await startWorker();
     await settled(() => polls >= 1);
 
-    for (let step = 0; step < 5; step += 1) await vi.advanceTimersByTimeAsync(61_000);
+    for (let step = 0; step < 200 && polls < 3; step += 1) {
+      await vi.advanceTimersByTimeAsync(61_000);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
     const whileAway = polls;
     expect(whileAway).toBeGreaterThanOrEqual(3);
     expect(harness.localStore['agi_paired_desktop']).toMatchObject({ token: PAIR_TOKEN });

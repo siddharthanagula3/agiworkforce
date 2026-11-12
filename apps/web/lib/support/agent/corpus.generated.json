@@ -925,7 +925,7 @@
         "remove my data"
       ],
       "description": "How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.",
-      "updated": "2026-11-11",
+      "updated": "2026-11-12",
       "source": "content/support/delete-your-account.md",
       "chunks": [
         {
@@ -940,14 +940,14 @@
           "ordinal": 1,
           "heading": "Changing your mind",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Changing your mind",
-          "text": "The 24 hours are a real cancellation window, not a formality. Sign back in\nbefore the deadline and Settings, Account shows **Account deletion scheduled**\nwith the erasure time and a **Cancel deletion** button. Cancelling keeps the\naccount active and removes nothing.\n\nOnce the window closes the button is gone and the page says the cancellation\nwindow has closed and erasure is already underway."
+          "text": "The 24 hours are a real cancellation window, not a formality. Sign back in\nbefore the deadline and Settings, Account shows **Account deletion scheduled**\nwith the erasure time and a **Cancel deletion** button. Cancelling keeps the\naccount active and removes nothing. If deleting the account stops your web plan\nfrom renewing, cancelling the deletion turns its renewal back on.\n\nOnce the window closes the button is gone and the page says the cancellation\nwindow has closed and erasure is already underway."
         },
         {
           "id": "delete-your-account#2",
           "ordinal": 2,
           "heading": "Before you confirm",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Before you confirm",
-          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf your paid plan still renews, the request is refused and nothing is\nscheduled. Cancel the plan first, on the web in Settings, Billing, or with Apple\nor Google if you bought it there, and then you can delete your account straight\naway, without waiting for the plan to end. A plan you have already cancelled does not block deletion: it ends when\nerasure runs, and its unused time is not refunded.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
+          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf your plan is billed on the web and still renews, deleting your account turns\nits renewal off, so you are not charged again. If you bought the plan from Apple\nor Google, deleting your account does not cancel it: the confirmation says so\nand links to the page where you cancel it with the store. A plan you have already cancelled does not block deletion: it ends when\nerasure runs, and its unused time is not refunded. While a payment on the plan\nis still being collected, the request is refused and nothing is scheduled.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
         },
         {
           "id": "delete-your-account#3",
