@@ -11600,6 +11600,9 @@
     "BoundedRedisRead": [
       "apps/web/lib/server/bounded-redis-read.ts"
     ],
+    "boundedRefusalText": [
+      "apps/extension-vscode/src/utils/accountRefusal.ts"
+    ],
     "boundedRenderInput": [
       "apps/web/lib/server/render-cache.ts"
     ],
@@ -21923,6 +21926,9 @@
     "CloudRefusalKind": [
       "apps/extension/src/features/cloud-bridge/cloudRefusal.ts"
     ],
+    "CloudRequestAttempts": [
+      "apps/extension-vscode/src/utils/api.ts"
+    ],
     "CloudResultPullHost": [
       "apps/extension-vscode/src/features/context-handoff/index.ts"
     ],
@@ -28794,6 +28800,9 @@
       "apps/desktop/src-tauri/src/core/agi/mod.rs"
     ],
     "CONVERSATION_SYNC_CURSOR_KEY": [
+      "apps/extension/src/features/cloud-bridge/conversationSync.ts"
+    ],
+    "CONVERSATION_SYNC_RETRY_ALARM": [
       "apps/extension/src/features/cloud-bridge/conversationSync.ts"
     ],
     "CONVERSATION_TITLE_MAX_LENGTH": [
@@ -41511,6 +41520,9 @@
     "E2E_STUB_MODEL_VENDOR": [
       "apps/extension-vscode/src/test/vsixInstallation.ts"
     ],
+    "earliestCloudSyncRetryAt": [
+      "apps/extension/src/features/background/conversation-history.ts"
+    ],
     "earliestExhaustedUsageResetAt": [
       "packages/contracts/types/src/work-usage.ts"
     ],
@@ -42834,6 +42846,9 @@
     ],
     "EnqueueJobInput": [
       "apps/web/lib/jobs/job-service.ts"
+    ],
+    "EnqueueOptions": [
+      "services/signaling-server/src/batch-queue.ts"
     ],
     "enqueuePrompt": [
       "packages/ui/unified-chat/src/index.ts",
@@ -66507,6 +66522,9 @@
     "kept_copies_of": [
       "apps/cli/src/platform/runtime/session_control.rs"
     ],
+    "kept_mode_notice": [
+      "apps/cli/src/repl/mod.rs"
+    ],
     "keptMessageContent": [
       "apps/web/lib/chat-kept-messages.ts"
     ],
@@ -70124,6 +70142,9 @@
       "apps/cli/src/features/a2a/registry.rs"
     ],
     "load_managed_conversation": [
+      "apps/cli/src/agent/mod.rs"
+    ],
+    "load_managed_conversation_keeping_mode": [
       "apps/cli/src/agent/mod.rs"
     ],
     "load_managed_hook_policy": [
@@ -87287,6 +87308,9 @@
     "OPT_IN_WORKSPACE_FEATURES": [
       "packages/contracts/types/src/enterprise/workspace-controls.ts"
     ],
+    "OPT_OUT_SETTING_KEYS": [
+      "apps/extension-vscode/src/platform/config.ts"
+    ],
     "optimize": [
       "apps/desktop/src-tauri/src/features/search/fts.rs"
     ],
@@ -87592,6 +87616,12 @@
     ],
     "OptionsStorage": [
       "apps/extension/src/features/options/destinations.ts"
+    ],
+    "OptOutFeature": [
+      "apps/extension-vscode/src/platform/config.ts"
+    ],
+    "optOutSettingFor": [
+      "apps/extension-vscode/src/platform/config.ts"
     ],
     "ORB_CANVAS_SIZE": [
       "packages/ui/unified-chat/src/index.ts",
@@ -123214,6 +123244,9 @@
     "show_recovery_window": [
       "apps/desktop/src-tauri/src/sys/startup_recovery.rs"
     ],
+    "show_remaining_approval_controls": [
+      "apps/cli/src/terminal_text.rs"
+    ],
     "SHOW_SCHEDULE_RUNS_COMMAND": [
       "apps/extension-vscode/src/features/schedules/index.ts",
       "apps/extension-vscode/src/features/schedules/scheduleActions.ts"
@@ -140799,6 +140832,9 @@
     "USER_SKILL_AUTHORING_OFF": [
       "apps/web/lib/services/user-skill-authoring.ts"
     ],
+    "USER_TAKEOVER_MAX_MINUTES": [
+      "apps/extension/src/features/computer-use/runOwnership.ts"
+    ],
     "USER_TAKEOVER_MAX_MS": [
       "apps/extension/src/features/computer-use/runOwnership.ts"
     ],
@@ -145579,6 +145615,9 @@
     ],
     "with_task_id": [
       "apps/desktop/src-tauri/src/core/research/orchestrator.rs"
+    ],
+    "with_terminal_approver": [
+      "apps/cli/src/remote_control/host.rs"
     ],
     "with_test_configs": [
       "apps/cli/src/mcp/mod.rs"
