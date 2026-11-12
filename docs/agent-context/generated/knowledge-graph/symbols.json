@@ -6189,7 +6189,8 @@
       "apps/desktop/src-tauri/src/core/agent/tests/mod.rs"
     ],
     "APPROVAL_TIMEOUT_MS": [
-      "apps/extension/src/features/computer-use/agentLoop.ts"
+      "apps/extension/src/features/computer-use/agentLoop.ts",
+      "apps/web/app/agent-permissions/page.test.tsx"
     ],
     "ApprovalAnswer": [
       "apps/extension-vscode/src/features/remote-control/approvalAnswers.ts"
@@ -33731,7 +33732,8 @@
       "apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs"
     ],
     "DEFAULT_BROWSER_PERMISSION_MODE": [
-      "apps/extension/src/features/computer-use/askBeforeActing.ts"
+      "apps/extension/src/features/computer-use/askBeforeActing.ts",
+      "apps/web/app/agent-permissions/page.test.tsx"
     ],
     "DEFAULT_CALLER_TOOL_MAX_STEPS": [
       "packages/contracts/cloud-contracts/src/index.ts",
@@ -45368,6 +45370,9 @@
     ],
     "ExportOptions": [
       "apps/web/features/chat/services/document-export-service.ts"
+    ],
+    "exportPinnedReleaseKeys": [
+      "scripts/release/release-signing-key.mjs"
     ],
     "exportPngImage": [
       "apps/mobile/services/fileCreation.ts"
@@ -61244,6 +61249,9 @@
     ],
     "InstalledVersions": [
       "apps/desktop/src-tauri/src/upgrade/mod.rs"
+    ],
+    "INSTALLER": [
+      "scripts/release/release-signing-key.mjs"
     ],
     "InstallerChecksum": [
       "apps/web/app/api/download/checksums/route.ts"
@@ -85657,9 +85665,6 @@
     "on_branch": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
     ],
-    "on_event": [
-      "apps/cli/src/tui/tui_app.rs"
-    ],
     "onAccountTierMayHaveChanged": [
       "apps/extension-vscode/src/integrations/tierRevalidation.ts"
     ],
@@ -85963,9 +85968,6 @@
     ],
     "OPEN_ORGANIZATION_CONTEXT_POLICY": [
       "packages/platform/context-engine/src/permissions.ts"
-    ],
-    "open_overlay": [
-      "apps/cli/src/tui/tui_app.rs"
     ],
     "OPEN_PATH_REFERENCE_COMMAND": [
       "apps/extension-vscode/src/features/path-links/index.ts"
@@ -91861,6 +91863,9 @@
     ],
     "PinoLevel": [
       "apps/web/lib/logger.ts"
+    ],
+    "pinReleaseKey": [
+      "scripts/release/release-signing-key.mjs"
     ],
     "PINS_BY_HOST": [
       "apps/mobile/lib/pinning.ts"
@@ -113313,7 +113318,6 @@
       "apps/cli/src/cloud/personalization.rs",
       "apps/cli/src/remote_control/mod.rs",
       "apps/cli/src/tui/mod.rs",
-      "apps/cli/src/tui/tui_app.rs",
       "apps/desktop/src-tauri/src/automation/action_router/dispatch.rs",
       "apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs",
       "apps/desktop/src-tauri/src/lib.rs",

@@ -265,7 +265,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                 response
                     .threads
                     .into_iter()
-                    .filter(|thread| relayable(thread))
+                    .filter(relayable)
                     .collect::<Vec<_>>(),
                 Vec::new(),
             ),

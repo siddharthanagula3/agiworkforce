@@ -61,7 +61,7 @@ const CAPABILITIES = [
   {
     meta: 'Permissions',
     title: 'Approved-site permissions',
-    body: 'Permission profiles specify the approved sites, allowed actions and any expiry. You can revoke a profile to end the sessions using it.',
+    body: "You keep the list of approved sites in the extension's settings, and the assistant controls a tab only on a site you approved and confirmed browser control for, or on one you allowed for a single task. Removing a site ends its access and stops a task running on it.",
   },
   {
     meta: 'Automation',

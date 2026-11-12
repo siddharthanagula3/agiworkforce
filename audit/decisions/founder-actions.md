@@ -23,16 +23,23 @@ of the UI gap campaign. Each `DEF-` or `REF-` id below is a campaign row still
 waiting on the founder; it closes when the action named beside it is done.
 Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 
-## [Deploy] Apply migrations 0368 to 0391, then deploy main (decision 2)
+## [Deploy] Apply migrations 0392 to 0418, then deploy main (decision 2)
 
-- `scripts/config/production-migrations-applied.json` records production through 0367 (2026-10-18);
-  0368 to 0391 are on main and not recorded as applied there, and the pre-deploy migration check blocks main until they are.
-- Action: apply them to staging, check, then to production with `--confirm-production`, then deploy.
-  A production apply cannot be undone, so it runs only at a time you choose.
-- Until then: connector tools fail closed (0381); published apps cannot use connectors, organization
-  daily activity is missing and Slack channel replies fail (0383 to 0389); usage promotions (0390) and
-  the artifact AI cap (0391, which needs 0380) cannot be switched on.
-- Done when `pnpm db:migrate -- status --target production` lists 0391 and the JSON record is updated.
+- `scripts/config/production-migrations-applied.json` records production through 0391; `apps/web/db/neon`
+  holds 0392 to 0418, none recorded as applied, and `deploy-production.yml` runs `pnpm db:migrate -- verify`,
+  which refuses to deploy over a pending migration.
+- Action: apply them to staging, check, then to production with
+  `pnpm db:migrate -- apply --target production --confirm-production`, then deploy main through
+  `deploy-production.yml`. A production apply cannot be undone, so it runs only at a time you choose.
+  Procedure: `docs/development/ci-and-deploys.md` ("Schema prerequisites", "Staging tier").
+- Until then the Chrome extension built from main does not fully work against production: browser tools
+  fail in any chat saved to the account (the older server drops the caller-tool fields; the checkpoint
+  they write needs `0397_caller_tool_checkpoints.sql`), and **Add a link** always fails
+  (`/api/page-context/read` does not exist there). A store reviewer would hit both, so this deploy comes
+  before the Chrome submission (`docs/runbooks/chrome-web-store-publish.md`, "First submission" step 12).
+- Done when `pnpm db:migrate -- status --target production` lists 0418, the JSON record is updated, and
+  `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://agiworkforce.com/api/page-context/read`
+  prints anything but `404`.
   Impact: RELEASE-BLOCKING.
 
 ## [Models] One paid probe before video comes back (decision 1)
@@ -169,10 +176,10 @@ agent token. This entry is the configuration half of
 3. Create `macos-release` allowing `v-cloud-desktop-*` and `v-desktop-*` (`mobile-store-release` already allows `v-mobile-*`); `.github/rulesets/README.md` walks `.github/rulesets/environments.json` for it. That walk rewrites every listed environment, and the file still gives `vscode-marketplace` and `chrome-web-store` a `main` branch policy, so until it lists the four release environments tag-only, create `macos-release` with the same `PUT` and tag `POST` as step 2 instead, and rerun the probe after any walk.
 4. `macos-release`: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`; repository `VITE_CLERK_PUBLISHABLE_KEY`.
 5. Windows signing variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` and secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`.
-6. `vscode-marketplace`, only after step 2: an Entra federated credential whose subject is exactly `repo:siddharthanagula3/agiworkforce:environment:vscode-marketplace` (bound to the environment, and through its tag-only policy to `v-vscode-*` tags), then `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`. Open VSX needs no token: its trusted publisher names repository, workflow and environment `open-vsx`, plus the repository variable `OPEN_VSX_PUBLISH`. Commands: `docs/runbooks/vscode-marketplace-publish.md`, "First submission".
+6. `vscode-marketplace`, only after step 2: an Entra federated credential whose subject is exactly `repo:siddharthanagula3/agiworkforce:environment:vscode-marketplace` (bound to the environment, and through its tag-only policy to `v-vscode-*` tags), then `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`. Open VSX needs no token: its trusted publisher names repository, workflow and environment `open-vsx`, plus the repository variable `OPEN_VSX_PUBLISH`, which is set only after the lead has added the pinned `ovsx` development dependency (Open VSX step 1). Commands: `docs/runbooks/vscode-marketplace-publish.md`, "First submission" and "Open VSX".
 7. Repository variables `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`; `chrome-web-store`, only after step 2: a Google workload-identity provider whose condition admits only this repository's `chrome-web-store` environment on a tag, and `CWS_PUBLISHER_ID`, `CWS_EXTENSION_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `CWS_SERVICE_ACCOUNT`. Commands: `docs/runbooks/chrome-web-store-publish.md`, "First submission" step 6.
 8. `mobile-store-release`: still missing secret `EXPO_TOKEN` and variable `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`; the App Store Connect and Play secrets, `ASC_APP_ID` and the live `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` are set (checked 2026-11-10). Steps: `docs/runbooks/mobile-store-first-release.md`.
-9. CLI, only after step 2: `AGI_CLI_RELEASE_SIGNING_KEY` (a P-256 key whose public half is pinned in `apps/web/public/install.sh`) as an environment secret of `cli-release`, never a repository secret (`gh secret set AGI_CLI_RELEASE_SIGNING_KEY --env cli-release`); the probe fails if a repository secret of that name exists. Optional `SENTRY_DSN_CLI`. The CLI ships only through the signed install script, so it needs no npm token or Homebrew tap. Steps: `docs/runbooks/cli-release.md`.
+9. CLI, only after step 2: `AGI_CLI_RELEASE_SIGNING_KEY` (a P-256 key whose public half is pinned in `apps/web/public/install.sh`) as an environment secret of `cli-release`, never a repository secret (`gh secret set AGI_CLI_RELEASE_SIGNING_KEY --env cli-release`); the probe fails if a repository secret of that name exists. Optional `SENTRY_DSN_CLI`, as a repository secret: the build jobs that read it run in no environment, so a `cli-release` copy is never read. The public half is pinned with `node scripts/release/release-signing-key.mjs pin agi-cli-release.pub`, not by hand (`docs/runbooks/cli-release.md`, step 6). The CLI ships only through the signed install script, so it needs no npm token or Homebrew tap. Steps: `docs/runbooks/cli-release.md`.
 
 **Where** GitHub repository settings (environments, secrets, variables); Apple, Azure, Microsoft Entra, Google Cloud, Expo, npm.
 **Needed input** Accounts and about two hours.
@@ -507,9 +514,13 @@ template that stamps a `surface` claim, and JWT templates are created in the
 Clerk dashboard.
 **Exact action** In the Clerk dashboard, JWT templates, on both the
 development and the production instance: create a template named `agi-mobile`
-with the claims `{"surface": "mobile"}` and the default lifetime. Then confirm
-`CLERK_AUTHORIZED_PARTIES` on the production web deployment lists the web
-origin and the published extension's `chrome-extension://<id>` origin.
+with the claims `{"surface": "mobile"}` and the default lifetime. Then set
+`CLERK_AUTHORIZED_PARTIES` on the production web deployment to the web origin
+and the extension's `chrome-extension://<item id>` origin, for example
+`https://agiworkforce.com,chrome-extension://<item id>`, before the deploy that
+precedes the Chrome submission. Without the extension origin, extension sign-in
+appears to succeed and then every API call answers 401. Steps and check:
+`docs/runbooks/chrome-web-store-publish.md`, "First submission" step 8.
 **Where** The claim and template name are `SURFACE_TOKEN_CLAIM` and
 `MOBILE_SESSION_TOKEN_TEMPLATE` in `packages/contracts/types/src/surface-binding.ts`;
 the binding is `bindSurfaceFromClaims` in `apps/web/lib/free-chat-surface-policy.ts`;
@@ -827,6 +838,26 @@ secret value was written anywhere. Rotation is offered as a precaution rather
 than as a response to a known key disclosure. History was not rewritten, because
 force-updating a pushed branch is not a call to make unasked.
 **Impact** PRECAUTIONARY
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
+
+## [Release] First CLI version number: 0.0.1 or 1.0.0
+
+**Why founder assistance is required** Which version a product first ships
+under is a product call. `apps/cli/Cargo.toml` and
+`MINIMUM_SUPPORTED_RUNTIME_VERSION` say `0.0.1`, and `docs/runbooks/cli-release.md`
+step 8 tags `v-cli-0.0.1`, while the site's changelog announces "CLI v1.0"
+(2026-05-03, `apps/web/lib/changelog-entries.ts`) for archives on a release the
+repository no longer holds.
+**The consequence either way** Shipping `0.0.1` leaves a public page that
+names a higher version than the first installable one, and anyone still
+holding one of the old 1.x binaries is told by `agi update` that their build is
+newer than the published release, so it never updates them; they must
+reinstall with the install script. Shipping `1.0.0` instead means raising the
+version in `apps/cli/Cargo.toml` (Cargo updates `Cargo.lock`) and tagging
+`v-cli-1.0.0`; it presents
+the first signed build as a stable 1.0 rather than a preview.
+**Exact action** Choose `0.0.1` (no change) or `1.0.0`, before runbook step 8.
+**Impact** NON-BLOCKING (either choice can ship)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Release] Cut signed releases so the verification instructions work

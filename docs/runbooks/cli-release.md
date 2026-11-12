@@ -22,8 +22,8 @@ release after the first.
   | ---------------------------------- | --------------------------------------------------------------------------- |
   | `agiworkforce-darwin-arm64.tar.gz` | macOS Apple silicon (`agi`, `agiworkforce`)                                 |
   | `agiworkforce-darwin-x64.tar.gz`   | macOS Intel                                                                 |
-  | `agiworkforce-linux-x64.tar.gz`    | Linux x64, glibc                                                            |
-  | `agiworkforce-linux-arm64.tar.gz`  | Linux arm64, glibc                                                          |
+  | `agiworkforce-linux-x64.tar.gz`    | Linux x64, glibc 2.35 or newer                                              |
+  | `agiworkforce-linux-arm64.tar.gz`  | Linux arm64, glibc 2.35 or newer                                            |
   | `agiworkforce-windows-x64.zip`     | Windows x64 (`agi.exe`, `agiworkforce.exe`)                                 |
   | `agiworkforce-windows-arm64.zip`   | Windows arm64                                                               |
   | `SHA256SUMS`                       | SHA-256 of every archive                                                    |
@@ -108,6 +108,14 @@ decision. **Lead** steps can be run from this repository.
    Expect "Validate CLI source" and all six "Build" jobs green, and the signing
    and release jobs skipped. A red Windows arm64 or Linux arm64 build is fixed
    here, before any key exists. The workflow has not yet completed a run.
+
+   Both Linux builds also run "Require the glibc floor the installer
+   promises", which prints the newest glibc each binary needs and fails above
+   `MIN_GLIBC_VERSION` in `install.sh` (2.35: Ubuntu 22.04, Debian 12). The
+   installer refuses an older glibc, and musl, before it downloads anything.
+   Linux x64 builds on `ubuntu-22.04`, the oldest image GitHub offers, for
+   that reason; when GitHub retires it, raise the floor in `install.sh` and
+   in the support article together.
 
 2. **Owner. Protect the release environments and tags, before any signing
    key, publish identity or store credential exists.** This one step covers
@@ -202,23 +210,42 @@ decision. **Lead** steps can be run from this repository.
    node scripts/release/check-release-environments.mjs
    ```
 
-   Optional, for crash reports: secret `SENTRY_DSN_CLI` (baked into the
-   binary), secret `SENTRY_AUTH_TOKEN` and variables `SENTRY_ORG` and
-   `SENTRY_PROJECT_CLI` (release registration). Without them the release
-   still publishes and logs a warning.
+   Optional, for crash reports: repository secret `SENTRY_DSN_CLI` (baked
+   into the binary by the build jobs, which run in no environment, so an
+   environment secret of that name is never read), repository secret
+   `SENTRY_AUTH_TOKEN` and variables `SENTRY_ORG` and `SENTRY_PROJECT_CLI`
+   (release registration). Without them the release still publishes and logs
+   a warning.
 
-6. **Lead. Pin the public key** by putting the contents of
-   `agi-cli-release.pub` between the quotes of `RELEASE_SIGNING_KEY=''` in
-   `apps/web/public/install.sh`, then run
-   `node scripts/release/check-pinned-release-key.mjs`. Commit it to `main`.
-   The CLI compiles `install.sh` into itself (`apps/cli/src/update_check.rs`),
-   so `agi update --install` trusts only the keys pinned in the commit it was
-   built from: the pin must land before the tag.
+6. **Lead. Pin the public key** with the one command that writes it, never by
+   hand. It adds the key to `RELEASE_SIGNING_KEY` in
+   `apps/web/public/install.sh`, in the layout the pin guard, the installer,
+   `agi update` and the release jobs all read, and refuses a key that is not
+   P-256:
+
+   ```bash
+   node scripts/release/release-signing-key.mjs pin agi-cli-release.pub
+   node scripts/release/check-pinned-release-key.mjs
+   node --test scripts/release/install-script.test.mjs
+   ```
+
+   Expect `Pinned: 1 release signing key(s) in ...`, then
+   `apps/web/public/install.sh pins 1 P-256 release signing key(s)`, then
+   `fail 0`. Commit it to `main`. The CLI compiles `install.sh` into itself
+   (`apps/cli/src/update_check.rs`), so `agi update --install` trusts only the
+   keys pinned in the commit it was built from: the pin must land before the
+   tag.
 
 7. **Owner. Deploy the web app** from that commit, so
-   `https://agiworkforce.com/install.sh` serves the pinned key. Check with
-   `curl -fsSL https://agiworkforce.com/install.sh | grep -c 'BEGIN PUBLIC KEY'`
-   (expect `1`).
+   `https://agiworkforce.com/install.sh` serves the pinned key. From the root
+   of a checkout of that commit:
+
+   ```bash
+   curl -fsSL https://agiworkforce.com/install.sh | diff - apps/web/public/install.sh && echo 'served installer matches'
+   ```
+
+   Expect only `served installer matches`. Any diff output means the site
+   still serves another installer; do not tag until it matches.
 
 8. **Owner. Tag the release** on the commit from step 6 or later. The version
    is the one in `apps/cli/Cargo.toml` (`0.0.1` today); to release another,
@@ -241,11 +268,33 @@ decision. **Lead** steps can be run from this repository.
    gh release view v-cli-0.0.1 --json assets --jq '.assets[].name'
    curl -fsSL https://agiworkforce.com/api/releases/cli/latest
    curl -fsSL https://agiworkforce.com/install.sh | bash
-   agi --version && agi doctor && agi update
-   cosign verify-blob --bundle SHA256SUMS.sigstore.json \
-     --certificate-identity https://github.com/siddharthanagula3/agiworkforce/.github/workflows/release-cli.yml@refs/tags/v-cli-0.0.1 \
-     --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
    ```
+
+   The asset list is the nine names in the table above, and the feed answers
+   `"version":"0.0.1"`. The installer ends with `Installed agi 0.0.1` and, on a
+   machine where `~/.agi/bin` was not on `PATH`, names the profile it changed
+   and the `export PATH=...` line. Open a new terminal, then:
+
+   ```bash
+   agi --version && agi doctor && agi update
+   ```
+
+   Expect `agi 0.0.1`, and `agi update` reporting nothing newer. Then check
+   both signatures on files downloaded for the check, from the root of the
+   checkout:
+
+   ```bash
+   verify_dir=$(mktemp -d)
+   gh release download v-cli-0.0.1 --repo siddharthanagula3/agiworkforce --pattern 'SHA256SUMS*' --dir "$verify_dir"
+   node scripts/release/release-signing-key.mjs export "$verify_dir/keys"
+   openssl dgst -sha256 -verify "$verify_dir/keys/1.pem" -signature "$verify_dir/SHA256SUMS.sig" "$verify_dir/SHA256SUMS"
+   cosign verify-blob --bundle "$verify_dir/SHA256SUMS.sigstore.json" \
+     --certificate-identity https://github.com/siddharthanagula3/agiworkforce/.github/workflows/release-cli.yml@refs/tags/v-cli-0.0.1 \
+     --certificate-oidc-issuer https://token.actions.githubusercontent.com "$verify_dir/SHA256SUMS"
+   ```
+
+   Expect `Wrote 1 pinned release signing key(s)`, then `Verified OK` from
+   `openssl` and `Verified OK` from `cosign`.
 
    Then: `agi login` completes the device sign-in, `agi usage` answers in
    Managed mode, and the same command is refused after `/privacy-mode local`
@@ -278,7 +327,9 @@ possible.
 
 ## Rotating the signing key
 
-Pin the new public key beside the old one in `install.sh`, release once signed
+Pin the new public key beside the old one with
+`node scripts/release/release-signing-key.mjs pin <new public key>`, which keeps
+every key already pinned, release once signed
 with the old key, replace the `AGI_CLI_RELEASE_SIGNING_KEY` secret in the
 `cli-release` environment (step 5), release
 again, then drop the old key. Builds before the rotation trust only the keys

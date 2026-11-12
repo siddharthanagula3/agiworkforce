@@ -28,6 +28,38 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 import AgentPermissionsPage from './page';
 
 const SECURITY_DOC = path.resolve(__dirname, '../../../..', 'docs/security/security.md');
+const COMPUTER_USE_SOURCE = path.resolve(
+  __dirname,
+  '../../../..',
+  'apps/extension/src/features/computer-use',
+);
+
+function extensionSource(file: string): string {
+  return readFileSync(path.join(COMPUTER_USE_SOURCE, file), 'utf8');
+}
+
+function extensionApprovalTimeoutMinutes(): number {
+  const declared = /export const APPROVAL_TIMEOUT_MS = (\d+) \* 60_000;/u.exec(
+    extensionSource('agentLoop.ts'),
+  );
+  expect(declared, 'APPROVAL_TIMEOUT_MS is no longer declared in minutes').not.toBeNull();
+  return Number(declared![1]);
+}
+
+function extensionDefaultPermissionMode(): string {
+  const declared =
+    /export const DEFAULT_BROWSER_PERMISSION_MODE: BrowserPermissionMode = '([a-z]+)';/u.exec(
+      extensionSource('askBeforeActing.ts'),
+    );
+  expect(declared, 'DEFAULT_BROWSER_PERMISSION_MODE is no longer declared').not.toBeNull();
+  return declared![1]!;
+}
+
+const BROWSER_MODE_LABEL: Record<string, string> = {
+  ask: 'Ask first',
+  auto: 'Auto',
+  full: 'Full access',
+};
 
 function renderedRows(caption: string): { label: string; value: string }[] {
   return within(screen.getByRole('list', { name: caption }))
@@ -132,6 +164,40 @@ describe('AgentPermissionsPage', () => {
       }
     }
     expect(disagreements, disagreements.join('\n')).toEqual([]);
+  });
+
+  it('states the browser approval timeout the extension enforces', () => {
+    render(<AgentPermissionsPage />);
+
+    const unanswered = renderedRows('Browser computer-use permissions').find(
+      (row) => row.label === 'Unanswered approvals',
+    );
+    expect(unanswered, 'the browser ledger needs an Unanswered approvals row').toBeDefined();
+    expect(unanswered!.value).toContain(
+      `Skipped after ${extensionApprovalTimeoutMinutes()} minutes.`,
+    );
+  });
+
+  it('names the browser permission mode the extension defaults to', () => {
+    render(<AgentPermissionsPage />);
+
+    const label = BROWSER_MODE_LABEL[extensionDefaultPermissionMode()];
+    expect(label, 'the extension default has no published mode name').toBeDefined();
+    const rows = renderedRows('Browser computer-use permissions');
+    const modes = rows.find((row) => row.label === 'Permission modes');
+    expect(modes, 'the browser ledger needs a Permission modes row').toBeDefined();
+    expect(modes!.value).toContain(`${label} is the default`);
+    expect(rows.some((row) => row.label === `${label}, the default`)).toBe(true);
+  });
+
+  it('keeps the retired browser approval claims off the page', () => {
+    const { container } = render(<AgentPermissionsPage />);
+    const text = container.textContent ?? '';
+
+    expect(text).not.toMatch(/30 seconds/iu);
+    expect(text).not.toMatch(/on by default/iu);
+    expect(text).not.toMatch(/autopilot/iu);
+    expect(text).not.toMatch(/only an explicit opt-out/iu);
   });
 
   it.each([

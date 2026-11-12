@@ -68,7 +68,7 @@ jobs:
             echo "ERROR: Chrome release tags must use v-ext-X.Y.Z" >&2
             exit 1
           fi
-          if ! git tag --points-at HEAD | grep -Fxq "$SELECTED_TAG"; then
+          if ! git tag --points-at HEAD | grep -Fx -- "$SELECTED_TAG" >/dev/null; then
             echo "ERROR: checked-out commit is not the selected release tag $SELECTED_TAG" >&2
             exit 1
           fi

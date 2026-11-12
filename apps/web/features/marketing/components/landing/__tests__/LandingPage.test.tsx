@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { LandingPage } from '../LandingPage';
 import {
+  CLI_TRANSCRIPT,
   CONSOLE_LANES,
   CONSOLE_PROMPT,
   HERO,
@@ -84,5 +85,12 @@ describe('LandingPage', () => {
         expect(within(row).getByText(surface.status)).toBeInTheDocument();
       }
     }
+  });
+
+  it('shows a terminal command that names the provider and the model in full', () => {
+    const commands = CLI_TRANSCRIPT.filter((line) => line.kind === 'cmd').map((line) => line.text);
+
+    expect(commands.filter((text) => /\s-p\s/.test(text))).toEqual([]);
+    expect(commands.some((text) => text.includes('--provider ollama --model <model>'))).toBe(true);
   });
 });

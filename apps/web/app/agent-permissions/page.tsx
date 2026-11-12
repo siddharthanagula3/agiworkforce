@@ -64,11 +64,11 @@ const REVOKE: { k: string; v: string }[] = [
   },
   {
     k: 'Browser: remove a site',
-    v: "Take a site off the extension's allowlist and the browser agent can no longer navigate to it.",
+    v: "Take a site off the extension's approved list and the browser agent can no longer navigate to it. Removing it also withdraws browser control and Chrome's site access for it, and stops a task running on it.",
   },
   {
-    k: 'Browser: re-enable the gate',
-    v: 'Turn "ask before acting" back on if you previously opted into autopilot. Only an explicit opt-out disables it.',
+    k: 'Browser: ask before every step',
+    v: 'Switch the permission mode in the side panel to Ask first. Auto, the default, asks only before the steps listed above.',
   },
   {
     k: 'Desktop: per-tool policy',
@@ -273,18 +273,39 @@ export default function AgentPermissionsPage() {
                     caption="Browser computer-use permissions"
                     rows={[
                       {
-                        label: 'Ask before acting',
+                        label: 'Permission modes',
                         value:
-                          'On by default. An unset preference means ask; autopilot is an explicit opt-out you have to choose.',
+                          'You choose one of three modes in the side panel: Ask first, Auto or Full access. Auto is the default, and a new install runs in Auto until you choose another mode.',
+                      },
+                      {
+                        label: 'Ask first',
+                        value:
+                          'Asks before every step except reading the page (a screenshot, a scroll, reading or searching its content) and an ordinary kind of step you allowed for the rest of the task. On a banking, health, sign-in or password-manager site, reading the page asks too.',
+                      },
+                      {
+                        label: 'Auto, the default',
+                        value:
+                          'Runs ordinary steps without asking. It stops and asks before a control that may make a payment or move money; one that may send, post, submit or delete; typing into a password, payment or identity field; signing in; accepting terms; granting another app access or changing account permissions; uploading or downloading a file; closing a tab; running a tool the website supplies; and any step on a banking, health, sign-in or password-manager site. It also asks before acting on a control it cannot identify.',
+                      },
+                      {
+                        label: 'Full access',
+                        value:
+                          'Runs steps without asking on the sites on your approved list. It still asks before everything Auto asks about, and before changing a dropdown, going back or forward, reloading and resizing the window. On a site you allowed for one task only, it asks the way Ask first does.',
+                      },
+                      {
+                        label: 'Purchases',
+                        value:
+                          'Never completed by the extension, in any mode. A step that would place an order or complete a payment is refused, and the assistant is told to hand the page back to you so you can check the amount and finish it yourself.',
                       },
                       {
                         label: 'Unanswered approvals',
-                        value: 'Denied after 30 seconds. The gate fails closed, not open.',
+                        value:
+                          'Skipped after 5 minutes. A request nobody answers counts as a no: that step does not run, and the gate fails closed, not open.',
                       },
                       {
                         label: 'Where it can go',
                         value:
-                          'Navigation is confined to the site allowlist you maintain in extension options.',
+                          "Navigation is confined to sites you approved, on the list you keep in the extension's settings or for a single task.",
                       },
                       {
                         label: 'Text leaving the page',
