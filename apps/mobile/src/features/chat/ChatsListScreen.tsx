@@ -193,6 +193,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   const serverChatMatches = useChatViewStore((state) => state.remoteSearchChats);
   const serverProjectMatches = useChatViewStore((state) => state.remoteSearchProjects);
   const searchFailed = useChatViewStore((state) => state.searchFailed);
+  const searchInFlight = useChatViewStore((state) => state.isSearching);
   const localProjects = useProjectStore((state) => state.projects);
   const cloudProjects = useCloudProjectStore((state) => state.projects);
   const storedArtifacts = useArtifactStore((state) => state.artifacts);
@@ -317,6 +318,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   );
 
   const isSearching = query.trim().length > 0;
+  const searchPending = isSearching && (!searchIsCurrent || searchInFlight);
   const cloudSearchFailed = isSearching && searchIsCurrent && searchFailed && appMode === 'cloud';
   const sections = useMemo<ChatsListSection[]>(() => {
     if (!isSearching) return searchOnly ? [] : groupHistory(filteredHistory);
@@ -678,6 +680,8 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             >
               {searchOnly && !isSearching ? (
                 <Search size={34} color={colors.textMuted} />
+              ) : searchPending ? (
+                <LoadingIndicator accessibilityLabel="Searching" />
               ) : appMode === 'cloud' && isLoadingConversations ? (
                 <LoadingIndicator accessibilityLabel="Loading chats" />
               ) : (
@@ -692,15 +696,17 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               >
                 {searchOnly && !isSearching
                   ? 'Search your workspace'
-                  : appMode === 'cloud' && isLoadingConversations
-                    ? 'Loading chats'
-                    : isSearching
-                      ? 'No matches'
-                      : filter === 'all'
-                        ? 'No chats yet'
-                        : 'No chats here'}
+                  : searchPending
+                    ? 'Searching'
+                    : appMode === 'cloud' && isLoadingConversations
+                      ? 'Loading chats'
+                      : isSearching
+                        ? 'No matches'
+                        : filter === 'all'
+                          ? 'No chats yet'
+                          : 'No chats here'}
               </Text>
-              {appMode === 'cloud' && isLoadingConversations ? null : (
+              {searchPending || (appMode === 'cloud' && isLoadingConversations) ? null : (
                 <Text
                   style={{
                     color: colors.textMuted,

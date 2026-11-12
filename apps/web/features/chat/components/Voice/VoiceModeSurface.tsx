@@ -145,6 +145,7 @@ export interface VoiceModeSurfaceProps {
     authority: RequestAuthority,
     bindConversation: (id: string) => void,
   ) => Promise<string | null>;
+  onDiscardConversation?: (conversationId: string) => void;
   onTranscript: (
     conversationId: string,
     turn: VoiceTranscriptTurn,
@@ -166,6 +167,7 @@ export function VoiceModeSurface({
   onSend,
   onStartWorkTask,
   onEnsureConversation,
+  onDiscardConversation,
   onTranscript,
   onNewChat,
   onOpenLibrary,
@@ -184,6 +186,7 @@ export function VoiceModeSurface({
     onSend,
     ...(onStartWorkTask ? { onStartWorkTask } : {}),
     onEnsureConversation,
+    ...(onDiscardConversation ? { onDiscardConversation } : {}),
     onTranscript,
     onCaption: handleCaption,
   });

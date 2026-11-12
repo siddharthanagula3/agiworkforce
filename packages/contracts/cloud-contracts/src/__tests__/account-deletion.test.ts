@@ -143,6 +143,39 @@ describe('account deletion mutation receipts', () => {
   )('rejects an unconfirmed cancellation receipt: $body', ({ body }) => {
     expect(() => parseAccountDeletionCancellationReceipt(body)).toThrow();
   });
+
+  it('carries the store that keeps billing and its https management page', () => {
+    const storeBilling = {
+      store: 'apple',
+      manageUrl: 'https://apps.apple.com/account/subscriptions',
+    };
+    expect(parseAccountDeletionScheduleReceipt({ ...scheduleReceipt, storeBilling })).toEqual({
+      ...scheduleReceipt,
+      storeBilling,
+    });
+    for (const invalid of [
+      { ...storeBilling, store: 'stripe' },
+      { ...storeBilling, manageUrl: 'http://apps.apple.com/account/subscriptions' },
+      { ...storeBilling, manageUrl: 'javascript:alert(1)' },
+    ]) {
+      expect(() =>
+        parseAccountDeletionScheduleReceipt({ ...scheduleReceipt, storeBilling: invalid }),
+      ).toThrow();
+    }
+  });
+
+  it('carries what undoing the deletion did to a plan renewal', () => {
+    const receipt = { message: 'Account deletion cancelled.', cancelled: true };
+    for (const planRenewal of ['restored', 'not_restored'] as const) {
+      expect(parseAccountDeletionCancellationReceipt({ ...receipt, planRenewal })).toEqual({
+        ...receipt,
+        planRenewal,
+      });
+    }
+    expect(() =>
+      parseAccountDeletionCancellationReceipt({ ...receipt, planRenewal: 'unknown' }),
+    ).toThrow();
+  });
 });
 
 describe('schedule-pair cancellation contract', () => {

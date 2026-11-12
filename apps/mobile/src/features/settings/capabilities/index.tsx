@@ -198,6 +198,8 @@ function makeSections(input: {
   ];
 }
 
+const CLOUD_TOGGLE_LOCKED_REASON = 'Sign in to change this Managed Cloud preference.';
+
 export default function CapabilitiesScreen() {
   const router = useRouter();
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
@@ -387,6 +389,19 @@ function CapabilityRow({
         >
           {row.description}
         </Text>
+        {toggleDisabled ? (
+          <Text
+            testID={`capability-locked-${row.label}`}
+            style={{
+              color: colors.textSecondary,
+              fontSize: typeScale.footnote,
+              lineHeight: 18,
+              marginTop: 3,
+            }}
+          >
+            {CLOUD_TOGGLE_LOCKED_REASON}
+          </Text>
+        ) : null}
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -396,9 +411,7 @@ function CapabilityRow({
             onValueChange={onToggle}
             disabled={toggleDisabled}
             accessibilityLabel={`${row.label}. ${row.description}`}
-            accessibilityHint={
-              toggleDisabled ? 'Sign in to change this Managed Cloud preference.' : undefined
-            }
+            accessibilityHint={toggleDisabled ? CLOUD_TOGGLE_LOCKED_REASON : undefined}
           />
         ) : row.value ? (
           <View

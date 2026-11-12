@@ -33,6 +33,7 @@ jest.mock('../storage/memory', () => ({
 }));
 
 import { api } from '../services/api';
+import { ApiHttpError } from '../services/apiErrors';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useCloudMemoryStore } from '../stores/memory/cloudMemoryStore';
 import { useMemorySyncStateStore } from '../stores/memory/memorySyncStateStore';
@@ -495,5 +496,58 @@ describe('memory store, save outcome for the editor', () => {
     const failure = await useMemoryStore.getState().updateMemory('fact-1', 'edited text');
 
     expect(failure).toBe('Could not update this memory. Try again.');
+  });
+});
+
+describe('a workspace that turns chat sync off for phones', () => {
+  const reason = 'Your workspace administrator has turned off cloud sync for Mobile.';
+
+  function refuseChatSync(body: Record<string, unknown>) {
+    mockGet.mockImplementation(async (path: string) => {
+      if ((path as string).startsWith('/api/chat/sync')) {
+        throw new ApiHttpError(reason, 403, 'surface_sync_disabled', { body });
+      }
+      return defaultPull(path as string) as never;
+    });
+  }
+
+  it('keeps memory and settings syncing and reports the workspace reason, not an error', async () => {
+    refuseChatSync({
+      error: { type: 'organization_policy', code: 'surface_sync_disabled', message: reason },
+    });
+
+    await syncNow();
+
+    const paths = mockGet.mock.calls.map((call) => call[0] as string);
+    expect(paths.some((path) => path.startsWith('/api/memory/sync'))).toBe(true);
+    expect(paths.some((path) => path.startsWith('/api/settings/sync'))).toBe(true);
+    expect(useCloudSyncStateStore.getState()).toMatchObject({
+      status: 'idle',
+      lastError: null,
+      chatSyncOffReason: reason,
+    });
+  });
+
+  it('clears the reason once the workspace allows chat sync again', async () => {
+    refuseChatSync({
+      error: { type: 'organization_policy', code: 'surface_sync_disabled', message: reason },
+    });
+    await syncNow();
+    mockGet.mockImplementation(async (path: string) => defaultPull(path as string) as never);
+
+    await syncNow();
+
+    expect(useCloudSyncStateStore.getState().chatSyncOffReason).toBeNull();
+  });
+
+  it('still reports a chat sync refusal that is not a workspace policy as a failure', async () => {
+    refuseChatSync({ error: { code: 'forbidden', message: reason } });
+
+    await syncNow();
+
+    expect(
+      mockGet.mock.calls.some((call) => (call[0] as string).startsWith('/api/memory/sync')),
+    ).toBe(false);
+    expect(useCloudSyncStateStore.getState()).toMatchObject({ status: 'error', lastError: reason });
   });
 });

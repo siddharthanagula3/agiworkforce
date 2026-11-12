@@ -83,10 +83,11 @@ export function DisconnectedDesktopBanner({
 
 interface ReconnectingBannerProps {
   countdown: number;
+  reason?: string | null;
   onReconnect: () => void;
 }
 
-export function ReconnectingBanner({ countdown, onReconnect }: ReconnectingBannerProps) {
+export function ReconnectingBanner({ countdown, reason, onReconnect }: ReconnectingBannerProps) {
   const colors = useThemeColors();
   return (
     <Animated.View entering={FadeIn.duration(motion.moved)}>
@@ -96,7 +97,7 @@ export function ReconnectingBanner({ countdown, onReconnect }: ReconnectingBanne
           <Text className="text-sm font-semibold text-amber-400 mb-0.5">
             Reconnecting in {countdown}s
           </Text>
-          <Text className="text-sm text-amber-400/70">Desktop connection lost.</Text>
+          <Text className="text-sm text-amber-400/70">{reason || 'Desktop connection lost.'}</Text>
         </View>
         <PressableBox
           onPress={onReconnect}

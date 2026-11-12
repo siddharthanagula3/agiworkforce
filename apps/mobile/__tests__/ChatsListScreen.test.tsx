@@ -68,6 +68,7 @@ const mockViewState = {
   searchQuery: 'launch',
   searchResults: [{ conversationId: 'chat-4', messageId: 'message-4', snippet: 'launch detail' }],
   searchFailed: false,
+  isSearching: false,
 };
 const mockLocalProjects = [
   { id: 'project-1', name: 'Launch project', description: 'Release planning' },
@@ -231,6 +232,7 @@ describe('ChatsListScreen', () => {
     mockChatState.conversationLoadError = null;
     mockViewState.searchQuery = 'launch';
     mockViewState.searchFailed = false;
+    mockViewState.isSearching = false;
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
   });
 
@@ -262,6 +264,16 @@ describe('ChatsListScreen', () => {
       mockSearchConversations.mockClear();
       fireEvent.press(screen.getByLabelText('Retry search'));
       expect(mockSearchConversations).toHaveBeenCalledWith('zzzunmatched');
+    });
+
+    it('shows Searching, not No matches, while the Cloud search is still running', () => {
+      mockViewState.isSearching = true;
+      const screen = render(<ChatsListScreen />);
+      fireEvent.changeText(screen.getByLabelText(searchLabel), 'zzzunmatched');
+
+      expect(screen.getByText('Searching')).toBeTruthy();
+      expect(screen.queryByText('No matches')).toBeNull();
+      expect(screen.queryByText(/Nothing in/)).toBeNull();
     });
 
     it('reports no matches only when the search succeeded and found nothing', () => {

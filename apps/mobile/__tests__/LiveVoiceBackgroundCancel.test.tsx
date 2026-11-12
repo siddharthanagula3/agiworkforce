@@ -69,6 +69,7 @@ jest.mock('@/src/features/voice/services/liveVoiceAvailability', () => ({
 
 jest.mock('@/src/features/voice/services/voiceInput', () => ({
   requestMicPermission: async () => true,
+  requestMicrophoneOnlyPermission: async () => true,
 }));
 
 jest.mock('@/stores/chatStore', () => ({

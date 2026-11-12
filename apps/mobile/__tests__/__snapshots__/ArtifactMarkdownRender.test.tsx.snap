@@ -237,6 +237,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
         }
       }
       horizontal={false}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={true}
       style={
         {

@@ -1,4 +1,4 @@
-import { Alert, Linking, ScrollView, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('../src/features/chat/components/MathBlock', () => ({
@@ -173,6 +173,23 @@ describe('MessageContentRenderer', () => {
     expect(getByText('const')).toHaveStyle({ color: syntaxTokenColor('keyword', lightColors) });
     expect(getByText('42')).toHaveStyle({ color: syntaxTokenColor('number', lightColors) });
     expect(getByText('// note')).toHaveStyle({ color: syntaxTokenColor('comment', lightColors) });
+  });
+
+  it('lets inline code inherit the line height of a list item it opens', () => {
+    const { getByText } = render(
+      <View>
+        {renderMarkdownContent(
+          '- `sorted()` returns a new list\n- `list.sort()` sorts in place\n- Both accept `key=`',
+          lightColors,
+        )}
+      </View>,
+    );
+
+    for (const code of ['sorted()', 'list.sort()', 'key=']) {
+      const style = StyleSheet.flatten(getByText(code).props.style);
+      expect(style).toMatchObject({ fontFamily: 'Menlo' });
+      expect(style.lineHeight).toBeUndefined();
+    }
   });
 
   it('renders unknown-language code blocks as plain monospace text', () => {

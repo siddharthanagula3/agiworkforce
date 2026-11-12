@@ -7,6 +7,7 @@ describe('offersModelSwitch', () => {
       'monthly_limit_exceeded',
       'insufficient_credits',
       'insufficient_quota',
+      'billing_period_not_renewed',
       'organization_spend_cap_reached',
     ]) {
       expect(offersModelSwitch(code)).toBe(false);

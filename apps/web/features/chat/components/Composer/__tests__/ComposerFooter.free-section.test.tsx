@@ -245,6 +245,7 @@ describe('ComposerFooter · free section', () => {
     );
     const user = userEvent.setup();
     const dialog = openPicker();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Free' }));
     fireEvent.click(await within(dialog).findByRole('button', { name: /More models/ }));
     const search = within(dialog).getByRole('searchbox', { name: 'Search free models' });
 
@@ -254,6 +255,15 @@ describe('ComposerFooter · free section', () => {
     expect(
       within(dialog).queryByRole('textbox', { name: 'Search models' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('opens the free section collapsed on a paid plan so Recommended stays in view', async () => {
+    billing.tier = 'team';
+    const dialog = openPicker();
+
+    const toggle = within(dialog).getByRole('button', { name: 'Free' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(dialog).queryByRole('button', { name: READY_NAME })).not.toBeInTheDocument();
   });
 
   it('draws the free models focus ring on the free default model row too', async () => {

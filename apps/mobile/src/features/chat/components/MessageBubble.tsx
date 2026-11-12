@@ -1193,6 +1193,9 @@ export const MessageBubble = memo(function MessageBubble({
   const streamingLabel = stopping ? 'Stopping…' : reconnecting ? 'Reconnecting…' : undefined;
   const finishReason = isAssistant ? message.metadata?.finishReason : undefined;
   const stoppedByUser = !isStreamingRow && finishReason === 'stopped';
+  const offersStreamFailureModelSwitch = Boolean(
+    onSwitchModel && offersModelSwitch(getMessageStreamErrorCode(message)),
+  );
   const usageLine = isAssistant && !isStreamingRow ? answerUsageLine(message.metadata) : null;
   const refusedAnswer =
     !isStreamingRow && typeof finishReason === 'string' && REFUSAL_FINISH_REASONS.has(finishReason);
@@ -1758,63 +1761,79 @@ export const MessageBubble = memo(function MessageBubble({
                     : streamFailureNoticeText(message)
                 }
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
                   gap: 6,
                   backgroundColor: themeColors.dangerSurface,
                   borderWidth: 1,
                   borderColor: themeColors.dangerBorder,
                   borderRadius: radii.md,
                   paddingHorizontal: 10,
-                  paddingVertical: 6,
+                  paddingVertical: 8,
                   marginTop: 4,
                   alignSelf: 'flex-start',
+                  maxWidth: '100%',
                 }}
               >
-                <AlertCircle size={13} color={themeColors.agentError} />
-                <Text
-                  testID="stream-failure-notice-text"
-                  style={{
-                    flexShrink: 1,
-                    fontSize: typeScale.caption,
-                    color: themeColors.textSecondary,
-                  }}
-                >
-                  {streamFailureNoticeText(message)}
-                </Text>
-                {onRetryMessage && (
-                  <>
-                    <RefreshCw size={12} color={themeColors.agentError} />
-                    <Text
-                      style={{
-                        fontSize: typeScale.caption,
-                        fontWeight: '600',
-                        color: themeColors.agentError,
-                      }}
-                    >
-                      Retry
-                    </Text>
-                  </>
-                )}
-                {onSwitchModel && offersModelSwitch(getMessageStreamErrorCode(message)) && (
-                  <PressableBox
-                    onPress={onSwitchModel}
-                    accessibilityRole="button"
-                    accessibilityLabel="Switch model"
-                    hitSlop={6}
-                    testID="stream-error-switch-model"
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                  <View style={{ paddingTop: 2 }}>
+                    <AlertCircle size={13} color={themeColors.agentError} />
+                  </View>
+                  <Text
+                    testID="stream-failure-notice-text"
+                    style={{
+                      flexShrink: 1,
+                      fontSize: typeScale.caption,
+                      color: themeColors.textSecondary,
+                    }}
                   >
-                    <Text
-                      style={{
-                        fontSize: typeScale.caption,
-                        fontWeight: '600',
-                        color: themeColors.agentError,
-                      }}
-                    >
-                      Switch model
-                    </Text>
-                  </PressableBox>
-                )}
+                    {streamFailureNoticeText(message)}
+                  </Text>
+                </View>
+                {onRetryMessage || offersStreamFailureModelSwitch ? (
+                  <View
+                    testID="stream-failure-notice-actions"
+                    style={{
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 12,
+                      paddingLeft: 19,
+                    }}
+                  >
+                    {onRetryMessage && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <RefreshCw size={12} color={themeColors.agentError} />
+                        <Text
+                          style={{
+                            fontSize: typeScale.caption,
+                            fontWeight: '600',
+                            color: themeColors.agentError,
+                          }}
+                        >
+                          Retry
+                        </Text>
+                      </View>
+                    )}
+                    {offersStreamFailureModelSwitch && (
+                      <PressableBox
+                        onPress={onSwitchModel}
+                        accessibilityRole="button"
+                        accessibilityLabel="Switch model"
+                        hitSlop={6}
+                        testID="stream-error-switch-model"
+                      >
+                        <Text
+                          style={{
+                            fontSize: typeScale.caption,
+                            fontWeight: '600',
+                            color: themeColors.agentError,
+                          }}
+                        >
+                          Switch model
+                        </Text>
+                      </PressableBox>
+                    )}
+                  </View>
+                ) : null}
               </PressableBox>
             )}
 

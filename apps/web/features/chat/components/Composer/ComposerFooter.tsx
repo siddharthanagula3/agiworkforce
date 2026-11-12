@@ -1601,6 +1601,7 @@ export function ComposerFooter({
                           {promotedModel && renderModelRow(promotedModel)}
                           <FreeQuotaModelSection
                             sources={freeModelSources}
+                            defaultExpanded={!paidPlan}
                             selectedId={selectedModelId}
                             fallback={
                               freeDefaultModel

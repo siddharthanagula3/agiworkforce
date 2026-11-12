@@ -1,15 +1,28 @@
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
-import { TemporaryChatBanner } from '../src/features/chat/components/TemporaryChatBanner';
+import {
+  TemporaryChatBanner,
+  __resetTemporaryChatBannerForTests,
+} from '../src/features/chat/components/TemporaryChatBanner';
 import { TemporaryChatToggle } from '../src/features/chat/components/TemporaryChatToggle';
 
 describe('temporary chat explainer', () => {
   beforeEach(() => {
+    __resetTemporaryChatBannerForTests();
     useSettingsStore.setState({ isTemporaryChat: true });
     useChatAppModeStore.setState({ appMode: 'cloud' });
+  });
+
+  it('closes the explainer when temporary mode is turned off', () => {
+    const { getByLabelText, queryByLabelText } = render(<TemporaryChatBanner />);
+    expect(getByLabelText('Temporary chat explainer')).toBeTruthy();
+
+    act(() => useSettingsStore.getState().setTemporaryChat(false));
+
+    expect(queryByLabelText('Temporary chat explainer')).toBeNull();
   });
 
   it('ends with an underlined Learn more link that opens the data-use settings page', () => {

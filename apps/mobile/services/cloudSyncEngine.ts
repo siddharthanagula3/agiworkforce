@@ -1,5 +1,6 @@
 import { Alert, AppState, type NativeEventSubscription } from 'react-native';
 import { api } from './api';
+import { ApiHttpError } from './apiErrors';
 import { managedCloudProjects } from './managedCloudProjects';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
 import type { ProjectSyncPushItem } from '@agiworkforce/cloud-contracts';
@@ -945,6 +946,24 @@ async function pullSettings(
   useSettingsSyncStateStore.getState().setSettingsCursor(advancedCursor);
 }
 
+function workspaceChatSyncRefusal(error: unknown): string | null {
+  if (!(error instanceof ApiHttpError) || error.status !== 403) return null;
+  const refusal = error.body?.['error'] as { type?: unknown } | undefined;
+  return refusal?.type === 'organization_policy' ? error.message : null;
+}
+
+async function syncChats(account: CloudAccountEpoch): Promise<string | null> {
+  try {
+    await push(account);
+    await pull(account);
+    return null;
+  } catch (error) {
+    const refusal = workspaceChatSyncRefusal(error);
+    if (refusal === null) throw error;
+    return refusal;
+  }
+}
+
 let syncingAccountKey: string | null = null;
 
 export async function syncNow(): Promise<void> {
@@ -956,8 +975,9 @@ export async function syncNow(): Promise<void> {
   syncingAccountKey = accountKey;
   useCloudSyncStateStore.getState().setStatus('syncing');
   try {
-    await push(account);
-    await pull(account);
+    const chatSyncOffReason = await syncChats(account);
+    assertCloudAccountEpochCurrent(account);
+    useCloudSyncStateStore.getState().setChatSyncOffReason(chatSyncOffReason);
     await pushMemory(account);
     await pullMemory(account);
     await pushProjects(account);

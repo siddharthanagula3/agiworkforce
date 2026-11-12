@@ -50,6 +50,10 @@ import { ServiceNotices } from '@shared/components/ServiceNotices';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 import { EnterpriseCollectionBanner } from '../components/EnterpriseCollectionBanner';
 import { toUserMessage } from '@/lib/user-error-message';
+import {
+  STORE_SUBSCRIPTION_MANAGEMENT_URL,
+  isStoreBillingSource,
+} from '@/lib/billing/store-subscription-management';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 interface PaymentMethod {
@@ -116,11 +120,6 @@ const BILLING_SOURCE_LABEL: Record<string, string> = {
   apple: 'the Apple App Store',
   google: 'Google Play',
   manual: 'your organization',
-};
-
-const STORE_SUBSCRIPTION_URL: Record<string, string> = {
-  apple: 'https://apps.apple.com/account/subscriptions',
-  google: 'https://play.google.com/store/account/subscriptions',
 };
 
 const TERMINAL_BILLING_STATUSES = new Set([
@@ -394,7 +393,9 @@ export function BillingSection() {
   const offersOnlyUpgradeWaitlist = isFreeTier && upgradeNeedsWaitlist(upgradeWaitlistStatus);
 
   const billingSource = subscription?.subscription_source ?? null;
-  const storeManagementUrl = billingSource ? (STORE_SUBSCRIPTION_URL[billingSource] ?? null) : null;
+  const storeManagementUrl = isStoreBillingSource(billingSource)
+    ? STORE_SUBSCRIPTION_MANAGEMENT_URL[billingSource]
+    : null;
   const isStoreBilled = storeManagementUrl !== null;
 
   const isManagedPaid = !isFreeTier && ['active', 'trialing'].includes(subscription?.status ?? '');

@@ -4,7 +4,7 @@ title: Delete your account, or cancel a scheduled deletion
 path: /privacy
 category: account
 tags: delete account, close account, erase, deletion, cancel deletion, undo deletion, permanently delete, account erasure, remove my data
-updated: 2026-11-11
+updated: 2026-11-12
 description: How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.
 scope: public
 ---
@@ -33,7 +33,8 @@ placed, nothing is erased until the hold is released.
 The 24 hours are a real cancellation window, not a formality. Sign back in
 before the deadline and Settings, Account shows **Account deletion scheduled**
 with the erasure time and a **Cancel deletion** button. Cancelling keeps the
-account active and removes nothing.
+account active and removes nothing. If deleting the account stops your web plan
+from renewing, cancelling the deletion turns its renewal back on.
 
 Once the window closes the button is gone and the page says the cancellation
 window has closed and erasure is already underway.
@@ -43,11 +44,12 @@ window has closed and erasure is already underway.
 Export your conversations first. The export is a self-service download from
 Settings, Privacy, and it cannot be run once the account is gone.
 
-If your paid plan still renews, the request is refused and nothing is
-scheduled. Cancel the plan first, on the web in Settings, Billing, or with Apple
-or Google if you bought it there, and then you can delete your account straight
-away, without waiting for the plan to end. A plan you have already cancelled does not block deletion: it ends when
-erasure runs, and its unused time is not refunded.
+If your plan is billed on the web and still renews, deleting your account turns
+its renewal off, so you are not charged again. If you bought the plan from Apple
+or Google, deleting your account does not cancel it: the confirmation says so
+and links to the page where you cancel it with the store. A plan you have already cancelled does not block deletion: it ends when
+erasure runs, and its unused time is not refunded. While a payment on the plan
+is still being collected, the request is refused and nothing is scheduled.
 
 If you are the only owner of a workspace, the request is refused and nothing is
 scheduled. The message names every workspace you own alone, so hand each one to

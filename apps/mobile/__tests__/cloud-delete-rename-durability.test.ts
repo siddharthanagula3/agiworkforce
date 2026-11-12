@@ -30,6 +30,7 @@ import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useModelStore } from '../src/features/model-picker/store';
 import { applyConversationDeltas } from '../services/cloudSyncEngine';
 import type { ChatMessage, ConversationSummary } from '../types/chat';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
@@ -302,6 +303,30 @@ describe('cloud conversation model durability', () => {
     expect(convModel('c1')).toBe(CLOUD_MODEL_ID);
     expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
     expect(mockPut).toHaveBeenCalledWith('c1', expect.objectContaining({ model: CLOUD_MODEL_ID }));
+  });
+
+  it('creates a Cloud chat with the model the person picked, not the server default', async () => {
+    useModelStore.getState().setModel(CLOUD_MODEL_ID);
+    const mockCreate = managedCloudChat.createConversation as jest.MockedFunction<
+      typeof managedCloudChat.createConversation
+    >;
+    mockCreate.mockImplementation(
+      async (request) =>
+        ({
+          id: request.id,
+          title: request.title,
+          model: request.model ?? 'auto',
+          createdAt: T,
+          updatedAt: T,
+          messageCount: 0,
+          pinned: false,
+        }) as never,
+    );
+
+    const id = await useChatMessageStore.getState().createConversation('Picked model');
+
+    expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ model: CLOUD_MODEL_ID }));
+    expect(convModel(id)).toBe(CLOUD_MODEL_ID);
   });
 
   it('rejects a Local model before mutating or queueing a Cloud conversation', async () => {

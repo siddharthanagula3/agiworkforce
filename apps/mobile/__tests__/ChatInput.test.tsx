@@ -667,6 +667,7 @@ describe('ChatInput', () => {
 
       expect(getByLabelText('Deep Research active')).toBeTruthy();
       expect(getByLabelText('Run code on')).toBeTruthy();
+      expect(queryByLabelText('Code execution active')).toBeNull();
       expect(queryByLabelText('Image generation active')).toBeNull();
 
       mockChatFeatures = {
@@ -697,6 +698,7 @@ describe('ChatInput', () => {
       const { queryByLabelText } = renderInput();
 
       expect(queryByLabelText('Run code on')).toBeNull();
+      expect(queryByLabelText('Code execution active')).toBeNull();
     });
 
     it('dismisses the keyboard when opening the + sheet', () => {
@@ -744,11 +746,11 @@ describe('ChatInput', () => {
       expect(local.getByLabelText('Message input').props.placeholder).toBe("What's on your mind?");
     });
 
-    it('shows "Reply to [model]..." placeholder during streaming', () => {
+    it('keeps the thread placeholder during streaming instead of naming the composer selection', () => {
       const { getByLabelText } = renderInput({ isStreaming: true });
 
       const input = getByLabelText('Message input');
-      expect(input.props.placeholder).toBe('Reply to Fixture Model...');
+      expect(input.props.placeholder).toBe('Reply to AGI');
     });
 
     it('shows stop button instead of send during streaming', () => {

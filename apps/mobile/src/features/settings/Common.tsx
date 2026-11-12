@@ -37,6 +37,7 @@ export function SettingsScreenShell({
       <ScreenHeader title={title} onBack={goBack} />
       <ScrollView
         className="flex-1"
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 16,

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 import type { ChatMessage } from '@/types/chat';
 
 jest.mock('@/src/ui/theme', () => {
@@ -239,9 +239,34 @@ describe('MessageBubble model label', () => {
           'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.',
       },
     };
-    const view = render(<MessageBubble message={message} onRetryMessage={jest.fn()} />);
+    const onSwitchModel = jest.fn();
+    const view = render(
+      <MessageBubble
+        message={{
+          ...message,
+          metadata: {
+            streamError: {
+              message:
+                'Your plan has no credits left this period, so the reply could not start. Switch to another model or try again later.',
+              code: 'billing_period_not_renewed',
+            },
+          },
+        }}
+        onRetryMessage={jest.fn()}
+        onSwitchModel={onSwitchModel}
+      />,
+    );
 
     expect(view.getByTestId('stream-failure-notice-text')).toHaveStyle({ flexShrink: 1 });
+    const actions = view.getByTestId('stream-failure-notice-actions');
+    expect(actions).toHaveStyle({ flexDirection: 'row', flexWrap: 'wrap' });
+    expect(within(actions).getByText('Retry')).toBeTruthy();
+    expect(view.getByTestId('stream-failure-notice-text').parent).not.toBe(actions);
+    expect(
+      view.getByLabelText(
+        'Your plan has no credits left this period, so the reply could not start. Switch to another model or try again later. Tap to try again.',
+      ),
+    ).toHaveStyle({ alignSelf: 'flex-start', maxWidth: '100%' });
   });
 
   it('follows the stored rating when a failed write restores the previous value', () => {

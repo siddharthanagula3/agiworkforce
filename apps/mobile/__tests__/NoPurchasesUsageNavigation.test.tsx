@@ -81,6 +81,7 @@ jest.mock('../services/authSession', () => ({
 }));
 
 jest.mock('@/services/usage', () => ({
+  tightestUsageWindow: jest.requireActual('@/services/usage').tightestUsageWindow,
   applyLimitReset: jest.fn(),
   fetchUsageSnapshot: () => mockFetchUsageSnapshot(),
   fetchUsageAllowances: () => new Promise(() => undefined),

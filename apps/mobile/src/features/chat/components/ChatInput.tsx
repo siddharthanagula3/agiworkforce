@@ -829,19 +829,17 @@ ${current}`
   }, [sendPreview, text, attachments]);
 
   const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
-  const placeholder = isStreaming
-    ? `Reply to ${modelName}...`
-    : !isOnline
-      ? `Offline, message will send on reconnect${queueLabel}`
-      : mediaMode === 'image'
-        ? 'Describe the image to create'
-        : mediaMode === 'video'
-          ? 'Describe the video to create'
-          : isThreadActive
-            ? 'Reply to AGI'
-            : agiWorkActive
-              ? 'Work with AGI'
-              : "What's on your mind?";
+  const placeholder = !isOnline
+    ? `Offline, message will send on reconnect${queueLabel}`
+    : mediaMode === 'image'
+      ? 'Describe the image to create'
+      : mediaMode === 'video'
+        ? 'Describe the video to create'
+        : isThreadActive || isStreaming
+          ? 'Reply to AGI'
+          : agiWorkActive
+            ? 'Work with AGI'
+            : "What's on your mind?";
 
   return (
     <View
