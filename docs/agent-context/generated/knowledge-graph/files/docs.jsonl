@@ -38,8 +38,6 @@
 {"path":"docs/agent-context/generated/knowledge-graph/files/tools.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/guards.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/migrations.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/routes.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/skills.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
