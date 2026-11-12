@@ -253,7 +253,11 @@ export function AgentConfigSections({
         >
           Icon
         </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        >
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {PROJECT_ICONS.map((entry) => (
               <Chip

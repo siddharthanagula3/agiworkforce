@@ -205,6 +205,15 @@ export async function requestMicPermission(): Promise<boolean> {
   }
 }
 
+export async function requestMicrophoneOnlyPermission(): Promise<boolean> {
+  try {
+    const status = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
+    return status.granted;
+  } catch {
+    return false;
+  }
+}
+
 export function isCapturing(): boolean {
   return activeCapture !== null;
 }

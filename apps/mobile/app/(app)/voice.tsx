@@ -444,6 +444,7 @@ export default function VoiceScreen() {
           {visibleSessionMessages?.length || showCurrentPreview ? (
             <Animated.View entering={FadeIn.duration(motion.quick)} style={styles.transcriptBox}>
               <ScrollView
+                keyboardShouldPersistTaps="handled"
                 testID="voice-session-transcript"
                 style={styles.transcriptScroll}
                 contentContainerStyle={styles.transcriptContent}

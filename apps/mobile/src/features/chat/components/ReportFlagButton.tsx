@@ -315,7 +315,7 @@ export function ReportSheet({
               </PressableBox>
             </View>
           ) : (
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               <Text
                 style={[styles.sheetTitle, { color: colors.textPrimary }]}
                 accessibilityRole="header"

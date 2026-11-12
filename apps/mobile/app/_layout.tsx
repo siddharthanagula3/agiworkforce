@@ -98,7 +98,7 @@ import {
 } from '@/src/features/auth/services/rootRouting';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { ToastHost } from '@/src/shared/components/Toast';
-import { CloudSyncErrorBanner } from '@/src/features/edge-cases/components/CloudSyncErrorBanner';
+import { CloudSyncErrorNotice } from '@/src/features/edge-cases/components/CloudSyncErrorNotice';
 import { CapabilityProvider } from '@/src/lib/Capabilities';
 import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
 import { registerAppTransactionForAccount } from '@/src/features/age-assurance/appTransaction';
@@ -791,7 +791,7 @@ export default function RootLayout() {
               </TextScaleBoundary>
             </ThemeVars>
             <OfflineBanner />
-            <CloudSyncErrorBanner />
+            <CloudSyncErrorNotice />
             <ToastHost />
             <AccountSecurityVerificationPrompt />
             {/* The lock covers the app, it does not replace it: unmounting the

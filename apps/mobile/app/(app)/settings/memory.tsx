@@ -614,6 +614,7 @@ export default function MemoryScreen() {
 
         <View className="mb-3">
           <ScrollView
+            keyboardShouldPersistTaps="handled"
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}

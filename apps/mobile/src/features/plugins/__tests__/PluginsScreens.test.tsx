@@ -207,6 +207,37 @@ describe('mobile plugins', () => {
     expect(queryByText('Show more')).toBeNull();
   });
 
+  it('keeps the newer search results when a retired first load settles late', async () => {
+    const connectors = jest.requireMock('@/services/connectors') as {
+      fetchConnectorDirectory: jest.Mock;
+    };
+    let resolveRetiredDirectory: (directory: unknown) => void = () => undefined;
+    const retiredDirectory = new Promise((resolve) => {
+      resolveRetiredDirectory = resolve;
+    });
+    connectors.fetchConnectorDirectory.mockImplementationOnce(() => retiredDirectory);
+    mockDirectory.mockImplementation((query: { search?: string }) =>
+      Promise.resolve(
+        query.search
+          ? { entries: [DOCS], total: 1, nextCursor: null }
+          : { entries: [MAIL], total: 1, nextCursor: null },
+      ),
+    );
+    const { findAllByLabelText, getByLabelText, queryAllByLabelText } = render(<PluginsScreen />);
+    await waitFor(() => expect(connectors.fetchConnectorDirectory).toHaveBeenCalledTimes(1));
+
+    fireEvent.changeText(getByLabelText('Search plugins'), 'docs');
+    expect((await findAllByLabelText(/^Docs kit by AGI Workforce/)).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      resolveRetiredDirectory({ connectors: [] });
+      await retiredDirectory;
+    });
+
+    expect(queryAllByLabelText(/^Mail helper by AGI Workforce/)).toHaveLength(0);
+    expect(queryAllByLabelText(/^Docs kit by AGI Workforce/).length).toBeGreaterThan(0);
+  });
+
   it('titles sections in title case and lists installed plugins once under Installed', async () => {
     mockInstallations.mockResolvedValue([
       {

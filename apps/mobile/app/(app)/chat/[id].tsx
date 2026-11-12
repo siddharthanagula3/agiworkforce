@@ -863,16 +863,19 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!conversation) return;
     setAppMode(conversationExecutionMode);
-    const preferredModel =
-      conversationExecutionMode === 'cloud'
-        ? conversation.model &&
-          executionModeForSelection(conversation.model, conversationExecutionMode) === 'cloud' &&
-          isSelectableModelIdForAccess(conversation.model, cloudUnlocked, subscriptionTier)
-          ? conversation.model
-          : (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID)
-        : conversation.model &&
-            executionModeForSelection(conversation.model, conversationExecutionMode) === 'local'
-          ? conversation.model
+    const currentModel = useModelStore.getState().selectedModel;
+    const fitsConversation = (modelId: string | null | undefined): modelId is string =>
+      Boolean(modelId) &&
+      executionModeForSelection(modelId as string, conversationExecutionMode) ===
+        conversationExecutionMode &&
+      (conversationExecutionMode === 'local' ||
+        isSelectableModelIdForAccess(modelId as string, cloudUnlocked, subscriptionTier));
+    const preferredModel = fitsConversation(conversation.model)
+      ? conversation.model
+      : fitsConversation(currentModel)
+        ? currentModel
+        : conversationExecutionMode === 'cloud'
+          ? (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID)
           : readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID);
 
     if (!preferredModel) return;

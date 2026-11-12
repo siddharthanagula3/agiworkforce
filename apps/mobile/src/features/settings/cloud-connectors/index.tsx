@@ -253,6 +253,9 @@ function WaitlistPlaceholder() {
   );
 }
 
+const DIRECTORY_INDEXING_NOTE =
+  'The connector directory is still being indexed, so it may look empty. Try again shortly.';
+
 export default function CloudConnectorsScreen({
   backHref = '/(app)/(tabs)/settings',
 }: {
@@ -293,6 +296,7 @@ export default function CloudConnectorsScreen({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError, setListingsError] = useState<string | null>(null);
+  const [directoryIndexing, setDirectoryIndexing] = useState(false);
   const listingRequestRef = useRef(0);
 
   const load = useCallback(async (): Promise<void> => {
@@ -414,6 +418,7 @@ export default function CloudConnectorsScreen({
         );
         setListingCategories(page.categories);
         setNextCursor(page.nextCursor);
+        if (!cursor) setDirectoryIndexing(page.stats?.bootstrapComplete === false);
       } catch {
         if (!isCurrent()) return;
         setListingsError('Could not load the connector directory. Retry.');
@@ -780,6 +785,18 @@ export default function CloudConnectorsScreen({
                 <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
                   No connectors found
                 </Text>
+                {directoryIndexing ? (
+                  <Text
+                    style={{
+                      color: colors.textMuted,
+                      fontSize: typeScale.footnote,
+                      textAlign: 'center',
+                      paddingHorizontal: 24,
+                    }}
+                  >
+                    {DIRECTORY_INDEXING_NOTE}
+                  </Text>
+                ) : null}
               </View>
             ) : visibleRows.length > 0 ? (
               <View

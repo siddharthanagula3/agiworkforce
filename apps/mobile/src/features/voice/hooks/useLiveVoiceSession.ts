@@ -16,7 +16,7 @@ import { getConversationMessageStore } from '@/stores/chat/conversationRepositor
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { getRemoteChatDisabledReason } from '@/services/remoteChatGate';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { requestMicPermission } from '@/src/features/voice/services/voiceInput';
+import { requestMicrophoneOnlyPermission } from '@/src/features/voice/services/voiceInput';
 import {
   applyAudioRoute,
   audioRouteNotAppliedMessage,
@@ -292,7 +292,7 @@ export function useLiveVoiceSession({
       if (unavailable) throw new Error(unavailable);
       const module = await loadLiveVoice();
       authority.assertCurrent();
-      const permission = await requestMicPermission();
+      const permission = await requestMicrophoneOnlyPermission();
       authority.assertCurrent();
       if (!permission) {
         throw new module.LiveVoiceSessionError(

@@ -102,6 +102,10 @@ import { handOffConversationSend, takeConversationSend } from '@agiworkforce/cli
 import { useChatExecutionStore, useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useModelStore } from '../src/features/model-picker/store';
+import { useWaitlistStore } from '../src/features/waitlist';
+import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { isAutoModeModelId } from '@agiworkforce/types';
 
 function seedThread(overrides: Record<string, unknown> = {}): void {
   useChatStore.setState({
@@ -166,6 +170,21 @@ describe('Thread header', () => {
     expect(screen.getByText('Teach me fractions')).toBeTruthy();
     expect(screen.getByLabelText('Your message: Teach me fractions. Sending')).toBeTruthy();
     takeConversationSend('thread-1');
+  });
+
+  it('keeps the model picked for a new Cloud chat instead of resetting it to Auto', () => {
+    const picked = requireMobileCloudModel(
+      (model) => !isAutoModeModelId(model.id),
+      'non-Auto Mobile Cloud model',
+    ).id;
+    useTierStore.setState({ tier: 'max' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useModelStore.setState({ selectedModel: picked });
+    seedThread({ executionMode: 'cloud' });
+
+    render(<ChatScreen />);
+
+    expect(useModelStore.getState().selectedModel).toBe(picked);
   });
 
   it('offers Chat and Work only until the first message is sent', () => {

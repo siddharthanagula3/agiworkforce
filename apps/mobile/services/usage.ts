@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { IDEMPOTENCY_KEY_HEADER } from '@agiworkforce/cloud-contracts';
 import { api } from './api';
 import {
+  managedUsageBucketLabel,
   parseAccountUsageHistoryResponse,
   parseAccountUsageLimitsResponse,
   parseManagedUsageSummaryResponse,
@@ -51,6 +52,29 @@ function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
     limitPromotions: summary.limit_promotions ?? null,
     ...(summary.usage_allocation ? { usageAllocation: summary.usage_allocation } : {}),
   };
+}
+
+function percentLeft(used: number): number {
+  return Math.round(100 - Math.min(100, Math.max(0, used)));
+}
+
+export function tightestUsageWindow(snapshot: UsageSnapshot): string | null {
+  const windows = [
+    snapshot.sessionResetAt !== null
+      ? { bucket: 'session' as const, left: percentLeft(snapshot.sessionUsagePercentage) }
+      : null,
+    snapshot.weeklyResetAt !== null
+      ? { bucket: 'weekly' as const, left: percentLeft(snapshot.weeklyUsagePercentage) }
+      : null,
+  ].filter((window) => window !== null);
+  if (windows.length === 0 && snapshot.usageResetAt !== null) {
+    windows.push({ bucket: 'period' as const, left: percentLeft(snapshot.usagePercentage) });
+  }
+  const tightest = windows.reduce<(typeof windows)[number] | null>(
+    (lowest, window) => (lowest === null || window.left < lowest.left ? window : lowest),
+    null,
+  );
+  return tightest ? `${managedUsageBucketLabel(tightest.bucket)} ${tightest.left}%` : null;
 }
 
 export async function fetchUsageSnapshot(): Promise<UsageSnapshot> {

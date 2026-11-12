@@ -44,6 +44,7 @@ import {
   ConnectorCredentialStatusResponseSchema,
   ConnectorDirectoryEntryResponseSchema,
   ConnectorDirectoryListResponseSchema,
+  ConnectorDirectoryStatsSchema,
   MANAGED_CLOUD_CONNECTORS_PATH,
   SaveConnectorCredentialResponseSchema,
   connectorCapabilitiesPath,
@@ -84,7 +85,7 @@ export type ConnectorListingCategory = ConnectorDirectoryCategory;
 export type ConnectorListingPage = Pick<
   ConnectorDirectoryListResponse,
   'entries' | 'nextCursor' | 'categories'
->;
+> & { stats?: { bootstrapComplete?: boolean } };
 
 export interface ConnectorListingFilter {
   search?: string;
@@ -100,6 +101,8 @@ const ListingPageSchema = ConnectorDirectoryListResponseSchema.pick({
   entries: true,
   nextCursor: true,
   categories: true,
+}).extend({
+  stats: ConnectorDirectoryStatsSchema.pick({ bootstrapComplete: true }).partial().optional(),
 });
 
 const SavedCredentialSchema = SaveConnectorCredentialResponseSchema.pick({ toolCount: true });

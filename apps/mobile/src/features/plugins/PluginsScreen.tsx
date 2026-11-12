@@ -232,7 +232,7 @@ export function PluginsScreen() {
           fetchConnectorDirectory().catch(() => null),
         ])
           .then(([page, installations, offers, directory]) => {
-            if (!isCloudAccountEpochCurrent(account)) return;
+            if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
             setEntries(page.entries);
             setByCategory((current) => page.stats?.byCategory ?? current);
             setNextCursor(page.nextCursor);
@@ -255,7 +255,9 @@ export function PluginsScreen() {
             );
           })
           .finally(() => {
-            if (isCloudAccountEpochCurrent(account)) setLoading(false);
+            if (!controller.signal.aborted && isCloudAccountEpochCurrent(account)) {
+              setLoading(false);
+            }
           });
       },
       query.search ? 250 : 0,
