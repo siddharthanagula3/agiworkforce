@@ -54,7 +54,10 @@ function harness() {
     url: 'https://approved.example/upload',
     signature: 'input|file|file||Upload',
   };
-  const listeners = new Set<(message: unknown, sender: unknown) => void>();
+  const pendingComputerUseApprovals = new Map<
+    string,
+    (message: unknown, sender: unknown) => void
+  >();
   const sent: Array<{ requestId: string; uploadBinding: BrowserUploadBinding }> = [];
   const lease = {
     runId: 'run-a',
@@ -67,17 +70,12 @@ function harness() {
     runtime: {
       id: extensionId,
       getURL: (path: string) => `chrome-extension://${extensionId}${path}`,
-      onMessage: {
-        addListener: (listener: (message: unknown, sender: unknown) => void) =>
-          listeners.add(listener),
-        removeListener: (listener: (message: unknown, sender: unknown) => void) =>
-          listeners.delete(listener),
-      },
     },
     tabs: { get: async () => ({ url: state.url }) },
   };
   const dependencies = {
     lease,
+    pendingComputerUseApprovals,
     chrome: chromeMock,
     APPROVAL_TIMEOUT_MS,
     permissionMode: 'full',
@@ -157,13 +155,21 @@ function harness() {
     return { decision, response };
   };
   const respond = (response: unknown) => {
-    for (const listener of listeners)
+    for (const listener of pendingComputerUseApprovals.values())
       listener(response, {
         id: extensionId,
         url: `chrome-extension://${extensionId}/src/side_panel.html`,
       });
   };
-  return { ...functions, state, approve, respond, listeners, lease, sent };
+  return {
+    ...functions,
+    state,
+    approve,
+    respond,
+    listeners: pendingComputerUseApprovals,
+    lease,
+    sent,
+  };
 }
 
 beforeEach(() => {
@@ -238,7 +244,7 @@ describe('production background browser upload approval', () => {
     const test = harness();
     const args = { index: 1 };
     const { decision, response } = await test.approve(args);
-    const listener = [...test.listeners][0]!;
+    const listener = [...test.listeners.values()][0]!;
     vi.useFakeTimers({ shouldAdvanceTime: true });
     test.lease.controller.abort(new DOMException('Approval cancelled', 'AbortError'));
     await expect(decision).rejects.toMatchObject({ name: 'AbortError' });
@@ -255,7 +261,7 @@ describe('production background browser upload approval', () => {
     const test = harness();
     const args = { index: 1 };
     const { decision, response } = await test.approve(args);
-    const listener = [...test.listeners][0]!;
+    const listener = [...test.listeners.values()][0]!;
     await vi.advanceTimersByTimeAsync(APPROVAL_TIMEOUT_MS);
     await expect(decision).resolves.toBe(false);
     listener(response, {

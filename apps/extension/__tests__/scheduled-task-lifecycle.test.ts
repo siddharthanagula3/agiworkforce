@@ -7,6 +7,7 @@ import {
   handleListScheduledTasks,
   handleUpdateScheduledTask,
   loadScheduledTasks,
+  nextTaskRunAt,
   registerTaskAlarm,
   recordScheduledTaskRun,
   restoreScheduledTaskAlarms,
@@ -41,7 +42,7 @@ const chromeMock = {
     create: vi.fn(async (name: string, info: chrome.alarms.AlarmCreateInfo) => {
       alarms.set(name, {
         name,
-        scheduledTime: Date.now() + (info.delayInMinutes ?? 0) * 60_000,
+        scheduledTime: info.when ?? Date.now() + (info.delayInMinutes ?? 0) * 60_000,
         periodInMinutes: info.periodInMinutes,
       });
     }),
@@ -102,13 +103,35 @@ describe('scheduled task lifecycle', () => {
   });
 
   it('creates an alarm when no durable Chrome alarm exists', async () => {
-    await registerTaskAlarm(task());
+    vi.useFakeTimers({ now: 1_000_000_000 });
+    try {
+      await registerTaskAlarm(task({ createdAt: Date.now() }));
+      expect(chromeMock.alarms.create).toHaveBeenCalledTimes(1);
+      expect(chromeMock.alarms.create).toHaveBeenCalledWith('agi_task_task-1', {
+        periodInMinutes: 1_440,
+        when: Date.now() + 1_440 * 60_000,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
-    expect(chromeMock.alarms.create).toHaveBeenCalledTimes(1);
-    expect(chromeMock.alarms.create).toHaveBeenCalledWith('agi_task_task-1', {
-      periodInMinutes: 1_440,
-      delayInMinutes: 1_440,
-    });
+  it('keeps the schedule from the last run when an update cleared the alarm', async () => {
+    const day = 1_440 * 60_000;
+    const now = 50 * day;
+    const ranSixHoursAgo = task({ createdAt: now - 40 * day, lastRun: now - 6 * 60 * 60_000 });
+    expect(nextTaskRunAt(ranSixHoursAgo, now)).toBe(now + 18 * 60 * 60_000);
+
+    const monthly = task({ scheduleType: 'monthly', createdAt: now - 10 * day });
+    expect(nextTaskRunAt(monthly, now)).toBe(now + 20 * day);
+  });
+
+  it('runs an overdue task shortly after the worker restores it, not a full period later', () => {
+    const day = 1_440 * 60_000;
+    const now = 50 * day;
+    const overdue = task({ createdAt: now - 40 * day, lastRun: now - 3 * day });
+    expect(nextTaskRunAt(overdue, now)).toBe(now + 60_000);
+    expect(nextTaskRunAt(task({ createdAt: now + day, lastRun: now + day }), now)).toBe(now + day);
   });
 
   it('does not report scheduled prompt completion before chat execution settles', async () => {

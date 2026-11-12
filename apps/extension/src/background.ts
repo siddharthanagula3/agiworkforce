@@ -200,6 +200,7 @@ import {
 import {
   ADMIN_SITE_POLICY_STORAGE_KEY,
   readAdminSitePolicy,
+  readUserSiteAllowlist,
   loadScheduledSitePolicyInput,
 } from './features/site-policy/store';
 import { createSitePolicyPublicationOwner } from './background/site-policy-publication';
@@ -249,6 +250,17 @@ import {
   listTransientHostPermissions,
   planTransientSweep,
 } from './features/computer-use/transientHostPermissions';
+import {
+  chromeHostPermissionReconcileDeps,
+  releaseUnapprovedHostPermissions,
+} from './features/computer-use/hostPermissionReconcile';
+import {
+  markComputerUseRunEnded,
+  markComputerUseRunStarted,
+  markComputerUseRunTab,
+  recoverLostComputerUseRun,
+  WORKER_RESTARTED_REASON,
+} from './features/computer-use/runMarker';
 import { purgeLegacyProviderCredentials } from './features/security/legacyProviderCredentials';
 import {
   isPermanentNativeDisconnect,
@@ -384,6 +396,8 @@ import type {
   ApproveContextHandoffMessage,
   BridgeUrlChangedMessage,
   CancelComputerUseMessage,
+  ComputerUseApprovalResponseMessage,
+  SidePanelClosedMessage,
   CancelContextHandoffMessage,
   CancelStreamMessage,
   ChatMessageMessage,
@@ -902,6 +916,12 @@ const SCHEDULED_RECOVERY_MAX_ATTEMPTS = 3;
 const SCHEDULED_HEARTBEAT_INTERVAL_MS = 20_000;
 
 const computerUseRuns = new ComputerUseRunCoordinator();
+const pendingComputerUseApprovals = new Map<
+  string,
+  (message: unknown, sender: chrome.runtime.MessageSender) => void
+>();
+const APPROVAL_NO_LONGER_PENDING =
+  'This request is no longer waiting for an answer, so nothing was done.';
 interface PendingRunGuidance {
   text: string;
   settle: (applied: boolean) => void;
@@ -938,6 +958,7 @@ function broadcastComputerUseForCurrentRun(
     runId: lease.runId,
     runGeneration: lease.generation,
     tabId: lease.tabId,
+    ...(lease.windowId === undefined ? {} : { windowId: lease.windowId }),
   });
 }
 
@@ -1607,10 +1628,13 @@ function initialize(): void {
 
 const openSidePanelWindows = new Map<number, number>();
 
-function publishSidePanelPresence(windowId: number): void {
+function publishSidePanelPresence(
+  windowId: number,
+  open: boolean = openSidePanelWindows.has(windowId),
+): void {
   const message: SidePanelPresenceMessage = {
     type: SIDE_PANEL_PRESENCE_MESSAGE,
-    open: openSidePanelWindows.has(windowId),
+    open,
   };
   void chrome.tabs
     .query({ windowId })
@@ -2260,17 +2284,24 @@ async function ensureTabGroup(tabId: number): Promise<boolean> {
   }
 }
 
-async function markComputerUseTab(tabId: number): Promise<() => Promise<void>> {
-  const leaveAsIs = async (): Promise<void> => undefined;
-  if (!chrome.tabGroups) return leaveAsIs;
+async function markComputerUseTab(tabId: number): Promise<(() => Promise<void>) | null> {
+  if (!chrome.tabGroups) return null;
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (typeof tab.groupId === 'number' && tab.groupId >= 0) return leaveAsIs;
-    if (!(await ensureTabGroup(tabId))) return leaveAsIs;
+    if (typeof tab.groupId === 'number' && tab.groupId >= 0) return null;
+    if (!(await ensureTabGroup(tabId))) return null;
     return () => chrome.tabs.ungroup(tabId).catch(() => undefined);
   } catch {
-    return leaveAsIs;
+    return null;
   }
+}
+
+async function ungroupLostComputerUseTab(tabId: number): Promise<void> {
+  if (!chrome.tabGroups) return;
+  const tab = await chrome.tabs.get(tabId);
+  if (typeof tab.groupId !== 'number' || tab.groupId < 0) return;
+  const group = await chrome.tabGroups.get(tab.groupId);
+  if (group.title === TAB_GROUP_NAME) await chrome.tabs.ungroup(tabId);
 }
 
 async function handleReplayShortcut(
@@ -5178,6 +5209,29 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'SIDE_PANEL_CLOSED': {
+      const windowId = (message as SidePanelClosedMessage).windowId;
+      if (!Number.isSafeInteger(windowId)) {
+        return {
+          success: false,
+          error: 'SIDE_PANEL_CLOSED: invalid windowId',
+        } as ExtensionResponse;
+      }
+      if (openSidePanelWindows.has(windowId)) return { success: true } as ExtensionResponse;
+      const remaining = (
+        await chrome.runtime
+          .getContexts({ contextTypes: ['SIDE_PANEL' as chrome.runtime.ContextType] })
+          .catch(() => [])
+      ).filter((panel) => panel.documentId === undefined || panel.documentId !== sender.documentId);
+      publishSidePanelPresence(
+        windowId,
+        remaining.some((panel) => panel.windowId === windowId),
+      );
+      if (remaining.length === 0 && openSidePanelWindows.size === 0)
+        await revokeAllOneTimeSiteGrants();
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'GET_SIDE_PANEL_OPEN': {
       const windowId = sender.tab?.windowId;
       const panels = await chrome.runtime
@@ -6029,6 +6083,10 @@ async function handleMessageAsync(
         );
       }
 
+      await lostComputerUseRunRecovery;
+      if (startWasCancelled()) {
+        return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
+      }
       clearPendingComputerUseStart(cuRunId);
       const notificationTarget =
         typeof cuMsg.historyConversationId === 'string' &&
@@ -6045,6 +6103,12 @@ async function handleMessageAsync(
         authOwner: authContext.owner,
         credential: authContext.token,
       });
+      const releaseWorker = beginScheduledTaskHeartbeat();
+      void markComputerUseRunStarted({
+        runId: lease.runId,
+        runGeneration: lease.generation,
+        tabIds: [cuTabId],
+      }).catch(() => undefined);
 
       const onCallerAbort = () => cancelActiveComputerUseRun('user_stopped', lease.runId);
       callerTask?.attachCancellation(onCallerAbort);
@@ -6130,7 +6194,8 @@ async function handleMessageAsync(
             const cleanup = (): void => {
               clearTimeout(timeout);
               signal?.removeEventListener('abort', onAbort);
-              chrome.runtime.onMessage.removeListener(listener);
+              if (pendingComputerUseApprovals.get(requestId) === listener)
+                pendingComputerUseApprovals.delete(requestId);
             };
             const finish = (allowed: boolean, forTask = false): void => {
               if (settled) return;
@@ -6200,7 +6265,7 @@ async function handleMessageAsync(
                 );
               }
             }
-            chrome.runtime.onMessage.addListener(listener);
+            pendingComputerUseApprovals.set(requestId, listener);
             signal?.addEventListener('abort', onAbort, { once: true });
             if (signal?.aborted) onAbort();
           });
@@ -6256,6 +6321,7 @@ async function handleMessageAsync(
                 const previousTabId = lease.tabId;
                 computerUseRuns.commitTabTransition(lease, transition, url);
                 inputWatch.retarget(previousTabId);
+                void markComputerUseRunTab(lease.runId, lease.tabId).catch(() => undefined);
               },
               abortTransition: (transition) =>
                 computerUseRuns.abortTabTransition(lease, transition),
@@ -6354,15 +6420,22 @@ async function handleMessageAsync(
         .catch(() => undefined);
       inputWatch.start();
       const unmarkTab = markComputerUseTab(cuTabId);
+      void unmarkTab
+        .then((unmark) => (unmark ? markComputerUseRunTab(lease.runId, cuTabId, true) : undefined))
+        .catch(() => undefined);
       const cleanupActions: Array<() => unknown> = [
         () => inputWatch.stop(cuTabId),
         () => flushAutomationAuditOutbox().catch(() => false),
-        () => unmarkTab.then((unmark) => unmark()),
+        () => unmarkTab.then((unmark) => unmark?.()),
+        () => markComputerUseRunEnded(lease.runId),
       ];
-      for (const cleanup of cleanupActions)
-        void completion
-          .then(cleanup, cleanup)
-          .catch((error) => logger.warn('Browser task cleanup failed', error));
+      void Promise.all(
+        cleanupActions.map((cleanup) =>
+          completion
+            .then(cleanup, cleanup)
+            .catch((error) => logger.warn('Browser task cleanup failed', error)),
+        ),
+      ).finally(releaseWorker);
       void completion.then(
         (browserContext) => {
           if (!computerUseRuns.finish(lease)) return;
@@ -6519,6 +6592,16 @@ async function handleMessageAsync(
       }
     }
 
+    case 'AGI_CU_APPROVE_RESPONSE': {
+      const requestId = (message as ComputerUseApprovalResponseMessage).requestId;
+      const deliver =
+        typeof requestId === 'string' ? pendingComputerUseApprovals.get(requestId) : undefined;
+      if (!deliver)
+        return { success: false, error: APPROVAL_NO_LONGER_PENDING } as ExtensionResponse;
+      deliver(message, sender);
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'GET_COMPUTER_USE_STATE': {
       const activeLease = computerUseRuns.getActive();
       if (!activeLease) {
@@ -6530,6 +6613,7 @@ async function handleMessageAsync(
         runId: activeLease.runId,
         runGeneration: activeLease.generation,
         tabId: activeLease.tabId,
+        ...(activeLease.windowId === undefined ? {} : { windowId: activeLease.windowId }),
         ...(activeLease.takeover ? { paused: true, pauseReason: activeLease.takeover.reason } : {}),
       } as ExtensionResponse;
     }
@@ -6545,6 +6629,9 @@ async function handleMessageAsync(
       ) {
         void handComputerUseTabToUser(lease, USER_INPUT_TAKEOVER_REASON).catch(() => undefined);
       }
+      const inputTabId = sender?.tab?.id;
+      if (typeof inputTabId === 'number' && lease?.tabId !== inputTabId)
+        watchComputerUseUserInput(inputTabId, false);
       return { success: true } as ExtensionResponse;
     }
 
@@ -6710,6 +6797,19 @@ async function handleMessageAsync(
           } as ExtensionResponse;
         }
         return { success: true, running: false } as ExtensionResponse;
+      }
+      if (
+        reason === 'panel_closed' &&
+        activeRun !== null &&
+        activeRun.runId === expectedRunId &&
+        activeRun.windowId !== undefined &&
+        cancelMessage.windowId !== activeRun.windowId
+      ) {
+        return {
+          success: false,
+          running: true,
+          error: 'CANCEL_COMPUTER_USE: the closed panel belongs to another window',
+        } as ExtensionResponse;
       }
 
       computerUseStartGeneration += 1;
@@ -7095,8 +7195,20 @@ chrome.action?.onClicked?.addListener((tab) => {
   });
 });
 
+function releaseUnapprovedSiteAccess(): void {
+  void releaseUnapprovedHostPermissions(chromeHostPermissionReconcileDeps(readUserSiteAllowlist))
+    .then((released) => {
+      if (released.length > 0)
+        logger.info('Released site access that was allowed only once', { count: released.length });
+    })
+    .catch((error) => logger.warn('Site access could not be reconciled', error));
+}
+
+chrome.runtime.onStartup.addListener(releaseUnapprovedSiteAccess);
+
 chrome.runtime.onInstalled.addListener((details) => {
   void rebuildContextMenus();
+  releaseUnapprovedSiteAccess();
   if (details.reason === 'install') {
     void chrome.tabs.create({ url: chrome.runtime.getURL(WELCOME_PAGE_PATH) });
   }
@@ -8594,6 +8706,24 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 initialize();
 installBackgroundErrorReporting();
 void flushAutomationAuditOutbox();
+const lostComputerUseRunRecovery = recoverLostComputerUseRun({
+  stopInputWatch: (tabId) =>
+    chrome.tabs.sendMessage(tabId, { type: 'AGI_CU_WATCH_INPUT', watching: false }),
+  detachDebugger: (tabId) => chrome.debugger.detach({ tabId }),
+  ungroupTab: ungroupLostComputerUseTab,
+  announce: (marker) =>
+    sendComputerUseLifecycle({
+      type: 'AGI_CU_STATE',
+      status: 'error',
+      reason: WORKER_RESTARTED_REASON,
+      runId: marker.runId,
+      runGeneration: marker.runGeneration,
+      tabId: marker.tabIds[marker.tabIds.length - 1],
+    }),
+}).catch((error) => {
+  logger.warn('A browser task lost with the previous worker could not be cleaned up', error);
+  return null;
+});
 
 // chrome.debugger.onDetach has to be attached in the worker's first turn: a
 // user pressing Cancel on Chrome's debugging bar wakes a worker that would

@@ -10,8 +10,8 @@ import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 
 const INSTALL_ID_KEY = 'agi_device_install_id';
+export const DEVICE_HEARTBEAT_SENT_AT_KEY = 'agi_device_heartbeat_sent_at';
 
-let lastSentAt = 0;
 let inFlight: Promise<boolean> | null = null;
 
 export interface ChromeHostFacts {
@@ -75,14 +75,26 @@ async function sendHeartbeat(fetchImpl: typeof fetch): Promise<boolean> {
     },
     body: JSON.stringify(heartbeat),
   });
-  if (response.ok) lastSentAt = Date.now();
+  if (response.ok) await chrome.storage.local.set({ [DEVICE_HEARTBEAT_SENT_AT_KEY]: Date.now() });
   return response.ok;
+}
+
+async function heartbeatDue(): Promise<boolean> {
+  const stored = await chrome.storage.local.get([DEVICE_HEARTBEAT_SENT_AT_KEY]);
+  const sentAt = stored[DEVICE_HEARTBEAT_SENT_AT_KEY];
+  const now = Date.now();
+  return (
+    typeof sentAt !== 'number' ||
+    !Number.isFinite(sentAt) ||
+    sentAt > now ||
+    now - sentAt >= DEVICE_HEARTBEAT_INTERVAL_MS
+  );
 }
 
 export function sendChromeHeartbeatIfDue(fetchImpl: typeof fetch = fetch): Promise<boolean> {
   if (inFlight) return inFlight;
-  if (Date.now() - lastSentAt < DEVICE_HEARTBEAT_INTERVAL_MS) return Promise.resolve(false);
-  inFlight = sendHeartbeat(fetchImpl)
+  inFlight = heartbeatDue()
+    .then((due) => (due ? sendHeartbeat(fetchImpl) : false))
     .catch(() => false)
     .finally(() => {
       inFlight = null;
@@ -91,6 +103,5 @@ export function sendChromeHeartbeatIfDue(fetchImpl: typeof fetch = fetch): Promi
 }
 
 export function resetChromeHeartbeatForTests(): void {
-  lastSentAt = 0;
   inFlight = null;
 }

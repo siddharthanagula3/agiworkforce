@@ -768,3 +768,32 @@ describe('conversation title row', () => {
     }
   });
 });
+
+describe('side panel presence after the worker stops', () => {
+  it('does not wake an idle worker again, and reports its own close instead', async () => {
+    const presenceCall = chromeMock.runtime.connect.mock.calls.findIndex(
+      ([options]) => (options as { name?: string }).name === 'agi-side-panel',
+    );
+    const port = chromeMock.runtime.connect.mock.results[presenceCall]!.value as {
+      onDisconnect: { addListener: ReturnType<typeof vi.fn> };
+    };
+    await vi.waitFor(() => expect(port.onDisconnect.addListener).toHaveBeenCalled());
+    const presenceConnects = (): number =>
+      chromeMock.runtime.connect.mock.calls.filter(
+        ([options]) => (options as { name?: string }).name === 'agi-side-panel',
+      ).length;
+    const before = presenceConnects();
+
+    vi.useFakeTimers();
+    try {
+      for (const [listener] of port.onDisconnect.addListener.mock.calls) (listener as () => void)();
+      vi.advanceTimersByTime(60_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(presenceConnects()).toBe(before);
+
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    expect(chromeMock.sent).toContainEqual({ type: 'SIDE_PANEL_CLOSED', windowId: 1 });
+  });
+});

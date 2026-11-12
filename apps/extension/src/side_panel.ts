@@ -6908,30 +6908,30 @@ function finishComposerBrowserTask(
   });
 }
 
+async function confirmComposerBrowserRun(run: ComposerBrowserRun): Promise<void> {
+  let state: ComputerUseCommandResponse | undefined;
+  try {
+    state = await chrome.runtime.sendMessage({ type: 'GET_COMPUTER_USE_STATE' });
+  } catch {
+    noteComposerBrowserActivity(run);
+    return;
+  }
+  if (composerBrowserRun !== run) return;
+  if (state?.running === false || (state?.running === true && state.runId !== run.runId)) {
+    finishComposerBrowserTask(
+      run,
+      run.finalMessage ?? 'The background service is no longer tracking this browser task.',
+      run.finalMessage === null,
+    );
+    return;
+  }
+  noteComposerBrowserActivity(run);
+}
+
 function noteComposerBrowserActivity(run: ComposerBrowserRun): void {
   if (composerBrowserRun !== run) return;
   if (run.activityTimer) clearTimeout(run.activityTimer);
-  run.activityTimer = setTimeout(() => {
-    void (async () => {
-      let state: ComputerUseCommandResponse | undefined;
-      try {
-        state = await chrome.runtime.sendMessage({ type: 'GET_COMPUTER_USE_STATE' });
-      } catch {
-        noteComposerBrowserActivity(run);
-        return;
-      }
-      if (composerBrowserRun !== run) return;
-      if (state?.running === false || (state?.running === true && state.runId !== run.runId)) {
-        finishComposerBrowserTask(
-          run,
-          run.finalMessage ?? 'The background service is no longer tracking this browser task.',
-          run.finalMessage === null,
-        );
-        return;
-      }
-      noteComposerBrowserActivity(run);
-    })();
-  }, 90_000);
+  run.activityTimer = setTimeout(() => void confirmComposerBrowserRun(run), 90_000);
 }
 
 function cancelComposerBrowserTask(reason: 'user_stopped' | 'user_cleared' = 'user_stopped'): void {
@@ -7091,8 +7091,19 @@ function startComposerBrowserTask(
   return outcome;
 }
 
-function respondToBrowserApproval(response: ComputerUseApprovalResponseMessage): void {
-  void chrome.runtime.sendMessage(response).catch(() => undefined);
+function respondToBrowserApproval(
+  run: ComposerBrowserRun,
+  response: ComputerUseApprovalResponseMessage,
+): void {
+  void chrome.runtime
+    .sendMessage(response)
+    .then((reply: ComputerUseCommandResponse | undefined) => {
+      if (reply?.success === true || composerBrowserRun !== run) return;
+      if (response.allowed)
+        run.controls.setError(reply?.error ?? 'The approval could not be delivered.');
+      void confirmComposerBrowserRun(run);
+    })
+    .catch(() => undefined);
 }
 
 function showInlineBrowserApproval(
@@ -7112,7 +7123,7 @@ function showInlineBrowserApproval(
       : undefined;
   if (!requestId || runGeneration === undefined || tabId === undefined) return;
   const deny = (): void =>
-    respondToBrowserApproval({
+    respondToBrowserApproval(run, {
       type: 'AGI_CU_APPROVE_RESPONSE',
       requestId,
       runId: run.runId,
@@ -7184,7 +7195,7 @@ function showInlineBrowserApproval(
     },
     resolve: (decision, upload) => {
       const allowed = decision !== 'skip' && composerBrowserRun === run;
-      respondToBrowserApproval({
+      respondToBrowserApproval(run, {
         type: 'AGI_CU_APPROVE_RESPONSE',
         requestId,
         runId: run.runId,
@@ -13078,7 +13089,8 @@ function buildUI(): void {
         status === 'running' &&
         typeof runId === 'string' &&
         runGeneration !== undefined &&
-        !isComposerBrowserRunId(runId)
+        !isComposerBrowserRunId(runId) &&
+        cuPanel.acceptsRunWindow(m['windowId'])
       ) {
         cuPanel.setRunState(true, runId, runGeneration);
         cuPanel.setPaused(false);
@@ -13180,13 +13192,24 @@ function buildUI(): void {
             forTask: decision === 'allow-for-task',
             ...(allowed && uploadBinding && upload ? { uploadBinding, upload } : {}),
           };
-          void chrome.runtime.sendMessage(response).catch(() => {
-            if (allowed && sameManagedCloudOwner(owner, _ctx.managedCloudOwner))
-              cuPanel.showHandoffBanner(
-                'The upload approval could not be delivered. No website upload was confirmed.',
-                'error',
-              );
-          });
+          void chrome.runtime
+            .sendMessage(response)
+            .then((reply: ComputerUseCommandResponse | undefined) => {
+              if (reply?.success === true || !cuPanel.ownsRun(runId)) return;
+              if (allowed)
+                cuPanel.showHandoffBanner(
+                  reply?.error ?? 'The approval could not be delivered.',
+                  'browser_error',
+                );
+              cuPanel.confirmRunState();
+            })
+            .catch(() => {
+              if (allowed && sameManagedCloudOwner(owner, _ctx.managedCloudOwner))
+                cuPanel.showHandoffBanner(
+                  'The upload approval could not be delivered. No website upload was confirmed.',
+                  'error',
+                );
+            });
         },
         uploadBinding
           ? {
@@ -15233,15 +15256,30 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 injectStyles();
 
 function announceSidePanelPresence(): void {
+  const presence = assistantHostWindowId().catch(() => undefined);
+  let workerTracksPanel = false;
   try {
     const port = chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
-    port.onDisconnect.addListener(() => setTimeout(announceSidePanelPresence, 1_000));
-    void assistantHostWindowId().then((windowId) => {
+    workerTracksPanel = true;
+    port.onDisconnect.addListener(() => {
+      workerTracksPanel = false;
+    });
+    void presence.then((windowId) => {
       if (windowId !== undefined) port.postMessage({ windowId });
     });
   } catch {
-    setTimeout(announceSidePanelPresence, 5_000);
+    workerTracksPanel = false;
   }
+  let hostWindowId: number | undefined;
+  void presence.then((windowId) => {
+    hostWindowId = windowId;
+  });
+  window.addEventListener('pagehide', () => {
+    if (workerTracksPanel || hostWindowId === undefined) return;
+    void chrome.runtime
+      .sendMessage({ type: 'SIDE_PANEL_CLOSED', windowId: hostWindowId })
+      .catch(() => undefined);
+  });
 }
 announceSidePanelPresence();
 followThemePreference();

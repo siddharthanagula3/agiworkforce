@@ -104,6 +104,13 @@ const harness = vi.hoisted(() => {
       lastError: null as { message: string } | null,
       getURL: (path: string) => `chrome-extension://${EXTENSION_ID}${path}`,
       getManifest: () => ({ version: '0.0.0-test' }),
+      getPlatformInfo: vi.fn((callback?: (info: { os: string; arch: string }) => void) => {
+        const info = { os: 'mac', arch: 'arm64' };
+        if (!callback) return Promise.resolve(info);
+        callback(info);
+        return undefined;
+      }),
+      getContexts: vi.fn(async (): Promise<Array<{ windowId: number; documentId?: string }>> => []),
       onMessage: {
         addListener: vi.fn((listener: (typeof messageListeners)[number]) => {
           messageListeners.push(listener);
@@ -1387,6 +1394,193 @@ describe('background service worker security guards', () => {
 
       expect(response['success'], String(response['error'])).toBe(true);
       expect(openOptionsPage).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('a browser task that waits on the user', () => {
+    const contentSender = (tabId: number) => ({
+      id: EXTENSION_ID,
+      url: `${SITE_A}/start`,
+      origin: SITE_A,
+      frameId: 0,
+      tab: { id: tabId, url: `${SITE_A}/start`, windowId: 7 },
+    });
+
+    function approvalRequests(): Array<Record<string, unknown>> {
+      return (harness.chromeMock.runtime.sendMessage.mock.calls as unknown as unknown[][])
+        .map((call) => call[0] as Record<string, unknown>)
+        .filter((message) => message?.['type'] === 'AGI_CU_APPROVE_REQUEST');
+    }
+
+    it('holds the worker awake for the whole run and lets it go once the run ends', async () => {
+      const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+      const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+      let finish: (value: unknown) => void = () => undefined;
+      harness.runAgentLoop.mockImplementationOnce((_goal, _tabId, options) => {
+        harness.captured.options = options;
+        return new Promise((resolve) => {
+          finish = resolve;
+        }) as never;
+      });
+      harness.chromeMock.runtime.getPlatformInfo.mockClear();
+
+      await startRun('cu_run_keepalive');
+
+      expect(harness.chromeMock.runtime.getPlatformInfo).toHaveBeenCalled();
+      const hold = setIntervalSpy.mock.calls.findIndex(([, delay]) => delay === 20_000);
+      expect(hold).toBeGreaterThanOrEqual(0);
+      const holdId = setIntervalSpy.mock.results[hold]!.value;
+      expect(clearIntervalSpy).not.toHaveBeenCalledWith(holdId);
+
+      finish({ finalMessage: 'done', stepsUsed: 1, history: [], totalTokens: 0 });
+      await vi.waitFor(() => expect(clearIntervalSpy).toHaveBeenCalledWith(holdId));
+    });
+
+    it('delivers an answer to the approval that asked for it, once', async () => {
+      const options = (await startRun('cu_run_approval_answer')) as CapturedAgentLoopOptions & {
+        onBeforeAction: (
+          tool: string,
+          args: Record<string, unknown>,
+          signal: AbortSignal,
+          requirement: { alwaysAsk: boolean; reason?: string },
+        ) => Promise<boolean>;
+      };
+      harness.chromeMock.runtime.sendMessage.mockClear();
+      const decision = options.onBeforeAction('click', { index: 3 }, options.signal, {
+        alwaysAsk: true,
+        reason: 'payment',
+      });
+      await vi.waitFor(() => expect(approvalRequests()).toHaveLength(1));
+      const request = approvalRequests()[0]!;
+      const answer = {
+        type: 'AGI_CU_APPROVE_RESPONSE',
+        requestId: request['requestId'],
+        runId: request['runId'],
+        runGeneration: request['runGeneration'],
+        tabId: RUN_TAB_ID,
+        allowed: true,
+      };
+
+      expect(await dispatch(answer)).toEqual({ success: true });
+      await expect(decision).resolves.toBe(true);
+      expect(await dispatch(answer)).toMatchObject({ success: false });
+    });
+
+    it('says an approval is no longer waiting instead of passing it to the page', async () => {
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      const reply = await dispatch({
+        type: 'AGI_CU_APPROVE_RESPONSE',
+        requestId: 'cu_approve_from_a_worker_that_stopped',
+        runId: 'cu_run_gone',
+        runGeneration: 1,
+        tabId: RUN_TAB_ID,
+        allowed: true,
+      });
+
+      expect(reply).toEqual({
+        success: false,
+        error: 'This request is no longer waiting for an answer, so nothing was done.',
+      });
+      expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('refuses an approval answer sent by a web page', async () => {
+      const reply = await dispatch(
+        {
+          type: 'AGI_CU_APPROVE_RESPONSE',
+          requestId: 'cu_approve_forged',
+          runId: 'cu_run_gone',
+          runGeneration: 1,
+          tabId: RUN_TAB_ID,
+          allowed: true,
+        },
+        contentSender(RUN_TAB_ID),
+      );
+      expect(reply).toMatchObject({
+        success: false,
+        error: 'This action requires the extension UI.',
+      });
+    });
+
+    it('stops a page from reporting input for a run it no longer belongs to', async () => {
+      await startRun('cu_run_input_owner');
+      harness.chromeMock.tabs.sendMessage.mockClear();
+
+      await dispatch({ type: 'AGI_CU_USER_INPUT' }, contentSender(55));
+
+      expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledWith(55, {
+        type: 'AGI_CU_WATCH_INPUT',
+        watching: false,
+      });
+      expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalledWith(RUN_TAB_ID, {
+        type: 'AGI_CU_WATCH_INPUT',
+        watching: false,
+      });
+    });
+  });
+
+  describe('closing a side panel in one window', () => {
+    it('reports the run window and leaves a run in another window running', async () => {
+      const options = await startRun('cu_run_other_window');
+      expect(await dispatch({ type: 'GET_COMPUTER_USE_STATE' })).toMatchObject({
+        running: true,
+        runId: 'cu_run_other_window',
+        windowId: 7,
+      });
+
+      const foreign = await dispatch({
+        type: 'CANCEL_COMPUTER_USE',
+        runId: 'cu_run_other_window',
+        reason: 'panel_closed',
+        windowId: 9,
+      });
+      expect(foreign).toMatchObject({ success: false, running: true });
+      expect(options.signal.aborted).toBe(false);
+
+      const unknownWindow = await dispatch({
+        type: 'CANCEL_COMPUTER_USE',
+        runId: 'cu_run_other_window',
+        reason: 'panel_closed',
+      });
+      expect(unknownWindow).toMatchObject({ success: false, running: true });
+      expect(options.signal.aborted).toBe(false);
+
+      const own = await dispatch({
+        type: 'CANCEL_COMPUTER_USE',
+        runId: 'cu_run_other_window',
+        reason: 'panel_closed',
+        windowId: 7,
+      });
+      expect(own).toMatchObject({ success: true, running: false });
+      expect(options.signal.aborted).toBe(true);
+    });
+
+    it('still lets the user stop a run from any window', async () => {
+      const options = await startRun('cu_run_stop_anywhere');
+      expect(
+        await dispatch({ type: 'CANCEL_COMPUTER_USE', runId: 'cu_run_stop_anywhere' }),
+      ).toMatchObject({ success: true, running: false });
+      expect(options.signal.aborted).toBe(true);
+    });
+
+    it("tells the window's pages the panel closed when the worker had restarted meanwhile", async () => {
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      harness.chromeMock.runtime.getContexts.mockResolvedValueOnce([
+        { windowId: 7, documentId: 'closing-panel' },
+      ]);
+
+      expect(
+        await dispatch(
+          { type: 'SIDE_PANEL_CLOSED', windowId: 7 },
+          { ...SIDE_PANEL_SENDER, documentId: 'closing-panel' },
+        ),
+      ).toEqual({ success: true });
+      await vi.waitFor(() =>
+        expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledWith(RUN_TAB_ID, {
+          type: 'AGI_SIDE_PANEL_PRESENCE',
+          open: false,
+        }),
+      );
     });
   });
 

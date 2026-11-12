@@ -75,6 +75,7 @@ export type NativeMessageType =
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_EXTENSION_SETTINGS'
   | 'GET_SIDE_PANEL_OPEN'
+  | 'SIDE_PANEL_CLOSED'
   | 'GET_PAGE_ACCESS'
   | 'PAGE_ACCESS_CHANGED'
   | 'GET_AUTOFILL_PROFILE'
@@ -689,6 +690,11 @@ export interface GetSidePanelOpenMessage extends BaseMessage {
   type: 'GET_SIDE_PANEL_OPEN';
 }
 
+export interface SidePanelClosedMessage extends BaseMessage {
+  type: 'SIDE_PANEL_CLOSED';
+  windowId: number;
+}
+
 export interface GetPageAccessMessage extends BaseMessage {
   type: 'GET_PAGE_ACCESS';
 }
@@ -1099,6 +1105,7 @@ export interface CancelComputerUseMessage extends BaseMessage {
   type: 'CANCEL_COMPUTER_USE';
   runId?: string;
   reason?: 'account_changed' | 'panel_closed' | 'user_cleared' | 'user_stopped';
+  windowId?: number;
 }
 
 /**
@@ -1130,6 +1137,7 @@ export interface ComputerUseCommandResponse {
   paused?: boolean;
   pauseReason?: string;
   tabId?: number;
+  windowId?: number;
   error?: string;
 }
 
@@ -1273,6 +1281,7 @@ export type ExtensionMessage =
   | OpenSidePanelMessage
   | OpenExtensionSettingsMessage
   | GetSidePanelOpenMessage
+  | SidePanelClosedMessage
   | GetPageAccessMessage
   | PageAccessChangedMessage
   | GetAutofillProfileMessage
