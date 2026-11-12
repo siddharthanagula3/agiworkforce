@@ -403,6 +403,49 @@ describe('presentChatError', () => {
     expect(presentChatError('   ').headline).toBe("AGI couldn't finish the reply.");
   });
 
+  it.each([
+    [
+      'an incident lockdown',
+      {
+        code: 'FORBIDDEN',
+        message: 'This workspace is locked down while an incident is investigated.',
+      },
+      'permission',
+    ],
+    [
+      'a workspace policy',
+      { code: 'surface_not_allowed', message: 'Your workspace does not allow this client.' },
+      'permission',
+    ],
+    [
+      'a plan limit',
+      {
+        code: 'developer_surface_plan_required',
+        message: 'Your plan does not include this client.',
+      },
+      'subscription',
+    ],
+  ])('shows the server wording for %s without offering a sign-in', (_case, error, category) => {
+    const presented = presentChatError(
+      `[agi-cloud] API error (HTTP 403): ${JSON.stringify({ error })}`,
+    );
+
+    expect(presented.headline).toBe(error.message);
+    expect(presented.category).toBe(category);
+    expect(presented.retryable).toBe(false);
+    expect(presented.action).toBeUndefined();
+  });
+
+  it('shows the server wording for an outage and lets the user retry', () => {
+    const presented = presentChatError(
+      '[agi-cloud] API error (HTTP 503): {"error":{"code":"SERVICE_UNAVAILABLE","message":"Service temporarily unavailable"}}',
+    );
+
+    expect(presented.headline).toBe('Service temporarily unavailable');
+    expect(presented.retryable).toBe(true);
+    expect(presented.action).toBeUndefined();
+  });
+
   it('keeps a long boundary refusal readable instead of burying it', () => {
     const refusal =
       'AGI will not continue a Local developer session into BYOK, Managed Cloud, or Auto routing without a reviewed handoff. Use New Chat for a fresh provider session, or create a reviewed continuation in the AGI CLI.';

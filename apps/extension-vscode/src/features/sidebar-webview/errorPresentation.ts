@@ -15,7 +15,7 @@
 
 import { modelDisplayLabel, providerDisplayLabel } from '../model-picker/modelConstants';
 import { t, tPlural, type MessageKey } from '../../l10n';
-import { accountRefusalMessage } from '../../utils/accountRefusal';
+import { accountRefusalKind, type AccountRefusalKind } from '../../utils/accountRefusal';
 
 export type ChatErrorCategory =
   | 'network'
@@ -144,10 +144,22 @@ function fromApiStatus(providerId: string, status: number): Classification {
   };
 }
 
-function accountRefusalIn(body: string): string | undefined {
+const REFUSAL_CATEGORY: Readonly<Record<AccountRefusalKind, ChatErrorCategory>> = Object.freeze({
+  account: 'sign-in',
+  policy: 'permission',
+  plan: 'subscription',
+  unavailable: 'provider',
+});
+
+function accountRefusalIn(body: string): Classification | undefined {
   try {
     const parsed = JSON.parse(body.replace(/^:\s*/u, '')) as { error?: unknown } | null;
-    return accountRefusalMessage(parsed?.error);
+    const error = parsed?.error as { code?: unknown; message?: unknown } | undefined;
+    if (typeof error?.code !== 'string' || typeof error.message !== 'string') return undefined;
+    const kind = accountRefusalKind(error.code);
+    const headline = error.message.trim();
+    if (kind === undefined || headline === '') return undefined;
+    return { category: REFUSAL_CATEGORY[kind], headline, retryable: kind === 'unavailable' };
   } catch {
     return undefined;
   }
@@ -165,8 +177,9 @@ function classify(raw: string, activeProvider: string | undefined): Classificati
 
   const api = API_ERROR.exec(raw);
   if (api?.[1] !== undefined && api[2] !== undefined) {
-    const refusal = api[2] === '403' ? accountRefusalIn(raw.slice(api[0].length)) : undefined;
-    if (refusal) return { category: 'sign-in', headline: refusal, retryable: false };
+    const refusal =
+      api[2] === '403' || api[2] === '503' ? accountRefusalIn(raw.slice(api[0].length)) : undefined;
+    if (refusal) return refusal;
     return fromApiStatus(api[1], Number(api[2]));
   }
 

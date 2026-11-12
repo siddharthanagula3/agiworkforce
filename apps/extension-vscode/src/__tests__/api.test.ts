@@ -29,12 +29,19 @@ import {
   setApiKey,
   clearAccountToken,
   clearApiKey,
+  fetchAccountIdentity,
   fetchBilledCredits,
+  fetchTierInfo,
+  fetchUsageHistory,
   AgiWorkforceClientUpdateRequiredError,
   forgetSharedCredentialRefusal,
   shareAccountCredentialFrom,
 } from '../utils/api';
-import { BILLING_PLAN_PRICING, classifyManagedQuotaErrorCode } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  billingPlanCapabilityUpgradeMessage,
+  classifyManagedQuotaErrorCode,
+} from '@agiworkforce/types';
 import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
 
@@ -870,7 +877,7 @@ describe('billed credits for a settled turn', () => {
     ) => {
       paths.push(String(options.path));
       const next = answers.shift() ?? { status: 500, body: 'exhausted' };
-      const res = Object.assign(new EventEmitter(), { statusCode: next.status });
+      const res = Object.assign(new EventEmitter(), { statusCode: next.status, headers: {} });
       queueMicrotask(() => {
         callback(res);
         const body = typeof next.body === 'string' ? next.body : JSON.stringify(next.body);
@@ -1209,5 +1216,415 @@ describe('one sign-in shared with the AGI CLI', () => {
     shareAccountCredentialFrom(async () => ({ token: 'stale-token' }));
 
     await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+  });
+});
+
+describe('a refusal from the account API is not a sign-out', () => {
+  const TIER_BODY = {
+    plan_tier: 'team',
+    subscription_status: 'active',
+    usage_percentage: 37,
+    usage_reset_at: '2026-08-01T00:00:00.000Z',
+  };
+  const RENEWED = {
+    kind: 'renewed',
+    token: 'rotated-token',
+    expiresAt: Date.now() + 600_000,
+    refreshToken: 'next-renewal',
+  };
+
+  interface Answer {
+    status: number;
+    body?: unknown;
+    headers?: Record<string, string>;
+  }
+
+  function answerAccountApi(...answers: Answer[]): string[] {
+    const bearers: string[] = [];
+    vi.mocked(https.request).mockImplementation(((
+      options: https.RequestOptions,
+      callback: (res: EventEmitter & { statusCode?: number; headers: object }) => void,
+    ) => {
+      bearers.push(String((options.headers as Record<string, string>)['Authorization']));
+      const next = answers.shift() ?? { status: 500, body: 'exhausted' };
+      const res = Object.assign(new EventEmitter(), {
+        statusCode: next.status,
+        headers: next.headers ?? {},
+      });
+      queueMicrotask(() => {
+        callback(res);
+        res.emit('data', Buffer.from(JSON.stringify(next.body ?? {}), 'utf8'));
+        res.emit('end');
+      });
+      return Object.assign(new EventEmitter(), {
+        end: () => undefined,
+        destroy: () => undefined,
+        setTimeout: () => undefined,
+      });
+    }) as never);
+    return bearers;
+  }
+
+  async function signedIn(renewable = true): Promise<vscode.SecretStorage> {
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    await setAccountToken(secrets, 'old-token', undefined, renewable ? 'renewal' : undefined);
+    return secrets;
+  }
+
+  beforeEach(() => {
+    vi.mocked(https.request).mockReset();
+    refreshDeviceSession.mockReset();
+  });
+
+  it('renews the credential and asks again before it touches the session', async () => {
+    const secrets = await signedIn();
+    refreshDeviceSession.mockResolvedValue(RENEWED);
+    const bearers = answerAccountApi({ status: 401 }, { status: 200, body: TIER_BODY });
+
+    await expect(fetchTierInfo(secrets)).resolves.toMatchObject({ tier: 'team' });
+
+    expect(bearers).toEqual(['Bearer old-token', 'Bearer rotated-token']);
+    await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
+    await expect(getAccountToken(secrets)).resolves.toBe('rotated-token');
+  });
+
+  it('ends the session only when the renewed credential is refused as well', async () => {
+    const secrets = await signedIn();
+    refreshDeviceSession.mockResolvedValue(RENEWED);
+    const bearers = answerAccountApi({ status: 401 }, { status: 401 });
+
+    await expect(fetchTierInfo(secrets)).resolves.toBeUndefined();
+
+    expect(bearers).toEqual(['Bearer old-token', 'Bearer rotated-token']);
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('next-renewal');
+  });
+
+  it('keeps the session when the renewal itself cannot be confirmed', async () => {
+    const secrets = await signedIn();
+    refreshDeviceSession.mockResolvedValue({ kind: 'unavailable' });
+    const bearers = answerAccountApi({ status: 401 });
+
+    await expect(fetchTierInfo(secrets)).resolves.toBeUndefined();
+
+    expect(bearers).toEqual(['Bearer old-token']);
+    await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
+    await expect(getAccountToken(secrets)).resolves.toBe('old-token');
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('renewal');
+  });
+
+  it('ends the session when the renewal says the grant was revoked', async () => {
+    const secrets = await signedIn();
+    refreshDeviceSession.mockResolvedValue({ kind: 'revoked' });
+    answerAccountApi({ status: 401 });
+
+    await expect(fetchTierInfo(secrets)).resolves.toBeUndefined();
+
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+    await expect(getAccountRefreshToken(secrets)).resolves.toBeUndefined();
+  });
+
+  it('asks once more with the same credential when none can be renewed', async () => {
+    const secrets = await signedIn(false);
+    const bearers = answerAccountApi({ status: 401 }, { status: 200, body: TIER_BODY });
+
+    await expect(fetchTierInfo(secrets)).resolves.toMatchObject({ tier: 'team' });
+
+    expect(bearers).toEqual(['Bearer old-token', 'Bearer old-token']);
+    expect(refreshDeviceSession).not.toHaveBeenCalled();
+    await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
+  });
+
+  it('ends the session when the same credential is refused twice and none can be renewed', async () => {
+    const secrets = await signedIn(false);
+    answerAccountApi({ status: 401 }, { status: 401 });
+
+    await expect(fetchTierInfo(secrets)).resolves.toBeUndefined();
+
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+  });
+
+  it.each([
+    [
+      'a slow dependency',
+      {
+        status: 503,
+        headers: { 'retry-after': '5' },
+        body: {
+          error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' },
+        },
+      },
+    ],
+    [
+      'an incident lockdown',
+      {
+        status: 403,
+        body: { error: { code: 'FORBIDDEN', message: 'This workspace is locked down.' } },
+      },
+    ],
+    [
+      'a workspace policy',
+      {
+        status: 403,
+        body: {
+          error: {
+            type: 'organization_policy',
+            code: 'surface_not_allowed',
+            message: 'This workspace does not allow this client.',
+          },
+        },
+      },
+    ],
+  ])('keeps the session, the renewal credential and the tier on %s', async (_case, answer) => {
+    const secrets = await signedIn();
+    const bearers = answerAccountApi(answer);
+
+    await expect(fetchTierInfo(secrets)).resolves.toBeUndefined();
+    answerAccountApi(answer);
+    await expect(fetchAccountIdentity(secrets)).resolves.toBeUndefined();
+
+    expect(bearers).toEqual(['Bearer old-token']);
+    expect(refreshDeviceSession).not.toHaveBeenCalled();
+    await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
+    await expect(getAccountToken(secrets)).resolves.toBe('old-token');
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('renewal');
+  });
+
+  it('shows the server wording for a lockdown or an outage in the usage history', async () => {
+    const secrets = await signedIn();
+    answerAccountApi({
+      status: 403,
+      body: { error: { code: 'FORBIDDEN', message: 'This workspace is locked down.' } },
+    });
+    await expect(fetchUsageHistory(secrets)).resolves.toEqual({
+      kind: 'unavailable',
+      reason: 'This workspace is locked down.',
+    });
+
+    answerAccountApi({
+      status: 503,
+      body: { error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' } },
+    });
+    await expect(fetchUsageHistory(secrets)).resolves.toEqual({
+      kind: 'unavailable',
+      reason: 'Service temporarily unavailable',
+    });
+  });
+
+  describe('chat completions', () => {
+    const cancellation = {
+      isCancellationRequested: false,
+      onCancellationRequested: () => ({ dispose: () => undefined }),
+    } as unknown as vscode.CancellationToken;
+
+    function sse(text: string): string {
+      return `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: [DONE]\n\n`;
+    }
+
+    function answerChat(...answers: Answer[]): string[] {
+      const bearers: string[] = [];
+      vi.mocked(https.request).mockImplementation(((
+        options: https.RequestOptions,
+        callback: (res: EventEmitter & { statusCode?: number; headers: object }) => void,
+      ) => {
+        bearers.push(String((options.headers as Record<string, string>)['Authorization']));
+        const next = answers.shift() ?? { status: 500, body: 'exhausted' };
+        const res = Object.assign(new EventEmitter(), {
+          statusCode: next.status,
+          headers: next.headers ?? {},
+        });
+        queueMicrotask(() => {
+          callback(res);
+          res.emit('data', Buffer.from(String(next.body ?? ''), 'utf8'));
+          res.emit('end');
+        });
+        return Object.assign(new EventEmitter(), {
+          write: () => true,
+          end: () => undefined,
+          destroy: () => undefined,
+        });
+      }) as never);
+      return bearers;
+    }
+
+    async function ask(secrets: vscode.SecretStorage): Promise<string> {
+      const tokens: string[] = [];
+      const settled = streamChatCompletion(
+        secrets,
+        [{ role: 'user', content: 'hi' }],
+        { onToken: (token) => tokens.push(token), onDone: () => undefined },
+        cancellation,
+      ).then(
+        () => ({ text: tokens.join('') }),
+        (error: unknown) => ({ error }),
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      const outcome = await settled;
+      if ('error' in outcome) throw outcome.error;
+      return outcome.text;
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('answers with a renewed credential after a single 401', async () => {
+      const secrets = await signedIn();
+      refreshDeviceSession.mockResolvedValue(RENEWED);
+      const bearers = answerChat(
+        { status: 401, body: 'nope' },
+        { status: 200, body: sse('Hello') },
+      );
+
+      await expect(ask(secrets)).resolves.toBe('Hello');
+
+      expect(bearers).toEqual(['Bearer old-token', 'Bearer rotated-token']);
+      await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
+    });
+
+    it('keeps the session and reports a temporary failure when the 401 cannot be confirmed', async () => {
+      const secrets = await signedIn();
+      refreshDeviceSession.mockResolvedValue({ kind: 'unavailable' });
+      answerChat({ status: 401, body: 'nope' });
+
+      await expect(ask(secrets)).rejects.toMatchObject({
+        statusCode: 503,
+        code: 'SESSION_CHECK_UNAVAILABLE',
+      });
+
+      await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
+      await expect(getAccountToken(secrets)).resolves.toBe('old-token');
+    });
+
+    it('asks to sign in again only after the renewed credential was refused', async () => {
+      const secrets = await signedIn();
+      refreshDeviceSession.mockResolvedValue(RENEWED);
+      answerChat({ status: 401, body: 'nope' }, { status: 401, body: 'nope' });
+
+      await expect(ask(secrets)).rejects.toMatchObject({ code: 'ACCOUNT_AUTH_REQUIRED' });
+
+      await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+    });
+
+    it('never offers a sign-in for a lockdown and shows the server wording', async () => {
+      const secrets = await signedIn();
+      const bearers = answerChat({
+        status: 403,
+        body: JSON.stringify({
+          error: { code: 'FORBIDDEN', message: 'This workspace is locked down.' },
+        }),
+      });
+
+      await expect(ask(secrets)).rejects.toMatchObject({
+        statusCode: 403,
+        code: 'FORBIDDEN',
+        message: 'This workspace is locked down.',
+      });
+
+      expect(bearers).toHaveLength(1);
+      expect(refreshDeviceSession).not.toHaveBeenCalled();
+      await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
+    });
+
+    it('waits at least as long as the server asked before retrying a 503', async () => {
+      const secrets = await signedIn();
+      const bearers = answerChat(
+        { status: 503, headers: { 'retry-after': '5' }, body: '{}' },
+        { status: 200, body: sse('Back') },
+      );
+      const tokens: string[] = [];
+      const pending = streamChatCompletion(
+        secrets,
+        [{ role: 'user', content: 'hi' }],
+        { onToken: (token) => tokens.push(token), onDone: () => undefined },
+        cancellation,
+      );
+
+      await vi.advanceTimersByTimeAsync(4_000);
+      expect(bearers).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(1_500);
+      await pending;
+      expect(bearers).toHaveLength(2);
+      expect(tokens.join('')).toBe('Back');
+    });
+  });
+});
+
+describe('what the server says about a refused request', () => {
+  it('carries the stated retry-after on a temporary failure', () => {
+    const error = parseCloudCompletionError(
+      503,
+      JSON.stringify({ error: { code: 'SERVICE_UNAVAILABLE' } }),
+      {
+        'retry-after': '5',
+      },
+    );
+
+    expect(error).toMatchObject({ statusCode: 503, retryAfterMs: 5_000 });
+  });
+
+  it('shows a lockdown or policy refusal as the server worded it', () => {
+    const lockdown = parseCloudCompletionError(
+      403,
+      JSON.stringify({
+        error: { code: 'FORBIDDEN', message: 'This workspace is locked down. Contact support.' },
+      }),
+    );
+    const policy = parseCloudCompletionError(
+      403,
+      JSON.stringify({
+        error: {
+          type: 'organization_policy',
+          code: 'surface_not_allowed',
+          message: 'Your workspace does not allow this client.',
+        },
+      }),
+    );
+
+    expect(lockdown).toMatchObject({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+      message: 'This workspace is locked down. Contact support.',
+    });
+    expect(lockdown).not.toBeInstanceOf(AgiWorkforcePaywallError);
+    expect(policy).toMatchObject({
+      statusCode: 403,
+      code: 'surface_not_allowed',
+      message: 'Your workspace does not allow this client.',
+    });
+  });
+
+  it('renders the developer surface plan refusal exactly as the server worded it', () => {
+    const serverText = billingPlanCapabilityUpgradeMessage('developer_surfaces');
+
+    const error = parseCloudCompletionError(
+      403,
+      JSON.stringify({ error: { code: 'developer_surface_plan_required', message: serverText } }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforcePaywallError);
+    expect(error).toMatchObject({ reason: serverText, recoveryAction: 'upgrade' });
+    expect(JSON.stringify(error)).not.toMatch(/browser extension/iu);
+    expect((error as AgiWorkforcePaywallError).reason).not.toMatch(/browser extension/iu);
+  });
+
+  it('treats the upper-case plan reason code the server uses for schedules as a plan refusal', () => {
+    const error = parseCloudCompletionError(
+      403,
+      JSON.stringify({
+        error: {
+          code: 'SUBSCRIPTION_REQUIRED',
+          message: 'This plan does not include scheduled tasks.',
+        },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforcePaywallError);
+    expect(error).toMatchObject({ reason: 'This plan does not include scheduled tasks.' });
   });
 });

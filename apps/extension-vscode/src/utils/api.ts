@@ -42,6 +42,8 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { Config, __CONFIG_DEFAULTS, type ExtensionAgentEffort } from '../platform/config';
 import { platformRequestHeaders } from '../platform/platformHeaders';
+import { t } from '../l10n';
+import { accountRefusalKind, parseRetryAfterMs } from './accountRefusal';
 
 export interface LlmChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -76,6 +78,7 @@ export class AgiWorkforceApiError extends Error {
     message: string,
     public readonly statusCode?: number,
     public readonly code?: string,
+    public readonly retryAfterMs?: number,
   ) {
     super(message);
     this.name = 'AgiWorkforceApiError';
@@ -156,6 +159,8 @@ export class AgiWorkforceUsageLimitError extends AgiWorkforceApiError {
   }
 }
 
+const MAX_RETRY_AFTER_MS = 30_000;
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   canRetry: () => boolean,
@@ -175,7 +180,9 @@ async function withRetry<T>(
     ) {
       throw err;
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    const stated = err instanceof AgiWorkforceApiError ? err.retryAfterMs : undefined;
+    const waitMs = Math.max(delayMs, Math.min(stated ?? 0, MAX_RETRY_AFTER_MS));
+    await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
     return withRetry(fn, canRetry, retries - 1, delayMs * 2);
   }
 }
@@ -383,17 +390,22 @@ let heldAccountUnavailable: string | undefined;
  * the device-code flow. deviceAuth is loaded here rather than imported at the
  * top because it owns the device endpoints and already imports this module.
  */
-export function renewAccountSession(secrets: vscode.SecretStorage): Promise<AccountSessionRenewal> {
+export function renewAccountSession(
+  secrets: vscode.SecretStorage,
+  rejectedToken?: string,
+): Promise<AccountSessionRenewal> {
   const custody = custodyOf(secrets);
   const pending = custody.renewal;
   if (pending !== undefined && pending.generation === custody.generation) return pending.promise;
 
   const generation = custody.generation;
-  const promise: Promise<AccountSessionRenewal> = rotateAccountSession(secrets, generation).finally(
-    () => {
-      if (custody.renewal?.promise === promise) custody.renewal = undefined;
-    },
-  );
+  const promise: Promise<AccountSessionRenewal> = rotateAccountSession(
+    secrets,
+    generation,
+    rejectedToken,
+  ).finally(() => {
+    if (custody.renewal?.promise === promise) custody.renewal = undefined;
+  });
   custody.renewal = { generation, promise };
   return promise;
 }
@@ -401,11 +413,19 @@ export function renewAccountSession(secrets: vscode.SecretStorage): Promise<Acco
 async function rotateAccountSession(
   secrets: vscode.SecretStorage,
   generation: number,
+  rejectedToken?: string,
 ): Promise<AccountSessionRenewal> {
   if (heldAccountUnavailable !== undefined) return 'account-unavailable';
   const owns = (): boolean => custodyOf(secrets).generation === generation;
 
-  if ((await getAccountAuthState(secrets)).status !== 'expired') return 'superseded';
+  const state = await getAccountAuthState(secrets);
+  const stillRejected =
+    rejectedToken !== undefined &&
+    state.status === 'signed-in' &&
+    (await secrets.get(ACCOUNT_TOKEN_KEY)) === rejectedToken;
+  if (rejectedToken === undefined ? state.status !== 'expired' : !stillRejected) {
+    return 'superseded';
+  }
   const refreshToken = await getAccountRefreshToken(secrets);
   if (refreshToken === undefined) return 'unavailable';
 
@@ -445,6 +465,39 @@ async function rotateAccountSession(
   }
   if (!owns()) return 'superseded';
   return result.kind === 'terms-required' ? 'terms-required' : 'unavailable';
+}
+
+export type RejectedAccountTokenReview =
+  { kind: 'retry'; token: string } | { kind: 'rejected' } | { kind: 'unconfirmed' };
+
+/**
+ * A single 401 from a data route does not prove the credential is gone. The
+ * session is only dropped after the credential was renewed and the renewed one
+ * was refused too, or when the renewal itself says the grant is revoked.
+ */
+export async function reviewRejectedAccountToken(
+  secrets: vscode.SecretStorage,
+  rejectedToken: string,
+): Promise<RejectedAccountTokenReview> {
+  if ((await getAccountRefreshToken(secrets)) === undefined) {
+    return { kind: 'retry', token: rejectedToken };
+  }
+  const renewal = await renewAccountSession(secrets, rejectedToken);
+  if (renewal === 'revoked') return { kind: 'rejected' };
+  if (renewal === 'renewed' || renewal === 'superseded') {
+    const current = await secrets.get(ACCOUNT_TOKEN_KEY);
+    if (current === undefined || current === '') return { kind: 'rejected' };
+    return current === rejectedToken ? { kind: 'unconfirmed' } : { kind: 'retry', token: current };
+  }
+  return { kind: 'unconfirmed' };
+}
+
+export async function confirmAccountTokenRejected(
+  secrets: vscode.SecretStorage,
+  token: string,
+): Promise<void> {
+  notifyAccountTierMayHaveChanged();
+  await invalidateAccountToken(secrets, token);
 }
 
 export async function getAccountAuthState(
@@ -631,16 +684,17 @@ export function parseCloudCompletionError(
     );
   }
 
-  if (statusCode === 403 && code !== undefined && PLAN_GATE_CODES.has(code)) {
+  const planGateCode = code?.toLowerCase();
+  if (statusCode === 403 && planGateCode !== undefined && PLAN_GATE_CODES.has(planGateCode)) {
     notifyAccountTierMayHaveChanged();
     return new AgiWorkforcePaywallError(
-      code.replace(/_(?:plan_)?required$/u, '') || 'managed_cloud',
+      planGateCode.replace(/_(?:plan_)?required$/u, '') || 'managed_cloud',
       requiredTier ?? 'pro',
       message ??
-        (code === 'subscription_inactive'
+        (planGateCode === 'subscription_inactive'
           ? 'Your AGI Cloud subscription needs billing attention.'
           : 'This AGI Cloud capability is unavailable on your current plan.'),
-      code,
+      planGateCode,
     );
   }
 
@@ -657,6 +711,9 @@ export function parseCloudCompletionError(
     );
   }
 
+  const retryAfter = responseHeaders['retry-after'];
+  const retryAfterMs = parseRetryAfterMs(Array.isArray(retryAfter) ? retryAfter[0] : retryAfter);
+
   return new AgiWorkforceApiError(
     message ??
       (statusCode === 429
@@ -664,6 +721,7 @@ export function parseCloudCompletionError(
         : `AGI Cloud request failed (HTTP ${statusCode}).`),
     statusCode,
     code ?? (statusCode === 429 ? 'RATE_LIMITED' : 'HTTP_ERROR'),
+    retryAfterMs,
   );
 }
 
@@ -863,11 +921,11 @@ export async function streamChatCompletion(
 
   const idempotencyKey = `agi.vscode.chat.${randomUUID()}`;
 
-  const authHeaders: Record<string, string> = {
-    Authorization: `Bearer ${credential.token}`,
+  const headersFor = (bearer: string): Record<string, string> => ({
+    Authorization: `Bearer ${bearer}`,
     ...platformRequestHeaders(),
     'Idempotency-Key': idempotencyKey,
-  };
+  });
 
   const requestStartTime = Date.now();
 
@@ -875,12 +933,12 @@ export async function streamChatCompletion(
     throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
   }
   let tokenDelivered = false;
-  try {
-    await withRetry(
+  const send = (bearer: string): Promise<void> =>
+    withRetry(
       () =>
         httpsPostStream(
           `${endpoint}/chat/completions`,
-          authHeaders,
+          headersFor(bearer),
           bodyStr,
           (chunk) => {
             const content = chunk.choices[0]?.delta?.content;
@@ -893,11 +951,34 @@ export async function streamChatCompletion(
         ),
       () => !tokenDelivered && !cancellationToken.isCancellationRequested,
     );
+  const isUnauthorized = (error: unknown): boolean =>
+    error instanceof AgiWorkforceApiError && error.statusCode === 401;
+  try {
+    try {
+      await send(credential.token);
+    } catch (error) {
+      if (!isUnauthorized(error) || credential.kind !== 'account') throw error;
+      notifyAccountTierMayHaveChanged();
+      const review = await reviewRejectedAccountToken(secrets, credential.token);
+      if (review.kind === 'unconfirmed') {
+        throw new AgiWorkforceApiError(
+          t('chatError.couldNotReach', { provider: PRODUCT_BRAND }),
+          503,
+          'SESSION_CHECK_UNAVAILABLE',
+        );
+      }
+      if (review.kind === 'rejected') throw error;
+      try {
+        await send(review.token);
+      } catch (retryError) {
+        if (isUnauthorized(retryError)) await confirmAccountTokenRejected(secrets, review.token);
+        throw retryError;
+      }
+    }
   } catch (error) {
-    if (error instanceof AgiWorkforceApiError && error.statusCode === 401) {
+    if (isUnauthorized(error)) {
       notifyAccountTierMayHaveChanged();
       if (credential.kind === 'account') {
-        await invalidateAccountToken(secrets, credential.token);
         throw new AgiWorkforceApiError(
           'Your AGI Cloud session expired or was revoked. Sign in again to continue.',
           401,
@@ -1143,25 +1224,70 @@ export async function fetchAccountIdentity(
   const accountToken = await getAccountToken(secrets);
   if (accountToken === undefined || accountToken === '') return undefined;
 
-  const response = await getCloudJson(
-    new URL('/api/me?surface=vscode', getCloudWebOrigin()).toString(),
-    accountToken,
+  const url = new URL('/api/me?surface=vscode', getCloudWebOrigin()).toString();
+  const response = await sendAccountRequest(
+    secrets,
+    { kind: 'account', token: accountToken },
+    (bearer) => getCloudJson(url, bearer),
   );
-  if (response.kind === 'http-error') {
-    if (response.status === 401) {
-      notifyAccountTierMayHaveChanged();
-      void invalidateAccountToken(secrets, accountToken);
-    }
-    return undefined;
-  }
   return response.kind === 'ok' ? parseAccountIdentityResponse(response.body) : undefined;
 }
 
 type CloudJsonResponse =
   | { kind: 'ok'; body: unknown }
-  | { kind: 'http-error'; status: number }
+  | { kind: 'http-error'; status: number; message?: string; code?: string; retryAfterMs?: number }
   | { kind: 'unreadable' }
   | { kind: 'unreachable' };
+
+function readHttpErrorBody(
+  status: number,
+  headers: http.IncomingHttpHeaders,
+  raw: string,
+): CloudJsonResponse {
+  let error: { code?: unknown; message?: unknown } | undefined;
+  try {
+    const parsed = JSON.parse(raw) as { error?: unknown } | null;
+    if (parsed?.error !== null && typeof parsed?.error === 'object') {
+      error = parsed.error as { code?: unknown; message?: unknown };
+    }
+  } catch {
+    error = undefined;
+  }
+  const message = typeof error?.message === 'string' ? error.message.trim() : '';
+  const code = typeof error?.code === 'string' ? error.code : undefined;
+  const retryAfter = headers['retry-after'];
+  const retryAfterMs = parseRetryAfterMs(Array.isArray(retryAfter) ? retryAfter[0] : retryAfter);
+  return {
+    kind: 'http-error',
+    status,
+    ...(message === '' ? {} : { message }),
+    ...(code === undefined ? {} : { code }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+  };
+}
+
+function isUnauthorizedResponse(response: CloudJsonResponse): boolean {
+  return response.kind === 'http-error' && response.status === 401;
+}
+
+async function sendAccountRequest(
+  secrets: vscode.SecretStorage,
+  credential: { kind: 'account' | 'api-key'; token: string },
+  send: (token: string) => Promise<CloudJsonResponse>,
+): Promise<CloudJsonResponse> {
+  const first = await send(credential.token);
+  if (!isUnauthorizedResponse(first)) return first;
+  notifyAccountTierMayHaveChanged();
+  if (credential.kind !== 'account') return first;
+
+  const review = await reviewRejectedAccountToken(secrets, credential.token);
+  if (review.kind === 'unconfirmed') return { kind: 'unreachable' };
+  if (review.kind === 'rejected') return first;
+
+  const second = await send(review.token);
+  if (isUnauthorizedResponse(second)) await confirmAccountTokenRejected(secrets, review.token);
+  return second;
+}
 
 function getCloudJson(url: string, token: string): Promise<CloudJsonResponse> {
   return new Promise((resolve) => {
@@ -1186,7 +1312,7 @@ function getCloudJson(url: string, token: string): Promise<CloudJsonResponse> {
       res.on('end', () => {
         const status = res.statusCode ?? 0;
         if (status >= 400) {
-          resolve({ kind: 'http-error', status });
+          resolve(readHttpErrorBody(status, res.headers, Buffer.concat(chunks).toString('utf8')));
           return;
         }
         try {
@@ -1220,14 +1346,8 @@ async function getAccountJson(
 ): Promise<CloudJsonResponse | undefined> {
   const credential = await getCloudCredential(secrets);
   if (credential.kind === 'none') return undefined;
-  const response = await getCloudJson(cloudAccountApiUrl(path), credential.token);
-  if (response.kind === 'http-error' && response.status === 401) {
-    notifyAccountTierMayHaveChanged();
-    if (credential.kind === 'account') {
-      void invalidateAccountToken(secrets, credential.token);
-    }
-  }
-  return response;
+  const url = cloudAccountApiUrl(path);
+  return sendAccountRequest(secrets, credential, (bearer) => getCloudJson(url, bearer));
 }
 
 export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
@@ -1255,12 +1375,18 @@ export async function fetchUsageHistory(
         };
   }
   if (response.kind === 'http-error') {
+    const serverText =
+      response.message !== undefined &&
+      (response.status === 503 || accountRefusalKind(response.code) !== undefined)
+        ? response.message
+        : undefined;
     return {
       kind: 'unavailable',
       reason:
-        response.status === 401
+        serverText ??
+        (response.status === 401
           ? 'Your AGI Cloud session expired. Sign in again to see usage history.'
-          : `Usage history is unavailable right now (HTTP ${response.status}).`,
+          : `Usage history is unavailable right now (HTTP ${response.status}).`),
     };
   }
   return { kind: 'unavailable', reason: 'AGI Cloud could not be reached for usage history.' };
