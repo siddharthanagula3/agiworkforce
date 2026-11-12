@@ -19874,6 +19874,12 @@
     "CliReleaseStatus": [
       "apps/web/app/cli/CliInstallCommand.tsx"
     ],
+    "CliResolution": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
+    ],
+    "CliResolutionFailure": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
+    ],
     "CliResolutionHost": [
       "apps/extension-vscode/src/platform/remoteEnvironment.ts"
     ],
@@ -22180,6 +22186,12 @@
     "CloudUtilityFailureKind": [
       "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts"
     ],
+    "cloudUtilityModel": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
+    ],
+    "CloudUtilityModel": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
+    ],
     "CloudVoiceActionDialog": [
       "apps/desktop/src/features/voice/CloudVoiceActionDialog.tsx"
     ],
@@ -23246,6 +23258,9 @@
     ],
     "collectReadmeFactErrors": [
       "scripts/check-readme-facts.mjs"
+    ],
+    "collectReleaseSettings": [
+      "scripts/release/check-release-environments.mjs"
     ],
     "collectResolvableAshbyFields": [
       "apps/extension/src/features/content/autofill/ashby.ts"
@@ -28395,7 +28410,8 @@
       "scripts/check-time-semantics.mjs",
       "scripts/check-visual-session-telemetry.mjs",
       "scripts/check-workflow-hardening.mjs",
-      "scripts/lib/research-run-bounds.mjs"
+      "scripts/lib/research-run-bounds.mjs",
+      "scripts/release/check-release-environments.mjs"
     ],
     "contract_permission": [
       "apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs"
@@ -29106,6 +29122,9 @@
     ],
     "COPY_VALUE_LABEL": [
       "packages/ui/ui/src/directory/constants.ts"
+    ],
+    "COPY_WORKSPACE_NOTES_ACTION": [
+      "apps/extension-vscode/src/memory/accountMemoryStore.ts"
     ],
     "CopyableIdField": [
       "apps/web/features/settings/components/CopyableIdField.tsx"
@@ -35479,6 +35498,9 @@
     "describeChart": [
       "apps/mobile/src/features/chat/utils/mermaidChart.ts"
     ],
+    "describeCliResolutionFailure": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
+    ],
     "describeCloudCodeError": [
       "apps/mobile/src/features/cloud-code/service.ts"
     ],
@@ -38143,6 +38165,9 @@
     ],
     "DiagnosticSurface": [
       "packages/contracts/cloud-contracts/src/support.ts"
+    ],
+    "DiagnosticWriter": [
+      "apps/cli/src/output.rs"
     ],
     "DiagramMetadata": [
       "apps/desktop/src-tauri/src/core/artifacts/types.rs",
@@ -42951,7 +42976,8 @@
       "scripts/lib/rollout/entitlements.mjs"
     ],
     "entries": [
-      "apps/cli/src/cloud/marketplaces.rs"
+      "apps/cli/src/cloud/marketplaces.rs",
+      "apps/cli/src/tui/turn_transcript.rs"
     ],
     "entry": [
       "apps/cli/src/mcp/registry.rs",
@@ -43778,6 +43804,9 @@
     ],
     "evaluatePublicTextContrast": [
       "apps/web/e2e/lib/public-text-contrast.ts"
+    ],
+    "evaluateReleaseSettings": [
+      "scripts/release/check-release-environments.mjs"
     ],
     "evaluateRelevanceFloor": [
       "apps/web/lib/support/agent/index.ts",
@@ -57196,6 +57225,9 @@
     "has_server": [
       "apps/cli/src/mcp/mod.rs"
     ],
+    "has_visible_text": [
+      "apps/cli/src/tui/turn_transcript.rs"
+    ],
     "has_work": [
       "apps/cli/src/update_check.rs"
     ],
@@ -70186,6 +70218,9 @@
       "scripts/check-domain-ownership.mjs",
       "scripts/check-migration-table-privileges.mjs"
     ],
+    "loadReleaseContract": [
+      "scripts/release/check-release-environments.mjs"
+    ],
     "loadRerunGoal": [
       "apps/mobile/src/features/tasks/taskActions.ts"
     ],
@@ -70422,6 +70457,9 @@
     ],
     "LOCAL_MODEL_PROJECT_REFUSAL": [
       "apps/web/lib/temporary-chat-policy.ts"
+    ],
+    "LOCAL_MODEL_SELECTED_CODE": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
     ],
     "LOCAL_MODEL_SERVER_LABELS": [
       "packages/contracts/local-runtime/src/index.ts",
@@ -70948,6 +70986,9 @@
       "apps/mobile/src/features/model-picker/localModelRuntime.ts",
       "packages/contracts/local-runtime/src/index.ts",
       "packages/contracts/local-runtime/src/inference.ts"
+    ],
+    "LocalModelSelectedError": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
     ],
     "LocalModelServerId": [
       "packages/contracts/local-runtime/src/index.ts",
@@ -72016,6 +72057,9 @@
     ],
     "MANAGE_LABEL": [
       "packages/ui/ui/src/directory/constants.ts"
+    ],
+    "MANAGE_WORKSPACE_TRUST_COMMAND": [
+      "apps/extension-vscode/src/integrations/localRuntimeClient.ts"
     ],
     "managed": [
       "apps/cli/src/features/hooks/mod.rs",
@@ -85040,6 +85084,7 @@
     "observe": [
       "apps/cli/src/models/managed_approvals.rs",
       "apps/cli/src/tui/composer_edits.rs",
+      "apps/cli/src/tui/turn_transcript.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/accelerator.rs"
     ],
     "observe_screen": [
@@ -95869,6 +95914,9 @@
     "probeRemoteAuthMode": [
       "apps/web/lib/connectors/directory/auth-probe.ts"
     ],
+    "probeResolvedCli": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
+    ],
     "ProbeRouteDeps": [
       "services/signaling-server/src/probes.ts"
     ],
@@ -99211,6 +99259,9 @@
     ],
     "push_task": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
+    ],
+    "push_text": [
+      "apps/cli/src/tui/turn_transcript.rs"
     ],
     "push_to_background": [
       "apps/desktop/src-tauri/src/core/agent/background_agent.rs"
@@ -104952,6 +105003,9 @@
     "RELAY_PAIRING_CODE_PATTERN": [
       "packages/contracts/types/src/pairing.ts"
     ],
+    "relayable_thread": [
+      "apps/cli/src/remote_control/host.rs"
+    ],
     "RelayClient": [
       "services/signaling-server/__tests__/relay/in-process.ts"
     ],
@@ -105016,6 +105070,9 @@
     "release_from_vault_keys": [
       "apps/desktop/src-tauri/src/sys/commands/connector_permissions.rs"
     ],
+    "release_held_diagnostics": [
+      "apps/cli/src/output.rs"
+    ],
     "release_key": [
       "apps/desktop/src-tauri/src/automation/input/keyboard.rs"
     ],
@@ -105039,6 +105096,9 @@
     ],
     "RELEASE_OUTCOMES": [
       "apps/web/lib/server/release-audit-store.ts"
+    ],
+    "release_process_leases": [
+      "apps/cli/src/platform/runtime/writer_lease.rs"
     ],
     "RELEASE_READINESS": [
       "scripts/production-deploy-scope.mjs"
@@ -106600,6 +106660,9 @@
     "REPLY_DONE_TITLE": [
       "apps/web/features/chat/lib/completion-notification.ts"
     ],
+    "reply_text": [
+      "apps/cli/src/tui/turn_transcript.rs"
+    ],
     "ReplyActions": [
       "apps/web/features/marketing/components/app-preview/AppPreviews.tsx"
     ],
@@ -106728,7 +106791,8 @@
       "scripts/lib/comment-scan.mjs",
       "scripts/lib/project-context-boundary.mjs",
       "scripts/lib/research-run-bounds.mjs",
-      "scripts/probe-models.mjs"
+      "scripts/probe-models.mjs",
+      "scripts/release/check-release-environments.mjs"
     ],
     "REPO_ROOTS": [
       "scripts/lib/comment-scan.mjs"
@@ -107451,6 +107515,9 @@
     ],
     "REQUIRED_SEARCH_SYSTEM_NUDGE": [
       "apps/web/lib/web-search/required-search.ts"
+    ],
+    "REQUIRED_TAG_RULES": [
+      "scripts/release/check-release-environments.mjs"
     ],
     "required_variables": [
       "apps/cli/src/repo/setup.rs"
@@ -109008,6 +109075,9 @@
     ],
     "ResolveCompromiseResponseInput": [
       "apps/web/lib/services/identity-events/index.ts"
+    ],
+    "resolveConfiguredCli": [
+      "apps/extension-vscode/src/platform/config.ts"
     ],
     "ResolveConnectorAccessOptions": [
       "apps/web/lib/connectors/oauth-access.ts"
@@ -113173,6 +113243,9 @@
     "rules_dir": [
       "apps/cli/src/native_process_test_fixture.rs"
     ],
+    "rulesetCoversRef": [
+      "scripts/release/check-release-environments.mjs"
+    ],
     "RuleSubject": [
       "apps/cli/src/agent/prompt.rs"
     ],
@@ -113768,6 +113841,9 @@
     ],
     "runSessionRowAction": [
       "apps/web/shared/components/layout/sidebar-session-actions.ts"
+    ],
+    "runsGlobalInstall": [
+      "scripts/check-workflow-hardening.mjs"
     ],
     "runShadowDecision": [
       "apps/web/lib/services/semantic-decisions/shadow.ts"
@@ -116739,6 +116815,9 @@
     ],
     "SCRIPT_RE": [
       "apps/cli/src/features/exec/tools/common/mod.rs"
+    ],
+    "scriptedInstalls": [
+      "scripts/check-workflow-hardening.mjs"
     ],
     "ScriptLanguage": [
       "packages/contracts/types/src/workflow.ts"
@@ -122519,6 +122598,9 @@
     "showLoadingOverlay": [
       "apps/desktop/electron/loadingOverlay.ts"
     ],
+    "showLocalModelRefusal": [
+      "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts"
+    ],
     "showMcpServerDetailsFromSettings": [
       "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts"
     ],
@@ -122956,6 +123038,9 @@
     ],
     "signing_key_from_seed_base64": [
       "apps/cli/src/features/plugins/signature.rs"
+    ],
+    "signingSecretsRead": [
+      "scripts/check-workflow-hardening.mjs"
     ],
     "signInIdentitiesSchema": [
       "apps/web/features/settings/components/Settings/use-sign-in-identities.ts"
@@ -135659,6 +135744,9 @@
     "TURN_INTERRUPT": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "turn_notice": [
+      "apps/cli/src/cloud/client.rs"
+    ],
     "turn_of": [
       "apps/cli/src/app_server/review.rs"
     ],
@@ -135750,6 +135838,9 @@
     "TurnEngine": [
       "crates/agiworkforce-agent-core/src/engine.rs",
       "crates/agiworkforce-agent-core/src/lib.rs"
+    ],
+    "TurnEntry": [
+      "apps/cli/src/tui/turn_transcript.rs"
     ],
     "TurnEnvironmentSelection": [
       "crates/agiworkforce-protocol/src/protocol.rs"
@@ -135984,6 +136075,9 @@
     ],
     "TurnToolProhibitionSchema": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-prohibition.ts"
+    ],
+    "TurnTranscript": [
+      "apps/cli/src/tui/turn_transcript.rs"
     ],
     "TurnTruncationInput": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-completeness.ts"
@@ -136909,6 +137003,9 @@
     ],
     "UNRESOLVED_UI_GAP_STATUSES": [
       "scripts/ui-gaps-lib.mjs"
+    ],
+    "unresolvedCliProbe": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
     ],
     "UnresolvedPublicRoute": [
       "apps/web/e2e/lib/public-route-inventory.ts"
@@ -145626,6 +145723,9 @@
     "WORKSPACE_MEMORY_ADOPTED_KEY": [
       "apps/extension-vscode/src/memory/accountMemoryStore.ts"
     ],
+    "WORKSPACE_MEMORY_DECLINED_KEY": [
+      "apps/extension-vscode/src/memory/accountMemoryStore.ts"
+    ],
     "WORKSPACE_MFA_REQUIREMENT_QUERY_KEY": [
       "apps/web/features/settings/components/WorkspaceMfaNotice.tsx",
       "apps/web/features/settings/hooks/use-mfa-readers.ts"
@@ -146065,6 +146165,9 @@
     ],
     "WorkspaceModelsPage": [
       "apps/web/app/workspace/models/page.tsx"
+    ],
+    "WorkspaceNotTrustedError": [
+      "apps/extension-vscode/src/integrations/localRuntimeClient.ts"
     ],
     "WorkspaceOverview": [
       "apps/mobile/src/features/team/index.ts",

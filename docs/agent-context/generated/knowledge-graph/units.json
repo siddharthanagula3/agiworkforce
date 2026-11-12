@@ -2361,12 +2361,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 319,
+      "files": 320,
       "roles": {
         "config": 1,
         "doc": 6,
         "other": 3,
-        "source": 278,
+        "source": 279,
         "test": 31
       }
     },
@@ -2505,13 +2505,13 @@
       "lanes": [
         "vscode-extension"
       ],
-      "files": 386,
+      "files": 387,
       "roles": {
         "asset": 3,
         "config": 5,
         "doc": 8,
         "other": 4,
-        "source": 187,
+        "source": 188,
         "test": 179
       }
     },
@@ -5028,13 +5028,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 724,
+      "files": 726,
       "roles": {
         "config": 67,
         "doc": 1,
         "other": 21,
-        "source": 378,
-        "test": 257
+        "source": 379,
+        "test": 258
       }
     },
     {
