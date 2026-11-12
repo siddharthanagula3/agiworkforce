@@ -112,6 +112,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   START_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   GET_RECORDED_ACTIONS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  RECORDING_ACTION: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   LIST_SHORTCUTS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   AGI_CU_USER_INPUT: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   LIST_SCHEDULED_TASKS: { senderClass: 'allowlisted-tab', allowsCrossTab: true },

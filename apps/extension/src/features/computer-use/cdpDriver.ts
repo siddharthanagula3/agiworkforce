@@ -747,6 +747,31 @@ export async function getTargetSignature(
   );
 }
 
+/** Whether the element the selector names is a field the user must fill in. True when unsure. */
+export async function isProtectedFieldTarget(
+  tabId: number,
+  selector: string,
+  expectedSignature: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  return withDebugger(
+    tabId,
+    async () => {
+      const result = await sendCommand<CdpObjectResult>(
+        tabId,
+        'Runtime.evaluate',
+        {
+          expression: `(() => { const el = ${buildIndexedElementExpression(selector, expectedSignature)}; return el ? ${DOM_ELEMENT_READER_JS}.isSensitiveField(el) : true; })()`,
+          returnByValue: true,
+        },
+        signal,
+      );
+      return result.exceptionDetails !== undefined || result.result.value !== false;
+    },
+    signal,
+  );
+}
+
 export interface TargetControlObservation {
   signature: string;
   state: ReturnType<ReturnType<typeof createDomElementReader>['controlState']>;

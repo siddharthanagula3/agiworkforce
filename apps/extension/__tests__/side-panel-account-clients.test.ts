@@ -155,6 +155,27 @@ describe('projects drawer client', () => {
     expect(result).toMatchObject({ status: 'error', code: 'auth_required' });
   });
 
+  it('shows the reason a signed-in account was refused instead of asking it to sign in', async () => {
+    const listProjects = vi
+      .fn()
+      .mockRejectedValue(
+        new ManagedCloudProjectsHttpError(
+          'HTTP 403: Projects are turned off for this workspace.',
+          403,
+        ),
+      );
+    const result = await listChromeProjects(
+      {},
+      projectsDependencies(projectsClient({ listProjects })),
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      code: 'refused',
+      message: 'Projects are turned off for this workspace.',
+    });
+  });
+
   it('reports the signed-out state when no account token is held at all', async () => {
     const result = await listChromeProjects({}, projectsDependencies(projectsClient(), null));
 
@@ -190,5 +211,24 @@ describe('schedules section client', () => {
     );
 
     expect(result).toMatchObject({ status: 'error', code: 'auth_required' });
+  });
+
+  it.each([
+    [
+      'a plan limit',
+      'Free plans do not include scheduled tasks. Upgrade to schedule unattended runs.',
+      'FORBIDDEN',
+    ],
+    ['a workspace policy', 'Schedules are turned off for this workspace.', 'feature_disabled'],
+  ])('shows %s as the server worded it, never as a sign-in prompt', async (_label, text, code) => {
+    const listSchedules = vi
+      .fn()
+      .mockRejectedValue(new ManagedCloudSchedulesHttpError(text, 403, code));
+    const result = await listChromeSchedules(
+      {},
+      schedulesDependencies(schedulesClient({ listSchedules })),
+    );
+
+    expect(result).toEqual({ status: 'error', code: 'refused', message: text });
   });
 });

@@ -204,6 +204,22 @@ function isGatewayCode(code: string | undefined, expected: string): boolean {
 const ACCOUNT_UNAVAILABLE_MESSAGE =
   'This AGI account cannot be used right now. Open your account on the web to see why.';
 
+/** The server did not accept the credential. Only the auth layer can say the session is gone. */
+export class ManagedAccessAuthRequiredError extends Error {
+  constructor() {
+    super('Authentication is required');
+    this.name = 'ManagedAccessAuthRequiredError';
+  }
+}
+
+/** A refusal with a reason, such as a workspace policy, that signing in again does not change. */
+export class ManagedAccessRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ManagedAccessRefusedError';
+  }
+}
+
 export class AccountUnavailableError extends Error {
   constructor(
     message: string,
@@ -236,6 +252,7 @@ export async function getManagedModelAccess(
   if (!response.ok || !usageResponse.ok) {
     const failed = !response.ok ? response : usageResponse;
     const status = failed.status;
+    if (status === 401) throw new ManagedAccessAuthRequiredError();
     if (status === 403) {
       const refusal = readGatewayErrorBody(await readBoundedErrorBody(failed));
       if (isGatewayCode(refusal.code, ACCOUNT_UNAVAILABLE_CODE)) {
@@ -244,10 +261,9 @@ export async function getManagedModelAccess(
           refusal.recoveryPath ?? null,
         );
       }
+      if (refusal.message) throw new ManagedAccessRefusedError(refusal.message);
     }
-    throw new Error(
-      status === 401 ? 'Authentication is required' : `Account access is unavailable (${status})`,
-    );
+    throw new Error(`Account access is unavailable (${status})`);
   }
 
   const [body, usageBody] = await Promise.all([response.json(), usageResponse.json()]);
@@ -444,11 +460,13 @@ async function clearLocalAuth(endClerkSession: boolean): Promise<LocalAuthClearR
     // ignore
   }
   let profileCleared = true;
-  try {
-    await clearAutofillProfile();
-  } catch (error) {
-    console.warn('[AGI] Removing the saved autofill profile failed:', error);
-    profileCleared = false;
+  if (endClerkSession) {
+    try {
+      await clearAutofillProfile();
+    } catch (error) {
+      console.warn('[AGI] Removing the saved autofill profile failed:', error);
+      profileCleared = false;
+    }
   }
   return { webSessionEnded, profileCleared };
 }

@@ -63,6 +63,7 @@ import {
   loadShortcuts,
   handleSaveShortcut,
   handleListShortcuts,
+  releaseRecordingsOfOtherAccounts,
   handleDeleteShortcut,
   handleUpdateShortcut,
   planShortcutReplay,
@@ -71,6 +72,14 @@ import {
   normalizeShortcutStartUrl,
   validateShortcutReplayTarget,
 } from './features/shortcuts/origin';
+import {
+  appendRecordedAction,
+  beginRecordingSession,
+  discardAllRecordingSessions,
+  discardRecordingSession,
+  endRecordingSession,
+  readRecordingSession,
+} from './features/background/recordingSessions';
 import { initializeSyncedPreferences } from './features/background/synced-preferences';
 import {
   loadScheduledTasks,
@@ -385,10 +394,14 @@ import {
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
 import {
+  bindUnboundDesktopPairing,
   desktopPairingRejectsAccount,
+  oweDesktopRevocation,
+  readDesktopPairToken,
+  readPendingDesktopRevocation,
   releaseStoredDesktopPairing,
-  parsePendingDesktopRevocation,
-  STORAGE_KEY_PENDING_DESKTOP_REVOCATION,
+  settlePendingDesktopRevocation,
+  type PendingDesktopRevocation,
 } from './features/native-bridge/pairing';
 import type {
   AdoptChatTurnMessage,
@@ -420,6 +433,7 @@ import type {
   ResumeChatRunMessage,
   RevealDownloadMessage,
   RevokeSiteOnceMessage,
+  RecordingActionMessage,
   SaveShortcutMessage,
   SetPageWatchMessage,
   SetQuickModeMessage,
@@ -452,7 +466,26 @@ interface NativeMessageEnvelope {
   type: string;
   success?: boolean;
   error?: string;
+  code?: unknown;
   data?: unknown;
+}
+
+const NATIVE_PAIRING_REJECTED_CODE = 'pairing-rejected';
+
+class NativeRequestRefused extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+  ) {
+    super(message);
+  }
+}
+
+function nativeRefusal(message: NativeMessageEnvelope): NativeRequestRefused {
+  return new NativeRequestRefused(
+    message.error ?? 'Native request failed',
+    typeof message.code === 'string' ? message.code : null,
+  );
 }
 
 interface NativeResponseEnvelope {
@@ -1322,10 +1355,18 @@ const TAB_GROUP_NAME = 'AGI';
 const _bgCtx = {
   nativeReconnectTimer: null as ReturnType<typeof setTimeout> | null,
   nativeReconnectAttempt: 0,
+  nativeConnectAttempt: 0,
   nativeHandshakeInFlight: false,
   nativeReconnectGaveUp: false,
   nativeSuspendInProgress: false,
+  revocationRetryAt: 0,
 };
+
+const DESKTOP_NOT_PAIRED =
+  'This browser profile is not paired with Desktop. Pair it in the extension settings.';
+const DESKTOP_PAIRED_ELSEWHERE =
+  'Desktop no longer recognizes this browser profile, so the pairing was removed here. Pair it again in the extension settings.';
+const DESKTOP_REVOCATION_RETRY_MS = 5 * 60_000;
 
 let nativeSessionSecret: ArrayBuffer | null = null;
 
@@ -1411,26 +1452,101 @@ function setDesktopPaired(paired: boolean): void {
  * throws is not a sign-out: the native session stays until the account is known.
  * Returns true when the pairing was released.
  */
-async function revokeMismatchedDesktopPairing(
+async function definitiveSignedInAccount(
   clerkRead?: Promise<ManagedCloudAuthContext | null>,
-): Promise<boolean> {
-  if (!isClerkExtensionAuthConfigured()) return false;
+): Promise<string | null | undefined> {
+  if (!isClerkExtensionAuthConfigured()) return undefined;
   let signedInAccountId: string | null;
   try {
     const context = await (clerkRead ?? getFreshClerkAuthContext());
     signedInAccountId = context?.owner.accountId ?? null;
   } catch {
-    return false;
+    return undefined;
   }
   // A missing Clerk session while the sync cookie is still there is hydration,
   // not a sign-out. A different account id is never ambiguous.
   if (signedInAccountId === null && (await syncHostSessionCookieState()) !== 'absent') {
+    return undefined;
+  }
+  return signedInAccountId;
+}
+
+async function releaseDesktopPairingOfOtherAccount(
+  signedInAccountId: string | null,
+): Promise<boolean> {
+  if (!(await desktopPairingRejectsAccount(signedInAccountId))) {
+    if (signedInAccountId !== null) await bindUnboundDesktopPairing(signedInAccountId);
     return false;
   }
-  if (!(await desktopPairingRejectsAccount(signedInAccountId))) return false;
-  await disconnectPairedNativeHost('The signed-in account changed.');
-  await releaseStoredDesktopPairing();
+  await releaseDesktopPairing('The signed-in account changed.', false);
   return true;
+}
+
+async function revokeMismatchedDesktopPairing(
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
+): Promise<boolean> {
+  const signedInAccountId = await definitiveSignedInAccount(clerkRead);
+  if (signedInAccountId === undefined) return false;
+  return releaseDesktopPairingOfOtherAccount(signedInAccountId);
+}
+
+/** Pairing and recordings belong to the account that made them. */
+async function releaseDataOfOtherAccounts(
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
+): Promise<void> {
+  const signedInAccountId = await definitiveSignedInAccount(clerkRead);
+  if (signedInAccountId === undefined) return;
+  await releaseDesktopPairingOfOtherAccount(signedInAccountId);
+  await releaseRecordingsOfOtherAccounts(signedInAccountId);
+}
+
+/**
+ * Unpairs this profile. When Desktop cannot be told now, the unpair is owed
+ * and retried on later worker starts with the token Desktop needs to accept it.
+ * `keepUnlessOwed` keeps the pairing when that debt cannot be recorded, so a
+ * user unpair is never silently half done; an account change releases anyway.
+ */
+async function releaseDesktopPairing(
+  reason: string,
+  keepUnlessOwed: boolean,
+): Promise<{ acknowledged: boolean; owed: boolean; kept: boolean }> {
+  const token = await readDesktopPairToken();
+  const acknowledged = await disconnectPairedNativeHost(reason);
+  const owed = !acknowledged && token !== null && (await oweDesktopRevocation(token));
+  if (!acknowledged && token !== null && !owed && keepUnlessOwed) {
+    return { acknowledged, owed, kept: true };
+  }
+  await releaseStoredDesktopPairing();
+  if (owed) {
+    _bgCtx.revocationRetryAt = 0;
+    void settleOwedDesktopRevocation();
+  }
+  return { acknowledged, owed, kept: false };
+}
+
+/** Tries to deliver an owed unpair, at most once per retry window. True while one is owed. */
+async function settleOwedDesktopRevocation(): Promise<boolean> {
+  if (!(await readPendingDesktopRevocation())) return false;
+  if (state.nativePort || _bgCtx.nativeHandshakeInFlight) return true;
+  if (Date.now() < _bgCtx.revocationRetryAt) return true;
+  _bgCtx.revocationRetryAt = Date.now() + DESKTOP_REVOCATION_RETRY_MS;
+  resetNativeReconnectState();
+  connectToNativeHost();
+  return true;
+}
+
+async function readDesktopConnectCredential(): Promise<{
+  token: string;
+  revocation: PendingDesktopRevocation | null;
+} | null> {
+  try {
+    const revocation = await readPendingDesktopRevocation();
+    if (revocation) return { token: revocation.token, revocation };
+    const token = await readDesktopPairToken();
+    return token ? { token, revocation: null } : null;
+  } catch {
+    return null;
+  }
 }
 
 async function shouldAutoConnectToDesktop(): Promise<boolean> {
@@ -1486,7 +1602,7 @@ function dropNativeConnection(port: chrome.runtime.Port | null, reason: string):
   void notifyConnectionStatusChange();
 }
 
-async function settlePendingDesktopRevocation(
+async function deliverOwedDesktopRevocation(
   port: chrome.runtime.Port,
   revocationId: string,
 ): Promise<void> {
@@ -1495,10 +1611,7 @@ async function settlePendingDesktopRevocation(
   })) as unknown as { success?: boolean } | null;
   if (state.nativePort !== port) return;
   if (receipt?.success !== true) throw new Error('Desktop did not remove the pairing.');
-  const owed = parsePendingDesktopRevocation(
-    await storageUtils.getItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION),
-  );
-  if (owed === revocationId) await storageUtils.removeItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION);
+  await settlePendingDesktopRevocation(revocationId);
   dropNativeConnection(port, 'The browser was unpaired from Desktop.');
 }
 
@@ -1614,7 +1727,7 @@ function initialize(): void {
     });
   }
   watchSyncHostSession(() => {
-    void revokeMismatchedDesktopPairing();
+    void releaseDataOfOtherAccounts();
   });
   void shouldAutoConnectToDesktop().then((autoConnect) => {
     if (!autoConnect) return;
@@ -1725,7 +1838,49 @@ function connectToNativeHost(): void {
   if (state.nativePort || _bgCtx.nativeHandshakeInFlight || _bgCtx.nativeReconnectGaveUp) {
     return;
   }
+  const attempt = ++_bgCtx.nativeConnectAttempt;
+  _bgCtx.nativeHandshakeInFlight = true;
+  void readDesktopConnectCredential().then((credential) => {
+    if (
+      attempt !== _bgCtx.nativeConnectAttempt ||
+      !_bgCtx.nativeHandshakeInFlight ||
+      state.nativePort
+    )
+      return;
+    if (!credential || _bgCtx.nativeReconnectGaveUp) {
+      _bgCtx.nativeHandshakeInFlight = false;
+      if (!credential) state.lastNativeError = DESKTOP_NOT_PAIRED;
+      return;
+    }
+    openNativeConnection(credential);
+  });
+}
 
+/**
+ * Handles a refused handshake. Desktop refuses a token it does not hold when
+ * it was unpaired or paired with another profile: an owed unpair is then
+ * already done, and a pairing that only this side still remembers is dropped
+ * so the settings page stops showing it.
+ */
+async function handleRefusedDesktopHandshake(
+  error: unknown,
+  revocation: PendingDesktopRevocation | null,
+): Promise<boolean> {
+  if (!(error instanceof NativeRequestRefused) || error.code !== NATIVE_PAIRING_REJECTED_CODE)
+    return false;
+  if (revocation) {
+    await settlePendingDesktopRevocation(revocation.id);
+  } else {
+    state.lastNativeError = DESKTOP_PAIRED_ELSEWHERE;
+    await releaseStoredDesktopPairing();
+  }
+  return true;
+}
+
+function openNativeConnection(credential: {
+  token: string;
+  revocation: PendingDesktopRevocation | null;
+}): void {
   try {
     state.connectionStatus = 'connecting';
     void notifyConnectionStatusChange();
@@ -1749,6 +1904,7 @@ function connectToNativeHost(): void {
         const connectResult = (await sendNativeRequest({
           type: 'connect',
           extension_id: chrome.runtime.id,
+          pair_token: credential.token,
         })) as unknown as NativeResponseEnvelope;
         if (state.nativePort !== port) return;
         if (!connectResult?.success) {
@@ -1766,12 +1922,8 @@ function connectToNativeHost(): void {
           throw new Error(pingResult?.error ?? 'Native ping failed');
         }
 
-        const pendingRevocation = parsePendingDesktopRevocation(
-          await storageUtils.getItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION),
-        );
-        if (state.nativePort !== port) return;
-        if (pendingRevocation) {
-          await settlePendingDesktopRevocation(port, pendingRevocation);
+        if (credential.revocation) {
+          await deliverOwedDesktopRevocation(port, credential.revocation.id);
           return;
         }
 
@@ -1799,8 +1951,16 @@ function connectToNativeHost(): void {
         state.connectionStatus = 'disconnected';
         state.nativePort = null;
         state.lastNativeError = error instanceof Error ? error.message : 'Native handshake failed';
+        if (await handleRefusedDesktopHandshake(error, credential.revocation)) {
+          clearNativeReconnectTimer();
+          setNativeReconnectGaveUp(true);
+          setDesktopPaired(false);
+        } else if (credential.revocation) {
+          setNativeReconnectGaveUp(true);
+        } else {
+          scheduleNativeReconnect('handshake_failed');
+        }
         void notifyConnectionStatusChange();
-        scheduleNativeReconnect('handshake_failed');
       } finally {
         if (state.nativePort === port) _bgCtx.nativeHandshakeInFlight = false;
       }
@@ -1813,7 +1973,8 @@ function connectToNativeHost(): void {
     state.connectionStatus = 'disconnected';
     state.lastNativeError = error instanceof Error ? error.message : 'Unknown error';
     void notifyConnectionStatusChange();
-    scheduleNativeReconnect('connect_failed');
+    if (credential.revocation) setNativeReconnectGaveUp(true);
+    else scheduleNativeReconnect('connect_failed');
   }
 }
 
@@ -2114,7 +2275,7 @@ function handleNativeMessage(message: NativeMessageEnvelope, port: chrome.runtim
               return;
             }
             if (message.success === false) {
-              reject(new Error(message.error ?? 'Native request failed'));
+              reject(nativeRefusal(message));
             } else {
               resolve(message as unknown as ExtensionResponse);
             }
@@ -2128,7 +2289,7 @@ function handleNativeMessage(message: NativeMessageEnvelope, port: chrome.runtim
         return;
       }
       if (message.success === false) {
-        reject(new Error(message.error ?? 'Native request failed'));
+        reject(nativeRefusal(message));
       } else {
         resolve(message as unknown as ExtensionResponse);
       }
@@ -2169,10 +2330,22 @@ function handleNativeDisconnect(): void {
     logger.warn('Native host permanently unavailable; halting reconnect', { error });
     setNativeReconnectGaveUp(true);
     setDesktopPaired(false);
+    void releaseUnreachableDesktopPairing();
     return;
   }
 
   scheduleNativeReconnect('native_disconnect');
+}
+
+/**
+ * Desktop removes its host registration when it unpairs or is uninstalled, and
+ * Chrome then reports the host as missing. No pairing is left on the other
+ * side, so neither the record here nor an owed unpair can mean anything.
+ */
+async function releaseUnreachableDesktopPairing(): Promise<void> {
+  const owed = await readPendingDesktopRevocation();
+  if (owed) await settlePendingDesktopRevocation(owed.id);
+  await releaseStoredDesktopPairing();
 }
 
 function showNotification(
@@ -2318,6 +2491,7 @@ async function handleReplayShortcut(
       error: 'The shortcut model selection is invalid.',
     } as ExtensionResponse;
   }
+  await releaseDataOfOtherAccounts();
   const shortcuts = await loadShortcuts();
   const shortcut = shortcuts.find((s) => s.id === message.shortcutId);
   if (!shortcut) {
@@ -3459,6 +3633,7 @@ async function runMaintenancePass(): Promise<boolean> {
     connectToNativeHost();
     outstanding = true;
   }
+  await settleOwedDesktopRevocation();
 
   return outstanding;
 }
@@ -4389,7 +4564,8 @@ async function listDesktopBrowserTabs(): Promise<BrowserTabSummary[]> {
 }
 
 const DESKTOP_POLL_TIMEOUT_MS = BROWSER_COMMAND_POLL_WINDOW_MS + 10_000;
-const DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES = 3;
+const DESKTOP_POLL_RETRY_BASE_MS = 5_000;
+const DESKTOP_POLL_RETRY_MAX_MS = 60_000;
 
 /**
  * Reads that may name a tab other than the foreground one, as the desktop's
@@ -4412,9 +4588,9 @@ let activePairedBrowserCommand: {
  * Desktop-issued page work, pulled rather than pushed.
  *
  * The native client only resolves responses to its own requests, so a host that
- * pushed a command would be talking to nobody. A host that does not know these
- * message types, the Rust one the Tauri app ships, answers an error and the
- * loop stops asking.
+ * pushed a command would be talking to nobody. The native host belongs to
+ * Chrome and outlives a Desktop restart, so a failed poll backs off and asks
+ * again for as long as this connection lasts: nothing else would restart it.
  */
 async function pollDesktopBrowserCommands(): Promise<void> {
   if (desktopPollRunning) return;
@@ -4446,8 +4622,10 @@ async function pollDesktopBrowserCommands(): Promise<void> {
         if (!isCurrentConnection()) return;
         failures += 1;
         logger.debug('Desktop browser command poll failed', error);
-        if (failures >= DESKTOP_POLL_MAX_CONSECUTIVE_FAILURES) return;
-        await sleep(5000);
+        const retryAt =
+          Date.now() +
+          Math.min(DESKTOP_POLL_RETRY_BASE_MS * 2 ** (failures - 1), DESKTOP_POLL_RETRY_MAX_MS);
+        while (isCurrentConnection() && Date.now() < retryAt) await sleep(1_000);
         continue;
       }
 
@@ -4733,7 +4911,7 @@ async function handleMessageAsync(
     }
     case 'GET_CLOUD_AUTH_TOKEN': {
       const clerkRead = getFreshClerkAuthContext(message.refresh);
-      await revokeMismatchedDesktopPairing(clerkRead);
+      await releaseDataOfOtherAccounts(clerkRead);
       const candidate = await getManagedCloudAuthContext(message.refresh, clerkRead);
       const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
       cancelComputerUseIfAuthChanged(context?.owner ?? null);
@@ -4766,8 +4944,9 @@ async function handleMessageAsync(
         cancelActiveComputerUseRun('account_changed', computerUseLease.runId);
       }
       await invalidateManagedCloudOwner(previousOwner, true);
-      await disconnectPairedNativeHost('The signed-in account changed.');
-      await releaseStoredDesktopPairing();
+      await releaseDesktopPairing('The signed-in account changed.', false);
+      await discardAllRecordingSessions();
+      await releaseDataOfOtherAccounts();
       return { success: true } as ExtensionResponse;
     }
 
@@ -4813,8 +4992,15 @@ async function handleMessageAsync(
       return triggerManualReconnect();
 
     case 'UNPAIR_NATIVE': {
-      const unpaired = await disconnectPairedNativeHost('The browser was unpaired from Desktop.');
-      return { success: unpaired } as ExtensionResponse;
+      const outcome = await releaseDesktopPairing('The browser was unpaired from Desktop.', true);
+      return (
+        outcome.kept
+          ? {
+              success: false,
+              error: 'Desktop could not be reached, so the pairing was kept. Try again.',
+            }
+          : { success: outcome.acknowledged, revocationOwed: outcome.owed }
+      ) as ExtensionResponse;
     }
 
     case 'TAB_READY': {
@@ -5383,7 +5569,18 @@ async function handleMessageAsync(
       if (!resolvedTabId) {
         return { success: false, error: 'No tab ID' } as ExtensionResponse;
       }
-      return forwardToContentScript(resolvedTabId, message);
+      return handleRecordingMessage(resolvedTabId, message);
+    }
+
+    case 'RECORDING_ACTION': {
+      if (tabId === undefined || sender.tab?.id !== tabId)
+        return { success: false, error: 'Only the recorded page reports its steps.' };
+      const recording = await appendRecordedAction(
+        tabId,
+        sender.url,
+        (message as RecordingActionMessage).action,
+      );
+      return { success: true, recording } as ExtensionResponse;
     }
 
     case 'FIND_ELEMENTS':
@@ -5554,9 +5751,13 @@ async function handleMessageAsync(
     }
 
     case 'SAVE_SHORTCUT':
-      return handleSaveShortcut(message as SaveShortcutMessage);
+      return handleSaveShortcut(
+        message as SaveShortcutMessage,
+        (await definitiveSignedInAccount()) ?? null,
+      );
 
     case 'LIST_SHORTCUTS':
+      await releaseDataOfOtherAccounts();
       return handleListShortcuts();
 
     case 'DELETE_SHORTCUT':
@@ -6882,6 +7083,51 @@ async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionRespo
   }
 }
 
+/**
+ * The worker owns the recording, so a page that loads a new document cannot
+ * take the recorded steps with it. Options asks the worker, and the worker asks
+ * the page whether it is still recording: a page that is not, or no longer
+ * answers, has navigated, and the recording ends there with its steps kept.
+ */
+async function handleRecordingMessage(
+  tabId: number,
+  message: ExtensionMessage,
+): Promise<ExtensionResponse> {
+  if (message.type === 'SET_RECORDING_VALUE_CAPTURE') return forwardToContentScript(tabId, message);
+  if (message.type === 'START_RECORDING') {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!(await beginRecordingSession(tabId, tab?.url)))
+      return { success: false, error: 'Only a web page can be recorded.' } as ExtensionResponse;
+    const started = await forwardToContentScript(tabId, message);
+    if (!started?.success) await discardRecordingSession(tabId);
+    return started;
+  }
+  const session = await readRecordingSession(tabId);
+  if (message.type === 'STOP_RECORDING') {
+    if (session?.state === 'recording') await forwardToContentScript(tabId, message);
+    const ended = await endRecordingSession(tabId, 'stopped');
+    return {
+      success: true,
+      recording: false,
+      actions: ended?.actions ?? [],
+      ...(ended?.state === 'navigated' ? { stoppedBy: 'navigation' } : {}),
+    } as ExtensionResponse;
+  }
+  if (!session) return { success: true, recording: false, actions: [] } as ExtensionResponse;
+  let current = session;
+  if (session.state === 'recording') {
+    const page = (await forwardToContentScript(tabId, message)) as { recording?: unknown };
+    if (page?.recording !== true)
+      current = (await endRecordingSession(tabId, 'navigated')) ?? session;
+  }
+  return {
+    success: true,
+    recording: current.state === 'recording',
+    actions: current.actions,
+    ...(current.state === 'navigated' ? { stoppedBy: 'navigation' } : {}),
+  } as ExtensionResponse;
+}
+
 async function forwardToContentScript(
   tabId: number,
   message: ExtensionMessage,
@@ -6905,7 +7151,8 @@ async function forwardToContentScript(
  * `connectedToDesktop` records that the native host has answered on this
  * profile, not that it is answering right now. A closed Desktop app is a
  * reconnect, not an unpairing, so only a permanently unavailable host, an
- * explicit unpair, or a Managed Cloud account change clears it.
+ * explicit unpair, Desktop refusing this profile's pair token, or a Managed
+ * Cloud account change clears it.
  */
 async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
@@ -7224,6 +7471,7 @@ function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   cancelInPagePrompts(tabId);
+  void discardRecordingSession(tabId);
   const lease = computerUseRuns.getActive();
   if (lease?.tabId === tabId) {
     computerUseStartGeneration += 1;

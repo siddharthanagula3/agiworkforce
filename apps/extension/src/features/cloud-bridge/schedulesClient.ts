@@ -13,7 +13,13 @@ import {
   type ManagedCloudSchedulesClient,
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
-import { FREE_TRIAL_GATEWAY, getAuthToken, getManagedModelAccess } from './freeTrialClient';
+import {
+  FREE_TRIAL_GATEWAY,
+  getAuthToken,
+  getManagedModelAccess,
+  ManagedAccessAuthRequiredError,
+  ManagedAccessRefusedError,
+} from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 
 export const CHROME_SCHEDULE_PAGE_SIZE = MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE;
@@ -36,7 +42,7 @@ const ScheduleDetailsSchema = ManagedCloudScheduleMutationSchema.pick({
   prompt: true,
 });
 
-export type ChromeSchedulesErrorCode = 'auth_required' | 'cancelled' | 'server_error';
+export type ChromeSchedulesErrorCode = 'auth_required' | 'refused' | 'cancelled' | 'server_error';
 
 export interface ChromeSchedulesError {
   status: 'error';
@@ -124,7 +130,17 @@ export function describeSchedulesFailure(
     return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
   }
   const status = error instanceof ManagedCloudSchedulesHttpError ? error.status : null;
-  if (status === 401 || status === 403) return signedOut();
+  if (status === 401 || error instanceof ManagedAccessAuthRequiredError) return signedOut();
+  if (error instanceof ManagedAccessRefusedError) {
+    return { status: 'error', code: 'refused', message: error.message };
+  }
+  if (status === 403) {
+    return {
+      status: 'error',
+      code: 'refused',
+      message: (error as Error).message.trim() || 'Schedules are not available for this account.',
+    };
+  }
   return {
     status: 'error',
     code: 'server_error',

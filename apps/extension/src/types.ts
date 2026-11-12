@@ -85,6 +85,7 @@ export type NativeMessageType =
   | 'STOP_RECORDING'
   | 'GET_RECORDED_ACTIONS'
   | 'SET_RECORDING_VALUE_CAPTURE'
+  | 'RECORDING_ACTION'
   | 'FIND_ELEMENTS'
   | 'FILL_FIELDS'
   | 'BUILD_ACCESSIBILITY_TREE'
@@ -743,6 +744,11 @@ export interface SetRecordingValueCaptureMessage extends BaseMessage {
   enabled: boolean;
 }
 
+export interface RecordingActionMessage extends BaseMessage {
+  type: 'RECORDING_ACTION';
+  action: unknown;
+}
+
 export interface RecordingResponse {
   success: boolean;
   recording?: boolean;
@@ -843,6 +849,7 @@ export interface SavedShortcut {
   prompt?: string;
   startUrl?: string;
   scheduled?: boolean;
+  ownerAccountId?: string | null;
 }
 
 export interface SaveShortcutMessage extends BaseMessage {
@@ -1292,6 +1299,7 @@ export type ExtensionMessage =
   | StopRecordingMessage
   | GetRecordedActionsMessage
   | SetRecordingValueCaptureMessage
+  | RecordingActionMessage
   | FindElementsMessage
   | FillFieldsMessage
   | BridgeUrlChangedMessage

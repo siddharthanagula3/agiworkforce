@@ -134,6 +134,7 @@ function promptReplayHarness(recorded = false) {
     validateShortcutReplayTarget,
     normalizeShortcutStartUrl,
     forwardToContentScript,
+    releaseDataOfOtherAccounts: vi.fn(async () => undefined),
     loadShortcuts: async () => [
       {
         id: 'prompt-1',
@@ -164,8 +165,22 @@ function promptReplayHarness(recorded = false) {
   const run = new Function(...Object.keys(dependencies), compiled)(
     ...Object.values(dependencies),
   ) as (message: Record<string, unknown>, owner?: unknown, notify?: boolean) => Promise<unknown>;
-  return { handleChatMessage, run, tabs, forwardToContentScript };
+  return {
+    handleChatMessage,
+    run,
+    tabs,
+    forwardToContentScript,
+    releaseDataOfOtherAccounts: dependencies.releaseDataOfOtherAccounts,
+  };
 }
+
+describe('recorded replay account authority', () => {
+  it('releases another account recordings before it looks the shortcut up', async () => {
+    const h = promptReplayHarness(true);
+    await h.run({ type: 'REPLAY_SHORTCUT', shortcutId: 'missing' });
+    expect(h.releaseDataOfOtherAccounts).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('prompt replay model selection', () => {
   it('honors an explicit caller model instead of replacing it with Auto', async () => {

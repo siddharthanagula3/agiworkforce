@@ -104,6 +104,8 @@ import {
   clearAuthToken,
   signOutOfAccount,
   getManagedModelAccess,
+  ManagedAccessAuthRequiredError,
+  ManagedAccessRefusedError,
   parseQuotaWarningHeader,
   streamFreeChat,
   streamManagedChatApproval,
@@ -413,6 +415,34 @@ describe('getManagedModelAccess', () => {
     await expect(getManagedModelAccess('token')).rejects.toThrow('Invalid model-access response');
   });
 
+  it('tells a rejected credential, a policy refusal and an unavailable server apart', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(activeUsageResponse());
+    await expect(getManagedModelAccess('token')).rejects.toBeInstanceOf(
+      ManagedAccessAuthRequiredError,
+    );
+
+    const policy = 'This workspace is locked down while an incident is investigated.';
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 'FORBIDDEN', message: policy } }), {
+        status: 403,
+      }),
+    );
+    const refused = getManagedModelAccess('token');
+    await expect(refused).rejects.toBeInstanceOf(ManagedAccessRefusedError);
+    await expect(refused).rejects.toThrow(policy);
+
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 503, headers: { 'Retry-After': '5' } }))
+      .mockResolvedValueOnce(activeUsageResponse());
+    const unavailable = getManagedModelAccess('token').catch((error: unknown) => error);
+    const error = await unavailable;
+    expect(error).not.toBeInstanceOf(ManagedAccessAuthRequiredError);
+    expect(error).not.toBeInstanceOf(ManagedAccessRefusedError);
+    expect(String((error as Error).message)).toContain('503');
+  });
+
   it('propagates an abort without retrying or converting it into admission', async () => {
     const controller = new AbortController();
     const abort = new DOMException('Aborted', 'AbortError');
@@ -470,15 +500,18 @@ describe('clearAuthToken', () => {
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
   });
 
-  it('erases the saved autofill profile so sign-out reaches the stored PII', async () => {
-    chromeMock._localStore['agi_autofill_profile'] = {
+  it('keeps the saved autofill profile, which only a sign-out the user chose removes', async () => {
+    const profile = {
       firstName: 'Ada',
       email: 'ada@example.test',
       currentCompany: 'Analytical Engines',
     };
+    chromeMock._localStore['agi_autofill_profile'] = profile;
 
     await clearAuthToken();
+    expect(chromeMock._localStore['agi_autofill_profile']).toEqual(profile);
 
+    await signOutOfAccount();
     expect(chromeMock._localStore['agi_autofill_profile']).toBeUndefined();
   });
 

@@ -14,7 +14,7 @@ export interface ChromeProjectsDependencies {
 }
 
 export type ChromeProjectsErrorCode =
-  'auth_required' | 'cancelled' | 'invalid_request' | 'server_error';
+  'auth_required' | 'refused' | 'cancelled' | 'invalid_request' | 'server_error';
 
 export interface ChromeProjectsError {
   status: 'error';
@@ -56,7 +56,16 @@ export function describeProjectsFailure(error: unknown, signal?: AbortSignal): C
     return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
   }
   const status = error instanceof ManagedCloudProjectsHttpError ? error.status : null;
-  if (status === 401 || status === 403) return signedOut();
+  if (status === 401) return signedOut();
+  if (status === 403) {
+    return {
+      status: 'error',
+      code: 'refused',
+      message:
+        (error as Error).message.replace(/^HTTP 403: /u, '').trim() ||
+        'Projects are not available for this account.',
+    };
+  }
   if (status === 400 || status === 422) {
     return {
       status: 'error',

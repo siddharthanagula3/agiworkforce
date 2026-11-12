@@ -52,6 +52,7 @@ import { isDomSmallEnoughToRead } from './dom-helpers';
 import {
   fillPageFields,
   findPageElements,
+  isSensitiveField,
   watchPasswordFields,
   pageElementSignature,
 } from './features/content/pageElements';
@@ -446,6 +447,13 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       return { type: actionType, success: true, url };
     }
     case 'click': {
+      const matches = selectorMatchCount(action.selector ?? '');
+      if (matches > 1)
+        return {
+          type: actionType,
+          success: false,
+          error: `The recorded click matches ${matches} elements on this page, so nothing was clicked. Record this shortcut again.`,
+        };
       const response = (await handleClick({
         type: 'CLICK',
         selector: action.selector ?? '',
@@ -1166,19 +1174,19 @@ const _userRecordedActions: UserRecordedAction[] = [];
 function sanitizeRecordedValue(
   target: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
 ): string | null {
-  if (target instanceof HTMLInputElement && target.type === 'password') {
-    return null;
-  }
-  const autocomplete = (target.getAttribute('autocomplete') ?? '').toLowerCase();
-  if (
-    /^cc-/.test(autocomplete) ||
-    autocomplete === 'current-password' ||
-    autocomplete === 'new-password' ||
-    autocomplete === 'one-time-code'
-  ) {
-    return '[REDACTED]';
-  }
+  if (isSensitiveField(target)) return null;
   return redactSecrets(target.value ?? '');
+}
+
+function reportRecordedAction(action: UserRecordedAction): void {
+  chrome.runtime.sendMessage({ type: 'RECORDING_ACTION', action }).catch(() => {
+    logger.debug('The recorded step did not reach the extension');
+  });
+}
+
+function recordAction(action: UserRecordedAction): void {
+  _userRecordedActions.push(action);
+  reportRecordedAction(action);
 }
 
 let _recordingClickListener: ((e: MouseEvent) => void) | null = null;
@@ -1187,7 +1195,7 @@ let _recordingScrollListener: (() => void) | null = null;
 let _recordingNavListener: (() => void) | null = null;
 let _recordingIndicatorHost: HTMLElement | null = null;
 
-function buildCssSelector(el: Element): string {
+function simpleCssSelector(el: Element): string {
   if (el.id) {
     return `#${CSS.escape(el.id)}`;
   }
@@ -1202,6 +1210,47 @@ function buildCssSelector(el: Element): string {
   const base = el.tagName.toLowerCase();
   const firstClass = el.classList[0] ? `.${CSS.escape(el.classList[0])}` : '';
   return `${base}${firstClass}`;
+}
+
+function selectorMatchCount(selector: string): number {
+  try {
+    return document.querySelectorAll(selector).length;
+  } catch {
+    return 0;
+  }
+}
+
+function selectsOnly(selector: string, el: Element): boolean {
+  return selectorMatchCount(selector) === 1 && document.querySelector(selector) === el;
+}
+
+/**
+ * A selector that matches this element and no other, so replay cannot land on
+ * a sibling. The readable form is kept when it is already unique; otherwise
+ * the path climbs by position until it is.
+ */
+function buildCssSelector(el: Element): string {
+  const simple = simpleCssSelector(el);
+  if (selectsOnly(simple, el)) return simple;
+  const steps: string[] = [];
+  for (let node: Element | null = el; node && node !== document.documentElement;) {
+    const parent: Element | null = node.parentElement;
+    const tag = node.tagName;
+    const position = parent
+      ? Array.from(parent.children)
+          .filter((child) => child.tagName === tag)
+          .indexOf(node) + 1
+      : 1;
+    steps.unshift(`${tag.toLowerCase()}:nth-of-type(${position})`);
+    const path = steps.join(' > ');
+    if (parent?.id) {
+      const anchored = `#${CSS.escape(parent.id)} > ${path}`;
+      if (selectsOnly(anchored, el)) return anchored;
+    }
+    if (selectsOnly(path, el)) return path;
+    node = parent;
+  }
+  return simple;
 }
 
 function showRecordingIndicator(): void {
@@ -1264,7 +1313,7 @@ function attachRecordingListeners(): void {
     if (!automationState.isRecording) return;
     const target = e.target;
     if (!(target instanceof Element)) return;
-    _userRecordedActions.push({
+    recordAction({
       type: 'click',
       selector: buildCssSelector(target),
       timestamp: Date.now(),
@@ -1295,7 +1344,7 @@ function attachRecordingListeners(): void {
             : sanitizedValue;
       }
     }
-    _userRecordedActions.push(action);
+    recordAction(action);
   };
 
   let _lastScrollTs = 0;
@@ -1304,7 +1353,7 @@ function attachRecordingListeners(): void {
     const now = Date.now();
     if (now - _lastScrollTs < 500) return;
     _lastScrollTs = now;
-    _userRecordedActions.push({
+    recordAction({
       type: 'scroll',
       selector: 'window',
       value: `${window.scrollX},${window.scrollY}`,
@@ -1314,7 +1363,7 @@ function attachRecordingListeners(): void {
 
   _recordingNavListener = () => {
     if (!automationState.isRecording) return;
-    _userRecordedActions.push({
+    recordAction({
       type: 'navigate',
       selector: 'window.location',
       value: window.location.href,
@@ -1378,21 +1427,19 @@ function handleStopRecording(): ExtensionResponse {
   detachRecordingListeners();
   hideRecordingIndicator();
 
-  const actions = [..._userRecordedActions];
-  chrome.runtime
-    .sendMessage({
-      type: 'STOP_RECORDING',
-      actions,
-    })
-    .catch(() => {
-      // Background may not be listening, not fatal
-    });
-
-  return { success: true, recording: false, actions } as ExtensionResponse;
+  return {
+    success: true,
+    recording: false,
+    actions: [..._userRecordedActions],
+  } as ExtensionResponse;
 }
 
 function handleGetRecordedActions(): ExtensionResponse {
-  return { success: true, actions: _userRecordedActions } as ExtensionResponse;
+  return {
+    success: true,
+    recording: automationState.isRecording,
+    actions: _userRecordedActions,
+  } as ExtensionResponse;
 }
 
 async function checkConnectionStatus(): Promise<void> {

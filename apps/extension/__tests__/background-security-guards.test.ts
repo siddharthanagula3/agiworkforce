@@ -338,6 +338,11 @@ describe('background service worker security guards', () => {
     // The worker connects to the native host only for a profile that has
     // already paired AGI Desktop, which is what these handshake cases exercise.
     harness.localStore['connectedToDesktop'] = true;
+    harness.localStore['agi_paired_desktop'] = {
+      fingerprint: 'ab12',
+      accountId: null,
+      token: 'c'.repeat(64),
+    };
     await import('../src/background');
     await new Promise((resolve) => setTimeout(resolve, 0));
   });

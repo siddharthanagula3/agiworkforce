@@ -432,6 +432,8 @@ import {
   getManagedModelAccess,
   AccountUnavailableError,
   clearAuthToken,
+  ManagedAccessAuthRequiredError,
+  ManagedAccessRefusedError,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
@@ -12642,14 +12644,18 @@ function buildUI(): void {
     const accountSummaryPromise = fetchAccountSummary(token).catch(() => null);
 
     let access: ManagedModelAccess;
+    let sessionEnded = false;
     try {
       try {
         access = await getManagedModelAccess(token);
       } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes('Authentication')) throw error;
+        if (!(error instanceof ManagedAccessAuthRequiredError)) throw error;
         const renewed = await getManagedCloudAuthContext(true);
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
-        if (!renewed || !sameManagedCloudOwner(authContext?.owner, renewed.owner)) throw error;
+        if (!renewed || !sameManagedCloudOwner(authContext?.owner, renewed.owner)) {
+          sessionEnded = true;
+          throw error;
+        }
         access = await getManagedModelAccess(renewed.token);
       }
     } catch (error) {
@@ -12675,7 +12681,19 @@ function buildUI(): void {
         return;
       }
 
-      if (error instanceof Error && error.message.includes('Authentication')) {
+      if (error instanceof ManagedAccessRefusedError) {
+        setManagedCloudChatState('unavailable', {
+          message: error.message,
+          action: 'retry',
+          actionLabel: t('spGateRetry'),
+        });
+        return;
+      }
+
+      // A rejected request alone is not a sign-out: the server can refuse a
+      // live session while it is degraded. Only the auth layer failing to
+      // renew the same session ends it here.
+      if (error instanceof ManagedAccessAuthRequiredError && sessionEnded) {
         await transitionManagedCloudOwner(null);
         await clearAuthToken();
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;

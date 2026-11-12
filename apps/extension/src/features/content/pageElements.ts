@@ -1,4 +1,5 @@
 import { createDomElementReader } from './elementReader';
+import { PROTECTED_FIELD_REFUSAL } from '../computer-use/approvalPolicy';
 import { LEVER_DOM_CONTROL_RULES } from './autofill/lever';
 
 const {
@@ -252,9 +253,7 @@ function dispatchValueEvents(el: Element): void {
 function fillOne(el: Element, value: string, expectedSignature?: string): string | null {
   if (expectedSignature !== undefined && pageElementSignature(el) !== expectedSignature)
     return 'The field changed before it could be filled.';
-  if (isSensitiveField(el)) {
-    return 'This is a password, payment or one-time code field; the user has to fill it in themselves.';
-  }
+  if (isSensitiveField(el)) return PROTECTED_FIELD_REFUSAL;
   if (!isVisible(el)) return 'This field is hidden, so it is not filled.';
   if (
     (el instanceof HTMLInputElement ||

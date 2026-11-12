@@ -3556,7 +3556,7 @@
     "description": "Row title for recording a workflow."
   },
   "optRecordHint": {
-    "message": "Records your clicks and typing on the website you used most recently, so you can replay them later. Only approved sites can be recorded.",
+    "message": "Records your clicks and typing on the website you used most recently, so you can replay them later. Only approved sites can be recorded, and recording stops when the page loads a new address.",
     "description": "Row hint for recording a workflow."
   },
   "optRecordStart": {
@@ -3568,7 +3568,7 @@
     "description": "Button that stops recording."
   },
   "optRecordCaptureValues": {
-    "message": "Capture typed values (passwords and sensitive fields are redacted)",
+    "message": "Capture typed values (passwords, card numbers, one-time codes, PINs and ID numbers are never recorded)",
     "description": "Checkbox label for recording typed values."
   },
   "optRecordNoTab": {
@@ -3607,6 +3607,10 @@
   "optRecordNameIt": {
     "message": "Recording stopped. Name it to save the shortcut.",
     "description": "Status after stopping a recording."
+  },
+  "optRecordStoppedByNavigation": {
+    "message": "Recording stopped because the page loaded a new address. Name it to save the steps recorded before that.",
+    "description": "Status when a recording ended because the recorded tab loaded a new page."
   },
   "optRecordNameLabel": {
     "message": "Shortcut name",
