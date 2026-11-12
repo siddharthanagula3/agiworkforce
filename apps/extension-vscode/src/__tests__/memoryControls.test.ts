@@ -53,7 +53,10 @@ function installAccountMemory(options: { signedOut?: boolean; facts?: MemoryFact
   return { store, facts: () => facts };
 }
 
-function mockConfiguration(values: Record<string, unknown>): {
+function mockConfiguration(
+  values: Record<string, unknown>,
+  workspaceValues: Record<string, unknown> = {},
+): {
   update: ReturnType<typeof vi.fn>;
 } {
   const update = vi.fn(async (key: string, value: unknown) => {
@@ -65,7 +68,11 @@ function mockConfiguration(values: Record<string, unknown>): {
         get: vi.fn((key: string, fallback?: unknown) => values[key] ?? fallback),
         update,
         has: vi.fn().mockReturnValue(true),
-        inspect: vi.fn((key: string) => ({ key, globalValue: values[key] })),
+        inspect: vi.fn((key: string) => ({
+          key,
+          globalValue: values[key],
+          workspaceValue: workspaceValues[key],
+        })),
       }) as unknown as vscode.WorkspaceConfiguration,
   );
   return { update };
@@ -213,6 +220,25 @@ describe('memory enable/disable controls', () => {
 
     await handlers.get('agi-workforce.memory.toggle')?.();
     expect(update).toHaveBeenLastCalledWith('memory.enabled', true, expect.anything());
+  });
+
+  it('says a workspace keeps memory off instead of claiming the user turned it on', async () => {
+    const values: Record<string, unknown> = { 'memory.enabled': false };
+    const { update } = mockConfiguration(values, { 'memory.enabled': false });
+    const { handlers } = registerMemoryCommands(makeWorkspaceState());
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Turn memory on' as never);
+    vi.mocked(vscode.window.showInputBox).mockResolvedValue('I prefer Rust');
+    const account = installAccountMemory();
+
+    await handlers.get('agi-workforce.memory.toggle')?.();
+    expect(update).toHaveBeenLastCalledWith('memory.enabled', true, expect.anything());
+    expect(vi.mocked(vscode.window.showInformationMessage).mock.calls.at(-1)?.[0]).toContain(
+      "this workspace's settings turn it off",
+    );
+
+    await handlers.get('agi-workforce.memory.create')?.();
+    expect(account.store.add).not.toHaveBeenCalled();
+    expect(account.facts()).toHaveLength(0);
   });
 
   it('keeps stored facts readable while memory is off', async () => {

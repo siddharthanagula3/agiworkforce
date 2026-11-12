@@ -53,8 +53,10 @@ export class AccountMemoryHttpError extends Error {
 }
 
 export class AccountMemoryUnauthorizedError extends AccountMemoryHttpError {
-  constructor() {
-    super('Your AGI Cloud session expired or was revoked. Sign in again to continue.', 401);
+  constructor(
+    message = 'Your AGI Cloud session expired or was revoked. Sign in again to continue.',
+  ) {
+    super(message, 401);
     this.name = 'AccountMemoryUnauthorizedError';
   }
 }
@@ -118,6 +120,9 @@ export function createAccountMemoryClient(config: AccountMemoryClientConfig): Ac
     let response = await send(path, init, token);
     if (response.status === 401) {
       const review = (await config.reviewRejectedToken?.(token)) ?? { kind: 'rejected' as const };
+      if (review.kind === 'account-refused') {
+        throw new AccountMemoryUnauthorizedError(review.message);
+      }
       if (review.kind === 'unconfirmed') {
         throw new AccountMemoryHttpError(
           t('chatError.couldNotReach', { provider: PRODUCT_BRAND }),

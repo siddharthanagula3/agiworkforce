@@ -79,22 +79,73 @@ describe('user-owned execution-boundary configuration', () => {
     ['inlineCompletions.enabled', () => Config.inlineCompletionsEnabled()],
     ['autoApplyFixes', () => Config.autoApplyFixes()],
     ['memory.enabled', () => Config.memoryEnabled()],
-  ] as const)('lets only the user turn on %s, even in a trusted repository', (key, read) => {
-    const trusted = vscode.workspace.isTrusted;
-    (vscode.workspace as { isTrusted: boolean }).isTrusted = true;
-    try {
-      stubConfiguration({
-        [key]: { defaultValue: false, globalValue: false, workspaceValue: true },
-      });
-      expect(read()).toBe(false);
-      stubConfiguration({
-        [key]: { defaultValue: false, globalValue: true, workspaceValue: false },
-      });
-      expect(read()).toBe(true);
-    } finally {
-      (vscode.workspace as { isTrusted: boolean }).isTrusted = trusted;
-    }
-  });
+  ] as const)(
+    'lets a trusted repository turn off %s, but only the user turn it on',
+    (key, read) => {
+      const trusted = vscode.workspace.isTrusted;
+      (vscode.workspace as { isTrusted: boolean }).isTrusted = true;
+      try {
+        stubConfiguration({
+          [key]: { defaultValue: false, globalValue: false, workspaceValue: true },
+        });
+        expect(read()).toBe(false);
+        stubConfiguration({
+          [key]: { defaultValue: false, globalValue: true, workspaceValue: false },
+        });
+        expect(read()).toBe(false);
+        stubConfiguration({
+          [key]: { defaultValue: false, globalValue: true, workspaceFolderValue: false },
+        });
+        expect(read()).toBe(false);
+        stubConfiguration({ [key]: { defaultValue: false, globalValue: true } });
+        expect(read()).toBe(true);
+      } finally {
+        (vscode.workspace as { isTrusted: boolean }).isTrusted = trusted;
+      }
+    },
+  );
+
+  it.each([
+    ['inlineCompletions.enabled', () => Config.inlineCompletionsEnabled()],
+    ['autoApplyFixes', () => Config.autoApplyFixes()],
+    ['memory.enabled', () => Config.memoryEnabled()],
+  ] as const)(
+    'turns off %s for the whole window when any folder of a multi-root workspace does',
+    (key, read) => {
+      const folders = vscode.workspace.workspaceFolders;
+      const personal = { uri: vscode.Uri.file('/work/personal'), name: 'personal', index: 0 };
+      const client = { uri: vscode.Uri.file('/work/client'), name: 'client', index: 1 };
+      const byFolder = new Map<string, InspectedValues>([
+        [personal.uri.fsPath, { defaultValue: false, globalValue: true }],
+        [
+          client.uri.fsPath,
+          { defaultValue: false, globalValue: true, workspaceFolderValue: false },
+        ],
+      ]);
+      (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = [personal, client];
+      vi.mocked(vscode.workspace.getConfiguration).mockImplementation(((
+        _section?: string,
+        scope?: { fsPath?: string },
+      ) => {
+        const values =
+          (scope?.fsPath === undefined ? undefined : byFolder.get(scope.fsPath)) ??
+          ({ defaultValue: false, globalValue: true } satisfies InspectedValues);
+        return {
+          get: vi.fn(),
+          inspect: vi.fn((inspectedKey: string) => (inspectedKey === key ? values : undefined)),
+          update: vi.fn().mockResolvedValue(undefined),
+          has: vi.fn().mockReturnValue(false),
+        };
+      }) as never);
+      try {
+        expect(read()).toBe(false);
+        byFolder.set(client.uri.fsPath, { defaultValue: false, globalValue: true });
+        expect(read()).toBe(true);
+      } finally {
+        (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = folders;
+      }
+    },
+  );
 
   it('lets a repository tighten, but never loosen, the editor context privacy settings', () => {
     stubConfiguration({
@@ -122,11 +173,13 @@ describe('user-owned execution-boundary configuration', () => {
   it('reports a workspace value as an override only when it takes effect', () => {
     stubConfiguration({
       autoApplyFixes: { defaultValue: false, workspaceValue: true },
+      'memory.enabled': { defaultValue: true, globalValue: true, workspaceValue: false },
       respectGitIgnore: { defaultValue: true, globalValue: true, workspaceValue: false },
       'editorContext.autoAttach': { defaultValue: true, globalValue: true, workspaceValue: false },
     });
 
     expect(Config.settingsSnapshot('unknown').workspaceOverrides).toEqual([
+      'memory.enabled',
       'editorContext.autoAttach',
     ]);
   });

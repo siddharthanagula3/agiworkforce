@@ -73,6 +73,25 @@ describe('account memory client on a refused request', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it('shows why the account is refused and offers sign-in, never a connection failure', async () => {
+    const fetchImpl = vi.fn<MemoryFetch>().mockImplementation(async () => json(401, {}));
+    const client = createAccountMemoryClient({
+      baseUrl: 'https://agiworkforce.example',
+      getAuthToken: async () => 'old-token',
+      reviewRejectedToken: async () => ({
+        kind: 'account-refused',
+        message: 'This account is suspended.',
+      }),
+      fetchImpl,
+    });
+
+    const failure = await client.readScope().catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(AccountMemoryUnauthorizedError);
+    expect(failure).toMatchObject({ message: 'This account is suspended.' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a plain 401 as a lost session when nothing can renew the credential', async () => {
     const client = createAccountMemoryClient({
       baseUrl: 'https://agiworkforce.example',

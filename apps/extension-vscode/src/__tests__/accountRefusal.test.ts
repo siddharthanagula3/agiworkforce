@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACCOUNT_REFUSAL_TEXT_MAX_LENGTH,
   accountRefusalKind,
   accountRefusalMessage,
   parseRetryAfterMs,
@@ -84,6 +85,23 @@ describe('accountRefusalMessage', () => {
     expect(accountRefusalMessage({ status: 403, message: 'HTTP 403: HTTP 403' })).toBeUndefined();
     expect(accountRefusalMessage({ status: 404, message: 'HTTP 404: Missing.' })).toBeUndefined();
     expect(accountRefusalMessage({ code: 'SOMETHING_ELSE', message: 'Nope.' })).toBeUndefined();
+  });
+
+  it('bounds server text to one line of a fixed length, whichever way it arrives', async () => {
+    const long = `Blocked.\n${'x'.repeat(5_000)}`;
+    const shown = [
+      accountRefusalMessage({ status: 403, message: `HTTP 403: ${long}` }),
+      accountRefusalMessage({ code: 'FORBIDDEN', message: long }),
+      (await readAccountRefusal(refusalResponse(403, { code: 'FORBIDDEN', message: long })))
+        ?.message,
+    ];
+
+    for (const text of shown) {
+      expect(text?.startsWith('Blocked. x')).toBe(true);
+      expect(text).not.toContain('\n');
+      expect(text?.endsWith('\u2026')).toBe(true);
+      expect(Array.from(text ?? '')).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
+    }
   });
 });
 

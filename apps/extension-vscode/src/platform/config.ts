@@ -124,6 +124,18 @@ function getUserScoped<T>(key: string, fallback: T): T {
   return inspected?.globalValue ?? inspected?.defaultValue ?? fallback;
 }
 
+function repositoryValues<T>(key: string): T[] {
+  const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<T>(key);
+  const folderValues = (vscode.workspace.workspaceFolders ?? []).map(
+    (folder) =>
+      vscode.workspace.getConfiguration('agiWorkforce', folder.uri).inspect<T>(key)
+        ?.workspaceFolderValue,
+  );
+  return [inspected?.workspaceValue, inspected?.workspaceFolderValue, ...folderValues].filter(
+    (value): value is T => value !== undefined,
+  );
+}
+
 function userChoiceNarrowedByWorkspace(
   key: string,
   fallback: boolean,
@@ -131,19 +143,14 @@ function userChoiceNarrowedByWorkspace(
 ): boolean {
   const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<boolean>(key);
   const userValue = inspected?.globalValue ?? inspected?.defaultValue ?? fallback;
-  return inspected?.workspaceValue === privateValue ||
-    inspected?.workspaceFolderValue === privateValue
-    ? privateValue
-    : userValue;
+  return repositoryValues<boolean>(key).includes(privateValue) ? privateValue : userValue;
 }
 
 function workspaceOverrides(values: MutableConfigValues): MutableConfigKey[] {
   const configuration = vscode.workspace.getConfiguration('agiWorkforce');
   return SETTINGS_PANEL_SETTING_KEYS.filter((key) => {
+    if (repositoryValues<unknown>(key).length === 0) return false;
     const inspected = configuration.inspect<unknown>(key);
-    if (inspected?.workspaceValue === undefined && inspected?.workspaceFolderValue === undefined) {
-      return false;
-    }
     return values[key] !== (inspected?.globalValue ?? inspected?.defaultValue);
   });
 }
@@ -184,13 +191,17 @@ export const Config = {
     return get<boolean>('codeLensEnabled', DEFAULTS.codeLensEnabled);
   },
   autoApplyFixes(): boolean {
-    return getUserScoped<boolean>('autoApplyFixes', DEFAULTS.autoApplyFixes);
+    return userChoiceNarrowedByWorkspace('autoApplyFixes', DEFAULTS.autoApplyFixes, false);
   },
   memoryEnabled(): boolean {
-    return getUserScoped<boolean>('memory.enabled', DEFAULTS.memoryEnabled);
+    return userChoiceNarrowedByWorkspace('memory.enabled', DEFAULTS.memoryEnabled, false);
   },
   inlineCompletionsEnabled(): boolean {
-    return getUserScoped<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
+    return userChoiceNarrowedByWorkspace(
+      'inlineCompletions.enabled',
+      DEFAULTS.inlineCompletionsEnabled,
+      false,
+    );
   },
   inlineCompletionsDebounceMs(): number {
     return get<number>('inlineCompletions.debounceMs', DEFAULTS.inlineCompletionsDebounceMs);

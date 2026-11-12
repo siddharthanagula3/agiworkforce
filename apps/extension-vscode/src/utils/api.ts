@@ -32,6 +32,7 @@ import {
   type ManagedUsageBucketReading,
   type ManagedUsageCreditWindow,
   type ManagedUsageCredits,
+  ErrorCode,
   PRODUCT_BRAND,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
@@ -161,9 +162,35 @@ export class AgiWorkforceUsageLimitError extends AgiWorkforceApiError {
 
 const MAX_RETRY_AFTER_MS = 30_000;
 
+function cancelledRequestError(): AgiWorkforceApiError {
+  return new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
+}
+
+function waitUnlessCancelled(
+  waitMs: number,
+  cancellation: vscode.CancellationToken,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    if (cancellation.isCancellationRequested) {
+      reject(cancelledRequestError());
+      return;
+    }
+    const timer = setTimeout(() => {
+      listener.dispose();
+      resolve();
+    }, waitMs);
+    const listener = cancellation.onCancellationRequested(() => {
+      clearTimeout(timer);
+      listener.dispose();
+      reject(cancelledRequestError());
+    });
+  });
+}
+
 async function withRetry<T>(
   fn: () => Promise<T>,
   canRetry: () => boolean,
+  cancellation: vscode.CancellationToken,
   retries = 2,
   delayMs = 1000,
 ): Promise<T> {
@@ -182,8 +209,9 @@ async function withRetry<T>(
     }
     const stated = err instanceof AgiWorkforceApiError ? err.retryAfterMs : undefined;
     const waitMs = Math.max(delayMs, Math.min(stated ?? 0, MAX_RETRY_AFTER_MS));
-    await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
-    return withRetry(fn, canRetry, retries - 1, delayMs * 2);
+    await waitUnlessCancelled(waitMs, cancellation);
+    if (cancellation.isCancellationRequested) throw cancelledRequestError();
+    return withRetry(fn, canRetry, cancellation, retries - 1, delayMs * 2);
   }
 }
 
@@ -419,18 +447,21 @@ async function rotateAccountSession(
   const owns = (): boolean => custodyOf(secrets).generation === generation;
 
   const state = await getAccountAuthState(secrets);
+  const observedToken = await secrets.get(ACCOUNT_TOKEN_KEY);
   const stillRejected =
-    rejectedToken !== undefined &&
-    state.status === 'signed-in' &&
-    (await secrets.get(ACCOUNT_TOKEN_KEY)) === rejectedToken;
-  if (rejectedToken === undefined ? state.status !== 'expired' : !stillRejected) {
-    return 'superseded';
-  }
+    rejectedToken !== undefined && state.status === 'signed-in' && observedToken === rejectedToken;
+  if (state.status !== 'expired' && !stillRejected) return 'superseded';
   const refreshToken = await getAccountRefreshToken(secrets);
   if (refreshToken === undefined) return 'unavailable';
 
   const { refreshDeviceSession } = await import('../features/account-auth/deviceAuth');
   if (!owns()) return 'superseded';
+  if (
+    (await secrets.get(ACCOUNT_TOKEN_KEY)) !== observedToken ||
+    (await getAccountRefreshToken(secrets)) !== refreshToken
+  ) {
+    return 'superseded';
+  }
   const result = await refreshDeviceSession(getCloudWebOrigin(), refreshToken);
 
   if (result.kind === 'renewed') {
@@ -444,7 +475,7 @@ async function rotateAccountSession(
   }
   if (result.kind === 'revoked') {
     const applied = await runExclusive(secrets, async () => {
-      if (!owns()) return false;
+      if (!owns() || (await getAccountRefreshToken(secrets)) !== refreshToken) return false;
       await wipeAccountSession(secrets);
       await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
       return true;
@@ -468,7 +499,15 @@ async function rotateAccountSession(
 }
 
 export type RejectedAccountTokenReview =
-  { kind: 'retry'; token: string } | { kind: 'rejected' } | { kind: 'unconfirmed' };
+  | { kind: 'retry'; token: string }
+  | { kind: 'rejected' }
+  | { kind: 'unconfirmed' }
+  | { kind: 'account-refused'; message: string };
+
+const TERMS_ACCEPTANCE_REQUIRED_MESSAGE =
+  'Accept the updated Terms of Service to keep using AGI Cloud. Sign in again to review them.';
+const ACCOUNT_UNAVAILABLE_MESSAGE =
+  'Your AGI Cloud account cannot be used right now. Sign in again to see why.';
 
 /**
  * A single 401 from a data route does not prove the credential is gone. The
@@ -484,6 +523,15 @@ export async function reviewRejectedAccountToken(
   }
   const renewal = await renewAccountSession(secrets, rejectedToken);
   if (renewal === 'revoked') return { kind: 'rejected' };
+  if (renewal === 'account-unavailable') {
+    return {
+      kind: 'account-refused',
+      message: heldAccountUnavailable ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+    };
+  }
+  if (renewal === 'terms-required') {
+    return { kind: 'account-refused', message: TERMS_ACCEPTANCE_REQUIRED_MESSAGE };
+  }
   if (renewal === 'renewed' || renewal === 'superseded') {
     const current = await secrets.get(ACCOUNT_TOKEN_KEY);
     if (current === undefined || current === '') return { kind: 'rejected' };
@@ -765,6 +813,10 @@ function httpsPostStream(
   token: vscode.CancellationToken,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (token.isCancellationRequested) {
+      reject(cancelledRequestError());
+      return;
+    }
     const parsed = new URL(urlString);
     const isHttps = parsed.protocol === 'https:';
     const lib = isHttps ? https : http;
@@ -870,7 +922,7 @@ function httpsPostStream(
     const cancelListener = token.onCancellationRequested(() => {
       cancelListener.dispose();
       req.destroy(new Error('Request cancelled'));
-      reject(new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED'));
+      reject(cancelledRequestError());
     });
 
     req.write(body);
@@ -929,9 +981,7 @@ export async function streamChatCompletion(
 
   const requestStartTime = Date.now();
 
-  if (cancellationToken.isCancellationRequested) {
-    throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
-  }
+  if (cancellationToken.isCancellationRequested) throw cancelledRequestError();
   let tokenDelivered = false;
   const send = (bearer: string): Promise<void> =>
     withRetry(
@@ -950,6 +1000,7 @@ export async function streamChatCompletion(
           cancellationToken,
         ),
       () => !tokenDelivered && !cancellationToken.isCancellationRequested,
+      cancellationToken,
     );
   const isUnauthorized = (error: unknown): boolean =>
     error instanceof AgiWorkforceApiError && error.statusCode === 401;
@@ -960,6 +1011,9 @@ export async function streamChatCompletion(
       if (!isUnauthorized(error) || credential.kind !== 'account') throw error;
       notifyAccountTierMayHaveChanged();
       const review = await reviewRejectedAccountToken(secrets, credential.token);
+      if (review.kind === 'account-refused') {
+        throw new AgiWorkforceApiError(review.message, 403, 'ACCOUNT_AUTH_REQUIRED');
+      }
       if (review.kind === 'unconfirmed') {
         throw new AgiWorkforceApiError(
           t('chatError.couldNotReach', { provider: PRODUCT_BRAND }),
@@ -1282,6 +1336,14 @@ async function sendAccountRequest(
 
   const review = await reviewRejectedAccountToken(secrets, credential.token);
   if (review.kind === 'unconfirmed') return { kind: 'unreachable' };
+  if (review.kind === 'account-refused') {
+    return {
+      kind: 'http-error',
+      status: 403,
+      code: ErrorCode.ACCOUNT_UNAVAILABLE,
+      message: review.message,
+    };
+  }
   if (review.kind === 'rejected') return first;
 
   const second = await send(review.token);

@@ -393,6 +393,99 @@ describe('AGI Cloud silent reauthentication', () => {
     await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'signed-out' });
     await expect(getAccountRefreshToken(secrets)).resolves.toBeUndefined();
   });
+
+  describe('two editor windows sharing one session', () => {
+    const REFRESH_KEY = 'agiWorkforce.accountRefreshToken';
+
+    function windowOver(
+      backing: Map<string, string>,
+      afterRead?: (key: string) => Promise<void>,
+    ): vscode.SecretStorage {
+      return {
+        get: async (key: string) => {
+          const value = backing.get(key);
+          await afterRead?.(key);
+          return value;
+        },
+        store: async (key: string, value: string) => {
+          backing.set(key, value);
+        },
+        delete: async (key: string) => {
+          backing.delete(key);
+        },
+        onDidChange: vi.fn(),
+      } as unknown as vscode.SecretStorage;
+    }
+
+    function serverWithReplayDetection(): void {
+      const used = new Set<string>();
+      refreshDeviceSession.mockImplementation(async (_origin: string, credential: string) => {
+        if (used.has(credential)) return { kind: 'revoked' };
+        used.add(credential);
+        return {
+          kind: 'renewed',
+          token: `token-after-${credential}`,
+          expiresAt: NOW + 600_000,
+          refreshToken: `${credential}-next`,
+        };
+      });
+    }
+
+    it('does not send a renewal credential that the other window rotated first', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(NOW);
+      serverWithReplayDetection();
+      const backing = new Map<string, string>();
+      const first = windowOver(backing);
+      let firstWindowRenewal: Promise<unknown> | undefined;
+      const second = windowOver(backing, async (key) => {
+        if (key !== REFRESH_KEY || firstWindowRenewal !== undefined) return;
+        firstWindowRenewal = renewAccountSession(first);
+        await firstWindowRenewal;
+      });
+      await setAccountToken(first, 'expired-token', NOW - 1, 'renewal-credential');
+
+      await expect(renewAccountSession(second)).resolves.toBe('superseded');
+
+      await expect(firstWindowRenewal).resolves.toBe('renewed');
+      expect(refreshDeviceSession).toHaveBeenCalledTimes(1);
+      await expect(getAccountToken(second)).resolves.toBe('token-after-renewal-credential');
+      await expect(getAccountRefreshToken(second)).resolves.toBe('renewal-credential-next');
+    });
+
+    it('keeps the session the other window renewed when its own renewal is refused', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(NOW);
+      const backing = new Map<string, string>();
+      const first = windowOver(backing);
+      const second = windowOver(backing);
+      await setAccountToken(first, 'expired-token', NOW - 1, 'renewal-credential');
+      let releaseFirst!: (value: unknown) => void;
+      refreshDeviceSession
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              releaseFirst = resolve;
+            }),
+        )
+        .mockImplementationOnce(async () => {
+          releaseFirst({
+            kind: 'renewed',
+            token: 'first-window-token',
+            expiresAt: NOW + 600_000,
+            refreshToken: 'first-window-renewal',
+          });
+          await firstWindowRenewal;
+          return { kind: 'revoked' };
+        });
+
+      const firstWindowRenewal = renewAccountSession(first);
+      await vi.waitFor(() => expect(refreshDeviceSession).toHaveBeenCalledTimes(1));
+
+      await expect(renewAccountSession(second)).resolves.toBe('superseded');
+      await expect(firstWindowRenewal).resolves.toBe('renewed');
+      await expect(getAccountToken(second)).resolves.toBe('first-window-token');
+      await expect(getAccountRefreshToken(second)).resolves.toBe('first-window-renewal');
+    });
+  });
 });
 
 describe('cloud completion error envelopes', () => {
@@ -1411,6 +1504,48 @@ describe('a refusal from the account API is not a sign-out', () => {
     });
   });
 
+  it('renews, rather than ending the session, when the token expired while the request was out', async () => {
+    let now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    await setAccountToken(secrets, 'old-token', now + 1_000, 'renewal');
+    refreshDeviceSession.mockResolvedValue({
+      kind: 'renewed',
+      token: 'rotated-token',
+      expiresAt: now + 600_000,
+      refreshToken: 'next-renewal',
+    });
+    const bearers = answerAccountApi({ status: 401 }, { status: 200, body: TIER_BODY });
+    const respond = vi.mocked(https.request).getMockImplementation();
+    vi.mocked(https.request).mockImplementation(((...args: Parameters<typeof https.request>) => {
+      now += 2_000;
+      return respond?.(...args);
+    }) as never);
+
+    await expect(fetchTierInfo(secrets)).resolves.toMatchObject({ tier: 'team' });
+
+    expect(refreshDeviceSession).toHaveBeenCalledTimes(1);
+    expect(bearers).toEqual(['Bearer old-token', 'Bearer rotated-token']);
+    await expect(getAccountToken(secrets)).resolves.toBe('rotated-token');
+  });
+
+  it('shows why the account is refused instead of a connection failure', async () => {
+    const secrets = await signedIn();
+    refreshDeviceSession.mockResolvedValue({
+      kind: 'account-unavailable',
+      message: 'This account is suspended.',
+    });
+    try {
+      answerAccountApi({ status: 401 });
+      await expect(fetchUsageHistory(secrets)).resolves.toEqual({
+        kind: 'unavailable',
+        reason: 'This account is suspended.',
+      });
+    } finally {
+      await clearAccountToken(secrets);
+    }
+  });
+
   describe('chat completions', () => {
     const cancellation = {
       isCancellationRequested: false,
@@ -1498,6 +1633,64 @@ describe('a refusal from the account API is not a sign-out', () => {
 
       await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
       await expect(getAccountToken(secrets)).resolves.toBe('old-token');
+    });
+
+    it.each([
+      [
+        'an unavailable account',
+        { kind: 'account-unavailable', message: 'This account is suspended.' },
+        'This account is suspended.',
+      ],
+      [
+        'terms that need accepting',
+        { kind: 'terms-required', acceptanceUrl: null },
+        'Accept the updated Terms of Service',
+      ],
+    ])(
+      'offers sign-in with the reason, never a connection retry, for %s',
+      async (_case, renewal, reason) => {
+        const secrets = await signedIn();
+        refreshDeviceSession.mockResolvedValue(renewal);
+        try {
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            answerChat({ status: 401, body: 'nope' });
+            const failure = await ask(secrets).catch((error: unknown) => error);
+            expect(failure).toMatchObject({ code: 'ACCOUNT_AUTH_REQUIRED' });
+            expect((failure as Error).message).toContain(reason);
+            expect((failure as Error).message).not.toMatch(/connection/iu);
+          }
+          await expect(getAccountRefreshToken(secrets)).resolves.toBe('renewal');
+        } finally {
+          await clearAccountToken(secrets);
+        }
+      },
+    );
+
+    it('stops waiting out a retry-after the moment the request is cancelled', async () => {
+      const secrets = await signedIn();
+      const bearers = answerChat(
+        { status: 503, headers: { 'retry-after': '30' }, body: '{}' },
+        { status: 200, body: sse('Too late') },
+      );
+      const source = new vscode.CancellationTokenSource();
+      const outcome = streamChatCompletion(
+        secrets,
+        [{ role: 'user', content: 'hi' }],
+        { onToken: () => undefined, onDone: () => undefined },
+        source.token,
+      ).then(
+        () => 'answered',
+        (error: unknown) => error,
+      );
+
+      await vi.advanceTimersByTimeAsync(10);
+      expect(bearers).toHaveLength(1);
+      source.cancel();
+      await vi.advanceTimersByTimeAsync(0);
+
+      await expect(outcome).resolves.toMatchObject({ code: 'CANCELLED' });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(bearers).toHaveLength(1);
     });
 
     it('asks to sign in again only after the renewed credential was refused', async () => {

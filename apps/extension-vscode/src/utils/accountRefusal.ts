@@ -34,6 +34,18 @@ const REFUSAL_STATUS_BY_KIND: Readonly<Record<AccountRefusalKind, number>> = {
 const SERVER_TEXT_STATUSES: ReadonlySet<number> = new Set([403, 503]);
 const STATUS_PREFIX = /^HTTP (\d{3}):\s*/u;
 const BARE_STATUS = /^HTTP \d{3}$/u;
+export const ACCOUNT_REFUSAL_TEXT_MAX_LENGTH = 240;
+
+function boundedRefusalText(text: string): string | undefined {
+  const line = text.replace(/\s+/gu, ' ').trim();
+  if (line === '') return undefined;
+  const characters = Array.from(line);
+  if (characters.length <= ACCOUNT_REFUSAL_TEXT_MAX_LENGTH) return line;
+  return `${characters
+    .slice(0, ACCOUNT_REFUSAL_TEXT_MAX_LENGTH - 1)
+    .join('')
+    .trimEnd()}\u2026`;
+}
 
 export interface AccountRefusal {
   code: string;
@@ -63,9 +75,13 @@ export async function readAccountRefusal(response: Response): Promise<AccountRef
   const error = body?.error as { code?: unknown; message?: unknown } | undefined;
   if (typeof error?.code !== 'string' || typeof error.message !== 'string') return undefined;
   const code = error.code.toUpperCase();
-  const message = error.message.trim();
+  const message = boundedRefusalText(error.message);
   const kind = accountRefusalKind(code);
-  if (kind === undefined || message === '' || REFUSAL_STATUS_BY_KIND[kind] !== response.status) {
+  if (
+    kind === undefined ||
+    message === undefined ||
+    REFUSAL_STATUS_BY_KIND[kind] !== response.status
+  ) {
     return undefined;
   }
   const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
@@ -76,7 +92,7 @@ function serverTextOf(error: { status?: unknown; message?: unknown }): string | 
   if (typeof error.status !== 'number' || !SERVER_TEXT_STATUSES.has(error.status)) return undefined;
   if (typeof error.message !== 'string') return undefined;
   const text = error.message.trim().replace(STATUS_PREFIX, '').trim();
-  return text === '' || BARE_STATUS.test(text) ? undefined : text;
+  return BARE_STATUS.test(text) ? undefined : boundedRefusalText(text);
 }
 
 export function accountRefusalMessage(error: unknown): string | undefined {
@@ -84,8 +100,8 @@ export function accountRefusalMessage(error: unknown): string | undefined {
   if (candidate === null || typeof candidate !== 'object') return undefined;
   if (typeof candidate.message !== 'string') return undefined;
   if (typeof candidate.code === 'string') {
-    return accountRefusalKind(candidate.code) !== undefined && candidate.message.trim() !== ''
-      ? candidate.message.trim()
+    return accountRefusalKind(candidate.code) !== undefined
+      ? boundedRefusalText(candidate.message)
       : undefined;
   }
   return serverTextOf(candidate);
