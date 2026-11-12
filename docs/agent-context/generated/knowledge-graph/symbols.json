@@ -45362,6 +45362,9 @@
     "ExportOptions": [
       "apps/web/features/chat/services/document-export-service.ts"
     ],
+    "exportPinnedReleaseKeys": [
+      "scripts/release/release-signing-key.mjs"
+    ],
     "exportPngImage": [
       "apps/mobile/services/fileCreation.ts"
     ],
@@ -61237,6 +61240,9 @@
     ],
     "InstalledVersions": [
       "apps/desktop/src-tauri/src/upgrade/mod.rs"
+    ],
+    "INSTALLER": [
+      "scripts/release/release-signing-key.mjs"
     ],
     "InstallerChecksum": [
       "apps/web/app/api/download/checksums/route.ts"
@@ -85650,9 +85656,6 @@
     "on_branch": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
     ],
-    "on_event": [
-      "apps/cli/src/tui/tui_app.rs"
-    ],
     "onAccountTierMayHaveChanged": [
       "apps/extension-vscode/src/integrations/tierRevalidation.ts"
     ],
@@ -85956,9 +85959,6 @@
     ],
     "OPEN_ORGANIZATION_CONTEXT_POLICY": [
       "packages/platform/context-engine/src/permissions.ts"
-    ],
-    "open_overlay": [
-      "apps/cli/src/tui/tui_app.rs"
     ],
     "OPEN_PATH_REFERENCE_COMMAND": [
       "apps/extension-vscode/src/features/path-links/index.ts"
@@ -91854,6 +91854,9 @@
     ],
     "PinoLevel": [
       "apps/web/lib/logger.ts"
+    ],
+    "pinReleaseKey": [
+      "scripts/release/release-signing-key.mjs"
     ],
     "PINS_BY_HOST": [
       "apps/mobile/lib/pinning.ts"
@@ -113303,7 +113306,6 @@
       "apps/cli/src/cloud/personalization.rs",
       "apps/cli/src/remote_control/mod.rs",
       "apps/cli/src/tui/mod.rs",
-      "apps/cli/src/tui/tui_app.rs",
       "apps/desktop/src-tauri/src/automation/action_router/dispatch.rs",
       "apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs",
       "apps/desktop/src-tauri/src/lib.rs",
