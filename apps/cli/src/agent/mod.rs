@@ -2453,6 +2453,7 @@ impl AgentSession {
         self.managed_session_path = None;
         self.checkpoint_log = checkpoints::CheckpointLog::in_memory();
         self.checkpoint_captures.clear();
+        self.session_activity = Default::default();
         self.enable_managed_session()
     }
 
