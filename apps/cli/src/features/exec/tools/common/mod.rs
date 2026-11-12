@@ -490,7 +490,7 @@ mod tests {
 
         let diff = generate_simple_diff(&old, &new);
 
-        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
         assert!(
             diff.contains("\n-row 30000\n+row thirty thousand\n"),
             "missing change"

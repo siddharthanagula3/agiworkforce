@@ -6990,6 +6990,9 @@ fn settled_stop_reason(
             Some(crate::errors::IncompleteTurnCause::RefusedBySafety) => {
                 AgentEventStopReason::Refusal
             }
+            Some(crate::errors::IncompleteTurnCause::StreamEndedEarly) => {
+                AgentEventStopReason::Error
+            }
             Some(crate::errors::IncompleteTurnCause::NoResponse) | None => {
                 AgentEventStopReason::EndTurn
             }

@@ -375,6 +375,7 @@ pub(super) async fn execute_grep_files(
                     })
                 }
             };
+            let include = include.map(|filter| filter.trim_start_matches("**/"));
             if let Some(filter) = include.filter(|filter| filter.contains('/')) {
                 return Ok(ToolResult {
                     tool_name: "grep_files".into(),
