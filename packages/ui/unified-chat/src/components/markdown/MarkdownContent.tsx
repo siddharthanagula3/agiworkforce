@@ -752,17 +752,17 @@ const markdownComponents: Components = {
   pre: MarkdownPre as Components['pre'],
   img: MarkdownImage as Components['img'],
   h1: ({ children }) => (
-    <h1 data-markdown-heading="" className="mb-4 mt-6 wrap-anywhere text-h2">
+    <h1 data-markdown-heading="" className="mb-4 mt-6 wrap-anywhere text-h1">
       {children}
     </h1>
   ),
   h2: ({ children }) => (
-    <h2 data-markdown-heading="" className="mb-3 mt-5 wrap-anywhere text-h3">
+    <h2 data-markdown-heading="" className="mb-3 mt-5 wrap-anywhere text-h2">
       {children}
     </h2>
   ),
   h3: ({ children }) => (
-    <h3 data-markdown-heading="" className="mb-2 mt-4 wrap-anywhere text-h4">
+    <h3 data-markdown-heading="" className="mb-2 mt-4 wrap-anywhere text-h3">
       {children}
     </h3>
   ),

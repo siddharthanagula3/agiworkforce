@@ -2,7 +2,7 @@ import { useColorScheme } from 'react-native';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { getAccentSwatch, getColors, type ColorScheme } from './tokens';
+import { accentTokenFrom, getAccentSwatch, getColors, type ColorScheme } from './tokens';
 import { useSystemHighContrast } from './useSystemHighContrast';
 import type { StatusBarStyle } from 'expo-status-bar';
 
@@ -41,17 +41,8 @@ export function useTheme(): ThemeResult {
 }
 
 function resolveAccent(color: string, isDark: boolean): string | null {
-  if (color === 'neutral') return null;
-  if (
-    color === 'green' ||
-    color === 'blue' ||
-    color === 'violet' ||
-    color === 'rose' ||
-    color === 'amber'
-  ) {
-    return getAccentSwatch(color, isDark);
-  }
-  return null;
+  const accent = accentTokenFrom(color);
+  return accent === 'neutral' ? null : getAccentSwatch(accent, isDark);
 }
 
 export function useThemeColors(): ColorScheme {

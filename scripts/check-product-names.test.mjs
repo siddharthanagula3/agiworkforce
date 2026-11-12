@@ -45,7 +45,10 @@ function fixture({ desktop = NAMES.desktop, source = '', names = NAMES } = {}) {
     'apps/extension/manifest.json',
     JSON.stringify({ name: `${COPYRIGHT_NAME} ${names.extension}` }),
   );
-  write('apps/extension-vscode/package.json', JSON.stringify({ displayName: NAMES.code }));
+  write(
+    'apps/extension-vscode/package.json',
+    JSON.stringify({ displayName: `${COPYRIGHT_NAME} ${names.code}` }),
+  );
   write('apps/web/app/page.tsx', source);
   return root;
 }
@@ -100,7 +103,7 @@ test('fails when a manifest has lost its display field', () => {
   const root = fixture();
   fs.writeFileSync(path.join(root, 'apps/extension-vscode/package.json'), JSON.stringify({}));
   assert.deepEqual(runProductNamesCheck(root), [
-    'apps/extension-vscode/package.json: shows "null", the registry names this app "Code"',
+    'apps/extension-vscode/package.json: shows "null", the registry names this app "AGI Code"',
   ]);
 });
 

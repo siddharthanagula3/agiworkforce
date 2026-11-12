@@ -206,9 +206,15 @@ describe('NEW-mqa-05, every Cloud entry point stages the intent', () => {
     'src/features/support/SupportTicketsScreen.tsx',
     'src/features/support/SupportTicketScreen.tsx',
     'src/features/cloud-code/useCloudCodeAccess.ts',
-    'services/api.ts',
     'app/_layout.tsx',
   ];
+
+  it('leaves sign-in to the root layout instead of routing from the API client', () => {
+    const api = readFileSync(join(__dirname, '..', 'services', 'api.ts'), 'utf8');
+
+    expect(api).not.toMatch(/expo-router|\/\(auth\)\//);
+    expect(api).toContain('oweSignInForEndedSession');
+  });
 
   it.each(entryPoints)(
     'routes %s through beginCloudPostAuthIntent, not a bare login push',

@@ -38,7 +38,9 @@ release after the first.
   downloads an archive in a browser instead will see those warnings.
 - A manual run of the workflow (Actions tab, or `gh workflow run`) validates
   and builds and smokes all six archives, then stops. It never signs, tags or
-  publishes, and needs no signing key.
+  publishes, and needs no signing key. It builds the archives even when the
+  source validation job is red, so a failing test does not hide whether they
+  compile; a tag builds only source that passed validation.
 
 ## Install channels
 

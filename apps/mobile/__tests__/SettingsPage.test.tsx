@@ -154,6 +154,14 @@ describe('Settings page', () => {
     expect(queryByText(/byok/i)).toBeNull();
   });
 
+  it('keeps each row label at its own width so a long value truncates instead of hiding it', () => {
+    const screen = render(<SettingsTabScreen />);
+    const label = screen.getByTestId('settings-row-label-account-email');
+
+    expect(label).toHaveStyle({ flexGrow: 1, flexShrink: 0 });
+    expect(label).not.toHaveStyle({ flex: 1 });
+  });
+
   it('opens Remote control from Settings and names the paired computer', () => {
     const screen = render(<SettingsTabScreen />);
 

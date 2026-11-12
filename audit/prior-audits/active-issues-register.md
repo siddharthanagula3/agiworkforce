@@ -3920,22 +3920,6 @@ Verification: Three real-hook/store assertions fail as expected; this particular
 
 Resolution/acceptance: Construct an otherwise admitted request with adequate budget and an allowed model; require the exact managed_compute_disabled code when the policy is off, then enable the policy and require that this gate permits the same request. Inject a broken managed-compute gate and prove the test fails even if another refusal remains.
 
-## VSCODE-CLI-HANDOFF-NOT-ACTIVATED-01
-
-Severity: Medium. Status: opening corrected in source (`895d49809b`); replay-receipt ordering open. Original: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-Continue CLI Session accepts the chosen thread but never opens it in VS Code. continueCliSessionHere selects newest/requested ID, validates and accepts its handoff, then only executes agi-workforce.chat. That command reveals native chat or the sidebar; it does not resume the accepted thread. The existing fork command explicitly calls sidebarProvider.resumeConversation(forkedId), demonstrating the required activation is separate. Deep links reach the same command.
-
-Impact/trigger: With a different sidebar thread active, invoke Continue CLI Session or a developer-session deep link for a specific CLI thread and confirm Continue here.
-
-Start at `apps/extension-vscode/src/core/commandSetup.ts:498` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
-
-Verification: Read complete command consumer and target command. Limit: No mounted VS Code invocation; existing admission helper tests do not exercise this command-to-sidebar activation.
-
-Resolution/acceptance: After acceptance, reveal first-party chat and resume newest.id; only record acceptance once backend admission and activation succeed. Add a command test with a different active thread.
-
-Update 2026-11-10: `895d49809b` makes `continueCliSessionHere` call `revealFirstPartyChat` and `sidebarProvider.resumeConversation` after `acceptHandoff` (`apps/extension-vscode/src/core/commandSetup.ts:528-571,1404-1413`); `sessionHandoffCommands.test.ts:170,197` covers an accepted and a declined review. Open: the replay receipt is still recorded (`accepted.add`) before the backend accepts and the thread is opened, so a failed accept consumes the link; no mounted VS Code invocation was run.
-
 ## CLI-INTERRUPT-RELEASE-BEFORE-CLEANUP-01
 
 Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
