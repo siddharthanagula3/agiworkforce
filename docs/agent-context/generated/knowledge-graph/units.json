@@ -2505,14 +2505,14 @@
       "lanes": [
         "vscode-extension"
       ],
-      "files": 390,
+      "files": 393,
       "roles": {
         "asset": 3,
         "config": 5,
         "doc": 8,
         "other": 4,
-        "source": 189,
-        "test": 181
+        "source": 190,
+        "test": 183
       }
     },
     {
@@ -2616,7 +2616,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8300,
+      "files": 8301,
       "roles": {
         "asset": 57,
         "config": 83,
@@ -2626,7 +2626,7 @@
         "other": 37,
         "source": 3515,
         "style": 35,
-        "test": 3780
+        "test": 3781
       }
     },
     {
