@@ -2825,7 +2825,7 @@ function formatCoreModelDetail(model: ModelMetadata): string {
   const tierLabel: Record<PickerModelTier, string> = {
     economy: 'Economy',
     balanced: 'Balanced',
-    premium: 'Premium',
+    premium: 'Flagship',
   };
   const tier = tierLabel[getPickerModelTier(model.id)];
   const bestFor = model.bestFor.slice(0, 2).join(', ');

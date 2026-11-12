@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { modelRegistry } from '@agiworkforce/model-registry';
+import { BILLING_PLAN_PRICING } from '../billing-catalog';
 import { PROVIDER_DISPLAY } from '../design-system/provider-display';
 import {
   applyInputTokenPricingTiers,
@@ -640,6 +641,16 @@ describe('model catalog helpers', () => {
     expect(
       models.every((model) => model.contextWindow !== undefined && model.contextWindow > 0),
     ).toBe(true);
+  });
+
+  it('never labels a picker capability tier with the name of a billing plan', () => {
+    const planLabels = new Set(Object.values(BILLING_PLAN_PRICING).map((plan) => plan.label));
+    const tierLabels = new Set(
+      getCoreManualModelOptions().map((option) => option.detail.split(' · ')[0]),
+    );
+
+    expect(tierLabels.size).toBeGreaterThan(0);
+    expect([...tierLabels].filter((label) => planLabels.has(label))).toEqual([]);
   });
 
   it('keeps specialized media, voice, and embedding models out of manual chat options', () => {
