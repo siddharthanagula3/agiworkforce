@@ -15,7 +15,7 @@ describe('computer-use default = Auto, crucial actions still ask', () => {
   it('background reads the stored mode through the one reader, so unset means Auto', () => {
     expect(background).toContain('readBrowserPermissionMode(askPref[ASK_BEFORE_ACTING_KEY])');
     expect(background).not.toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*===\s*true/);
-    expect(background).toMatch(/crucial: isCrucialAction\(requirement\)/);
+    expect(background).toMatch(/crucial: asksInAutoMode\(requirement\)/);
   });
 
   it('the Ask before acting checkbox is off by default, which is Auto', () => {

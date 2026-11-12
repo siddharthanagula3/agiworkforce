@@ -5,10 +5,10 @@ vi.mock('../src/utils', async (importOriginal) => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-const authorizeBrowserToolUrl = vi.hoisted(() => vi.fn());
-vi.mock('../src/features/browser-tools/tabAuthority', async (importOriginal) => ({
+const authorizeSiteToolDestination = vi.hoisted(() => vi.fn());
+vi.mock('../src/features/content/workerAccess', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
-  authorizeBrowserToolUrl,
+  authorizeSiteToolDestination,
 }));
 
 import { callTool } from '../src/webmcp';
@@ -35,7 +35,7 @@ function setBase(href: string): HTMLBaseElement {
 }
 
 function refuseBlockedOrigin(): void {
-  authorizeBrowserToolUrl.mockImplementation(async (url: string) => {
+  authorizeSiteToolDestination.mockImplementation(async (url: string) => {
     if (new URL(url).origin === BLOCKED_ORIGIN) throw new Error('blocked');
     return { origin: new URL(url).origin, url };
   });
@@ -46,8 +46,8 @@ const request = { name: 'SendNote', arguments: { note: 'hello' }, assertCurrent:
 beforeEach(() => {
   document.head.querySelectorAll('base').forEach((node) => node.remove());
   document.body.innerHTML = '';
-  authorizeBrowserToolUrl.mockReset();
-  authorizeBrowserToolUrl.mockImplementation(async (url: string) => ({
+  authorizeSiteToolDestination.mockReset();
+  authorizeSiteToolDestination.mockImplementation(async (url: string) => ({
     origin: new URL(url).origin,
     url,
   }));
@@ -70,7 +70,7 @@ describe('declarative site-tool form destination', () => {
 
     await expect(callTool({ ...request, source: 'declarative' })).rejects.toThrow('blocked');
 
-    expect(authorizeBrowserToolUrl).toHaveBeenCalledWith(`${BLOCKED_ORIGIN}/submit`);
+    expect(authorizeSiteToolDestination).toHaveBeenCalledWith(`${BLOCKED_ORIGIN}/submit`);
     expect(form.requestSubmit).not.toHaveBeenCalled();
   });
 
@@ -78,7 +78,7 @@ describe('declarative site-tool form destination', () => {
     const form = seedForm('/submit');
     const base = setBase(`${window.location.origin}/`);
     const assertCurrent = vi.fn();
-    authorizeBrowserToolUrl.mockImplementation(async (url: string) => {
+    authorizeSiteToolDestination.mockImplementation(async (url: string) => {
       base.href = `${BLOCKED_ORIGIN}/`;
       return { origin: new URL(url).origin, url };
     });
@@ -95,7 +95,7 @@ describe('declarative site-tool form destination', () => {
 
     const response = await callTool({ ...request, source: 'declarative' });
 
-    expect(authorizeBrowserToolUrl).toHaveBeenCalledWith(`${window.location.origin}/submit`);
+    expect(authorizeSiteToolDestination).toHaveBeenCalledWith(`${window.location.origin}/submit`);
     expect(response.success).toBe(true);
     expect(form.requestSubmit).toHaveBeenCalledTimes(1);
   });
@@ -106,7 +106,7 @@ describe('declarative site-tool form destination', () => {
 
     await callTool({ ...request, source: 'declarative' });
 
-    expect(authorizeBrowserToolUrl).toHaveBeenCalledWith('https://approved.example/post');
+    expect(authorizeSiteToolDestination).toHaveBeenCalledWith('https://approved.example/post');
   });
 
   it('authorizes the page address for an empty action', async () => {
@@ -114,7 +114,7 @@ describe('declarative site-tool form destination', () => {
 
     const response = await callTool({ ...request, source: 'declarative' });
 
-    expect(authorizeBrowserToolUrl).toHaveBeenCalledWith(new URL(window.location.href).href);
+    expect(authorizeSiteToolDestination).toHaveBeenCalledWith(new URL(window.location.href).href);
     expect(response.success).toBe(true);
     expect(form.requestSubmit).toHaveBeenCalledTimes(1);
   });
@@ -126,10 +126,10 @@ describe('declarative site-tool form destination', () => {
 
     await expect(callTool({ ...request, source: 'declarative' })).rejects.toThrow('blocked');
 
-    expect(authorizeBrowserToolUrl).toHaveBeenCalledWith(`${BLOCKED_ORIGIN}/submit`);
+    expect(authorizeSiteToolDestination).toHaveBeenCalledWith(`${BLOCKED_ORIGIN}/submit`);
     expect(form.requestSubmit).not.toHaveBeenCalled();
   });
 });
 
 type ImportedModule1 = typeof import('../src/utils');
-type ImportedModule0 = typeof import('../src/features/browser-tools/tabAuthority');
+type ImportedModule0 = typeof import('../src/features/content/workerAccess');

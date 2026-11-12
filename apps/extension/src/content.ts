@@ -36,7 +36,6 @@ import {
   autofillLever,
   autofillLinkedIn,
   autofillAshby,
-  loadAutofillProfile,
   resolveProfileValue,
 } from './features/content/autofill/filler';
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
@@ -58,9 +57,16 @@ import {
   MAX_WEBMCP_SCHEMA_BYTES,
   normalizeWebMCPToolsUpdate,
 } from './background/policy';
-import { evaluateSiteAccess } from './features/site-policy/store';
+import { requestAutofillProfile, requestPageAccess } from './features/content/workerAccess';
 import { selectOptionElement } from './features/content/selectOption';
 import { BROWSER_COMMAND_TIMEOUT_MS } from '@agiworkforce/types';
+import type {
+  FillFieldsMessage,
+  FindElementsMessage,
+  SetRecordingValueCaptureMessage,
+  WebMCPCallToolMessage,
+  WebMCPCancelToolMessage,
+} from './types';
 
 function extractPageHtmlSafely(): string {
   try {
@@ -99,23 +105,14 @@ const automationState: AutomationState = {
 };
 
 /**
- * Whether this page's origin carries the user's approval.
- *
- * Read once per document and shared, because every startup call this gates
- * wakes the service worker. Ungated, an extension declaring `http://*\/*`
- * content scripts woke the worker twice on every page load of every site the
- * user visits, and on a site the user never approved, both wakes could only
- * end in the allowlist rejection.
+ * Whether this page's origin carries the user's approval, asked of the service
+ * worker once per document: extension storage is closed to content scripts, and
+ * every other startup call waits on this one answer.
  */
-const originApproved: Promise<boolean> = (async () => {
-  if (!/^https?:/.test(location.protocol)) return false;
-  try {
-    return (await evaluateSiteAccess(window.location.href, 'automation')).allowed;
-  } catch (err) {
-    logger.debug('Could not read the site policy, treating this origin as unapproved', err);
-    return false;
-  }
-})();
+const pageAccess = /^https?:/.test(location.protocol)
+  ? requestPageAccess()
+  : Promise.resolve({ approved: false, inPagePanel: false });
+const originApproved: Promise<boolean> = pageAccess.then((access) => access.approved);
 
 interface ContentScriptScope {
   __agiWorkforceContentScriptReady?: boolean;
@@ -131,7 +128,7 @@ function initialize(): void {
 
   watchPasswordFields();
   initializeEditableSelection();
-  void setupInPagePanel(originApproved, logger);
+  void setupInPagePanel(pageAccess, logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);
 
@@ -254,10 +251,10 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleAutoFillJobApplication(message as AutoFillJobApplicationMessage);
 
     case 'FIND_ELEMENTS':
-      return handleFindElements(message as import('./types').FindElementsMessage);
+      return handleFindElements(message as FindElementsMessage);
 
     case 'FILL_FIELDS':
-      return handleFillFields(message as import('./types').FillFieldsMessage);
+      return handleFillFields(message as FillFieldsMessage);
 
     case 'GET_ACCESSIBILITY_TREE':
     case 'BUILD_ACCESSIBILITY_TREE':
@@ -279,10 +276,10 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       return handleWebMCPDiscoverTools();
 
     case 'WEBMCP_CALL_TOOL':
-      return handleWebMCPCallTool(message as import('./types').WebMCPCallToolMessage);
+      return handleWebMCPCallTool(message as WebMCPCallToolMessage);
 
     case 'WEBMCP_CANCEL_TOOL': {
-      const cancel = message as import('./types').WebMCPCancelToolMessage;
+      const cancel = message as WebMCPCancelToolMessage;
       if (cancel.pageInstanceId !== webmcpPageInstanceId)
         return { success: false, error: 'The site-tool document changed.' };
       const pending = webmcpBrowserCalls.get(cancel.browserAgentCallId);
@@ -889,12 +886,7 @@ const AUTOFILL_ORIGIN_BLOCKED_ERROR =
   'Autofill is blocked here, this site is not on your approved-site allowlist';
 
 async function isAutofillOriginAllowed(): Promise<boolean> {
-  try {
-    return (await evaluateSiteAccess(window.location.href, 'automation')).allowed;
-  } catch (err) {
-    logger.debug('Could not read the site policy for autofill gating', err);
-    return false;
-  }
+  return (await requestPageAccess()).approved;
 }
 
 async function handleAutoFillJobApplication(
@@ -941,10 +933,10 @@ async function handleAutoFillJobApplication(
 
 async function handleRunAutofill(): Promise<ExtensionResponse> {
   try {
-    if (!(await isAutofillOriginAllowed())) {
+    const profile = await requestAutofillProfile();
+    if (!profile) {
       return { success: false, error: AUTOFILL_ORIGIN_BLOCKED_ERROR } as ExtensionResponse;
     }
-    const profile = await loadAutofillProfile();
     const detection = detectJobApplication();
 
     if (!detection.isJobApplication || !detection.platform) {
@@ -1003,7 +995,7 @@ async function handleRunAutofill(): Promise<ExtensionResponse> {
   }
 }
 
-function handleFindElements(message: import('./types').FindElementsMessage): ExtensionResponse {
+function handleFindElements(message: FindElementsMessage): ExtensionResponse {
   try {
     const query = typeof message.query === 'string' ? message.query : undefined;
     return { success: true, elements: findPageElements(query) } as ExtensionResponse;
@@ -1012,7 +1004,7 @@ function handleFindElements(message: import('./types').FindElementsMessage): Ext
   }
 }
 
-function handleFillFields(message: import('./types').FillFieldsMessage): ExtensionResponse {
+function handleFillFields(message: FillFieldsMessage): ExtensionResponse {
   try {
     const fields = Array.isArray(message.fields)
       ? message.fields.filter(
@@ -1289,7 +1281,7 @@ function detachRecordingListeners(): void {
 }
 
 function handleSetRecordingValueCapture(
-  message: import('./types').SetRecordingValueCaptureMessage,
+  message: SetRecordingValueCaptureMessage,
 ): ExtensionResponse {
   const enabled = message.enabled === true;
   automationState.captureValues = enabled;
@@ -1413,9 +1405,7 @@ function handleWebMCPDiscoverTools(): ExtensionResponse {
   } as ExtensionResponse;
 }
 
-async function handleWebMCPCallTool(
-  message: import('./types').WebMCPCallToolMessage,
-): Promise<ExtensionResponse> {
+async function handleWebMCPCallTool(message: WebMCPCallToolMessage): Promise<ExtensionResponse> {
   const { toolName, arguments: args } = message;
   const binding = message.browserAgentBinding;
   const callId = message.browserAgentCallId;

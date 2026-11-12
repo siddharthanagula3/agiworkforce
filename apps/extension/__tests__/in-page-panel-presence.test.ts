@@ -36,7 +36,7 @@ const launcher = (): HTMLElement => document.querySelector<HTMLElement>('[data-a
 
 describe('in-page launcher while the real side panel is open', () => {
   it('hides when the panel is already open, shows when it closes and hides again when it reopens', async () => {
-    await setupInPagePanel(true);
+    await setupInPagePanel({ approved: true, inPagePanel: true });
     await vi.waitFor(() => expect(launcher().style.getPropertyValue('display')).toBe('none'));
 
     const deliver = (open: boolean, sender: { id?: string; tab?: unknown }): void => {

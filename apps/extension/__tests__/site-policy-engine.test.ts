@@ -47,7 +47,7 @@ let localFails = false;
 let managedFails = false;
 
 vi.stubGlobal('chrome', {
-  runtime: { id: 'site-policy-test', lastError: undefined },
+  runtime: { id: 'site-policy-test', lastError: undefined, getManifest: packagedManifest },
   storage: {
     local: areaFor(local, () => localFails),
     managed: areaFor(managed, () => managedFails),
@@ -87,6 +87,7 @@ import { SITE_ALLOWLIST_STORAGE_KEY } from '../src/background/policy';
 import { assertDestinationAllowlisted } from '../src/features/computer-use/cdpDriver';
 import { resolveDownloadUrl } from '../src/features/browser-tools/downloads';
 import { authorizeBrowserToolTab } from '../src/features/browser-tools/tabAuthority';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 const PARTNER = 'https://partner.example';
 const BLOCKED = 'https://leak.example';

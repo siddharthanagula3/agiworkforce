@@ -259,6 +259,7 @@ const chromeMock = vi.hoisted(() => {
   (globalThis as Record<string, unknown>).chrome = mock;
   return mock;
 });
+Object.assign(chromeMock.runtime, { getManifest: packagedManifest });
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -350,6 +351,7 @@ import {
 } from '../src/features/computer-use/cloudAgentClient';
 import * as browserControlConsent from '../src/features/computer-use/browserControlConsent';
 import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 const inspection = createCdpInspectionFixture('https://example.com/page');
 

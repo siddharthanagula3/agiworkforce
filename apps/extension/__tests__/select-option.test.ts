@@ -5,6 +5,7 @@ import * as sitePolicy from '../src/features/site-policy/store';
 import * as browserControlConsent from '../src/features/computer-use/browserControlConsent';
 import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
 import { createDomElementReader } from '../src/features/content/elementReader';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 const inspection = createCdpInspectionFixture(document.location.href);
 
@@ -213,7 +214,7 @@ describe('indexed select driver settlement', () => {
     vi.spyOn(sitePolicy, 'assertSiteAccess').mockResolvedValue(undefined);
     vi.spyOn(browserControlConsent, 'hasBrowserControlConsent').mockResolvedValue(true);
     vi.stubGlobal('chrome', {
-      runtime: { lastError: null },
+      runtime: { lastError: null, getManifest: packagedManifest },
       storage: { local: { get: vi.fn(async () => ({})), set: vi.fn(async () => undefined) } },
       debugger: {
         attach: (_t: unknown, _v: unknown, cb: () => void) => cb(),

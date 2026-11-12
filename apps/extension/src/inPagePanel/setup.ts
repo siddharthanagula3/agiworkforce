@@ -1,11 +1,7 @@
-import {
-  createLauncher,
-  loadPosition,
-  applyPosition,
-  attachScrollBehaviour,
-} from '../features/content/in-page-panel/launcher';
+import { createLauncher, attachScrollBehaviour } from '../features/content/in-page-panel/launcher';
 import { createPanel } from '../features/content/in-page-panel/panel';
 import { isSidePanelPresenceMessage } from '../features/side-panel/panelPresence';
+import type { PageAccess } from '../features/content/workerAccess';
 
 let realSidePanelOpen = false;
 
@@ -34,32 +30,20 @@ function watchSidePanelPresence(): void {
     .catch(() => {});
 }
 
-export const IN_PAGE_PANEL_ENABLED_KEY = 'in_page_panel_enabled';
-
-export async function isPanelEnabled(): Promise<boolean> {
-  try {
-    const result = await chrome.storage.local.get(IN_PAGE_PANEL_ENABLED_KEY);
-    const val = result[IN_PAGE_PANEL_ENABLED_KEY];
-    return val !== false;
-  } catch {
-    return true;
-  }
-}
-
 /**
  * Inject the floating launcher + slide-in panel into the current page.
  *
  * Safe to call on any http/https page. Skips non-http(s) protocols and
  * idempotently does nothing if the launcher has already been injected.
  *
- * @param originApproved Whether this origin carries the user's approval. The
- *   content script reads it once per document and shares that one read with
- *   every gate, so this takes the shared promise as well as a plain boolean.
+ * @param access What the service worker allows on this page: whether the
+ *   origin is approved and whether the user left the in-page panel on. The
+ *   content script asks once per document and shares that answer.
  * @param logger Optional logger with debug/warn methods (injected by content.ts
  *   to avoid circular imports).
  */
 export async function setupInPagePanel(
-  originApproved: boolean | Promise<boolean>,
+  access: PageAccess | Promise<PageAccess>,
   logger?: {
     debug: (msg: string, ...args: unknown[]) => void;
     warn: (msg: string, ...args: unknown[]) => void;
@@ -71,16 +55,15 @@ export async function setupInPagePanel(
     return;
   }
 
-  if (!(await originApproved)) {
+  const { approved, inPagePanel } = await access;
+  if (!approved) {
     logger?.debug('in-page panel skipped, origin not on user allowlist', {
       origin: window.location.origin,
     });
     return;
   }
-
-  const enabled = await isPanelEnabled();
-  if (!enabled) {
-    logger?.debug('in-page panel disabled via storage flag');
+  if (!inPagePanel) {
+    logger?.debug('in-page panel turned off in settings');
     return;
   }
 
@@ -97,9 +80,6 @@ export async function setupInPagePanel(
       () => panel.close(),
     );
     const { host: launcherHost } = launcher;
-
-    const pos = await loadPosition();
-    applyPosition(launcherHost, pos);
 
     document.body.appendChild(launcherHost);
 

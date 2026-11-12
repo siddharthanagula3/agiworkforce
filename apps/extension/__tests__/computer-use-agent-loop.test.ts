@@ -146,6 +146,7 @@ const chromeMock = vi.hoisted(() => {
   (globalThis as Record<string, unknown>).chrome = mock;
   return mock;
 });
+Object.assign(chromeMock.runtime, { getManifest: packagedManifest });
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
@@ -320,6 +321,7 @@ import {
 } from '../src/features/computer-use/cloudAgentClient';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
+import { packagedManifest } from './fixtures/packaged-manifest';
 import { DOM_SUMMARY_HEADING } from '../src/features/computer-use/historyBudget';
 import { createDomElementReader } from '../src/features/content/elementReader';
 import { ELEMENT_LABEL_MAX_CHARS } from '../src/features/computer-use/cdpDriver';

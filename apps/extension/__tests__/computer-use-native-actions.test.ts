@@ -162,6 +162,17 @@ describe('native browser input', () => {
     ]);
   });
 
+  it.each(['click', 'hover'] as const)(
+    'refuses to %s a point whose element is in a frame from another site',
+    async (action) => {
+      state.signature = null as unknown as string;
+      await expect(driver[action](42, { x: 10, y: 20 })).rejects.toThrow(
+        'The pointer target is in an inaccessible or unapproved scope. Use manual interaction.',
+      );
+      expect(calls('Input.dispatchMouseEvent')).toEqual([]);
+    },
+  );
+
   it('hovers by moving the native pointer without pressing a button', async () => {
     await driver.hover(42, { x: 30, y: 40 });
     expect(calls('Input.dispatchMouseEvent')).toEqual([

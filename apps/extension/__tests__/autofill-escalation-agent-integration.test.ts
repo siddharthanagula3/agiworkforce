@@ -197,11 +197,11 @@ function makeFinalStream(): ReadableStream<Uint8Array> {
 
 import {
   autofillGreenhouse,
-  loadAutofillProfile,
   resolveProfileValue,
   FILE_INPUT_SKIP_REASON,
   USER_TEXT_SKIP_REASON,
 } from '../src/features/content/autofill/filler';
+import { loadAutofillProfile } from '../src/features/content/autofill/profile-storage';
 import { detectJobApplication } from '../src/features/content/autofill/detector';
 import { makeEscalationDecision } from '../src/features/computer-use/escalationEngine';
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from '../src/features/content/autofill/ashby';
