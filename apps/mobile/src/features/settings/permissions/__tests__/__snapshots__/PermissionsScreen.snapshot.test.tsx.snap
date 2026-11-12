@@ -408,6 +408,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
         "paddingTop": 8,
       }
     }
+    keyboardShouldPersistTaps="handled"
   >
     <View>
       <View

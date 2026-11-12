@@ -57,15 +57,21 @@ beforeEach(() => {
   mockRefresh.mockResolvedValue(false);
 });
 
-describe('a token whose account the server no longer accepts', () => {
-  it('tears the local session down when the identity route answers 403', async () => {
-    mockFetch.mockResolvedValueOnce(makeResponse(403, { error: { code: 'FORBIDDEN' } }));
+describe('a 403 from the server', () => {
+  it('keeps the session when the identity route refuses for a reason it states', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeResponse(403, {
+        error: { code: 'FORBIDDEN', message: 'You are not a member of that workspace.' },
+      }),
+    );
 
-    await expect(api.get('/api/me?surface=mobile')).rejects.toThrow('403');
+    await expect(api.get('/api/me?surface=mobile')).rejects.toThrow(
+      'You are not a member of that workspace.',
+    );
 
-    expect(invalidateCloudAccount).toHaveBeenCalledTimes(1);
-    expect(clearLocalCloudAccountState).toHaveBeenCalledTimes(1);
-    expect(clearAuthSession).toHaveBeenCalledTimes(1);
+    expect(invalidateCloudAccount).not.toHaveBeenCalled();
+    expect(clearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(clearAuthSession).not.toHaveBeenCalled();
     expect(mockRefresh).not.toHaveBeenCalled();
   });
 
