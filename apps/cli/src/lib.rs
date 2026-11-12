@@ -7908,6 +7908,8 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
             .or(normalized_cli_options.permission_mode)
             .is_some(),
         repository: app_config.source.repository_permission_mode,
+        explicit_yes: cli.yes,
+        explicit_skip: cli.dangerously_skip_permissions,
     };
     let effective_auto_approve_plan = cli.auto_approve_plan;
 

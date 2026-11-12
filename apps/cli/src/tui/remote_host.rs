@@ -333,8 +333,36 @@ impl TuiRemoteHost {
         );
     }
 
-    pub fn approval_settled(&self, id: Uuid) {
-        self.live().pending.retain(|(pending, _)| *pending != id);
+    pub fn approval_settled(&self, id: Uuid, decision: ApprovalDecision) {
+        let (turn_id, sequence) = {
+            let mut live = self.live();
+            let waiting = live.pending.len();
+            live.pending.retain(|(pending, _)| *pending != id);
+            if live.pending.len() == waiting {
+                return;
+            }
+            let Some(turn_id) = live.turn_ids.first().cloned() else {
+                return;
+            };
+            let sequence = live.event_sequence;
+            live.event_sequence += 1;
+            (turn_id, sequence)
+        };
+        let decision = match decision {
+            ApprovalDecision::AllowOnce | ApprovalDecision::AlwaysAllow => "approved",
+            ApprovalDecision::AllowSession => "approved-for-session",
+            ApprovalDecision::Deny => "denied",
+            ApprovalDecision::Cancel | ApprovalDecision::Timeout => "cancelled",
+        };
+        self.emit(
+            "turn/agent_event",
+            json!({
+                "sessionId": self.thread_id,
+                "turnId": turn_id,
+                "sequence": sequence,
+                "event": { "type": "approval-resolved", "approvalId": id.to_string(), "decision": decision },
+            }),
+        );
     }
 
     pub fn answered_remotely(&self, id: Uuid) -> Option<bool> {
@@ -741,6 +769,43 @@ mod tests {
         let detail = relayed.params["detail"].as_str().expect("detail");
         assert_eq!(detail, format!("{command}\nChanges files"));
         assert_eq!(host.live().pending[0].1.detail, detail);
+    }
+
+    #[tokio::test]
+    async fn a_terminal_answer_is_relayed_once_as_the_approval_resolving() {
+        let fixture = fixture();
+        let host = &fixture.host;
+        host.begin_turn(ApprovalBroker::new(), Vec::new());
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: "cargo test".to_string(),
+            },
+            "Allow this command?",
+            vec!["cargo test".to_string()],
+        );
+        host.approval_requested(&request);
+        let mut events = host.subscribe();
+
+        host.approval_settled(request.id, ApprovalDecision::Deny);
+        host.approval_settled(request.id, ApprovalDecision::AllowOnce);
+
+        let relayed: Vec<AppServerNotification> =
+            std::iter::from_fn(|| events.try_recv().ok()).collect();
+        assert_eq!(relayed.len(), 1);
+        assert_eq!(relayed[0].method, "turn/agent_event");
+        assert_eq!(relayed[0].params["sessionId"], THREAD);
+        assert_eq!(relayed[0].params["event"]["type"], "approval-resolved");
+        assert_eq!(
+            relayed[0].params["event"]["approvalId"],
+            request.id.to_string()
+        );
+        assert_eq!(relayed[0].params["event"]["decision"], "denied");
+        use agiworkforce_protocol::agent_events::AgentEvent;
+        assert!(matches!(
+            serde_json::from_value::<AgentEvent>(relayed[0].params["event"].clone()),
+            Ok(AgentEvent::ApprovalResolved(_))
+        ));
+        assert!(host.live().pending.is_empty());
     }
 
     #[tokio::test]
