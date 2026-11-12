@@ -30,6 +30,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 import { runAuthGate } from '../lib/auth-gate';
 import { CURRENT_TERMS_VERSION, forgetTermsStanding } from '@/lib/server/terms';
+import { billingPlanCapabilityUpgradeMessage } from '@agiworkforce/types';
 
 function request(surface?: string, token = 'clerk-session-token'): NextRequest {
   const headers: Record<string, string> = {
@@ -145,9 +146,12 @@ describe('runAuthGate managed cloud surface entitlements', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.response.status).toBe(403);
-        await expect(result.response.json()).resolves.toMatchObject({
+        const body = await result.response.json();
+        expect(body).toMatchObject({
           error: { code: 'developer_surface_plan_required', requiredTier: 'pro' },
         });
+        expect(body.error.message).toBe(billingPlanCapabilityUpgradeMessage('developer_surfaces'));
+        expect(body.error.message).not.toMatch(/browser extension/i);
       }
     }
 

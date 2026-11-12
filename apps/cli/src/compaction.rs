@@ -174,7 +174,7 @@ pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
     let mut total = 0usize;
 
     if let Some((path, content)) = global_instructions() {
-        let content = if estimate_tokens(&content) <= MAX_INSTRUCTION_TOKENS {
+        let content = if estimate_tokens(&content) <= MAX_INSTRUCTION_TOKENS / 2 {
             content
         } else {
             truncated = true;
@@ -457,6 +457,32 @@ mod tests {
             with_config_home(home.path(), || instruction_sources(cwd.path()));
 
         assert!(truncated);
+        assert!(sources
+            .iter()
+            .any(|source| source.content == "Use the house style."));
+    }
+
+    #[test]
+    fn a_global_file_just_under_the_budget_still_leaves_room_for_the_repository() {
+        let home = tempfile::tempdir().expect("home");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let mut near_budget = String::new();
+        while estimate_tokens(&near_budget) < MAX_INSTRUCTION_TOKENS - 100 {
+            near_budget.push_str("Always run the formatter before you finish.\n");
+        }
+        assert!(estimate_tokens(&near_budget) <= MAX_INSTRUCTION_TOKENS);
+        fs::write(home.path().join("instructions.md"), &near_budget).expect("global instructions");
+        fs::write(cwd.path().join("AGENTS.md"), "Use the house style.").expect("repository file");
+
+        let (sources, truncated) =
+            with_config_home(home.path(), || instruction_sources(cwd.path()));
+        let global = sources
+            .iter()
+            .find(|source| source.path == home.path().join("instructions.md"))
+            .expect("the global file still loads");
+
+        assert!(truncated);
+        assert!(estimate_tokens(&global.content) <= MAX_INSTRUCTION_TOKENS / 2);
         assert!(sources
             .iter()
             .any(|source| source.content == "Use the house style."));

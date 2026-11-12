@@ -32,6 +32,26 @@ pub fn sanitize_terminal_text(input: &str) -> Cow<'_, str> {
     Cow::Owned(out)
 }
 
+pub fn sanitize_approval_text(input: &str) -> String {
+    let stripped = sanitize_terminal_text(input);
+    let mut shown = String::with_capacity(stripped.len());
+    for ch in stripped.chars() {
+        if is_bidi_control(ch) {
+            shown.push_str(&format!("<U+{:04X}>", u32::from(ch)));
+        } else {
+            shown.push(ch);
+        }
+    }
+    shown
+}
+
+fn is_bidi_control(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{061C}' | '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+    )
+}
+
 /// Strip escapes from ratatui lines that are about to be painted.
 ///
 /// `Paragraph` copies a grapheme into the frame buffer whenever its display
@@ -306,6 +326,15 @@ mod tests {
             .collect();
         assert_eq!(joined, "safe run nowAPPROVED");
         assert_eq!(lines[0].spans[1].style, style);
+    }
+
+    #[test]
+    fn approval_text_shows_bidi_controls_and_drops_escapes() {
+        assert_eq!(
+            sanitize_approval_text("ls \u{202E}txt.exe\u{2066} \u{1b}[2Jdone\nnext"),
+            "ls <U+202E>txt.exe<U+2066> done\nnext"
+        );
+        assert_eq!(sanitize_approval_text("plain é 日"), "plain é 日");
     }
 
     #[test]

@@ -9,6 +9,7 @@ import type { IdentityRequestAuth } from '@agiworkforce/identity';
 import { createError, isAppError } from '@/lib/errors';
 import { getClerkAuthUser, getCookieSessionAuthUser, type AuthResult } from '@/lib/api-auth';
 import { getRequestIdentity } from '@/lib/server/identity';
+import { logger } from '@/lib/logger';
 import { traceDatabaseAdapter } from '@/lib/observability/database-span';
 import { setTenantScope } from '@/lib/observability/trace-context';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
@@ -62,7 +63,15 @@ async function resolveRequestOrganizationId(
   request: NextRequest,
   userId: string,
 ): Promise<string | null> {
-  return resolveActiveOrganizationId(getNeonDb(), userId, request);
+  try {
+    return await resolveActiveOrganizationId(getNeonDb(), userId, request);
+  } catch (error) {
+    if (isAppError(error)) throw error;
+    logger.error({ error, userId }, 'workspace scope lookup failed; denying request');
+    throw createError.serviceUnavailable(
+      'Unable to verify workspace scope. Please try again shortly.',
+    );
+  }
 }
 
 function isApiKeyToken(token: string): boolean {

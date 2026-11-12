@@ -138,6 +138,15 @@ impl std::fmt::Debug for ContinuationSink {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ManagedModelSwitch {
+    SameSession,
+    NewSession,
+}
+
+pub const NEW_MANAGED_SESSION_NOTICE: &str =
+    "Started a new cloud session for this model; your earlier session is kept here and was not sent.";
+
 /// Stable identifiers shared by every SDK stream event in one CLI turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SdkStreamContext {
@@ -1190,6 +1199,10 @@ impl AgentSession {
     /// preserving the managed trust/billing boundary instead of inferring the
     /// upstream vendor from the model id.
     pub fn switch_managed_model(&mut self, model: &str) -> Result<()> {
+        self.enter_managed_model(model).map(|_| ())
+    }
+
+    pub fn enter_managed_model(&mut self, model: &str) -> Result<ManagedModelSwitch> {
         let already_managed = self.privacy_mode == PrivacyMode::Managed
             && self.provider_privacy_mode() == PrivacyMode::Managed;
         let fresh_session = self.turn_count == 0
@@ -1209,6 +1222,11 @@ impl AgentSession {
             }
             .into());
         }
+        let leaves_history_behind = self.switch_to_managed_leaves_history_behind();
+        if leaves_history_behind {
+            self.managed_session = None;
+            self.managed_session_path = None;
+        }
         if !already_managed {
             self.rebuild_system_message_for(
                 PrivacyMode::Managed,
@@ -1218,7 +1236,35 @@ impl AgentSession {
         self.model = model.to_string();
         self.provider = models::Provider::ManagedCloud;
         self.set_privacy_mode(PrivacyMode::Managed);
-        Ok(())
+        if !leaves_history_behind {
+            return Ok(ManagedModelSwitch::SameSession);
+        }
+        self.start_fresh_managed_session()?;
+        Ok(ManagedModelSwitch::NewSession)
+    }
+
+    fn switch_to_managed_leaves_history_behind(&self) -> bool {
+        if self.privacy_mode == PrivacyMode::Managed {
+            return false;
+        }
+        let recorded = self
+            .session_activity
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .has_records();
+        recorded
+            || !self.checkpoint_log.checkpoints().is_empty()
+            || self.managed_session.as_ref().is_some_and(|session| {
+                session.title.is_some()
+                    || session.code.is_some()
+                    || !session.approvals.is_empty()
+                    || !session.file_changes.is_empty()
+                    || !session.validations.is_empty()
+                    || session
+                        .messages
+                        .iter()
+                        .any(|message| message.role != "system")
+            })
     }
 
     /// Add an additional directory root at runtime, mirroring Claude Code's
@@ -2350,6 +2396,38 @@ impl AgentSession {
         self.skip_permissions && self.pinned_permission_mode.is_none()
     }
 
+    pub(crate) fn settle_loaded_permission_mode(
+        &mut self,
+        launch: crate::cli_options::LaunchPermissionMode,
+        before_load: crate::cli_options::PermissionMode,
+    ) {
+        let saved = self
+            .managed_session
+            .as_ref()
+            .and_then(|session| session.permission_mode);
+        let mode = launch.after_load(before_load, saved, self.pinned_permission_mode);
+        let planning = mode == crate::cli_options::PermissionMode::Plan;
+        if self.plan_mode != planning {
+            self.plan_approved = false;
+        }
+        self.permission_mode = mode;
+        self.plan_mode = planning;
+    }
+
+    pub(crate) fn plan_exit_mode(&mut self) -> crate::cli_options::PermissionMode {
+        self.plan_return_mode
+            .take()
+            .unwrap_or_default()
+            .within(self.pinned_permission_mode)
+    }
+
+    pub(crate) fn pinned_mode_notice(&self) -> String {
+        format!(
+            "Your organization's policy holds tool approval at {}, so a looser mode is not available.",
+            self.governed_permission_mode().name()
+        )
+    }
+
     /// The approval callback a tool call receives: the surface's own, with
     /// every decision recorded on this session.
     pub(crate) fn recorded_approval_callback(&self) -> Option<crate::tools::ApprovalCallback> {
@@ -2375,6 +2453,7 @@ impl AgentSession {
         self.managed_session_path = None;
         self.checkpoint_log = checkpoints::CheckpointLog::in_memory();
         self.checkpoint_captures.clear();
+        self.session_activity = Default::default();
         self.enable_managed_session()
     }
 
@@ -3115,6 +3194,98 @@ mod tests {
         assert!(session.recent_tool_calls.is_empty());
         assert_eq!(session.loop_strike_count, 0);
         assert_eq!(session.memory_extracted_through, 0);
+    }
+
+    #[test]
+    fn a_requested_launch_mode_survives_loading_a_looser_saved_session() {
+        use crate::cli_options::{LaunchPermissionMode, PermissionMode};
+        for (requested, expected) in [
+            (true, PermissionMode::Plan),
+            (false, PermissionMode::AcceptEdits),
+        ] {
+            let temp = tempfile::tempdir().expect("session fixture");
+            let mut session =
+                AgentSession::new("fixture-local-model:latest", &test_context(), None);
+            session.set_session_persistence(false);
+            session.pinned_permission_mode = None;
+            session.permission_mode = PermissionMode::Plan;
+            session.plan_mode = true;
+            let mut incoming =
+                ManagedSession::with_messages("saved-in-auto", chrono::Utc::now(), Vec::new());
+            incoming.model = Some(session.model.clone());
+            incoming.routing_authority = Some(session.current_routing_authority());
+            incoming.permission_mode = Some(PermissionMode::AcceptEdits);
+            incoming.plan_mode = Some(false);
+            let launch = LaunchPermissionMode {
+                mode: PermissionMode::Plan,
+                requested,
+                repository: None,
+            };
+
+            let before_load = session.permission_mode;
+            session
+                .load_managed_conversation(incoming, temp.path().join("target.json"))
+                .expect("load target");
+            session.settle_loaded_permission_mode(launch, before_load);
+
+            assert_eq!(session.permission_mode, expected, "requested: {requested}");
+            assert_eq!(session.governed_permission_mode(), expected);
+            assert_eq!(
+                session.plan_mode,
+                expected == PermissionMode::Plan,
+                "requested: {requested}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_cleared_local_session_with_history_moves_to_managed_only_through_a_new_session() {
+        let mut local = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        local.set_session_persistence(false);
+        assert_eq!(local.privacy_mode, PrivacyMode::Local);
+        assert!(!local.switch_to_managed_leaves_history_behind());
+
+        local.managed_session = Some(ManagedSession::with_messages(
+            "local-empty",
+            chrono::Utc::now(),
+            Vec::new(),
+        ));
+        assert!(!local.switch_to_managed_leaves_history_behind());
+
+        let mut titled =
+            ManagedSession::with_messages("local-titled", chrono::Utc::now(), Vec::new());
+        titled.title = Some("the private project".to_string());
+        local.managed_session = Some(titled);
+        local
+            .messages
+            .push(Message::text("user", "the private project"));
+        local.clear();
+        assert!(local.switch_to_managed_leaves_history_behind());
+
+        local.managed_session = Some(ManagedSession::with_messages(
+            "local-turns",
+            chrono::Utc::now(),
+            vec![Message::text("user", "an earlier turn")],
+        ));
+        assert!(local.switch_to_managed_leaves_history_behind());
+
+        local.set_privacy_mode(PrivacyMode::Managed);
+        assert!(!local.switch_to_managed_leaves_history_behind());
+    }
+
+    #[test]
+    fn plan_exit_mode_returns_to_the_entry_mode_within_the_pin() {
+        use crate::cli_options::PermissionMode;
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.pinned_permission_mode = None;
+        session.plan_return_mode = Some(PermissionMode::AcceptEdits);
+        assert_eq!(session.plan_exit_mode(), PermissionMode::AcceptEdits);
+        assert_eq!(session.plan_return_mode, None);
+        assert_eq!(session.plan_exit_mode(), PermissionMode::Default);
+
+        session.pinned_permission_mode = Some(PermissionMode::Plan);
+        session.plan_return_mode = Some(PermissionMode::AcceptEdits);
+        assert_eq!(session.plan_exit_mode(), PermissionMode::Plan);
     }
 
     #[test]

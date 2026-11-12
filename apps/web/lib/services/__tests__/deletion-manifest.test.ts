@@ -24,6 +24,7 @@ import {
 
 import {
   RETENTION_MATRIX,
+  SIGNALING_SESSION_MAXIMUM_AGE_DAYS,
   accountErasureProgress,
   resolveDeletionStatus,
   renderRetentionMatrixMarkdown,
@@ -60,6 +61,47 @@ describe('the matrix covers every store the erasure paths know about', () => {
     const outside = RETENTION_MATRIX.filter((candidate) => candidate.kind !== 'table');
     expect(outside.map((candidate) => candidate.store)).toContain('media object storage');
     expect(outside.every((candidate) => candidate.dataClass !== 'telemetry')).toBe(true);
+  });
+});
+
+describe('the relay pairing store', () => {
+  it('is erased with its account and swept by the relay once expired', () => {
+    expect(entry('signaling_sessions')).toMatchObject({
+      kind: 'table',
+      dataClass: 'operational_record',
+      erasedWithSubject: true,
+      erasedWithTenant: false,
+    });
+    expect(entry('signaling_sessions').deletionPath).toContain('lib/server/account-erasure.ts');
+    expect(entry('signaling_sessions').deletionPath).toContain(
+      'services/signaling-server src/expired-pairings.ts',
+    );
+  });
+
+  it('states the ceiling the relay enforces, rounded up to whole days', () => {
+    const relayConstants = readFileSync(
+      join(process.cwd(), '../../services/signaling-server/src/constants.ts'),
+      'utf8',
+    );
+    const constantMs = (name: string): number => {
+      const expression = new RegExp(`export const ${name} = ([\\d_ *]+);`, 'u').exec(
+        relayConstants,
+      )?.[1];
+      if (!expression) throw new Error(`${name} is missing from the relay constants`);
+      return expression
+        .split('*')
+        .map((factor) => Number(factor.trim().replace(/_/gu, '')))
+        .reduce((product, factor) => product * factor, 1);
+    };
+    const dayMs = 24 * 60 * 60 * 1000;
+    const longestLifeMs =
+      constantMs('PAIRING_MAX_LIFETIME_MS_DEFAULT') +
+      constantMs('EXPIRED_PAIRING_PRUNE_GRACE_MS') +
+      constantMs('EXPIRED_PAIRING_PRUNE_INTERVAL_MS');
+
+    expect(SIGNALING_SESSION_MAXIMUM_AGE_DAYS).toBe(Math.ceil(longestLifeMs / dayMs));
+    expect(entry('signaling_sessions').maximumAgeDays).toBe(SIGNALING_SESSION_MAXIMUM_AGE_DAYS);
+    expect(entry('signaling_sessions').deletionPath).not.toContain('financial-record-retention');
   });
 });
 
@@ -288,6 +330,19 @@ describe('the published matrix is the one the code holds', () => {
 
   it('publishes a row for every store and no store the code dropped', () => {
     expect(storesNamedIn(doc)).toEqual(storesNamedIn(renderRetentionMatrixMarkdown()));
+  });
+
+  it('states the maximum age each row was rendered with', () => {
+    const rendered = renderRetentionMatrixMarkdown().split('\n');
+    const ageOf = (row: string): string => row.split('|')[5]?.trim() ?? '';
+    for (const entry of RETENTION_MATRIX) {
+      const prefix = `| \`${entry.store}\``;
+      const published = doc.split('\n').find((line) => line.startsWith(prefix));
+      const expected = rendered.find((line) => line.startsWith(prefix));
+      expect(published && ageOf(published), `${entry.store} maximum age`).toBe(
+        expected && ageOf(expected),
+      );
+    }
   });
 
   it('states the deletion path each row was rendered with', () => {

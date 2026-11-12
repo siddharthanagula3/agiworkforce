@@ -1,13 +1,15 @@
 use std::path::Path;
 use std::time::Duration;
 
-use agiworkforce_protocol::developer_session::{DeveloperSessionHandoff, HandoffEnvironment};
+use agiworkforce_protocol::developer_session::{
+    DeveloperSessionHandoff, DeveloperSessionTrustMode, HandoffEnvironment,
+};
 use serde::Deserialize;
 
 use super::code_handoff::{Access, NETWORK_ACCESS};
 use super::code_sessions::{CodeSession, CODE_SESSIONS_PATH};
 use super::{CloudClient, CloudError};
-use crate::runtime::session::ManagedSession;
+use crate::runtime::session::{ManagedSession, PrivacyMode};
 use crate::runtime::session_control::{ManagedSessionReference, ManagedSessionStore};
 use crate::runtime::session_handoff::{developer_session_handoff, HandoffContext};
 
@@ -64,6 +66,30 @@ pub fn local_session(reference: Option<&str>, workspace: &Path) -> Result<Manage
         );
     }
     Ok(session)
+}
+
+pub fn admit(session: &ManagedSession) -> Result<(), String> {
+    let mode = session
+        .routing_authority
+        .as_ref()
+        .map(|authority| authority.privacy_mode);
+    let recorded = session.code.as_ref().map(|code| code.trust_mode);
+    match (mode, recorded) {
+        (Some(PrivacyMode::Managed), None | Some(DeveloperSessionTrustMode::Managed)) => Ok(()),
+        (Some(PrivacyMode::Managed), Some(_)) | (None, _) => Err(format!(
+            "Session {} has no readable Managed mode, so it stays on this machine and nothing \
+             was handed off.",
+            session.session_id
+        )),
+        (Some(mode), _) => Err(format!(
+            "Session {id} runs in {} mode, so it stays on this machine and nothing was handed \
+             off. To move its work to your account, open it with `agi resume {id}`, run \
+             /continue-with-cloud and send the draft you review there; that starts a Managed \
+             session you can hand off.",
+            mode.trust_word(),
+            id = session.session_id
+        )),
+    }
 }
 
 pub fn record(session: &ManagedSession) -> DeveloperSessionHandoff {
@@ -151,5 +177,43 @@ pub fn warning_text(warning: &str) -> String {
             "Uncommitted changes stay on this machine; the cloud session works from the pushed branch.".to_string()
         }
         other => format!("The cloud noted: {other}."),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::runtime::session::ManagedSessionRoutingAuthority;
+
+    fn session_in(mode: Option<PrivacyMode>) -> ManagedSession {
+        let mut session = ManagedSession::new("s1", chrono::Utc::now());
+        session.routing_authority = mode.map(|privacy_mode| ManagedSessionRoutingAuthority {
+            privacy_mode,
+            provider: "fixture-provider".to_string(),
+        });
+        session
+    }
+
+    #[test]
+    fn only_a_managed_session_is_handed_to_the_cloud() {
+        assert!(admit(&session_in(Some(PrivacyMode::Managed))).is_ok());
+
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let refused = admit(&session_in(Some(mode))).unwrap_err();
+            assert!(refused.contains(mode.trust_word()), "{refused}");
+            assert!(refused.contains("nothing was handed off"), "{refused}");
+            assert!(refused.contains("/continue-with-cloud"), "{refused}");
+        }
+
+        assert!(admit(&session_in(None)).is_err());
+
+        let mut recorded_local = session_in(Some(PrivacyMode::Managed));
+        let mut code = session_in(Some(PrivacyMode::Local)).code_session();
+        code.trust_mode = DeveloperSessionTrustMode::Local;
+        recorded_local.code = Some(Box::new(code));
+        assert!(
+            admit(&recorded_local).is_err(),
+            "a record that names another mode was handed off"
+        );
     }
 }

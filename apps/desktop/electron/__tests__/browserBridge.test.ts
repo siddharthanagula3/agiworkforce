@@ -426,6 +426,7 @@ describe('loopback pairing bridge', () => {
     });
 
     const token = context.pairingStore.hostToken();
+    const pairToken = context.pairingStore.readPairing()?.pairToken;
     const pending = context.bridge.sendBrowserCommand('browser_read_page', {});
 
     const polled = await fetch(url('/native/message'), {
@@ -433,6 +434,7 @@ describe('loopback pairing bridge', () => {
       headers: { 'Content-Type': 'application/json', 'X-Native-Host-Token': token },
       body: JSON.stringify({
         extensionId: EXTENSION_ID,
+        pairToken,
         message: { type: NATIVE_BROWSER_POLL_MESSAGE, version: BROWSER_COMMAND_PROTOCOL_VERSION },
       }),
     });
@@ -444,6 +446,7 @@ describe('loopback pairing bridge', () => {
       headers: { 'Content-Type': 'application/json', 'X-Native-Host-Token': token },
       body: JSON.stringify({
         extensionId: EXTENSION_ID,
+        pairToken,
         message: {
           type: NATIVE_BROWSER_RESULT_MESSAGE,
           version: BROWSER_COMMAND_PROTOCOL_VERSION,
@@ -480,18 +483,73 @@ describe('loopback pairing bridge', () => {
     expect(String(body['error'])).toMatch(/not paired/i);
   });
 
-  async function nativeMessage(message: Record<string, unknown>) {
+  async function nativeMessage(
+    message: Record<string, unknown>,
+    pairToken: string | null | undefined = context.pairingStore.readPairing()?.pairToken,
+  ) {
     const response = await fetch(url('/native/message'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Native-Host-Token': context.pairingStore.hostToken(),
       },
-      body: JSON.stringify({ extensionId: EXTENSION_ID, message }),
+      body: JSON.stringify({ extensionId: EXTENSION_ID, pairToken, message }),
     });
     expect(response.status).toBe(200);
     return response.json() as Promise<Record<string, unknown>>;
   }
+
+  it('refuses a native message from a profile that cannot present the pair token', async () => {
+    const record = context.pairingStore.savePairing(EXTENSION_ID);
+    const pending = context.bridge.sendBrowserCommand('browser_read_page', {});
+    const rejected = expect(pending).rejects.toThrow(/no longer paired/i);
+
+    for (const pairToken of [null, '', 'f'.repeat(record.pairToken.length)]) {
+      await expect(
+        nativeMessage({ type: 'connect', extension_id: EXTENSION_ID }, pairToken),
+      ).resolves.toMatchObject({ success: false, code: 'pairing-rejected' });
+      const polled = await nativeMessage(
+        { type: NATIVE_BROWSER_POLL_MESSAGE, version: BROWSER_COMMAND_PROTOCOL_VERSION },
+        pairToken,
+      );
+      expect(polled).toMatchObject({ success: false, code: 'pairing-rejected' });
+      expect(polled['command']).toBeUndefined();
+      await expect(
+        nativeMessage({ type: 'desktop_browser_unpair' }, pairToken),
+      ).resolves.toMatchObject({ success: false });
+      expect(context.bridge.pairingState().paired).toBe(true);
+    }
+    expect(context.bridge.pairingState().connected).toBe(false);
+
+    await expect(
+      nativeMessage({ type: 'connect', extension_id: EXTENSION_ID }, record.pairToken),
+    ).resolves.toEqual({ success: true });
+    context.bridge.removeHostAndPairing();
+    await rejected;
+  });
+
+  it('shows the browser connected only while it is asking for work', async () => {
+    context.pairingStore.savePairing(EXTENSION_ID);
+    await nativeMessage({ type: 'ping' });
+    expect(context.bridge.pairingState().connected).toBe(false);
+
+    const polling = nativeMessage({
+      type: NATIVE_BROWSER_POLL_MESSAGE,
+      version: BROWSER_COMMAND_PROTOCOL_VERSION,
+    });
+    await vi.waitFor(() => expect(context.bridge.pairingState().connected).toBe(true));
+    const pending = context.bridge.sendBrowserCommand('browser_read_page', {});
+    const { command } = (await polling) as { command: { id: string } };
+    await nativeMessage({
+      type: NATIVE_BROWSER_RESULT_MESSAGE,
+      version: BROWSER_COMMAND_PROTOCOL_VERSION,
+      result: { version: BROWSER_COMMAND_PROTOCOL_VERSION, id: command.id, ok: true, value: 1 },
+    });
+    await expect(pending).resolves.toBe(1);
+
+    context.bridge.removeHostAndPairing();
+    expect(context.bridge.pairingState().connected).toBe(false);
+  });
 
   it('never delivers an aborted queued command and preserves site rules for the next command', async () => {
     context.pairingStore.savePairing(EXTENSION_ID);
@@ -956,6 +1014,7 @@ describe('local client routes', () => {
       headers: { 'Content-Type': 'application/json', 'X-Native-Host-Token': token },
       body: JSON.stringify({
         extensionId: EXTENSION_ID,
+        pairToken: context.pairingStore.readPairing()?.pairToken,
         message: { type: 'desktop_browser_unpair' },
       }),
     });

@@ -134,4 +134,33 @@ describe('resolveTier account-owned entitlement', () => {
     ).resolves.toBeUndefined();
     expect(context.globalState.update).toHaveBeenCalledWith('tierStatus.cachedTier', undefined);
   });
+
+  it('keeps the verified tier when a read fails while the account session is still held', async () => {
+    const context = makeContext('max', Date.now());
+    vi.mocked(context.secrets.get).mockImplementation((key: string) =>
+      Promise.resolve(key === 'agiWorkforce.accountToken' ? 'account-token' : undefined),
+    );
+    stubConfiguration();
+
+    await expect(
+      refreshAccountTierCache(context, vi.fn().mockResolvedValue(undefined)),
+    ).resolves.toBe('max');
+
+    expect(context.globalState.get('tierStatus.cachedTier')).toBe('max');
+    expect(context.globalState.get('tierStatus.cachedAtMs')).toBeUndefined();
+  });
+
+  it('clears the tier once the session is no longer held', async () => {
+    const context = makeContext('max', Date.now());
+    vi.mocked(context.secrets.get).mockImplementation((key: string) =>
+      Promise.resolve(key === 'agiWorkforce.accountTokenExpired' ? '1' : undefined),
+    );
+    stubConfiguration();
+
+    await expect(
+      refreshAccountTierCache(context, vi.fn().mockResolvedValue(undefined)),
+    ).resolves.toBeUndefined();
+
+    expect(context.globalState.get('tierStatus.cachedTier')).toBeUndefined();
+  });
 });

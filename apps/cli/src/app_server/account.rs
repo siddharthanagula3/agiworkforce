@@ -109,6 +109,13 @@ fn forget_account_caches() {
     crate::claude_parity::connectors::forget_local_tool_policy();
 }
 
+fn forget_account_on_this_device() {
+    forget_account_caches();
+    if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
+        crate::cloud::forget_account_data(&config_dir);
+    }
+}
+
 /// The managed credential this machine holds, with its expiry in epoch
 /// milliseconds when the stored entry states one.
 pub fn managed_credential() -> Option<(String, Option<i64>)> {
@@ -297,7 +304,7 @@ pub fn save_device_grant(entry: AuthEntry) -> Result<()> {
             install_device_grant(store, entry);
             Ok(())
         },
-        |_| forget_account_caches(),
+        |_| forget_account_on_this_device(),
     )
 }
 
@@ -600,7 +607,7 @@ pub fn forget_refused_session(rejected_access: &str) -> Result<()> {
         |store| Ok(forget_access(store, rejected_access)),
         |changed| {
             if *changed {
-                forget_account_caches();
+                forget_account_on_this_device();
             }
         },
     )
@@ -651,7 +658,7 @@ pub async fn sign_out_of_account() -> Result<CliSignOut> {
             forget_managed(store);
             Ok((base, entries, held, unread))
         },
-        |_| forget_account_caches(),
+        |_| forget_account_on_this_device(),
     )?;
     let revoked = revoke_snapshot(&base, &entries).await && !unread;
     Ok(CliSignOut {
@@ -698,7 +705,7 @@ pub async fn sign_out_of_every_provider() -> Result<CliSignOut> {
             if *providers > 0 {
                 crate::onboarding::forget_setup();
             }
-            forget_account_caches();
+            forget_account_on_this_device();
         },
     )?;
     let revoked = revoke_snapshot(&base, &entries).await && !unread;

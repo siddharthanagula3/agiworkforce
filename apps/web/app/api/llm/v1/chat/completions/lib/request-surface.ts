@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, billingPlanCapabilityUpgradeMessage } from '@agiworkforce/types';
 import {
   canUseManagedCloudChatSurface,
   getCloudChatSurfaceCapability,
@@ -52,7 +52,7 @@ export function managedCloudSurfaceRefusal(
         }
       : capability === 'developer_surfaces'
         ? {
-            message: `Managed Cloud CLI, browser extension, and IDE access require ${BILLING_PLAN_PRICING.pro.label} or higher.`,
+            message: billingPlanCapabilityUpgradeMessage('developer_surfaces'),
             code: 'developer_surface_plan_required',
             requiredTier: 'pro',
           }

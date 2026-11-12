@@ -274,6 +274,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: true,
   },
+  'page-read-account-day': {
+    limit: 500,
+    window: '1 d',
+    failClosed: true,
+  },
   'chat-conversation': {
     limit: 60,
     window: '1 m', // 60 conversation operations per minute
@@ -407,6 +412,11 @@ export const rateLimitConfigs = {
     limit: 5,
     window: '1 m', // 5 share creations per minute (prevents share spam)
     failClosed: false,
+  },
+  'share-create-account-day': {
+    limit: 50,
+    window: '1 d',
+    failClosed: true,
   },
   'share-view': {
     limit: 60,

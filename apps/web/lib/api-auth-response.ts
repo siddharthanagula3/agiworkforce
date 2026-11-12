@@ -2,21 +2,19 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 import { handleError } from '@/lib/error-handler';
-import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
-import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
-import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
-import { isAccountUnavailableError } from '@/lib/api-auth';
+import { isAppError } from '@/lib/errors';
 
 const GENERIC_UNAUTHORIZED_MESSAGE = 'Authentication required';
 const GENERIC_UNAUTHORIZED_STATUS = 401;
 
+/**
+ * A refusal the caller must see as it is, rather than as a sign-in prompt: an
+ * account gate, a lockdown, a scope denial, or a dependency that could not
+ * answer. Only a 401 means the credential itself was missing or invalid, and a
+ * client that signs out on anything else signs the user out during an outage.
+ */
 export function isAuthGateRefusal(error: unknown): boolean {
-  return (
-    isMfaRequiredError(error) ||
-    isIpNotAllowedError(error) ||
-    isPasskeyRequiredError(error) ||
-    isAccountUnavailableError(error)
-  );
+  return isAppError(error) && error.statusCode !== GENERIC_UNAUTHORIZED_STATUS;
 }
 
 export function unauthorizedResponseFor(error: unknown): NextResponse {

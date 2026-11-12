@@ -553,6 +553,215 @@ describe('chat favourites', () => {
   });
 });
 
+describe('sharing from recent chats', () => {
+  async function rowShareItem(content: string): Promise<HTMLButtonElement> {
+    byId('sp-history-btn')!.click();
+    let share!: HTMLButtonElement;
+    await vi.waitFor(() => {
+      const more = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('#sp-recents .sp-drawer-history-more'),
+      ).find((button) => button.getAttribute('aria-label')?.includes(content));
+      expect(more).toBeDefined();
+      more!.click();
+      const menu = more!.parentElement!.querySelector<HTMLElement>('[role="menu"]')!;
+      share = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
+        (item) => item.textContent?.trim() === catalogMessage('spHistoryShare', []),
+      )!;
+      expect(share).toBeDefined();
+    });
+    return share;
+  }
+
+  it('explains, instead of sharing, a chat kept only in this browser', async () => {
+    const content = 'Device only share fixture';
+    const conversationId = await openSavedConversation(content);
+    try {
+      const share = await rowShareItem(content);
+      const reason = catalogMessage('spHistoryShareLocalOnly', []);
+      expect(share.getAttribute('aria-disabled')).toBe('true');
+      expect(share.title).toBe(reason);
+      share.click();
+      expect(document.querySelector('.sp-drawer-history-share-text')).toBeNull();
+      expect(document.querySelector('.sp-drawer-history-error')?.textContent).toBe(reason);
+    } finally {
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
+  it('offers share for a chat saved to the account', async () => {
+    const content = 'Account share fixture';
+    const conversationId = await openSavedConversation(content, {
+      conversationId: '6a1d3f8b-2c4e-4d9f-8b7a-1e3c5d7f9a20',
+      organizationId: null,
+      createAcknowledged: true,
+      state: 'idle',
+    });
+    try {
+      const share = await rowShareItem(content);
+      expect(share.hasAttribute('aria-disabled')).toBe(false);
+      share.click();
+      expect(document.querySelector('.sp-drawer-history-share-text')?.textContent).toBe(
+        catalogMessage('spHistoryShareConfirm', []),
+      );
+    } finally {
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+});
+
+describe('saving a chat so it can be shared', () => {
+  const differs =
+    'This chat has changes that are not saved to your account yet. Wait for them to save, then share again.';
+
+  async function shareRecovery(
+    content: string,
+    saveAnswer: Record<string, unknown>,
+  ): Promise<{ conversationId: string; restore: () => void }> {
+    const conversationId = await openSavedConversation(content, {
+      conversationId: '7b2e4c9d-3f5a-4e8b-9c1d-2f4a6b8c0e31',
+      organizationId: null,
+      createAcknowledged: true,
+      state: 'error',
+      lastError: 'Saving to your account is temporarily unavailable.',
+      retryAfter: Date.now() + 300_000,
+    });
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).endsWith('/api/share')
+        ? Response.json({ error: { code: 'CONFLICT', message: differs } }, { status: 409 })
+        : previousFetch(input, init),
+    ) as typeof fetch;
+    const original = chromeMock.runtime.sendMessage.getMockImplementation()!;
+    chromeMock.runtime.sendMessage.mockImplementation(
+      (message: { type?: string } & Record<string, unknown>, callback?: (r: unknown) => void) => {
+        if (message.type !== 'SAVE_CONVERSATION_NOW') return original(message, callback);
+        chromeMock.sent.push(message);
+        return Promise.resolve(saveAnswer);
+      },
+    );
+    const restore = (): void => {
+      globalThis.fetch = previousFetch;
+      chromeMock.runtime.sendMessage.mockImplementation(original);
+    };
+    byId('sp-history-btn')!.click();
+    await vi.waitFor(() =>
+      expect(byId('sp-recents')?.textContent).toContain(
+        catalogMessage('spHistoryRefreshFailed', []),
+      ),
+    );
+    await vi.waitFor(() => {
+      const more = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('#sp-recents .sp-drawer-history-more'),
+      ).find((button) => button.getAttribute('aria-label')?.includes(content));
+      expect(more).toBeDefined();
+      more!.click();
+      const menu = more!.parentElement!.querySelector<HTMLElement>('[role="menu"]')!;
+      Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+        .find((item) => item.textContent?.trim() === catalogMessage('spHistoryShare', []))!
+        .click();
+    });
+    createLinkButton().click();
+    await vi.waitFor(() => expect(recoveryButton()).not.toBeNull());
+    expect(recoveryButton()!.textContent).toBe(catalogMessage('spHistoryShareSaveNow', []));
+    return { conversationId, restore };
+  }
+
+  const createLinkButton = (): HTMLButtonElement =>
+    Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.sp-drawer-history-confirm button'),
+    ).find((button) => button.textContent === catalogMessage('spHistoryShareCreate', []))!;
+  const recoveryButton = (): HTMLButtonElement | null =>
+    document.querySelector<HTMLButtonElement>('.sp-drawer-history-share-recovery');
+  const shareText = (): string | null | undefined =>
+    document.querySelector('.sp-drawer-history-share-text')?.textContent;
+
+  it('starts a real save now, despite an earlier failure, and says when the link can be made', async () => {
+    const { conversationId, restore } = await shareRecovery('Save now share fixture', {
+      success: true,
+      status: 'saved',
+    });
+    try {
+      recoveryButton()!.click();
+      await vi.waitFor(() => expect(shareText()).toBe(catalogMessage('spHistoryShareSaved', [])));
+      expect(chromeMock.sent).toContainEqual({
+        type: 'SAVE_CONVERSATION_NOW',
+        owner: account.owner,
+        conversationId,
+      });
+      expect(chromeMock.sent.some((message) => message.type === 'SYNC_CONVERSATION')).toBe(false);
+      expect(recoveryButton()).toBeNull();
+      expect(createLinkButton().disabled).toBe(false);
+    } finally {
+      restore();
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
+  it('keeps Save changes now off until the time the account asked to wait', async () => {
+    const { conversationId, restore } = await shareRecovery('Save wait share fixture', {
+      success: true,
+      status: 'not-saved',
+      reason: 'Too many requests.',
+      retryAt: Date.now() + 120_000,
+    });
+    try {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      recoveryButton()!.click();
+      await vi.waitFor(() =>
+        expect(shareText()).toContain(
+          catalogMessage('spHistoryShareSaveAgainAt', ['@']).split('@')[0]!,
+        ),
+      );
+      expect(shareText()).toContain('Too many requests.');
+      expect(recoveryButton()!.disabled).toBe(true);
+      const sends = chromeMock.sent.filter((m) => m.type === 'SAVE_CONVERSATION_NOW').length;
+      recoveryButton()!.click();
+      expect(chromeMock.sent.filter((m) => m.type === 'SAVE_CONVERSATION_NOW')).toHaveLength(sends);
+      vi.advanceTimersByTime(120_000);
+      expect(recoveryButton()!.disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      restore();
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
+  it('drops Save changes now when the account refuses for a reason a retry cannot fix', async () => {
+    const reason = 'Your workspace administrator has turned off saving chats from the extension.';
+    const { conversationId, restore } = await shareRecovery('Save refused share fixture', {
+      success: true,
+      status: 'refused',
+      reason,
+    });
+    try {
+      recoveryButton()!.click();
+      await vi.waitFor(() => expect(shareText()).toBe(reason));
+      expect(recoveryButton()).toBeNull();
+    } finally {
+      restore();
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
+  it('says why the save failed and lets the user try again', async () => {
+    const reason = 'Your workspace administrator has turned off saving chats from the extension.';
+    const { conversationId, restore } = await shareRecovery('Save failed share fixture', {
+      success: true,
+      status: 'not-saved',
+      reason,
+    });
+    try {
+      recoveryButton()!.click();
+      await vi.waitFor(() => expect(shareText()).toBe(reason));
+      expect(recoveryButton()!.disabled).toBe(false);
+      expect(createLinkButton().disabled).toBe(false);
+    } finally {
+      restore();
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+});
+
 describe('conversation title row', () => {
   it('is hidden until a conversation exists, then names it with an actions menu', async () => {
     expect(byId('sp-title-row')!.hidden).toBe(true);
@@ -766,5 +975,81 @@ describe('conversation title row', () => {
     } finally {
       await deleteConversation(account.owner, conversationId);
     }
+  });
+});
+
+describe('side panel presence after the worker stops', () => {
+  it('does not wake an idle worker again, and reports its own close instead', async () => {
+    const presenceCall = chromeMock.runtime.connect.mock.calls.findIndex(
+      ([options]) => (options as { name?: string }).name === 'agi-side-panel',
+    );
+    const port = chromeMock.runtime.connect.mock.results[presenceCall]!.value as {
+      onDisconnect: { addListener: ReturnType<typeof vi.fn> };
+    };
+    await vi.waitFor(() => expect(port.onDisconnect.addListener).toHaveBeenCalled());
+    const presenceConnects = (): number =>
+      chromeMock.runtime.connect.mock.calls.filter(
+        ([options]) => (options as { name?: string }).name === 'agi-side-panel',
+      ).length;
+    const before = presenceConnects();
+
+    vi.useFakeTimers();
+    try {
+      for (const [listener] of port.onDisconnect.addListener.mock.calls) (listener as () => void)();
+      vi.advanceTimersByTime(60_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(presenceConnects()).toBe(before);
+
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    expect(chromeMock.sent).toContainEqual({ type: 'SIDE_PANEL_CLOSED', windowId: 1 });
+  });
+
+  it('registers again the next time the worker is awake, at most once a second', async () => {
+    const presencePorts = () =>
+      chromeMock.runtime.connect.mock.calls
+        .map((call, index) => ({ call, index }))
+        .filter(({ call: [options] }) => (options as { name?: string }).name === 'agi-side-panel')
+        .map(
+          ({ index }) =>
+            chromeMock.runtime.connect.mock.results[index]!.value as {
+              onDisconnect: { addListener: ReturnType<typeof vi.fn> };
+              postMessage: ReturnType<typeof vi.fn>;
+            },
+        );
+    const workerSpoke = (): void => {
+      for (const [listener] of chromeMock.runtime.onMessage.addListener.mock.calls)
+        (listener as (message: unknown, sender: unknown) => unknown)(
+          { type: 'AGI_FIXTURE_WORKER_AWAKE' },
+          { id: 'test-extension' },
+        );
+    };
+    for (const port of presencePorts())
+      for (const [listener] of port.onDisconnect.addListener.mock.calls) (listener as () => void)();
+    const before = presencePorts().length;
+
+    vi.useFakeTimers({ now: Date.now() + 5_000, toFake: ['Date'] });
+    try {
+      workerSpoke();
+      workerSpoke();
+      expect(presencePorts()).toHaveLength(before + 1);
+      const fresh = presencePorts().at(-1)!;
+      await vi.waitFor(() => expect(fresh.postMessage).toHaveBeenCalledWith({ windowId: 1 }));
+
+      for (const [listener] of fresh.onDisconnect.addListener.mock.calls)
+        (listener as () => void)();
+      workerSpoke();
+      expect(presencePorts()).toHaveLength(before + 1);
+      vi.setSystemTime(Date.now() + 1_000);
+      workerSpoke();
+      expect(presencePorts()).toHaveLength(before + 2);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    chromeMock.sent.length = 0;
+    window.dispatchEvent(new PageTransitionEvent('pagehide'));
+    expect(chromeMock.sent).not.toContainEqual({ type: 'SIDE_PANEL_CLOSED', windowId: 1 });
   });
 });

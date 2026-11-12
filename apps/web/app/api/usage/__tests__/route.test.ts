@@ -59,6 +59,7 @@ vi.mock('@/lib/cors', () => ({
 
 import { GET } from '../route';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { createError } from '@/lib/errors';
 
 function makeRequest() {
   return new Request('http://localhost:3000/api/usage', { method: 'GET' }) as never;
@@ -317,6 +318,29 @@ describe('GET /api/usage', () => {
     mockGetUserScopedDb.mockRejectedValue(new Error('no session'));
     const res = await GET(makeRequest());
     expect(res.status).toBe(401);
+  });
+
+  it('answers a slow account check as 503 with a retry hint, never as signed out', async () => {
+    mockGetUserScopedDb.mockRejectedValue(
+      createError.serviceUnavailable('Unable to verify account status. Please try again shortly.'),
+    );
+
+    const res = await GET(makeRequest());
+
+    expect(res.status).toBe(503);
+    expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0);
+    expect((await res.json()).error.code).toBe('SERVICE_UNAVAILABLE');
+  });
+
+  it('answers a locked-down workspace as 403 with the lockdown message, never as signed out', async () => {
+    const message =
+      'This workspace is locked down while an incident is investigated. Contact support.';
+    mockGetUserScopedDb.mockRejectedValue(createError.forbidden(message).asUserSafe());
+
+    const res = await GET(makeRequest());
+
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatchObject({ code: 'FORBIDDEN', message });
   });
 
   it('preserves a scoped-key denial as 403 and declares the usage-read requirement', async () => {

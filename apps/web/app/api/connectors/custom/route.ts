@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { buildWorkspaceAccessGateResponse } from '@/lib/managed-compute-gate';
 import type {
   CreateCustomConnectorRequest,
   CreateCustomConnectorResponse,
@@ -57,10 +57,13 @@ async function withDirectoryLink(
 }
 
 async function handleGet(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, surface } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET, `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   const summaries = await getUserCustomConnectorSummaries(db, userId);
   const signedIn = new Set(
@@ -80,13 +83,16 @@ async function handleGet(request: NextRequest) {
 }
 
 async function handlePost(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, surface } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET, `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   // A custom connector is an arbitrary member-supplied MCP endpoint, and
   // `allowCustomConnectors` is the switch an administrator sets to say no to
@@ -101,7 +107,7 @@ async function handlePost(request: NextRequest) {
     connectorId: null,
     isCustom: true,
     request,
-    surface: resolveCloudChatSurface(request),
+    surface: surface ?? 'unknown',
   });
   if (!policyDecision.allowed) throw createError.forbidden(policyDecision.reason).asUserSafe();
 
@@ -169,13 +175,16 @@ async function handlePost(request: NextRequest) {
 }
 
 async function handleDelete(request: NextRequest) {
-  const { db, userId } = await getUserScopedDb(request, CONNECTOR_SCOPE);
+  const { db, userId, surface } = await getUserScopedDb(request, CONNECTOR_SCOPE);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, RATE_LIMIT_BUCKET, `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   const url = new URL(request.url);
   const id = url.searchParams.get('id');

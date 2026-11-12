@@ -3,11 +3,14 @@ import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
 
 export const AgentModeSchema = z.enum(['ask', 'auto', 'plan', 'bypass']);
 export const EffortSchema = z.enum(['low', 'medium', 'high', 'max']);
+export const MAX_SEND_MESSAGE_CHARS = 100_000;
+export const MAX_SIDE_QUESTION_CHARS = 20_000;
+export const MAX_SEND_MESSAGE_REFERENCES = 50;
 
 const sendMessage = z.object({
   type: z.literal('sendMessage'),
   payload: z.object({
-    text: z.string().min(1).max(100_000),
+    text: z.string().min(1).max(MAX_SEND_MESSAGE_CHARS),
     model: z.string().min(1).max(200).optional(),
     browseWeb: z.boolean().optional(),
     standalone: z.boolean().optional(),
@@ -32,7 +35,7 @@ const sendMessage = z.object({
             .optional(),
         }),
       )
-      .max(50)
+      .max(MAX_SEND_MESSAGE_REFERENCES)
       .optional(),
   }),
 });
@@ -44,7 +47,7 @@ const openPlanDocument = z.object({ type: z.literal('openPlanDocument') });
 const sideQuestion = z.object({
   type: z.literal('sideQuestion'),
   payload: z.object({
-    question: z.string().trim().min(1).max(20_000),
+    question: z.string().trim().min(1).max(MAX_SIDE_QUESTION_CHARS),
     requestId: z.string().min(1).max(100),
   }),
 });
@@ -395,4 +398,40 @@ export function parseBoundWebviewMessage(
   if (binding.data.origin !== current.origin) return undefined;
   if (binding.data.epoch !== current.epoch) return undefined;
   return parseWebviewMessage(raw);
+}
+
+export interface RejectedWebviewMessage {
+  type: string;
+  reason: 'binding' | 'schema';
+  clientMessageId?: string;
+}
+
+const RejectedSendSchema = z.object({
+  type: z.literal('sendMessage'),
+  payload: z.object({
+    clientMessageId: sendMessage.shape.payload.shape.clientMessageId,
+  }),
+});
+
+export function describeRejectedWebviewMessage(
+  raw: unknown,
+  current: SessionBinding,
+): RejectedWebviewMessage {
+  const type =
+    typeof raw === 'object' && raw !== null && typeof (raw as { type?: unknown }).type === 'string'
+      ? (raw as { type: string }).type.slice(0, 64)
+      : 'unknown';
+  const binding = SessionBindingSchema.safeParse(raw);
+  if (
+    !binding.success ||
+    binding.data.origin !== current.origin ||
+    binding.data.epoch !== current.epoch
+  ) {
+    return { type, reason: 'binding' };
+  }
+  const send = RejectedSendSchema.safeParse(raw);
+  const clientMessageId = send.success ? send.data.payload.clientMessageId : undefined;
+  return clientMessageId === undefined
+    ? { type, reason: 'schema' }
+    : { type, reason: 'schema', clientMessageId };
 }

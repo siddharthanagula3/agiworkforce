@@ -9,6 +9,7 @@ pub struct ConfigSource {
     pub global_path: Option<PathBuf>,
     pub project_path: Option<PathBuf>,
     pub env_overrides: Vec<String>,
+    pub repository_permission_mode: Option<crate::cli_options::PermissionMode>,
 }
 
 /// Top-level CLI configuration, loaded from ~/.agiworkforce/config.toml
@@ -681,6 +682,11 @@ impl CliConfig {
             let ignored = config.narrow_repository_layer(&mut repository);
             report_ignored_repository_settings(&ignored);
             config.merge_from(&repository);
+            config.source.repository_permission_mode = repository
+                .default
+                .permission_mode
+                .as_deref()
+                .and_then(crate::cli_options::persisted_permission_mode);
         }
         config.merge_env_overrides();
         config.apply_managed_state(managed)?;

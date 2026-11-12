@@ -470,11 +470,11 @@ mod tests {
     #[test]
     fn registry_builder_appends_skills_after_builtins() {
         let skills = vec![crate::skills::Skill {
-            name: "release-notes".to_string(),
+            name: "ship-notes".to_string(),
             description: "Draft release notes".to_string(),
             content: String::new(),
             body: String::new(),
-            path: std::path::PathBuf::from(".agiworkforce/skills/release-notes.md"),
+            path: std::path::PathBuf::from(".agiworkforce/skills/ship-notes.md"),
             allow_implicit: true,
             category: None,
             required_env_vars: vec![],
@@ -493,7 +493,7 @@ mod tests {
                 .commands()
                 .last()
                 .map(|command| (command.name.as_str(), command.kind)),
-            Some(("release-notes", CommandKind::Prompt))
+            Some(("ship-notes", CommandKind::Prompt))
         );
     }
 
@@ -521,11 +521,11 @@ mod tests {
     #[test]
     fn registry_builder_appends_prompts_after_skills_and_drops_builtin_collisions() {
         let skills = vec![crate::skills::Skill {
-            name: "release-notes".to_string(),
+            name: "ship-notes".to_string(),
             description: "Draft release notes".to_string(),
             content: String::new(),
             body: String::new(),
-            path: std::path::PathBuf::from(".agiworkforce/skills/release-notes.md"),
+            path: std::path::PathBuf::from(".agiworkforce/skills/ship-notes.md"),
             allow_implicit: true,
             category: None,
             required_env_vars: vec![],
@@ -564,7 +564,7 @@ mod tests {
                 .take(2)
                 .map(|command| command.name.as_str())
                 .collect::<Vec<_>>(),
-            vec!["prompts:draft-pr", "release-notes"]
+            vec!["prompts:draft-pr", "ship-notes"]
         );
     }
 

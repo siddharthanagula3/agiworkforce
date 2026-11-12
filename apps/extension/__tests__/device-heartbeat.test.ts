@@ -6,6 +6,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
   getAuthToken: vi.fn(async () => 'clerk-session-token'),
 }));
 
+import { DEVICE_HEARTBEAT_INTERVAL_MS } from '@agiworkforce/cloud-contracts';
 import { getAuthToken } from '../src/features/cloud-bridge/freeTrialClient';
 import {
   buildChromeHeartbeat,
@@ -74,6 +75,32 @@ describe('Chrome extension device registry heartbeat', () => {
       appVersion: '1.2.0',
       installId: storage.get('agi_device_install_id'),
     });
+  });
+
+  it('keeps its interval across worker restarts instead of posting on every start', async () => {
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 200 }));
+    await expect(sendChromeHeartbeatIfDue(fetchImpl as never)).resolves.toBe(true);
+
+    vi.resetModules();
+    const restarted = await import('../src/features/cloud-bridge/deviceHeartbeat');
+    await expect(restarted.sendChromeHeartbeatIfDue(fetchImpl as never)).resolves.toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    storage.set(
+      restarted.DEVICE_HEARTBEAT_SENT_AT_KEY,
+      Date.now() - DEVICE_HEARTBEAT_INTERVAL_MS - 1,
+    );
+    vi.resetModules();
+    const later = await import('../src/features/cloud-bridge/deviceHeartbeat');
+    await expect(later.sendChromeHeartbeatIfDue(fetchImpl as never)).resolves.toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('records no send time for a refused heartbeat, so the next start tries again', async () => {
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 503 }));
+    await expect(sendChromeHeartbeatIfDue(fetchImpl as never)).resolves.toBe(false);
+    await expect(sendChromeHeartbeatIfDue(fetchImpl as never)).resolves.toBe(false);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it('sends nothing while signed out', async () => {
