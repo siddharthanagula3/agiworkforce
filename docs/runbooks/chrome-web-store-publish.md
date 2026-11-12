@@ -343,9 +343,10 @@ of the candidate first.
      and the site is gone from **Site access**.
 8. This takes 15 minutes, so start it and do checks 16 and 18 in another window meanwhile. Do not
    quit Chrome or sign out until it ends. On the approved website, start a task and press **Take
-   over**. Do not press **Hand back**. After 15 minutes you should see "The page was not handed
-   back within 15 minutes, so the task ended and AGI let go of the tab. Start the task again to
-   continue.", and the tab leaves the AGI tab group.
+   over**. The paused notice says "You have the page. If the page is not handed back within 15
+   minutes, the task ends." Do not press **Hand back**. After 15 minutes you should see "The page
+   was not handed back within 15 minutes, so the task ended and AGI let go of the tab. Start the
+   task again to continue.", and the tab leaves the AGI tab group.
 
 ### Desktop pairing
 
@@ -438,7 +439,9 @@ If the installed Desktop predates this release, skip checks 9 to 15 and note the
     whether your autofill profile is still listed in **Extension settings**.
 31. While the lead makes chat saving answer "too many requests" with a 2-minute
     wait, use **Share** and then **Save changes now**. The button turns off, the row says "You can
-    save it again after <time>.", and the button comes back on after two minutes.
+    save it again after <time>.", and the button comes back on after two minutes. Run it once
+    more, and this time close the side panel during the wait and leave Chrome alone for three
+    minutes. Note whether the chat's latest message is then on the web app.
 
 ### If a check fails
 
