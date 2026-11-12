@@ -44,12 +44,16 @@ pub fn history(detail: &CodeSessionDetail) -> Vec<Message> {
 }
 
 fn private_hooks_dir() -> Result<tempfile::TempDir, String> {
-    tempfile::Builder::new()
-        .prefix("agi-teleport-no-hooks-")
-        .tempdir()
-        .map_err(|error| {
-            format!("Could not make a private folder to keep the repository's hooks off: {error}")
-        })
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("agi-teleport-no-hooks-");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o700));
+    }
+    builder.tempdir().map_err(|error| {
+        format!("Could not make a private folder to keep the repository's hooks off: {error}")
+    })
 }
 
 fn git_without_hooks(args: &[&str]) -> Result<String, String> {
