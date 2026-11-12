@@ -89,6 +89,16 @@ impl FallbackChain {
         }
     }
 
+    pub fn rotation_after(&self, current: &str) -> Vec<&String> {
+        match self.primaries.iter().position(|model| model == current) {
+            Some(at) => self.primaries[at + 1..]
+                .iter()
+                .chain(&self.primaries[..at])
+                .collect(),
+            None => self.tail().iter().collect(),
+        }
+    }
+
     /// Whether the supplied error should trigger rotation.
     pub fn should_rotate(&self, err: &CliError) -> bool {
         match self.on {
@@ -139,6 +149,17 @@ mod tests {
             "the stream failed"
         );
         assert_eq!(FallbackChain::reason_phrase("something_new"), "a failure");
+    }
+
+    #[test]
+    fn rotation_never_retries_the_model_that_just_failed() {
+        let c = FallbackChain::parse("a,b,c");
+        assert_eq!(c.rotation_after("a"), vec!["b", "c"]);
+        assert_eq!(c.rotation_after("b"), vec!["c", "a"]);
+        assert_eq!(c.rotation_after("c"), vec!["a", "b"]);
+        assert_eq!(c.rotation_after("unlisted"), vec!["b", "c"]);
+        let pair = FallbackChain::parse("a,b");
+        assert_eq!(pair.rotation_after("b"), vec!["a"]);
     }
 
     #[test]

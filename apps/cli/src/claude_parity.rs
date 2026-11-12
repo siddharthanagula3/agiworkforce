@@ -1707,6 +1707,8 @@ fn effort_ladder_usage() -> String {
         .join(" | ")
 }
 
+pub(crate) const EFFORT_NOT_TAKEN_NOTE: &str = ". This model takes no effort setting on this route, so the level applies once you switch to one that does";
+
 pub fn set_effort(session: &mut AgentSession, arg: &str) -> String {
     let current = session.effort.unwrap_or_default();
     if arg.trim().is_empty() {
@@ -1724,13 +1726,10 @@ pub fn set_effort(session: &mut AgentSession, arg: &str) -> String {
         );
     };
     session.effort = Some(effort);
-    let note = if matches!(
-        crate::model_catalog::effort_support(&session.model),
-        crate::model_catalog::EffortSupport::Unsupported
-    ) {
-        ". This model has no effort control, so it applies once you switch to one that does"
-    } else {
+    let note = if crate::models::effort_reaches_model(&session.provider, &session.model, effort) {
         ""
+    } else {
+        EFFORT_NOT_TAKEN_NOTE
     };
     format!("Effort set to {}{note}", effort.label())
 }
@@ -3352,6 +3351,26 @@ mod tests {
         assert!(prompt.contains("login fails on Safari"));
         assert!(prompt.contains("connectors:"));
         assert!(create_skill_prompt("").contains("Ask me what the skill should do"));
+    }
+
+    #[test]
+    fn effort_says_when_the_model_or_route_cannot_take_it() {
+        let mut session = test_session();
+        session.provider = crate::models::Provider::Ollama(crate::models::OllamaMode::Local);
+        let reply = set_effort(&mut session, "high");
+        assert!(reply.ends_with(EFFORT_NOT_TAKEN_NOTE), "{reply}");
+
+        let model = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| {
+                crate::model_catalog::effort_parameter(&model.id)
+                    == Some(crate::model_catalog::EffortParameter::OutputConfigEffort)
+            })
+            .expect("a catalog model that takes an effort setting");
+        session.model = model.id.clone();
+        session.provider = crate::models::Provider::Anthropic;
+        assert_eq!(set_effort(&mut session, "high"), "Effort set to High");
     }
 
     #[test]

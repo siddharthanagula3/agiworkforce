@@ -1,5 +1,4 @@
 use anyhow::{bail, Context, Result};
-use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashMap};
@@ -28,10 +27,6 @@ pub enum AuthEntry {
 pub struct AuthStore {
     #[serde(flatten)]
     pub entries: HashMap<String, AuthEntry>,
-    /// Transient copilot API token cache: (token, expires_at_unix_seconds).
-    /// Not persisted to disk, refreshed on demand.
-    #[serde(skip)]
-    pub copilot_cache: Option<(String, i64)>,
 }
 
 /// Auth status for a single provider, returned by `auth_status()`.
@@ -298,10 +293,7 @@ fn load_keyring_auth(
         })?;
         entries.insert(provider, entry);
     }
-    Ok(AuthStore {
-        entries,
-        copilot_cache: None,
-    })
+    Ok(AuthStore { entries })
 }
 
 fn recover_keyring_auth(
@@ -1017,9 +1009,8 @@ fn auth_status_from_store(
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// GitHub OAuth App client ID for Copilot device flow authentication.
-/// Public per OAuth spec (not a secret). Registered at github.com/settings/applications.
-const GITHUB_CLIENT_ID: &str = "Ov23li8tweQw6odWQebz";
+const COPILOT_AUTH_KEY: &str = "copilot";
+const COPILOT_SIGN_IN_UNAVAILABLE: &str = "GitHub Copilot sign-in is not available in this version. Run `agi login` for your AGI account, or `agi login <provider>` to use your own API key.";
 const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
 // The device-grant endpoints live on the web origin (apps/web: POST
 // /api/auth/device/code, /token, /refresh), so this base MUST include `/api`:
@@ -1032,212 +1023,6 @@ const AGIWORKFORCE_API_BASE: &str = "https://agiworkforce.com/api";
 /// the one host this file documents.
 pub fn agiworkforce_api_base() -> &'static str {
     AGIWORKFORCE_API_BASE
-}
-/// Maximum number of polling attempts during device code authentication (5s intervals = 5min).
-const MAX_POLL_ATTEMPTS: u32 = 60;
-
-// ──────────────────────────────────────────────────────────────────────────────
-// GitHub Copilot Login (Device Code Flow)
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct GithubDeviceCodeResponse {
-    device_code: String,
-    user_code: String,
-    verification_uri: String,
-    interval: u64,
-}
-
-#[derive(Deserialize)]
-struct GithubTokenResponse {
-    access_token: Option<String>,
-    error: Option<String>,
-}
-
-pub async fn login_copilot() -> Result<AuthEntry> {
-    let client = reqwest::Client::new();
-
-    // Step 1: Request device code
-    let resp = client
-        .post("https://github.com/login/device/code")
-        .header("Accept", "application/json")
-        .form(&[("client_id", GITHUB_CLIENT_ID), ("scope", "read:user")])
-        .send()
-        .await
-        .context("Failed to request GitHub device code")?;
-
-    let status = resp.status();
-    if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::UNAUTHORIZED {
-        bail!(
-            "GitHub device code request failed (HTTP {}). \
-             Make sure you have an active GitHub Copilot subscription at \
-             https://github.com/settings/copilot",
-            status,
-        );
-    }
-
-    let device: GithubDeviceCodeResponse = resp
-        .json()
-        .await
-        .context("Failed to parse GitHub device code response")?;
-
-    // Step 2: Show instructions to user
-    println!(
-        "\n  {}  {}\n  {}  {}\n",
-        "Go to:".bold(),
-        ts::link(device.verification_uri),
-        "Enter code:".bold(),
-        ts::success_header(device.user_code),
-    );
-    println!("  {}", "Waiting for authorization...".dimmed());
-
-    // Step 3: Poll for access token
-    let poll_interval = device.interval + 3;
-    let mut attempts = 0;
-
-    loop {
-        attempts += 1;
-        if attempts > MAX_POLL_ATTEMPTS {
-            bail!(
-                "Authorization timed out after {} attempts",
-                MAX_POLL_ATTEMPTS
-            );
-        }
-
-        tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
-
-        let resp = client
-            .post("https://github.com/login/oauth/access_token")
-            .header("Accept", "application/json")
-            .form(&[
-                ("client_id", GITHUB_CLIENT_ID),
-                ("device_code", device.device_code.as_str()),
-                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ])
-            .send()
-            .await
-            .context("Failed to poll GitHub token endpoint")?;
-
-        let token_resp: GithubTokenResponse = resp
-            .json()
-            .await
-            .context("Failed to parse GitHub token response")?;
-
-        if let Some(access_token) = token_resp.access_token {
-            return Ok(AuthEntry::OAuth {
-                refresh: access_token.clone(),
-                access: access_token,
-                expires: 0,
-            });
-        }
-
-        match token_resp.error.as_deref() {
-            Some("authorization_pending") => continue,
-            Some("slow_down") => {
-                // Back off an extra 5 seconds
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                continue;
-            }
-            Some(err) => bail!("GitHub authorization failed: {}", err),
-            None => bail!("Unexpected empty response from GitHub token endpoint"),
-        }
-    }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Copilot Token Fetch
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct CopilotTokenResponse {
-    token: String,
-    expires_at: i64,
-}
-
-pub async fn get_copilot_api_token(github_token: &str) -> Result<(String, i64)> {
-    let client = reqwest::Client::new();
-    let resp = client
-        .get("https://api.github.com/copilot_internal/v2/token")
-        .header("Authorization", format!("token {}", github_token))
-        .header(
-            "User-Agent",
-            concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")),
-        )
-        .send()
-        .await
-        .context("Failed to fetch Copilot API token")?;
-
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            bail!(
-                "Copilot token fetch failed (HTTP 401): {}. \
-                 Your GitHub credentials may have expired; run `{}` to sign in again.",
-                body,
-                sign_in_command("copilot"),
-            );
-        }
-        bail!("Copilot token fetch failed (HTTP {}): {}", status, body);
-    }
-
-    let token_resp: CopilotTokenResponse = resp
-        .json()
-        .await
-        .context("Failed to parse Copilot token response")?;
-
-    Ok((token_resp.token, token_resp.expires_at))
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Resolve Auth for Provider
-// ──────────────────────────────────────────────────────────────────────────────
-
-/// Returns `Some((api_key_or_token, optional_base_url_override))` if subscription
-/// auth is available for the given provider. Returns `None` to fall through to
-/// standard API key resolution.
-pub async fn resolve_auth(
-    store: &mut AuthStore,
-    provider: &str,
-) -> Result<Option<(String, Option<String>)>> {
-    match provider {
-        "copilot" => {
-            let entry = match store.entries.get("copilot") {
-                Some(e) => e.clone(),
-                None => return Ok(None),
-            };
-
-            // Check the transient cache first, avoid fetching a new token on every request
-            let now_secs = chrono::Utc::now().timestamp();
-            if let Some((ref cached_token, cached_expires)) = store.copilot_cache {
-                if cached_expires > now_secs + 30 {
-                    return Ok(Some((
-                        cached_token.clone(),
-                        Some("https://api.githubcopilot.com/chat/completions".to_string()),
-                    )));
-                }
-            }
-
-            let github_token = match &entry {
-                AuthEntry::OAuth { access, .. } => access.clone(),
-                AuthEntry::ApiKey { key } => key.clone(),
-            };
-
-            record_credential_use("copilot", "exchanged the stored token for an API token");
-            let (copilot_token, expires_at) = get_copilot_api_token(&github_token).await?;
-
-            // Cache the token for subsequent calls
-            store.copilot_cache = Some((copilot_token.clone(), expires_at));
-
-            Ok(Some((
-                copilot_token,
-                Some("https://api.githubcopilot.com/chat/completions".to_string()),
-            )))
-        }
-        // The managed credential is resolved by provider_dispatch::resolve_key,
-        // never here, so a Local or BYOK route cannot pick it up.
-        _ => Ok(None),
-    }
 }
 
 fn save_auth_entry(key: &str, entry: AuthEntry) -> Result<()> {
@@ -1478,25 +1263,22 @@ pub async fn interactive_api_key_login_for_provider(provider: &str) -> Result<()
 
 /// Login for a specific provider by name (used by onboarding wizard).
 ///
-/// `None` intentionally means AGI Workforce cloud login; subscription providers
-/// are only selected when named explicitly.
+/// `None` intentionally means AGI Workforce cloud login.
 pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()> {
     if is_agiworkforce_login_provider(provider) {
         return login_agiworkforce().await;
     }
 
     match provider {
-        Some("copilot") => {
-            println!("\n{}", ts::accent("Connecting to GitHub Copilot..."));
-            let entry = login_copilot().await?;
-            save_auth_entry("copilot", entry)
+        Some(pid) if pid.eq_ignore_ascii_case(COPILOT_AUTH_KEY) => {
+            bail!(COPILOT_SIGN_IN_UNAVAILABLE)
         }
         Some(pid) => {
             if is_api_key_provider(pid) {
                 interactive_api_key_login_for_provider(pid).await
             } else {
                 bail!(
-                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot, and brave or tavily for web search",
+                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, and brave or tavily for web search",
                     pid
                 )
             }
@@ -1725,10 +1507,7 @@ mod tests {
         for (k, v) in entries {
             map.insert(k.to_string(), v);
         }
-        AuthStore {
-            entries: map,
-            copilot_cache: None,
-        }
+        AuthStore { entries: map }
     }
 
     // ── auth_status tests ──
@@ -2700,6 +2479,25 @@ mod tests {
         write_owner_only_file(&path, "not json").unwrap();
         let error = read_file_store(&path, "not json").expect_err("damaged file");
         assert!(format!("{error:#}").contains("`agi login`"), "{error:#}");
+    }
+
+    #[tokio::test]
+    async fn copilot_sign_in_refuses_before_any_device_flow() {
+        for name in ["copilot", "Copilot"] {
+            let error = interactive_login_for_provider(Some(name))
+                .await
+                .expect_err("Copilot sign-in is not available");
+            let text = error.to_string();
+            assert!(text.contains("not available in this version"), "{text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unknown_login_provider_is_not_offered_copilot() {
+        let error = interactive_login_for_provider(Some("fixture-unknown-provider"))
+            .await
+            .expect_err("unknown provider");
+        assert!(!error.to_string().contains("copilot"), "{error}");
     }
 
     #[test]

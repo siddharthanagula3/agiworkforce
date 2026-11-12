@@ -347,6 +347,9 @@ pub(crate) fn judge_generation(outcome: &agiworkforce_llm::ChatOutcome) -> Gener
         Some(stop) if stop.is_output_limit() => {
             GenerationVerdict::Failed(IncompleteTurnCause::OutputLimitReached)
         }
+        None if has_answer => {
+            GenerationVerdict::DeliveredIncomplete(IncompleteTurnCause::StreamEndedEarly)
+        }
         _ if has_answer => GenerationVerdict::Delivered,
         _ => GenerationVerdict::Failed(IncompleteTurnCause::NoResponse),
     }
@@ -2083,7 +2086,7 @@ impl TurnHostAdapter<'_> {
                             .downcast_ref::<CliError>()
                             .map(|c| (c.kind(), chain.should_rotate(c)));
                         if let Some((kind, true)) = cli_err_kind {
-                            for fallback_model in chain.tail() {
+                            for fallback_model in chain.rotation_after(&self.session.model) {
                                 let prev_model = self.session.model.clone();
                                 let prev_provider = self.session.provider.clone();
                                 // Privacy-boundary guard: mutate provider/model and then
@@ -5500,6 +5503,18 @@ mod tests {
                 GenerationVerdict::Continues,
             );
         }
+    }
+
+    #[test]
+    fn an_answer_whose_stream_closed_before_a_stop_is_kept_and_named() {
+        assert_eq!(
+            judge_generation(&outcome("Half an ans", None, vec![])),
+            GenerationVerdict::DeliveredIncomplete(IncompleteTurnCause::StreamEndedEarly),
+        );
+        assert_eq!(
+            IncompleteTurnCause::StreamEndedEarly.code(),
+            agiworkforce_protocol::developer_session::TurnFailureCode::StreamInterrupted,
+        );
     }
 
     #[test]

@@ -97,6 +97,7 @@ pub async fn run_repl(
         crate::path_security::registered_additional_workspace_roots(),
     )?;
     session.apply_ui_config(config);
+    crate::apply_saved_effort(&mut session, config);
     crate::claude_parity::connectors::prefetch_workspace_policy(session.privacy_mode);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;

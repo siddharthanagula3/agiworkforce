@@ -12,7 +12,7 @@ fn device_client(timeout: std::time::Duration) -> reqwest::Result<reqwest::Clien
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Device Code Flow (for AGI Workforce + GitHub Copilot style auth)
+// Device Code Flow (AGI Workforce sign-in)
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(serde::Deserialize)]

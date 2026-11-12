@@ -343,7 +343,9 @@ pub struct Cli {
     #[arg(long)]
     team: bool,
 
-    /// Effort level preset: low (fast/cheap), medium (default), high (thorough), max (exhaustive)
+    /// Reasoning effort for this run, plus a run preset: low (at most 3 turns, 2048 output
+    /// tokens), medium (no preset), high (at most 50 turns, 16384 tokens), max (at most 100
+    /// turns, 32768 tokens). --max-turns and --max-tokens win over the preset.
     #[arg(long, value_name = "LEVEL", value_enum)]
     effort: Option<EffortLevel>,
 
@@ -503,17 +505,43 @@ pub struct Cli {
     dump_system_prompt: bool,
 }
 
-/// Effort level presets that bundle max_turns + max_tokens + temperature.
+/// Reasoning effort, with the turn and output limits each level presets.
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum EffortLevel {
-    /// Fast responses, minimal tool use (max_turns=3, max_tokens=2048)
+    /// Low reasoning effort, at most 3 turns and 2048 output tokens
     Low,
-    /// Default balanced settings
+    /// Medium reasoning effort, no turn or output preset
     Medium,
-    /// Thorough analysis and implementation (max_turns=50, max_tokens=16384)
+    /// High reasoning effort, at most 50 turns and 16384 output tokens
     High,
-    /// Exhaustive, use all available context (max_turns=100, max_tokens=32768)
+    /// Maximum reasoning effort, at most 100 turns and 32768 output tokens
     Max,
+}
+
+impl EffortLevel {
+    fn effort(self) -> design_system::Effort {
+        match self {
+            EffortLevel::Low => design_system::Effort::Low,
+            EffortLevel::Medium => design_system::Effort::Medium,
+            EffortLevel::High => design_system::Effort::High,
+            EffortLevel::Max => design_system::Effort::Max,
+        }
+    }
+}
+
+fn saved_effort(config: &config::CliConfig) -> Option<design_system::Effort> {
+    config
+        .default
+        .reasoning_effort
+        .as_deref()
+        .and_then(design_system::Effort::from_config_value)
+}
+
+pub(crate) fn apply_saved_effort(session: &mut agent::AgentSession, config: &config::CliConfig) {
+    let effort = saved_effort(config);
+    session.effort = effort;
+    session.thinking_budget_tokens =
+        effort.and_then(design_system::Effort::thinking_budget_for_anthropic);
 }
 
 /// Coding CLI whose settings `agi migrate` can import.
@@ -954,12 +982,12 @@ enum Command {
     },
     /// Sign in to your AGI account, or store a provider API key.
     Login {
-        /// Omit for your AGI account; name a provider (anthropic, openai, google, …) to enter its API key under Your Key; copilot uses its device flow.
+        /// Omit for your AGI account; name a provider (anthropic, openai, google, …) to enter its API key under Your Key.
         provider: Option<String>,
     },
-    /// Sign out of your account on this machine. Saved provider API keys and the Copilot sign-in stay.
+    /// Sign out of your account on this machine. Saved provider API keys stay.
     Logout {
-        /// Also remove every saved provider API key and the Copilot sign-in, and run first-time setup again on the next start.
+        /// Also remove every saved provider API key and any GitHub Copilot sign-in an earlier version saved, and run first-time setup again on the next start.
         #[arg(long)]
         all: bool,
         /// Kept for scripts that pass it; signing out of the account only is the default.
@@ -4837,9 +4865,7 @@ async fn run_update_install(
 }
 
 fn account_sign_out_message(signed_out: &str) -> String {
-    format!(
-        "{signed_out} Saved provider API keys and the Copilot sign-in stay; `agi logout --all` removes them."
-    )
+    format!("{signed_out} Saved provider API keys stay; `agi logout --all` removes them.")
 }
 
 /// The in-session `/logout`: the account only, as a bare `agi logout` does.
@@ -5988,6 +6014,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     crate::path_security::registered_additional_workspace_roots(),
                 )?;
                 session.apply_ui_config(&app_config);
+                apply_saved_effort(&mut session, &app_config);
                 session.apply_tool_filters(
                     &normalized_cli_options.allowed_tools,
                     &normalized_cli_options.disallowed_tools,
@@ -7069,7 +7096,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             } => {
                 let signed_out = if *all && !*account_only {
                     if !confirm_destructive(
-                        "Remove every saved provider API key and the Copilot sign-in from this machine and sign out of your account? You will have to enter the keys again.",
+                        "Remove every saved provider API key, and any GitHub Copilot sign-in an earlier version saved, from this machine and sign out of your account? You will have to enter the keys again.",
                         *yes,
                     ) {
                         return Ok(());
@@ -8488,6 +8515,9 @@ fn resolve_system_prompt(cli: &Cli) -> Result<Option<String>> {
 /// `--effort`, then the explicit `--max-tokens`, `--no-stream` and
 /// `--temperature` over it. Returns the turn limit the effort preset implies.
 fn apply_run_overrides(cli: &Cli, config: &mut config::CliConfig) -> Option<usize> {
+    if let Some(level) = cli.effort {
+        config.default.reasoning_effort = Some(level.effort().wire_value().to_string());
+    }
     let effort_max_turns = match cli.effort {
         Some(EffortLevel::Low) => {
             config.default.max_tokens = 2048;
@@ -8948,6 +8978,7 @@ pub async fn run_oneshot(
         crate::path_security::registered_additional_workspace_roots(),
     )?;
     session.apply_ui_config(config);
+    apply_saved_effort(&mut session, config);
     session.max_turns = max_turns;
     session.max_budget_usd = max_budget_usd;
     session.skip_permissions = skip_permissions;
@@ -9123,16 +9154,17 @@ pub async fn run_oneshot(
                         // turn cut at the model's output limit is `max_tokens`
                         // there, and announcing it as `end_turn` is how a
                         // reader is told a truncated answer finished.
-                        stop_reason: Some(
-                            match turn.incomplete {
-                                Some(errors::IncompleteTurnCause::OutputLimitReached) => {
-                                    "max_tokens"
-                                }
-                                Some(errors::IncompleteTurnCause::RefusedBySafety) => "refusal",
-                                Some(errors::IncompleteTurnCause::NoResponse) | None => "end_turn",
+                        stop_reason: match turn.incomplete {
+                            Some(errors::IncompleteTurnCause::OutputLimitReached) => {
+                                Some("max_tokens")
                             }
-                            .to_string(),
-                        ),
+                            Some(errors::IncompleteTurnCause::RefusedBySafety) => Some("refusal"),
+                            Some(errors::IncompleteTurnCause::StreamEndedEarly) => None,
+                            Some(errors::IncompleteTurnCause::NoResponse) | None => {
+                                Some("end_turn")
+                            }
+                        }
+                        .map(str::to_string),
                         input_tokens: turn.input_tokens,
                         output_tokens: turn.output_tokens,
                     }))
@@ -10428,6 +10460,19 @@ mod tests {
         assert_eq!(cli.max_turns.or(effort_turns), Some(3));
         assert_eq!(config.default.max_tokens, 1024, "an explicit flag wins");
         assert_eq!(cli.max_budget_usd, Some(1.0));
+        assert_eq!(saved_effort(&config), Some(design_system::Effort::Low));
+    }
+
+    #[test]
+    fn the_effort_flag_sets_the_reasoning_effort_over_the_saved_one() {
+        let mut config = config::CliConfig::default();
+        config.default.reasoning_effort = Some("low".to_string());
+        let unflagged = Cli::try_parse_from(["agi"]).expect("parses");
+        apply_run_overrides(&unflagged, &mut config);
+        assert_eq!(saved_effort(&config), Some(design_system::Effort::Low));
+        let flagged = Cli::try_parse_from(["agi", "--effort", "max"]).expect("parses");
+        apply_run_overrides(&flagged, &mut config);
+        assert_eq!(saved_effort(&config), Some(design_system::Effort::Max));
     }
 
     #[test]

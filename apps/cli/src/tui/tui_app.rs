@@ -6317,13 +6317,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                             .persist_effort_project(&e.label().to_ascii_lowercase())
                             .map(|_| " and saved as this project's default")
                             .unwrap_or("");
-                        let note = if matches!(
-                            crate::model_catalog::effort_support(&app.session.model),
-                            crate::model_catalog::EffortSupport::Unsupported
+                        let note = if crate::models::effort_reaches_model(
+                            &app.session.provider,
+                            &app.session.model,
+                            e,
                         ) {
-                            ". This model has no effort control, so it applies once you switch to one that does"
-                        } else {
                             ""
+                        } else {
+                            crate::claude_parity::EFFORT_NOT_TAKEN_NOTE
                         };
                         SlashResult::SystemMessage(format!(
                             "Effort set to {}{saved}{note}",
