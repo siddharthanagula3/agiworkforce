@@ -86,7 +86,11 @@ impl InteractionMode {
         if session.skips_approval() {
             return Self::BypassPermissions;
         }
-        match session.governed_permission_mode() {
+        Self::for_permission_mode(session.governed_permission_mode())
+    }
+
+    fn for_permission_mode(mode: crate::cli_options::PermissionMode) -> Self {
+        match mode {
             crate::cli_options::PermissionMode::Plan => Self::Plan,
             crate::cli_options::PermissionMode::AcceptEdits => Self::AcceptEdits,
             crate::cli_options::PermissionMode::BypassPermissions => Self::BypassPermissions,
@@ -5013,16 +5017,23 @@ fn finish_model_pick(
     banner: String,
 ) {
     let switched = if provider_id == crate::design_system::ProviderId::AGICloud {
-        app.session.switch_managed_model(model_id)
+        app.session.enter_managed_model(model_id)
     } else {
-        app.session.switch_model(model_id)
+        app.session
+            .switch_model(model_id)
+            .map(|()| crate::agent::ManagedModelSwitch::SameSession)
     };
     let text = match switched {
-        Ok(()) => {
+        Ok(switch) => {
             if let Some(effort) = effort {
                 app.effort = effort;
             }
-            banner
+            match switch {
+                crate::agent::ManagedModelSwitch::SameSession => banner,
+                crate::agent::ManagedModelSwitch::NewSession => {
+                    format!("{banner}\n{}", crate::agent::NEW_MANAGED_SESSION_NOTICE)
+                }
+            }
         }
         Err(err) => format!(
             "Model switch failed: {}",
@@ -5094,13 +5105,22 @@ fn cycle_model(app: &mut TuiApp) {
         return;
     };
     let switched = if provider_id == crate::design_system::ProviderId::AGICloud {
-        app.session.switch_managed_model(&model_id)
+        app.session.enter_managed_model(&model_id)
     } else {
-        app.session.switch_model(&model_id)
+        app.session
+            .switch_model(&model_id)
+            .map(|()| crate::agent::ManagedModelSwitch::SameSession)
     };
     app.status_notice = Some((
         match switched {
-            Ok(()) => format!("model: {}", crate::model_catalog::display_name(&model_id)),
+            Ok(crate::agent::ManagedModelSwitch::SameSession) => {
+                format!("model: {}", crate::model_catalog::display_name(&model_id))
+            }
+            Ok(crate::agent::ManagedModelSwitch::NewSession) => format!(
+                "model: {} · {}",
+                crate::model_catalog::display_name(&model_id),
+                crate::agent::NEW_MANAGED_SESSION_NOTICE
+            ),
             Err(error) => format!(
                 "model switch failed: {}",
                 crate::errors::terminal_text(&error)
@@ -5302,6 +5322,11 @@ fn apply_mode(app: &mut TuiApp, mode: InteractionMode) -> bool {
     if !mode.available_in(&app.session) {
         return false;
     }
+    if mode != InteractionMode::Plan {
+        app.session.plan_return_mode = None;
+    } else if app.mode != InteractionMode::Plan {
+        app.session.plan_return_mode = Some(app.session.permission_mode);
+    }
     app.mode = mode;
     app.session.permission_mode = mode.permission_mode();
     // An approval covers the plan it was given in; entering plan mode again
@@ -5323,10 +5348,7 @@ fn apply_mode(app: &mut TuiApp, mode: InteractionMode) -> bool {
 }
 
 fn pinned_mode_notice(app: &TuiApp) -> String {
-    format!(
-        "Your organization's policy holds tool approval at {}, so a looser mode is not available.",
-        app.session.governed_permission_mode().name()
-    )
+    app.session.pinned_mode_notice()
 }
 
 fn unavailable_mode_notice(app: &TuiApp, mode: InteractionMode) -> String {
@@ -5589,10 +5611,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/plan" => {
-            let new_mode = match arg {
-                "" if app.mode == InteractionMode::Plan => InteractionMode::Chat,
-                "" | "on" => InteractionMode::Plan,
-                "off" => InteractionMode::Chat,
+            let leaving = match arg {
+                "" => app.mode == InteractionMode::Plan,
+                "on" => false,
+                "off" => true,
                 unknown => {
                     return SlashResult::SystemMessage(sanitize_terminal_text(&format!(
                         "Unknown /plan subcommand: {unknown}. Use one of: on | off | accept | reject <feedback> | show | todos"
@@ -5600,7 +5622,22 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     .into_owned());
                 }
             };
-            if !apply_mode(app, new_mode) {
+            if !leaving {
+                if !apply_mode(app, InteractionMode::Plan) {
+                    return SlashResult::SystemMessage(pinned_mode_notice(app));
+                }
+                return SlashResult::SystemMessage(format!(
+                    "{}, {}",
+                    app.mode.label(),
+                    mode_description(app.mode)
+                ));
+            }
+            let exit_mode = app.session.plan_exit_mode();
+            if !apply_mode(app, InteractionMode::for_permission_mode(exit_mode)) {
+                return SlashResult::SystemMessage(pinned_mode_notice(app));
+            }
+            app.session.permission_mode = exit_mode;
+            if app.mode == InteractionMode::Plan {
                 return SlashResult::SystemMessage(pinned_mode_notice(app));
             }
             SlashResult::SystemMessage(format!("{}, {}", app.mode.label(), mode_description(app.mode)))
@@ -6798,7 +6835,7 @@ pub async fn run(
     auto_approve_safe: bool,
     quiet: bool,
     provider_override: Option<String>,
-    permission_mode: crate::cli_options::PermissionMode,
+    permission_mode: crate::cli_options::LaunchPermissionMode,
     auto_approve_plan: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
@@ -6837,10 +6874,13 @@ pub async fn run(
         session.fallback_chain = Some(fallback_chain);
     }
     session.session_name = session_name;
-    session.permission_mode = permission_mode;
+    session.permission_mode = permission_mode.mode;
     session.auto_approve_plan = auto_approve_plan;
     session.apply_tool_filters(&allowed_tools, &disallowed_tools);
-    if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
+    if matches!(
+        permission_mode.mode,
+        crate::cli_options::PermissionMode::Plan
+    ) {
         session.plan_mode = true;
     }
     if team_mode {
@@ -6865,10 +6905,12 @@ pub async fn run(
         }
     }
 
+    let mode_before_load = session.permission_mode;
     match (resume_messages, resume_managed_session) {
         (Some(messages), Some((mut managed_session, path))) => {
             managed_session.messages = messages;
             session.load_managed_conversation(managed_session, path)?;
+            session.settle_loaded_permission_mode(permission_mode, mode_before_load);
             session.turn_count = session
                 .messages
                 .iter()
@@ -6888,6 +6930,7 @@ pub async fn run(
         }
         (None, Some((managed_session, path))) => {
             session.load_managed_conversation(managed_session, path)?;
+            session.settle_loaded_permission_mode(permission_mode, mode_before_load);
             session.turn_count = session
                 .messages
                 .iter()
@@ -9079,6 +9122,48 @@ mod tests {
         handle_slash("/plan off", &mut app);
         assert_eq!(app.mode, InteractionMode::Chat);
         assert!(!app.session.plan_mode);
+    }
+
+    #[test]
+    fn plan_off_returns_to_the_mode_plan_was_entered_from() {
+        use crate::cli_options::PermissionMode;
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = None;
+        assert!(apply_mode(&mut app, InteractionMode::AcceptEdits));
+
+        handle_slash("/plan", &mut app);
+        assert_eq!(app.mode, InteractionMode::Plan);
+        handle_slash("/plan off", &mut app);
+        assert_eq!(app.mode, InteractionMode::AcceptEdits);
+        assert_eq!(app.session.permission_mode, PermissionMode::AcceptEdits);
+        assert_eq!(InteractionMode::for_session(&app.session), app.mode);
+        assert!(!app.session.plan_mode);
+        assert_eq!(app.session.plan_return_mode, None);
+
+        handle_slash("/plan on", &mut app);
+        assert!(apply_mode(&mut app, InteractionMode::Chat));
+        handle_slash("/plan", &mut app);
+        handle_slash("/plan", &mut app);
+        assert_eq!(app.mode, InteractionMode::Chat);
+        assert_eq!(app.session.permission_mode, PermissionMode::Default);
+    }
+
+    #[test]
+    fn plan_off_under_a_plan_pin_keeps_plan_and_says_why() {
+        use crate::cli_options::PermissionMode;
+        let mut app = minimal_app();
+        app.session.pinned_permission_mode = Some(PermissionMode::Plan);
+        app.mode = InteractionMode::for_session(&app.session);
+
+        handle_slash("/plan", &mut app);
+        let SlashResult::SystemMessage(notice) = handle_slash("/plan off", &mut app) else {
+            panic!("/plan off answers with a system message");
+        };
+
+        assert_eq!(app.mode, InteractionMode::Plan);
+        assert_eq!(app.session.permission_mode, PermissionMode::Plan);
+        assert!(app.session.plan_mode);
+        assert_eq!(notice, app.session.pinned_mode_notice());
     }
 
     #[test]

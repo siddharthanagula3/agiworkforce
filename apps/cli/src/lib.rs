@@ -7901,7 +7901,14 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
         ));
     let effective_skip_permissions = resolved_permissions.skip_permissions;
     let effective_auto_approve_safe = resolved_permissions.auto_approve_safe;
-    let effective_permission_mode: cli_options::PermissionMode = resolved_permissions.mode;
+    let launch_permission_mode = cli_options::LaunchPermissionMode {
+        mode: resolved_permissions.mode,
+        requested: cli
+            .mode
+            .or(normalized_cli_options.permission_mode)
+            .is_some(),
+        repository: app_config.source.repository_permission_mode,
+    };
     let effective_auto_approve_plan = cli.auto_approve_plan;
 
     // Resolve effective max_turns: explicit --max-turns wins, then --effort preset
@@ -7963,7 +7970,7 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
             effective_skip_permissions,
             effective_auto_approve_safe,
             cli.quiet,
-            effective_permission_mode,
+            launch_permission_mode,
             effective_auto_approve_plan,
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
@@ -8076,7 +8083,7 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
             effective_auto_approve_safe,
             cli.quiet,
             effective_provider_override,
-            effective_permission_mode,
+            launch_permission_mode,
             effective_auto_approve_plan,
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
@@ -8102,7 +8109,7 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
             effective_auto_approve_safe,
             cli.quiet,
             effective_provider_override.map(str::to_string),
-            effective_permission_mode,
+            launch_permission_mode,
             effective_auto_approve_plan,
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
@@ -8918,7 +8925,7 @@ pub async fn run_oneshot(
     skip_permissions: bool,
     auto_approve_safe: bool,
     quiet: bool,
-    permission_mode: cli_options::PermissionMode,
+    permission_mode: cli_options::LaunchPermissionMode,
     auto_approve_plan: bool,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
@@ -8967,16 +8974,18 @@ pub async fn run_oneshot(
     // Sprint B4: thread the permission mode + auto-approval into the
     // session before any send. `--mode plan` here means the model sees
     // the plan-mode reminder and the dispatcher gates mutating tools.
-    session.permission_mode = permission_mode;
+    session.permission_mode = permission_mode.mode;
     session.auto_approve_plan = auto_approve_plan;
     session.apply_tool_filters(&allowed_tools, &disallowed_tools);
-    if matches!(permission_mode, cli_options::PermissionMode::Plan) {
+    if matches!(permission_mode.mode, cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }
     apply_named_agent(&mut session, agent_name.as_deref());
     let resuming = resume_session.is_some();
     if let Some((managed, path)) = resume_session {
+        let mode_before_load = session.permission_mode;
         session.load_managed_conversation(managed, path)?;
+        session.settle_loaded_permission_mode(permission_mode, mode_before_load);
     }
     session.enable_managed_session_as(session_id_override.as_deref().filter(|_| !resuming))?;
     if let Some(seed) = auto_route_seed {
