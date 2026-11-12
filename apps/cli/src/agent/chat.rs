@@ -308,7 +308,7 @@ async fn run_pre_tool_use_hooks(
         },
     )
     .await;
-    let pre_t = hooks::aggregate_transformers(&pre_results);
+    let pre_t = hooks::aggregate_transformers_for(&pre_results, &tool_call.arguments);
     let effective_args = pre_t
         .updated_input
         .clone()
@@ -1837,14 +1837,14 @@ impl TurnHostAdapter<'_> {
                 session_id: Some(self.session.runtime_session_id.clone()),
                 model: Some(self.session.model.clone()),
                 tool_name: Some(tool_name),
-                tool_args: Some(tool_args),
+                tool_args: Some(tool_args.clone()),
                 tool_output: Some(output.clone()),
                 message: None,
                 tool_execution: None,
             },
         )
         .await;
-        hooks::aggregate_transformers(&persist_results)
+        hooks::aggregate_transformers_for(&persist_results, &tool_args)
             .updated_mcp_tool_output
             .unwrap_or(output)
     }
@@ -2606,6 +2606,54 @@ impl TurnHostAdapter<'_> {
             output: tool_result.output,
         }
     }
+
+    async fn run_captured_tool(
+        &mut self,
+        call: &ToolCallResponse,
+        args: serde_json::Value,
+    ) -> ExecResult {
+        let workspace_root = self.session.workspace_root();
+        self.session
+            .note_file_edit_started(&call.id, &call.name, &args, workspace_root.as_deref())
+            .await;
+        self.run_sequential_tool(call, args).await
+    }
+
+    async fn run_batch(&mut self, call: &ToolCallResponse, args: &serde_json::Value) -> ExecResult {
+        let inner_calls = match crate::tools::batch_calls(&value_to_legacy_args(args)) {
+            Ok(inner_calls) => inner_calls,
+            Err(output) => return ExecResult { ok: false, output },
+        };
+        let mut results = Vec::with_capacity(inner_calls.len());
+        for (position, inner) in inner_calls.into_iter().enumerate() {
+            let inner = ToolCallResponse {
+                id: format!("{}#{}", call.id, position + 1),
+                name: inner.name,
+                arguments: serde_json::Value::Object(inner.args),
+            };
+            let block = match self
+                .prepare_tool_inner(&inner, DispatchMode::Sequential)
+                .await
+            {
+                Prepared::Proceed { args } => {
+                    let executed = self.run_captured_tool(&inner, args.clone()).await;
+                    self.session.note_file_edit_finished(&inner.id, executed.ok);
+                    self.finish_sequential_tool(&inner, args, executed).await
+                }
+                Prepared::PreEmpted { block } => block,
+            };
+            results.push(Ok(crate::tools::ToolResult {
+                tool_name: inner.name,
+                success: !block.is_error,
+                output: block.content,
+            }));
+        }
+        let summary = crate::tools::batch_result(results);
+        ExecResult {
+            ok: summary.success,
+            output: summary.output,
+        }
+    }
 }
 
 fn declared_tool_timeout(tool_name: &str, mode: DispatchMode) -> Option<std::time::Duration> {
@@ -3200,8 +3248,14 @@ impl TurnHost for TurnHostAdapter<'_> {
         call: &ToolCallResponse,
         args: serde_json::Value,
     ) -> ExecResult {
-        let (result, notes) =
-            crate::tools::collect_approval_notes(self.run_sequential_tool(call, args)).await;
+        let (result, notes) = crate::tools::collect_approval_notes(async {
+            if call.name == "batch" {
+                self.run_batch(call, &args).await
+            } else {
+                self.run_captured_tool(call, args).await
+            }
+        })
+        .await;
         ExecResult {
             ok: result.ok,
             output: crate::tools::with_approval_notes(result.output, &notes),
@@ -3231,7 +3285,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         )
         .await;
 
-        let post_t = hooks::aggregate_transformers(&post_results);
+        let post_t = hooks::aggregate_transformers_for(&post_results, &args);
         let final_output = post_t.updated_mcp_tool_output.unwrap_or(result.output);
         if let Some(ctx) = post_t.additional_context {
             self.hook_additional_contexts.push(ctx);
@@ -3484,8 +3538,6 @@ impl TurnHost for TurnHostAdapter<'_> {
                 if let Ok(mut activity) = self.session.session_activity.lock() {
                     activity.tool_started(id, name, args, workspace_root.as_deref());
                 }
-                self.session
-                    .note_file_edit_started(id, name, args, workspace_root.as_deref());
                 let raw_input = args.to_string();
                 let redacted_input = crate::agent_events::redact_args(&raw_input);
                 emit_tool_event(
@@ -5244,6 +5296,69 @@ mod tests {
                 .any(|message| message.role == "system"
                     && message.text_content().contains("hook-note")),
             "accrued hook context must be flushed as a system message on commit"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn live_turn_runs_each_batched_call_through_its_own_hooks_and_rewind_capture() {
+        let scratch = workspace_scratch();
+        let refused = scratch.path().join("refused.txt");
+        let created = scratch.path().join("created.txt");
+
+        let mut session = live_session();
+        session.hooks_config = hook_config(&[(
+            "PreToolUse",
+            "input=$(cat); case \"$input\" in *refused.txt*) printf '%s' '{\"decision\":\"block\",\"reason\":\"guarded path\"}';; esac"
+                .to_string(),
+        )]);
+        for hook in session.hooks_config.hooks.values_mut().flatten() {
+            hook.matcher = Some("^write_file$".to_string());
+        }
+        session.save_checkpoint();
+
+        run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["batch", "write_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "writing",
+                    vec![live_call(
+                        "batch-1",
+                        "batch",
+                        serde_json::json!({"calls": [
+                            {"name": "write_file", "args": {"path": refused, "content": "guarded"}},
+                            {"name": "write_file", "args": {"path": created, "content": "written"}}
+                        ]}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        assert!(
+            !refused.exists(),
+            "a blocking hook must stop the call inside the batch"
+        );
+        assert_eq!(std::fs::read_to_string(&created).unwrap(), "written");
+        let (content, is_error) = committed_result(&session, "batch-1");
+        assert!(
+            content.contains("blocked by hook: guarded path"),
+            "{content}"
+        );
+        assert!(is_error);
+
+        session
+            .rewind_to(0, crate::agent::RewindMode::Code)
+            .unwrap();
+        assert!(
+            !created.exists(),
+            "rewind must undo a write made inside the batch"
         );
     }
 

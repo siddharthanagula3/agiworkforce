@@ -1358,10 +1358,6 @@ pub fn aggregate_transformers_for(
     aggregate_transformers_audited(results, original_args, audit_log_updated_input)
 }
 
-pub fn aggregate_transformers(results: &[HookResult]) -> HookTransformers {
-    aggregate_transformers_for(results, &serde_json::Value::Null)
-}
-
 fn aggregate_transformers_audited(
     results: &[HookResult],
     original_args: &serde_json::Value,
@@ -2925,7 +2921,7 @@ mod tests {
             updated_mcp_tool_output: Some(format!("out{}", idx)),
         };
         let results = vec![make(1), make(2), make(3)];
-        let t = aggregate_transformers(&results);
+        let t = aggregate_transformers_for(&results, &serde_json::json!({}));
         assert_eq!(
             t.updated_input
                 .as_ref()
@@ -3499,9 +3495,9 @@ mod tests {
             additional_context: None,
             updated_mcp_tool_output: None,
         }];
-        // audit_log_updated_input is called inside aggregate_transformers.
+        // audit_log_updated_input is called inside aggregate_transformers_for.
         // We verify that the aggregated updated_input is the one from the hook.
-        let transformers = aggregate_transformers(&results);
+        let transformers = aggregate_transformers_for(&results, &serde_json::json!({}));
         assert_eq!(
             transformers
                 .updated_input
@@ -3528,7 +3524,7 @@ mod tests {
             additional_context: None,
             updated_mcp_tool_output: None,
         }];
-        let transformers = aggregate_transformers(&results);
+        let transformers = aggregate_transformers_for(&results, &serde_json::json!({}));
         assert!(
             transformers.updated_input.is_none(),
             "no updated_input → nothing to log or aggregate"
