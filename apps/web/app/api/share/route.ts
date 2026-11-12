@@ -255,6 +255,7 @@ async function artifactsMatchStored(
   db: DatabaseAdapter,
   userId: string,
   conversationId: string,
+  organizationId: string | null,
   messages: Array<Record<string, unknown>>,
   stored: readonly StoredTranscriptRow[],
 ): Promise<boolean> {
@@ -265,8 +266,9 @@ async function artifactsMatchStored(
        from web_artifacts artifact
       where artifact.conversation_id = $1
         and artifact.user_id = $2
+        and artifact.organization_id is not distinct from $3::uuid
         and artifact.deleted_at is null`,
-    [conversationId, userId],
+    [conversationId, userId, organizationId],
   );
   const artifactContents = new Set(
     storedArtifacts.map((artifact) => (artifact.content ?? '').trim()),
@@ -292,13 +294,22 @@ async function verifySnapshotAgainstStored(
        join web_conversations conversation on conversation.id = message.conversation_id
       where message.conversation_id = $1
         and conversation.user_id = $2
+        and conversation.organization_id is not distinct from $3::uuid
+        and conversation.deleted_at is null
         and message.deleted_at is null
       order by message.created_at asc, message.id asc`,
-    [conversationId, userId],
+    [conversationId, userId, conversation.organizationId],
   );
   if (
     !messagesMatchStored(messages, stored) ||
-    !(await artifactsMatchStored(db, userId, conversationId, messages, stored))
+    !(await artifactsMatchStored(
+      db,
+      userId,
+      conversationId,
+      conversation.organizationId,
+      messages,
+      stored,
+    ))
   ) {
     logger.warn(
       { userId, conversationId, submitted: messages.length, stored: stored.length },

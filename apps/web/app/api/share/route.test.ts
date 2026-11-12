@@ -680,10 +680,10 @@ describe('POST /api/share, the stored conversation is the source of truth', () =
     });
 
     expect(response.status).toBe(201);
-    expect(mocks.storedArtifacts).toHaveBeenCalledWith(expect.any(String), [
-      CONVERSATION_ID,
-      'user-1',
-    ]);
+    expect(mocks.storedArtifacts).toHaveBeenCalledWith(
+      expect.stringMatching(/artifact\.organization_id is not distinct from \$3::uuid/),
+      [CONVERSATION_ID, 'user-1', null],
+    );
   });
 
   it('labels the share with the stored title and model, never the ones the client sent', async () => {
@@ -703,7 +703,52 @@ describe('POST /api/share, the stored conversation is the source of truth', () =
     expect(mocks.transcript).toHaveBeenCalledWith(expect.stringMatching(/user_id = \$2/), [
       CONVERSATION_ID,
       'user-1',
+      null,
     ]);
+  });
+
+  it('reads the transcript only inside the workspace that holds the chat, and never a deleted chat', async () => {
+    const workspace = '11111111-1111-4111-8111-111111111111';
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      if (/from web_conversations/i.test(String(sql))) {
+        return [{ ...STORED_CONVERSATION, organization_id: workspace }];
+      }
+      return /insert into shared_sessions/i.test(String(sql)) ? [NEW_SHARE] : [];
+    });
+
+    const response = await share({ messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(response.status).toBe(201);
+    const [sql, params] = mocks.transcript.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/conversation\.organization_id is not distinct from \$3::uuid/);
+    expect(sql).toMatch(/conversation\.deleted_at is null/);
+    expect(sql).toMatch(/message\.deleted_at is null/);
+    expect(params).toEqual([CONVERSATION_ID, 'user-1', workspace]);
+  });
+
+  it('refuses a deleted conversation and publishes nothing', async () => {
+    mocks.query.mockImplementation(async (sql: unknown) => {
+      const text = String(sql);
+      if (/from web_conversations/i.test(text)) {
+        return /deleted_at is null/i.test(text) ? [] : [STORED_CONVERSATION];
+      }
+      return [NEW_SHARE];
+    });
+
+    const response = await share({ messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(response.status).toBe(404);
+    expect(mocks.transcript).not.toHaveBeenCalled();
+    expect(insertParams()).toBeUndefined();
+  });
+
+  it('refuses a chat deleted after it was looked up, because its transcript is gone', async () => {
+    mocks.transcript.mockResolvedValueOnce([]);
+
+    const response = await share({ messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(response.status).toBe(409);
+    expect(insertParams()).toBeUndefined();
   });
 
   it('holds each account to a daily share allowance from configuration', async () => {
