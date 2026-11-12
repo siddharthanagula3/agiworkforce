@@ -1219,3 +1219,4 @@ policy and its audit trail, which is a security decision.
    **What remains after founder action** Engineering implements the chosen option on the server and
    in the two clients.
    **Impact** NOT BLOCKING for any release.
+   **Status** FOUNDER DECISION REQUIRED
