@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
+import { mkdtemp } from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { isCredentialPath } from '@agiworkforce/local-runtime-contract';
 import { Config } from '../platform/config';
 import { safeResolveWorkspacePath, type SafeResolveResult } from '../utils/pathSafety';
 
-export type ContextWithholdReason = 'credential' | 'excluded' | 'gitignored' | 'unavailable';
+export type ContextWithholdReason =
+  'credential' | 'excluded' | 'gitignored' | 'unchecked' | 'unavailable';
 export type ContextFileResolution =
   Extract<SafeResolveResult, { ok: true }> | { ok: false; reason: ContextWithholdReason };
 
@@ -139,11 +142,13 @@ export async function resolveContextFile(filePath: string): Promise<ContextFileR
   if (matchesExcludeSetting(resolved.uri, resolved.folder))
     return { ok: false, reason: 'excluded' };
   if (honoursGitIgnore(resolved.folder)) {
-    if (!vscode.workspace.isTrusted) return { ok: false, reason: 'gitignored' };
-    if (await isGitIgnored(filePath)) return { ok: false, reason: 'gitignored' };
+    if (!vscode.workspace.isTrusted) return { ok: false, reason: 'unchecked' };
+    const lexicalIgnore = await gitWithholdReason(filePath);
+    if (lexicalIgnore !== undefined) return { ok: false, reason: lexicalIgnore };
     const relative = toPosix(path.relative(resolved.folder.uri.fsPath, resolved.resolvedPath));
     const ignored = await checkIgnore(resolved.folder.uri.fsPath, [relative]);
-    if (ignored === undefined || ignored.has(relative)) return { ok: false, reason: 'gitignored' };
+    if (ignored === undefined) return { ok: false, reason: 'unchecked' };
+    if (ignored.has(relative)) return { ok: false, reason: 'gitignored' };
   }
   return resolved;
 }
@@ -155,45 +160,94 @@ function honoursGitIgnore(folder: vscode.WorkspaceFolder): boolean {
   );
 }
 
-function checkIgnore(cwd: string, paths: readonly string[]): Promise<Set<string> | undefined> {
+type IgnoreCheck =
+  | { kind: 'answered'; ignored: Set<string> }
+  | { kind: 'no-git' }
+  | { kind: 'no-repository' }
+  | { kind: 'failed' };
+
+function runCheckIgnore(
+  cwd: string,
+  paths: readonly string[],
+  gitDirArgs: readonly string[],
+): Promise<IgnoreCheck> {
   return new Promise((resolve) => {
     const child = execFile(
       'git',
-      ['check-ignore', '--no-index', '-z', '--stdin'],
+      [...gitDirArgs, 'check-ignore', '--no-index', '-z', '--stdin'],
       { cwd, timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
       (error, stdout) => {
         if (error === null) {
-          resolve(
-            new Set(
+          resolve({
+            kind: 'answered',
+            ignored: new Set(
               String(stdout)
                 .split('\0')
                 .filter((entry) => entry !== ''),
             ),
-          );
+          });
           return;
         }
         const code = (error as { code?: unknown }).code;
-        resolve(code === 1 ? new Set() : undefined);
+        if (code === 1) resolve({ kind: 'answered', ignored: new Set() });
+        else if (code === 'ENOENT') resolve({ kind: 'no-git' });
+        else if (code === 128 && error.killed !== true) resolve({ kind: 'no-repository' });
+        else resolve({ kind: 'failed' });
       },
     );
     if (child.stdin === null) {
-      resolve(undefined);
+      resolve({ kind: 'failed' });
       return;
     }
-    child.stdin.on('error', () => resolve(undefined));
+    child.stdin.on('error', () => undefined);
     child.stdin.end(`${paths.join('\0')}\0`);
   });
 }
 
-export async function gitIgnoredPaths(uris: readonly vscode.Uri[]): Promise<Set<string>> {
-  const ignored = new Set<string>();
+let scratchGitDir: Promise<string | undefined> | undefined;
+
+function emptyGitDir(): Promise<string | undefined> {
+  scratchGitDir ??= (async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'agi-ignore-rules-'));
+    process.once('exit', () => rmSync(dir, { recursive: true, force: true }));
+    const created = await new Promise<boolean>((resolve) => {
+      execFile(
+        'git',
+        ['-c', 'init.templateDir=', 'init', '--bare', '-q', dir],
+        { timeout: GIT_CHECK_TIMEOUT_MS, windowsHide: true },
+        (error) => resolve(error === null),
+      );
+    });
+    return created ? dir : undefined;
+  })().catch(() => undefined);
+  return scratchGitDir;
+}
+
+async function checkIgnore(
+  cwd: string,
+  paths: readonly string[],
+): Promise<Set<string> | undefined> {
+  const direct = await runCheckIgnore(cwd, paths, []);
+  if (direct.kind === 'answered') return direct.ignored;
+  if (direct.kind === 'no-git') return new Set();
+  if (direct.kind === 'failed') return undefined;
+  const gitDir = await emptyGitDir();
+  if (gitDir === undefined) return undefined;
+  const rules = await runCheckIgnore(cwd, paths, [`--git-dir=${gitDir}`, `--work-tree=${cwd}`]);
+  return rules.kind === 'answered' ? rules.ignored : undefined;
+}
+
+async function ignoreStatuses(
+  uris: readonly vscode.Uri[],
+): Promise<Map<string, 'gitignored' | 'unchecked'>> {
+  const statuses = new Map<string, 'gitignored' | 'unchecked'>();
   const byFolder = new Map<string, { root: string; files: Map<string, string> }>();
   for (const uri of uris) {
     if (uri.scheme !== 'file') continue;
     const folder = vscode.workspace.getWorkspaceFolder(uri);
     if (folder === undefined || !honoursGitIgnore(folder)) continue;
     if (!vscode.workspace.isTrusted) {
-      ignored.add(uri.fsPath);
+      statuses.set(uri.fsPath, 'unchecked');
       continue;
     }
     const relativePath = toPosix(path.relative(folder.uri.fsPath, uri.fsPath));
@@ -211,16 +265,26 @@ export async function gitIgnoredPaths(uris: readonly vscode.Uri[]): Promise<Set<
       const chunk = relativePaths.slice(start, start + GIT_PATHS_PER_CHECK);
       const matched = await checkIgnore(root, chunk);
       for (const relativePath of chunk) {
-        if (matched === undefined || matched.has(relativePath)) {
-          ignored.add(files.get(relativePath) ?? relativePath);
-        }
+        const filePath = files.get(relativePath) ?? relativePath;
+        if (matched === undefined) statuses.set(filePath, 'unchecked');
+        else if (matched.has(relativePath)) statuses.set(filePath, 'gitignored');
       }
     }
   }
-  return ignored;
+  return statuses;
+}
+
+export async function gitIgnoredPaths(uris: readonly vscode.Uri[]): Promise<Set<string>> {
+  return new Set((await ignoreStatuses(uris)).keys());
+}
+
+export async function gitWithholdReason(
+  filePath: string,
+): Promise<'gitignored' | 'unchecked' | undefined> {
+  const uri = vscode.Uri.file(filePath);
+  return (await ignoreStatuses([uri])).get(uri.fsPath);
 }
 
 export async function isGitIgnored(filePath: string): Promise<boolean> {
-  const uri = vscode.Uri.file(filePath);
-  return (await gitIgnoredPaths([uri])).has(uri.fsPath);
+  return (await gitWithholdReason(filePath)) !== undefined;
 }

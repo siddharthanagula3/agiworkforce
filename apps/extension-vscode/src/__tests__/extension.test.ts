@@ -184,7 +184,7 @@ describe('inline completions first-run privacy notice', () => {
     } as unknown as vscode.ExtensionContext;
   }
 
-  function configureInlineCompletions(enabled: boolean, globalValue?: boolean): void {
+  function configureInlineCompletions(enabled: boolean, globalValue: boolean = enabled): void {
     vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
       () =>
         ({

@@ -328,7 +328,7 @@ describe('editor context chips', () => {
       get: vi.fn(() => false),
       update: vi.fn(),
       has: vi.fn(),
-      inspect: vi.fn(),
+      inspect: vi.fn(() => ({ defaultValue: true, globalValue: true, workspaceValue: false })),
     } as never);
 
     expect(resolveEditorContext(new Set())).toEqual({ chips: [], contextFiles: [], texts: [] });

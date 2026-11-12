@@ -31,6 +31,7 @@ import {
   unresolvedCliProbe,
 } from '../platform/remoteEnvironment';
 import { setTerminalOutputSource, type TerminalOutput } from '../data/terminalOutput';
+import { isContainedIn } from '@agiworkforce/utils/path-containment';
 
 const TERMINAL_NAME = PRODUCT_NAMES.code;
 
@@ -43,6 +44,12 @@ function quoteCliPathIfNeeded(cliPath: string): string {
 }
 
 export { validateSuggestedCommand };
+
+function terminalCreationCwd(terminal: vscode.Terminal): vscode.Uri | undefined {
+  const cwd = (terminal.creationOptions as vscode.TerminalOptions | undefined)?.cwd;
+  if (cwd === undefined) return undefined;
+  return typeof cwd === 'string' ? vscode.Uri.file(cwd) : cwd;
+}
 
 interface CapturedExecution {
   readonly execution: vscode.TerminalShellExecution;
@@ -59,6 +66,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
    * terminal closes, never sent anywhere until "Explain Terminal Output" is run.
    */
   private readonly _lastExecutions = new Map<vscode.Terminal, CapturedExecution>();
+  private readonly _runningExecutions = new Map<vscode.Terminal, vscode.TerminalShellExecution>();
 
   constructor(secrets: vscode.SecretStorage) {
     this._secrets = secrets;
@@ -69,6 +77,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
           this._terminal = undefined;
         }
         this._lastExecutions.delete(closed);
+        this._runningExecutions.delete(closed);
       }),
       vscode.window.onDidStartTerminalShellExecution((event) => {
         const captured: CapturedExecution = {
@@ -76,9 +85,13 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
           capture: emptyTerminalCapture(),
         };
         this._lastExecutions.set(event.terminal, captured);
+        this._runningExecutions.set(event.terminal, event.execution);
         void this._drainExecution(captured);
       }),
       vscode.window.onDidEndTerminalShellExecution((event) => {
+        if (this._runningExecutions.get(event.terminal) === event.execution) {
+          this._runningExecutions.delete(event.terminal);
+        }
         const captured = this._lastExecutions.get(event.terminal);
         if (captured?.execution !== event.execution) return;
         captured.capture.ended = true;
@@ -87,24 +100,29 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
     );
   }
 
+  private _canTakeCommand(terminal: vscode.Terminal, folder: vscode.Uri | undefined): boolean {
+    if (!vscode.window.terminals.includes(terminal)) return false;
+    if (this._runningExecutions.has(terminal)) return false;
+    if (folder === undefined) return true;
+    const cwd = terminal.shellIntegration?.cwd ?? terminalCreationCwd(terminal);
+    return cwd === undefined || isContainedIn(folder.fsPath, cwd.fsPath);
+  }
+
   getOrCreateTerminal(): vscode.Terminal {
-    if (this._terminal !== undefined) {
-      const stillAlive = vscode.window.terminals.find((t) => t === this._terminal);
-      if (stillAlive !== undefined) {
-        this._terminal.show(/* preserveFocus */ true);
-        return this._terminal;
-      }
-      this._terminal = undefined;
-    }
-
-    const existing = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME);
-    if (existing !== undefined) {
-      this._terminal = existing;
-      this._terminal.show(true);
-      return this._terminal;
-    }
-
     const workspaceUri = getActiveWorkspaceFolderSync()?.uri;
+    const reusable = [
+      this._terminal,
+      ...vscode.window.terminals.filter((t) => t.name === TERMINAL_NAME),
+    ].find(
+      (candidate): candidate is vscode.Terminal =>
+        candidate !== undefined && this._canTakeCommand(candidate, workspaceUri),
+    );
+    if (reusable !== undefined) {
+      this._terminal = reusable;
+      reusable.show(true);
+      return reusable;
+    }
+
     this._terminal = vscode.window.createTerminal(
       workspaceUri !== undefined
         ? { name: TERMINAL_NAME, cwd: workspaceUri }

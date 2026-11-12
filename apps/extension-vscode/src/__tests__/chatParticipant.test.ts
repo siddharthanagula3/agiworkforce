@@ -802,7 +802,11 @@ describe('chat participant approval lifecycle', () => {
           update: vi.fn().mockResolvedValue(undefined),
           has: vi.fn().mockReturnValue(false),
           inspect: vi.fn((key: string) =>
-            key === 'model' ? { key, globalValue: 'auto' } : undefined,
+            key === 'model'
+              ? { key, globalValue: 'auto' }
+              : key === 'memory.enabled'
+                ? { key, globalValue: false }
+                : undefined,
           ),
         }) as unknown as vscode.WorkspaceConfiguration,
     );

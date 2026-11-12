@@ -515,11 +515,6 @@ export async function deactivate(): Promise<void> {
 async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext): Promise<void> {
   if (!Config.inlineCompletionsEnabled()) return;
 
-  const inspected = vscode.workspace
-    .getConfiguration()
-    .inspect('agiWorkforce.inlineCompletions.enabled');
-  if (inspected?.globalValue !== undefined) return;
-
   const alreadyShown = context.globalState.get<boolean>('inlineCompletions.firstRunNoticeShown');
   if (alreadyShown === true) return;
 

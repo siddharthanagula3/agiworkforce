@@ -139,11 +139,30 @@ export class AccountMemoryStore {
     );
   }
 
-  turnFacts(): MemoryFact[] {
+  async turnFacts(): Promise<MemoryFact[]> {
     if (this.scope() === undefined || this.storage.get<boolean>(ACCOUNT_MEMORY_UNSCOPED_KEY)) {
       return [];
     }
+    const token = await getAccountToken(this.secrets, { renew: false });
+    if (token === undefined || token === '') return [];
+    const recorded = this.storage.get<string>(ACCOUNT_MEMORY_OWNER_KEY);
+    if (recorded !== undefined && recorded !== jwtSubject(token)) return [];
     return this.cachedFacts();
+  }
+
+  async forgetLocalCache(): Promise<void> {
+    this.clearGeneration += 1;
+    for (const key of [
+      ACCOUNT_MEMORY_CACHE_KEY,
+      ACCOUNT_MEMORY_VERSIONS_KEY,
+      ACCOUNT_MEMORY_CURSOR_KEY,
+      ACCOUNT_MEMORY_OWNER_KEY,
+      ACCOUNT_MEMORY_SCOPE_KEY,
+      ACCOUNT_MEMORY_UNSCOPED_KEY,
+    ]) {
+      await this.storage.update(key, undefined);
+    }
+    this.changed.fire();
   }
 
   async signedOut(): Promise<boolean> {

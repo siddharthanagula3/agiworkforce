@@ -1227,6 +1227,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       }
       await clearAccountTierCache(context);
+      await getAccountMemoryStore()?.forgetLocalCache();
       artifactContentProvider.clear();
       artifactsTreeProvider.refresh();
       sidebarProvider.refreshAccountPresentation();

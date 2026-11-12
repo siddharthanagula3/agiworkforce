@@ -742,6 +742,8 @@ describe('ChatStateManager local turn lifecycle', () => {
     const editor = {
       document: {
         uri: vscode.Uri.file('/workspace/src/app.ts'),
+        languageId: 'typescript',
+        isUntitled: false,
         getText: () => '',
         lineCount: 1,
         lineAt: () => ({ text: '' }),
@@ -787,6 +789,48 @@ describe('ChatStateManager local turn lifecycle', () => {
       filePath: expect.any(String),
     });
     expect(posted).toContainEqual(expect.objectContaining({ type: 'diffProposed' }));
+  });
+
+  it('refuses to apply a code block in another language to the focused file', async () => {
+    const editor = {
+      document: {
+        uri: vscode.Uri.file('/workspace/src/index.ts'),
+        languageId: 'typescript',
+        isUntitled: false,
+        getText: () => '',
+        lineCount: 50,
+        lineAt: () => ({ text: '' }),
+      },
+      selection: new vscode.Selection(39, 0, 39, 0),
+      setDecorations: vi.fn(),
+    } as unknown as vscode.TextEditor;
+    vscode.window.activeTextEditor = editor;
+    const showDiff = vi.fn(() => ({ id: 'diff-1' }));
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      undefined,
+      context.workspaceState,
+      undefined,
+      { showDiff } as unknown as DiffDecorationProvider,
+    );
+    try {
+      await manager.handleMessage({
+        type: 'proposeDiff',
+        payload: { code: 'def parse(path):\n    return []', language: 'python' },
+      });
+    } finally {
+      vscode.window.activeTextEditor = undefined;
+    }
+
+    expect(showDiff).not.toHaveBeenCalled();
+    expect(posted).toContainEqual({
+      type: 'diffProposalFailed',
+      payload: { message: expect.stringContaining('does not belong in') },
+    });
   });
 
   it('leaves staged attachments for the user when a generated prompt is sent', async () => {

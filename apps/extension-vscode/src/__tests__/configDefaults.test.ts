@@ -11,6 +11,7 @@ interface PkgConfigContrib {
   description?: string;
   deprecationMessage?: string;
   readOnly?: boolean;
+  scope?: string;
 }
 
 interface ExtensionPackageJson {
@@ -54,7 +55,6 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   respectGitIgnore: 'agiWorkforce.respectGitIgnore',
   editorContextAutoAttach: 'agiWorkforce.editorContext.autoAttach',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
-  currentTier: 'agiWorkforce.currentTier',
   cliPath: 'agiWorkforce.cliPath',
   activateOnStartup: 'agiWorkforce.activateOnStartup',
   useTerminal: 'agiWorkforce.useTerminal',
@@ -108,6 +108,16 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
       .sort();
 
     expect([...SETTINGS_PANEL_SETTING_KEYS].sort()).toEqual(activeMutableKeys);
+  });
+
+  it.each([
+    'agiWorkforce.agent.mode',
+    'agiWorkforce.agent.effort',
+    'agiWorkforce.autoApplyFixes',
+    'agiWorkforce.memory.enabled',
+    'agiWorkforce.inlineCompletions.enabled',
+  ])('declares %s user-only and inherited by remote windows (application scope)', (key) => {
+    expect(pkgSettings[key]?.scope).toBe('application');
   });
 
   it('requires an explicit opt-in before sending editor context for inline completions', () => {

@@ -1,4 +1,5 @@
 import { settingsWithholdReason } from '../../data/contextExclusion';
+import { codeBlockTargetRefusal } from '../../platform/codeBlockTarget';
 import * as path from 'node:path';
 import { realpath } from 'node:fs/promises';
 import { resolveContained } from '@agiworkforce/utils/path-containment';
@@ -1879,12 +1880,17 @@ export class ChatStateManager {
           this._post({ type: 'diffProposalFailed', payload: { message } });
           break;
         }
+        const refusal = codeBlockTargetRefusal(editor.document, language, this._thread?.cwd);
+        if (refusal !== undefined) {
+          void vscode.window.showWarningMessage(refusal);
+          this._post({ type: 'diffProposalFailed', payload: { message: refusal } });
+          break;
+        }
         const selection = editor.selection;
         const range = selection.isEmpty
           ? new vscode.Range(editor.selection.active, editor.selection.active)
           : selection;
         const originalText = selection.isEmpty ? '' : editor.document.getText(selection);
-        void language;
 
         try {
           const filePath = vscode.workspace.asRelativePath(editor.document.uri);
@@ -4467,7 +4473,9 @@ export class ChatStateManager {
           project: activeProject ?? null,
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
-        const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
+        const memoryInput = buildMemoryContextInput(
+          (await getAccountMemoryStore()?.turnFacts()) ?? [],
+        );
         const editorContext = await withholdGitIgnoredContext(await request.editorContext);
         const contextFiles = await contextFilesForWorkspace(cwd, editorContext.contextFiles);
         const editorContextInputs: UserInput[] = editorContext.texts.map((text) => ({

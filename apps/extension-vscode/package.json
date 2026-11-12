@@ -1249,13 +1249,13 @@
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send."
+          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send. A workspace setting can turn this off, but only your user setting turns it on."
         },
         "agiWorkforce.respectGitIgnore": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "markdownDescription": "Leave files that git ignores out of `@` file search, and send only the path of an ignored file that is open in the editor. Takes effect while `#search.useIgnoreFiles#` is also on."
+          "markdownDescription": "Leave files that git ignores out of `@` file search, and send only the path of an ignored file that is open in the editor. Takes effect while `#search.useIgnoreFiles#` is also on. A workspace setting can turn this on, but only your user setting turns it off."
         },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
@@ -1270,6 +1270,7 @@
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
           "default": true,
+          "scope": "application",
           "description": "Include the memory facts saved to your AGI account with chat turns. Turn this off to stop sending them without deleting them; Code: Memory keeps showing what is stored.",
           "tags": [
             "usesOnlineServices"
@@ -1288,11 +1289,13 @@
         "agiWorkforce.autoApplyFixes": {
           "type": "boolean",
           "default": false,
+          "scope": "application",
           "description": "Automatically apply AI-suggested fixes without showing a diff"
         },
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
           "default": false,
+          "scope": "application",
           "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key.",
           "tags": [
             "usesOnlineServices"
@@ -1333,8 +1336,8 @@
             "Skip approval prompts for workspace/additional-directory, terminal, network-capable command, and configured MCP tool access. Selecting this requires a modal risk confirmation."
           ],
           "default": "auto",
-          "scope": "machine",
-          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is machine-scoped, and Bypass Permissions is confirmed per workspace."
+          "scope": "application",
+          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is a user setting that also applies in remote windows, and Bypass Permissions is confirmed per workspace."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",
@@ -1348,19 +1351,13 @@
             "max"
           ],
           "default": "medium",
-          "scope": "machine",
-          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis. Machine-scoped so a repository cannot raise it."
+          "scope": "application",
+          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis. A user setting, so a repository cannot raise it, and it also applies in remote windows."
         },
         "agiWorkforce.agent.thinking": {
           "type": "boolean",
           "default": false,
           "description": "Enable extended thinking for cloud-backed editor utilities such as Explain, Fix, diagnostics, and inline completion. This setting does not affect local @agi, sidebar, or editor developer sessions, whose reasoning effort is controlled by the Effort setting."
-        },
-        "agiWorkforce.currentTier": {
-          "type": "string",
-          "default": "unknown",
-          "readOnly": true,
-          "description": "Current subscription tier (read-only, populated on activation). Run 'Code: Show Tier Status' to see full usage details or visit agiworkforce.com/pricing to upgrade."
         },
         "agiWorkforce.activateOnStartup": {
           "type": "boolean",

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
@@ -331,6 +331,94 @@ describe('F19, the gate is wired to terminal.sendText, not just exported', () =>
 
     expect(await provider.suggestCommand('context', token())).toBeUndefined();
     expect(terminal.sendText).not.toHaveBeenCalled();
+  });
+});
+
+describe('which terminal a command is typed into', () => {
+  let started: ((event: vscode.TerminalShellExecutionStartEvent) => void) | undefined;
+  let ended: ((event: vscode.TerminalShellExecutionEndEvent) => void) | undefined;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vscode.workspace.isTrusted = true;
+    (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = [
+      { uri: vscode.Uri.file('/repo'), name: 'repo', index: 0 },
+    ];
+    vi.mocked(vscode.window.onDidStartTerminalShellExecution).mockImplementation(((
+      listener: (event: vscode.TerminalShellExecutionStartEvent) => void,
+    ) => {
+      started = listener;
+      return new vscode.Disposable(() => undefined);
+    }) as never);
+    vi.mocked(vscode.window.onDidEndTerminalShellExecution).mockImplementation(((
+      listener: (event: vscode.TerminalShellExecutionEndEvent) => void,
+    ) => {
+      ended = listener;
+      return new vscode.Disposable(() => undefined);
+    }) as never);
+  });
+
+  afterEach(() => {
+    vscode.window.terminals = [];
+    (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = undefined;
+    vi.mocked(vscode.window.createTerminal).mockImplementation(
+      () => ({ show: vi.fn(), sendText: vi.fn(), dispose: vi.fn() }) as never,
+    );
+    vi.mocked(vscode.window.onDidStartTerminalShellExecution).mockImplementation(
+      () => new vscode.Disposable(() => undefined),
+    );
+    vi.mocked(vscode.window.onDidEndTerminalShellExecution).mockImplementation(
+      () => new vscode.Disposable(() => undefined),
+    );
+  });
+
+  function codeTerminal(cwd = '/repo') {
+    return {
+      name: PRODUCT_NAMES.code,
+      show: vi.fn(),
+      sendText: vi.fn(),
+      dispose: vi.fn(),
+      creationOptions: { name: PRODUCT_NAMES.code, cwd: vscode.Uri.file(cwd) },
+    };
+  }
+
+  it('opens a new terminal instead of typing into a running program, then reuses the idle one', () => {
+    const busy = codeTerminal();
+    const fresh = codeTerminal();
+    vscode.window.terminals = [busy];
+    vi.mocked(vscode.window.createTerminal).mockImplementation((() => {
+      vscode.window.terminals = [busy, fresh];
+      return fresh;
+    }) as never);
+    const provider = new TerminalProvider({} as vscode.SecretStorage);
+    const execution = { read: () => (async function* () {})() };
+    started?.({ terminal: busy, execution, shellIntegration: {} } as never);
+
+    provider.runCommand('agi login openai');
+
+    expect(busy.sendText).not.toHaveBeenCalled();
+    expect(fresh.sendText).toHaveBeenCalledWith('agi login openai');
+
+    ended?.({ terminal: busy, execution, exitCode: 0, shellIntegration: {} } as never);
+    vscode.window.terminals = [busy];
+    provider.runCommand('git status');
+    expect(busy.sendText).toHaveBeenCalledWith('git status');
+  });
+
+  it('does not reuse a terminal opened in another workspace folder', () => {
+    const elsewhere = codeTerminal('/other-root');
+    const fresh = codeTerminal();
+    vscode.window.terminals = [elsewhere];
+    vi.mocked(vscode.window.createTerminal).mockReturnValue(fresh as never);
+    const provider = new TerminalProvider({} as vscode.SecretStorage);
+
+    provider.runCommand('git status');
+
+    expect(elsewhere.sendText).not.toHaveBeenCalled();
+    expect(fresh.sendText).toHaveBeenCalledWith('git status');
+    expect(vscode.window.createTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: vscode.Uri.file('/repo') }),
+    );
   });
 });
 
