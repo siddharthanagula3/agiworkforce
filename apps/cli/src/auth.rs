@@ -403,6 +403,15 @@ fn first_removal_failure(failures: Vec<(String, anyhow::Error)>) -> Result<()> {
     Ok(())
 }
 
+// Only an index this root wrote, or a legacy one it adopts on load, proves which
+// accounts in its keychain service are its own to delete.
+fn index_owned_by(index: &AuthKeyringIndex, credentials: &dyn CredentialStore) -> bool {
+    match index.scope.as_deref() {
+        Some(scope) => scope == credentials.scope(),
+        None => index.version == 1,
+    }
+}
+
 fn write_keyring_auth(
     credentials: &dyn CredentialStore,
     path: &Path,
@@ -412,6 +421,7 @@ fn write_keyring_auth(
     let previous_providers = std::fs::read_to_string(path)
         .ok()
         .and_then(|data| parse_auth_keyring_index(&data))
+        .filter(|index| index_owned_by(index, credentials))
         .map(|index| {
             index
                 .providers
@@ -647,7 +657,15 @@ impl AuthStore {
             Ok(true) if replacing => self.save_replacing_unlocked(kept)?,
             Ok(true) => self.save_unlocked()?,
             Ok(false) => {}
-            Err(_) if replacing => {}
+            Err(error) if replacing => {
+                let aside = set_aside_unreadable(&legacy)?;
+                crate::output::print_warn(&format!(
+                    "{} could not be used ({error:#}), so it was moved to {} and is no longer read. Delete it once you no longer need it.",
+                    legacy.display(),
+                    aside.display()
+                ));
+                return Ok(());
+            }
             Err(error) => return Err(error),
         }
         std::fs::remove_file(&legacy).context("Failed to remove the migrated credential")
@@ -707,32 +725,62 @@ impl AuthStore {
     }
 
     fn save_replacing_unlocked(&self, kept: &BTreeSet<String>) -> Result<()> {
-        let left_in_store = if crate::secure_store::uses_keychain() {
-            let dir = crate::config::CliConfig::config_dir()?;
-            std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
-            write_keyring_auth(&OsKeyring::for_config_root()?, &auth_path()?, self, kept)
-                .context(KEYRING_SAVE_REFUSED)?
-        } else {
+        if !crate::secure_store::uses_keychain() {
             self.save_unlocked()?;
-            kept.iter()
-                .map(|provider| {
-                    (
-                        provider.clone(),
-                        anyhow::anyhow!(
-                            "the owner-only credential file cannot keep a credential it could not read"
-                        ),
-                    )
-                })
-                .collect()
-        };
-        for (provider, error) in left_in_store {
-            crate::output::print_warn(&format!(
-                "{provider} is signed out here, and the OS credential store still holds its saved credential ({error:#}). Run `{}` to use it again.",
-                sign_in_command(&provider)
-            ));
+            for provider in kept {
+                crate::output::print_warn(&dropped_from_file_store(provider));
+            }
+            return Ok(());
+        }
+        let dir = crate::config::CliConfig::config_dir()?;
+        std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
+        let undeleted =
+            write_keyring_auth(&OsKeyring::for_config_root()?, &auth_path()?, self, kept)
+                .context(KEYRING_SAVE_REFUSED)?;
+        for (provider, error) in undeleted {
+            crate::output::print_warn(&kept_by_keychain(&provider, &error));
         }
         Ok(())
     }
+}
+
+fn dropped_from_file_store(provider: &str) -> String {
+    format!(
+        "{provider} is signed out here: its saved credential could not be read, and the owner-only credential file cannot keep a credential it could not read. Run `{}` to enter it again.",
+        sign_in_command(provider)
+    )
+}
+
+fn kept_by_keychain(provider: &str, error: &anyhow::Error) -> String {
+    format!(
+        "{provider} is signed out here, but the OS credential store would not delete its saved credential ({error:#}). The next saved sign-in tries again."
+    )
+}
+
+fn set_aside_unreadable(path: &Path) -> Result<PathBuf> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("credential");
+    let aside = path.with_file_name(format!(
+        "{name}.unreadable-{}",
+        chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ")
+    ));
+    std::fs::rename(path, &aside)
+        .with_context(|| format!("Could not move the unreadable {} aside", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&aside, std::fs::Permissions::from_mode(0o600)).with_context(
+            || {
+                format!(
+                    "Moved the unreadable credential file to {}, but could not make it owner-only",
+                    aside.display()
+                )
+            },
+        )?;
+    }
+    Ok(aside)
 }
 
 const KEYRING_SAVE_REFUSED: &str = "Could not persist credentials in the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to use an owner-only file";
@@ -2479,6 +2527,70 @@ mod tests {
         let loaded = load_keyring_auth_for_root(&keyring, &unscoped, &path, index, false)
             .expect("this root reads its own index again");
         assert_eq!(loaded.entries.get("agiworkforce"), Some(&fresh_grant()));
+        assert!(
+            keyring
+                .get(&auth_keyring_account("openai"))
+                .unwrap()
+                .is_some(),
+            "an entry only another root's index named is never deleted from this root's service"
+        );
+    }
+
+    #[test]
+    fn only_this_roots_own_index_proves_which_entries_it_may_delete() {
+        let keyring = MemoryStore::default();
+        let index = |version: u8, scope: Option<&str>| AuthKeyringIndex {
+            version,
+            storage: AUTH_INDEX_STORAGE.to_string(),
+            providers: vec!["openai".to_string()],
+            removing: Vec::new(),
+            scope: scope.map(str::to_string),
+        };
+        assert!(index_owned_by(
+            &index(AUTH_INDEX_VERSION, Some(keyring.scope())),
+            &keyring
+        ));
+        assert!(index_owned_by(&index(1, None), &keyring));
+        assert!(!index_owned_by(
+            &index(AUTH_INDEX_VERSION, Some("another-config-root")),
+            &keyring
+        ));
+    }
+
+    #[test]
+    fn a_legacy_credential_file_that_cannot_be_used_is_moved_aside_not_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("auth.toml");
+        std::fs::write(&legacy, "not a credential").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&legacy, std::fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        let aside = set_aside_unreadable(&legacy).expect("set aside");
+
+        assert!(!legacy.exists());
+        assert_eq!(aside.parent(), legacy.parent());
+        assert!(aside
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("auth.toml.unreadable-")));
+        assert_eq!(std::fs::read_to_string(&aside).unwrap(), "not a credential");
+        assert!(check_file_permissions_secure(&aside));
+    }
+
+    #[test]
+    fn a_sign_out_warning_says_where_the_credential_really_is() {
+        let file = dropped_from_file_store("openai");
+        assert!(!file.contains("still holds"), "{file}");
+        assert!(file.contains("`agi login openai`"), "{file}");
+        let keychain = kept_by_keychain(
+            "openai",
+            &anyhow::anyhow!("the OS credential store denied access"),
+        );
+        assert!(keychain.contains("would not delete"), "{keychain}");
+        assert!(keychain.contains("denied access"), "{keychain}");
     }
 
     #[test]

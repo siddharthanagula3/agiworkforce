@@ -8718,6 +8718,7 @@ async fn build_mcp_manager_inner(
         return Ok(None);
     }
 
+    let mut mcp_mgr = mcp::McpManager::new();
     mcp_mgr.start_servers_in(
         project
             .map(std::path::Path::to_path_buf)
