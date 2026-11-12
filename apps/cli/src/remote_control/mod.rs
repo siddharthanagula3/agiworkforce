@@ -129,6 +129,14 @@ fn backoff(attempt: u32) -> Duration {
     (RECONNECT_BASE * 2u32.saturating_pow(attempt.min(5))).min(RECONNECT_MAX)
 }
 
+fn attempt_after_drop(attempt: u32, connected_for: Duration) -> u32 {
+    if connected_for >= RECONNECT_MAX {
+        1
+    } else {
+        attempt.saturating_add(1)
+    }
+}
+
 type Socket = WebSocketStream<reqwest::Upgraded>;
 
 struct Pairing {
@@ -787,6 +795,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
                 continue;
             }
         };
+        let connected_at = std::time::Instant::now();
         match relay.serve(&stop, socket, &mut notifications).await {
             SessionEnd::Stopped => {
                 paired_end_sent = true;
@@ -794,7 +803,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
             }
             SessionEnd::Ended(reason) => break Err(anyhow!("Remote Control stopped: {reason}")),
             SessionEnd::Dropped => {
-                attempt += 1;
+                attempt = attempt_after_drop(attempt, connected_at.elapsed());
                 relay.dispatch = None;
                 relay.code_host.reset();
                 status(RemoteControlStatus::Reconnecting);
@@ -825,6 +834,24 @@ mod tests {
     use super::*;
 
     const PROMPT: Duration = Duration::from_millis(500);
+
+    #[test]
+    fn a_drop_after_a_settled_connection_waits_the_short_delay_again() {
+        let mut attempt = 0;
+        for _ in 0..6 {
+            attempt = attempt_after_drop(attempt, Duration::from_secs(1));
+        }
+        assert_eq!(backoff(attempt), RECONNECT_MAX);
+
+        attempt = attempt_after_drop(attempt, RECONNECT_MAX);
+        assert_eq!(backoff(attempt), RECONNECT_BASE * 2);
+
+        assert_eq!(
+            backoff(attempt_after_drop(attempt, Duration::from_secs(1))),
+            RECONNECT_BASE * 4,
+            "a relay that drops straight after connecting must still back off"
+        );
+    }
 
     fn notification(
         method: &str,

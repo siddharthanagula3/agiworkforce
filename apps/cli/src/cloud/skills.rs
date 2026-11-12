@@ -60,6 +60,16 @@ pub fn account_skills_dir(config_dir: &Path) -> PathBuf {
     config_dir.join(ACCOUNT_SKILLS_DIR)
 }
 
+pub const ACCOUNT_SKILLS_STAMP: &str = ".synced";
+
+pub fn account_skills_belong_to(dir: &Path, owner: Option<&str>) -> bool {
+    let Some(owner) = owner.map(str::trim).filter(|owner| !owner.is_empty()) else {
+        return false;
+    };
+    std::fs::read_to_string(dir.join(ACCOUNT_SKILLS_STAMP))
+        .is_ok_and(|stamped| stamped.trim() == owner)
+}
+
 /// The name becomes a folder name, so it must be one plain path component.
 fn safe_skill_name(name: &str) -> bool {
     !name.is_empty()
@@ -263,6 +273,21 @@ mod tests {
             std::fs::read(dir.path().join("pdf-forms/scripts/run.sh")).unwrap(),
             b"echo hi\n"
         );
+    }
+
+    #[test]
+    fn account_skills_load_only_for_the_account_that_synced_them() {
+        let dir = tempfile::tempdir().unwrap();
+        write_account_skills(dir.path(), &[skill("kept", "---\nname: kept\n---\n")]).unwrap();
+        assert!(!account_skills_belong_to(dir.path(), Some("account-a")));
+
+        std::fs::write(dir.path().join(ACCOUNT_SKILLS_STAMP), b"").unwrap();
+        assert!(!account_skills_belong_to(dir.path(), Some("account-a")));
+
+        std::fs::write(dir.path().join(ACCOUNT_SKILLS_STAMP), b"account-a").unwrap();
+        assert!(account_skills_belong_to(dir.path(), Some("account-a")));
+        assert!(!account_skills_belong_to(dir.path(), Some("account-b")));
+        assert!(!account_skills_belong_to(dir.path(), None));
     }
 
     #[test]

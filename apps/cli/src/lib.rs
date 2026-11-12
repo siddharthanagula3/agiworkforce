@@ -2641,11 +2641,12 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         teleported.branch,
         teleported.remote,
     );
+    let shown_title = terminal_text::sanitize_terminal_text(&title);
     let loaded = match &imported {
         sessions::HostedImport::KeptLocal => format!(
-            "kept this computer's copy of '{title}', which already holds every cloud turn plus the work you did here"
+            "kept this computer's copy of '{shown_title}', which already holds every cloud turn plus the work you did here"
         ),
-        _ => format!("loaded '{title}' ({} turns)", detail.turns.len()),
+        _ => format!("loaded '{shown_title}' ({} turns)", detail.turns.len()),
     };
     eprintln!(
         "{checked_out} and {loaded}. New work here stays on this computer; push the branch to share it."
@@ -2656,6 +2657,15 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         );
     }
     Ok(local_id)
+}
+
+fn code_session_choice(index: usize, session: &cloud::code_sessions::CodeSession) -> String {
+    format!(
+        "  {}. {}  {}",
+        index + 1,
+        terminal_text::sanitize_terminal_text(&cloud::code_teleport::title(session)),
+        terminal_text::sanitize_terminal_text(session.working_branch.as_deref().unwrap_or(""))
+    )
 }
 
 async fn pick_code_session(client: &cloud::CloudClient) -> Result<String> {
@@ -2691,12 +2701,7 @@ async fn pick_code_session(client: &cloud::CloudClient) -> Result<String> {
         );
     }
     for (index, session) in sessions.iter().enumerate() {
-        eprintln!(
-            "  {}. {}  {}",
-            index + 1,
-            cloud::code_teleport::title(session),
-            session.working_branch.as_deref().unwrap_or("")
-        );
+        eprintln!("{}", code_session_choice(index, session));
     }
     eprint!("Teleport which session? ");
     std::io::stderr().flush()?;
@@ -2835,15 +2840,14 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
             workspace_root: None,
         },
     )?;
+    let shown_title = terminal_text::sanitize_terminal_text(&conversation.title);
     if adoption == sessions::HostedAdoption::Kept {
         eprintln!(
-            "Resuming '{}'. This device already has everything your account holds for it.",
-            conversation.title
+            "Resuming '{shown_title}'. This device already has everything your account holds for it."
         );
     } else {
         eprintln!(
-            "Resuming '{}' from your account ({} messages).",
-            conversation.title,
+            "Resuming '{shown_title}' from your account ({} messages).",
             conversation.messages.len()
         );
     }
@@ -3125,11 +3129,12 @@ async fn handle_code_handoff(
     }
     let local =
         code_push::local_session(session, &std::env::current_dir()?).map_err(anyhow::Error::msg)?;
+    code_push::admit(&local).map_err(anyhow::Error::msg)?;
     let model = cloud_code_model(config, model).await?;
     let access = code_handoff::repository_access(client, &checkout.full_name)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
-    let review = code_handoff::review(&checkout, &access, &model, client.base());
+    let review = code_handoff::handoff_review(&checkout, &access, &model, client.base());
     let title = local
         .title
         .clone()
@@ -9313,6 +9318,21 @@ pub async fn run_oneshot(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_cloud_session_title_or_branch_cannot_write_escape_sequences_to_the_terminal() {
+        let session: cloud::code_sessions::CodeSession =
+            serde_json::from_value(serde_json::json!({
+                "id": "s1",
+                "title": "Fix login\u{1b}]52;c;cm0gLXJmIH4K\u{07}\u{1b}[2A",
+                "workingBranch": "fix\u{1b}[31m-login",
+            }))
+            .expect("session");
+        let line = code_session_choice(0, &session);
+        assert!(!line.contains('\u{1b}'), "{line:?}");
+        assert!(!line.contains('\u{07}'), "{line:?}");
+        assert!(line.contains("Fix login"));
+    }
 
     #[tokio::test]
     async fn resume_and_fork_open_the_interactive_session_with_the_given_flags() {

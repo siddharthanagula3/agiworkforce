@@ -316,8 +316,22 @@ fn listed(paths: &[String]) -> String {
 }
 
 pub fn review(checkout: &Checkout, access: &Access, model: &str, base: &str) -> Review {
+    review_of(checkout, access, model, base, false)
+}
+
+pub fn handoff_review(checkout: &Checkout, access: &Access, model: &str, base: &str) -> Review {
+    review_of(checkout, access, model, base, true)
+}
+
+fn review_of(
+    checkout: &Checkout,
+    access: &Access,
+    model: &str,
+    base: &str,
+    handing_off: bool,
+) -> Review {
     let short_commit: String = checkout.remote_commit.chars().take(7).collect();
-    let moves = vec![
+    let mut moves = vec![
         format!(
             "{} on GitHub at {}, as GitHub has it ({short_commit} as of your last fetch)",
             checkout.full_name, checkout.branch
@@ -328,6 +342,13 @@ pub fn review(checkout: &Checkout, access: &Access, model: &str, base: &str) -> 
             crate::model_catalog::display_name(model)
         ),
     ];
+    if handing_off {
+        moves.push(
+            "this session's handoff record: its goal, the approvals you gave, its plan and \
+             architecture notes, the files it changed, the checks it ran and this folder's path"
+                .to_string(),
+        );
+    }
     let mut stays = Vec::new();
     if checkout.unpushed_commits > 0 {
         stays.push(format!(
@@ -358,10 +379,14 @@ pub fn review(checkout: &Checkout, access: &Access, model: &str, base: &str) -> 
             listed(&checkout.untracked_files)
         ));
     }
-    stays.push(
+    stays.push(if handing_off {
+        "the rest of this session's conversation, this terminal's other conversations, \
+         environment variables, MCP servers and local settings"
+            .to_string()
+    } else {
         "this terminal's conversations, environment variables, MCP servers and local settings"
-            .to_string(),
-    );
+            .to_string()
+    });
     let access = match access {
         Access::Installation {
             full_name, private, ..
@@ -546,4 +571,53 @@ pub fn render_session(session: &CodeSession, remote: &str, url: &str) -> String 
         ));
     }
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn checkout() -> Checkout {
+        Checkout {
+            full_name: "acme/widgets".to_string(),
+            remote: "origin".to_string(),
+            branch: "main".to_string(),
+            remote_commit: "0123456789abcdef".to_string(),
+            unpushed_commits: 0,
+            changed_files: Vec::new(),
+            untracked_files: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_handoff_review_names_the_session_record_it_uploads() {
+        let handoff = handoff_review(
+            &checkout(),
+            &Access::PublicClone,
+            "fixture-model",
+            "https://example.test",
+        );
+        assert!(handoff
+            .moves
+            .iter()
+            .any(|line| line.contains("handoff record") && line.contains("approvals")));
+        assert!(
+            !handoff
+                .stays
+                .iter()
+                .any(|line| line.starts_with("this terminal's conversations")),
+            "the review says the session stays on this machine while it is uploaded"
+        );
+
+        let start = review(
+            &checkout(),
+            &Access::PublicClone,
+            "fixture-model",
+            "https://example.test",
+        );
+        assert!(!start
+            .moves
+            .iter()
+            .any(|line| line.contains("handoff record")));
+    }
 }

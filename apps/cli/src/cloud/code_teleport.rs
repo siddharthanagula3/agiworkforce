@@ -43,10 +43,18 @@ pub fn history(detail: &CodeSessionDetail) -> Vec<Message> {
     messages
 }
 
+fn private_hooks_dir() -> Result<tempfile::TempDir, String> {
+    tempfile::Builder::new()
+        .prefix("agi-teleport-no-hooks-")
+        .tempdir()
+        .map_err(|error| {
+            format!("Could not make a private folder to keep the repository's hooks off: {error}")
+        })
+}
+
 fn git_without_hooks(args: &[&str]) -> Result<String, String> {
-    let no_hooks =
-        std::env::temp_dir().join(format!("agi-teleport-no-hooks-{}", std::process::id()));
-    let hooks_setting = format!("core.hooksPath={}", no_hooks.display());
+    let no_hooks = private_hooks_dir()?;
+    let hooks_setting = format!("core.hooksPath={}", no_hooks.path().display());
     let mut full = vec!["-c", hooks_setting.as_str()];
     full.extend_from_slice(args);
     git(&full)
@@ -235,6 +243,26 @@ mod tests {
                 error.contains("is not a valid branch name"),
                 "{branch:?} reached git: {error}"
             );
+        }
+    }
+
+    #[test]
+    fn the_hooks_folder_is_new_empty_private_and_not_named_by_the_process_id() {
+        let first = private_hooks_dir().expect("hooks folder");
+        let second = private_hooks_dir().expect("hooks folder");
+        assert_ne!(first.path(), second.path());
+        let predictable =
+            std::env::temp_dir().join(format!("agi-teleport-no-hooks-{}", std::process::id()));
+        assert_ne!(first.path(), predictable.as_path());
+        assert_eq!(std::fs::read_dir(first.path()).expect("listing").count(), 0);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(first.path())
+                .expect("metadata")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o077, 0, "another user can write the hooks folder");
         }
     }
 

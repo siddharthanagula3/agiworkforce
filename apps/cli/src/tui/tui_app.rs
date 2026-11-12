@@ -616,6 +616,7 @@ struct TuiApp {
 }
 
 struct RemoteLink {
+    thread_id: String,
     host: Arc<crate::tui::remote_host::TuiRemoteHost>,
     inbox: tokio::sync::mpsc::UnboundedReceiver<crate::tui::remote_host::RemoteInput>,
     stop: tokio::sync::watch::Sender<bool>,
@@ -4330,6 +4331,7 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
         role: ChatRole::System,
         text,
     });
+    release_unbound_remote_control(app);
 }
 
 fn open_checkpoint_picker(app: &mut TuiApp) {
@@ -4750,7 +4752,7 @@ fn start_remote_control(app: &mut TuiApp) -> String {
             )
         }
     };
-    let (host, inbox) = crate::tui::remote_host::TuiRemoteHost::new(inner, thread_id);
+    let (host, inbox) = crate::tui::remote_host::TuiRemoteHost::new(inner, thread_id.clone());
     let (stop, stopped) = tokio::sync::watch::channel(false);
     let status = Arc::new(std::sync::Mutex::new(None));
     let sink = Arc::clone(&status);
@@ -4795,6 +4797,7 @@ fn start_remote_control(app: &mut TuiApp) -> String {
         });
     });
     app.remote = Some(RemoteLink {
+        thread_id,
         host,
         inbox,
         stop,
@@ -4809,11 +4812,31 @@ fn stop_remote_control(app: &mut TuiApp) -> String {
     app.remote_label = None;
     match app.remote.take() {
         Some(link) => {
+            link.host.close();
             let _ = link.stop.send(true);
             "Stopping Remote Control; the phone can no longer reach this session.".to_string()
         }
         None => "Remote Control is not on.".to_string(),
     }
+}
+
+fn release_unbound_remote_control(app: &mut TuiApp) -> bool {
+    let Some(link) = app.remote.as_ref() else {
+        return false;
+    };
+    let bound = app.session.managed_session_id() == Some(link.thread_id.as_str())
+        && crate::cloud::CloudClient::admit(app.session.privacy_mode).is_ok();
+    if bound {
+        return false;
+    }
+    stop_remote_control(app);
+    app.remote_prompts.clear();
+    app.remote_turn_ids.clear();
+    app.chat_messages.push(ChatMessage {
+        role: ChatRole::System,
+        text: "Remote Control stopped: this terminal moved to another session or out of Managed mode, so the phone can no longer see or control it.".to_string(),
+    });
+    true
 }
 
 fn drain_remote_control(app: &mut TuiApp) {
@@ -4825,6 +4848,12 @@ fn drain_remote_control(app: &mut TuiApp) {
         app.remote_label = None;
         return;
     }
+    if release_unbound_remote_control(app) {
+        return;
+    }
+    let Some(link) = app.remote.as_mut() else {
+        return;
+    };
     while let Ok(input) = link.inbox.try_recv() {
         link.host.receive(&mut app.remote_prompts, input);
     }
@@ -7003,6 +7032,7 @@ pub async fn run(
         handle.abort();
     }
     if let Some(link) = app.remote.take() {
+        link.host.close();
         let _ = link.stop.send(true);
         let _ = tokio::time::timeout(std::time::Duration::from_secs(3), link.task).await;
     }
@@ -8036,6 +8066,7 @@ async fn send_message_with_prompt(
         });
         app.session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
     }
+    release_unbound_remote_control(app);
     let remote_host = app.remote.as_ref().map(|link| Arc::clone(&link.host));
     let claimed_remote_turns = std::mem::take(&mut app.remote_turn_ids);
     if let Some(host) = &remote_host {
@@ -8624,6 +8655,88 @@ mod tests {
             .chat_messages
             .iter()
             .any(|message| message.text.contains("Resumed session empty-target")));
+    }
+
+    fn attach_remote(
+        app: &mut TuiApp,
+        thread_id: &str,
+        workspace: &std::path::Path,
+        store: &std::path::Path,
+    ) -> (
+        Arc<crate::tui::remote_host::TuiRemoteHost>,
+        tokio::sync::broadcast::Receiver<
+            agiworkforce_protocol::developer_session::AppServerNotification,
+        >,
+    ) {
+        let inner = crate::app_server::CliDeveloperSessionHost::new_with_store(
+            crate::config::CliConfig::default(),
+            workspace.to_path_buf(),
+            crate::runtime::session_control::ManagedSessionStore::new(store.to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let (host, inbox) =
+            crate::tui::remote_host::TuiRemoteHost::new(inner, thread_id.to_string());
+        let events = agiworkforce_app_server::DeveloperSessionHost::subscribe(&*host);
+        let (stop, _) = tokio::sync::watch::channel(false);
+        app.remote = Some(RemoteLink {
+            thread_id: thread_id.to_string(),
+            host: Arc::clone(&host),
+            inbox,
+            stop,
+            status: Arc::new(std::sync::Mutex::new(None)),
+            task: tokio::spawn(std::future::pending::<()>()),
+        });
+        (host, events)
+    }
+
+    #[tokio::test]
+    async fn remote_control_stops_when_the_terminal_leaves_the_session_it_shares() {
+        use crate::agent::PrivacyMode;
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        let mut app = minimal_app();
+        app.session.set_privacy_mode(PrivacyMode::Managed);
+        app.session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+            "shared",
+            chrono::Utc::now(),
+        ));
+
+        let (host, mut events) = attach_remote(&mut app, "shared", workspace.path(), store.path());
+        drain_remote_control(&mut app);
+        assert!(
+            app.remote.is_some(),
+            "the shared session itself was cut off"
+        );
+
+        app.session.set_privacy_mode(PrivacyMode::Local);
+        drain_remote_control(&mut app);
+        assert!(app.remote.is_none(), "a Local session stayed shared");
+        assert!(app
+            .chat_messages
+            .iter()
+            .any(|message| message.text.starts_with("Remote Control stopped")));
+        host.begin_turn(
+            crate::tui::approval_broker::ApprovalBroker::new(),
+            Vec::new(),
+        );
+        host.output("a reply in the Local session");
+        assert!(
+            events.try_recv().is_err(),
+            "the Local session's turn reached the phone"
+        );
+
+        app.session.set_privacy_mode(PrivacyMode::Managed);
+        let _attached = attach_remote(&mut app, "shared", workspace.path(), store.path());
+        app.session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+            "resumed",
+            chrono::Utc::now(),
+        ));
+        assert!(release_unbound_remote_control(&mut app));
+        assert!(
+            app.remote.is_none(),
+            "another session went out under the shared one"
+        );
     }
 
     fn quiet_chrome() -> FrameChrome<'static> {
