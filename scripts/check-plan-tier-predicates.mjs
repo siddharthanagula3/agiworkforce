@@ -120,6 +120,10 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
     why: 'account deletion cancels the subscription the user owns',
   },
   {
+    path: 'apps/web/lib/server/account-deletion-plan-renewal.ts',
+    why: 'undoing a deletion restores renewal on the subscription the user owns',
+  },
+  {
     path: 'apps/web/lib/server/spendable-credits.ts',
     why: 'purchased credits and the overage opt-in live on the payer’s own row',
   },
