@@ -108,15 +108,17 @@ describe('sidebar recent conversations', () => {
     expect(recentsPayload(posted)).toEqual({ total: 0, conversations: [] });
   });
 
-  it('opens a clicked conversation through the shared open-conversation command', async () => {
+  it('opens a clicked conversation in the chat it was clicked in, not the sidebar', async () => {
     const { manager } = makeManager(async () => THREADS);
+    const resume = vi.spyOn(manager, 'resumeConversation').mockResolvedValue(true);
 
     await manager.handleMessage({
       type: 'openRecentConversation',
       payload: { threadId: 'thread-b' },
     });
 
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+    expect(resume).toHaveBeenCalledWith('thread-b');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
       'agi-workforce.openConversation',
       'thread-b',
     );

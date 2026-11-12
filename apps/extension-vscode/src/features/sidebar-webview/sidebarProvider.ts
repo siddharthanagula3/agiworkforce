@@ -53,6 +53,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       localRuntimes,
       diffDecorationProvider,
     );
+    this._stateManager.bindRestoreKey('sidebar', true);
   }
 
   public resolveWebviewView(

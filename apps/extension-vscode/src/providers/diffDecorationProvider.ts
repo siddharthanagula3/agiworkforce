@@ -262,9 +262,20 @@ export class DiffDecorationProvider implements vscode.Disposable {
     this._disposables.push(
       vscode.window.onDidChangeActiveTextEditor((e) => {
         if (e !== undefined) this._applyDecorationsToEditor(e);
+        this._syncCursorContext();
       }),
+      vscode.window.onDidChangeTextEditorSelection(() => this._syncCursorContext()),
       vscode.workspace.onDidCloseTextDocument((doc) => this._clearSessionsForUri(doc.uri)),
     );
+  }
+
+  private _diffUnderCursor = false;
+
+  private _syncCursorContext(): void {
+    const underCursor = this.currentSession() !== undefined;
+    if (underCursor === this._diffUnderCursor) return;
+    this._diffUnderCursor = underCursor;
+    void vscode.commands.executeCommand('setContext', 'agi-workforce.diffUnderCursor', underCursor);
   }
 
   showDiff(
@@ -335,6 +346,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
     editor.setDecorations(this._removedGutter, removedGutterOpts);
     this.codeLensProvider.refresh(this._activeDiffs);
     void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', true);
+    this._syncCursorContext();
     return session;
   }
 
@@ -431,6 +443,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
     }
     this.codeLensProvider.refresh(this._activeDiffs);
     void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', true);
+    this._syncCursorContext();
     return restored;
   }
 
@@ -441,16 +454,11 @@ export class DiffDecorationProvider implements vscode.Disposable {
     if (sessions.length === 0) return undefined;
 
     const cursorLine = editor.selection.active.line;
-    let closest: DiffSession | undefined;
-    let minDist = Infinity;
-    for (const s of sessions) {
-      const dist = Math.abs(s.range.start.line - cursorLine);
-      if (dist < minDist) {
-        minDist = dist;
-        closest = s;
-      }
-    }
-    return closest;
+    return sessions.find(
+      (session) =>
+        session.range.start.line <= cursorLine &&
+        cursorLine <= Math.max(session.range.start.line, session.range.end.line),
+    );
   }
 
   async acceptCurrentDiff(): Promise<boolean> {
@@ -573,6 +581,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
     if (this._activeDiffs.size === 0) {
       void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', false);
     }
+    this._syncCursorContext();
   }
 
   private _clearSessionsForUri(uri: vscode.Uri): void {
@@ -587,6 +596,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
     if (this._activeDiffs.size === 0) {
       void vscode.commands.executeCommand('setContext', 'agi-workforce.hasDiff', false);
     }
+    this._syncCursorContext();
   }
 
   private _applyDecorationsToEditor(editor: vscode.TextEditor): void {

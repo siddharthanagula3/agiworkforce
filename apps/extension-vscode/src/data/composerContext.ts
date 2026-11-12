@@ -6,6 +6,7 @@ import { Config } from '../platform/config';
 import { tPlural } from '../l10n';
 import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
 import { latestTerminalOutput } from './terminalOutput';
+import { workingTextEditor } from '../platform/lastTextEditor';
 import {
   isGitIgnored,
   settingsWithholdReason,
@@ -409,7 +410,7 @@ export async function withholdGitIgnoredContext(
 export async function captureEditorContext(
   dismissed: ReadonlySet<string>,
 ): Promise<EditorContextSnapshot> {
-  const editor = vscode.window.activeTextEditor;
+  const editor = workingTextEditor();
   if (editor === undefined || !Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
   const relative = vscode.workspace.asRelativePath(editor.document.uri);
   const keepFile = !dismissed.has(editorContextChipId('active-file', relative));

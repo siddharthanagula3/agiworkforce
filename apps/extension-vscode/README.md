@@ -62,8 +62,10 @@ traversal, symlinks, folders, and sensitive filenames before anything is sent,
 and the current editor selection can be included as context.
 
 **Reviewable edits.** Proposed changes open in VS Code's native diff view.
-Accept or reject per hunk, per file, or globally. `Ctrl/Cmd+Shift+A` accepts
-and `Ctrl/Cmd+Shift+R` rejects the diff under the cursor.
+Accept or reject per hunk, per file, or globally. While the cursor is inside a
+proposed change, `Ctrl/Cmd+Shift+A` or `Ctrl/Cmd+Shift+Enter` accepts it and
+`Ctrl/Cmd+Shift+R` or `Escape` rejects it. Anywhere else these keys keep their
+usual meaning.
 `agiWorkforce.autoApplyFixes` is off by default.
 
 **Agent modes with explicit approval.** `ask` confirms edits and commands.

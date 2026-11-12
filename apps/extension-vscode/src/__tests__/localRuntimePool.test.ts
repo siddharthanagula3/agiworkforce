@@ -42,7 +42,7 @@ describe('LocalRuntimePool', () => {
     await pool.retainWorkspaces(['/workspace/a']);
 
     expect(clients[0]?.dispose).not.toHaveBeenCalled();
-    expect(clients[1]?.dispose).toHaveBeenCalledOnce();
+    expect(clients[1]?.dispose).toHaveBeenCalledWith(expect.stringContaining('b was closed'));
     expect(pool.forWorkspace('/workspace/a')).toBe(kept);
     expect(pool.forWorkspace('/workspace/b')).not.toBe(clients[1]);
   });
@@ -72,6 +72,36 @@ describe('LocalRuntimePool', () => {
     expect(after).toBe(before);
     expect(clients).toHaveLength(1);
     expect(result).toEqual({ restartedWorkspaces: 1 });
+    await pool.shutdownAll();
+  });
+
+  it('disposes only the workspace processes whose restart failed', async () => {
+    const clients: Array<{
+      cwd: string;
+      restart: ReturnType<typeof vi.fn>;
+      dispose: ReturnType<typeof vi.fn>;
+    }> = [];
+    const pool = new LocalRuntimePool((cwd) => {
+      const client = {
+        cwd,
+        requiresPermissionRestart: () => false,
+        restart: vi.fn(async () => {
+          if (cwd.endsWith('broken')) throw new Error('restart failed');
+        }),
+        dispose: vi.fn(async () => undefined),
+      };
+      clients.push(client);
+      return client;
+    });
+    const healthy = pool.forWorkspace('/workspace/healthy');
+    const broken = pool.forWorkspace('/workspace/broken');
+
+    await expect(pool.restartAll()).rejects.toThrow('restart failed');
+
+    expect(clients[0]?.dispose).not.toHaveBeenCalled();
+    expect(clients[1]?.dispose).toHaveBeenCalledOnce();
+    expect(pool.forWorkspace('/workspace/healthy')).toBe(healthy);
+    expect(pool.forWorkspace('/workspace/broken')).not.toBe(broken);
     await pool.shutdownAll();
   });
 

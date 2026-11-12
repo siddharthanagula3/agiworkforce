@@ -7,6 +7,7 @@ import { activate } from '../extension';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { __resetStartupWorkForTests } from '../core/startupWork';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
+import { AccountMemoryStore } from '../memory/accountMemoryStore';
 type ScanModule0 = typeof import('../features/device-registry');
 type ScanModule1 = typeof import('../integrations/tierResolver');
 
@@ -108,6 +109,19 @@ describe('background work waits for the user to reach for AGI', () => {
 
     expect(heartbeat).not.toHaveBeenCalled();
     expect(tierRefresh).not.toHaveBeenCalled();
+  });
+
+  it('pulls account memory only once the user reaches for AGI', () => {
+    const memoryRefresh = vi
+      .spyOn(AccountMemoryStore.prototype, 'refresh')
+      .mockResolvedValue({ status: 'ready' });
+    activate(new vscode.ExtensionContext());
+
+    expect(memoryRefresh).not.toHaveBeenCalled();
+
+    openTheChatView();
+
+    expect(memoryRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('starts them when the activity-bar view is opened', () => {

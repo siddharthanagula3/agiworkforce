@@ -1852,8 +1852,7 @@ export function getWebviewContent(
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
-    .turn-changes__review,
-    .turn-changes__undo {
+    .turn-changes__review {
       min-height: 28px;
       padding: 0 12px;
       border: 1px solid var(--border);
@@ -1863,8 +1862,7 @@ export function getWebviewContent(
       cursor: pointer;
       font: inherit;
     }
-    .turn-changes__review:hover,
-    .turn-changes__undo:hover { background: var(--hover); }
+    .turn-changes__review:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -6330,6 +6328,7 @@ export function getWebviewContent(
       }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
+          if (action.decision === 'session' && payload.sessionScopeOffered === false) return;
           var button = document.createElement('button');
           button.type = 'button';
           button.className =
@@ -6881,6 +6880,13 @@ export function getWebviewContent(
         showTyping();
       }
 
+      else if (msg.type === 'streamReplaced') {
+        if (!currentAssistantEl) currentAssistantEl = addMessage('assistant', '');
+        accumulatedContent = msg.payload.text;
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
+        bindCodeBlockActions(currentAssistantEl);
+      }
+
       else if (msg.type === 'done') {
         removeTyping();
         settleSending('');
@@ -6911,16 +6917,6 @@ export function getWebviewContent(
         }
         currentAssistantEl = null;
         accumulatedContent = '';
-      }
-
-      else if (msg.type === 'turnChangesUndone') {
-        var undoneRow = messagesEl.querySelector(
-          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
-        );
-        if (undoneRow) {
-          undoneRow.textContent = 'Changes undone';
-          undoneRow.classList.add('turn-changes--undone');
-        }
       }
 
       else if (msg.type === 'contextUsage') {
@@ -7753,8 +7749,6 @@ export function getWebviewContent(
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
-      for (var u = 0; u < earlier.length; u++) earlier[u].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -7771,15 +7765,6 @@ export function getWebviewContent(
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });
       row.appendChild(review);
-      var undo = document.createElement('button');
-      undo.type = 'button';
-      undo.className = 'turn-changes__undo';
-      undo.textContent = 'Undo';
-      undo.title = 'Put the files this reply changed back to how they were before it.';
-      undo.addEventListener('click', function () {
-        vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
-      });
-      row.appendChild(undo);
       container.appendChild(row);
     }
 

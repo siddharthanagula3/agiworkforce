@@ -477,8 +477,31 @@ describe('AccountMemoryStore', () => {
     expect(workspaceState.get(WORKSPACE_MEMORY_ADOPTED_KEY)).toBeUndefined();
   });
 
-  it('asks each account once and uploads nothing when the user does not agree', async () => {
+  it('asks again later when the prompt is dismissed without a choice', async () => {
     vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
+    const workspaceState = legacyWorkspace();
+    const push = acceptingPush();
+    const store = new AccountMemoryStore(
+      makeMemento(),
+      makeSecrets(SIGNED_IN_TOKEN),
+      workspaceState,
+      makeClient({ push }),
+    );
+
+    await store.refresh();
+    await vi.waitFor(() => expect(vscode.window.showInformationMessage).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(workspaceState.get(WORKSPACE_MEMORY_DECLINED_KEY)).toBeUndefined();
+
+    await store.refresh();
+    await vi.waitFor(() => expect(vscode.window.showInformationMessage).toHaveBeenCalledTimes(2));
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('asks each account once and uploads nothing when the user does not agree', async () => {
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
+      "Don't copy" as unknown as vscode.MessageItem,
+    );
     const workspaceState = legacyWorkspace();
     const push = acceptingPush();
     const store = new AccountMemoryStore(

@@ -396,10 +396,11 @@ export class AccountMemoryStore {
       COPY_WORKSPACE_NOTES_ACTION,
       KEEP_WORKSPACE_NOTES_ACTION,
     );
-    if (choice !== COPY_WORKSPACE_NOTES_ACTION) {
+    if (choice === KEEP_WORKSPACE_NOTES_ACTION) {
       await this.workspaceState.update(WORKSPACE_MEMORY_DECLINED_KEY, [...declined, owner]);
       return;
     }
+    if (choice !== COPY_WORKSPACE_NOTES_ACTION) return;
     if (!Config.memoryEnabled() || (await currentOwner(this.secrets)) !== owner) return;
     const items = unseen.map<MemoryPushItem>((fact) => ({
       id: randomId(),

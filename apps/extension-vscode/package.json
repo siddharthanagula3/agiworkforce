@@ -1098,6 +1098,10 @@
           "when": "false"
         },
         {
+          "command": "agi-workforce.signInProvider",
+          "when": "false"
+        },
+        {
           "command": "agi-workforce.openCloudTask",
           "when": "false"
         },
@@ -1358,7 +1362,7 @@
         "command": "agi-workforce.chat",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
-        "when": "!terminalFocus && !agi-workforce.hasDiff"
+        "when": "!terminalFocus && !editorTextFocus || !terminalFocus && !agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.explain",
@@ -1403,24 +1407,24 @@
         "command": "agi-workforce.acceptCurrentDiff",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.rejectCurrentDiff",
         "key": "ctrl+shift+r",
         "mac": "cmd+shift+r",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.acceptDiff",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.rejectDiff",
         "key": "escape",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor && !suggestWidgetVisible && !editorHasMultipleSelections && !inSnippetMode && !inlineSuggestionVisible && !parameterHintsVisible && !findWidgetVisible"
       },
       {
         "command": "agi-workforce.acceptAllDiffsGlobal",

@@ -1749,8 +1749,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
-    .turn-changes__review,
-    .turn-changes__undo {
+    .turn-changes__review {
       min-height: 28px;
       padding: 0 12px;
       border: 1px solid var(--border);
@@ -1760,8 +1759,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       cursor: pointer;
       font: inherit;
     }
-    .turn-changes__review:hover,
-    .turn-changes__undo:hover { background: var(--hover); }
+    .turn-changes__review:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -6327,6 +6325,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
+          if (action.decision === 'session' && payload.sessionScopeOffered === false) return;
           var button = document.createElement('button');
           button.type = 'button';
           button.className =
@@ -6878,6 +6877,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         showTyping();
       }
 
+      else if (msg.type === 'streamReplaced') {
+        if (!currentAssistantEl) currentAssistantEl = addMessage('assistant', '');
+        accumulatedContent = msg.payload.text;
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
+        bindCodeBlockActions(currentAssistantEl);
+      }
+
       else if (msg.type === 'done') {
         removeTyping();
         settleSending('');
@@ -6908,16 +6914,6 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         }
         currentAssistantEl = null;
         accumulatedContent = '';
-      }
-
-      else if (msg.type === 'turnChangesUndone') {
-        var undoneRow = messagesEl.querySelector(
-          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
-        );
-        if (undoneRow) {
-          undoneRow.textContent = 'Changes undone';
-          undoneRow.classList.add('turn-changes--undone');
-        }
       }
 
       else if (msg.type === 'contextUsage') {
@@ -7750,8 +7746,6 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
-      for (var u = 0; u < earlier.length; u++) earlier[u].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -7768,15 +7762,6 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });
       row.appendChild(review);
-      var undo = document.createElement('button');
-      undo.type = 'button';
-      undo.className = 'turn-changes__undo';
-      undo.textContent = 'Undo';
-      undo.title = 'Put the files this reply changed back to how they were before it.';
-      undo.addEventListener('click', function () {
-        vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
-      });
-      row.appendChild(undo);
       container.appendChild(row);
     }
 
@@ -10110,8 +10095,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
-    .turn-changes__review,
-    .turn-changes__undo {
+    .turn-changes__review {
       min-height: 28px;
       padding: 0 12px;
       border: 1px solid var(--border);
@@ -10121,8 +10105,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       cursor: pointer;
       font: inherit;
     }
-    .turn-changes__review:hover,
-    .turn-changes__undo:hover { background: var(--hover); }
+    .turn-changes__review:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -14688,6 +14671,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
+          if (action.decision === 'session' && payload.sessionScopeOffered === false) return;
           var button = document.createElement('button');
           button.type = 'button';
           button.className =
@@ -15239,6 +15223,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         showTyping();
       }
 
+      else if (msg.type === 'streamReplaced') {
+        if (!currentAssistantEl) currentAssistantEl = addMessage('assistant', '');
+        accumulatedContent = msg.payload.text;
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
+        bindCodeBlockActions(currentAssistantEl);
+      }
+
       else if (msg.type === 'done') {
         removeTyping();
         settleSending('');
@@ -15269,16 +15260,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         }
         currentAssistantEl = null;
         accumulatedContent = '';
-      }
-
-      else if (msg.type === 'turnChangesUndone') {
-        var undoneRow = messagesEl.querySelector(
-          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
-        );
-        if (undoneRow) {
-          undoneRow.textContent = 'Changes undone';
-          undoneRow.classList.add('turn-changes--undone');
-        }
       }
 
       else if (msg.type === 'contextUsage') {
@@ -16111,8 +16092,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
-      for (var u = 0; u < earlier.length; u++) earlier[u].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -16129,15 +16108,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });
       row.appendChild(review);
-      var undo = document.createElement('button');
-      undo.type = 'button';
-      undo.className = 'turn-changes__undo';
-      undo.textContent = 'Undo';
-      undo.title = 'Put the files this reply changed back to how they were before it.';
-      undo.addEventListener('click', function () {
-        vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
-      });
-      row.appendChild(undo);
       container.appendChild(row);
     }
 
@@ -18471,8 +18441,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       font-size: var(--type-label-size);
       line-height: var(--type-label-height);
     }
-    .turn-changes__review,
-    .turn-changes__undo {
+    .turn-changes__review {
       min-height: 28px;
       padding: 0 12px;
       border: 1px solid var(--border);
@@ -18482,8 +18451,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       cursor: pointer;
       font: inherit;
     }
-    .turn-changes__review:hover,
-    .turn-changes__undo:hover { background: var(--hover); }
+    .turn-changes__review:hover { background: var(--hover); }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -23049,6 +23017,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
+          if (action.decision === 'session' && payload.sessionScopeOffered === false) return;
           var button = document.createElement('button');
           button.type = 'button';
           button.className =
@@ -23600,6 +23569,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         showTyping();
       }
 
+      else if (msg.type === 'streamReplaced') {
+        if (!currentAssistantEl) currentAssistantEl = addMessage('assistant', '');
+        accumulatedContent = msg.payload.text;
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
+        bindCodeBlockActions(currentAssistantEl);
+      }
+
       else if (msg.type === 'done') {
         removeTyping();
         settleSending('');
@@ -23630,16 +23606,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         }
         currentAssistantEl = null;
         accumulatedContent = '';
-      }
-
-      else if (msg.type === 'turnChangesUndone') {
-        var undoneRow = messagesEl.querySelector(
-          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
-        );
-        if (undoneRow) {
-          undoneRow.textContent = 'Changes undone';
-          undoneRow.classList.add('turn-changes--undone');
-        }
       }
 
       else if (msg.type === 'contextUsage') {
@@ -24472,8 +24438,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
-      for (var u = 0; u < earlier.length; u++) earlier[u].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -24490,15 +24454,6 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });
       row.appendChild(review);
-      var undo = document.createElement('button');
-      undo.type = 'button';
-      undo.className = 'turn-changes__undo';
-      undo.textContent = 'Undo';
-      undo.title = 'Put the files this reply changed back to how they were before it.';
-      undo.addEventListener('click', function () {
-        vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
-      });
-      row.appendChild(undo);
       container.appendChild(row);
     }
 
