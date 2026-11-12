@@ -5,6 +5,7 @@ const mockSyncNow = jest.fn().mockResolvedValue(undefined);
 const mockShowToast = jest.fn();
 let mockStatus: 'idle' | 'syncing' | 'error' = 'error';
 let mockLastError: string | null = 'Settings request failed';
+let mockChatSyncOffReason: string | null = null;
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 let mockIsSignedIn = true;
 let mockIsOnline = true;
@@ -17,7 +18,11 @@ jest.mock('@/src/shared/components/Toast', () => ({
 }));
 jest.mock('@/stores/chat/cloudSyncStateStore', () => ({
   useCloudSyncStateStore: (selector: (state: unknown) => unknown) =>
-    selector({ status: mockStatus, lastError: mockLastError }),
+    selector({
+      status: mockStatus,
+      lastError: mockLastError,
+      chatSyncOffReason: mockChatSyncOffReason,
+    }),
 }));
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: (selector: (state: unknown) => unknown) =>
@@ -36,6 +41,7 @@ describe('CloudSyncErrorNotice', () => {
     jest.clearAllMocks();
     mockStatus = 'error';
     mockLastError = 'Settings request failed';
+    mockChatSyncOffReason = null;
     mockAppMode = 'cloud';
     mockIsSignedIn = true;
     mockIsOnline = true;
@@ -65,6 +71,19 @@ describe('CloudSyncErrorNotice', () => {
     screen.rerender(<CloudSyncErrorNotice />);
 
     expect(mockShowToast).toHaveBeenCalledTimes(2);
+  });
+
+  it('tells the person once that their workspace turned chat sync off', () => {
+    mockStatus = 'idle';
+    mockLastError = null;
+    mockChatSyncOffReason = 'Your workspace administrator has turned off cloud sync for Mobile.';
+    const screen = render(<CloudSyncErrorNotice />);
+    screen.rerender(<CloudSyncErrorNotice />);
+
+    expect(mockShowToast).toHaveBeenCalledTimes(1);
+    expect(mockShowToast).toHaveBeenCalledWith(
+      'Your workspace administrator has turned off cloud sync for Mobile.',
+    );
   });
 
   it('stays quiet in Local Mode and while offline', () => {

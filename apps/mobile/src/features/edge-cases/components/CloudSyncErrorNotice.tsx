@@ -14,10 +14,13 @@ export function CloudSyncErrorNotice(): null {
   const isSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const status = useCloudSyncStateStore((state) => state.status);
   const lastError = useCloudSyncStateStore((state) => state.lastError);
+  const chatSyncOffReason = useCloudSyncStateStore((state) => state.chatSyncOffReason);
   const announcedError = useRef<string | null>(null);
+  const announcedChatSyncOff = useRef<string | null>(null);
 
   const errorKey = lastError ?? 'Cloud sync failed';
-  const failing = isOnline && isSignedIn && appMode === 'cloud' && status === 'error';
+  const inCloud = isSignedIn && appMode === 'cloud';
+  const failing = isOnline && inCloud && status === 'error';
 
   useEffect(() => {
     if (status === 'idle') announcedError.current = null;
@@ -28,6 +31,16 @@ export function CloudSyncErrorNotice(): null {
     announcedError.current = errorKey;
     showToast(CLOUD_SYNC_FAILED_MESSAGE, { label: 'Retry', onPress: () => void syncNow() });
   }, [errorKey, failing]);
+
+  useEffect(() => {
+    if (!chatSyncOffReason) {
+      announcedChatSyncOff.current = null;
+      return;
+    }
+    if (!inCloud || announcedChatSyncOff.current === chatSyncOffReason) return;
+    announcedChatSyncOff.current = chatSyncOffReason;
+    showToast(chatSyncOffReason);
+  }, [chatSyncOffReason, inCloud]);
 
   return null;
 }

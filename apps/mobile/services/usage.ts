@@ -9,6 +9,7 @@ import {
   type AccountUsageLimitsResponse,
   type AccountUsageHistoryGranularity,
   type AccountUsageHistoryResponse,
+  type ManagedUsageBucket,
   type ManagedUsageCredits,
   type ManagedUsageSummaryResponse,
   type UsageLimitPromotionState,
@@ -58,19 +59,23 @@ function percentLeft(used: number): number {
   return Math.round(100 - Math.min(100, Math.max(0, used)));
 }
 
+interface UsageWindowLeft {
+  bucket: ManagedUsageBucket;
+  left: number;
+}
+
 export function tightestUsageWindow(snapshot: UsageSnapshot): string | null {
-  const windows = [
-    snapshot.sessionResetAt !== null
-      ? { bucket: 'session' as const, left: percentLeft(snapshot.sessionUsagePercentage) }
-      : null,
-    snapshot.weeklyResetAt !== null
-      ? { bucket: 'weekly' as const, left: percentLeft(snapshot.weeklyUsagePercentage) }
-      : null,
-  ].filter((window) => window !== null);
-  if (windows.length === 0 && snapshot.usageResetAt !== null) {
-    windows.push({ bucket: 'period' as const, left: percentLeft(snapshot.usagePercentage) });
+  const windows: UsageWindowLeft[] = [];
+  if (snapshot.sessionResetAt !== null) {
+    windows.push({ bucket: 'session', left: percentLeft(snapshot.sessionUsagePercentage) });
   }
-  const tightest = windows.reduce<(typeof windows)[number] | null>(
+  if (snapshot.weeklyResetAt !== null) {
+    windows.push({ bucket: 'weekly', left: percentLeft(snapshot.weeklyUsagePercentage) });
+  }
+  if (windows.length === 0 && snapshot.usageResetAt !== null) {
+    windows.push({ bucket: 'period', left: percentLeft(snapshot.usagePercentage) });
+  }
+  const tightest = windows.reduce<UsageWindowLeft | null>(
     (lowest, window) => (lowest === null || window.left < lowest.left ? window : lowest),
     null,
   );
