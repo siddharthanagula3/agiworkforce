@@ -184,6 +184,10 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
 /// (e.g. the command for `run_command`, the path for file tools). Carries no
 /// full output, capped to one line of <=80 chars.
 fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
+    let shown_path = args
+        .get("path")
+        .and_then(|value| value.as_str())
+        .map(|value| crate::path_security::display_path(std::path::Path::new(value)));
     let raw = crate::runtime::tool_catalog::tool_status_line(name, |key| {
         args.get(key).and_then(|value| value.as_str()).map(|value| {
             if key == "path" {
@@ -195,9 +199,15 @@ fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
     })
     .unwrap_or_default();
     let one_line = raw.replace('\n', " ");
+    let length = one_line.chars().count();
     if one_line.trim().is_empty() {
         format!("Running {}", name.replace(['_', '-'], " "))
-    } else if one_line.chars().count() > 80 {
+    } else if length > 80 && shown_path.as_deref() == Some(raw.as_str()) {
+        format!(
+            "…{}",
+            one_line.chars().skip(length - 79).collect::<String>()
+        )
+    } else if length > 80 {
         format!("{}…", one_line.chars().take(79).collect::<String>())
     } else {
         one_line
@@ -4012,6 +4022,21 @@ mod tests {
             MAX_TOOL_EVENT_OUTPUT_CHARS + TOOL_EVENT_TRUNCATION_MARKER.chars().count()
         );
         assert!(output.ends_with(TOOL_EVENT_TRUNCATION_MARKER));
+    }
+
+    #[test]
+    fn a_long_path_summary_keeps_the_file_name_and_a_long_command_keeps_its_start() {
+        let path = format!("{}/é/the_file_name.rs", "deep/nested".repeat(9));
+        let summary = tool_event_summary("write_file", &serde_json::json!({ "path": path }));
+        assert_eq!(summary.chars().count(), 80);
+        assert!(summary.starts_with('…'), "{summary}");
+        assert!(summary.ends_with("é/the_file_name.rs"), "{summary}");
+
+        let command = format!("cargo test {}", "--flag ".repeat(20));
+        let summary = tool_event_summary("run_command", &serde_json::json!({ "command": command }));
+        assert_eq!(summary.chars().count(), 80);
+        assert!(summary.starts_with("cargo test --flag"), "{summary}");
+        assert!(summary.ends_with('…'), "{summary}");
     }
 
     #[test]

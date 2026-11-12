@@ -293,6 +293,7 @@ pub struct AgentSession {
     /// any JSON event; chat.rs always writes a human-readable line to stderr.
     pub on_budget_exhausted: Option<BudgetSink>,
     pub plan_mode: bool,
+    pub plan_return_mode: Option<crate::cli_options::PermissionMode>,
     pub permission_mode: crate::cli_options::PermissionMode,
     pub(crate) pinned_permission_mode: Option<crate::cli_options::PermissionMode>,
     pub(crate) memory_enabled: bool,
@@ -819,6 +820,7 @@ impl AgentSession {
             max_budget_usd: None,
             on_budget_exhausted: None::<BudgetSink>,
             plan_mode: false,
+            plan_return_mode: None,
             permission_mode: crate::cli_options::PermissionMode::Default,
             pinned_permission_mode: crate::permissions::managed_permission_mode(),
             memory_enabled,

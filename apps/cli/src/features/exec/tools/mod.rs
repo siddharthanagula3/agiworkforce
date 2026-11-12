@@ -44,6 +44,7 @@ use common::{
     TRUNCATION_TAIL_LINES,
 };
 use dir_ops::{execute_glob, execute_grep_files, execute_list_directory, execute_search_files};
+pub(crate) use file_ops::headless_change_was_refused;
 use file_ops::{
     execute_apply_patch, execute_multiedit, execute_read_file, execute_read_many_files,
     execute_write_file,

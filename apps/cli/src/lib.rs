@@ -5761,6 +5761,7 @@ pub async fn run_main() -> Result<()> {
         )
         && !cli.stdin;
     output::set_screen_reader(screen_reader && interactive);
+    crate::platform::runtime::git::use_git_state_dir();
     let session_worktree = match cli.worktree.as_deref() {
         Some(requested) => Some(enter_session_worktree(requested).await?),
         None => None,
@@ -8571,6 +8572,7 @@ pub fn run_to_exit_code() -> std::process::ExitCode {
         .and_then(|runtime| runtime.block_on(run_main()));
     end_process_cleanly();
     match result {
+        Ok(()) if crate::tools::headless_change_was_refused() => std::process::ExitCode::FAILURE,
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) if broken_pipe::is_broken_pipe_error(&error) => {
             std::process::ExitCode::from(broken_pipe::BROKEN_PIPE_EXIT_CODE)

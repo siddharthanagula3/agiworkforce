@@ -149,13 +149,7 @@ pub(super) async fn execute_run_command(
                     .await
                 }
             };
-            executed.map_err(|error| {
-                let kind = error
-                    .downcast_ref::<std::io::Error>()
-                    .map(std::io::Error::kind)
-                    .unwrap_or(std::io::ErrorKind::Other);
-                std::io::Error::new(kind, error.to_string())
-            })
+            executed.map_err(command_io_error)
         }
         .await;
         if let Err(ref e) = sandbox_result {
@@ -176,57 +170,81 @@ pub(super) async fn execute_run_command(
         sandbox_result
     };
 
+    let notice: String = workspace_notice
+        .into_iter()
+        .chain(network_notice)
+        .map(|notice| format!("{notice}\n"))
+        .collect();
     match result {
-        Ok(output) => {
-            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-            let mut combined = String::new();
-            if !stdout.is_empty() {
-                combined.push_str(&stdout);
-            }
-            if !stderr.is_empty() {
-                if !combined.is_empty() {
-                    combined.push('\n');
-                }
-                combined.push_str("[stderr]\n");
-                combined.push_str(&stderr);
-            }
-
-            if combined.is_empty() {
-                combined = "(no output)".to_string();
-            }
-
-            let combined = truncate_output_with_save("run_command", combined);
-            let notice: String = workspace_notice
-                .into_iter()
-                .chain(network_notice)
-                .map(|notice| format!("{notice}\n"))
-                .collect();
-
-            Ok(ToolResult {
-                tool_name: "run_command".to_string(),
-                success: output.status.success(),
-                output: format!(
-                    "{notice}Exit code: {}\n{}",
-                    exit_description(output.status),
-                    combined
-                ),
-            })
-        }
+        Ok(output) => Ok(ToolResult {
+            tool_name: "run_command".to_string(),
+            success: output.status.success(),
+            output: format!(
+                "{notice}Exit code: {}\n{}",
+                exit_description(output.status),
+                captured_output(&output.stdout, &output.stderr)
+            ),
+        }),
         Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
             tool_name: "run_command".to_string(),
             success: false,
             output: format!("Failed to execute command: {}", e),
         }),
-        Err(_) => Ok(ToolResult {
+        Err(e) => Ok(ToolResult {
             tool_name: "run_command".to_string(),
             success: false,
-            output: format!(
-                "Command timed out after {} seconds",
-                COMMAND_TIMEOUT.as_secs()
-            ),
+            output: timed_out_report(&notice, &e),
         }),
+    }
+}
+
+fn command_io_error(error: anyhow::Error) -> std::io::Error {
+    let kind = error
+        .downcast_ref::<std::io::Error>()
+        .map(std::io::Error::kind)
+        .unwrap_or(std::io::ErrorKind::Other);
+    if kind == std::io::ErrorKind::TimedOut {
+        return error
+            .downcast::<std::io::Error>()
+            .unwrap_or_else(|error| std::io::Error::new(kind, error.to_string()));
+    }
+    std::io::Error::new(kind, error.to_string())
+}
+
+fn captured_output(stdout: &[u8], stderr: &[u8]) -> String {
+    let stdout = String::from_utf8_lossy(stdout);
+    let stderr = String::from_utf8_lossy(stderr);
+
+    let mut combined = String::new();
+    if !stdout.is_empty() {
+        combined.push_str(&stdout);
+    }
+    if !stderr.is_empty() {
+        if !combined.is_empty() {
+            combined.push('\n');
+        }
+        combined.push_str("[stderr]\n");
+        combined.push_str(&stderr);
+    }
+
+    if combined.is_empty() {
+        combined = "(no output)".to_string();
+    }
+
+    truncate_output_with_save("run_command", combined)
+}
+
+fn timed_out_report(notice: &str, error: &std::io::Error) -> String {
+    let headline = format!(
+        "{notice}Command timed out after {} seconds and was stopped.",
+        COMMAND_TIMEOUT.as_secs()
+    );
+    match crate::process_tree::TimedOutOutput::of(error) {
+        Some(partial) => format!(
+            "{headline} Output before the timeout:\n{}",
+            captured_output(&partial.stdout, &partial.stderr)
+        ),
+        None => headline,
     }
 }
 
@@ -1580,6 +1598,35 @@ mod tests {
             exit_description(std::process::ExitStatus::from_raw(256)),
             "1"
         );
+    }
+
+    #[test]
+    fn a_timed_out_command_reports_the_output_it_had_produced() {
+        let sandboxed = anyhow::Error::new(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            crate::process_tree::TimedOutOutput {
+                stdout: b"started\n".to_vec(),
+                stderr: b"still compiling\n".to_vec(),
+            },
+        ))
+        .context("Seatbelt exec failed");
+
+        let error = command_io_error(sandboxed);
+        let report = timed_out_report("", &error);
+
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(
+            report.starts_with(&format!(
+                "Command timed out after {} seconds and was stopped. Output before the timeout:\n",
+                COMMAND_TIMEOUT.as_secs()
+            )),
+            "{report}"
+        );
+        assert!(report.contains("started\n"), "{report}");
+        assert!(report.contains("[stderr]\nstill compiling"), "{report}");
+
+        let bare = std::io::Error::new(std::io::ErrorKind::TimedOut, "subprocess timed out");
+        assert!(!timed_out_report("", &bare).contains("Output before the timeout"));
     }
 
     #[test]

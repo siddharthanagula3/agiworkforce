@@ -95,12 +95,15 @@ fn print_diff_preview(diff: &str) {
 const EDIT_FLAGS_NOTE: &str = "-y approves only reads, searches and listings; a file change \
      needs --full-auto, --permission-mode auto or --dangerously-skip-permissions.";
 
-/// Reached when a mutating tool needs approval, there is no TUI/approval
-/// callback installed (headless / `agi exec` context), and stdin is not a
-/// TTY, so there is no way to obtain user consent. A routine failed tool
-/// result would let the process exit 0 though the mutation never happened;
-/// hard-failing gives a script driving `agi exec` a failure it can detect.
-fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
+static HEADLESS_CHANGE_REFUSED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn headless_change_was_refused() -> bool {
+    HEADLESS_CHANGE_REFUSED.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+fn refuse_noninteractive_change(tool_name: &str, action: &str) -> ToolResult {
+    HEADLESS_CHANGE_REFUSED.store(true, std::sync::atomic::Ordering::SeqCst);
     eprintln!(
         "{}",
         ts::danger(format!(
@@ -110,18 +113,22 @@ fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
     );
     eprintln!(
         "{}",
-        format!(
-            "  Refusing to silently continue: exiting with a non-zero status instead of letting \
-             the '{tool_name}' call be auto-denied without signal.",
-        )
-        .dimmed()
+        format!("  The '{tool_name}' call was refused; this run will end with a non-zero status.")
+            .dimmed()
     );
     crate::agent_events::emit_terminal_error(
         "approval_required",
         format!("{action} requires approval and no confirmation is possible here."),
         format!("{EDIT_FLAGS_NOTE} Or run where stdin is a terminal."),
     );
-    std::process::exit(1);
+    ToolResult {
+        tool_name: tool_name.to_string(),
+        success: false,
+        output: format!(
+            "{action} was refused: it requires approval and no one can confirm it in this run. \
+             {EDIT_FLAGS_NOTE} Nothing was changed; do not retry this change in this run."
+        ),
+    }
 }
 
 /// True when there is no way to prompt a human for approval right now:
@@ -920,7 +927,10 @@ pub(super) async fn execute_write_file(
                     // No TUI callback (REPL / headless): preview the change, then fall
                     // back to the blocking dialoguer confirm.
                     if stdin_is_noninteractive() {
-                        abort_noninteractive_auto_deny("write_file", "Writing this file");
+                        return Ok(refuse_noninteractive_change(
+                            "write_file",
+                            "Writing this file",
+                        ));
                     }
                     if file_path.exists() && file_path.is_file() {
                         match read_existing_text_for_preview(file_path) {
@@ -1233,7 +1243,10 @@ pub(super) async fn execute_edit_file(
                     );
                 } else {
                     if stdin_is_noninteractive() {
-                        abort_noninteractive_auto_deny("edit_file", "Editing this file");
+                        return Ok(refuse_noninteractive_change(
+                            "edit_file",
+                            "Editing this file",
+                        ));
                     }
                     eprintln!(
                         "  {} {}",
@@ -1374,7 +1387,10 @@ pub(super) async fn execute_apply_patch(
                     }
                 } else {
                     if stdin_is_noninteractive() {
-                        abort_noninteractive_auto_deny("apply_patch", "Applying this patch");
+                        return Ok(refuse_noninteractive_change(
+                            "apply_patch",
+                            "Applying this patch",
+                        ));
                     }
                     crate::output::confirm("Apply this patch?", false)
                 }
@@ -1580,7 +1596,10 @@ pub(super) async fn execute_multiedit(
                     );
                 } else {
                     if stdin_is_noninteractive() {
-                        abort_noninteractive_auto_deny("multiedit", "Applying these edits");
+                        return Ok(refuse_noninteractive_change(
+                            "multiedit",
+                            "Applying these edits",
+                        ));
                     }
                     eprintln!(
                         "{}",
@@ -2990,5 +3009,16 @@ mod tests {
         ] {
             assert!(EDIT_FLAGS_NOTE.contains(flag), "{flag}");
         }
+    }
+
+    #[test]
+    fn a_headless_refusal_returns_a_failed_result_and_marks_the_run_failed() {
+        let result = refuse_noninteractive_change("write_file", "Writing this file");
+
+        assert!(!result.success);
+        assert_eq!(result.tool_name, "write_file");
+        assert!(result.output.contains(EDIT_FLAGS_NOTE), "{}", result.output);
+        assert!(result.output.contains("Nothing was changed"));
+        assert!(headless_change_was_refused());
     }
 }
