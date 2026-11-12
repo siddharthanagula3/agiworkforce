@@ -616,11 +616,40 @@ describe('Cloud Account destructive action ownership', () => {
     expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
   });
 
-  it('shows why a renewing paid plan blocks deletion and offers the plan view', async () => {
+  it('offers the store subscription page when a store plan keeps billing after scheduling', async () => {
+    const manageUrl = 'https://apps.apple.com/account/subscriptions';
+    const message =
+      'Account deletion scheduled. Your Premium plan is billed by Apple, and deleting your account ' +
+      `does not cancel it. Apple keeps charging you until you cancel it there: ${manageUrl}`;
+    mockDeleteAccount.mockResolvedValueOnce({
+      ...scheduledReceipt,
+      message,
+      storeBilling: { store: 'apple', manageUrl },
+    });
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => {
+      destructiveActionFor('Delete Account')();
+    });
+
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenLastCalledWith('Account deletion scheduled', message, [
+      { text: 'OK', style: 'cancel' },
+      { text: 'Open subscriptions', onPress: expect.any(Function) },
+    ]);
+    const buttons = (Alert.alert as jest.Mock).mock.lastCall?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === 'Open subscriptions')?.onPress?.();
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith(manageUrl);
+  });
+
+  it('shows why a paid plan blocks deletion and offers the plan view', async () => {
     const refusal =
-      'Your Premium plan renews automatically, so nothing was deleted. Cancel it on the web in ' +
-      'Settings > Billing first: it then stays active until 2026-09-01 and is not charged again. ' +
-      'After that you can delete your account right away, without waiting for the plan to end.';
+      'A payment for your Premium plan is still being collected, so nothing was deleted. ' +
+      'Delete your account once it is settled, or email support for help.';
     mockDeleteAccount.mockRejectedValueOnce(
       httpErrorFrom(
         409,
@@ -628,7 +657,7 @@ describe('Cloud Account destructive action ownership', () => {
           error: refusal,
           reason: 'active_subscription',
           planTier: 'pro',
-          status: 'active',
+          status: 'past_due',
           cancelAtPeriodEnd: false,
         }),
       ),
@@ -742,8 +771,34 @@ describe('Cloud Account destructive action ownership', () => {
     );
     expect(mockLegacyPost).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Account deletion cancelled',
+      'Your account deletion was cancelled.',
+    );
     expect(mockSignOut).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['restored', 'Account deletion cancelled. Your plan renews again.'],
+    [
+      'not_restored',
+      "Account deletion cancelled. If deleting turned off your plan's renewal, turn it back on in Settings > Billing.",
+    ],
+  ])(
+    'says what happened to the plan renewal when undoing a deletion: %s',
+    async (planRenewal, message) => {
+      mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
+      mockCancelDeletion.mockResolvedValueOnce({ message, cancelled: true, planRenewal });
+      render(<CloudAccountScreen />);
+      await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+      await act(async () => {
+        deletionAlert('Cancel account deletion?').confirm();
+      });
+
+      expect(Alert.alert).toHaveBeenLastCalledWith('Account deletion cancelled', message);
+    },
+  );
 
   it.each([null, '2026-11-04T18:00:00.123456Z'])(
     'captures a frozen lossless pair with requestedAt %p (UNRUN)',
