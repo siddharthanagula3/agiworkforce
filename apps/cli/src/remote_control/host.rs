@@ -100,12 +100,12 @@ fn clipped_for_approval(value: &str) -> (String, bool) {
     if length <= MESSAGE_LENGTH {
         return (redacted, false);
     }
+    let note = |hidden: usize| {
+        format!("\n[{hidden} more characters are not shown here. Approve this in the terminal, where all of it is shown.]")
+    };
+    let kept = MESSAGE_LENGTH.saturating_sub(note(length).chars().count());
     (
-        format!(
-            "{}\n[{} more characters are not shown here. Approve this in the terminal, where all of it is shown.]",
-            clip_head(&redacted, MESSAGE_LENGTH),
-            length - MESSAGE_LENGTH
-        ),
+        format!("{}{}", clip_head(&redacted, kept), note(length - kept)),
         true,
     )
 }
@@ -777,7 +777,18 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             return Vec::new();
         };
         if approved && approval.truncated {
-            return Vec::new();
+            return self
+                .event(
+                    thread_id,
+                    json!({
+                        "type": "approval-held",
+                        "requestId": request_id,
+                        "status": "refused",
+                        "message": "This request is too long to show on the phone. Allow it in the terminal, where all of it is shown.",
+                    }),
+                )
+                .into_iter()
+                .collect();
         }
         let Ok(params) = serde_json::from_value(json!({
             "threadId": thread_id,
@@ -1647,6 +1658,7 @@ mod tests {
         let detail = event["detail"].as_str().expect("detail");
         assert!(!detail.contains("tail.example"));
         assert!(detail.contains("more characters are not shown here"));
+        assert!(detail.chars().count() <= MESSAGE_LENGTH);
 
         let allowed = code
             .handle_control(
@@ -1657,7 +1669,8 @@ mod tests {
                 ),
             )
             .await;
-        assert!(allowed.is_empty());
+        assert_eq!(allowed[0].1["event"]["type"], "approval-held");
+        assert_eq!(allowed[0].1["event"]["status"], "refused");
         assert!(
             host.answered().is_empty(),
             "a command the phone never saw in full was allowed from the phone"
