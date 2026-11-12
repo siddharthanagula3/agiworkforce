@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { classifyMemoryCategory, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import {
   applyMemoryDeltas,
@@ -19,6 +20,7 @@ import {
   type MemoryScope,
 } from './accountMemoryClient';
 import { loadLegacyWorkspaceFacts, type MemoryFact } from './memoryStore';
+import { Config } from '../platform/config';
 
 export const ACCOUNT_MEMORY_CACHE_KEY = 'agiWorkforce.accountMemory';
 export const ACCOUNT_MEMORY_CURSOR_KEY = 'agiWorkforce.accountMemoryCursor';
@@ -27,6 +29,9 @@ export const ACCOUNT_MEMORY_SCOPE_KEY = 'agiWorkforce.accountMemoryScope';
 export const ACCOUNT_MEMORY_VERSIONS_KEY = 'agiWorkforce.accountMemoryVersions';
 export const ACCOUNT_MEMORY_UNSCOPED_KEY = 'agiWorkforce.accountMemoryUnscoped';
 export const WORKSPACE_MEMORY_ADOPTED_KEY = 'agiWorkforce.workspaceMemoryAdopted';
+export const WORKSPACE_MEMORY_DECLINED_KEY = 'agiWorkforce.workspaceMemoryDeclined';
+export const COPY_WORKSPACE_NOTES_ACTION = 'Copy to account';
+const KEEP_WORKSPACE_NOTES_ACTION = "Don't copy";
 
 export type AccountMemoryStatus = 'ready' | 'signed-out' | 'unreachable';
 
@@ -99,6 +104,7 @@ export class AccountMemoryStore {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChange = this.changed.event;
   private clearGeneration = 0;
+  private adoption: Promise<void> | undefined;
 
   constructor(
     private readonly storage: Storage,
@@ -168,7 +174,7 @@ export class AccountMemoryStore {
       await this.applyDeltas(page.memories);
       await this.storage.update(ACCOUNT_MEMORY_UNSCOPED_KEY, false);
       await this.storage.update(ACCOUNT_MEMORY_CURSOR_KEY, selectNextCursor(cursor, page.cursor));
-      await this.adoptWorkspaceFacts();
+      this.offerWorkspaceFacts();
       this.changed.fire();
       return { status: 'ready', facts: this.cachedFacts() };
     } catch (error) {
@@ -352,21 +358,49 @@ export class AccountMemoryStore {
     await this.storage.update(ACCOUNT_MEMORY_SCOPE_KEY, scope);
   }
 
+  private offerWorkspaceFacts(): void {
+    if (this.adoption !== undefined) return;
+    const adoption = this.adoptWorkspaceFacts()
+      .catch((error: unknown) => {
+        void vscode.window.showWarningMessage(
+          `${PRODUCT_NAMES.code}: the notes an earlier version saved in this workspace were not copied to your account, ${error instanceof Error ? error.message : String(error)}. They stay on this computer, and you will be asked again.`,
+        );
+      })
+      .finally(() => {
+        if (this.adoption === adoption) this.adoption = undefined;
+      });
+    this.adoption = adoption;
+  }
+
   /**
-   * Facts written before memory became an account feature live in this
-   * workspace's state. They are pushed to the account once, so signing in
-   * promotes them instead of hiding them.
+   * Facts written before memory became an account feature live only in this
+   * workspace's state. They reach an account only while memory is on and after
+   * the user agrees, and each signed-in account is asked at most once.
    */
   private async adoptWorkspaceFacts(): Promise<void> {
     if (this.workspaceState.get<boolean>(WORKSPACE_MEMORY_ADOPTED_KEY) === true) return;
-    const legacy = loadLegacyWorkspaceFacts(this.workspaceState).filter(
-      (fact) => fact.text.trim() !== '',
+    if (!Config.memoryEnabled()) return;
+    const owner = await currentOwner(this.secrets);
+    if (owner === undefined) return;
+    const declined = this.workspaceState.get<string[]>(WORKSPACE_MEMORY_DECLINED_KEY) ?? [];
+    if (declined.includes(owner)) return;
+    const unseen = loadLegacyWorkspaceFacts(this.workspaceState).filter(
+      (fact) => fact.text.trim() !== '' && !this.contains(fact.text),
     );
-    const unseen = legacy.filter((fact) => !this.contains(fact.text));
     if (unseen.length === 0) {
       await this.workspaceState.update(WORKSPACE_MEMORY_ADOPTED_KEY, true);
       return;
     }
+    const choice = await vscode.window.showInformationMessage(
+      `${PRODUCT_NAMES.code}: an earlier version saved ${unseen.length} memory ${unseen.length === 1 ? 'note' : 'notes'} in this workspace, kept only on this computer. Copy them to the memory of the AGI account you are signed in to, where your other AGI apps can use them?`,
+      COPY_WORKSPACE_NOTES_ACTION,
+      KEEP_WORKSPACE_NOTES_ACTION,
+    );
+    if (choice !== COPY_WORKSPACE_NOTES_ACTION) {
+      await this.workspaceState.update(WORKSPACE_MEMORY_DECLINED_KEY, [...declined, owner]);
+      return;
+    }
+    if (!Config.memoryEnabled() || (await currentOwner(this.secrets)) !== owner) return;
     const items = unseen.map<MemoryPushItem>((fact) => ({
       id: randomId(),
       content: fact.text.trim(),
@@ -380,6 +414,7 @@ export class AccountMemoryStore {
       items.filter((item) => response.applied.some((row) => row.id === item.id)),
     );
     await this.workspaceState.update(WORKSPACE_MEMORY_ADOPTED_KEY, true);
+    this.changed.fire();
   }
 }
 

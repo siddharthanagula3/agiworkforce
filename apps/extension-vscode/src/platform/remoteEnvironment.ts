@@ -37,7 +37,13 @@ export interface CliResolutionHost {
   homedir: string;
   pathVariable: string | undefined;
   isExecutableFile: (candidate: string) => boolean;
+  workspaceRoots: readonly string[];
 }
+
+export type CliResolutionFailure = 'empty' | 'relative' | 'not-found';
+
+export type CliResolution =
+  { ok: true; path: string } | { ok: false; configured: string; reason: CliResolutionFailure };
 
 export const INSTALLED_CLI_DIRECTORIES = ['.agi/bin', '.local/bin', '.cargo/bin'] as const;
 
@@ -47,17 +53,32 @@ function expandHome(candidate: string, homedir: string): string {
   return candidate;
 }
 
+function isInside(pathApi: path.PlatformPath, root: string, candidate: string): boolean {
+  const relative = pathApi.relative(root, candidate);
+  return (
+    relative === '' ||
+    (relative !== '..' && !relative.startsWith(`..${pathApi.sep}`) && !pathApi.isAbsolute(relative))
+  );
+}
+
 /**
  * Where the configured CLI actually lives in the environment this extension
- * host runs in. A remote server starts without the login shell's PATH, so a
- * CLI installed under the user's home is looked for there too. An unresolved
- * name is returned unchanged so the spawn failure still names it.
+ * host runs in, always as an absolute path. A remote server starts without the
+ * login shell's PATH, so a CLI installed under the user's home is looked for
+ * there too. A bare name is never handed back: process creation on Windows
+ * looks a bare name up in the working directory before PATH, and that
+ * directory is the workspace. A PATH search never settles on a relative entry
+ * or on a file inside an open workspace folder.
  */
-export function resolveCliPath(configured: string, host: CliResolutionHost): string {
+export function resolveCliPath(configured: string, host: CliResolutionHost): CliResolution {
   const trimmed = expandHome(configured.trim(), host.homedir);
-  if (trimmed === '') return trimmed;
+  if (trimmed === '') return { ok: false, configured: trimmed, reason: 'empty' };
   const pathApi = host.platform === 'win32' ? path.win32 : path.posix;
-  if (trimmed.includes('/') || trimmed.includes('\\')) return trimmed;
+  if (trimmed.includes('/') || trimmed.includes('\\')) {
+    return pathApi.isAbsolute(trimmed)
+      ? { ok: true, path: trimmed }
+      : { ok: false, configured: trimmed, reason: 'relative' };
+  }
 
   const names =
     host.platform === 'win32' && pathApi.extname(trimmed) === ''
@@ -65,23 +86,25 @@ export function resolveCliPath(configured: string, host: CliResolutionHost): str
       : [trimmed];
   const searchPath = (host.pathVariable ?? '')
     .split(host.platform === 'win32' ? ';' : ':')
-    .filter((entry) => entry !== '');
+    .filter((entry) => entry !== '' && pathApi.isAbsolute(entry));
   const installed = INSTALLED_CLI_DIRECTORIES.map((directory) =>
     pathApi.join(host.homedir, directory),
   );
   for (const directory of [...searchPath, ...installed]) {
     for (const name of names) {
       const candidate = pathApi.join(directory, name);
-      if (host.isExecutableFile(candidate)) return candidate;
+      if (host.workspaceRoots.some((root) => isInside(pathApi, root, candidate))) continue;
+      if (host.isExecutableFile(candidate)) return { ok: true, path: candidate };
     }
   }
-  return trimmed;
+  return { ok: false, configured: trimmed, reason: 'not-found' };
 }
 
-export function nodeCliResolutionHost(): CliResolutionHost {
+export function nodeCliResolutionHost(workspaceRoots: readonly string[]): CliResolutionHost {
   return {
     platform: process.platform,
     homedir: os.homedir(),
+    workspaceRoots,
     pathVariable: process.env['PATH'] ?? process.env['Path'],
     isExecutableFile: (candidate) => {
       try {
@@ -126,6 +149,34 @@ export async function probeCli(cliPath: string, runVersion: RunVersion): Promise
           : `did not run (${error instanceof Error ? error.message : String(error)})`;
     return { ok: false, cliPath, reason };
   }
+}
+
+const RESOLUTION_FAILURE_REASONS: Readonly<Record<CliResolutionFailure, string>> = {
+  empty: 'is not set',
+  relative: 'is a relative path, which is never run because it would resolve inside the workspace',
+  'not-found': 'was not found on the PATH or in the usual install folders',
+};
+
+export function describeCliResolutionFailure(reason: CliResolutionFailure): string {
+  return RESOLUTION_FAILURE_REASONS[reason];
+}
+
+export function unresolvedCliProbe(
+  resolution: Extract<CliResolution, { ok: false }>,
+): Extract<CliProbeResult, { ok: false }> {
+  return {
+    ok: false,
+    cliPath: resolution.configured === '' ? 'agiWorkforce.cliPath' : resolution.configured,
+    reason: describeCliResolutionFailure(resolution.reason),
+  };
+}
+
+export function probeResolvedCli(
+  resolution: CliResolution,
+  runVersion: RunVersion,
+): Promise<CliProbeResult> {
+  if (resolution.ok) return probeCli(resolution.path, runVersion);
+  return Promise.resolve(unresolvedCliProbe(resolution));
 }
 
 export function cliProbeMessage(result: CliProbeResult, environment: RemoteEnvironment): string {

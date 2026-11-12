@@ -272,8 +272,8 @@ describe('policy, DOM_MUTATION_MESSAGE_TYPES', () => {
 });
 
 describe('policy, DISCOVERY_MESSAGE_TYPES (H-1)', () => {
-  it('is empty, no types bypass the allowlist gate', () => {
-    expect(DISCOVERY_MESSAGE_TYPES.size).toBe(0);
+  it('holds only GET_PAGE_ACCESS, no other type bypasses the allowlist gate', () => {
+    expect([...DISCOVERY_MESSAGE_TYPES]).toEqual(['GET_PAGE_ACCESS']);
   });
 });
 
@@ -458,7 +458,7 @@ describe('policy, MESSAGE_POLICY matrix (Arch #1 audit 2026-05-19)', () => {
     }
   });
 
-  it('DISCOVERY_MESSAGE_TYPES is empty (H-1)', () => {
-    expect(DISCOVERY_MESSAGE_TYPES.size).toBe(0);
+  it('DISCOVERY_MESSAGE_TYPES holds only GET_PAGE_ACCESS (H-1)', () => {
+    expect([...DISCOVERY_MESSAGE_TYPES]).toEqual(['GET_PAGE_ACCESS']);
   });
 });

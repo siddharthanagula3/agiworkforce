@@ -9,9 +9,7 @@ import { registerChatRetryCommand } from '../features/chat/retry';
 import {
   cliProbeMessage,
   describeRemoteEnvironment,
-  nodeCliResolutionHost,
-  probeCli,
-  resolveCliPath,
+  probeResolvedCli,
   runCliVersion,
 } from '../platform/remoteEnvironment';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
@@ -206,7 +204,11 @@ import { showPlanComparison } from '../features/account-auth/planComparison';
 import { planDisplayLabel } from '../features/account-auth/planLabel';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import { getExtensionVersion } from '../platform/version';
-import { Config } from '../platform/config';
+import { Config, resolveConfiguredCli } from '../platform/config';
+import {
+  MANAGE_WORKSPACE_TRUST_COMMAND,
+  WorkspaceNotTrustedError,
+} from '../integrations/localRuntimeClient';
 import { isEntitledSubscriptionStatus, isFreeBillingPlanTier } from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
@@ -465,6 +467,8 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
     );
     return;
   }
+  const cli = await ensureCliForTerminal();
+  if (cli === undefined) return;
   try {
     await sidebarProvider.releaseForTerminal();
   } catch (error) {
@@ -473,7 +477,6 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
     );
     return;
   }
-  const cli = resolveCliPath(Config.cliPath(), nodeCliResolutionHost());
   const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder.uri });
   terminal.show();
   terminal.sendText(
@@ -484,26 +487,24 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
 const AGI_TERMINAL_NAME = 'AGI';
 const INSTALL_CLI_ACTION = 'Install AGI CLI';
 
-async function ensureCliForTerminal(): Promise<boolean> {
+async function ensureCliForTerminal(): Promise<string | undefined> {
   const environment = describeRemoteEnvironment(vscode.env.remoteName);
-  const probe = await probeCli(
-    resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
-    runCliVersion,
-  );
-  if (probe.ok) return true;
+  const probe = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);
+  if (probe.ok) return probe.cliPath;
   const choice = await vscode.window.showWarningMessage(
     cliProbeMessage(probe, environment),
     INSTALL_CLI_ACTION,
   );
-  if (choice !== INSTALL_CLI_ACTION) return false;
+  if (choice !== INSTALL_CLI_ACTION) return undefined;
   const installed = await vscode.commands.executeCommand<{ ok: boolean }>(
     'agi-workforce.installCli',
   );
-  return installed?.ok === true;
+  if (installed?.ok !== true) return undefined;
+  const resolved = resolveConfiguredCli();
+  return resolved.ok ? resolved.path : undefined;
 }
 
 async function openAgiInTheTerminal(sidebarProvider: SidebarProvider): Promise<void> {
-  if (!(await ensureCliForTerminal())) return;
   if (sidebarProvider.activeThreadId() !== undefined) {
     await continueThisSessionInTheTerminal(sidebarProvider);
     return;
@@ -515,15 +516,24 @@ async function openAgiInTheTerminal(sidebarProvider: SidebarProvider): Promise<v
     running.show();
     return;
   }
+  const cli = await ensureCliForTerminal();
+  if (cli === undefined) return;
   const folder = getActiveWorkspaceFolderSync();
   const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder?.uri });
   terminal.show();
-  terminal.sendText(
-    shellExecutableForCurrentPlatform(resolveCliPath(Config.cliPath(), nodeCliResolutionHost())),
-  );
+  terminal.sendText(shellExecutableForCurrentPlatform(cli));
 }
 
 const CONTINUE_HANDOFF_HERE = 'Continue here';
+
+async function offerWorkspaceTrust(error: WorkspaceNotTrustedError): Promise<void> {
+  const manageTrust = t('webview.manageTrust');
+  const choice = await vscode.window.showWarningMessage(
+    `${PRODUCT_NAMES.code}: ${error.message}`,
+    manageTrust,
+  );
+  if (choice === manageTrust) await vscode.commands.executeCommand(MANAGE_WORKSPACE_TRUST_COMMAND);
+}
 
 async function continueCliSessionHere(
   localRuntimes: LocalRuntimePool,
@@ -544,6 +554,10 @@ async function continueCliSessionHere(
   try {
     threads = await runtime.listThreads({ cwd });
   } catch (error) {
+    if (error instanceof WorkspaceNotTrustedError) {
+      await offerWorkspaceTrust(error);
+      return;
+    }
     await vscode.window.showErrorMessage(
       `${PRODUCT_NAMES.code}: could not reach the AGI CLI. ${error instanceof Error ? error.message : String(error)}`,
     );
@@ -916,8 +930,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.checkCli', async () => {
       const environment = describeRemoteEnvironment(vscode.env.remoteName);
-      const cliPath = resolveCliPath(Config.cliPath(), nodeCliResolutionHost());
-      const result = await probeCli(cliPath, runCliVersion);
+      const result = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);
       const message = cliProbeMessage(result, environment);
       if (result.ok) vscode.window.showInformationMessage(message);
       else vscode.window.showErrorMessage(message);
@@ -927,10 +940,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.installCli', async () => {
       if (!(await installCli())) return { ok: false as const };
       const environment = describeRemoteEnvironment(vscode.env.remoteName);
-      const result = await probeCli(
-        resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
-        runCliVersion,
-      );
+      const result = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);
       if (!result.ok) {
         vscode.window.showErrorMessage(cliProbeMessage(result, environment));
         return { ok: false as const };

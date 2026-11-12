@@ -15,6 +15,8 @@ import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
 import { browserActivityEnvelope } from '../computer-use/browserTurnActivity';
 import { t, tPlural } from '../../i18n';
+import type { CallerBrowserContext } from '../cloud-bridge/callerBrowserContext';
+import type { FormObservationReference } from '../browser-tools/documentBridge';
 
 export interface SidePanelMessageAttachment {
   kind: 'image' | 'file';
@@ -55,8 +57,8 @@ export interface SidePanelChatMessage {
   agentEvents?: AgentEventEnvelope[];
   browserActivity?: AgentActivityState;
   browserSource?: PageContextSource;
-  browserContext?: import('../cloud-bridge/callerBrowserContext').CallerBrowserContext;
-  browserObservation?: import('../browser-tools/documentBridge').FormObservationReference;
+  browserContext?: CallerBrowserContext;
+  browserObservation?: FormObservationReference;
   browserEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;

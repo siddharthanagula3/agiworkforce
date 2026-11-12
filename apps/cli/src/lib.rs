@@ -685,7 +685,7 @@ pub fn init_tracing(verbose: bool, debug: Option<&Option<String>>) -> String {
     // (raw/JSON one-shot output, SDK JSONL streams).
     let _ = fmt()
         .with_env_filter(filter)
-        .with_writer(std::io::stderr)
+        .with_writer(|| output::DiagnosticWriter)
         .try_init();
 
     directive
@@ -838,14 +838,13 @@ enum Command {
         #[arg(long, requires = "workspace_consent")]
         workspace_consent_at_ms: Option<i64>,
         /// Transport: `stdio`, `ws`, or a WebSocket bind address such as `127.0.0.1:8788`.
+        /// A WebSocket requires its bearer token in AGI_APP_SERVER_TOKEN; no argument
+        /// carries it, since other local users can list a process's arguments.
         #[arg(long, default_value = "stdio")]
         listen: String,
         /// Permit a non-loopback WebSocket bind after network controls are configured.
         #[arg(long)]
         allow_public_listen: bool,
-        /// WebSocket bearer token (required unless AGI_APP_SERVER_TOKEN is set).
-        #[arg(long)]
-        auth_token: Option<String>,
         /// Browser origin allowed to open the WebSocket; repeat for multiple origins.
         #[arg(long = "allowed-origin")]
         allowed_origin: Vec<String>,
@@ -3878,7 +3877,7 @@ async fn handle_artifacts_command(
 
 fn open_with_default_app(path: &std::path::Path) -> bool {
     let mut command = if cfg!(target_os = "macos") {
-        std::process::Command::new("open")
+        std::process::Command::new("/usr/bin/open")
     } else if cfg!(target_os = "windows") {
         let mut command = std::process::Command::new("cmd");
         command.args(["/C", "start", ""]);
@@ -6058,6 +6057,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                     // 130 = 128 + SIGINT, the conventional exit code.
                     terminals::stop_all();
+                    end_process_cleanly();
                     std::process::exit(130);
                 };
                 match result {
@@ -6429,7 +6429,6 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 workspace_consent_at_ms: _,
                 listen,
                 allow_public_listen,
-                auth_token,
                 allowed_origin,
                 allow_query_token,
                 no_memory,
@@ -6471,14 +6470,13 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             "AGI_CLI_SERVER_ADDR (or default 127.0.0.1:8788) must be a valid SocketAddr",
                         )
                     });
-                let token = auth_token
-                    .clone()
-                    .or_else(|| std::env::var("AGI_APP_SERVER_TOKEN").ok())
+                let token = std::env::var("AGI_APP_SERVER_TOKEN")
+                    .ok()
                     .map(|token| token.trim().to_string())
                     .filter(|token| !token.is_empty())
                     .ok_or_else(|| {
                         anyhow::anyhow!(
-                            "WebSocket app-server requires --auth-token or AGI_APP_SERVER_TOKEN; auth tokens are never printed"
+                            "WebSocket app-server requires AGI_APP_SERVER_TOKEN; auth tokens are never printed"
                         )
                     })?;
                 app_server::run_developer_session_websocket(
@@ -6826,7 +6824,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 let policy = features::exec::exec_policy::load_policy()?;
                 let prefixes = policy.get_allowed_prefixes();
                 if prefixes.is_empty() {
-                    println!("No rules. Add .rules files to ~/.agiworkforce/rules/");
+                    let rules_dir = config::CliConfig::config_dir()?.join("rules");
+                    println!("No rules. Add .rules files to {}", rules_dir.display());
                 } else {
                     println!("{} allowed command prefix(es):", prefixes.len());
                     for prefix in prefixes {
@@ -8111,7 +8110,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
         )
         .await
     } else {
-        tui::run(
+        let outcome = tui::run(
             &mut app_config,
             &model,
             &sys_context,
@@ -8135,7 +8134,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
             cli.agent.clone(),
             auto_route_seed,
         )
-        .await
+        .await;
+        output::release_held_diagnostics();
+        outcome
     }
 }
 
@@ -8338,7 +8339,13 @@ pub fn build_final_prompt(
 }
 
 pub fn exit_with_error(e: &anyhow::Error) -> ! {
+    end_process_cleanly();
     std::process::exit(exit_code_for(e))
+}
+
+fn end_process_cleanly() {
+    runtime::writer_lease::release_process_leases();
+    output::release_held_diagnostics();
 }
 
 pub fn run_to_exit_code() -> std::process::ExitCode {
@@ -8355,6 +8362,7 @@ pub fn run_to_exit_code() -> std::process::ExitCode {
         .build()
         .map_err(anyhow::Error::from)
         .and_then(|runtime| runtime.block_on(run_main()));
+    end_process_cleanly();
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) if broken_pipe::is_broken_pipe_error(&error) => {
@@ -9499,6 +9507,32 @@ mod tests {
         let system_prompt = Cli::try_parse_from(["agi", "--dump-system-prompt"])
             .expect("read-only system prompt flag should parse");
         assert!(!invocation_requires_project_trust(&system_prompt));
+    }
+
+    #[test]
+    fn the_app_server_token_never_travels_in_arguments() {
+        let error = Cli::try_parse_from([
+            "agi",
+            "app-server",
+            "--listen",
+            "127.0.0.1:8788",
+            "--auth-token",
+            "secret",
+        ])
+        .expect_err("a bearer token in argv is readable by other local users");
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
+
+        let root = Cli::command();
+        let app_server = root
+            .find_subcommand("app-server")
+            .expect("app-server subcommand");
+        let token_values: Vec<&str> = app_server
+            .get_arguments()
+            .filter(|argument| argument.get_action().takes_values())
+            .map(|argument| argument.get_id().as_str())
+            .filter(|id| id.contains("token"))
+            .collect();
+        assert!(token_values.is_empty(), "{token_values:?}");
     }
 
     #[test]

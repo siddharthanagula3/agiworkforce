@@ -99,15 +99,38 @@ vi.mock('../src/inPagePanel/setup', () => ({
 
 import {
   detectJobApplication,
+  isJobApplicationHostUrl,
   isLeverUrl,
   isLinkedInUrl,
 } from '../src/features/content/autofill/detector';
 import { isGreenhouseUrl } from '../src/features/content/autofill/greenhouse';
 import { isAshbyUrl } from '../src/features/content/autofill/ashby';
-import { AUTOFILL_PROFILE_STORAGE_KEY } from '../src/features/content/autofill/filler';
+import { AUTOFILL_PROFILE_STORAGE_KEY } from '../src/features/content/autofill/profile-storage';
 import { handleMessage } from '../src/content.ts';
 
 const ATTACKER_ORIGIN = 'https://attacker.example';
+
+function pageApproved(): boolean {
+  const allowlist = chromeMock._localStore['agi_site_allowlist'];
+  return Array.isArray(allowlist) && allowlist.includes(window.location.origin);
+}
+
+function serviceWorkerReply(message: { type?: string }): Record<string, unknown> {
+  if (message.type === 'GET_PAGE_ACCESS')
+    return { success: true, approved: pageApproved(), inPagePanel: false };
+  if (message.type === 'GET_AUTOFILL_PROFILE')
+    return pageApproved() && isJobApplicationHostUrl(window.location.href)
+      ? { success: true, profile: chromeMock._localStore[AUTOFILL_PROFILE_STORAGE_KEY] }
+      : { success: false, error: 'Autofill is blocked here.' };
+  return { success: true };
+}
+
+beforeEach(() => {
+  chromeMock.runtime.sendMessage.mockImplementation(async (message: { type?: string }) =>
+    serviceWorkerReply(message),
+  );
+  chromeMock.storage.local.get.mockClear();
+});
 
 function setPageUrl(href: string): void {
   const parsed = new URL(href);
@@ -197,7 +220,8 @@ describe('SEC-15, AGI_RUN_AUTOFILL gates the stored profile on the site allowlis
 
     expect(response.success).toBe(false);
     expect(response.error).toMatch(/allowlist/i);
-    expect(chromeMock.storage.local.get).not.toHaveBeenCalledWith(AUTOFILL_PROFILE_STORAGE_KEY);
+    expect(chromeMock.storage.local.get).not.toHaveBeenCalled();
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({ type: 'GET_AUTOFILL_PROFILE' });
     expect((document.querySelector('#first_name') as HTMLInputElement).value).toBe('');
     expect((document.querySelector('#email') as HTMLInputElement).value).toBe('');
   });

@@ -436,6 +436,36 @@ describe('paired desktop browser commands', () => {
     expect(harness.attachedTabs).toEqual([]);
   });
 
+  it('lists a tab on a site the user has not approved by its origin alone', async () => {
+    harness.tabs.set(11, {
+      id: 11,
+      windowId: WINDOW_ID,
+      active: false,
+      url: 'https://bank.example/reset?token=reset-secret#code=abc',
+      title: 'Reset your password for jane@example.com',
+      text: '',
+      status: 'complete',
+      loaderId: 'loader-bank',
+      history: { currentIndex: 0, entries: [] },
+    });
+
+    const result = await runPaired('browser_list_tabs', {});
+
+    expect(result.ok).toBe(true);
+    const listed = result.value as Array<{ tabId: number; title: string; url: string }>;
+    expect(listed.find((tab) => tab.tabId === 11)).toEqual({
+      tabId: 11,
+      title: '',
+      url: 'https://bank.example',
+      active: false,
+    });
+    expect(listed.find((tab) => tab.tabId === BACKGROUND_TAB_ID)).toMatchObject({
+      title: 'Quarterly report',
+      url: `${SITE}/report`,
+    });
+    expect(JSON.stringify(listed)).not.toMatch(/reset-secret|code=abc|jane@example\.com/);
+  });
+
   it('says a named tab that has closed is gone instead of reading another', async () => {
     const result = await runPaired('browser_read_page', { tabId: 404 });
 

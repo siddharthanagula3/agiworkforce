@@ -186,7 +186,15 @@ import {
   removeBrowserControlHostPermission,
   requestBrowserControlHostPermission,
 } from './features/computer-use/browserControlConsent';
-import { loadSitePolicyInput, readUserSiteAllowlist } from './features/site-policy/store';
+import {
+  ACCOUNT_ORIGIN_REFUSAL,
+  isExtensionAccountOrigin,
+} from './features/computer-use/accountOrigins';
+import {
+  evaluateSiteAccess,
+  loadSitePolicyInput,
+  readUserSiteAllowlist,
+} from './features/site-policy/store';
 import { isUserBlockedSite, readUserSiteBlocklist } from './features/site-policy/userBlocklist';
 import { requestReadGrant, type ReadGrant } from './features/side-panel/readGrant';
 import { readChromeLinkedPage } from './features/cloud-bridge/pageContextClient';
@@ -486,6 +494,8 @@ import {
 import { platformRequestHeaders } from './platformHeaders';
 import { installSidePanelErrorReporting } from './features/observability/errorReporting';
 import { flushProductEvents, trackProductEvent } from './features/observability/productAnalytics';
+import type { ContactAutofillProfile } from './features/content/autofill/contactProfile';
+import type { FormFillPlan } from './features/content/formFillPlan';
 
 installSidePanelErrorReporting();
 
@@ -7503,6 +7513,8 @@ async function requestBrowserSiteAccess(
   }
   const tabId = tab.id;
   if (scope === 'act') {
+    if (isExtensionAccountOrigin(origin))
+      return { status: 'unavailable', reason: ACCOUNT_ORIGIN_REFUSAL };
     const policy = await loadSitePolicyInput();
     const permitted = evaluateSitePolicy(
       { ...policy, userAllowlist: [...policy.userAllowlist, origin] },
@@ -7974,8 +7986,8 @@ async function runBrowserTaskTool(
 async function runFormFillTool(
   streamId: string,
   toolCallId: string,
-  profile: import('./features/content/autofill/contactProfile').ContactAutofillProfile,
-  fieldPlan?: import('./features/content/formFillPlan').FormFillPlan,
+  profile: ContactAutofillProfile,
+  fieldPlan?: FormFillPlan,
   replaceExisting?: boolean,
   onVerified?: (filledCount: number) => void,
 ): Promise<string> {
@@ -10089,23 +10101,30 @@ function renderSkillChip(bar: HTMLElement): void {
 }
 
 let pendingSelectionText: string | null = null;
-let offeredSelectionKey: string | null = null;
 
 function pendingSelectionAttached(): boolean {
   return pendingSelectionText !== null && _ctx.pendingPageContext === pendingSelectionText;
 }
 
-async function offerPageSelection(): Promise<void> {
-  if (editableRewrites.current()) return;
+function showSelectionNotice(notice: string): void {
+  composerContextNotice = notice;
+  updateAttachmentPreview();
+}
+
+async function attachPageSelection(): Promise<void> {
+  editableRewrites.cancel();
   if (managedCloudChatState !== 'ready' || _ctx.isStreaming) return;
-  if (pendingBrowserContextTabs.length > 0) return;
-  if (_ctx.pendingPageContext !== null && !pendingSelectionAttached()) return;
   const generation = _ctx.conversationGeneration;
   let tab: chrome.tabs.Tab | undefined;
   let selection: PageSelection | null = null;
   try {
     [tab] = await chrome.tabs.query(await activePageQuery());
-    if (!tab?.id || !tab.url || (await isUserBlockedSite(tab.url))) return;
+    if (!tab?.id || !tab.url) return showSelectionNotice('No readable website tab is open.');
+    const host = pageChipLabel(tab.url);
+    if (await isUserBlockedSite(tab.url))
+      return showSelectionNotice(t('spSiteBlockedByYou', [host]));
+    if (!(await evaluateSiteAccess(tab.url, 'automation')).allowed)
+      return showSelectionNotice(t('spSelectionSiteNotApproved', [host]));
     const [result] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: readVisibleSelection,
@@ -10113,23 +10132,12 @@ async function offerPageSelection(): Promise<void> {
     });
     selection = (result?.result as PageSelection | null | undefined) ?? null;
   } catch {
-    return;
+    return showSelectionNotice(PAGE_CONTEXT_BLOCKED_REASON);
   }
-  if (!tab?.id || !tab.url || !selection) return;
-  const prepared = prepareSelectionContext(selection, tab.url);
-  if (!prepared) return;
-  const key = `${tab.id}\n${tab.url}\n${prepared.text}`;
-  if (key === offeredSelectionKey) return;
-  if (
-    generation !== _ctx.conversationGeneration ||
-    _ctx.isStreaming ||
-    managedCloudChatState !== 'ready' ||
-    pendingBrowserContextTabs.length > 0 ||
-    (_ctx.pendingPageContext !== null && !pendingSelectionAttached())
-  ) {
-    return;
-  }
-  offeredSelectionKey = key;
+  if (!tab.id || !tab.url) return;
+  const prepared = selection && prepareSelectionContext(selection, tab.url);
+  if (!prepared) return showSelectionNotice(t('spSelectionNone'));
+  if (generation !== _ctx.conversationGeneration || _ctx.isStreaming) return;
   pendingSelectionText = prepared.text;
   _ctx.pendingPageContext = prepared.text;
   _ctx.pendingPageContextSource = {
@@ -10137,9 +10145,11 @@ async function offerPageSelection(): Promise<void> {
     url: tab.url,
     title: t('spSelectionChipTitle', [pageChipLabel(tab.url)]),
   };
+  pendingBrowserContextTabs = [];
   composerContextNotice = null;
   updateAttachmentPreview();
   updateContextButton();
+  document.getElementById('sp-input')?.focus();
 }
 
 function renderPendingPageChip(bar: HTMLElement): void {
@@ -13272,6 +13282,10 @@ function buildUI(): void {
   refreshComputerUseSiteHook = () => void refreshComputerUseSite();
 
   cuPanel.onApproveSite((origin) => {
+    if (isExtensionAccountOrigin(origin)) {
+      cuPanel.showHandoffBanner(ACCOUNT_ORIGIN_REFUSAL, 'error');
+      return;
+    }
     const hostGranted = requestBrowserControlHostPermission(origin);
     void hostGranted.then(async (granted) => {
       if (!granted) {
@@ -13433,8 +13447,6 @@ function buildUI(): void {
     name: 'message',
     'aria-label': 'Message AGI',
   }) as HTMLTextAreaElement;
-  inputEl.addEventListener('focus', () => void offerPageSelection());
-  window.addEventListener('focus', () => void offerPageSelection());
 
   const slashMenu = el('div', {
     id: 'sp-slash-menu',
@@ -13966,6 +13978,20 @@ function buildUI(): void {
     }
   });
 
+  const selectionItem = el('button', {
+    class: 'sp-attach-menu-item',
+    id: 'sp-attach-selection-item',
+    type: 'button',
+    role: 'menuitem',
+  });
+  selectionItem.appendChild(renderIcon(FileText, 16));
+  selectionItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spSelectionItem')));
+  selectionItem.addEventListener('click', () => {
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
+    void attachPageSelection();
+  });
+
   const connectorsItem = el('button', {
     class: 'sp-attach-menu-item',
     id: 'sp-attach-connectors-item',
@@ -14350,6 +14376,7 @@ function buildUI(): void {
     fileItem,
     screenshotItem,
     contextBtn,
+    selectionItem,
     tabsItem,
     linkItem,
     videoItem,

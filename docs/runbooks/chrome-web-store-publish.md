@@ -24,6 +24,8 @@ References (read 2026-11-11):
 - <https://developer.chrome.com/docs/webstore/publish>
 - <https://developer.chrome.com/docs/webstore/prepare>
 - <https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments>
+- <https://docs.github.com/en/actions/reference/security/oidc>
+- <https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines>
 - <https://clerk.com/docs/guides/sessions/sync-host>
 
 ## First submission
@@ -102,30 +104,52 @@ or a decision that is his; **Lead** steps can be run from this repository with
    deployment. The package and publish jobs refuse a key whose derived ID is not
    `CWS_EXTENSION_ID`.
 
-6. **Owner. Link the publish identity.** In a Google Cloud project, enable the
-   Chrome Web Store API, create a dedicated service account with no project
-   roles, and add its email in the Dashboard's **Account** section (one service
-   account per publisher). Create a GitHub workload-identity pool and provider
-   restricted to `siddharthanagula3/agiworkforce`, and grant that principal
-   `roles/iam.workloadIdentityUser` on the service account only.
-7. **Lead. Create the protected `chrome-web-store` environment before any
-   `v-ext-*` tag exists.** A workflow that references a missing environment
-   creates it with no protection, so the first tag push would publish without
-   an approval.
+6. **Owner. Protect `chrome-web-store`, then link the publish identity.**
+   Protection comes first, before any identity exists: run "First release"
+   steps 2 and 3 of `docs/runbooks/cli-release.md`, which create the
+   environment with the owner as required reviewer, administrator bypass off
+   and a deployment policy of `v-ext-*` tags only, add the tag ruleset, and
+   end with `node scripts/release/check-release-environments.mjs` printing
+   `OK`. A workflow that names a missing environment creates it with no
+   protection, so a tag pushed before this would publish unapproved, and the
+   tag-only policy keeps a `workflow_dispatch` from a branch out.
+
+   Then, in a Google Cloud project, enable the Chrome Web Store API, create a
+   dedicated service account with no project roles, and add its email in the
+   Dashboard's **Account** section (one service account per publisher). Create
+   a workload-identity pool and a GitHub provider whose condition admits only
+   this repository's `chrome-web-store` environment on a tag, by numeric ids
+   (repository 1087257707, owner 198491067, read with `gh api` on 2026-11-11),
+   which a renamed or recreated repository cannot reuse; then grant only that
+   environment `roles/iam.workloadIdentityUser` on the service account:
 
    ```bash
-   REVIEWER_ID=$(gh api users/siddharthanagula3 --jq .id)
-   printf '{"reviewers":[{"type":"User","id":%s}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}' "$REVIEWER_ID" \
-     | gh api -X PUT repos/siddharthanagula3/agiworkforce/environments/chrome-web-store --input -
-   gh api -X POST repos/siddharthanagula3/agiworkforce/environments/chrome-web-store/deployment-branch-policies \
-     -f name='v-ext-*' -f type=tag
-   gh variable set GCP_WORKLOAD_IDENTITY_PROVIDER --env chrome-web-store --body 'projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>'
+   gcloud iam workload-identity-pools create github --location=global
+   gcloud iam workload-identity-pools providers create-oidc agiworkforce \
+     --location=global --workload-identity-pool=github \
+     --issuer-uri="https://token.actions.githubusercontent.com/" \
+     --attribute-mapping="google.subject=assertion.sub,attribute.environment=assertion.environment" \
+     --attribute-condition="assertion.repository_id == '1087257707' && assertion.repository_owner_id == '198491067' && assertion.environment == 'chrome-web-store' && assertion.ref_type == 'tag'"
+   gcloud iam service-accounts add-iam-policy-binding '<service account email>' \
+     --role=roles/iam.workloadIdentityUser \
+     --member="principalSet://iam.googleapis.com/projects/<project number>/locations/global/workloadIdentityPools/github/attribute.environment/chrome-web-store"
+   ```
+
+   The environment's `v-ext-*`-only policy narrows the tag to release tags.
+   For a provider that already exists, apply the same condition with
+   `gcloud iam workload-identity-pools providers update-oidc` and the same
+   `--attribute-condition`.
+
+7. **Lead. Point the protected environment at the identity.** The probe
+   confirms `chrome-web-store` is still protected before anything is stored
+   in it.
+
+   ```bash
+   node scripts/release/check-release-environments.mjs
+   gh variable set GCP_WORKLOAD_IDENTITY_PROVIDER --env chrome-web-store --body 'projects/<number>/locations/global/workloadIdentityPools/github/providers/agiworkforce'
    gh variable set CWS_SERVICE_ACCOUNT --env chrome-web-store --body '<service account email>'
    gh variable set CWS_PUBLISHER_ID --env chrome-web-store --body '<publisher id>'
    ```
-
-   Leave "Prevent self-review" off while the owner is the only reviewer, or no
-   one can approve his own tag.
 
 8. **Owner. Allow the extension in Clerk production.** Clerk's sync-host guide
    adds the origin with the production secret key:
@@ -167,7 +191,9 @@ or a decision that is his; **Lead** steps can be run from this repository with
     The package job runs, then the publish job waits for the `chrome-web-store`
     approval; rejecting that approval stops the run with nothing uploaded, and
     `gh workflow run release-chrome-extension.yml -f tag=v-ext-<version> -f publish=false`
-    repackages the same tag without the publish job. Approve only after comparing
+    repackages the same tag without the publish job. A manual submission has
+    to run on the tag itself, because the environment admits only tags:
+    `gh workflow run release-chrome-extension.yml --ref v-ext-<version> -f tag=v-ext-<version> -f publish=true`. Approve only after comparing
     the artifact name and SHA-256 in the package job. The publish job uploads the release ZIP
     to the draft item and submits it with `DEFAULT_PUBLISH`, so it goes live
     when approved. To hold the launch, choose **Defer publish** in the item's

@@ -750,25 +750,34 @@ async fn sandbox_network_policy(
         return crate::sandbox::NetworkPolicy::Deny;
     }
     let summary = "This command needs the network, which the sandbox blocks.";
+    let scope = network_grant_scope(crate::sandbox::SandboxType::detect());
     let request = ApprovalRequest::new(
         ApprovalRequestKind::Network {
             tool_name: "run_command".to_string(),
-            destination: "external hosts (this machine stays unreachable)".to_string(),
+            destination: scope.to_string(),
         },
         summary,
         vec![describe_command(command)],
     );
     let allowed = match request_approval(approval_callback, request).await {
         Some(decision) => approval_allows(decision),
-        None => crate::output::confirm(
-            format!("{summary} Allow external network access for it?"),
-            false,
-        ),
+        None => crate::output::confirm(format!("{summary} Allow it to reach {scope}?"), false),
     };
     if allowed {
         crate::sandbox::NetworkPolicy::AllowExternal
     } else {
         crate::sandbox::NetworkPolicy::Deny
+    }
+}
+
+fn network_grant_scope(backend: crate::sandbox::SandboxType) -> &'static str {
+    match backend {
+        crate::sandbox::SandboxType::MacosSeatbelt => {
+            "any host except localhost, including your local network and cloud metadata addresses"
+        }
+        crate::sandbox::SandboxType::LinuxBubblewrap | crate::sandbox::SandboxType::None => {
+            "any host, including services on this machine and cloud metadata addresses"
+        }
     }
 }
 
@@ -1021,7 +1030,7 @@ mod tests {
             *seen.lock().expect("seen lock"),
             vec![ApprovalRequestKind::Network {
                 tool_name: "run_command".to_string(),
-                destination: "external hosts (this machine stays unreachable)".to_string(),
+                destination: network_grant_scope(crate::sandbox::SandboxType::detect()).to_string(),
             }]
         );
 
@@ -1038,6 +1047,30 @@ mod tests {
             sandbox_network_policy("git pull", false, Some(&allow)).await,
             crate::sandbox::NetworkPolicy::Deny
         );
+    }
+
+    #[test]
+    fn a_network_grant_names_what_the_sandbox_in_use_leaves_reachable() {
+        use crate::sandbox::SandboxType;
+
+        let seatbelt = network_grant_scope(SandboxType::MacosSeatbelt);
+        assert!(seatbelt.contains("except localhost"), "{seatbelt}");
+        assert!(seatbelt.contains("local network"), "{seatbelt}");
+        assert!(seatbelt.contains("cloud metadata"), "{seatbelt}");
+
+        for backend in [SandboxType::LinuxBubblewrap, SandboxType::None] {
+            let scope = network_grant_scope(backend);
+            assert!(scope.contains("this machine"), "{scope}");
+            assert!(scope.contains("cloud metadata"), "{scope}");
+            assert!(!scope.contains("except"), "{scope}");
+        }
+        for backend in [
+            SandboxType::MacosSeatbelt,
+            SandboxType::LinuxBubblewrap,
+            SandboxType::None,
+        ] {
+            assert!(!network_grant_scope(backend).contains("unreachable"));
+        }
     }
 
     #[test]

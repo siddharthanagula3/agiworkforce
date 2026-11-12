@@ -550,16 +550,30 @@ async fn output_in_group(
 fn configure_lifecycle(command: &mut Command) {
     command.kill_on_drop(true);
 
-    // A new group lets cancellation reach `sh -c` descendants, not just the
-    // shell itself. Tokio exposes this without a pre-exec unsafe block.
     #[cfg(unix)]
-    command.process_group(0);
+    lead_own_session(command);
 
     // CREATE_NEW_PROCESS_GROUP. `taskkill /T` below is the Windows tree-kill
     // primitive; the creation flag also prevents the child from sharing the
     // CLI's console process group.
     #[cfg(windows)]
     command.creation_flags(0x0000_0200);
+}
+
+/// A session of its own gives the child a process group that cancellation
+/// signals as a whole, reaching `sh -c` descendants, and no controlling
+/// terminal. A program that prompts on `/dev/tty` then fails at once instead
+/// of being stopped by job control until the timeout, and nothing the child
+/// starts can read from or push input into the terminal the CLI draws on.
+#[cfg(unix)]
+#[allow(unsafe_code)]
+fn lead_own_session(command: &mut Command) {
+    unsafe {
+        command.pre_exec(|| {
+            nix::unistd::setsid()?;
+            Ok(())
+        });
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -881,6 +895,28 @@ mod tests {
     fn host_shell_commands_name_the_shell_by_absolute_path() {
         let command = shell_command("true");
         assert_eq!(command.as_std().get_program(), "/bin/sh");
+    }
+
+    #[tokio::test]
+    async fn a_command_leads_its_own_session_with_no_controlling_terminal() {
+        let _guard = CHILD_SPAWNING_TESTS.lock().await;
+        let mut command = Command::new("/bin/sh");
+        command
+            .args(["-c", "exec sleep 5"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let mut child = ProcessTreeChild::spawn(command).expect("spawn");
+        let pid = Pid::from_raw(
+            i32::try_from(child.child_mut().id().expect("running child")).expect("pid"),
+        );
+        let session = nix::unistd::getsid(Some(pid));
+        let group = nix::unistd::getpgid(Some(pid));
+        child.terminate().await;
+
+        assert_eq!(session.expect("child session"), pid);
+        assert_eq!(group.expect("child process group"), pid);
+        assert_ne!(nix::unistd::getsid(None).expect("own session"), pid);
     }
 
     #[tokio::test]

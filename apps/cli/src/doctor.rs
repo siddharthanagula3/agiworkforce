@@ -153,27 +153,31 @@ pub fn format_text_report(report: &DoctorReport) -> String {
 
 fn runtime_dependency_checks() -> Vec<DoctorCheck> {
     let mut checks = Vec::new();
-    for (id, binary, required) in [
-        ("runtime.git", "git", true),
-        ("runtime.shell", "sh", true),
-        ("runtime.rg", "rg", false),
-        ("runtime.node", "node", false),
-        ("runtime.cargo", "cargo", false),
+    for (id, binary, required, absent_note) in [
+        ("runtime.git", "git", true, ""),
+        ("runtime.shell", "sh", true, ""),
+        ("runtime.rg", "rg", false, "file search falls back to grep"),
+        (
+            "runtime.node",
+            "node",
+            false,
+            "only needed by tools that run on Node",
+        ),
+        (
+            "runtime.cargo",
+            "cargo",
+            false,
+            "only needed for Rust projects",
+        ),
     ] {
         let available = command_available(binary);
-        let status = if available {
-            DoctorStatus::Pass
-        } else if required {
-            DoctorStatus::Fail
-        } else {
-            DoctorStatus::Warn
-        };
+        let status = runtime_dependency_status(available, required);
         let message = if available {
             format!("`{binary}` is available")
         } else if required {
             format!("required runtime `{binary}` is missing")
         } else {
-            format!("optional runtime `{binary}` is missing")
+            format!("optional runtime `{binary}` is not installed, {absent_note}")
         };
         checks.push(check(
             id,
@@ -184,6 +188,14 @@ fn runtime_dependency_checks() -> Vec<DoctorCheck> {
         ));
     }
     checks
+}
+
+fn runtime_dependency_status(available: bool, required: bool) -> DoctorStatus {
+    if available || !required {
+        DoctorStatus::Pass
+    } else {
+        DoctorStatus::Fail
+    }
 }
 
 fn command_available(binary: &str) -> bool {
@@ -924,6 +936,32 @@ mod tests {
         assert!(is_http_url("http://localhost:11434"));
         assert!(!is_http_url("file:///tmp/model.sock"));
         assert!(!is_http_url("not a url"));
+    }
+
+    #[test]
+    fn an_absent_optional_runtime_does_not_degrade_the_verdict() {
+        assert_eq!(runtime_dependency_status(false, false), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(true, false), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(true, true), DoctorStatus::Pass);
+        assert_eq!(runtime_dependency_status(false, true), DoctorStatus::Fail);
+        let checks = vec![
+            check(
+                "runtime.rg",
+                "runtime dependency: rg",
+                runtime_dependency_status(false, false),
+                "optional runtime `rg` is not installed",
+                vec![],
+            ),
+            check(
+                "runtime.git",
+                "runtime dependency: git",
+                runtime_dependency_status(false, true),
+                "required runtime `git` is missing",
+                vec![],
+            ),
+        ];
+        assert_eq!(summarize_checks(&checks[..1]).overall, DoctorStatus::Pass);
+        assert_eq!(summarize_checks(&checks).overall, DoctorStatus::Fail);
     }
 
     #[test]

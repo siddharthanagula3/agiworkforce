@@ -632,6 +632,8 @@ fn unlock_plan_label(model_id: &str) -> String {
         .unwrap_or_else(|| "unavailable".to_string())
 }
 
+const CTX_COL_WIDTH: usize = 9;
+
 fn format_model_row(
     width: u16,
     bullet: &str,
@@ -649,10 +651,8 @@ fn format_model_row(
         );
     }
 
-    // Local models discovered at runtime don't report a context window
-    // (Ollama's /api/tags omits it), so show ", " instead of a bogus "0K ctx".
     let ctx_col = if ctx_k == 0 {
-        format!("{:>9}", ", ")
+        " ".repeat(CTX_COL_WIDTH)
     } else {
         format!("{ctx_k:>4}K ctx")
     };
@@ -866,6 +866,18 @@ mod tests {
         let narrow = format_model_row(20, "●", "供应商/中文模型版本", "balanced", 128);
         assert!(display_width(&narrow) <= 20);
         assert!(narrow.ends_with('…'));
+    }
+
+    #[test]
+    fn a_local_row_without_a_context_window_shows_no_context_field() {
+        let local = format_model_row(70, " ", "fixture-local-model:latest", "Balanced", 0);
+        let cloud = format_model_row(70, " ", "fixture-local-model:latest", "Balanced", 128);
+
+        assert!(!local.contains(','), "dangling separator: {local:?}");
+        assert!(!local.contains("ctx"), "{local:?}");
+        assert!(local.trim_end().ends_with("Balanced"), "{local:?}");
+        assert_eq!(display_width(&local), display_width(&cloud));
+        assert!(cloud.ends_with(" 128K ctx"), "{cloud:?}");
     }
 
     fn model(id: &str, provider: &str) -> Model {

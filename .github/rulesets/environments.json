@@ -94,10 +94,7 @@
           "custom_branch_policies": true
         }
       },
-      "branch_policies": [
-        { "name": "main", "type": "branch" },
-        { "name": "v-ext-*", "type": "tag" }
-      ]
+      "branch_policies": [{ "name": "v-ext-*", "type": "tag" }]
     },
     {
       "name": "vscode-marketplace",
@@ -111,10 +108,35 @@
           "custom_branch_policies": true
         }
       },
-      "branch_policies": [
-        { "name": "main", "type": "branch" },
-        { "name": "v-vscode-*", "type": "tag" }
-      ]
+      "branch_policies": [{ "name": "v-vscode-*", "type": "tag" }]
+    },
+    {
+      "name": "open-vsx",
+      "used_by": [".github/workflows/release-vscode-extension.yml"],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [{ "name": "v-vscode-*", "type": "tag" }]
+    },
+    {
+      "name": "cli-release",
+      "used_by": [".github/workflows/release-cli.yml"],
+      "protection": {
+        "wait_timer": 0,
+        "prevent_self_review": false,
+        "reviewers": [{ "type": "User", "login": "siddharthanagula3" }],
+        "deployment_branch_policy": {
+          "protected_branches": false,
+          "custom_branch_policies": true
+        }
+      },
+      "branch_policies": [{ "name": "v-cli-*", "type": "tag" }]
     },
     {
       "name": "mobile-store-release",

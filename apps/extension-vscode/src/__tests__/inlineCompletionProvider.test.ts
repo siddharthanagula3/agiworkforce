@@ -9,6 +9,7 @@ import {
 } from '../utils/api';
 import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
 import { AgiInlineCompletionProvider } from '../features/inline-completions/inlineCompletionProvider';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 type ScanModule0 = typeof import('../core/cloudUtilityErrorActions');
 type ScanModule1 = typeof import('../utils/api');
 
@@ -100,6 +101,27 @@ afterEach(() => {
 });
 
 describe('inline completions, real provider extraction', () => {
+  it('sends nothing to AGI Cloud on a Local default model and says why once', async () => {
+    configure({ model: SYNTHETIC_LOCAL_MODEL_ID });
+    const provider = new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+    const ask = () =>
+      provider.provideInlineCompletionItems(
+        documentAt('const value = '),
+        new vscode.Position(0, 'const value = '.length),
+        {} as vscode.InlineCompletionContext,
+        token,
+      );
+
+    expect(await ask()).toEqual([]);
+    expect(await ask()).toEqual([]);
+
+    expect(chatCompletion).not.toHaveBeenCalled();
+    expect(vscode.window.showWarningMessage).toHaveBeenCalledOnce();
+    expect(String(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0])).toContain(
+      `Inline completion runs only on AGI Cloud, and your default model, ${SYNTHETIC_LOCAL_MODEL_ID}, is a Local model`,
+    );
+  });
+
   it.each(['credential-target', 'unresolved'] as const)(
     'reads and sends nothing when the file path is %s',
     async (refusal) => {

@@ -5,10 +5,13 @@
 //! which resolves the newest stable `v-cli-*` GitHub release. Nothing is
 //! downloaded: the command prints the install command the README documents.
 
+use agiworkforce_sandbox_policy::host_path::{find_program, trusted_path_entries, untrusted_roots};
 use anyhow::{anyhow, bail, Context};
 use semver::Version;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
+use std::ffi::{OsStr, OsString};
+use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -27,6 +30,7 @@ const PUBLIC_KEY_BEGIN: &str = "-----BEGIN PUBLIC KEY-----";
 const PUBLIC_KEY_END: &str = "-----END PUBLIC KEY-----";
 const INSTALLED_BINARIES: [&str; 2] = ["agi", "agiworkforce"];
 const NO_UPDATE_CHECK_ENV: &str = "AGIWORKFORCE_NO_UPDATE_CHECK";
+const MAX_VERSION_OUTPUT_BYTES: u64 = 4096;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -326,7 +330,56 @@ async fn fetch_release_file(client: &reqwest::Client, url: &str) -> anyhow::Resu
     Ok(response.bytes().await?.to_vec())
 }
 
-fn verify_manifest(work: &Path, manifest: &[u8], signature: &[u8]) -> anyhow::Result<()> {
+/// A program the updater runs on the host with the user's rights, found only
+/// on `PATH` entries a sandboxed command cannot write, and run with `PATH`
+/// set to those entries so nothing it starts comes from one either.
+struct HostTool {
+    program: PathBuf,
+    search_path: OsString,
+}
+
+impl HostTool {
+    fn command(&self) -> Command {
+        let mut command = Command::new(&self.program);
+        command.env("PATH", &self.search_path);
+        command
+    }
+}
+
+fn host_tool(name: &str) -> anyhow::Result<HostTool> {
+    host_tool_on(&std::env::var_os("PATH").unwrap_or_default(), name)
+}
+
+fn host_tool_on(path: &OsStr, name: &str) -> anyhow::Result<HostTool> {
+    let roots = untrusted_roots(&[]);
+    let entries: Vec<PathBuf> = trusted_path_entries(path, &roots)
+        .into_iter()
+        .filter(|entry| !crate::path_security::program_is_untrusted(entry))
+        .collect();
+    let program = entries
+        .iter()
+        .find_map(|entry| {
+            find_program(entry.as_os_str(), name, &roots)
+                .filter(|program| !crate::path_security::program_is_untrusted(program))
+        })
+        .ok_or_else(|| {
+            anyhow!(
+                "{name} is required to install an update, and no {name} was found on PATH outside \
+                 the folders a sandboxed command can write; nothing was installed."
+            )
+        })?;
+    Ok(HostTool {
+        program,
+        search_path: std::env::join_paths(&entries)?,
+    })
+}
+
+fn verify_manifest(
+    openssl: &HostTool,
+    work: &Path,
+    manifest: &[u8],
+    signature: &[u8],
+) -> anyhow::Result<()> {
     let keys = pinned_release_keys();
     if keys.is_empty() {
         bail!(
@@ -341,7 +394,8 @@ fn verify_manifest(work: &Path, manifest: &[u8], signature: &[u8]) -> anyhow::Re
     for (index, key) in keys.iter().enumerate() {
         let key_path = work.join(format!("release-key-{index}.pem"));
         std::fs::write(&key_path, key)?;
-        let verified = Command::new("openssl")
+        let verified = openssl
+            .command()
             .arg("dgst")
             .arg("-sha256")
             .arg("-verify")
@@ -384,14 +438,17 @@ fn previous_path(directory: &Path, name: &str) -> PathBuf {
     directory.join(format!(".{name}.previous"))
 }
 
-fn start_staged_binary(staged: &Path) -> std::io::Result<std::process::Child> {
+fn start_staged_binary(
+    staged: &Path,
+    stdout: &std::fs::File,
+) -> std::io::Result<std::process::Child> {
     let mut attempts = 0;
     loop {
         let started = Command::new(staged)
             .arg("--version")
             .env(NO_UPDATE_CHECK_ENV, "1")
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
+            .stdout(stdout.try_clone()?)
             .stderr(Stdio::null())
             .spawn();
         match started {
@@ -406,12 +463,13 @@ fn start_staged_binary(staged: &Path) -> std::io::Result<std::process::Child> {
     }
 }
 
-fn staged_binary_runs(staged: &Path) -> anyhow::Result<()> {
-    let mut child = start_staged_binary(staged)?;
+fn staged_binary_version(staged: &Path) -> anyhow::Result<String> {
+    let mut output = tempfile::tempfile()?;
+    let mut child = start_staged_binary(staged, &output)?;
     let deadline = std::time::Instant::now() + SELF_CHECK_TIMEOUT;
     loop {
         match child.try_wait()? {
-            Some(status) if status.success() => return Ok(()),
+            Some(status) if status.success() => break,
             Some(status) => bail!("it exited with {status}"),
             None if std::time::Instant::now() >= deadline => {
                 let _ = child.kill();
@@ -424,9 +482,61 @@ fn staged_binary_runs(staged: &Path) -> anyhow::Result<()> {
             None => std::thread::sleep(Duration::from_millis(50)),
         }
     }
+    output.rewind()?;
+    let mut reported = Vec::new();
+    output
+        .take(MAX_VERSION_OUTPUT_BYTES)
+        .read_to_end(&mut reported)?;
+    Ok(String::from_utf8_lossy(&reported).into_owned())
 }
 
-fn stage_binaries(unpacked: &Path, directory: &Path) -> anyhow::Result<Vec<&'static str>> {
+fn reported_version(output: &str) -> Option<&str> {
+    output
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())?
+        .split_whitespace()
+        .last()
+}
+
+/// The version an update must report: the one the release feed named, and
+/// newer than this agi. The signed manifest names assets without versions, so
+/// without this a feed could point at an older signed release.
+#[derive(Debug, Clone, Copy)]
+struct ReleaseVersions<'a> {
+    published: &'a str,
+    running: &'a str,
+}
+
+impl ReleaseVersions<'_> {
+    fn check(&self, name: &str, output: &str) -> anyhow::Result<()> {
+        let published = self.published;
+        let running = self.running;
+        let Some(reported) = reported_version(output) else {
+            bail!(
+                "The new {name} reports no version, so the installed one was left as it was; nothing was installed."
+            );
+        };
+        let shown = crate::terminal_text::sanitize_terminal_text(reported);
+        if compare_versions(reported, published) != UpdateVerdict::UpToDate {
+            bail!(
+                "The new {name} reports version {shown}, not the {published} the release feed named, so the installed one was left as it was; nothing was installed."
+            );
+        }
+        if compare_versions(running, reported) != UpdateVerdict::Available {
+            bail!(
+                "The new {name} is version {shown}, which is not newer than this agi ({running}), so the installed one was left as it was; nothing was installed."
+            );
+        }
+        Ok(())
+    }
+}
+
+fn stage_binaries(
+    unpacked: &Path,
+    directory: &Path,
+    versions: ReleaseVersions<'_>,
+) -> anyhow::Result<Vec<&'static str>> {
     let mut staged = Vec::new();
     for name in INSTALLED_BINARIES {
         let source = unpacked.join(name);
@@ -442,11 +552,12 @@ fn stage_binaries(unpacked: &Path, directory: &Path) -> anyhow::Result<Vec<&'sta
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))?;
         }
-        staged_binary_runs(&path).map_err(|reason| {
+        let reported = staged_binary_version(&path).map_err(|reason| {
             anyhow!(
                 "The new {name} does not start ({reason}), so the installed one was left as it was; nothing was installed."
             )
         })?;
+        versions.check(name, &reported)?;
     }
     Ok(staged)
 }
@@ -539,12 +650,16 @@ fn swap_failure(problem: String, stranded: Vec<String>) -> anyhow::Error {
     }
 }
 
-fn replace_binaries(unpacked: &Path, directory: &Path) -> anyhow::Result<()> {
+fn replace_binaries(
+    unpacked: &Path,
+    directory: &Path,
+    versions: ReleaseVersions<'_>,
+) -> anyhow::Result<()> {
     if !unpacked.join(INSTALLED_BINARIES[0]).is_file() {
         bail!("The release archive does not contain agi; nothing was installed.");
     }
-    let outcome =
-        stage_binaries(unpacked, directory).and_then(|staged| swap_in(directory, &staged));
+    let outcome = stage_binaries(unpacked, directory, versions)
+        .and_then(|staged| swap_in(directory, &staged));
     for name in INSTALLED_BINARIES {
         let _ = std::fs::remove_file(staged_path(directory, name));
     }
@@ -563,6 +678,8 @@ pub async fn install_release(release: &CliRelease, directory: &Path) -> anyhow::
         .download_url
         .rsplit_once('/')
         .ok_or_else(|| anyhow!("The release feed named no download location."))?;
+    let openssl = host_tool("openssl")?;
+    let tar = host_tool("tar")?;
 
     let client = reqwest::Client::builder()
         .timeout(RELEASE_DOWNLOAD_TIMEOUT)
@@ -572,7 +689,7 @@ pub async fn install_release(release: &CliRelease, directory: &Path) -> anyhow::
     let signature = fetch_release_file(&client, &format!("{base}/SHA256SUMS.sig")).await?;
 
     let work = tempfile::tempdir()?;
-    verify_manifest(work.path(), &manifest, &signature)?;
+    verify_manifest(&openssl, work.path(), &manifest, &signature)?;
     let expected = manifest_checksum(&manifest, &download.asset_name)?;
     if crate::hex::encode(&Sha256::digest(&archive)) != expected {
         bail!("The archive does not match its signed checksum; nothing was installed.");
@@ -582,7 +699,8 @@ pub async fn install_release(release: &CliRelease, directory: &Path) -> anyhow::
     let unpacked = work.path().join("unpacked");
     std::fs::write(&archive_path, &archive)?;
     std::fs::create_dir_all(&unpacked)?;
-    let extracted = Command::new("tar")
+    let extracted = tar
+        .command()
         .arg("-xzf")
         .arg(&archive_path)
         .arg("-C")
@@ -592,7 +710,14 @@ pub async fn install_release(release: &CliRelease, directory: &Path) -> anyhow::
     if !extracted.success() {
         bail!("The release archive could not be unpacked; nothing was installed.");
     }
-    replace_binaries(&unpacked, directory)
+    replace_binaries(
+        &unpacked,
+        directory,
+        ReleaseVersions {
+            published: &release.version,
+            running: running_version(),
+        },
+    )
 }
 
 pub async fn fetch_latest_release() -> anyhow::Result<CliRelease> {
@@ -850,7 +975,7 @@ mod tests {
         write_script(unpacked.path(), "agi", "exit 3");
         write_script(unpacked.path(), "agiworkforce", "echo new");
 
-        let error = replace_binaries(unpacked.path(), installed.path())
+        let error = replace_binaries(unpacked.path(), installed.path(), UPDATE)
             .expect_err("a build that exits non-zero must not be installed");
 
         assert!(error.to_string().contains("does not start"), "{error}");
@@ -870,13 +995,13 @@ mod tests {
     fn a_working_build_replaces_both_binaries_and_drops_the_backups() {
         let installed = tempfile::tempdir().expect("install dir");
         let unpacked = tempfile::tempdir().expect("unpacked dir");
-        write_script(installed.path(), "agi", "echo old");
-        write_script(unpacked.path(), "agi", "echo new-agi");
-        write_script(unpacked.path(), "agiworkforce", "echo new-agiworkforce");
+        write_script(installed.path(), "agi", "echo agi 1.0.0");
+        write_script(unpacked.path(), "agi", "echo agi 9.9.9");
+        write_script(unpacked.path(), "agiworkforce", "echo agiworkforce 9.9.9");
 
-        replace_binaries(unpacked.path(), installed.path()).expect("install the new build");
+        replace_binaries(unpacked.path(), installed.path(), UPDATE).expect("install the new build");
 
-        for (name, body) in [("agi", "new-agi"), ("agiworkforce", "new-agiworkforce")] {
+        for (name, body) in [("agi", "agi 9.9.9"), ("agiworkforce", "agiworkforce 9.9.9")] {
             let installed_now =
                 std::fs::read_to_string(installed.path().join(name)).expect("read binary");
             assert!(installed_now.contains(body), "{name}: {installed_now}");
@@ -893,10 +1018,10 @@ mod tests {
         let blocker = installed.path().join("agiworkforce");
         std::fs::create_dir(&blocker).expect("directory in the way");
         std::fs::write(blocker.join("keep"), "x").expect("fill the directory");
-        write_script(unpacked.path(), "agi", "echo new-agi");
-        write_script(unpacked.path(), "agiworkforce", "echo new-agiworkforce");
+        write_script(unpacked.path(), "agi", "echo agi 9.9.9");
+        write_script(unpacked.path(), "agiworkforce", "echo agiworkforce 9.9.9");
 
-        let error = replace_binaries(unpacked.path(), installed.path())
+        let error = replace_binaries(unpacked.path(), installed.path(), UPDATE)
             .expect_err("the second binary cannot replace a directory");
 
         assert!(error.to_string().contains("put back"), "{error}");
@@ -904,6 +1029,133 @@ mod tests {
         assert!(agi.contains("old-agi"), "agi was not restored: {agi}");
         assert!(blocker.is_dir());
         assert_eq!(file_names(installed.path()), ["agi", "agiworkforce"]);
+    }
+
+    #[cfg(unix)]
+    const UPDATE: ReleaseVersions<'static> = ReleaseVersions {
+        published: "9.9.9",
+        running: "1.0.0",
+    };
+
+    #[cfg(unix)]
+    fn refused_install(unpacked_scripts: &[(&str, &str)], versions: ReleaseVersions<'_>) -> String {
+        let installed = tempfile::tempdir().expect("install dir");
+        let unpacked = tempfile::tempdir().expect("unpacked dir");
+        write_script(installed.path(), "agi", "echo old-agi");
+        write_script(installed.path(), "agiworkforce", "echo old-agiworkforce");
+        for (name, body) in unpacked_scripts {
+            write_script(unpacked.path(), name, body);
+        }
+
+        let error = replace_binaries(unpacked.path(), installed.path(), versions)
+            .expect_err("a build other than the published, newer one must not be installed");
+
+        for (name, body) in [("agi", "old-agi"), ("agiworkforce", "old-agiworkforce")] {
+            let kept = std::fs::read_to_string(installed.path().join(name)).expect("read binary");
+            assert!(kept.contains(body), "{name} changed: {kept}");
+        }
+        assert_eq!(file_names(installed.path()), ["agi", "agiworkforce"]);
+        let message = error.to_string();
+        assert!(message.contains("nothing was installed"), "{message}");
+        message
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_older_signed_build_than_the_feed_named_is_refused() {
+        let message = refused_install(&[("agi", "echo agi 0.0.1")], UPDATE);
+        assert!(message.contains("reports version 0.0.1"), "{message}");
+        assert!(message.contains("9.9.9"), "{message}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_second_binary_from_another_release_is_refused() {
+        let message = refused_install(
+            &[
+                ("agi", "echo agi 9.9.9"),
+                ("agiworkforce", "echo agiworkforce 0.0.1"),
+            ],
+            UPDATE,
+        );
+        assert!(message.contains("new agiworkforce"), "{message}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_feed_that_names_the_running_version_installs_nothing() {
+        let message = refused_install(
+            &[("agi", "echo agi 1.0.0")],
+            ReleaseVersions {
+                published: "1.0.0",
+                running: "1.0.0",
+            },
+        );
+        assert!(message.contains("not newer than this agi"), "{message}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_build_that_reports_no_version_is_refused() {
+        let message = refused_install(&[("agi", "true")], UPDATE);
+        assert!(message.contains("reports no version"), "{message}");
+    }
+
+    #[test]
+    fn the_reported_version_is_the_last_word_of_the_first_line() {
+        assert_eq!(reported_version("agi 1.2.3\n"), Some("1.2.3"));
+        assert_eq!(
+            reported_version("\n  agiworkforce 2.0.0-beta.1  \nmore\n"),
+            Some("2.0.0-beta.1")
+        );
+        assert_eq!(reported_version(" \n"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_planted_tool_on_a_sandbox_writable_path_is_never_run() {
+        let planted = tempfile::tempdir().expect("sandbox-writable folder");
+        let marker = planted.path().join("ran");
+        write_script(
+            planted.path(),
+            "openssl",
+            &format!("touch '{}'", marker.display()),
+        );
+
+        let error = host_tool_on(planted.path().as_os_str(), "openssl")
+            .err()
+            .expect("a tool only on a sandbox-writable path must not be resolved");
+        assert!(
+            error
+                .to_string()
+                .contains("outside the folders a sandboxed command can write"),
+            "{error}"
+        );
+        assert!(!marker.exists(), "the planted openssl ran");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_planted_tool_ahead_of_a_trusted_one_is_skipped() {
+        let planted = tempfile::tempdir().expect("sandbox-writable folder");
+        write_script(planted.path(), "sh", "exit 0");
+        let search =
+            std::env::join_paths([planted.path(), Path::new("/bin"), Path::new("/usr/bin")])
+                .expect("join search path");
+
+        let tool = host_tool_on(&search, "sh").expect("a trusted sh is on the path");
+
+        assert!(
+            !tool.program.starts_with(planted.path()),
+            "{}",
+            tool.program.display()
+        );
+        assert!(
+            std::env::split_paths(&tool.search_path)
+                .all(|entry| !entry.starts_with(planted.path())),
+            "the planted folder stays on the tool's PATH: {:?}",
+            tool.search_path
+        );
     }
 
     #[test]

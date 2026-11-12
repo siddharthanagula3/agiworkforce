@@ -850,6 +850,9 @@
     "ACCOUNT_NOTIFICATIONS_PATH": [
       "apps/mobile/src/features/notifications/accountFeed.ts"
     ],
+    "ACCOUNT_ORIGIN_REFUSAL": [
+      "apps/extension/src/features/computer-use/accountOrigins.ts"
+    ],
     "account_poll_device_authorization": [
       "apps/desktop/src-tauri/src/sys/account/mod.rs"
     ],
@@ -5985,9 +5988,6 @@
     "applyPluginVersion": [
       "apps/web/features/directory/services/plugins-directory.ts"
     ],
-    "applyPosition": [
-      "apps/extension/src/features/content/in-page-panel/launcher.ts"
-    ],
     "applyPostAuthIntentAfterSignIn": [
       "apps/mobile/src/features/auth/actions/postAuthIntent.ts"
     ],
@@ -7915,6 +7915,9 @@
     "asksForSchedule": [
       "apps/web/lib/server/tools/schedule-tool.ts"
     ],
+    "asksInAutoMode": [
+      "apps/extension/src/features/computer-use/crucialActions.ts"
+    ],
     "askSupport": [
       "apps/web/features/support/lib/support-client.ts"
     ],
@@ -8473,7 +8476,7 @@
       "apps/mobile/src/features/age-assurance/ageAssurance.ts"
     ],
     "async": [
-      "apps/extension/src/utils.ts"
+      "apps/extension/src/features/background/storageUtils.ts"
     ],
     "async_utils": [
       "crates/agiworkforce-protocol/src/lib.rs"
@@ -9669,6 +9672,12 @@
     "authorizeRemoteCommand": [
       "apps/desktop/electron/runtime/permissionManager.ts"
     ],
+    "authorizeSiteToolDestination": [
+      "apps/extension/src/features/content/workerAccess.ts"
+    ],
+    "AuthorizeSiteToolDestinationMessage": [
+      "apps/extension/src/types.ts"
+    ],
     "authorizeSSORequest": [
       "apps/web/lib/server/sso/sso-route-guard.ts"
     ],
@@ -9873,7 +9882,6 @@
       "packages/ai/routing/src/index.ts"
     ],
     "AUTOFILL_PROFILE_STORAGE_KEY": [
-      "apps/extension/src/features/content/autofill/filler.ts",
       "apps/extension/src/features/content/autofill/profile-storage.ts"
     ],
     "autofillAshby": [
@@ -19051,7 +19059,6 @@
       "apps/extension/src/features/cloud-bridge/freeTrialClient.ts"
     ],
     "clearAutofillProfile": [
-      "apps/extension/src/features/content/autofill/filler.ts",
       "apps/extension/src/features/content/autofill/profile-storage.ts"
     ],
     "clearAvailabilityCache": [
@@ -19889,6 +19896,12 @@
     ],
     "CliReleaseStatus": [
       "apps/web/app/cli/CliInstallCommand.tsx"
+    ],
+    "CliResolution": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
+    ],
+    "CliResolutionFailure": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
     ],
     "CliResolutionHost": [
       "apps/extension-vscode/src/platform/remoteEnvironment.ts"
@@ -22196,6 +22209,12 @@
     "CloudUtilityFailureKind": [
       "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts"
     ],
+    "cloudUtilityModel": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
+    ],
+    "CloudUtilityModel": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
+    ],
     "CloudVoiceActionDialog": [
       "apps/desktop/src/features/voice/CloudVoiceActionDialog.tsx"
     ],
@@ -23262,6 +23281,9 @@
     ],
     "collectReadmeFactErrors": [
       "scripts/check-readme-facts.mjs"
+    ],
+    "collectReleaseSettings": [
+      "scripts/release/check-release-environments.mjs"
     ],
     "collectResolvableAshbyFields": [
       "apps/extension/src/features/content/autofill/ashby.ts"
@@ -27654,6 +27676,9 @@
     "content_route": [
       "apps/cli/src/cloud/artifacts.rs"
     ],
+    "CONTENT_SENDER_REFUSAL": [
+      "apps/extension/src/features/background/contentAccess.ts"
+    ],
     "ContentBlock": [
       "apps/cli/src/models/mod.rs",
       "crates/agiworkforce-agent-core/src/lib.rs",
@@ -27711,6 +27736,12 @@
     "ContentReportStatus": [
       "apps/web/features/admin/services/content-report-queue-client.ts",
       "apps/web/lib/server/content-report-triage.ts"
+    ],
+    "contentScriptPageUrl": [
+      "apps/extension/src/features/background/contentAccess.ts"
+    ],
+    "ContentScriptSender": [
+      "apps/extension/src/features/background/contentAccess.ts"
     ],
     "ContentTakedownPanel": [
       "apps/web/features/admin/components/ContentTakedownPanel.tsx"
@@ -28411,7 +28442,8 @@
       "scripts/check-time-semantics.mjs",
       "scripts/check-visual-session-telemetry.mjs",
       "scripts/check-workflow-hardening.mjs",
-      "scripts/lib/research-run-bounds.mjs"
+      "scripts/lib/research-run-bounds.mjs",
+      "scripts/release/check-release-environments.mjs"
     ],
     "contract_permission": [
       "apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs"
@@ -29122,6 +29154,9 @@
     ],
     "COPY_VALUE_LABEL": [
       "packages/ui/ui/src/directory/constants.ts"
+    ],
+    "COPY_WORKSPACE_NOTES_ACTION": [
+      "apps/extension-vscode/src/memory/accountMemoryStore.ts"
     ],
     "CopyableIdField": [
       "apps/web/features/settings/components/CopyableIdField.tsx"
@@ -35499,6 +35534,9 @@
     "describeChart": [
       "apps/mobile/src/features/chat/utils/mermaidChart.ts"
     ],
+    "describeCliResolutionFailure": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
+    ],
     "describeCloudCodeError": [
       "apps/mobile/src/features/cloud-code/service.ts"
     ],
@@ -36297,6 +36335,9 @@
     ],
     "DesktopSubscriptionOwnerPolicy": [
       "apps/desktop/src/lib/subscriptionOwnership.ts"
+    ],
+    "desktopTabSummary": [
+      "apps/extension/src/features/native-bridge/tabListing.ts"
     ],
     "DesktopTasks": [
       "apps/desktop/src/features/tasks/DesktopTasks.tsx"
@@ -38163,6 +38204,9 @@
     ],
     "DiagnosticSurface": [
       "packages/contracts/cloud-contracts/src/support.ts"
+    ],
+    "DiagnosticWriter": [
+      "apps/cli/src/output.rs"
     ],
     "DiagramMetadata": [
       "apps/desktop/src-tauri/src/core/artifacts/types.rs",
@@ -42971,7 +43015,8 @@
       "scripts/lib/rollout/entitlements.mjs"
     ],
     "entries": [
-      "apps/cli/src/cloud/marketplaces.rs"
+      "apps/cli/src/cloud/marketplaces.rs",
+      "apps/cli/src/tui/turn_transcript.rs"
     ],
     "entry": [
       "apps/cli/src/mcp/registry.rs",
@@ -43798,6 +43843,9 @@
     ],
     "evaluatePublicTextContrast": [
       "apps/web/e2e/lib/public-text-contrast.ts"
+    ],
+    "evaluateReleaseSettings": [
+      "scripts/release/check-release-environments.mjs"
     ],
     "evaluateRelevanceFloor": [
       "apps/web/lib/support/agent/index.ts",
@@ -53136,6 +53184,9 @@
       "packages/ai/routing/src/auto-capability-envelope.ts",
       "packages/ai/routing/src/index.ts"
     ],
+    "GetAutofillProfileMessage": [
+      "apps/extension/src/types.ts"
+    ],
     "getAutoModeById": [
       "apps/mobile/src/features/model-picker/service.ts"
     ],
@@ -54137,6 +54188,9 @@
     ],
     "getOwnedPublishedArtifactSummaryByArtifactId": [
       "apps/web/lib/services/published-artifact-service.ts"
+    ],
+    "GetPageAccessMessage": [
+      "apps/extension/src/types.ts"
     ],
     "getPageActions": [
       "apps/extension/src/features/content/in-page-panel/pageActions.ts"
@@ -57231,6 +57285,9 @@
     "has_server": [
       "apps/cli/src/mcp/mod.rs"
     ],
+    "has_visible_text": [
+      "apps/cli/src/tui/turn_transcript.rs"
+    ],
     "has_work": [
       "apps/cli/src/update_check.rs"
     ],
@@ -59992,9 +60049,6 @@
       "apps/cli/src/agent/checkpoints.rs",
       "apps/cli/src/tui/prompt_history.rs",
       "apps/desktop/src-tauri/src/data/db/mod.rs"
-    ],
-    "IN_PAGE_PANEL_ENABLED_KEY": [
-      "apps/extension/src/inPagePanel/setup.ts"
     ],
     "IN_PAGE_PANEL_ENABLED_STORAGE_KEY": [
       "apps/extension/src/features/options/preference-rows.ts"
@@ -63688,6 +63742,9 @@
     "isExperimentFlagKey": [
       "apps/web/lib/feature-flags/experiments.ts"
     ],
+    "isExtensionAccountOrigin": [
+      "apps/extension/src/features/computer-use/accountOrigins.ts"
+    ],
     "isExternalResourceRef": [
       "packages/contracts/types/src/file-reference.ts"
     ],
@@ -64047,6 +64104,9 @@
     "isItineraryTool": [
       "apps/web/lib/places/itinerary-tool.ts"
     ],
+    "isJobApplicationHostUrl": [
+      "apps/extension/src/features/content/autofill/detector.ts"
+    ],
     "isJobCancellationRequested": [
       "apps/web/lib/jobs/cancellation.ts"
     ],
@@ -64214,6 +64274,9 @@
     ],
     "isLoopbackHostname": [
       "packages/contracts/types/src/url.ts"
+    ],
+    "isLoopbackOrigin": [
+      "apps/extension/src/features/computer-use/accountOrigins.ts"
     ],
     "isMaintenanceUnderway": [
       "apps/web/lib/service-notices/maintenance-window.ts"
@@ -64534,9 +64597,6 @@
     ],
     "isPanelAvailable": [
       "apps/desktop/src/features/v3/shellPanels.ts"
-    ],
-    "isPanelEnabled": [
-      "apps/extension/src/inPagePanel/setup.ts"
     ],
     "isParallelSafeTool": [
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts",
@@ -66930,9 +66990,6 @@
     "launcherPath": [
       "apps/desktop/electron/browser/hostInstaller.ts"
     ],
-    "LauncherPosition": [
-      "apps/extension/src/features/content/in-page-panel/launcher.ts"
-    ],
     "launchExtension": [
       "apps/extension/e2e/extension-harness.mjs"
     ],
@@ -68391,6 +68448,9 @@
     ],
     "listedOutsideRangeMessage": [
       "apps/web/lib/services/plugin-dependencies.ts"
+    ],
+    "ListedTab": [
+      "apps/extension/src/features/native-bridge/tabListing.ts"
     ],
     "ListedTrigger": [
       "apps/desktop/src-tauri/src/core/agent/triggers.rs"
@@ -69929,7 +69989,6 @@
       "tools/evals/src/artifacts-package.ts"
     ],
     "loadAutofillProfile": [
-      "apps/extension/src/features/content/autofill/filler.ts",
       "apps/extension/src/features/content/autofill/profile-storage.ts"
     ],
     "loadBaseline": [
@@ -70198,9 +70257,6 @@
     "loadPluginReleaseHistory": [
       "apps/web/features/plugins/server/registry-source.ts"
     ],
-    "loadPosition": [
-      "apps/extension/src/features/content/in-page-panel/launcher.ts"
-    ],
     "loadProjectContext": [
       "apps/web/lib/services/project-context-service.ts"
     ],
@@ -70226,6 +70282,9 @@
       "scripts/check-concept-registry.mjs",
       "scripts/check-domain-ownership.mjs",
       "scripts/check-migration-table-privileges.mjs"
+    ],
+    "loadReleaseContract": [
+      "scripts/release/check-release-environments.mjs"
     ],
     "loadRerunGoal": [
       "apps/mobile/src/features/tasks/taskActions.ts"
@@ -70466,6 +70525,9 @@
     ],
     "LOCAL_MODEL_PROJECT_REFUSAL": [
       "apps/web/lib/temporary-chat-policy.ts"
+    ],
+    "LOCAL_MODEL_SELECTED_CODE": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
     ],
     "LOCAL_MODEL_SERVER_LABELS": [
       "packages/contracts/local-runtime/src/index.ts",
@@ -70992,6 +71054,9 @@
       "apps/mobile/src/features/model-picker/localModelRuntime.ts",
       "packages/contracts/local-runtime/src/index.ts",
       "packages/contracts/local-runtime/src/inference.ts"
+    ],
+    "LocalModelSelectedError": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
     ],
     "LocalModelServerId": [
       "packages/contracts/local-runtime/src/index.ts",
@@ -72060,6 +72125,9 @@
     ],
     "MANAGE_LABEL": [
       "packages/ui/ui/src/directory/constants.ts"
+    ],
+    "MANAGE_WORKSPACE_TRUST_COMMAND": [
+      "apps/extension-vscode/src/integrations/localRuntimeClient.ts"
     ],
     "managed": [
       "apps/cli/src/features/hooks/mod.rs",
@@ -74688,6 +74756,9 @@
     ],
     "ManifestFormat": [
       "apps/cli/src/features/plugins/plugins.rs"
+    ],
+    "ManifestHostPermissions": [
+      "apps/extension/src/features/computer-use/accountOrigins.ts"
     ],
     "ManifestInstallOutcome": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs"
@@ -85090,6 +85161,7 @@
     "observe": [
       "apps/cli/src/models/managed_approvals.rs",
       "apps/cli/src/tui/composer_edits.rs",
+      "apps/cli/src/tui/turn_transcript.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/accelerator.rs"
     ],
     "observe_screen": [
@@ -88065,8 +88137,14 @@
     "package_skill": [
       "packages/tools/skills/reference-bundles/skill-creator/scripts/package_skill.py"
     ],
+    "PACKAGED_HOST_PERMISSIONS": [
+      "apps/extension/__tests__/fixtures/packaged-manifest.ts"
+    ],
     "packaged_profile": [
       "scripts/prepare-linux-sandbox.py"
+    ],
+    "packagedManifest": [
+      "apps/extension/__tests__/fixtures/packaged-manifest.ts"
     ],
     "PackageFile": [
       "apps/desktop/src-tauri/src/core/mcp/extensions/package.rs"
@@ -88151,6 +88229,9 @@
     ],
     "page_url": [
       "apps/cli/src/cloud/code_sessions.rs"
+    ],
+    "PageAccess": [
+      "apps/extension/src/features/content/workerAccess.ts"
     ],
     "PageAction": [
       "apps/desktop/src-tauri/src/sys/commands/extension.rs",
@@ -95919,6 +96000,9 @@
     "probeRemoteAuthMode": [
       "apps/web/lib/connectors/directory/auth-probe.ts"
     ],
+    "probeResolvedCli": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
+    ],
     "ProbeRouteDeps": [
       "services/signaling-server/src/probes.ts"
     ],
@@ -99261,6 +99345,9 @@
     ],
     "push_task": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
+    ],
+    "push_text": [
+      "apps/cli/src/tui/turn_transcript.rs"
     ],
     "push_to_background": [
       "apps/desktop/src-tauri/src/core/agent/background_agent.rs"
@@ -105002,6 +105089,9 @@
     "RELAY_PAIRING_CODE_PATTERN": [
       "packages/contracts/types/src/pairing.ts"
     ],
+    "relayable_thread": [
+      "apps/cli/src/remote_control/host.rs"
+    ],
     "RelayClient": [
       "services/signaling-server/__tests__/relay/in-process.ts"
     ],
@@ -105066,6 +105156,9 @@
     "release_from_vault_keys": [
       "apps/desktop/src-tauri/src/sys/commands/connector_permissions.rs"
     ],
+    "release_held_diagnostics": [
+      "apps/cli/src/output.rs"
+    ],
     "release_key": [
       "apps/desktop/src-tauri/src/automation/input/keyboard.rs"
     ],
@@ -105089,6 +105182,9 @@
     ],
     "RELEASE_OUTCOMES": [
       "apps/web/lib/server/release-audit-store.ts"
+    ],
+    "release_process_leases": [
+      "apps/cli/src/platform/runtime/writer_lease.rs"
     ],
     "RELEASE_READINESS": [
       "scripts/production-deploy-scope.mjs"
@@ -106656,6 +106752,9 @@
     "REPLY_DONE_TITLE": [
       "apps/web/features/chat/lib/completion-notification.ts"
     ],
+    "reply_text": [
+      "apps/cli/src/tui/turn_transcript.rs"
+    ],
     "ReplyActions": [
       "apps/web/features/marketing/components/app-preview/AppPreviews.tsx"
     ],
@@ -106784,7 +106883,8 @@
       "scripts/lib/comment-scan.mjs",
       "scripts/lib/project-context-boundary.mjs",
       "scripts/lib/research-run-bounds.mjs",
-      "scripts/probe-models.mjs"
+      "scripts/probe-models.mjs",
+      "scripts/release/check-release-environments.mjs"
     ],
     "REPO_ROOTS": [
       "scripts/lib/comment-scan.mjs"
@@ -107141,6 +107241,9 @@
     "RequestAuthority": [
       "apps/web/lib/identity/request-authority.ts"
     ],
+    "requestAutofillProfile": [
+      "apps/extension/src/features/content/workerAccess.ts"
+    ],
     "requestAutomationPermission": [
       "packages/client/desktop-command-client/src/automation.ts"
     ],
@@ -107260,6 +107363,9 @@
     ],
     "requestOrganizationRegionMove": [
       "apps/web/lib/server/data-region.ts"
+    ],
+    "requestPageAccess": [
+      "apps/extension/src/features/content/workerAccess.ts"
     ],
     "requestPairing": [
       "apps/extension/src/features/native-bridge/pairing.ts"
@@ -107507,6 +107613,9 @@
     ],
     "REQUIRED_SEARCH_SYSTEM_NUDGE": [
       "apps/web/lib/web-search/required-search.ts"
+    ],
+    "REQUIRED_TAG_RULES": [
+      "scripts/release/check-release-environments.mjs"
     ],
     "required_variables": [
       "apps/cli/src/repo/setup.rs"
@@ -109064,6 +109173,9 @@
     ],
     "ResolveCompromiseResponseInput": [
       "apps/web/lib/services/identity-events/index.ts"
+    ],
+    "resolveConfiguredCli": [
+      "apps/extension-vscode/src/platform/config.ts"
     ],
     "ResolveConnectorAccessOptions": [
       "apps/web/lib/connectors/oauth-access.ts"
@@ -111095,6 +111207,9 @@
     ],
     "restrictions_for": [
       "apps/cli/src/trust/mod.rs"
+    ],
+    "restrictStorageToTrustedContexts": [
+      "apps/extension/src/features/background/storageAccess.ts"
     ],
     "Result": [
       "apps/desktop/src-tauri/src/integrations/api_integrations/mod.rs",
@@ -113229,6 +113344,9 @@
     "rules_dir": [
       "apps/cli/src/native_process_test_fixture.rs"
     ],
+    "rulesetCoversRef": [
+      "scripts/release/check-release-environments.mjs"
+    ],
     "RuleSubject": [
       "apps/cli/src/agent/prompt.rs"
     ],
@@ -113824,6 +113942,9 @@
     ],
     "runSessionRowAction": [
       "apps/web/shared/components/layout/sidebar-session-actions.ts"
+    ],
+    "runsGlobalInstall": [
+      "scripts/check-workflow-hardening.mjs"
     ],
     "runShadowDecision": [
       "apps/web/lib/services/semantic-decisions/shadow.ts"
@@ -115172,7 +115293,6 @@
       "apps/web/features/skills/components/save-as-skill.ts"
     ],
     "saveAutofillProfile": [
-      "apps/extension/src/features/content/autofill/filler.ts",
       "apps/extension/src/features/content/autofill/profile-storage.ts"
     ],
     "saveAutoReload": [
@@ -115350,9 +115470,6 @@
     ],
     "savePairing": [
       "apps/desktop/electron/browser/pairingStore.ts"
-    ],
-    "savePosition": [
-      "apps/extension/src/features/content/in-page-panel/launcher.ts"
     ],
     "savePreferenceNamespace": [
       "apps/mobile/services/preferences.ts",
@@ -116795,6 +116912,9 @@
     ],
     "SCRIPT_RE": [
       "apps/cli/src/features/exec/tools/common/mod.rs"
+    ],
+    "scriptedInstalls": [
+      "scripts/check-workflow-hardening.mjs"
     ],
     "ScriptLanguage": [
       "packages/contracts/types/src/workflow.ts"
@@ -122575,6 +122695,9 @@
     "showLoadingOverlay": [
       "apps/desktop/electron/loadingOverlay.ts"
     ],
+    "showLocalModelRefusal": [
+      "apps/extension-vscode/src/core/cloudUtilityErrorActions.ts"
+    ],
     "showMcpServerDetailsFromSettings": [
       "apps/extension-vscode/src/features/surfaces/capabilityManagement.ts"
     ],
@@ -123012,6 +123135,9 @@
     ],
     "signing_key_from_seed_base64": [
       "apps/cli/src/features/plugins/signature.rs"
+    ],
+    "signingSecretsRead": [
+      "scripts/check-workflow-hardening.mjs"
     ],
     "signInIdentitiesSchema": [
       "apps/web/features/settings/components/Settings/use-sign-in-identities.ts"
@@ -127036,6 +127162,9 @@
     "STORAGE_TABLE_TEST": [
       "scripts/check-privacy-claims.mjs"
     ],
+    "StorageAccessLevelAreas": [
+      "apps/extension/src/features/background/storageAccess.ts"
+    ],
     "storageFallback": [
       "apps/desktop/src/lib/storageFallback.ts",
       "apps/desktop/src/utils/localStorage.ts"
@@ -127059,7 +127188,7 @@
       "apps/mobile/src/features/settings/storageUsage.ts"
     ],
     "storageUtils": [
-      "apps/extension/src/utils.ts"
+      "apps/extension/src/features/background/storageUtils.ts"
     ],
     "store": [
       "crates/agiworkforce-mcp/src/cache.rs"
@@ -135474,6 +135603,9 @@
     "TRUSTED": [
       "apps/cli/src/trust/mod.rs"
     ],
+    "TRUSTED_ONLY_STORAGE_AREAS": [
+      "apps/extension/src/features/background/storageAccess.ts"
+    ],
     "trusted_path_entries": [
       "crates/agiworkforce-sandbox-policy/src/host_path.rs"
     ],
@@ -135501,6 +135633,9 @@
     ],
     "TrustedImagesContext": [
       "packages/ui/unified-chat/src/components/markdown/ImageTrust.tsx"
+    ],
+    "TrustedOnlyStorageArea": [
+      "apps/extension/src/features/background/storageAccess.ts"
     ],
     "trustedPluginPublisherKeys": [
       "apps/web/lib/services/plugin-marketplace-service.ts"
@@ -135727,6 +135862,9 @@
     "TURN_INTERRUPT": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "turn_notice": [
+      "apps/cli/src/cloud/client.rs"
+    ],
     "turn_of": [
       "apps/cli/src/app_server/review.rs"
     ],
@@ -135818,6 +135956,9 @@
     "TurnEngine": [
       "crates/agiworkforce-agent-core/src/engine.rs",
       "crates/agiworkforce-agent-core/src/lib.rs"
+    ],
+    "TurnEntry": [
+      "apps/cli/src/tui/turn_transcript.rs"
     ],
     "TurnEnvironmentSelection": [
       "crates/agiworkforce-protocol/src/protocol.rs"
@@ -136052,6 +136193,9 @@
     ],
     "TurnToolProhibitionSchema": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-prohibition.ts"
+    ],
+    "TurnTranscript": [
+      "apps/cli/src/tui/turn_transcript.rs"
     ],
     "TurnTruncationInput": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-completeness.ts"
@@ -136977,6 +137121,9 @@
     ],
     "UNRESOLVED_UI_GAP_STATUSES": [
       "scripts/ui-gaps-lib.mjs"
+    ],
+    "unresolvedCliProbe": [
+      "apps/extension-vscode/src/platform/remoteEnvironment.ts"
     ],
     "UnresolvedPublicRoute": [
       "apps/web/e2e/lib/public-route-inventory.ts"
@@ -145697,6 +145844,9 @@
     "WORKSPACE_MEMORY_ADOPTED_KEY": [
       "apps/extension-vscode/src/memory/accountMemoryStore.ts"
     ],
+    "WORKSPACE_MEMORY_DECLINED_KEY": [
+      "apps/extension-vscode/src/memory/accountMemoryStore.ts"
+    ],
     "WORKSPACE_MFA_REQUIREMENT_QUERY_KEY": [
       "apps/web/features/settings/components/WorkspaceMfaNotice.tsx",
       "apps/web/features/settings/hooks/use-mfa-readers.ts"
@@ -146136,6 +146286,9 @@
     ],
     "WorkspaceModelsPage": [
       "apps/web/app/workspace/models/page.tsx"
+    ],
+    "WorkspaceNotTrustedError": [
+      "apps/extension-vscode/src/integrations/localRuntimeClient.ts"
     ],
     "WorkspaceOverview": [
       "apps/mobile/src/features/team/index.ts",

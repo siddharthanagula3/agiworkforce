@@ -23,6 +23,13 @@ import type {
   BrowserUploadBinding,
   BrowserUploadedFileMetadata,
 } from './features/computer-use/userFileUpload';
+import type { BrowserSiteToolBinding } from './features/tools/browserAgentSiteTools';
+import type { CallerBrowserContext } from './features/cloud-bridge/callerBrowserContext';
+import type { ChatToolCursor } from './features/computer-use/chatToolResults';
+import type { ContextHandoffDestinationId } from './features/context-handoff';
+import type { FormFillPlan } from './features/content/formFillPlan';
+import type { FormObservationReference } from './features/browser-tools/documentBridge';
+import type { PageMetadata } from './page-metadata';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
 export type NativeMessageType =
@@ -67,6 +74,9 @@ export type NativeMessageType =
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_EXTENSION_SETTINGS'
   | 'GET_SIDE_PANEL_OPEN'
+  | 'GET_PAGE_ACCESS'
+  | 'GET_AUTOFILL_PROFILE'
+  | 'AUTHORIZE_SITE_TOOL_DESTINATION'
   | 'GET_ACCESSIBILITY_TREE'
   | 'START_RECORDING'
   | 'STOP_RECORDING'
@@ -231,7 +241,7 @@ export interface GetPageInfoResponse {
   title?: string;
   html?: string;
   selectedText?: string;
-  metadata?: import('./page-metadata').PageMetadata;
+  metadata?: PageMetadata;
   error?: string;
 }
 
@@ -394,15 +404,15 @@ export interface SyncPageContextMessage extends BaseMessage {
     selectedText?: string;
     timestamp?: number;
     reason?: string;
-    metadata?: import('./page-metadata').PageMetadata;
+    metadata?: PageMetadata;
   };
-  metadata?: import('./page-metadata').PageMetadata;
+  metadata?: PageMetadata;
 }
 
 export interface ApproveContextHandoffMessage extends BaseMessage {
   type: 'APPROVE_CONTEXT_HANDOFF';
   handoffId: string;
-  destination?: import('./features/context-handoff').ContextHandoffDestinationId;
+  destination?: ContextHandoffDestinationId;
 }
 
 export interface CancelContextHandoffMessage extends BaseMessage {
@@ -445,8 +455,8 @@ export interface RunPageActionsResponse {
 
 export interface ChatMessageMessage extends BaseMessage {
   type: 'CHAT_MESSAGE';
-  browserObservation?: import('./features/browser-tools/documentBridge').FormObservationReference;
-  browserContext?: import('./features/cloud-bridge/callerBrowserContext').CallerBrowserContext;
+  browserObservation?: FormObservationReference;
+  browserContext?: CallerBrowserContext;
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
@@ -485,13 +495,13 @@ export interface ChatToolHandoffMessage {
   id: string;
   handoffId: string;
   calls: ToolCall[];
-  callerCheckpoint?: import('./features/computer-use/chatToolResults').ChatToolCursor;
+  callerCheckpoint?: ChatToolCursor;
   recoveryContext?: {
     historyConversationId: string;
     projectId: string | null;
     organizationId: string | null;
-    browserContext: import('./features/cloud-bridge/callerBrowserContext').CallerBrowserContext;
-    observation?: import('./features/browser-tools/documentBridge').FormObservationReference;
+    browserContext: CallerBrowserContext;
+    observation?: FormObservationReference;
   };
 }
 
@@ -672,6 +682,19 @@ export interface GetSidePanelOpenMessage extends BaseMessage {
   type: 'GET_SIDE_PANEL_OPEN';
 }
 
+export interface GetPageAccessMessage extends BaseMessage {
+  type: 'GET_PAGE_ACCESS';
+}
+
+export interface GetAutofillProfileMessage extends BaseMessage {
+  type: 'GET_AUTOFILL_PROFILE';
+}
+
+export interface AuthorizeSiteToolDestinationMessage extends BaseMessage {
+  type: 'AUTHORIZE_SITE_TOOL_DESTINATION';
+  url: string;
+}
+
 export interface GetAccessibilityTreeMessage extends BaseMessage {
   type: 'GET_ACCESSIBILITY_TREE';
 }
@@ -753,7 +776,7 @@ export interface WebMCPCallToolMessage extends BaseMessage {
   type: 'WEBMCP_CALL_TOOL';
   toolName: string;
   arguments?: Record<string, unknown>;
-  browserAgentBinding?: import('./features/tools/browserAgentSiteTools').BrowserSiteToolBinding;
+  browserAgentBinding?: BrowserSiteToolBinding;
   browserAgentCallId?: string;
 }
 
@@ -997,7 +1020,7 @@ export interface FillObservedFormMessage extends Omit<BaseMessage, 'type'> {
   pageUrl: string;
   documentId: string;
   formSnapshotId: string;
-  plan: import('./features/content/formFillPlan').FormFillPlan;
+  plan: FormFillPlan;
   owner: ManagedCloudOwner;
 }
 
@@ -1238,6 +1261,9 @@ export type ExtensionMessage =
   | OpenSidePanelMessage
   | OpenExtensionSettingsMessage
   | GetSidePanelOpenMessage
+  | GetPageAccessMessage
+  | GetAutofillProfileMessage
+  | AuthorizeSiteToolDestinationMessage
   | GetAccessibilityTreeMessage
   | BuildAccessibilityTreeMessage
   | StartRecordingMessage

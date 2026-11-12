@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/ide-runtime';
 import type { DeveloperReasoningEffort } from '@agiworkforce/local-runtime-contract';
 import { describeOutboundRefusal } from '../core/outboundContentGuard';
+import { cloudUtilityModel, LocalModelSelectedError } from '../core/cloudModelBoundary';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { reviewDepthInstruction } from './reviewEffort';
 
@@ -120,6 +121,9 @@ export class AgiDiagnosticsProvider
     cancellationToken: vscode.CancellationToken,
     effort: DeveloperReasoningEffort,
   ): Promise<ReviewResult> {
+    const selected = cloudUtilityModel();
+    if (selected.route === 'local')
+      throw new LocalModelSelectedError(selected.model, 'Code Review');
     const refusal = describeOutboundRefusal(editor.document);
     if (refusal !== null) {
       return { status: 'not-reviewed', reason: refusal };

@@ -35,6 +35,8 @@ References (read 2026-11-11):
 - <https://code.visualstudio.com/api/extension-guides/telemetry>
 - <https://github.com/eclipse/openvsx/wiki/Publishing-Extensions>
 - `ovsx` 1.3.0 package README (Trusted Publishing section)
+- <https://docs.github.com/en/actions/reference/security/oidc> and
+  <https://learn.microsoft.com/en-us/cli/azure/ad/app/federated-credential>
 
 ## What the package job enforces
 
@@ -88,47 +90,74 @@ Who does what: **Owner** steps need the owner's Microsoft, Azure, Eclipse or
 GitHub account; **Lead** steps run from this repository with `gh` and admin
 rights on `siddharthanagula3/agiworkforce`.
 
-1. **Owner. Create the publisher.** Sign in at
+1. **Owner. Protect `vscode-marketplace` and `open-vsx` before any publish
+   identity exists.** Run "First release" steps 2 and 3 of
+   `docs/runbooks/cli-release.md`: they create all four release environments
+   with the owner as required reviewer, administrator bypass off and a
+   deployment policy of `v-vscode-*` tags only, add the tag ruleset, and end
+   with `node scripts/release/check-release-environments.mjs` printing `OK`.
+   A workflow that names a missing environment creates it with no protection,
+   so a tag pushed before this step would publish unapproved; and because the
+   policy admits only tags, a `workflow_dispatch` from a branch never reaches
+   either environment.
+2. **Owner. Create the publisher.** Sign in at
    <https://marketplace.visualstudio.com/manage> with the Microsoft account that
    will own the listing, choose **Create publisher**, and set ID `agiworkforce`
    (it cannot be changed later) and the display name shown as the publisher.
    If `agiworkforce` is taken, stop: the manifest `publisher` and every URL in
    this runbook use it.
-2. **Owner. Create the publish identity.** In the Azure portal, under Microsoft
+3. **Owner. Create the publish identity.** In the Azure portal, under Microsoft
    Entra ID, create an app registration (or a user-assigned managed identity)
    used only for Marketplace publication. Add a federated credential for
    GitHub Actions with organization `siddharthanagula3`, repository
    `agiworkforce`, entity type **Environment**, environment
    `vscode-marketplace` (subject
    `repo:siddharthanagula3/agiworkforce:environment:vscode-marketplace`). Give it
-   no Azure subscription roles and no client secret.
-3. **Owner. Admit the identity to the publisher.** On the publisher's
-   management page, add the identity as a member by its ID with the
-   **Contributor** role.
-4. **Lead. Create the protected environment before any `v-vscode-*` tag
-   exists.** A workflow that references a missing environment creates it with
-   no protection.
+   no Azure subscription roles and no client secret. From the Azure CLI:
 
    ```bash
-   REVIEWER_ID=$(gh api users/siddharthanagula3 --jq .id)
-   printf '{"reviewers":[{"type":"User","id":%s}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}' "$REVIEWER_ID" \
-     | gh api -X PUT repos/siddharthanagula3/agiworkforce/environments/vscode-marketplace --input -
-   gh api -X POST repos/siddharthanagula3/agiworkforce/environments/vscode-marketplace/deployment-branch-policies \
-     -f name='v-vscode-*' -f type=tag
+   gh api repos/siddharthanagula3/agiworkforce/actions/oidc/customization/sub
+   az ad app federated-credential create --id '<application (client) ID>' --parameters '{
+     "name": "agiworkforce-vscode-marketplace",
+     "issuer": "https://token.actions.githubusercontent.com",
+     "subject": "repo:siddharthanagula3/agiworkforce:environment:vscode-marketplace",
+     "audiences": ["api://AzureADTokenExchange"]
+   }'
+   ```
+
+   The first command must show `"use_immutable_subject":false` and the prefix
+   `repo:siddharthanagula3/agiworkforce` (true on 2026-11-11). If immutable
+   subjects are ever turned on, the subject gains the owner and repository ids
+   and the credential has to be updated to match. A job that declares an
+   environment presents that environment, not its ref, as the subject (GitHub
+   OIDC reference, read 2026-11-11), so the tag binding comes from the
+   environment's `v-vscode-*`-only policy (step 1). Entra matches the subject
+   exactly, so no other environment, branch or pull request can use it.
+
+4. **Owner. Admit the identity to the publisher.** On the publisher's
+   management page, add the identity as a member by its ID with the
+   **Contributor** role.
+5. **Lead. Point the protected environment at the identity.** The
+   environment already exists from step 1; the probe confirms it is still
+   protected before anything is stored in it.
+
+   ```bash
+   node scripts/release/check-release-environments.mjs
    gh variable set VSCODE_MARKETPLACE_AZURE_CLIENT_ID --env vscode-marketplace --body '<application (client) ID>'
    gh variable set VSCODE_MARKETPLACE_AZURE_TENANT_ID --env vscode-marketplace --body '<directory (tenant) ID>'
    ```
 
-   Leave "Prevent self-review" off while the owner is the only reviewer. The
-   publish job refuses to run without both variables.
+   The publish job refuses to run without both variables.
 
-5. **Owner decides the first version; lead sets it.** Raise `version` in
+6. **Owner decides the first version; lead sets it.** Raise `version` in
    `apps/extension-vscode/package.json` (the Marketplace suggests even minor
    numbers for stable and odd for pre-release, for example `0.2.0` stable and
    `0.3.0` pre-release), commit, and run "Each release" below.
-6. **Owner. Approve the publish job** only after comparing the VSIX name and
-   SHA-256 in the package job's artifact with the tag. Without the identity
-   (steps 2 and 3), run the workflow with `publish=false`, download the
+7. **Owner. Approve the publish job** only after comparing the VSIX name and
+   SHA-256 in the package job's artifact with the tag. A manual publish has to
+   run on the tag itself, because the environment admits only tags:
+   `gh workflow run release-vscode-extension.yml --ref v-vscode-<version> -f tag=v-vscode-<version> -f publish=true`. Without the identity
+   (steps 3 and 4), run the workflow with `publish=false`, download the
    artifact, and upload the `.vsix` at
    <https://marketplace.visualstudio.com/manage/publishers/agiworkforce>; never
    create a temporary token instead.
@@ -147,11 +176,12 @@ needs `ovsx` as a pinned development dependency of `apps/extension-vscode`.
    `npx ovsx create-namespace agiworkforce -p <token>`, then delete the token
    and claim verified ownership through the namespace-access request the wiki
    describes.
-3. **Owner.** Under <https://open-vsx.org/user-settings/trusted-publishers>,
-   register repository `siddharthanagula3/agiworkforce`, workflow
-   `release-vscode-extension.yml`, environment `open-vsx`.
-4. **Lead.** Create the protected `open-vsx` environment the same way as step 4
-   above (tag policy `v-vscode-*`, no variables), then
+3. **Owner.** Only after "First submission" step 1 shows `open-vsx` protected, register
+   repository `siddharthanagula3/agiworkforce`, workflow
+   `release-vscode-extension.yml`, environment `open-vsx` under
+   <https://open-vsx.org/user-settings/trusted-publishers>. The environment's
+   `v-vscode-*`-only policy is what binds that trust to release tags.
+4. **Lead.** Run `node scripts/release/check-release-environments.mjs`, then
    `gh variable set OPEN_VSX_PUBLISH --body true`.
 
 ## Each release

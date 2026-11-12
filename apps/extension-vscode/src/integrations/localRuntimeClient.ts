@@ -67,6 +67,7 @@ import {
 } from '@agiworkforce/types';
 import { redactTelemetryText } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
+import { describeCliResolutionFailure, type CliResolution } from '../platform/remoteEnvironment';
 
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
 const MAX_REJECTED_LINE_CHARS = 400;
@@ -90,6 +91,32 @@ export const CLI_NOT_EXECUTABLE_MARKER = 'AGI_CLI_NOT_EXECUTABLE';
 
 export function cliAcquisitionHint(): string {
   return `Run "${PRODUCT_NAMES.code}: Install AGI CLI" to install AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer, or set ${CLI_PATH_SETTING} to one you already have.`;
+}
+
+export const MANAGE_WORKSPACE_TRUST_COMMAND = 'workbench.trust.manage';
+
+export class WorkspaceNotTrustedError extends Error {
+  constructor(readonly cwd: string) {
+    super(
+      'This folder is in Restricted Mode, so the AGI CLI is not started here. Trust the folder to use AGI in it.',
+    );
+    this.name = 'WorkspaceNotTrustedError';
+  }
+}
+
+function describeUnresolvedCli(
+  resolution: Extract<CliResolution, { ok: false }>,
+  environmentLabel?: string,
+): Error {
+  if (resolution.reason === 'empty') {
+    return new Error(
+      `${CLI_NOT_FOUND_MARKER}: ${CLI_PATH_SETTING} is empty, so there is no binary to start. ${cliAcquisitionHint()}`,
+    );
+  }
+  const inside = environmentLabel === undefined ? '' : ` in ${environmentLabel}`;
+  return new Error(
+    `${CLI_NOT_FOUND_MARKER}: The AGI CLI could not be started. ${JSON.stringify(resolution.configured)} ${describeCliResolutionFailure(resolution.reason)}${inside}. ${cliAcquisitionHint()}`,
+  );
 }
 
 function describeSpawnFailure(cliPath: string, error: Error, environmentLabel?: string): Error {
@@ -1403,7 +1430,8 @@ export type SpawnLocalRuntime = (
 export type TerminateLocalRuntimeTree = (child: ChildProcessWithoutNullStreams) => Promise<void>;
 
 export interface LocalRuntimeClientOptions {
-  cliPath: string | (() => string);
+  cliPath: string | (() => CliResolution);
+  workspaceTrusted: () => boolean;
   memoryEnabled?: () => boolean;
   bypassPermissionsAvailable?: () => boolean;
   /** When the user consented to AGI working in `cwd`; undefined withholds consent. */
@@ -2177,15 +2205,19 @@ export class LocalRuntimeClient {
   private ensureProcess(): JsonlConnection {
     if (this.disposed) throw new Error('AGI local runtime client is disposed');
     if (this.connection !== undefined) return this.connection;
+    if (!this.options.workspaceTrusted()) throw new WorkspaceNotTrustedError(this.options.cwd);
     const spawnRuntime = this.options.spawn ?? (nodeSpawn as SpawnLocalRuntime);
-    const configuredCliPath =
-      typeof this.options.cliPath === 'function' ? this.options.cliPath() : this.options.cliPath;
-    const cliPath = configuredCliPath.trim();
-    if (cliPath === '') {
-      throw new Error(
-        `${CLI_NOT_FOUND_MARKER}: ${CLI_PATH_SETTING} is empty, so there is no binary to start. ${cliAcquisitionHint()}`,
+    const resolution =
+      typeof this.options.cliPath === 'function'
+        ? this.options.cliPath()
+        : { ok: true as const, path: this.options.cliPath.trim() };
+    if (!resolution.ok || resolution.path === '') {
+      throw describeUnresolvedCli(
+        resolution.ok ? { ok: false, configured: '', reason: 'empty' } : resolution,
+        this.options.environmentLabel,
       );
     }
+    const cliPath = resolution.path;
     let child: ChildProcessWithoutNullStreams;
     const bypassPermissionsAvailable = this.options.bypassPermissionsAvailable?.() === true;
     try {

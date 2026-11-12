@@ -46,8 +46,11 @@ published. Windows needs Git Bash, MSYS2, Cygwin or WSL to run it. `agi update`
 compares this build against the newest release. `agi update --install` does not
 run the shell installer: it downloads the release archive for your platform,
 verifies the signed checksum manifest against the key built into this `agi`,
-checks the archive's SHA-256, and replaces the `agi` it runs from, after you
-confirm (or pass `--yes`). It does not replace a running `agi` on Windows or inside the AGI Cloud
+checks the archive's SHA-256, checks that the new build reports the version the
+release feed named and that it is newer than the running one, and replaces the
+`agi` it runs from, after you confirm (or pass `--yes`). It runs `openssl` and
+`tar` only from `PATH` folders outside the project and temporary folders a
+sandboxed command can write, and stops if it finds none there. It does not replace a running `agi` on Windows or inside the AGI Cloud
 app; on Windows, close `agi` and run the installer above from Git Bash or WSL.
 AGI Cloud for desktop ships its own copy of `agi` for local coding sessions, so
 the desktop app needs no separate install.
@@ -367,8 +370,9 @@ JetBrains IDEs: in AI Chat choose Add Custom Agent, then add the agent to
   protocol and full agent engine; the CLI owns persistence, tool/MCP execution,
   streaming, approval round-trips, cancellation, model resolution, and
   workspace isolation while clients own presentation and context selection.
-  WebSocket mode requires `--auth-token` or `AGI_APP_SERVER_TOKEN`; auth tokens
-  are never printed.
+  WebSocket mode requires its bearer token in `AGI_APP_SERVER_TOKEN`; no
+  argument carries it, because other local users can list a process's
+  arguments, and auth tokens are never printed.
 - CLI and VS Code sessions share `~/.agiworkforce/managed_sessions/`; they do
   not join Web/Mobile/Desktop Cloud chat sync. App-server reads never expose
   the internal system prompt, and cross-workspace read/fork/archive operations

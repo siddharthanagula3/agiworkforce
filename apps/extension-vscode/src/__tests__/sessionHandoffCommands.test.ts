@@ -3,10 +3,20 @@ import * as vscode from 'vscode';
 import { DEVELOPER_SESSION_PROTOCOL_VERSION } from '@agiworkforce/types';
 
 import { setupCommands } from '../core/commandSetup';
+import { LocalRuntimeClient } from '../integrations/localRuntimeClient';
+import { t } from '../l10n';
 import { Config } from '../platform/config';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { __resetStartupWorkForTests } from '../core/startupWork';
 import type { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
+
+type RemoteEnvironmentModule = typeof import('../platform/remoteEnvironment');
+
+vi.mock('../platform/remoteEnvironment', async (importOriginal) => ({
+  ...(await importOriginal<RemoteEnvironmentModule>()),
+  runCliVersion: vi.fn(async () => 'agi 1.0.0'),
+  resolveCliPath: vi.fn(() => ({ ok: true, path: '/home/dev/.agi/bin/agi' })),
+}));
 
 interface Terminal {
   name: string;
@@ -165,6 +175,31 @@ describe('taking a session somewhere else', () => {
     expect(String((options as { detail?: string }).detail)).toContain('will not be recoverable');
     expect(confirm).toBe('Start new chat');
     expect(sidebar.resetConversation).not.toHaveBeenCalled();
+  });
+
+  it('answers a session link in a Restricted Mode folder by offering trust, starting nothing', async () => {
+    const spawn = vi.fn();
+    const client = new LocalRuntimeClient({
+      cliPath: '/home/dev/.agi/bin/agi',
+      workspaceTrusted: () => false,
+      cwd: '/repo',
+      clientVersion: '0.3.0',
+      spawn,
+    });
+    runtime.listThreads.mockImplementation((params) => client.listThreads(params));
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValue(
+      t('webview.manageTrust') as never,
+    );
+
+    await handlers.get('agi-workforce.continueCliSession')?.('thread-cli');
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(runtime.handOffThread).not.toHaveBeenCalled();
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0]).toContain(
+      'Restricted Mode',
+    );
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.trust.manage');
   });
 
   it('opens the accepted CLI session in the sidebar instead of leaving another thread selected', async () => {

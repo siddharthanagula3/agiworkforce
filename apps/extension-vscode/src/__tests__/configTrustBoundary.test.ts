@@ -55,4 +55,23 @@ describe('user-owned execution-boundary configuration', () => {
 
     expect(Config.model()).toBe('fixture-user-boundary');
   });
+
+  it('keeps inline completions off when only an untrusted folder turns them on', () => {
+    const trusted = vscode.workspace.isTrusted;
+    stubConfiguration({
+      'inlineCompletions.enabled': {
+        defaultValue: false,
+        workspaceValue: true,
+        workspaceFolderValue: true,
+      },
+    });
+    try {
+      (vscode.workspace as { isTrusted: boolean }).isTrusted = false;
+      expect(Config.inlineCompletionsEnabled()).toBe(false);
+      (vscode.workspace as { isTrusted: boolean }).isTrusted = true;
+      expect(Config.inlineCompletionsEnabled()).toBe(true);
+    } finally {
+      (vscode.workspace as { isTrusted: boolean }).isTrusted = trusted;
+    }
+  });
 });

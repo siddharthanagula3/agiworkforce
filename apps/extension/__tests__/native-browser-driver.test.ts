@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NativeBrowserDriver } from '../src/features/native-bridge/nativeBrowserDriver';
+import { packagedManifest } from './fixtures/packaged-manifest';
 
 const navigation = vi.hoisted(() => vi.fn());
 
@@ -29,7 +30,7 @@ beforeEach(() => {
   navigation.mockReset();
   getTab.mockReset().mockImplementation(async () => ({ ...tab }));
   vi.stubGlobal('chrome', {
-    runtime: { lastError: null },
+    runtime: { lastError: null, getManifest: packagedManifest },
     tabs: {
       get: getTab,
       query: vi.fn(async () => [{ ...tab }]),

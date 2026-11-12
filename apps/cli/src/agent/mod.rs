@@ -128,6 +128,7 @@ impl std::fmt::Debug for SteerSource {
 /// TUI wrote straight past ratatui's buffer and left the model's answer on the
 /// frame's borders instead of in the transcript. A surface that owns the
 /// terminal installs this so both halves of one reply land in the same place.
+/// It is called once per streamed delta, not once per completion.
 #[derive(Clone)]
 pub struct ContinuationSink(pub std::sync::Arc<dyn Fn(&str) + Send + Sync>);
 

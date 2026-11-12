@@ -57,7 +57,7 @@ pub fn report_boundary_once(error: &CloudError) {
     if BOUNDARY_NOTICE_SHOWN.swap(true, Ordering::SeqCst) {
         return;
     }
-    crate::output::print_info(&error.to_string());
+    crate::output::print_info(&error.turn_notice());
 }
 
 pub fn cloud_dir(config_dir: &Path) -> PathBuf {
