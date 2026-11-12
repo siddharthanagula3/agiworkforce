@@ -222,13 +222,34 @@ fn validate_policy(mut policy: ManagedHookPolicy) -> Result<ManagedHookPolicy, S
     Ok(policy)
 }
 
-fn command_allowed(policy: &ManagedHookPolicy, command: &str) -> bool {
-    match &policy.allowed_commands {
-        None => true,
-        Some(patterns) => patterns
-            .iter()
-            .any(|pattern| glob_match(pattern, command.trim())),
+fn command_allowed(policy: &ManagedHookPolicy, hook: &Hook) -> bool {
+    let Some(patterns) = &policy.allowed_commands else {
+        return true;
+    };
+    if hook.args.is_empty() && !is_plain_word(hook.command.trim()) {
+        return false;
     }
+    if std::iter::once(&hook.command)
+        .chain(&hook.args)
+        .any(|part| climbs_a_folder(part))
+    {
+        return false;
+    }
+    let command = hook.display_command();
+    patterns
+        .iter()
+        .any(|pattern| glob_match(pattern, command.trim()))
+}
+
+fn is_plain_word(text: &str) -> bool {
+    !text.is_empty()
+        && text.chars().all(|c| {
+            c.is_alphanumeric() || matches!(c, '/' | '.' | '_' | '-' | '+' | ',' | ':' | '@' | '%')
+        })
+}
+
+fn climbs_a_folder(text: &str) -> bool {
+    text.split(['/', '\\']).any(|part| part.trim() == "..")
 }
 
 pub fn apply_managed_hook_policy(
@@ -260,10 +281,8 @@ pub fn apply_managed_hook_policy(
         for hook in hooks {
             let permitted = match hook.source {
                 HookSource::Managed => true,
-                HookSource::Plugin => {
-                    policy.allow_plugin_hooks && command_allowed(policy, &hook.display_command())
-                }
-                HookSource::User => command_allowed(policy, &hook.display_command()),
+                HookSource::Plugin => policy.allow_plugin_hooks && command_allowed(policy, &hook),
+                HookSource::User => command_allowed(policy, &hook),
             };
             if permitted {
                 merged.entry(event.clone()).or_default().push(hook);
@@ -393,6 +412,50 @@ mod tests {
         let kept = &config.hooks["PreToolUse"];
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].args, vec!["./scripts/lint.sh".to_string()]);
+    }
+
+    #[test]
+    fn an_allowed_prefix_does_not_admit_a_shell_line_after_it() {
+        let (_dir, state) = write_policy(r#"{"hooks":{"allowedCommands": ["/opt/corp/hooks/*"]}}"#);
+        let program = {
+            let mut entry = hook("/opt/corp/hooks/a.sh", HookSource::User);
+            entry.args = vec!["x".to_string()];
+            entry
+        };
+        let climbing = {
+            let mut entry = hook("/opt/corp/hooks/../../../bin/sh", HookSource::User);
+            entry.args = vec!["-c".to_string(), "id".to_string()];
+            entry
+        };
+        let mut hooks = HashMap::new();
+        hooks.insert(
+            "PreToolUse".to_string(),
+            vec![
+                hook("/opt/corp/hooks/a.sh; id", HookSource::User),
+                hook("/opt/corp/hooks/a.sh $(id)", HookSource::User),
+                hook("/opt/corp/hooks/a.sh", HookSource::User),
+                program,
+                climbing,
+            ],
+        );
+        let config = apply_managed_hook_policy(
+            HooksConfig {
+                hooks,
+                sandbox: None,
+            },
+            &state,
+        );
+        let kept: Vec<(String, Vec<String>)> = config.hooks["PreToolUse"]
+            .iter()
+            .map(|hook| (hook.command.clone(), hook.args.clone()))
+            .collect();
+        assert_eq!(
+            kept,
+            vec![
+                ("/opt/corp/hooks/a.sh".to_string(), Vec::new()),
+                ("/opt/corp/hooks/a.sh".to_string(), vec!["x".to_string()]),
+            ]
+        );
     }
 
     #[test]

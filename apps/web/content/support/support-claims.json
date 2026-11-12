@@ -5283,6 +5283,26 @@
       ]
     },
     {
+      "id": "config-repository-layer-only-narrows",
+      "doc": "configuration",
+      "section": "Which setting wins",
+      "kind": "prose",
+      "sentence": "The repository's file can only narrow your own privacy mode, permission mode and model route: a looser value is ignored and the session says so when it starts.",
+      "implementation": ["apps/cli/src/config.rs#fn narrow_repository_layer"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "a_repository_layer_can_only_narrow_privacy_and_permissions"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/config.rs",
+          "name": "a_repository_model_that_leaves_a_local_boundary_is_not_applied"
+        }
+      ]
+    },
+    {
       "id": "config-repository-mcp-trusted",
       "doc": "configuration",
       "section": "MCP servers and hooks",

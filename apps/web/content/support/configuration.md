@@ -69,6 +69,11 @@ then the repository's `.agiworkforce/config.toml`, then your own
 `config.toml`, then the defaults. A managed policy can fix the permission and
 privacy modes and can turn repository settings off.
 
+The repository's file can only narrow your own privacy mode, permission mode
+and model route: a looser value is ignored and the session says so when it
+starts. A `/privacy-mode` choice for a folder is saved in your own settings
+folder, not in the repository.
+
 ## More than one account
 
 Each `AGIWORKFORCE_HOME` folder keeps its own sign-in, saved API keys, MCP

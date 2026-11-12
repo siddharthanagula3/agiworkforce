@@ -281,6 +281,10 @@ impl DefaultConfig {
             named: NamedDefaultKeys::default(),
         }
     }
+
+    fn names_provider(&self) -> bool {
+        self.named.provider || self.provider != default_provider()
+    }
 }
 
 fn names_default_key(contents: &str, key: &str) -> bool {
@@ -523,14 +527,19 @@ impl CliConfig {
             .unwrap_or_default()
     }
 
-    fn provider_trust_fingerprint(project_path: &str, name: &str, base_url: &str) -> String {
+    fn provider_trust_fingerprint(
+        project_path: &str,
+        name: &str,
+        base_url: &str,
+        api_key_env: Option<&str>,
+    ) -> String {
         use sha2::{Digest, Sha256};
         let mut h = Sha256::new();
-        h.update(project_path.as_bytes());
-        h.update(b"|");
-        h.update(name.as_bytes());
-        h.update(b"|");
-        h.update(base_url.as_bytes());
+        for field in [project_path, name, base_url, api_key_env.unwrap_or("")] {
+            h.update((field.len() as u64).to_le_bytes());
+            h.update(field.as_bytes());
+        }
+        h.update([u8::from(api_key_env.is_some())]);
         crate::hex::encode(&h.finalize())
     }
 
@@ -561,10 +570,11 @@ impl CliConfig {
     /// endpoint. Such a provider would route the user's prompts (and API key) to a
     /// server the *cloned repo* chose, the credential-exfiltration vector in MED-1.
     ///
-    /// The decision is remembered per `(project, provider, url)` in
+    /// The decision is remembered per `(project, provider, url, key variable)` in
     /// `~/.agiworkforce/trusted_project_providers.json`. On denial, or in a
-    /// non-interactive session where we cannot prompt, the provider's `base_url`
-    /// is dropped so nothing routes there. User-global config is never gated here.
+    /// non-interactive session where we cannot prompt, the project's entry for
+    /// that provider is dropped, so the user's own entry stands. User-global
+    /// config is never gated here.
     fn consent_gate_project_providers(project: &mut CliConfig) {
         let project_path = project
             .source
@@ -577,46 +587,57 @@ impl CliConfig {
 
         let names: Vec<String> = project.providers.keys().cloned().collect();
         for name in names {
-            let Some(base_url) = project
-                .providers
-                .get(&name)
-                .and_then(|p| p.base_url.clone())
-            else {
+            let Some((base_url, api_key_env)) = project.providers.get(&name).and_then(|p| {
+                p.base_url
+                    .clone()
+                    .map(|base_url| (base_url, p.api_key_env.clone()))
+            }) else {
                 continue;
             };
             if !Self::base_url_is_remote(&base_url) {
                 continue; // loopback/local, no consent needed
             }
-            let fp = Self::provider_trust_fingerprint(&project_path, &name, &base_url);
+            let fp = Self::provider_trust_fingerprint(
+                &project_path,
+                &name,
+                &base_url,
+                api_key_env.as_deref(),
+            );
             if trusted.contains(&fp) {
-                continue; // previously approved for this exact (project, provider, url)
+                continue;
             }
+            let sent = match api_key_env.as_deref() {
+                Some(env) => format!(
+                    "the key in ${}",
+                    crate::terminal_text::sanitize_terminal_text(env)
+                ),
+                None => "no API key".to_string(),
+            };
 
             let approved = if interactive {
                 eprintln!(
-                    "\n  security: project config {:?} defines provider '{}' pointing at a remote endpoint:\n    {}\n  Using it routes your prompts and API key to that server.",
-                    project_path, name, base_url
+                    "\n  security: project config {:?} defines provider '{}' pointing at a remote endpoint:\n    {}\n  Using it routes your prompts and {} to that server.",
+                    project_path, name, base_url, sent
                 );
                 crate::output::confirm(
                     format!(
-                        "  Trust provider '{}' -> {} for this project?",
-                        name, base_url
+                        "  Trust provider '{}' -> {} with {} for this project?",
+                        name, base_url, sent
                     ),
                     false,
                 )
             } else {
                 eprintln!(
-                    "  security: skipping untrusted project provider '{}' ({}), non-interactive session; run interactively to approve.",
-                    name, base_url
+                    "  security: skipping untrusted project provider '{}' ({}, {}), non-interactive session; run interactively to approve.",
+                    name, base_url, sent
                 );
                 false
             };
 
             if approved {
                 Self::record_trusted_provider_fingerprint(&fp);
-            } else if let Some(p) = project.providers.get_mut(&name) {
-                // Drop the dangerous endpoint so nothing routes there.
-                p.base_url = None;
+            } else {
+                project.providers.remove(&name);
             }
         }
     }
@@ -631,7 +652,7 @@ impl CliConfig {
     /// repo cannot silently route prompts/credentials to a third-party server.
     #[allow(dead_code)]
     pub fn load_merged() -> Result<Self> {
-        let user = Self::load()?;
+        let user = Self::load_user_layer()?;
         let repository = if Self::project_config_allowed() {
             Self::load_project_config().map(|mut project| {
                 Self::consent_gate_project_providers(&mut project);
@@ -656,12 +677,104 @@ impl CliConfig {
         managed: &crate::platform::policy::managed::ManagedPolicyState,
     ) -> Result<Self> {
         let mut config = user;
-        if let Some(repository) = repository {
+        if let Some(mut repository) = repository {
+            let ignored = config.narrow_repository_layer(&mut repository);
+            report_ignored_repository_settings(&ignored);
             config.merge_from(&repository);
         }
         config.merge_env_overrides();
         config.apply_managed_state(managed)?;
         Ok(config)
+    }
+
+    fn narrow_repository_layer(&self, repository: &mut CliConfig) -> Vec<String> {
+        use crate::cli_options::persisted_permission_mode;
+        use crate::platform::runtime::session::PrivacyMode;
+
+        let mut ignored = Vec::new();
+        let own_privacy = self
+            .ui
+            .privacy_mode
+            .as_deref()
+            .and_then(PrivacyMode::from_arg);
+        let mut boundary = own_privacy.or_else(|| self.chosen_route_privacy());
+        if let Some(raw) = repository.ui.privacy_mode.take() {
+            match PrivacyMode::from_arg(&raw) {
+                Some(PrivacyMode::Local) => {
+                    repository.ui.privacy_mode = Some(raw);
+                    boundary = Some(PrivacyMode::Local);
+                }
+                Some(mode) if Some(mode) == own_privacy => {}
+                _ => ignored.push(format!("privacy_mode = {raw:?}")),
+            }
+        }
+
+        if let Some(raw) = repository.default.permission_mode.take() {
+            let own = self
+                .default
+                .permission_mode
+                .as_deref()
+                .and_then(persisted_permission_mode)
+                .unwrap_or_default();
+            match persisted_permission_mode(&raw) {
+                Some(mode) if !mode.is_looser_than(own) => {
+                    repository.default.permission_mode = Some(raw);
+                }
+                _ => ignored.push(format!("permission_mode = {raw:?}")),
+            }
+        }
+
+        let names_model =
+            repository.default.model_chosen || repository.default.model != default_model();
+        let names_provider = repository.default.names_provider();
+        if let Some(boundary) = boundary.filter(|_| names_model || names_provider) {
+            let model = if names_model {
+                repository.default.model.as_str()
+            } else {
+                self.default.model.as_str()
+            };
+            let provider = if names_provider {
+                Some(repository.default.provider.as_str())
+            } else {
+                self.default
+                    .names_provider()
+                    .then_some(self.default.provider.as_str())
+            };
+            let route = route_privacy(&[&repository.providers, &self.providers], model, provider);
+            let stays_inside = match boundary {
+                PrivacyMode::Local => route == Some(PrivacyMode::Local),
+                PrivacyMode::Byok => route != Some(PrivacyMode::Managed),
+                PrivacyMode::Managed => true,
+            };
+            if !stays_inside {
+                ignored.push(format!(
+                    "a model route outside {} ({})",
+                    boundary.label(),
+                    match provider {
+                        Some(provider) => format!("{model} via {provider}"),
+                        None => model.to_string(),
+                    }
+                ));
+                repository.default.model = default_model();
+                repository.default.model_chosen = false;
+                repository.default.provider = default_provider();
+                repository.default.named.provider = false;
+            }
+        }
+        ignored
+    }
+
+    fn chosen_route_privacy(&self) -> Option<crate::platform::runtime::session::PrivacyMode> {
+        if !self.default.model_chosen {
+            return None;
+        }
+        route_privacy(
+            &[&self.providers],
+            &self.default.model,
+            self.default
+                .names_provider()
+                .then_some(self.default.provider.as_str()),
+        )
     }
 
     /// Whether repository-controlled configuration may be merged at all.
@@ -726,7 +839,7 @@ impl CliConfig {
     /// outside the process until the project trust boundary has been crossed.
     pub fn load_without_project() -> Result<Self> {
         Self::from_layers(
-            Self::load()?,
+            Self::load_user_layer()?,
             None,
             &crate::platform::policy::managed::load_managed_policy(),
         )
@@ -739,7 +852,7 @@ impl CliConfig {
             self.default.model = other.default.model.clone();
             self.default.model_chosen |= other.default.model_chosen;
         }
-        if other.default.named.provider || other.default.provider != default_provider() {
+        if other.default.names_provider() {
             self.default.provider = other.default.provider.clone();
         }
         if other.default.named.max_tokens || other.default.max_tokens != default_max_tokens() {
@@ -957,10 +1070,9 @@ impl CliConfig {
     /// Persist only `[ui]` settings to the current/project config file.
     ///
     /// This avoids dumping merged global provider settings into a project file
-    /// when a user changes session-local UX/privacy defaults from a slash command.
+    /// when a user changes session-local UX defaults from a slash command.
     pub fn save_project_ui_settings(&mut self) -> Result<PathBuf> {
         let output_style = self.ui.output_style.clone();
-        let privacy_mode = self.ui.privacy_mode.clone();
         let theme = self.ui.theme.clone();
         let terminal_title = self.ui.terminal_title.clone();
         self.update_project_config(|root| {
@@ -975,9 +1087,6 @@ impl CliConfig {
                 .context("Failed to update [ui] config table")?;
             if let Some(style) = output_style {
                 ui.insert("output_style".to_string(), toml::Value::String(style));
-            }
-            if let Some(mode) = privacy_mode {
-                ui.insert("privacy_mode".to_string(), toml::Value::String(mode));
             }
             if let Some(theme) = theme {
                 ui.insert("theme".to_string(), toml::Value::String(theme));
@@ -1049,8 +1158,64 @@ impl CliConfig {
     }
 
     pub fn persist_privacy_mode_project(&mut self, mode: &str) -> Result<PathBuf> {
-        self.ui.privacy_mode = Some(mode.to_ascii_lowercase());
-        self.save_project_ui_settings()
+        let project = std::env::current_dir().context("Failed to read the current directory")?;
+        let store = Self::project_privacy_store()?;
+        self.persist_privacy_mode_at(&store, &project, mode)?;
+        Ok(store)
+    }
+
+    fn persist_privacy_mode_at(
+        &mut self,
+        store: &std::path::Path,
+        project: &std::path::Path,
+        mode: &str,
+    ) -> Result<()> {
+        let mode = mode.trim().to_ascii_lowercase();
+        if !is_valid_privacy_mode(&mode) {
+            bail!("privacy-mode must be one of: local, byok, managed");
+        }
+        self.ui.privacy_mode = Some(mode.clone());
+        let mut choices = Self::project_privacy_choices(store)?;
+        choices.insert(project_privacy_key(project), mode);
+        let json = serde_json::to_string_pretty(&choices)
+            .context("Failed to serialize the per-project privacy choices")?;
+        write_config_file(store, &json)
+    }
+
+    fn project_privacy_store() -> Result<PathBuf> {
+        Ok(Self::config_dir()?.join("project_privacy.json"))
+    }
+
+    fn project_privacy_choices(store: &std::path::Path) -> Result<BTreeMap<String, String>> {
+        if !store.exists() {
+            return Ok(BTreeMap::new());
+        }
+        let contents = std::fs::read_to_string(store)
+            .with_context(|| format!("Failed to read {}", store.display()))?;
+        serde_json::from_str(&contents)
+            .with_context(|| format!("Failed to parse {}", store.display()))
+    }
+
+    fn with_project_privacy_at(
+        mut self,
+        store: &std::path::Path,
+        project: &std::path::Path,
+    ) -> Result<Self> {
+        if let Some(mode) = Self::project_privacy_choices(store)?
+            .remove(&project_privacy_key(project))
+            .filter(|mode| is_valid_privacy_mode(mode))
+        {
+            self.ui.privacy_mode = Some(mode);
+        }
+        Ok(self)
+    }
+
+    fn load_user_layer() -> Result<Self> {
+        let user = Self::load()?;
+        match std::env::current_dir() {
+            Ok(project) => user.with_project_privacy_at(&Self::project_privacy_store()?, &project),
+            Err(_) => Ok(user),
+        }
     }
 
     /// Persist the chosen terminal theme so it survives a restart. Without this
@@ -1615,6 +1780,58 @@ fn is_valid_privacy_mode(mode: &str) -> bool {
             | "agi-cloud"
             | "cloud"
     )
+}
+
+fn project_privacy_key(project: &std::path::Path) -> String {
+    crate::project_scope::resolve_project_scope(project)
+        .display()
+        .to_string()
+}
+
+fn route_privacy(
+    providers: &[&HashMap<String, ProviderConfig>],
+    model: &str,
+    provider: Option<&str>,
+) -> Option<crate::platform::runtime::session::PrivacyMode> {
+    use crate::platform::runtime::session::PrivacyMode;
+    let Some(name) = provider else {
+        return crate::models::try_detect_provider(model)
+            .map(|route| crate::agent::provider_privacy_mode(&route));
+    };
+    if let Some(route) = crate::models::provider_from_name(name) {
+        return Some(crate::agent::provider_privacy_mode(&route));
+    }
+    let entry = providers.iter().find_map(|entries| entries.get(name))?;
+    let local = entry.api_key_env.is_none()
+        && entry
+            .base_url
+            .as_deref()
+            .is_some_and(crate::models::is_local_provider_base_url);
+    Some(if local {
+        PrivacyMode::Local
+    } else {
+        PrivacyMode::Byok
+    })
+}
+
+fn report_ignored_repository_settings(ignored: &[String]) {
+    static REPORTED: std::sync::Mutex<Option<std::collections::HashSet<String>>> =
+        std::sync::Mutex::new(None);
+    if ignored.is_empty() {
+        return;
+    }
+    let line = format!(
+        "note: this repository's config can only narrow your own settings, so it was not applied for: {}.",
+        crate::terminal_text::sanitize_terminal_text(&ignored.join("; "))
+    );
+    let first = REPORTED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_or_insert_with(std::collections::HashSet::new)
+        .insert(line.clone());
+    if first {
+        eprintln!("{line}");
+    }
 }
 
 #[cfg(test)]
@@ -2660,7 +2877,7 @@ model = "fixture-config-model"
         assert!(contents.contains("model = \"fixture-config-model\""));
         assert!(contents.contains("[ui]"));
         assert!(contents.contains("output_style = \"explanatory\""));
-        assert!(contents.contains("privacy_mode = \"byok\""));
+        assert!(!contents.contains("privacy_mode"));
     }
 
     #[test]
@@ -2763,13 +2980,184 @@ model = "fixture-config-model"
             },
         );
         CliConfig::consent_gate_project_providers(&mut project);
-        // Remote endpoint dropped (denied in non-interactive session).
-        assert_eq!(project.providers["evil"].base_url, None);
+        assert!(!project.providers.contains_key("evil"));
         // Loopback endpoint untouched.
         assert_eq!(
             project.providers["local"].base_url.as_deref(),
             Some("http://localhost:11434")
         );
+    }
+
+    #[test]
+    fn an_approved_project_provider_must_be_approved_again_when_its_key_variable_changes() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let checkout = tempfile::tempdir().unwrap();
+        let project_path = checkout.path().join(".agiworkforce").join("config.toml");
+        let url = "https://llm.corp.example/v1";
+        CliConfig::record_trusted_provider_fingerprint(&CliConfig::provider_trust_fingerprint(
+            &project_path.display().to_string(),
+            "corp",
+            url,
+            Some("CORP_KEY"),
+        ));
+        let gated = |api_key_env: &str| {
+            let mut project = CliConfig::default();
+            project.providers.clear();
+            project.source.project_path = Some(project_path.clone());
+            project.providers.insert(
+                "corp".to_string(),
+                ProviderConfig {
+                    api_key_env: Some(api_key_env.to_string()),
+                    base_url: Some(url.to_string()),
+                },
+            );
+            CliConfig::consent_gate_project_providers(&mut project);
+            project.providers.contains_key("corp")
+        };
+
+        assert!(gated("CORP_KEY"));
+        assert!(!gated("ANTHROPIC_API_KEY"));
+    }
+
+    #[test]
+    fn a_declined_project_provider_leaves_your_own_entry_for_it() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut user = CliConfig::default();
+        user.providers.insert(
+            "openrouter".to_string(),
+            ProviderConfig {
+                api_key_env: Some("OPENROUTER_API_KEY".to_string()),
+                base_url: Some("https://my-proxy.example/v1".to_string()),
+            },
+        );
+        let mut project = CliConfig::default();
+        project.providers.clear();
+        project.providers.insert(
+            "openrouter".to_string(),
+            ProviderConfig {
+                api_key_env: Some("OPENROUTER_API_KEY".to_string()),
+                base_url: Some("https://other.example/v1".to_string()),
+            },
+        );
+        CliConfig::consent_gate_project_providers(&mut project);
+
+        let merged = CliConfig::from_layers(
+            user,
+            Some(project),
+            &crate::platform::policy::managed::ManagedPolicyState::Absent,
+        )
+        .expect("merged");
+
+        assert_eq!(
+            merged.providers["openrouter"].base_url.as_deref(),
+            Some("https://my-proxy.example/v1")
+        );
+    }
+
+    #[test]
+    fn a_repository_layer_can_only_narrow_privacy_and_permissions() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let layered = |user_privacy: Option<&str>,
+                       user_permission: Option<&str>,
+                       repository_privacy: Option<&str>,
+                       repository_permission: Option<&str>| {
+            let mut user = CliConfig::default();
+            user.ui.privacy_mode = user_privacy.map(str::to_string);
+            user.default.permission_mode = user_permission.map(str::to_string);
+            let mut repository = CliConfig::default();
+            repository.ui.privacy_mode = repository_privacy.map(str::to_string);
+            repository.default.permission_mode = repository_permission.map(str::to_string);
+            CliConfig::from_layers(
+                user,
+                Some(repository),
+                &crate::platform::policy::managed::ManagedPolicyState::Absent,
+            )
+            .expect("merged")
+        };
+
+        let merged = layered(Some("local"), None, Some("managed"), None);
+        assert_eq!(merged.ui.privacy_mode.as_deref(), Some("local"));
+        let merged = layered(None, None, Some("byok"), None);
+        assert_eq!(merged.ui.privacy_mode, None);
+        let merged = layered(Some("managed"), None, Some("local"), None);
+        assert_eq!(merged.ui.privacy_mode.as_deref(), Some("local"));
+
+        let merged = layered(None, Some("default"), None, Some("acceptEdits"));
+        assert_eq!(merged.default.permission_mode.as_deref(), Some("default"));
+        let merged = layered(None, None, None, Some("auto"));
+        assert_eq!(merged.default.permission_mode, None);
+        let merged = layered(None, Some("acceptEdits"), None, Some("plan"));
+        assert_eq!(merged.default.permission_mode.as_deref(), Some("plan"));
+    }
+
+    #[test]
+    fn a_repository_model_that_leaves_a_local_boundary_is_not_applied() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let cloud_provider = ["openai", "anthropic"]
+            .into_iter()
+            .find(|provider| *provider != default_provider())
+            .expect("a cloud provider other than the default");
+        let mut user = CliConfig::default();
+        user.ui.privacy_mode = Some("local".to_string());
+        let mut repository = CliConfig::default();
+        repository.default.provider = cloud_provider.to_string();
+        repository.default.named.provider = true;
+
+        let merged = CliConfig::from_layers(
+            user.clone(),
+            Some(repository),
+            &crate::platform::policy::managed::ManagedPolicyState::Absent,
+        )
+        .expect("merged");
+        assert_ne!(merged.default.provider, cloud_provider);
+
+        let mut repository = CliConfig::default();
+        repository.default.provider = "ollama".to_string();
+        repository.default.named.provider = true;
+        let merged = CliConfig::from_layers(
+            user,
+            Some(repository),
+            &crate::platform::policy::managed::ManagedPolicyState::Absent,
+        )
+        .expect("merged");
+        assert_eq!(merged.default.provider, "ollama");
+    }
+
+    #[test]
+    fn the_per_project_privacy_choice_is_kept_in_your_own_store() {
+        let home = tempfile::tempdir().unwrap();
+        let project = tempfile::tempdir().unwrap();
+        let other = tempfile::tempdir().unwrap();
+        let store = home.path().join("project_privacy.json");
+        let mut config = CliConfig::default();
+        config.source.project_path = Some(project.path().join(".agiworkforce").join("config.toml"));
+
+        config
+            .persist_privacy_mode_at(&store, project.path(), "local")
+            .expect("saved");
+
+        assert!(!project.path().join(".agiworkforce").exists());
+        let reloaded = CliConfig::default()
+            .with_project_privacy_at(&store, project.path())
+            .expect("reloaded");
+        assert_eq!(reloaded.ui.privacy_mode.as_deref(), Some("local"));
+        let elsewhere = CliConfig::default()
+            .with_project_privacy_at(&store, other.path())
+            .expect("reloaded");
+        assert_eq!(elsewhere.ui.privacy_mode, None);
+
+        std::fs::write(&store, "not json").unwrap();
+        assert!(config
+            .persist_privacy_mode_at(&store, project.path(), "byok")
+            .is_err());
     }
 
     #[test]
