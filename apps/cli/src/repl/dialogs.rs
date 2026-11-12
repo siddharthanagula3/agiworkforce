@@ -46,10 +46,12 @@ pub(super) fn handle_setup(config: &mut CliConfig) {
 
         match url_result {
             Ok(url) => {
+                let saved =
+                    crate::config::CliConfig::save_user_provider_base_url(selected_provider, &url);
                 if let Some(pc) = config.providers.get_mut(selected_provider) {
                     pc.base_url = Some(url);
                 }
-                if let Err(e) = config.save() {
+                if let Err(e) = saved {
                     output::print_error(&format!("Failed to save config: {:#}", e));
                 } else {
                     output::print_info(&format!(

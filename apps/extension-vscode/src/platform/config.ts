@@ -110,7 +110,6 @@ const DEFAULTS = {
   editorContextAutoAttach: true,
   respectGitIgnore: true,
   telemetryEnabled: false,
-  currentTier: 'unknown',
   cliPath: 'agi',
   activateOnStartup: false,
   useTerminal: false,
@@ -125,11 +124,27 @@ function getUserScoped<T>(key: string, fallback: T): T {
   return inspected?.globalValue ?? inspected?.defaultValue ?? fallback;
 }
 
-function workspaceOverrides(): MutableConfigKey[] {
+function userChoiceNarrowedByWorkspace(
+  key: string,
+  fallback: boolean,
+  privateValue: boolean,
+): boolean {
+  const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<boolean>(key);
+  const userValue = inspected?.globalValue ?? inspected?.defaultValue ?? fallback;
+  return inspected?.workspaceValue === privateValue ||
+    inspected?.workspaceFolderValue === privateValue
+    ? privateValue
+    : userValue;
+}
+
+function workspaceOverrides(values: MutableConfigValues): MutableConfigKey[] {
   const configuration = vscode.workspace.getConfiguration('agiWorkforce');
   return SETTINGS_PANEL_SETTING_KEYS.filter((key) => {
     const inspected = configuration.inspect<unknown>(key);
-    return inspected?.workspaceValue !== undefined || inspected?.workspaceFolderValue !== undefined;
+    if (inspected?.workspaceValue === undefined && inspected?.workspaceFolderValue === undefined) {
+      return false;
+    }
+    return values[key] !== (inspected?.globalValue ?? inspected?.defaultValue);
   });
 }
 
@@ -169,16 +184,13 @@ export const Config = {
     return get<boolean>('codeLensEnabled', DEFAULTS.codeLensEnabled);
   },
   autoApplyFixes(): boolean {
-    return get<boolean>('autoApplyFixes', DEFAULTS.autoApplyFixes);
+    return getUserScoped<boolean>('autoApplyFixes', DEFAULTS.autoApplyFixes);
   },
   memoryEnabled(): boolean {
-    return get<boolean>('memory.enabled', DEFAULTS.memoryEnabled);
+    return getUserScoped<boolean>('memory.enabled', DEFAULTS.memoryEnabled);
   },
   inlineCompletionsEnabled(): boolean {
-    if (!vscode.workspace.isTrusted) {
-      return getUserScoped<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
-    }
-    return get<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
+    return getUserScoped<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
   },
   inlineCompletionsDebounceMs(): number {
     return get<number>('inlineCompletions.debounceMs', DEFAULTS.inlineCompletionsDebounceMs);
@@ -202,10 +214,14 @@ export const Config = {
     return get<number>('contextLines', DEFAULTS.contextLines);
   },
   editorContextAutoAttach(): boolean {
-    return get<boolean>('editorContext.autoAttach', DEFAULTS.editorContextAutoAttach);
+    return userChoiceNarrowedByWorkspace(
+      'editorContext.autoAttach',
+      DEFAULTS.editorContextAutoAttach,
+      false,
+    );
   },
   respectGitIgnore(): boolean {
-    return get<boolean>('respectGitIgnore', DEFAULTS.respectGitIgnore);
+    return userChoiceNarrowedByWorkspace('respectGitIgnore', DEFAULTS.respectGitIgnore, true);
   },
   apiEndpoint(): string {
     return getUserScoped<string>('apiEndpoint', DEFAULTS.apiEndpoint);
@@ -213,13 +229,6 @@ export const Config = {
 
   telemetryEnabled(): boolean {
     return getUserScoped<boolean>('telemetryEnabled', DEFAULTS.telemetryEnabled);
-  },
-
-  currentTier(): string {
-    const inspected = vscode.workspace
-      .getConfiguration('agiWorkforce')
-      .inspect<string>('currentTier');
-    return inspected?.globalValue ?? DEFAULTS.currentTier;
   },
 
   cliPath(): string {
@@ -230,34 +239,33 @@ export const Config = {
     return get<string>('cliPath', DEFAULTS.cliPath);
   },
 
-  settingsSnapshot(): ExtensionSettingsSnapshot {
+  settingsSnapshot(currentTier: string): ExtensionSettingsSnapshot {
+    const values: MutableConfigValues = {
+      apiEndpoint: this.apiEndpoint(),
+      model: this.model(),
+      cliPath: this.cliPath(),
+      'composer.followUpBehavior': this.composerFollowUpBehavior(),
+      'composer.enterBehavior': this.composerEnterBehavior(),
+      contextLines: this.contextLines(),
+      'editorContext.autoAttach': this.editorContextAutoAttach(),
+      respectGitIgnore: this.respectGitIgnore(),
+      telemetryEnabled: this.telemetryEnabled(),
+      hoverEnabled: this.hoverEnabled(),
+      codeLensEnabled: this.codeLensEnabled(),
+      autoApplyFixes: this.autoApplyFixes(),
+      'memory.enabled': this.memoryEnabled(),
+      'inlineCompletions.enabled': this.inlineCompletionsEnabled(),
+      'inlineCompletions.debounceMs': this.inlineCompletionsDebounceMs(),
+      'inlineCompletions.maxLength': this.inlineCompletionsMaxLength(),
+      'agent.mode': this.agentMode(),
+      'agent.effort': this.agentEffort(),
+      'agent.thinking': this.agentThinking(),
+      activateOnStartup: this.activateOnStartup(),
+      useTerminal: this.useTerminal(),
+    };
     return {
-      values: {
-        apiEndpoint: this.apiEndpoint(),
-        model: this.model(),
-        cliPath: this.cliPath(),
-        'composer.followUpBehavior': this.composerFollowUpBehavior(),
-        'composer.enterBehavior': this.composerEnterBehavior(),
-        contextLines: this.contextLines(),
-        'editorContext.autoAttach': this.editorContextAutoAttach(),
-        respectGitIgnore: this.respectGitIgnore(),
-        telemetryEnabled: this.telemetryEnabled(),
-        hoverEnabled: this.hoverEnabled(),
-        codeLensEnabled: this.codeLensEnabled(),
-        autoApplyFixes: this.autoApplyFixes(),
-        'memory.enabled': this.memoryEnabled(),
-        'inlineCompletions.enabled': this.inlineCompletionsEnabled(),
-        'inlineCompletions.debounceMs': this.inlineCompletionsDebounceMs(),
-        'inlineCompletions.maxLength': this.inlineCompletionsMaxLength(),
-        'agent.mode': this.agentMode(),
-        'agent.effort': this.agentEffort(),
-        'agent.thinking': this.agentThinking(),
-        activateOnStartup: this.activateOnStartup(),
-        useTerminal: this.useTerminal(),
-        currentTier: this.currentTier(),
-        currentTierLabel: currentTierLabel(this.currentTier()),
-      },
-      workspaceOverrides: workspaceOverrides(),
+      values: { ...values, currentTier, currentTierLabel: currentTierLabel(currentTier) },
+      workspaceOverrides: workspaceOverrides(values),
       workspaceTrusted: vscode.workspace.isTrusted,
     };
   },

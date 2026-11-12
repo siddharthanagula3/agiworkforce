@@ -214,6 +214,7 @@ export const contracts = {
 };
 
 const platformProvidedKeys = new Set([
+  'CARGO_HOME',
   'CARGO_PKG_NAME',
   'CARGO_PKG_VERSION',
   'CI',

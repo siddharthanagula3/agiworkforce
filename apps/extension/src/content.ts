@@ -40,7 +40,12 @@ import {
 } from './features/content/autofill/filler';
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
-import { discoverAllTools, callTool, startToolChangeReporting } from './webmcp';
+import {
+  discoverAllTools,
+  callTool,
+  startToolChangeReporting,
+  stopWatchingToolChanges,
+} from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
 import { isDomSmallEnoughToRead } from './dom-helpers';
@@ -57,7 +62,11 @@ import {
   MAX_WEBMCP_SCHEMA_BYTES,
   normalizeWebMCPToolsUpdate,
 } from './background/policy';
-import { requestAutofillProfile, requestPageAccess } from './features/content/workerAccess';
+import {
+  requestAutofillProfile,
+  requestPageAccess,
+  type PageAccess,
+} from './features/content/workerAccess';
 import { selectOptionElement } from './features/content/selectOption';
 import { BROWSER_COMMAND_TIMEOUT_MS } from '@agiworkforce/types';
 import type {
@@ -104,15 +113,76 @@ const automationState: AutomationState = {
   captureValues: false,
 };
 
+const NO_PAGE_ACCESS: PageAccess = { approved: false, inPagePanel: false };
+
+function documentIsPrerendering(): boolean {
+  return (document as Document & { prerendering?: boolean }).prerendering === true;
+}
+
+/**
+ * A prerendered page's outermost frame carries a non-zero frame id until the
+ * user navigates to it, and the service worker answers only the outermost frame
+ * of the active page, so a prerendered document asks after it is activated.
+ */
+function whenPageIsActive(): Promise<void> {
+  if (!documentIsPrerendering()) return Promise.resolve();
+  return new Promise((resolve) => {
+    document.addEventListener('prerenderingchange', () => resolve(), { once: true });
+  });
+}
+
+async function askPageAccess(): Promise<PageAccess> {
+  if (!/^https?:/.test(location.protocol)) return NO_PAGE_ACCESS;
+  await whenPageIsActive();
+  return requestPageAccess();
+}
+
 /**
  * Whether this page's origin carries the user's approval, asked of the service
- * worker once per document: extension storage is closed to content scripts, and
- * every other startup call waits on this one answer.
+ * worker once the document is active: extension storage is closed to content
+ * scripts, and every other startup call waits on this answer. The worker asks
+ * again through PAGE_ACCESS_CHANGED when the approved sites or the in-page
+ * panel preference change.
  */
-const pageAccess = /^https?:/.test(location.protocol)
-  ? requestPageAccess()
-  : Promise.resolve({ approved: false, inPagePanel: false });
-const originApproved: Promise<boolean> = pageAccess.then((access) => access.approved);
+const initialPageAccess: Promise<PageAccess> = askPageAccess();
+let pageAccessGeneration = 0;
+let approvedStartupDone = false;
+
+function startApprovedFeatures(): void {
+  if (approvedStartupDone) return;
+  approvedStartupDone = true;
+  void checkConnectionStatus();
+  void notifyTabReady();
+
+  try {
+    initWebMCP();
+  } catch (err) {
+    logger.debug('initWebMCP failed (non-fatal)', err);
+  }
+}
+
+function stopApprovedFeatures(): void {
+  if (!approvedStartupDone) return;
+  approvedStartupDone = false;
+  if (webmcpStartTimer !== null) {
+    clearTimeout(webmcpStartTimer);
+    webmcpStartTimer = null;
+  }
+  stopWatchingToolChanges();
+}
+
+async function applyPageAccess(request: Promise<PageAccess>): Promise<void> {
+  const generation = ++pageAccessGeneration;
+  const access = await request;
+  if (generation !== pageAccessGeneration) return;
+  await setupInPagePanel(access, logger);
+  if (access.approved) startApprovedFeatures();
+  else stopApprovedFeatures();
+}
+
+function refreshPageAccess(): Promise<void> {
+  return applyPageAccess(askPageAccess());
+}
 
 interface ContentScriptScope {
   __agiWorkforceContentScriptReady?: boolean;
@@ -128,20 +198,11 @@ function initialize(): void {
 
   watchPasswordFields();
   initializeEditableSelection();
-  void setupInPagePanel(pageAccess, logger);
+  void applyPageAccess(initialPageAccess);
 
   chrome.runtime.onMessage.addListener(handleMessage);
-
-  void originApproved.then((approved) => {
-    if (!approved) return;
-    void checkConnectionStatus();
-    void notifyTabReady();
-
-    try {
-      initWebMCP();
-    } catch (err) {
-      logger.debug('initWebMCP failed (non-fatal)', err);
-    }
+  window.addEventListener('pageshow', (event) => {
+    if (event.persisted) void refreshPageAccess();
   });
 }
 
@@ -164,7 +225,8 @@ function handleMessage(
       msg?.type === 'FILL_OBSERVED_FORM' ||
       msg?.type === 'CAPTURE_EDITABLE_SELECTION' ||
       msg?.type === 'APPLY_EDITABLE_SELECTION' ||
-      msg?.type === 'UNDO_EDITABLE_SELECTION') &&
+      msg?.type === 'UNDO_EDITABLE_SELECTION' ||
+      msg?.type === 'PAGE_ACCESS_CHANGED') &&
     sender.tab
   ) {
     sendResponse({
@@ -300,6 +362,10 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
       }
       return { success: true } as ExtensionResponse;
     }
+
+    case 'PAGE_ACCESS_CHANGED':
+      await refreshPageAccess();
+      return { success: true } as ExtensionResponse;
 
     case 'AGI_CU_WATCH_INPUT':
       watchUserInput(message.watching === true);
@@ -933,10 +999,11 @@ async function handleAutoFillJobApplication(
 
 async function handleRunAutofill(): Promise<ExtensionResponse> {
   try {
-    const profile = await requestAutofillProfile();
-    if (!profile) {
-      return { success: false, error: AUTOFILL_ORIGIN_BLOCKED_ERROR } as ExtensionResponse;
+    const profileReply = await requestAutofillProfile();
+    if ('error' in profileReply) {
+      return { success: false, error: profileReply.error } as ExtensionResponse;
     }
+    const { profile } = profileReply;
     const detection = detectJobApplication();
 
     if (!detection.isJobApplication || !detection.platform) {
@@ -1356,8 +1423,11 @@ function sendWebMCPTools(tools: WebMCPToolInfo[], url: string): void {
     });
 }
 
+let webmcpStartTimer: ReturnType<typeof setTimeout> | null = null;
+
 function initWebMCP(): void {
-  setTimeout(() => {
+  webmcpStartTimer = setTimeout(() => {
+    webmcpStartTimer = null;
     let discoveredTools: WebMCPToolInfo[] = [];
     try {
       const discovery = discoverAllTools();
@@ -1499,6 +1569,7 @@ const VALID_MESSAGE_TYPES = new Set([
   'FILL_APPLICATION_CONTACT',
   'AGI_CU_WATCH_INPUT',
   'AGI_CU_SHOW_ACTION',
+  'PAGE_ACCESS_CHANGED',
 ]);
 
 const ACTION_POINT_VISIBLE_MS = 900;

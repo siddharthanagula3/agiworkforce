@@ -283,15 +283,23 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         <Link href={CANONICAL_POLICY_ROUTES.agentPermissions} className="agi-ds-link">
           /agent-permissions
         </Link>
-        . When you turn on Browsing history in the Chrome extension and allow a search, it sends the
-        titles, addresses and last visit times of at most 20 matching pages for that answer, with
-        sign-in details and secret-looking parts of each address removed; during browser control on
-        a site you have allowed, the assistant can also read that tab&rsquo;s console messages and
-        the address, method, status, type, timing and size of its network requests, never their
-        bodies or headers; and the extension records in your account each action it takes, when it
-        took it, whether it worked and the website it acted on, but not the page. The use of
-        information the Chrome extension receives, including page text, addresses and screenshots of
-        the tabs you choose, will adhere to the{' '}
+        . When you attach a page in the Chrome extension, or run a page command on it, the extension
+        sends up to 30,000 characters taken from that page: its visible text and what is currently
+        in its visible form fields, such as a name, an address or a message you have typed but not
+        sent. Fields it recognizes as password, payment card, one-time code, PIN or Social Security
+        number fields are left out, and strings that look like keys, tokens, card numbers or
+        passwords are removed before it is sent. Each chat request from the extension also carries
+        your browser&rsquo;s time zone name, such as America/Chicago, so times in answers are local;
+        the extension reads no coordinates or street address. When you turn on Browsing history in
+        the Chrome extension and allow a search, it sends the titles, addresses and last visit times
+        of at most 20 matching pages for that answer, with sign-in details and secret-looking parts
+        of each address removed; during browser control on a site you have allowed, the assistant
+        can also read that tab&rsquo;s console messages and the address, method, status, type,
+        timing and size of its network requests, never their bodies or headers; and the extension
+        records in your account each action it takes, when it took it, whether it worked and the
+        website it acted on, but not the page. The use of information the Chrome extension receives,
+        including page text, form field contents, addresses and screenshots of the tabs you choose,
+        will adhere to the{' '}
         <a
           href="https://developer.chrome.com/docs/webstore/program-policies/policies"
           className="agi-ds-link"
@@ -1522,11 +1530,12 @@ export default function PrivacyPage() {
                     health, race or ethnic origin, religion, sexual orientation, immigration status,
                     precise location, government identity numbers and the contents of your private
                     messages. It reaches us only if you put it in a chat, a file or a profile field,
-                    or connect an account that holds it. When it does, we use it only to provide
-                    what you asked for, which includes memory if you turned memory on. We do not use
-                    it for advertising or to build a profile of you for any other purpose, and we do
-                    not sell or share it. Voice audio is not stored and no voiceprint is made, as
-                    section 01 says.
+                    connect an account that holds it, or let the Chrome extension read or act on a
+                    page that shows it, such as an email you attach or a chat you ask it to work in.
+                    When it does, we use it only to provide what you asked for, which includes
+                    memory if you turned memory on. We do not use it for advertising or to build a
+                    profile of you for any other purpose, and we do not sell or share it. Voice
+                    audio is not stored and no voiceprint is made, as section 01 says.
                   </Prose>
                   <Prose size="sm">
                     <strong>Health information.</strong> AGI is not a medical service. It is not

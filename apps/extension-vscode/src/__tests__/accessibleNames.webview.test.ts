@@ -125,7 +125,7 @@ describe('every control the chat webview renders announces itself', () => {
 
   it('names each control in the settings panel', () => {
     const state = {
-      ...Config.settingsSnapshot(),
+      ...Config.settingsSnapshot('unknown'),
       accountConnected: false,
       accountStatus: 'signed-out',
       agentConfigPath: '/host/.agiworkforce/config.toml',

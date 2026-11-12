@@ -2,7 +2,7 @@ import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { Config } from '../platform/config';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
-import { applyLlmEdit } from '../platform/applyEdit';
+import { applyLlmEdit, showLlmResultInNewTab } from '../platform/applyEdit';
 import { trackProductEvent } from '../features/analytics/productAnalytics';
 import {
   classifyCloudUtilityFailure,
@@ -161,6 +161,11 @@ async function runInlineCommandOnTarget(
         if (cancelSource.token.isCancellationRequested) return undefined;
 
         progress.report({ increment: 100 });
+
+        if (command === 'tests' || command === 'docs') {
+          await showLlmResultInNewTab(result, commandLabel(command));
+          return undefined;
+        }
 
         const resolution = await applyLlmEdit(
           editor,

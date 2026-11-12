@@ -6,20 +6,19 @@ use anyhow::Result;
 use colored::Colorize;
 use tokio::io::AsyncReadExt;
 
+use crate::file_state::MAX_EDIT_FILE_BYTES;
 use crate::permissions::FilePermissionOperation;
+use crate::secret_redaction::{placeholder_count, redact_tool_output};
 use crate::terminal_style as ts;
 use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 use super::common::{
     change_detail, display_path, generate_simple_diff, marked_lines, preview_string,
-    print_tool_status, truncate_line, truncate_output_with_save, validate_file_path,
-    validate_file_write_path, MAX_FILE_LINES,
+    print_tool_status, tool_size_cap, truncate_line, truncate_output_with_save, validate_file_path,
+    validate_file_write_path, MAX_FILE_LINES, MAX_LINE_LENGTH,
 };
 use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
-
-const MAX_TEXT_READ_BYTES: u64 = 1_000_000;
-const MAX_EDIT_FILE_BYTES: u64 = 2_000_000;
 
 #[derive(Debug, Deserialize)]
 struct MultiEditOp {
@@ -93,33 +92,43 @@ fn print_diff_preview(diff: &str) {
     }
 }
 
-/// Reached when a mutating tool needs approval, there is no TUI/approval
-/// callback installed (headless / `agi exec` context), and stdin is not a
-/// TTY, so there is no way to obtain user consent. A routine failed tool
-/// result would let the process exit 0 though the mutation never happened;
-/// hard-failing gives a script driving `agi exec` a failure it can detect.
-fn abort_noninteractive_auto_deny(tool_name: &str, action: &str) -> ! {
+const EDIT_FLAGS_NOTE: &str = "-y approves only reads, searches and listings; a file change \
+     needs --full-auto, --permission-mode auto or --dangerously-skip-permissions.";
+
+static HEADLESS_CHANGE_REFUSED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn headless_change_was_refused() -> bool {
+    HEADLESS_CHANGE_REFUSED.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+fn refuse_noninteractive_change(tool_name: &str, action: &str) -> ToolResult {
+    HEADLESS_CHANGE_REFUSED.store(true, std::sync::atomic::Ordering::SeqCst);
     eprintln!(
         "{}",
         ts::danger(format!(
-            "{action} requires approval, but no --full-auto/-y/--dangerously-skip-permissions \
-             flag was passed and stdin is not a terminal, so no confirmation is possible."
+            "{action} requires approval and stdin is not a terminal, so no confirmation is \
+             possible. {EDIT_FLAGS_NOTE}"
         ))
     );
     eprintln!(
         "{}",
-        format!(
-            "  Refusing to silently continue: exiting with a non-zero status instead of letting \
-             the '{tool_name}' call be auto-denied without signal.",
-        )
-        .dimmed()
+        format!("  The '{tool_name}' call was refused; this run will end with a non-zero status.")
+            .dimmed()
     );
     crate::agent_events::emit_terminal_error(
         "approval_required",
         format!("{action} requires approval and no confirmation is possible here."),
-        "Pass --full-auto, -y or --dangerously-skip-permissions, or run where stdin is a terminal.",
+        format!("{EDIT_FLAGS_NOTE} Or run where stdin is a terminal."),
     );
-    std::process::exit(1);
+    ToolResult {
+        tool_name: tool_name.to_string(),
+        success: false,
+        output: format!(
+            "{action} was refused: it requires approval and no one can confirm it in this run. \
+             {EDIT_FLAGS_NOTE} Nothing was changed; do not retry this change in this run."
+        ),
+    }
 }
 
 /// True when there is no way to prompt a human for approval right now:
@@ -154,11 +163,7 @@ async fn read_editable_text_file(
         .await
         .map_err(|e| format!("Failed to inspect file: {e}"))?;
     if metadata.len() > MAX_EDIT_FILE_BYTES {
-        return Err(format!(
-            "File is too large to edit safely ({} bytes; limit {} bytes). Use a narrower patch or split the file first.",
-            metadata.len(),
-            MAX_EDIT_FILE_BYTES
-        ));
+        return Err(crate::file_state::too_large_to_edit_message(metadata.len()));
     }
     tokio::fs::read_to_string(file_path)
         .await
@@ -451,6 +456,78 @@ fn conflict_marker_refusal(shown_path: &str, old: &str, new: &str) -> Option<Str
     ))
 }
 
+/// `Some(message)` when a write would put more redaction placeholders into a
+/// file than the text it replaces had. A placeholder is what a read showed
+/// where the file holds a credential, so writing one back replaces the real
+/// value. A file that already carries placeholders as its own text, and whose
+/// read showed it unredacted, is the one exception.
+fn placeholder_refusal(
+    shown_path: &str,
+    original: &str,
+    removed: &str,
+    added: &str,
+) -> Option<String> {
+    let introduced = placeholder_count(added).saturating_sub(placeholder_count(removed));
+    if introduced == 0
+        || (placeholder_count(original) > 0 && redact_tool_output(original) == original)
+    {
+        return None;
+    }
+    Some(format!(
+        "Refusing to write {shown_path}: the new text carries {introduced} redaction \
+         placeholder(s) such as [REDACTED] that the text it replaces does not. A read shows a \
+         placeholder where the file holds a credential, and writing it back would replace the \
+         real value. Leave the lines that hold a credential out of the change."
+    ))
+}
+
+fn placeholder_not_found_note(old_string: &str) -> &'static str {
+    if placeholder_count(old_string) > 0 {
+        " It carries a redaction placeholder such as [REDACTED]: the file holds the real \
+         credential there, so leave that line out of old_string."
+    } else {
+        ""
+    }
+}
+
+/// `old` and `new` with the line endings of `contents`: a file written with
+/// CRLF is read back without the CR, so text copied from a read carries LF.
+fn in_file_line_endings(contents: &str, old: &str, new: &str) -> (String, String) {
+    if contents.contains("\r\n") && !old.contains('\r') && !new.contains('\r') {
+        let old_crlf = old.replace('\n', "\r\n");
+        if contents.contains(old_crlf.as_str()) {
+            return (old_crlf, new.replace('\n', "\r\n"));
+        }
+    }
+    (old.to_string(), new.to_string())
+}
+
+fn patch_placeholder_refusal(patch: &str, targets: &[PathBuf]) -> Option<String> {
+    let mut removed = String::new();
+    let mut added = String::new();
+    for line in patch.lines() {
+        if line.starts_with("+++ ") || line.starts_with("--- ") {
+            continue;
+        }
+        if let Some(text) = line.strip_prefix('+') {
+            added.push_str(text);
+            added.push('\n');
+        } else if let Some(text) = line.strip_prefix('-') {
+            removed.push_str(text);
+            removed.push('\n');
+        }
+    }
+    if placeholder_count(&added) <= placeholder_count(&removed) {
+        return None;
+    }
+    let originals: Vec<String> = targets
+        .iter()
+        .filter_map(|target| std::fs::read_to_string(target).ok())
+        .collect();
+    let shown: Vec<String> = targets.iter().map(|target| display_path(target)).collect();
+    placeholder_refusal(&shown.join(", "), &originals.join("\n"), &removed, &added)
+}
+
 /// The refusal for a path that is not there, kept distinct from a read failure
 /// and named against the repository root so a retry uses the real spelling.
 fn missing_path_message(path: &Path) -> String {
@@ -476,6 +553,46 @@ fn missing_path_message(path: &Path) -> String {
         shown.display(),
         named.join(", ")
     )
+}
+
+const READ_FOOTER_RESERVE_BYTES: usize = 1_024;
+
+struct NumberedPage {
+    text: String,
+    shown: usize,
+    cut_lines: usize,
+}
+
+/// The first lines of `lines` that fit in `max_bytes` once numbered and
+/// redacted, to [`MAX_FILE_LINES`]. A read is never cut after this, so what
+/// its footer names is what it shows.
+fn numbered_page(lines: &[&str], first_line: usize, max_bytes: usize) -> NumberedPage {
+    let mut budget = max_bytes;
+    loop {
+        let mut text = String::new();
+        let mut shown = 0;
+        let mut cut_lines = 0;
+        for (offset, line) in lines.iter().take(MAX_FILE_LINES).enumerate() {
+            let numbered = format!("{:>6}\t{}\n", first_line + offset, truncate_line(line));
+            if shown > 0 && text.len() + numbered.len() > budget {
+                break;
+            }
+            if line.len() > MAX_LINE_LENGTH {
+                cut_lines += 1;
+            }
+            text.push_str(&numbered);
+            shown += 1;
+        }
+        let text = redact_tool_output(&text);
+        if text.len() <= max_bytes || shown <= 1 {
+            return NumberedPage {
+                text,
+                shown,
+                cut_lines,
+            };
+        }
+        budget = budget.saturating_sub((text.len() - max_bytes) * 2);
+    }
 }
 
 pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<ToolResult> {
@@ -593,7 +710,7 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         );
     }
 
-    match read_text_file_limited(file_path, MAX_TEXT_READ_BYTES).await {
+    match read_text_file_limited(file_path, MAX_EDIT_FILE_BYTES).await {
         Ok((contents, byte_truncated)) => {
             if !byte_truncated {
                 crate::file_state::record_file_read(file_path, &contents);
@@ -621,30 +738,28 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
                 });
             }
 
-            let selected = &all_lines[start_idx..end_idx];
-            let range_len = selected.len();
-
-            let capped = range_len > MAX_FILE_LINES;
-            let display_count = if capped { MAX_FILE_LINES } else { range_len };
-
-            let mut output = String::new();
-            for (i, line) in selected[..display_count].iter().enumerate() {
-                let line_no = start_idx + i + 1;
-                let display_line = truncate_line(line);
-                output.push_str(&format!("{:>6}\t{}\n", line_no, display_line));
-            }
-
+            let page = numbered_page(
+                &all_lines[start_idx..end_idx],
+                start_idx + 1,
+                tool_size_cap("read_file").saturating_sub(READ_FOOTER_RESERVE_BYTES),
+            );
             let showing_start = start_idx + 1;
-            let showing_end = start_idx + display_count;
+            let showing_end = start_idx + page.shown;
+            let mut output = page.text;
 
-            if capped {
+            if showing_end < end_idx {
                 output.push_str(&format!(
-                    "\n[truncated: showing lines {}-{} of {} total]",
-                    showing_start, showing_end, total_lines
+                    "\n[showing lines {}-{} of {} total; lines {}-{} were not shown]",
+                    showing_start,
+                    showing_end,
+                    total_lines,
+                    showing_end + 1,
+                    end_idx
                 ));
                 output.push_str(&format!(
-                    "\nTo read more, call read_file with start_line: {}",
-                    showing_end + 1
+                    "\nTo read more, call read_file with start_line: {} and end_line: {}",
+                    showing_end + 1,
+                    end_idx.min(showing_end + MAX_FILE_LINES)
                 ));
             } else if start_line.is_some() || end_line.is_some() {
                 output.push_str(&format!(
@@ -657,26 +772,22 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
                         showing_end + 1
                     ));
                 }
-            } else if total_lines > MAX_FILE_LINES {
+            }
+            if page.cut_lines > 0 {
                 output.push_str(&format!(
-                    "\n[truncated: showing {}/{} lines]",
-                    MAX_FILE_LINES, total_lines
-                ));
-                output.push_str(&format!(
-                    "\nTo read more, call read_file with start_line: {}",
-                    MAX_FILE_LINES + 1
+                    "\n[{} line(s) above are longer than {} characters and are cut short]",
+                    page.cut_lines, MAX_LINE_LENGTH
                 ));
             }
             if byte_truncated {
                 output.push_str(&format!(
                     "\n[truncated: read first {} bytes; file was not marked fully read for editing]",
-                    MAX_TEXT_READ_BYTES
+                    MAX_EDIT_FILE_BYTES
                 ));
             }
 
-            let mut output = truncate_output_with_save("read_file", output);
             if let Some(view) = conflict_view(file_path, &contents) {
-                output.push_str(&view);
+                output.push_str(&redact_tool_output(&view));
             }
 
             Ok(ToolResult {
@@ -752,14 +863,14 @@ pub(super) async fn execute_write_file(
         .is_file()
         .then(|| read_existing_text_for_preview(file_path).ok())
         .flatten();
-    if let Some(refusal) =
-        conflict_marker_refusal(&shown_path, existing.as_deref().unwrap_or(""), content).or_else(
-            || {
-                existing
-                    .as_deref()
-                    .and_then(|existing| rewrite_guard_refusal(&shown_path, existing, content))
-            },
-        )
+    let replaced = existing.as_deref().unwrap_or("");
+    if let Some(refusal) = placeholder_refusal(&shown_path, replaced, replaced, content)
+        .or_else(|| conflict_marker_refusal(&shown_path, replaced, content))
+        .or_else(|| {
+            existing
+                .as_deref()
+                .and_then(|existing| rewrite_guard_refusal(&shown_path, existing, content))
+        })
     {
         return Ok(ToolResult {
             tool_name: "write_file".to_string(),
@@ -816,7 +927,10 @@ pub(super) async fn execute_write_file(
                     // No TUI callback (REPL / headless): preview the change, then fall
                     // back to the blocking dialoguer confirm.
                     if stdin_is_noninteractive() {
-                        abort_noninteractive_auto_deny("write_file", "Writing this file");
+                        return Ok(refuse_noninteractive_change(
+                            "write_file",
+                            "Writing this file",
+                        ));
                     }
                     if file_path.exists() && file_path.is_file() {
                         match read_existing_text_for_preview(file_path) {
@@ -1038,14 +1152,25 @@ pub(super) async fn execute_edit_file(
         }
     };
 
-    let match_count = contents.matches(old_string.as_str()).count();
+    if old_string.is_empty() {
+        return Ok(ToolResult {
+            tool_name: "edit_file".to_string(),
+            success: false,
+            output: "old_string must not be empty. To replace the whole file, use write_file."
+                .to_string(),
+        });
+    }
+
+    let (old_in_file, new_in_file) = in_file_line_endings(&contents, old_string, new_string);
+    let match_count = contents.matches(old_in_file.as_str()).count();
     if match_count == 0 {
         return Ok(ToolResult {
             tool_name: "edit_file".to_string(),
             success: false,
             output: format!(
-                "old_string not found in {}. The string to replace does not exist in the file.",
-                path
+                "old_string not found in {}. The string to replace does not exist in the file.{}",
+                path,
+                placeholder_not_found_note(old_string)
             ),
         });
     }
@@ -1060,7 +1185,14 @@ pub(super) async fn execute_edit_file(
         });
     }
 
-    let new_contents = contents.replacen(old_string, new_string, 1);
+    let new_contents = contents.replacen(old_in_file.as_str(), new_in_file.as_str(), 1);
+    if let Some(refusal) = placeholder_refusal(path, &contents, &old_in_file, &new_in_file) {
+        return Ok(ToolResult {
+            tool_name: "edit_file".to_string(),
+            success: false,
+            output: refusal,
+        });
+    }
 
     if require_confirmation {
         let old_preview = preview_string(old_string, 3);
@@ -1111,7 +1243,10 @@ pub(super) async fn execute_edit_file(
                     );
                 } else {
                     if stdin_is_noninteractive() {
-                        abort_noninteractive_auto_deny("edit_file", "Editing this file");
+                        return Ok(refuse_noninteractive_change(
+                            "edit_file",
+                            "Editing this file",
+                        ));
                     }
                     eprintln!(
                         "  {} {}",
@@ -1193,6 +1328,13 @@ pub(super) async fn execute_apply_patch(
             });
         }
     };
+    if let Some(refusal) = patch_placeholder_refusal(patch, &patch_paths) {
+        return Ok(ToolResult {
+            tool_name: "apply_patch".into(),
+            success: false,
+            output: refusal,
+        });
+    }
     let approved: Vec<PathBuf> = patch_paths
         .iter()
         .map(|path| landing_when_checked(path))
@@ -1245,7 +1387,10 @@ pub(super) async fn execute_apply_patch(
                     }
                 } else {
                     if stdin_is_noninteractive() {
-                        abort_noninteractive_auto_deny("apply_patch", "Applying this patch");
+                        return Ok(refuse_noninteractive_change(
+                            "apply_patch",
+                            "Applying this patch",
+                        ));
                     }
                     crate::output::confirm("Apply this patch?", false)
                 }
@@ -1290,6 +1435,9 @@ pub(super) async fn execute_apply_patch(
 
     match crate::apply_patch::apply_git_patch(patch, Some(&cwd)).await {
         Ok(r) => {
+            if r.exit_code == 0 {
+                crate::file_state::record_files_written(&patch_paths);
+            }
             let mut out = String::new();
             if !r.applied.is_empty() {
                 out.push_str(&format!("Applied: {}\n", r.applied.join(", ")));
@@ -1395,6 +1543,13 @@ pub(super) async fn execute_multiedit(
             });
         }
     };
+    if let Some(refusal) = placeholder_refusal(&path, &original, &original, &updated) {
+        return Ok(ToolResult {
+            tool_name: "multiedit".into(),
+            success: false,
+            output: refusal,
+        });
+    }
 
     if require_confirm {
         let diff = generate_simple_diff(&original, &updated);
@@ -1441,7 +1596,10 @@ pub(super) async fn execute_multiedit(
                     );
                 } else {
                     if stdin_is_noninteractive() {
-                        abort_noninteractive_auto_deny("multiedit", "Applying these edits");
+                        return Ok(refuse_noninteractive_change(
+                            "multiedit",
+                            "Applying these edits",
+                        ));
                     }
                     eprintln!(
                         "{}",
@@ -1506,9 +1664,15 @@ fn apply_multiedits_to_content(
             ));
         }
 
-        let match_count = updated.matches(edit.old_string.as_str()).count();
+        let (old_in_file, new_in_file) =
+            in_file_line_endings(&updated, &edit.old_string, &edit.new_string);
+        let match_count = updated.matches(old_in_file.as_str()).count();
         if match_count == 0 {
-            return Err(format!("Edit {} rejected: old_string not found.", i + 1));
+            return Err(format!(
+                "Edit {} rejected: old_string not found.{}",
+                i + 1,
+                placeholder_not_found_note(&edit.old_string)
+            ));
         }
         if match_count > 1 && !edit.replace_all {
             return Err(format!(
@@ -1519,9 +1683,9 @@ fn apply_multiedits_to_content(
         }
 
         updated = if edit.replace_all {
-            updated.replace(edit.old_string.as_str(), edit.new_string.as_str())
+            updated.replace(old_in_file.as_str(), new_in_file.as_str())
         } else {
-            updated.replacen(edit.old_string.as_str(), edit.new_string.as_str(), 1)
+            updated.replacen(old_in_file.as_str(), new_in_file.as_str(), 1)
         };
     }
 
@@ -1579,7 +1743,7 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
             output_parts.push(format!("--- {} ---\n[File not found]", path_str));
             continue;
         }
-        match read_text_file_limited(&file_path, MAX_TEXT_READ_BYTES).await {
+        match read_text_file_limited(&file_path, MAX_EDIT_FILE_BYTES).await {
             Ok((content, byte_truncated)) => {
                 if !byte_truncated {
                     crate::file_state::record_file_read(&file_path, &content);
@@ -1588,7 +1752,7 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
                 let truncated = if byte_truncated {
                     format!(
                         "\n[... truncated at {} bytes; file was not marked fully read for editing]",
-                        MAX_TEXT_READ_BYTES
+                        MAX_EDIT_FILE_BYTES
                     )
                 } else if content.lines().count() > MAX_FILE_LINES {
                     format!("\n[... truncated at {} lines]", MAX_FILE_LINES)
@@ -2349,6 +2513,74 @@ mod tests {
         );
     }
 
+    fn edit_args(path: &Path, old: &str, new: &str) -> HashMap<String, String> {
+        HashMap::from([
+            ("path".to_string(), path.display().to_string()),
+            ("old_string".to_string(), old.to_string()),
+            ("new_string".to_string(), new.to_string()),
+        ])
+    }
+
+    #[tokio::test]
+    async fn an_edit_right_after_a_patch_to_the_same_file_is_not_refused_as_stale() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("patched.txt");
+        std::fs::write(&path, "old\n").expect("write file");
+        let read_args = HashMap::from([("path".to_string(), path.display().to_string())]);
+        assert!(execute_read_file(&read_args).await.unwrap().success);
+        let target = format!(
+            "{}/patched.txt",
+            folder_in_the_working_directory(tmp.path())
+        );
+        let patch = HashMap::from([(
+            "patch".to_string(),
+            format!("--- a/{target}\n+++ b/{target}\n@@ -1 +1 @@\n-old\n+new\n"),
+        )]);
+
+        let patched = execute_apply_patch(&patch, false, None, None)
+            .await
+            .unwrap();
+        assert!(patched.success, "{}", patched.output);
+        let edited = execute_edit_file(&edit_args(&path, "new", "newer"), false, None)
+            .await
+            .unwrap();
+
+        assert!(edited.success, "{}", edited.output);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "newer\n");
+    }
+
+    #[tokio::test]
+    async fn a_file_the_edit_tools_accept_can_be_read_and_edited_and_a_larger_one_says_too_large() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let editable = tmp.path().join("generated.txt");
+        let body = format!("{}\n", "x".repeat(99)).repeat(15_000);
+        std::fs::write(&editable, format!("{body}unique-marker\n")).expect("write file");
+        let read_args = HashMap::from([("path".to_string(), editable.display().to_string())]);
+        assert!(execute_read_file(&read_args).await.unwrap().success);
+
+        let edited = execute_edit_file(
+            &edit_args(&editable, "unique-marker", "changed"),
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(edited.success, "{}", edited.output);
+
+        let oversized = tmp.path().join("oversized.txt");
+        std::fs::write(&oversized, format!("{}\n", "y".repeat(99)).repeat(25_000))
+            .expect("write file");
+        let refused = execute_edit_file(&edit_args(&oversized, "y", "z"), false, None)
+            .await
+            .unwrap();
+        assert!(!refused.success);
+        assert!(
+            refused.output.contains("too large to edit"),
+            "{}",
+            refused.output
+        );
+    }
+
     #[tokio::test]
     async fn edit_file_succeeds_after_read_state_is_seeded() {
         let tmp = tempfile::tempdir_in(".").expect("tempdir");
@@ -2572,5 +2804,221 @@ mod tests {
 
         assert!(result.success, "{}", result.output);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "beta\n");
+    }
+
+    fn path_args(path: &Path) -> HashMap<String, String> {
+        HashMap::from([("path".to_string(), path.display().to_string())])
+    }
+
+    #[tokio::test]
+    async fn a_long_read_shows_one_contiguous_page_and_names_where_the_next_starts() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("long.txt");
+        let body: String = (1..=2_500)
+            .map(|i| format!("{i:04} {}\n", "y".repeat(55)))
+            .collect();
+        std::fs::write(&path, body).expect("write file");
+
+        let first = execute_read_file(&path_args(&path)).await.unwrap();
+        assert!(first.success, "{}", first.output);
+        assert!(!first.output.contains("omitted"), "{}", first.output);
+        assert!(first.output.starts_with("     1\t0001 "));
+        let prefix = "[showing lines 1-";
+        let at = first.output.find(prefix).expect("a footer naming the page");
+        let last: usize = first.output[at + prefix.len()..]
+            .split(' ')
+            .next()
+            .and_then(|number| number.parse().ok())
+            .expect("the last line shown");
+        assert!((1_000..2_000).contains(&last), "{last}");
+        assert!(first.output.contains(&format!("{last:>6}\t")));
+        assert!(!first.output.contains(&format!("{:>6}\t", last + 1)));
+        assert!(first.output.contains(&format!(
+            "call read_file with start_line: {} and end_line: 2500",
+            last + 1
+        )));
+
+        let mut next_args = path_args(&path);
+        next_args.insert("start_line".to_string(), (last + 1).to_string());
+        let next = execute_read_file(&next_args).await.unwrap();
+        assert!(next.success, "{}", next.output);
+        assert!(next.output.starts_with(&format!("{:>6}\t", last + 1)));
+    }
+
+    #[tokio::test]
+    async fn a_file_of_short_lines_is_paged_at_the_line_limit() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("short-lines.txt");
+        let body: String = (1..=2_500).map(|i| format!("line {i}\n")).collect();
+        std::fs::write(&path, body).expect("write file");
+
+        let read = execute_read_file(&path_args(&path)).await.unwrap();
+
+        assert!(read.output.contains("  2000\tline 2000\n"));
+        assert!(!read.output.contains("\tline 2001\n"));
+        assert!(read.output.contains("lines 2001-2500 were not shown"));
+        assert!(read
+            .output
+            .contains("call read_file with start_line: 2001 and end_line: 2500"));
+    }
+
+    #[tokio::test]
+    async fn a_dockerfile_reads_unchanged_and_its_flag_line_can_be_edited() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("Dockerfile");
+        std::fs::write(&path, "FROM alpine\nRUN mkdir -p /app/data\nEXPOSE 8080\n")
+            .expect("write file");
+
+        let read = execute_read_file(&path_args(&path)).await.unwrap();
+        assert!(
+            read.output.contains("RUN mkdir -p /app/data"),
+            "{}",
+            read.output
+        );
+
+        let edited = execute_edit_file(
+            &edit_args(&path, "RUN mkdir -p /app/data", "RUN mkdir -p /srv/data"),
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(edited.success, "{}", edited.output);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "FROM alpine\nRUN mkdir -p /srv/data\nEXPOSE 8080\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_placeholder_from_a_redacted_read_is_never_written_back() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("config.yml");
+        let original = "token: abcdef0123456789xyz\nname: app\n";
+        std::fs::write(&path, original).expect("write file");
+        let read = execute_read_file(&path_args(&path)).await.unwrap();
+        assert!(read.output.contains("token=[REDACTED]"), "{}", read.output);
+
+        let mut write = path_args(&path);
+        write.insert(
+            "content".to_string(),
+            "token=[REDACTED]\nname: renamed\n".to_string(),
+        );
+        let written = execute_write_file(&write, false, None).await.unwrap();
+        assert!(!written.success);
+        assert!(written.output.contains("redaction"), "{}", written.output);
+
+        let missed = execute_edit_file(
+            &edit_args(
+                &path,
+                "token=[REDACTED]\nname: app",
+                "token=[REDACTED]\nname: x",
+            ),
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(!missed.success);
+        assert!(
+            missed.output.contains("leave that line out"),
+            "{}",
+            missed.output
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+
+        let around =
+            execute_edit_file(&edit_args(&path, "name: app", "name: renamed"), false, None)
+                .await
+                .unwrap();
+        assert!(around.success, "{}", around.output);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "token: abcdef0123456789xyz\nname: renamed\n"
+        );
+    }
+
+    #[test]
+    fn a_patch_that_adds_a_placeholder_is_refused_and_one_that_keeps_none_is_not() {
+        let adds =
+            "--- a/config.yml\n+++ b/config.yml\n@@ -1 +1 @@\n-name: app\n+token=[REDACTED]\n";
+        assert!(patch_placeholder_refusal(adds, &[]).is_some());
+        let plain = "--- a/config.yml\n+++ b/config.yml\n@@ -1 +1 @@\n-name: app\n+name: x\n";
+        assert!(patch_placeholder_refusal(plain, &[]).is_none());
+        let documented = "[REDACTED] marks a value.\n";
+        assert!(placeholder_refusal(
+            "docs.md",
+            documented,
+            documented,
+            "[REDACTED] marks a value.\n[REDACTED] again.\n"
+        )
+        .is_none());
+    }
+
+    #[tokio::test]
+    async fn a_multi_line_edit_of_a_crlf_file_keeps_crlf() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("build.bat");
+        std::fs::write(&path, "@echo off\r\nset A=1\r\nset B=2\r\n").expect("write file");
+        read_for_edit(&path).await;
+
+        let edited = execute_edit_file(
+            &edit_args(&path, "set A=1\nset B=2", "set A=3\nset B=4\nset C=5"),
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(edited.success, "{}", edited.output);
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "@echo off\r\nset A=3\r\nset B=4\r\nset C=5\r\n"
+        );
+
+        let empty = execute_edit_file(&edit_args(&path, "", "x"), false, None)
+            .await
+            .unwrap();
+        assert!(!empty.success);
+        assert!(
+            empty.output.contains("must not be empty"),
+            "{}",
+            empty.output
+        );
+    }
+
+    #[test]
+    fn multiedit_matches_lf_text_against_a_crlf_file() {
+        let edits = vec![MultiEditOp {
+            old_string: "a\nb".into(),
+            new_string: "z\ny".into(),
+            replace_all: false,
+        }];
+        assert_eq!(
+            apply_multiedits_to_content("a\r\nb\r\nc\r\n", &edits).unwrap(),
+            "z\r\ny\r\nc\r\n"
+        );
+    }
+
+    #[test]
+    fn the_headless_refusal_says_what_y_covers_and_which_flags_allow_a_change() {
+        assert!(EDIT_FLAGS_NOTE.contains("-y approves only reads"));
+        for flag in [
+            "--full-auto",
+            "--permission-mode auto",
+            "--dangerously-skip-permissions",
+        ] {
+            assert!(EDIT_FLAGS_NOTE.contains(flag), "{flag}");
+        }
+    }
+
+    #[test]
+    fn a_headless_refusal_returns_a_failed_result_and_marks_the_run_failed() {
+        let result = refuse_noninteractive_change("write_file", "Writing this file");
+
+        assert!(!result.success);
+        assert_eq!(result.tool_name, "write_file");
+        assert!(result.output.contains(EDIT_FLAGS_NOTE), "{}", result.output);
+        assert!(result.output.contains("Nothing was changed"));
+        assert!(headless_change_was_refused());
     }
 }

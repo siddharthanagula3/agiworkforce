@@ -16,6 +16,7 @@ const SCHEDULES_TIMEOUT: Duration = Duration::from_secs(15);
 const SCHEDULES_PATH: &str = "/api/schedules";
 
 pub const DEFAULT_SCHEDULE_LIMIT: u32 = 50;
+const NAME_LOOKUP_PAGES: u32 = 40;
 pub const DEFAULT_RUN_LIMIT: u32 = 20;
 
 #[derive(Debug)]
@@ -412,19 +413,45 @@ impl SchedulesClient {
         Ok(body.run)
     }
 
+    pub async fn get(&self, schedule_id: &str) -> Result<Schedule, ScheduleError> {
+        let body: ScheduleBody = self
+            .send(self.request(reqwest::Method::GET, &schedule_path(schedule_id)))
+            .await?;
+        Ok(body.schedule)
+    }
+
     pub async fn resolve_id(&self, id_or_name: &str) -> Result<String, ScheduleError> {
-        let schedules = self.list(DEFAULT_SCHEDULE_LIMIT, 0).await?;
-        if let Some(found) = schedules.iter().find(|schedule| schedule.id == id_or_name) {
-            return Ok(found.id.clone());
+        let not_found = || ScheduleError::Api {
+            status: 404,
+            message: format!("No schedule named '{id_or_name}' in this account"),
+        };
+        if id_or_name.trim().is_empty() {
+            return Err(not_found());
         }
-        schedules
-            .iter()
-            .find(|schedule| schedule.name == id_or_name)
-            .map(|schedule| schedule.id.clone())
-            .ok_or_else(|| ScheduleError::Api {
-                status: 404,
-                message: format!("No schedule named '{id_or_name}' in this account"),
-            })
+        if uuid::Uuid::parse_str(id_or_name).is_ok() {
+            match self.get(id_or_name).await {
+                Ok(schedule) => return Ok(schedule.id),
+                Err(ScheduleError::Api {
+                    status: 400 | 404, ..
+                }) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        for page in 0..NAME_LOOKUP_PAGES {
+            let schedules = self
+                .list(DEFAULT_SCHEDULE_LIMIT, page * DEFAULT_SCHEDULE_LIMIT)
+                .await?;
+            if let Some(found) = schedules
+                .iter()
+                .find(|schedule| schedule.name == id_or_name)
+            {
+                return Ok(found.id.clone());
+            }
+            if schedules.len() < DEFAULT_SCHEDULE_LIMIT as usize {
+                break;
+            }
+        }
+        Err(not_found())
     }
 }
 
@@ -822,6 +849,68 @@ mod tests {
         });
         let schedule: Schedule = serde_json::from_value(wire).expect("decodes");
         assert_eq!(schedule, sample_schedule());
+    }
+
+    #[tokio::test]
+    async fn a_schedule_past_the_first_page_resolves_by_id_and_by_name() {
+        use axum::extract::{Path, Query};
+        use axum::http::StatusCode;
+        use axum::routing::get;
+        use axum::{Json, Router};
+
+        let named = |index: u32| Schedule {
+            id: format!("00000000-0000-4000-8000-{index:012}"),
+            name: format!("Digest {index}"),
+            ..sample_schedule()
+        };
+        let router = Router::new()
+            .route(
+                "/api/schedules",
+                get(
+                    move |Query(query): Query<std::collections::HashMap<String, String>>| async move {
+                        let offset: u32 = query["offset"].parse().unwrap();
+                        let limit: u32 = query["limit"].parse().unwrap();
+                        let rows: Vec<Schedule> =
+                            (offset..(offset + limit).min(51)).map(named).collect();
+                        Json(serde_json::json!({ "schedules": rows }))
+                    },
+                ),
+            )
+            .route(
+                "/api/schedules/{id}",
+                get(move |Path(id): Path<String>| async move {
+                    if id == "00000000-0000-4000-8000-000000000050" {
+                        Ok(Json(serde_json::json!({ "schedule": named(50) })))
+                    } else {
+                        Err((
+                            StatusCode::NOT_FOUND,
+                            Json(serde_json::json!({ "error": "Schedule not found" })),
+                        ))
+                    }
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let client = SchedulesClient {
+            base: format!("http://{}", listener.local_addr().unwrap()),
+            jwt: "fixture-token".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+
+        let by_id = client
+            .resolve_id("00000000-0000-4000-8000-000000000050")
+            .await;
+        let by_name = client.resolve_id("Digest 50").await;
+        let missing = client.resolve_id("Digest 51").await;
+        server.abort();
+
+        let id = "00000000-0000-4000-8000-000000000050";
+        assert_eq!(by_id.expect("an exact id past the first page"), id);
+        assert_eq!(by_name.expect("a name past the first page"), id);
+        assert!(matches!(
+            missing,
+            Err(ScheduleError::Api { status: 404, .. })
+        ));
     }
 
     #[test]

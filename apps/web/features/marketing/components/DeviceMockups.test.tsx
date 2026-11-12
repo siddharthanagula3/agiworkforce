@@ -349,7 +349,7 @@ describe('CLI terminal', () => {
     expect(box?.textContent).toContain('Allow write_file to modify:');
     expect(
       Array.from(box?.querySelectorAll('.agi-app-tui-choices span') ?? [], (i) => i.textContent),
-    ).toEqual(['[ Yes ]', '[ No ]', '[ Allow Session ]', '[ Always Allow ]']);
+    ).toEqual(['[ y Yes ]', '[ n No ]', '[ s Allow Session ]', '[ a Always allow ]']);
     expect(box?.querySelectorAll('.agi-app-tui-choices span[data-on]')).toHaveLength(1);
   });
 
@@ -359,7 +359,7 @@ describe('CLI terminal', () => {
       'Tool Approval',
       'Allow write_file to modify:',
       ' Allow Session ',
-      ' Always Allow ',
+      ' Always allow ',
     ])
       expect(overlay).toContain(text);
     expect(readSource('apps/cli/src/tui/tui_app.rs')).toContain('Message AGI...  / for commands');

@@ -1338,13 +1338,13 @@ pub fn handle_output_style(session: &mut AgentSession, arg: &str) -> String {
                     )
                 }
             };
-            if !output_style_known(name) {
+            let Some(name) = output_style_named(name) else {
                 return format!(
                     "No output style named `{name}`. Run /output-style to list them. Output style unchanged: {}.",
                     session.output_style
                 );
-            }
-            session.apply_output_style(name);
+            };
+            session.apply_output_style(&name);
             if session_only {
                 format!(
                     "Output style: {} for this session only; your saved default is unchanged.",
@@ -1364,14 +1364,15 @@ pub fn output_style_arg_persists(arg: &str) -> bool {
     let mut words = arg.split_whitespace();
     matches!(
         (words.next(), words.next()),
-        (Some(name), None) if !crate::output_styles::is_command_action(name) && output_style_known(name)
+        (Some(name), None) if !crate::output_styles::is_command_action(name) && output_style_named(name).is_some()
     )
 }
 
-fn output_style_known(name: &str) -> bool {
+fn output_style_named(name: &str) -> Option<String> {
     crate::output_styles::load_all()
-        .iter()
-        .any(|style| style.name == name)
+        .into_iter()
+        .find(|style| style.name.eq_ignore_ascii_case(name))
+        .map(|style| style.name)
 }
 
 fn output_style_overview(session: &AgentSession) -> String {
@@ -1707,6 +1708,8 @@ fn effort_ladder_usage() -> String {
         .join(" | ")
 }
 
+pub(crate) const EFFORT_NOT_TAKEN_NOTE: &str = ". This model takes no effort setting on this route, so the level applies once you switch to one that does";
+
 pub fn set_effort(session: &mut AgentSession, arg: &str) -> String {
     let current = session.effort.unwrap_or_default();
     if arg.trim().is_empty() {
@@ -1724,13 +1727,10 @@ pub fn set_effort(session: &mut AgentSession, arg: &str) -> String {
         );
     };
     session.effort = Some(effort);
-    let note = if matches!(
-        crate::model_catalog::effort_support(&session.model),
-        crate::model_catalog::EffortSupport::Unsupported
-    ) {
-        ". This model has no effort control, so it applies once you switch to one that does"
-    } else {
+    let note = if crate::models::effort_reaches_model(&session.provider, &session.model, effort) {
         ""
+    } else {
+        EFFORT_NOT_TAKEN_NOTE
     };
     format!("Effort set to {}{note}", effort.label())
 }
@@ -3137,6 +3137,15 @@ mod tests {
     }
 
     #[test]
+    fn an_output_style_is_selected_whatever_case_it_is_typed_in() {
+        let mut session = test_session();
+        let message = handle_output_style(&mut session, "CONCISE --session");
+        assert_eq!(session.output_style, "concise", "{message}");
+        assert!(output_style_arg_persists("Explanatory"));
+        assert!(!output_style_arg_persists("no-such-style"));
+    }
+
+    #[test]
     fn workspace_mcp_slash_lists_refusals_when_no_server_connected() {
         crate::cloud::workspace_policy::with_test_policy(
             serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": false, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
@@ -3352,6 +3361,26 @@ mod tests {
         assert!(prompt.contains("login fails on Safari"));
         assert!(prompt.contains("connectors:"));
         assert!(create_skill_prompt("").contains("Ask me what the skill should do"));
+    }
+
+    #[test]
+    fn effort_says_when_the_model_or_route_cannot_take_it() {
+        let mut session = test_session();
+        session.provider = crate::models::Provider::Ollama(crate::models::OllamaMode::Local);
+        let reply = set_effort(&mut session, "high");
+        assert!(reply.ends_with(EFFORT_NOT_TAKEN_NOTE), "{reply}");
+
+        let model = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| {
+                crate::model_catalog::effort_parameter(&model.id)
+                    == Some(crate::model_catalog::EffortParameter::OutputConfigEffort)
+            })
+            .expect("a catalog model that takes an effort setting");
+        session.model = model.id.clone();
+        session.provider = crate::models::Provider::Anthropic;
+        assert_eq!(set_effort(&mut session, "high"), "Effort set to High");
     }
 
     #[test]

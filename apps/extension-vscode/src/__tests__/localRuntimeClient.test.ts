@@ -1582,6 +1582,27 @@ describe('LocalRuntimeClient', () => {
     expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('exited'));
   });
 
+  it('tells listeners the runtime stopped, not that it is restarting, when it is disposed', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const disconnected = vi.fn();
+    client.onEvent((event) => {
+      if (event.type === 'runtime_disconnected') disconnected(event.error);
+    });
+    await client.initialize();
+
+    await client.dispose('The folder workspace was closed, so its AGI local runtime stopped.');
+
+    expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('was closed'));
+    expect(disconnected).not.toHaveBeenCalledWith(expect.stringContaining('restarting'));
+  });
+
   it('treats a closed stdout stream as a runtime disconnect', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
@@ -1695,10 +1716,33 @@ describe('LocalRuntimeClient', () => {
     vi.useFakeTimers();
 
     const disposing = client.dispose();
-    await vi.advanceTimersByTimeAsync(7_000);
+    await vi.advanceTimersByTimeAsync(10_000);
     await disposing;
 
     expect(terminateProcessTree).toHaveBeenCalledOnce();
+  });
+
+  it('closes the runtime input and lets it reap its own command trees before any hard kill', async () => {
+    const runtime = fakeRuntime(8, { ignoreMethods: ['shutdown'] });
+    const terminateProcessTree = vi.fn(async () => undefined);
+    const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+      terminateProcessTree,
+    });
+    await client.initialize();
+    const child = runtime.children[0] as EventEmitter & { stdin: PassThrough };
+    child.stdin.once('finish', () => child.emit('exit', 0, null));
+    vi.useFakeTimers();
+
+    const disposing = client.dispose();
+    await vi.advanceTimersByTimeAsync(7_000);
+    await disposing;
+
+    expect(terminateProcessTree).not.toHaveBeenCalled();
   });
 
   it('validates the shutdown acknowledgment before trusting a graceful exit', async () => {
@@ -1767,7 +1811,8 @@ describe('LocalRuntimeClient', () => {
 
     const disposing = client.dispose();
 
-    expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('restarting'));
+    expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('stopped'));
+    expect(disconnected).not.toHaveBeenCalledWith(expect.stringContaining('restarting'));
     await disposing;
   });
   it('names the missing binary, the setting, and the required version on ENOENT', async () => {

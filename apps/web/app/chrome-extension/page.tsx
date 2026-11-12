@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { BROWSER_BRIDGE_DEFAULT_PORT } from '@agiworkforce/types';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -51,7 +52,7 @@ const CAPABILITIES = [
   {
     meta: 'Bridge',
     title: 'Paired Desktop handoff',
-    body: 'Native messaging carries a selection, a page capture or a queued message to Desktop on localhost port 8787, with explicit pairing and HMAC-signed messages. It moves context into Desktop rather than answering in the panel.',
+    body: `Native messaging, Chrome's direct channel to an app installed on your computer, carries a selection, a page capture or a queued message to Desktop in HMAC-signed messages. Pairing runs over loopback on your own machine, at localhost port ${BROWSER_BRIDGE_DEFAULT_PORT}, with a code or token from Desktop. It moves context into Desktop rather than answering in the panel.`,
   },
   {
     meta: 'Computer use',
@@ -79,9 +80,12 @@ const BOUNDARY_LEDGER = [
   { k: 'Manifest', v: 'Chrome MV3 with side panel' },
   {
     k: 'Bridge',
-    v: 'Optional native messaging to Desktop · localhost port 8787 · selections, captures and queued messages',
+    v: 'Optional native messaging to Desktop · selections, captures and queued messages · HMAC-signed messages',
   },
-  { k: 'Pairing', v: 'Explicit pairing · HMAC-signed messages' },
+  {
+    k: 'Pairing',
+    v: `Explicit pairing over loopback at localhost port ${BROWSER_BRIDGE_DEFAULT_PORT} · a code or token from Desktop`,
+  },
   {
     k: 'Inference in Chrome',
     v: 'None. Chat answers come from Cloud, and computer use calls the Cloud gateway directly from the extension with the screenshots it takes.',

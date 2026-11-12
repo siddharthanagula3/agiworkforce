@@ -39,7 +39,7 @@ export async function applyLlmEdit(
   const codeBlock = extractCodeBlock(llmResponse, lang);
 
   if (codeBlock === undefined || selection.isEmpty) {
-    await openInNewTab(llmResponse, commandLabel);
+    await showLlmResultInNewTab(llmResponse, commandLabel);
     return undefined;
   }
 
@@ -65,7 +65,7 @@ export async function applyLlmEdit(
     if (applied) return 'accepted';
     if (cancelled()) return undefined;
     vscode.window.showWarningMessage(t('applyEdit.autoApplyFailed'));
-    await openInNewTab(llmResponse, commandLabel);
+    await showLlmResultInNewTab(llmResponse, commandLabel);
     return undefined;
   }
 
@@ -84,14 +84,14 @@ export async function applyLlmEdit(
     if (applied) return 'accepted';
     if (cancelled()) return undefined;
     vscode.window.showWarningMessage(t('applyEdit.applyFailed'));
-    await openInNewTab(llmResponse, commandLabel);
+    await showLlmResultInNewTab(llmResponse, commandLabel);
     return undefined;
   }
-  if (choice === viewInNewTab) await openInNewTab(llmResponse, commandLabel);
+  if (choice === viewInNewTab) await showLlmResultInNewTab(llmResponse, commandLabel);
   return 'dismissed';
 }
 
-async function openInNewTab(content: string, label: string): Promise<void> {
+export async function showLlmResultInNewTab(content: string, label: string): Promise<void> {
   const doc = await vscode.workspace.openTextDocument({
     content: `# ${PRODUCT_NAMES.code}, ${label}\n\n${content}`,
     language: 'markdown',

@@ -160,7 +160,7 @@ fn parse_user_style(stem: &str, source: &str, path: &Path) -> OutputStyle {
                 .filter(|value| !value.is_empty())
         })
     };
-    let name = field("name").unwrap_or_else(|| stem.to_string());
+    let name = selectable_style_name(&field("name").unwrap_or_else(|| stem.to_string()));
     let body = body.trim();
     let system_prompt = if body.starts_with(STYLE_MARKER) {
         body.to_string()
@@ -173,6 +173,12 @@ fn parse_user_style(stem: &str, source: &str, path: &Path) -> OutputStyle {
         system_prompt,
         origin: path.display().to_string(),
     }
+}
+
+/// `/output-style` reads the first word as the name, so a name written with
+/// spaces is listed and selected with hyphens in their place.
+fn selectable_style_name(name: &str) -> String {
+    name.split_whitespace().collect::<Vec<_>>().join("-")
 }
 
 fn split_frontmatter(source: &str) -> (&str, &str) {
@@ -326,6 +332,19 @@ mod tests {
         assert_eq!(delete_in(Some(dir.path()), "focused").unwrap(), notes);
         assert!(!notes.exists());
         assert!(user_styles(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn a_style_named_with_spaces_is_listed_under_a_name_the_command_can_select() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write_style(dir.path(), "pirate.md", "Pirate  Speak");
+        let listed: Vec<_> = user_styles(dir.path())
+            .into_iter()
+            .map(|(_, style)| style.name)
+            .collect();
+        assert_eq!(listed, vec!["Pirate-Speak".to_string()]);
+        assert!(!listed[0].contains(char::is_whitespace));
+        assert_eq!(delete_in(Some(dir.path()), "Pirate-Speak").unwrap(), path);
     }
 
     #[test]

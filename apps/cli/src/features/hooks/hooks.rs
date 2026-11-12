@@ -1351,17 +1351,24 @@ fn append_updated_input_audit(
 /// HIGH-2: when `updated_input` is present in any hook result, the rewrite is
 /// logged to stderr and ~/.agiworkforce/security-audit.log. This makes
 /// hook-driven tool argument tampering visible to the user.
-pub fn aggregate_transformers(results: &[HookResult]) -> HookTransformers {
+pub fn aggregate_transformers_for(
+    results: &[HookResult],
+    original_args: &serde_json::Value,
+) -> HookTransformers {
+    aggregate_transformers_audited(results, original_args, audit_log_updated_input)
+}
+
+fn aggregate_transformers_audited(
+    results: &[HookResult],
+    original_args: &serde_json::Value,
+    mut audit: impl FnMut(&str, &serde_json::Value, &serde_json::Value),
+) -> HookTransformers {
     let mut t = HookTransformers::default();
     let mut ctx_chunks: Vec<&str> = Vec::new();
     for r in results {
         if let Some(new_input) = &r.updated_input {
             // SECURITY: log the rewrite before applying it so the user can audit.
-            audit_log_updated_input(
-                &r.hook_command,
-                t.updated_input.as_ref().unwrap_or(&serde_json::Value::Null),
-                new_input,
-            );
+            audit(&r.hook_command, original_args, new_input);
             t.updated_input = Some(new_input.clone());
         }
         if let Some(out) = &r.updated_mcp_tool_output {
@@ -2914,7 +2921,7 @@ mod tests {
             updated_mcp_tool_output: Some(format!("out{}", idx)),
         };
         let results = vec![make(1), make(2), make(3)];
-        let t = aggregate_transformers(&results);
+        let t = aggregate_transformers_for(&results, &serde_json::json!({}));
         assert_eq!(
             t.updated_input
                 .as_ref()
@@ -3488,9 +3495,9 @@ mod tests {
             additional_context: None,
             updated_mcp_tool_output: None,
         }];
-        // audit_log_updated_input is called inside aggregate_transformers.
+        // audit_log_updated_input is called inside aggregate_transformers_for.
         // We verify that the aggregated updated_input is the one from the hook.
-        let transformers = aggregate_transformers(&results);
+        let transformers = aggregate_transformers_for(&results, &serde_json::json!({}));
         assert_eq!(
             transformers
                 .updated_input
@@ -3517,10 +3524,58 @@ mod tests {
             additional_context: None,
             updated_mcp_tool_output: None,
         }];
-        let transformers = aggregate_transformers(&results);
+        let transformers = aggregate_transformers_for(&results, &serde_json::json!({}));
         assert!(
             transformers.updated_input.is_none(),
             "no updated_input → nothing to log or aggregate"
+        );
+    }
+
+    #[test]
+    fn every_input_rewrite_is_audited_against_the_call_arguments() {
+        let rewrite = |hook: &str, new_args: serde_json::Value| HookResult {
+            hook_command: hook.to_string(),
+            success: true,
+            stdout: String::new(),
+            stderr: String::new(),
+            duration_ms: 0,
+            blocked: false,
+            reason: None,
+            should_stop: false,
+            updated_input: Some(new_args),
+            additional_context: None,
+            updated_mcp_tool_output: None,
+        };
+        let results = vec![
+            rewrite("first.sh", serde_json::json!({"path": "b"})),
+            rewrite("second.sh", serde_json::json!({"path": "c"})),
+        ];
+        let mut audited = Vec::new();
+        let transformers = aggregate_transformers_audited(
+            &results,
+            &serde_json::json!({"path": "a"}),
+            |hook, original, new_args| {
+                audited.push((hook.to_string(), original.clone(), new_args.clone()))
+            },
+        );
+        assert_eq!(
+            audited,
+            vec![
+                (
+                    "first.sh".to_string(),
+                    serde_json::json!({"path": "a"}),
+                    serde_json::json!({"path": "b"})
+                ),
+                (
+                    "second.sh".to_string(),
+                    serde_json::json!({"path": "a"}),
+                    serde_json::json!({"path": "c"})
+                ),
+            ]
+        );
+        assert_eq!(
+            transformers.updated_input,
+            Some(serde_json::json!({"path": "c"}))
         );
     }
 

@@ -13,7 +13,9 @@ import {
 import {
   ASK_BEFORE_ACTING_KEY,
   browserPermissionModeToStored,
+  DEFAULT_BROWSER_PERMISSION_MODE,
   readBrowserPermissionMode,
+  type BrowserPermissionMode,
 } from '../computer-use/askBeforeActing';
 import {
   BROWSER_CONTROL_CONSENT_BODY,
@@ -1121,54 +1123,71 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   controlsLabel.className = 'sp-cu-controls-label';
   controlsLabel.textContent = 'AGI Cloud • powered by AGI';
 
+  const MODE_COPY: Record<BrowserPermissionMode, { label: string; tooltip: string }> = {
+    ask: { label: t('spAutonomyAskFirst'), tooltip: t('spAutonomyAskFirstTooltip') },
+    auto: { label: t('spAutonomyAuto'), tooltip: t('spAutonomyAutoTooltip') },
+    full: { label: t('spAutonomyFullAccess'), tooltip: t('spAutonomyFullAccessTooltip') },
+  };
+
   const askLabel = document.createElement('label');
   askLabel.className = 'sp-cu-ask-toggle';
-  askLabel.title =
-    'When on, the agent asks before every click, typed text or page change. When off, it works in Auto and asks only before buying, sending, deleting, signing in, granting access or downloading.';
 
-  const askCheckbox = document.createElement('input');
-  askCheckbox.type = 'checkbox';
-  askCheckbox.id = 'sp-cu-ask-checkbox';
-  askCheckbox.checked = false;
+  const modeSelect = document.createElement('select');
+  modeSelect.id = 'sp-cu-mode-select';
+  modeSelect.setAttribute('aria-label', t('spAutonomyMenuHeading'));
+  for (const mode of ['ask', 'auto', 'full'] as const) {
+    const option = document.createElement('option');
+    option.value = mode;
+    option.textContent = MODE_COPY[mode].label;
+    modeSelect.appendChild(option);
+  }
 
-  let askPreferenceMutation = 0;
+  const showMode = (mode: BrowserPermissionMode): void => {
+    modeSelect.value = mode;
+    askLabel.title = MODE_COPY[mode].tooltip;
+  };
+  showMode(DEFAULT_BROWSER_PERMISSION_MODE);
+
+  let modeMutation = 0;
   chrome.storage?.local?.get(ASK_BEFORE_ACTING_KEY, (items) => {
     if (chrome.runtime?.lastError) return;
-    if (askPreferenceMutation !== 0) return;
-    askCheckbox.checked = readBrowserPermissionMode(items?.[ASK_BEFORE_ACTING_KEY]) === 'ask';
+    if (modeMutation !== 0) return;
+    showMode(readBrowserPermissionMode(items?.[ASK_BEFORE_ACTING_KEY]));
   });
 
   chrome.storage?.onChanged?.addListener((changes, area) => {
     if (area !== 'local' || !(ASK_BEFORE_ACTING_KEY in changes)) return;
-    if (askCheckbox.disabled) return;
-    askCheckbox.checked =
-      readBrowserPermissionMode(changes[ASK_BEFORE_ACTING_KEY]?.newValue) === 'ask';
+    if (modeSelect.disabled) return;
+    showMode(readBrowserPermissionMode(changes[ASK_BEFORE_ACTING_KEY]?.newValue));
   });
 
-  askCheckbox.addEventListener('change', () => {
-    const next = askCheckbox.checked;
-    const mutation = ++askPreferenceMutation;
-    askCheckbox.disabled = true;
+  modeSelect.addEventListener('change', () => {
+    const previous = askLabel.title;
+    const previousMode = (Object.keys(MODE_COPY) as BrowserPermissionMode[]).find(
+      (mode) => MODE_COPY[mode].tooltip === previous,
+    );
+    const next = modeSelect.value as BrowserPermissionMode;
+    const mutation = ++modeMutation;
+    modeSelect.disabled = true;
+    askLabel.title = MODE_COPY[next].tooltip;
     void (async () => {
       try {
         await chrome.storage.local.set({
-          [ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(next ? 'ask' : 'auto'),
+          [ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(next),
         });
       } catch {
-        if (askPreferenceMutation === mutation) askCheckbox.checked = !next;
+        if (modeMutation === mutation && previousMode) showMode(previousMode);
         showHandoffBanner(
-          'The Ask before acting setting could not be saved. The previous setting is still active.',
+          'The permission mode could not be saved. The previous setting is still active.',
           'error',
         );
       } finally {
-        if (askPreferenceMutation === mutation) askCheckbox.disabled = false;
+        if (modeMutation === mutation) modeSelect.disabled = false;
       }
     })();
   });
 
-  const askText = document.createTextNode('Ask before acting');
-  askLabel.appendChild(askCheckbox);
-  askLabel.appendChild(askText);
+  askLabel.appendChild(modeSelect);
 
   const clearBtn = document.createElement('button');
   clearBtn.className = 'sp-cu-clear-btn';
@@ -2013,7 +2032,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   }
 
   function isAskBeforeActing(): boolean {
-    return askCheckbox.checked;
+    return modeSelect.value === 'ask';
   }
 
   function showApprovalCard(

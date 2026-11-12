@@ -4,6 +4,7 @@ import type { ManagedModelAccess } from '../src/features/cloud-bridge/freeTrialC
 
 type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 type AgentLoopModule = typeof import('../src/features/computer-use/agentLoop');
+type ManagedChatHandlerModule = typeof import('../src/features/cloud-bridge/managedChatHandler');
 
 interface CapturedAgentLoopOptions {
   model: string;
@@ -31,6 +32,11 @@ const harness = vi.hoisted(() => {
     (message: unknown, sender: unknown, sendResponse: (response?: unknown) => void) => unknown
   > = [];
   const nativeListeners: Array<(message: unknown) => void> = [];
+  const contextMenuListeners: Array<(info: unknown, tab: unknown) => void> = [];
+  const tabRemovedListeners: Array<(tabId: number) => void> = [];
+  const connectListeners: Array<(port: unknown) => void> = [];
+  const tabUpdatedListeners: Array<(tabId: number, changeInfo: Record<string, unknown>) => void> =
+    [];
   const storageListeners: Array<(changes: Record<string, unknown>, area: string) => void> = [];
   const captured: { options: CapturedAgentLoopOptions | null } = { options: null };
   const tab = { id: RUN_TAB_ID, url: `${SITE_A}/start`, windowId: RUN_WINDOW_ID, active: true };
@@ -41,7 +47,9 @@ const harness = vi.hoisted(() => {
     hasListener: vi.fn(() => false),
   });
 
-  const readStore = (keys: unknown): Promise<Record<string, unknown>> => {
+  const readHold: { current: Promise<void> | null } = { current: null };
+
+  const readNow = (keys: unknown): Promise<Record<string, unknown>> => {
     const requested =
       keys === undefined || keys === null
         ? Object.keys(localStore)
@@ -62,6 +70,9 @@ const harness = vi.hoisted(() => {
     }
     return Promise.resolve(out);
   };
+
+  const readStore = (keys: unknown): Promise<Record<string, unknown>> =>
+    readHold.current ? readHold.current.then(() => readNow(keys)) : readNow(keys);
 
   const area = (store: Record<string, unknown>) => ({
     get: vi.fn((keys?: unknown) => (store === localStore ? readStore(keys) : Promise.resolve({}))),
@@ -99,7 +110,13 @@ const harness = vi.hoisted(() => {
         }),
         removeListener: vi.fn(),
       },
-      onConnect: event(),
+      onConnect: {
+        addListener: vi.fn((listener: (typeof connectListeners)[number]) => {
+          connectListeners.push(listener);
+        }),
+        removeListener: vi.fn(),
+        hasListener: vi.fn(() => false),
+      },
       onInstalled: event(),
       onStartup: event(),
       onSuspend: event(),
@@ -137,8 +154,20 @@ const harness = vi.hoisted(() => {
       ),
       query: vi.fn(() => Promise.resolve([{ ...tab }])),
       sendMessage: vi.fn(() => Promise.resolve()),
-      onRemoved: event(),
-      onUpdated: event(),
+      onRemoved: {
+        addListener: vi.fn((listener: (typeof tabRemovedListeners)[number]) => {
+          tabRemovedListeners.push(listener);
+        }),
+        removeListener: vi.fn(),
+        hasListener: vi.fn(() => false),
+      },
+      onUpdated: {
+        addListener: vi.fn((listener: (typeof tabUpdatedListeners)[number]) => {
+          tabUpdatedListeners.push(listener);
+        }),
+        removeListener: vi.fn(),
+        hasListener: vi.fn(() => false),
+      },
       onActivated: event(),
     },
     windows: { get: vi.fn(() => Promise.resolve({ id: RUN_WINDOW_ID })), onFocusChanged: event() },
@@ -152,7 +181,13 @@ const harness = vi.hoisted(() => {
     contextMenus: {
       create: vi.fn(),
       removeAll: vi.fn((callback?: () => void) => callback?.()),
-      onClicked: event(),
+      onClicked: {
+        addListener: vi.fn((listener: (typeof contextMenuListeners)[number]) => {
+          contextMenuListeners.push(listener);
+        }),
+        removeListener: vi.fn(),
+        hasListener: vi.fn(() => false),
+      },
     },
     sidePanel: {
       setPanelBehavior: vi.fn(() => Promise.resolve()),
@@ -173,7 +208,7 @@ const harness = vi.hoisted(() => {
       contains: vi.fn(() => Promise.resolve(true)),
       request: vi.fn(() => Promise.resolve(true)),
     },
-    i18n: { getMessage: (key: string) => key },
+    i18n: { getMessage: (key: string) => key, getUILanguage: () => 'en' },
   };
 
   (globalThis as Record<string, unknown>).chrome = chromeMock;
@@ -186,6 +221,7 @@ const harness = vi.hoisted(() => {
     return new Promise<never>(() => {});
   });
   const getManagedModelAccess = vi.fn<() => Promise<ManagedModelAccess>>();
+  const executeChat = vi.fn();
 
   return {
     EXTENSION_ID,
@@ -196,14 +232,20 @@ const harness = vi.hoisted(() => {
     CONSENT_KEY,
     localStore,
     unreadableKeys,
+    readHold,
     messageListeners,
     nativeListeners,
+    contextMenuListeners,
+    tabRemovedListeners,
+    tabUpdatedListeners,
+    connectListeners,
     storageListeners,
     captured,
     debuggerMock,
     tab,
     runAgentLoop,
     getManagedModelAccess,
+    executeChat,
     chromeMock,
   };
 });
@@ -213,6 +255,12 @@ vi.mock('../src/features/computer-use/agentLoop', async (importOriginal) => ({
   runAgentLoop: harness.runAgentLoop,
 }));
 
+vi.mock('../src/features/cloud-bridge/managedChatHandler', async (importOriginal) => {
+  const actual = await importOriginal<ManagedChatHandlerModule>();
+  harness.executeChat.mockImplementation(actual.executeChromeManagedChat);
+  return { ...actual, executeChromeManagedChat: harness.executeChat };
+});
+
 vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
   ...(await importOriginal<FreeTrialClientModule>()),
   getManagedModelAccess: harness.getManagedModelAccess,
@@ -220,6 +268,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
 
 import { assertDestinationAllowlisted, navigate } from '../src/features/computer-use/cdpDriver';
 import { MAX_RUN_GUIDANCE_CHARS } from '../src/features/computer-use/agentLoop';
+import { captureEditableTarget } from '../src/features/background/editable-selection';
 import {
   captureEditableSelection,
   applyEditableSelection,
@@ -314,10 +363,36 @@ describe('background service worker security guards', () => {
       text: 'clear wording',
     };
 
+    it('refuses to capture or write into a field on a site the user has not approved', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      const owner = auth['owner'] as { accountId: string; authIncarnation: string };
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_B]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      harness.chromeMock.scripting.executeScript.mockClear();
+
+      await expect(
+        captureEditableTarget(
+          { id: RUN_TAB_ID, url: `${SITE_A}/start` } as chrome.tabs.Tab,
+          'rough words',
+          owner,
+          () => true,
+        ),
+      ).rejects.toThrow('spRewriteSiteNotApproved');
+      expect(
+        await dispatch({ ...base, selectionId: '22222222-2222-4222-8222-222222222222', owner }),
+      ).toMatchObject({ success: false });
+
+      expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+      expect(harness.chromeMock.scripting.executeScript).not.toHaveBeenCalled();
+      expect(harness.localStore[SITE_ALLOWLIST_KEY]).toEqual([SITE_B]);
+    });
+
     it('executes only the captured field without creating general browser-control consent', async () => {
       const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
-      putStorage(SITE_ALLOWLIST_KEY, []);
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_A]);
       putStorage(CONSENT_KEY, []);
+      await new Promise((resolve) => setTimeout(resolve, 0));
       vi.stubGlobal('location', { href: harness.tab.url });
       vi.stubGlobal('CSS', { escape: (value: string) => value });
       const rect = vi
@@ -351,7 +426,7 @@ describe('background service worker security guards', () => {
         ).toMatchObject({ success: true, verified: true });
         expect(field.value).toBe('Before clear wording after.');
         expect((document.getElementById('other') as HTMLInputElement).value).toBe('');
-        expect(harness.localStore[SITE_ALLOWLIST_KEY]).toEqual([]);
+        expect(harness.localStore[SITE_ALLOWLIST_KEY]).toEqual([SITE_A]);
         expect(harness.localStore[CONSENT_KEY]).toEqual([]);
         harness.chromeMock.tabs.sendMessage.mockImplementationOnce(
           async (_tabId: unknown, request: unknown) => {
@@ -503,6 +578,341 @@ describe('background service worker security guards', () => {
       } finally {
         delete harness.localStore['agi_autofill_profile'];
       }
+    });
+  });
+
+  describe('which reason the form-fill profile request gives', () => {
+    const contentSender = (url: string) => ({
+      id: EXTENSION_ID,
+      url,
+      origin: new URL(url).origin,
+      frameId: 0,
+      tab: { id: RUN_TAB_ID, url },
+    });
+    const board = 'https://boards.greenhouse.io';
+
+    it('keeps not approved, not a supported page and unreadable apart', async () => {
+      harness.localStore['agi_autofill_profile'] = { firstName: 'Jane' };
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B]);
+      try {
+        const notApproved = await dispatch(
+          { type: 'GET_AUTOFILL_PROFILE' },
+          contentSender(`${board}/acme/jobs/1`),
+        );
+        const unsupported = await dispatch(
+          { type: 'GET_AUTOFILL_PROFILE' },
+          contentSender(`${SITE_A}/apply`),
+        );
+        putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B, board]);
+        harness.unreadableKeys.add('agi_autofill_profile');
+        const unreadable = await dispatch(
+          { type: 'GET_AUTOFILL_PROFILE' },
+          contentSender(`${board}/acme/jobs/1`),
+        );
+        const errors = [notApproved, unsupported, unreadable].map((reply) => reply['error']);
+        expect(new Set(errors).size).toBe(3);
+        expect(errors[0]).toMatch(/not on your AGI approved-sites list/);
+        expect(errors[1]).toMatch(/does not support this page/);
+        expect(errors[2]).toMatch(/could not be read/);
+        for (const reply of [notApproved, unsupported, unreadable]) {
+          expect(reply).toMatchObject({ success: false });
+          expect(reply).not.toHaveProperty('profile');
+        }
+      } finally {
+        harness.unreadableKeys.delete('agi_autofill_profile');
+        delete harness.localStore['agi_autofill_profile'];
+      }
+    });
+  });
+
+  describe('an on-page request the service refuses', () => {
+    const pageSender = {
+      id: EXTENSION_ID,
+      url: `${SITE_A}/start`,
+      origin: SITE_A,
+      frameId: 0,
+      tab: { id: RUN_TAB_ID, windowId: 7, url: `${SITE_A}/start` },
+    };
+
+    async function refusedWith(result: Record<string, unknown>): Promise<Record<string, unknown>> {
+      await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      harness.executeChat.mockResolvedValueOnce({ status: 'error', ...result });
+      return dispatch(
+        { type: 'IN_PAGE_PROMPT', prompt: 'Summarize', pageContext: 'text' },
+        pageSender,
+      );
+    }
+
+    it('shows the reason the service gave instead of a fixed account sentence', async () => {
+      const reply = await refusedWith({
+        code: 'plan_required',
+        message: 'Your workspace administrator has turned off web search.',
+      });
+      expect(reply).toMatchObject({
+        success: false,
+        outcome: 'plan_required',
+        message: 'Your workspace administrator has turned off web search.',
+      });
+    });
+
+    it('shows a model refusal as a rejected request with the service reason', async () => {
+      const reply = await refusedWith({
+        code: 'model_refused',
+        message: 'This model may train on your chats. Choose another model.',
+      });
+      expect(reply).toMatchObject({
+        success: false,
+        outcome: 'request_rejected',
+        message: 'This model may train on your chats. Choose another model.',
+      });
+    });
+
+    it('says when to retry after a rate limit', async () => {
+      const reply = await refusedWith({
+        code: 'rate_limited',
+        message: 'AGI Cloud is receiving too many requests. Try again shortly.',
+        retryAfterSeconds: 30,
+      });
+      expect(reply).toMatchObject({ success: false, outcome: 'rate_limited', retryable: true });
+      expect(reply['message']).toBe('spStreamTryAgainIn');
+    });
+  });
+
+  describe('an on-page request whose tab goes away', () => {
+    const pageSender = {
+      id: EXTENSION_ID,
+      url: `${SITE_A}/start`,
+      origin: SITE_A,
+      frameId: 0,
+      tab: { id: RUN_TAB_ID, windowId: 7, url: `${SITE_A}/start` },
+    };
+
+    async function startOnPageRequest(requestId?: string): Promise<AbortSignal> {
+      await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      let signal: AbortSignal | undefined;
+      harness.executeChat.mockImplementationOnce((request: { signal: AbortSignal }) => {
+        signal = request.signal;
+        return new Promise(() => undefined);
+      });
+      void dispatch(
+        { type: 'IN_PAGE_PROMPT', prompt: 'Summarize', pageContext: 'text', requestId },
+        pageSender,
+      );
+      await vi.waitFor(() => expect(signal).toBeDefined());
+      return signal!;
+    }
+
+    function connectPromptPort(requestId: string, sender: Record<string, unknown> = pageSender) {
+      let onDisconnect: () => void = () => undefined;
+      const port = {
+        name: `agi-in-page-prompt:${requestId}`,
+        sender,
+        disconnect: vi.fn(),
+        onMessage: { addListener: vi.fn() },
+        onDisconnect: {
+          addListener: vi.fn((listener: () => void) => {
+            onDisconnect = listener;
+          }),
+        },
+      };
+      for (const listener of harness.connectListeners) listener(port);
+      return { port, disconnect: () => onDisconnect() };
+    }
+
+    it('is cancelled when the tab is closed', async () => {
+      const signal = await startOnPageRequest();
+      expect(signal.aborted).toBe(false);
+      for (const listener of harness.tabRemovedListeners) listener(RUN_TAB_ID);
+      expect(signal.aborted).toBe(true);
+    });
+
+    it('keeps running when a single-page site changes its address and the tab reports loading', async () => {
+      const signal = await startOnPageRequest('request-spa');
+      const page = connectPromptPort('request-spa');
+      for (const listener of harness.tabUpdatedListeners)
+        listener(RUN_TAB_ID, { status: 'loading', url: `${SITE_A}/next-route` });
+      expect(signal.aborted).toBe(false);
+      page.disconnect();
+    });
+
+    it('is cancelled when the page that asked is gone, which closes its port', async () => {
+      const signal = await startOnPageRequest('request-gone');
+      const page = connectPromptPort('request-gone');
+      expect(signal.aborted).toBe(false);
+      page.disconnect();
+      expect(signal.aborted).toBe(true);
+    });
+
+    it('is not cancelled by the port of a different request on the same tab', async () => {
+      const signal = await startOnPageRequest('request-live');
+      const finished = connectPromptPort('request-finished');
+      finished.disconnect();
+      expect(signal.aborted).toBe(false);
+      connectPromptPort('request-live').disconnect();
+    });
+
+    it('is refused at once when its page went away before the request arrived', async () => {
+      connectPromptPort('request-early').disconnect();
+      await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      const reply = await dispatch(
+        {
+          type: 'IN_PAGE_PROMPT',
+          prompt: 'Summarize',
+          pageContext: 'text',
+          requestId: 'request-early',
+        },
+        pageSender,
+      );
+      expect(reply).toMatchObject({ success: false, outcome: 'cancelled' });
+    });
+
+    it('ignores a prompt port opened by anything but this extension in a tab', () => {
+      const foreign = connectPromptPort('request-foreign', { id: 'someone-else' });
+      expect(foreign.port.disconnect).toHaveBeenCalled();
+    });
+
+    it('is cancelled the moment the site loses its approval', async () => {
+      const signal = await startOnPageRequest('request-revoked');
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_B]);
+      expect(signal.aborted).toBe(true);
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B]);
+    });
+
+    it('is left running when a different site loses its approval', async () => {
+      const signal = await startOnPageRequest('request-unrelated');
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_A]);
+      expect(signal.aborted).toBe(false);
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B]);
+      for (const listener of harness.tabRemovedListeners) listener(RUN_TAB_ID);
+    });
+
+    it('is cancelled when the panel on that tab says it was closed', async () => {
+      const signal = await startOnPageRequest();
+      await dispatch({ type: 'CANCEL_IN_PAGE_PROMPT' }, pageSender);
+      expect(signal.aborted).toBe(true);
+    });
+
+    it('is left running when a different tab goes away', async () => {
+      const signal = await startOnPageRequest();
+      for (const listener of harness.tabRemovedListeners) listener(RUN_TAB_ID + 1);
+      expect(signal.aborted).toBe(false);
+      for (const listener of harness.tabRemovedListeners) listener(RUN_TAB_ID);
+    });
+  });
+
+  describe('context-menu requests made in a particular window', () => {
+    const MENU_TAB = { id: 77, windowId: 5, url: 'https://menu-site.example/page' };
+
+    it.each([
+      ['explain-selection', 'explain', { selectionText: 'chosen words' }],
+      ['translate-selection', 'translate', { selectionText: 'chosen words' }],
+      ['ask-agi-workforce', 'ask-selection', { selectionText: 'chosen words' }],
+      ['ask-page', 'ask-page', {}],
+      ['summarize-page', 'summarize', {}],
+    ])('stamps %s with the window and tab it was used in', async (menuItemId, type, extra) => {
+      const listener = harness.contextMenuListeners[0];
+      if (!listener) throw new Error('background did not register a context-menu listener');
+      harness.chromeMock.storage.session.set.mockClear();
+
+      listener({ menuItemId, pageUrl: MENU_TAB.url, ...extra }, MENU_TAB);
+
+      await vi.waitFor(() =>
+        expect(harness.chromeMock.storage.session.set).toHaveBeenCalledWith({
+          agi_pending_chat: expect.objectContaining({
+            type,
+            tabId: MENU_TAB.id,
+            windowId: MENU_TAB.windowId,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('the site prompt on a chat turn', () => {
+    const GMAIL = 'https://mail.google.com/mail/u/0/';
+
+    async function chatTurn(extra: Record<string, unknown>): Promise<Record<string, unknown>> {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      harness.tab.url = GMAIL;
+      harness.executeChat.mockClear();
+      harness.executeChat.mockRejectedValueOnce(new Error('stop after admission'));
+      const reply = await dispatch({
+        type: 'CHAT_MESSAGE',
+        owner: auth['owner'],
+        clientInstanceId: 'panel-1',
+        id: `stream-${crypto.randomUUID()}`,
+        text: 'What is a good name for a dog?',
+        ...extra,
+      });
+      expect(reply['success']).toBe(true);
+      await vi.waitFor(() => expect(harness.executeChat).toHaveBeenCalled());
+      return harness.executeChat.mock.calls[0]![0] as Record<string, unknown>;
+    }
+
+    it('sends no site prompt when nothing from the page is attached', async () => {
+      const request = await chatTurn({});
+      expect(request['systemPrompt']).toBeUndefined();
+    });
+
+    it('sends the site prompt when the turn carries page text', async () => {
+      const request = await chatTurn({ pageContext: 'Inbox: 3 unread messages' });
+      expect(String(request['systemPrompt'])).toContain('You are assisting on Gmail');
+    });
+
+    it('sends the site prompt when the turn has a browser tool tier', async () => {
+      const request = await chatTurn({ browserToolTier: 'read' });
+      expect(String(request['systemPrompt'])).toContain('You are assisting on Gmail');
+    });
+  });
+
+  describe('telling open pages that their access changed', () => {
+    const OTHER = 'https://unrelated.example';
+    const openTabs = [
+      { id: 11, url: `${SITE_A}/page` },
+      { id: 12, url: `${OTHER}/page` },
+      { id: 13, url: `${SITE_B}/page` },
+    ];
+
+    function fireStorageChange(changes: Record<string, unknown>): void {
+      for (const listener of harness.storageListeners) listener(changes, 'local');
+    }
+
+    function notifiedTabs(): unknown[][] {
+      return harness.chromeMock.tabs.sendMessage.mock.calls.filter(
+        (call) =>
+          (call as unknown[])[1] && (call[1] as { type?: string }).type === 'PAGE_ACCESS_CHANGED',
+      ) as unknown[][];
+    }
+
+    beforeEach(() => {
+      harness.chromeMock.tabs.query.mockResolvedValue(openTabs.map((tab) => ({ ...tab })));
+      harness.chromeMock.tabs.sendMessage.mockClear();
+    });
+
+    afterEach(() => {
+      harness.chromeMock.tabs.query.mockImplementation(() => Promise.resolve([{ ...harness.tab }]));
+    });
+
+    it('messages the top document of a tab whose site was just removed from the approved list', async () => {
+      fireStorageChange({
+        [SITE_ALLOWLIST_KEY]: { oldValue: [SITE_A, SITE_B], newValue: [SITE_B] },
+      });
+      await vi.waitFor(() => expect(notifiedTabs()).toHaveLength(1));
+      expect(notifiedTabs()[0]).toEqual([11, { type: 'PAGE_ACCESS_CHANGED' }, { frameId: 0 }]);
+    });
+
+    it('messages the top document of a tab whose site was just approved', async () => {
+      fireStorageChange({
+        [SITE_ALLOWLIST_KEY]: { oldValue: [SITE_B], newValue: [SITE_A, SITE_B] },
+      });
+      await vi.waitFor(() => expect(notifiedTabs()).toHaveLength(1));
+      expect(notifiedTabs()[0]?.[0]).toBe(11);
+    });
+
+    it('messages every approved tab, and no other, when the in-page panel preference changes', async () => {
+      fireStorageChange({ in_page_panel_enabled: { oldValue: true, newValue: false } });
+      await vi.waitFor(() => expect(notifiedTabs()).toHaveLength(2));
+      expect(notifiedTabs().map((call) => call[0])).toEqual([11, 13]);
     });
   });
 
@@ -1238,5 +1648,56 @@ describe('background service worker security guards', () => {
       expect(logged).toContain('Received native message');
       debugSpy.mockRestore();
     });
+  });
+});
+
+describe('opening the side panel from the in-page panel on a dormant worker', () => {
+  it('opens inside the synchronous turn of the click, before the allowlist has loaded', async () => {
+    let release: () => void = () => undefined;
+    harness.readHold.current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const listenersBefore = harness.messageListeners.length;
+    vi.resetModules();
+    await import('../src/background');
+    const dormant = harness.messageListeners[listenersBefore];
+    if (!dormant) throw new Error('the restarted worker registered no message listener');
+    harness.chromeMock.sidePanel.open.mockClear();
+    const sender = {
+      id: EXTENSION_ID,
+      url: `${SITE_A}/start`,
+      origin: SITE_A,
+      tab: { id: RUN_TAB_ID, windowId: 7, url: `${SITE_A}/start` },
+    };
+    const reply = vi.fn();
+
+    const kept = dormant({ type: 'OPEN_SIDE_PANEL' }, sender, reply);
+
+    expect(harness.chromeMock.sidePanel.open).toHaveBeenCalledTimes(1);
+    expect(harness.chromeMock.sidePanel.open).toHaveBeenCalledWith({ tabId: RUN_TAB_ID });
+    expect(kept).toBe(true);
+    expect(reply).not.toHaveBeenCalled();
+
+    harness.readHold.current = null;
+    release();
+    await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
+    expect(reply).toHaveBeenCalledWith({ success: true });
+  });
+
+  it('reports a site the user has not approved as a failure once the allowlist is known', async () => {
+    const dormant = harness.messageListeners.at(-1)!;
+    const reply = vi.fn();
+    dormant(
+      { type: 'OPEN_SIDE_PANEL' },
+      {
+        id: EXTENSION_ID,
+        url: 'https://unapproved.example/',
+        origin: 'https://unapproved.example',
+        tab: { id: RUN_TAB_ID, windowId: 7, url: 'https://unapproved.example/' },
+      },
+      reply,
+    );
+    await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
+    expect(reply.mock.calls[0]![0]).toMatchObject({ success: false });
   });
 });

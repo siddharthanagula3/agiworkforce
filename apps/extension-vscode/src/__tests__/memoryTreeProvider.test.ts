@@ -42,7 +42,9 @@ function mockMemoryEnabled(enabled: boolean): void {
         ),
         update: vi.fn(),
         has: vi.fn().mockReturnValue(true),
-        inspect: vi.fn().mockReturnValue(undefined),
+        inspect: vi.fn((key: string) =>
+          key === 'memory.enabled' ? { key, globalValue: enabled } : undefined,
+        ),
       }) as unknown as vscode.WorkspaceConfiguration,
   );
 }

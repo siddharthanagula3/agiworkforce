@@ -1,5 +1,4 @@
 use anyhow::{bail, Context, Result};
-use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeSet, HashMap};
@@ -28,10 +27,6 @@ pub enum AuthEntry {
 pub struct AuthStore {
     #[serde(flatten)]
     pub entries: HashMap<String, AuthEntry>,
-    /// Transient copilot API token cache: (token, expires_at_unix_seconds).
-    /// Not persisted to disk, refreshed on demand.
-    #[serde(skip)]
-    pub copilot_cache: Option<(String, i64)>,
 }
 
 /// Auth status for a single provider, returned by `auth_status()`.
@@ -47,8 +42,8 @@ pub struct AuthStatusEntry {
     /// Whether the auth file has secure permissions (Unix 0o600).
     pub permissions_secure: bool,
     /// When this credential was last read out of the credential store and used,
-    /// from the local credential-use trail. `None` means it has not been used
-    /// since the trail began.
+    /// from the local credential-use trail, or the environment variable it is
+    /// read from. `None` means it has not been used since the trail began.
     pub last_used: Option<String>,
 }
 
@@ -177,7 +172,7 @@ impl CredentialStore for OsKeyring {
             Ok(secret) => Ok(Some(secret)),
             Err(keyring::Error::NoEntry) => Ok(None),
             Err(error) => Err(error).context(
-                "The OS credential store denied access; approve the keychain prompt, or sign in again with `agi login`",
+                "The OS credential store would not return the saved credential. Unlock it and approve its prompt. Where it cannot unlock (an SSH session, a container), run `agi login` with AGIWORKFORCE_NO_KEYRING=1 to keep credentials in an owner-only file, or `agi logout` to clear the saved sign-in",
             ),
         }
     }
@@ -221,13 +216,23 @@ fn read_file_store(path: &Path, data: &str) -> Result<AuthStore> {
     if !check_file_permissions_secure(path) {
         bail!(
             "{} holds credentials in the clear and is readable by other accounts on this machine. \
-             Sign in again with `agi login` to move them into the OS credential store, or run \
+             Run `agi login` to replace it (keys saved in it must be entered again), or run \
              `chmod 600 {}` once you know who has read it.",
             path.display(),
             path.display()
         );
     }
-    serde_json::from_str(data).context("Failed to parse auth.json")
+    serde_json::from_str(data).context(
+        "auth.json is not a credential file this agi can read; run `agi login` to replace it",
+    )
+}
+
+fn sign_in_command(provider: &str) -> String {
+    if provider == "managed_cloud" || is_agiworkforce_login_provider(Some(provider)) {
+        "agi login".to_string()
+    } else {
+        format!("agi login {provider}")
+    }
 }
 
 /// Credentials saved before config roots had keychain services of their own sit
@@ -276,17 +281,61 @@ fn load_keyring_auth(
             Some(secret) => secret,
             None if missing_signs_out => continue,
             None => bail!(
-                "The saved {provider} credential is missing from the OS credential store; sign in again with `agi login`"
+                "The saved {provider} credential is missing from the OS credential store; run `{}` to replace it",
+                sign_in_command(&provider)
             ),
         };
-        let entry = serde_json::from_str::<AuthEntry>(&secret)
-            .with_context(|| format!("Saved {provider} credential is invalid"))?;
+        let entry = serde_json::from_str::<AuthEntry>(&secret).with_context(|| {
+            format!(
+                "Saved {provider} credential is invalid; run `{}` to replace it",
+                sign_in_command(&provider)
+            )
+        })?;
         entries.insert(provider, entry);
     }
-    Ok(AuthStore {
-        entries,
-        copilot_cache: None,
-    })
+    Ok(AuthStore { entries })
+}
+
+fn recover_keyring_auth(
+    credentials: &dyn CredentialStore,
+    providers: Vec<String>,
+) -> (AuthStore, BTreeSet<String>) {
+    let mut store = AuthStore::default();
+    let mut unreadable = BTreeSet::new();
+    for provider in providers {
+        match credentials.get(&auth_keyring_account(&provider)) {
+            Ok(None) => {}
+            Ok(Some(secret)) => match serde_json::from_str::<AuthEntry>(&secret) {
+                Ok(entry) => {
+                    store.entries.insert(provider, entry);
+                }
+                Err(_) => {
+                    unreadable.insert(provider);
+                }
+            },
+            Err(_) => {
+                unreadable.insert(provider);
+            }
+        }
+    }
+    (store, unreadable)
+}
+
+// Another root's index names credentials this root must never adopt, so a
+// sign-in here starts empty and replaces that index.
+fn recover_keyring_auth_for_root(
+    credentials: &dyn CredentialStore,
+    unscoped: &dyn CredentialStore,
+    index: AuthKeyringIndex,
+) -> (AuthStore, BTreeSet<String>) {
+    let legacy = index.version == 1 && index.scope.is_none();
+    if !legacy && index.scope.as_deref() != Some(credentials.scope()) {
+        return (AuthStore::default(), BTreeSet::new());
+    }
+    if legacy {
+        let _ = adopt_unscoped_credentials(credentials, unscoped, &index);
+    }
+    recover_keyring_auth(credentials, index.providers)
 }
 
 fn load_keyring_auth_for_root(
@@ -299,7 +348,7 @@ fn load_keyring_auth_for_root(
     let legacy = index.version == 1 && index.scope.is_none();
     if !legacy && index.scope.as_deref() != Some(credentials.scope()) {
         bail!(
-            "The credential index belongs to another config root; sign in again with `agi login`"
+            "The credential index belongs to another config root; run `agi login` to sign in here, and enter provider keys saved under that root again"
         );
     }
     if legacy {
@@ -331,9 +380,40 @@ fn save_keyring_auth(
     path: &Path,
     store: &AuthStore,
 ) -> Result<()> {
+    first_removal_failure(write_keyring_auth(
+        credentials,
+        path,
+        store,
+        &BTreeSet::new(),
+    )?)
+}
+
+fn first_removal_failure(failures: Vec<(String, anyhow::Error)>) -> Result<()> {
+    if let Some((provider, error)) = failures.into_iter().next() {
+        return Err(error.context(format!("Could not remove the saved {provider} credential")));
+    }
+    Ok(())
+}
+
+// Only an index this root wrote, or a legacy one it adopts on load, proves which
+// accounts in its keychain service are its own to delete.
+fn index_owned_by(index: &AuthKeyringIndex, credentials: &dyn CredentialStore) -> bool {
+    match index.scope.as_deref() {
+        Some(scope) => scope == credentials.scope(),
+        None => index.version == 1,
+    }
+}
+
+fn write_keyring_auth(
+    credentials: &dyn CredentialStore,
+    path: &Path,
+    store: &AuthStore,
+    kept: &BTreeSet<String>,
+) -> Result<Vec<(String, anyhow::Error)>> {
     let previous_providers = std::fs::read_to_string(path)
         .ok()
         .and_then(|data| parse_auth_keyring_index(&data))
+        .filter(|index| index_owned_by(index, credentials))
         .map(|index| {
             index
                 .providers
@@ -342,12 +422,12 @@ fn save_keyring_auth(
                 .collect::<BTreeSet<_>>()
         })
         .unwrap_or_default();
-    let current_providers = store.entries.keys().cloned().collect::<BTreeSet<_>>();
+    let written_providers = store.entries.keys().cloned().collect::<BTreeSet<_>>();
 
     // Credentials are committed to the store before the index names them, so a
     // failure anywhere leaves the previous index in place rather than a file
     // that promises credentials the store does not hold.
-    for provider in &current_providers {
+    for provider in &written_providers {
         let entry = store
             .entries
             .get(provider)
@@ -360,6 +440,10 @@ fn save_keyring_auth(
             })?;
     }
 
+    let current_providers = written_providers
+        .union(kept)
+        .cloned()
+        .collect::<BTreeSet<_>>();
     let removed: Vec<String> = previous_providers
         .difference(&current_providers)
         .cloned()
@@ -370,15 +454,21 @@ fn save_keyring_auth(
     // keeps listing it as removing until the deletion is confirmed: an
     // interrupted removal then neither leaves an index naming a deleted
     // credential nor forgets one still held.
+    let mut failures = Vec::new();
     if !removed.is_empty() {
         write_auth_index(credentials, path, &providers, &removed)?;
-        for provider in &removed {
-            credentials
-                .delete(&auth_keyring_account(provider))
-                .with_context(|| format!("Could not remove the saved {provider} credential"))?;
+        for provider in removed {
+            if let Err(error) = credentials.delete(&auth_keyring_account(&provider)) {
+                failures.push((provider, error));
+            }
         }
     }
-    write_auth_index(credentials, path, &providers, &[])
+    let pending: Vec<String> = failures
+        .iter()
+        .map(|(provider, _)| provider.clone())
+        .collect();
+    write_auth_index(credentials, path, &providers, &pending)?;
+    Ok(failures)
 }
 
 fn write_auth_index(
@@ -431,6 +521,24 @@ fn apply_auth_transaction<T>(
     Ok(result)
 }
 
+fn apply_replacing_transaction<T>(
+    store: &mut AuthStore,
+    unreadable: &mut BTreeSet<String>,
+    change: impl FnOnce(&mut AuthStore, &mut BTreeSet<String>) -> Result<T>,
+    persist: impl FnOnce(&AuthStore, &BTreeSet<String>) -> Result<()>,
+    committed: impl FnOnce(&T),
+) -> Result<T> {
+    let entries_before = store.entries.clone();
+    let unreadable_before = unreadable.clone();
+    let result = change(store, unreadable)?;
+    unreadable.retain(|provider| !store.entries.contains_key(provider));
+    if store.entries != entries_before || *unreadable != unreadable_before {
+        persist(store, unreadable)?;
+    }
+    committed(&result);
+    Ok(result)
+}
+
 impl AuthStore {
     fn mutation_lock() -> Result<std::fs::File> {
         let dir = crate::config::CliConfig::config_dir()?;
@@ -475,24 +583,84 @@ impl AuthStore {
         apply_auth_transaction(&mut store, change, Self::save_unlocked, committed)
     }
 
+    // Sign-in and sign-out must work when saved credentials cannot be read. The
+    // second argument names credentials the store would not return: a name left
+    // there stays in the index unread, a name removed from it is signed out.
+    // Both callbacks run under the mutation lock and must not re-enter AuthStore.
+    pub fn transaction_replacing_unreadable<T>(
+        change: impl FnOnce(&mut Self, &mut BTreeSet<String>) -> Result<T>,
+        committed: impl FnOnce(&T),
+    ) -> Result<T> {
+        let _lock = Self::mutation_lock()?;
+        let (mut store, mut unreadable) = Self::load_replacing_unlocked()?;
+        apply_replacing_transaction(
+            &mut store,
+            &mut unreadable,
+            change,
+            Self::save_replacing_unlocked,
+            committed,
+        )
+    }
+
     fn load_unlocked() -> Result<Self> {
         let mut store = Self::load_current_unlocked()?;
+        store.migrate_legacy_unlocked(&BTreeSet::new(), false)?;
+        Ok(store)
+    }
+
+    fn load_replacing_unlocked() -> Result<(Self, BTreeSet<String>)> {
+        let path = auth_path()?;
+        let (mut store, unreadable) = match std::fs::read_to_string(&path) {
+            Ok(data) => match parse_auth_keyring_index(&data) {
+                Some(index) => recover_keyring_auth_for_root(
+                    &OsKeyring::for_config_root()?,
+                    &OsKeyring::unscoped(),
+                    index,
+                ),
+                None => (
+                    read_file_store(&path, &data).unwrap_or_default(),
+                    BTreeSet::new(),
+                ),
+            },
+            Err(_) => (Self::default(), BTreeSet::new()),
+        };
+        store.migrate_legacy_unlocked(&unreadable, true)?;
+        Ok((store, unreadable))
+    }
+
+    fn migrate_legacy_unlocked(&mut self, kept: &BTreeSet<String>, replacing: bool) -> Result<()> {
         let legacy = crate::config::CliConfig::config_dir()?.join("auth.toml");
-        if legacy
+        if !legacy
             .try_exists()
             .context("Failed to inspect the legacy credential")?
         {
-            if !check_file_permissions_secure(&legacy) {
-                bail!("The legacy credential file is not owner-only; refusing migration");
-            }
-            let content =
-                std::fs::read_to_string(&legacy).context("Failed to read the legacy credential")?;
-            if adopt_legacy_credential(&mut store, &content)? {
-                store.save_unlocked()?;
-            }
-            std::fs::remove_file(&legacy).context("Failed to remove the migrated credential")?;
+            return Ok(());
         }
-        Ok(store)
+        let adopted = if check_file_permissions_secure(&legacy) {
+            std::fs::read_to_string(&legacy)
+                .context("Failed to read the legacy credential")
+                .and_then(|content| adopt_legacy_credential(self, &content))
+        } else {
+            Err(anyhow::anyhow!(
+                "The legacy credential file is not owner-only; refusing migration"
+            ))
+        };
+        match adopted {
+            Ok(true) if replacing => self.save_replacing_unlocked(kept)?,
+            Ok(true) => self.save_unlocked()?,
+            Ok(false) => {}
+            Err(error) if replacing => {
+                let aside = set_aside_unreadable(&legacy)?;
+                crate::output::print_warn(&format!(
+                    "{} could not be used ({error:#}), so it was moved to {} and is no longer read. Delete it once you no longer need it.",
+                    legacy.display(),
+                    aside.display()
+                ));
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        }
+        std::fs::remove_file(&legacy).context("Failed to remove the migrated credential")
     }
 
     fn load_current_unlocked() -> Result<Self> {
@@ -545,11 +713,69 @@ impl AuthStore {
                 serde_json::to_string_pretty(self).context("Failed to serialize auth store")?;
             return write_owner_only_file(&path, &data);
         }
-        save_keyring_auth(&OsKeyring::for_config_root()?, &path, self).context(
-            "Could not persist credentials in the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to use an owner-only file",
-        )
+        save_keyring_auth(&OsKeyring::for_config_root()?, &path, self).context(KEYRING_SAVE_REFUSED)
+    }
+
+    fn save_replacing_unlocked(&self, kept: &BTreeSet<String>) -> Result<()> {
+        if !crate::secure_store::uses_keychain() {
+            self.save_unlocked()?;
+            for provider in kept {
+                crate::output::print_warn(&dropped_from_file_store(provider));
+            }
+            return Ok(());
+        }
+        let dir = crate::config::CliConfig::config_dir()?;
+        std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
+        let undeleted =
+            write_keyring_auth(&OsKeyring::for_config_root()?, &auth_path()?, self, kept)
+                .context(KEYRING_SAVE_REFUSED)?;
+        for (provider, error) in undeleted {
+            crate::output::print_warn(&kept_by_keychain(&provider, &error));
+        }
+        Ok(())
     }
 }
+
+fn dropped_from_file_store(provider: &str) -> String {
+    format!(
+        "{provider} is signed out here: its saved credential could not be read, and the owner-only credential file cannot keep a credential it could not read. Run `{}` to enter it again.",
+        sign_in_command(provider)
+    )
+}
+
+fn kept_by_keychain(provider: &str, error: &anyhow::Error) -> String {
+    format!(
+        "{provider} is signed out here, but the OS credential store would not delete its saved credential ({error:#}). The next saved sign-in tries again."
+    )
+}
+
+fn set_aside_unreadable(path: &Path) -> Result<PathBuf> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("credential");
+    let aside = path.with_file_name(format!(
+        "{name}.unreadable-{}",
+        chrono::Utc::now().format("%Y%m%dT%H%M%S%.3fZ")
+    ));
+    std::fs::rename(path, &aside)
+        .with_context(|| format!("Could not move the unreadable {} aside", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&aside, std::fs::Permissions::from_mode(0o600)).with_context(
+            || {
+                format!(
+                    "Moved the unreadable credential file to {}, but could not make it owner-only",
+                    aside.display()
+                )
+            },
+        )?;
+    }
+    Ok(aside)
+}
+
+const KEYRING_SAVE_REFUSED: &str = "Could not persist credentials in the OS keyring; set AGIWORKFORCE_NO_KEYRING=1 only in a trusted headless environment to use an owner-only file";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Credential-use trail
@@ -665,7 +891,41 @@ pub fn auth_status() -> Result<Vec<AuthStatusEntry>> {
         })
         .unwrap_or(false);
     let results = auth_status_from_store(&store, now_ms, perms_secure, &credential_uses());
-    Ok(results)
+    Ok(with_environment_auth_status(results, |name| {
+        std::env::var(name).ok()
+    }))
+}
+
+fn with_environment_auth_status(
+    mut results: Vec<AuthStatusEntry>,
+    variable: impl Fn(&str) -> Option<String>,
+) -> Vec<AuthStatusEntry> {
+    results.extend(environment_auth_status(variable));
+    results.sort_by(|a, b| a.provider.cmp(&b.provider));
+    results
+}
+
+fn environment_auth_status(variable: impl Fn(&str) -> Option<String>) -> Vec<AuthStatusEntry> {
+    std::iter::once((AGIWORKFORCE_AUTH_KEY, "AGIWORKFORCE_JWT"))
+        .chain(
+            API_KEY_PROVIDERS
+                .iter()
+                .map(|provider| (provider.id, provider.env_var)),
+        )
+        .filter_map(|(provider, env_var)| {
+            variable(env_var)
+                .filter(|value| !value.trim().is_empty())
+                .map(|_| AuthStatusEntry {
+                    provider: provider.to_string(),
+                    auth_type: "env".to_string(),
+                    status: "active".to_string(),
+                    expires_in: None,
+                    has_refresh_token: false,
+                    permissions_secure: true,
+                    last_used: Some(format!("from {env_var}")),
+                })
+        })
+        .collect()
 }
 
 /// Core status logic, separated from disk I/O for testability.
@@ -749,9 +1009,8 @@ fn auth_status_from_store(
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
-/// GitHub OAuth App client ID for Copilot device flow authentication.
-/// Public per OAuth spec (not a secret). Registered at github.com/settings/applications.
-const GITHUB_CLIENT_ID: &str = "Ov23li8tweQw6odWQebz";
+const COPILOT_AUTH_KEY: &str = "copilot";
+const COPILOT_SIGN_IN_UNAVAILABLE: &str = "GitHub Copilot sign-in is not available in this version. Run `agi login` for your AGI account, or `agi login <provider>` to use your own API key.";
 const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
 // The device-grant endpoints live on the web origin (apps/web: POST
 // /api/auth/device/code, /token, /refresh), so this base MUST include `/api`:
@@ -765,218 +1024,15 @@ const AGIWORKFORCE_API_BASE: &str = "https://agiworkforce.com/api";
 pub fn agiworkforce_api_base() -> &'static str {
     AGIWORKFORCE_API_BASE
 }
-/// Maximum number of polling attempts during device code authentication (5s intervals = 5min).
-const MAX_POLL_ATTEMPTS: u32 = 60;
-
-// ──────────────────────────────────────────────────────────────────────────────
-// GitHub Copilot Login (Device Code Flow)
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct GithubDeviceCodeResponse {
-    device_code: String,
-    user_code: String,
-    verification_uri: String,
-    interval: u64,
-}
-
-#[derive(Deserialize)]
-struct GithubTokenResponse {
-    access_token: Option<String>,
-    error: Option<String>,
-}
-
-pub async fn login_copilot() -> Result<AuthEntry> {
-    let client = reqwest::Client::new();
-
-    // Step 1: Request device code
-    let resp = client
-        .post("https://github.com/login/device/code")
-        .header("Accept", "application/json")
-        .form(&[("client_id", GITHUB_CLIENT_ID), ("scope", "read:user")])
-        .send()
-        .await
-        .context("Failed to request GitHub device code")?;
-
-    let status = resp.status();
-    if status == reqwest::StatusCode::NOT_FOUND || status == reqwest::StatusCode::UNAUTHORIZED {
-        bail!(
-            "GitHub device code request failed (HTTP {}). \
-             Make sure you have an active GitHub Copilot subscription at \
-             https://github.com/settings/copilot",
-            status,
-        );
-    }
-
-    let device: GithubDeviceCodeResponse = resp
-        .json()
-        .await
-        .context("Failed to parse GitHub device code response")?;
-
-    // Step 2: Show instructions to user
-    println!(
-        "\n  {}  {}\n  {}  {}\n",
-        "Go to:".bold(),
-        ts::link(device.verification_uri),
-        "Enter code:".bold(),
-        ts::success_header(device.user_code),
-    );
-    println!("  {}", "Waiting for authorization...".dimmed());
-
-    // Step 3: Poll for access token
-    let poll_interval = device.interval + 3;
-    let mut attempts = 0;
-
-    loop {
-        attempts += 1;
-        if attempts > MAX_POLL_ATTEMPTS {
-            bail!(
-                "Authorization timed out after {} attempts",
-                MAX_POLL_ATTEMPTS
-            );
-        }
-
-        tokio::time::sleep(std::time::Duration::from_secs(poll_interval)).await;
-
-        let resp = client
-            .post("https://github.com/login/oauth/access_token")
-            .header("Accept", "application/json")
-            .form(&[
-                ("client_id", GITHUB_CLIENT_ID),
-                ("device_code", device.device_code.as_str()),
-                ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-            ])
-            .send()
-            .await
-            .context("Failed to poll GitHub token endpoint")?;
-
-        let token_resp: GithubTokenResponse = resp
-            .json()
-            .await
-            .context("Failed to parse GitHub token response")?;
-
-        if let Some(access_token) = token_resp.access_token {
-            return Ok(AuthEntry::OAuth {
-                refresh: access_token.clone(),
-                access: access_token,
-                expires: 0,
-            });
-        }
-
-        match token_resp.error.as_deref() {
-            Some("authorization_pending") => continue,
-            Some("slow_down") => {
-                // Back off an extra 5 seconds
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                continue;
-            }
-            Some(err) => bail!("GitHub authorization failed: {}", err),
-            None => bail!("Unexpected empty response from GitHub token endpoint"),
-        }
-    }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Copilot Token Fetch
-// ──────────────────────────────────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct CopilotTokenResponse {
-    token: String,
-    expires_at: i64,
-}
-
-pub async fn get_copilot_api_token(github_token: &str) -> Result<(String, i64)> {
-    let client = reqwest::Client::new();
-    let resp = client
-        .get("https://api.github.com/copilot_internal/v2/token")
-        .header("Authorization", format!("token {}", github_token))
-        .header(
-            "User-Agent",
-            concat!("agiworkforce-cli/", env!("CARGO_PKG_VERSION")),
-        )
-        .send()
-        .await
-        .context("Failed to fetch Copilot API token")?;
-
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        if status == reqwest::StatusCode::UNAUTHORIZED {
-            bail!(
-                "Copilot token fetch failed (HTTP 401): {}. \
-                 Your GitHub credentials may have expired, try running /login again \
-                 to refresh them.",
-                body,
-            );
-        }
-        bail!("Copilot token fetch failed (HTTP {}): {}", status, body);
-    }
-
-    let token_resp: CopilotTokenResponse = resp
-        .json()
-        .await
-        .context("Failed to parse Copilot token response")?;
-
-    Ok((token_resp.token, token_resp.expires_at))
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Resolve Auth for Provider
-// ──────────────────────────────────────────────────────────────────────────────
-
-/// Returns `Some((api_key_or_token, optional_base_url_override))` if subscription
-/// auth is available for the given provider. Returns `None` to fall through to
-/// standard API key resolution.
-pub async fn resolve_auth(
-    store: &mut AuthStore,
-    provider: &str,
-) -> Result<Option<(String, Option<String>)>> {
-    match provider {
-        "copilot" => {
-            let entry = match store.entries.get("copilot") {
-                Some(e) => e.clone(),
-                None => return Ok(None),
-            };
-
-            // Check the transient cache first, avoid fetching a new token on every request
-            let now_secs = chrono::Utc::now().timestamp();
-            if let Some((ref cached_token, cached_expires)) = store.copilot_cache {
-                if cached_expires > now_secs + 30 {
-                    return Ok(Some((
-                        cached_token.clone(),
-                        Some("https://api.githubcopilot.com/chat/completions".to_string()),
-                    )));
-                }
-            }
-
-            let github_token = match &entry {
-                AuthEntry::OAuth { access, .. } => access.clone(),
-                AuthEntry::ApiKey { key } => key.clone(),
-            };
-
-            record_credential_use("copilot", "exchanged the stored token for an API token");
-            let (copilot_token, expires_at) = get_copilot_api_token(&github_token).await?;
-
-            // Cache the token for subsequent calls
-            store.copilot_cache = Some((copilot_token.clone(), expires_at));
-
-            Ok(Some((
-                copilot_token,
-                Some("https://api.githubcopilot.com/chat/completions".to_string()),
-            )))
-        }
-        // The managed credential is resolved by provider_dispatch::resolve_key,
-        // never here, so a Local or BYOK route cannot pick it up.
-        _ => Ok(None),
-    }
-}
 
 fn save_auth_entry(key: &str, entry: AuthEntry) -> Result<()> {
-    AuthStore::transaction(|store| {
-        store.entries.insert(key.to_string(), entry);
-        Ok(())
-    })?;
+    AuthStore::transaction_replacing_unreadable(
+        |store, _| {
+            store.entries.insert(key.to_string(), entry);
+            Ok(())
+        },
+        |_| {},
+    )?;
     record_credential_use(key, "signed in and saved a credential");
     Ok(())
 }
@@ -1134,6 +1190,15 @@ pub fn api_key_providers() -> Result<Vec<ApiKeyProviderSummary>> {
 pub fn save_api_key(provider: &str, key: &str) -> Result<()> {
     let provider = api_key_provider(provider)
         .ok_or_else(|| anyhow::anyhow!("Unknown API-key provider '{}'", provider))?;
+    save_auth_entry(
+        provider.id,
+        AuthEntry::ApiKey {
+            key: normalized_api_key(key)?.to_string(),
+        },
+    )
+}
+
+fn normalized_api_key(key: &str) -> Result<&str> {
     let key = key.trim();
     if key.is_empty()
         || key
@@ -1142,12 +1207,7 @@ pub fn save_api_key(provider: &str, key: &str) -> Result<()> {
     {
         bail!("That is not an API key.");
     }
-    save_auth_entry(
-        provider.id,
-        AuthEntry::ApiKey {
-            key: key.to_string(),
-        },
-    )
+    Ok(key)
 }
 
 pub fn remove_api_key(provider: &str) -> Result<bool> {
@@ -1190,6 +1250,7 @@ pub async fn interactive_api_key_login_for_provider(provider: &str) -> Result<()
         bail!("Empty API key.");
     }
 
+    let key = normalized_api_key(&key)?.to_string();
     save_auth_entry(provider.id, AuthEntry::ApiKey { key })?;
     println!(
         "  {} {} API key saved to the {}.",
@@ -1202,25 +1263,22 @@ pub async fn interactive_api_key_login_for_provider(provider: &str) -> Result<()
 
 /// Login for a specific provider by name (used by onboarding wizard).
 ///
-/// `None` intentionally means AGI Workforce cloud login; subscription providers
-/// are only selected when named explicitly.
+/// `None` intentionally means AGI Workforce cloud login.
 pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()> {
     if is_agiworkforce_login_provider(provider) {
         return login_agiworkforce().await;
     }
 
     match provider {
-        Some("copilot") => {
-            println!("\n{}", ts::accent("Connecting to GitHub Copilot..."));
-            let entry = login_copilot().await?;
-            save_auth_entry("copilot", entry)
+        Some(pid) if pid.eq_ignore_ascii_case(COPILOT_AUTH_KEY) => {
+            bail!(COPILOT_SIGN_IN_UNAVAILABLE)
         }
         Some(pid) => {
             if is_api_key_provider(pid) {
                 interactive_api_key_login_for_provider(pid).await
             } else {
                 bail!(
-                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot, and brave or tavily for web search",
+                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, minimax, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, and brave or tavily for web search",
                     pid
                 )
             }
@@ -1229,10 +1287,9 @@ pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()
     }
 }
 
-/// Interactive API key setup (used by onboarding wizard).
-///
-/// Prompts for provider selection and API key entry, then persists to the OS keyring.
-pub async fn interactive_api_key_login() -> Result<()> {
+/// Interactive API key setup (used by onboarding wizard): the id of the
+/// provider whose key was saved, or `None` when the user cancelled.
+pub async fn interactive_api_key_login_choice() -> Result<Option<&'static str>> {
     let mut choices: Vec<String> = API_KEY_PROVIDERS
         .iter()
         .map(|provider| format!("{} ({})", provider.label, provider.env_var))
@@ -1246,12 +1303,13 @@ pub async fn interactive_api_key_login() -> Result<()> {
         .interact()
         .context("Failed to display provider menu")?;
 
-    if selection >= API_KEY_PROVIDERS.len() {
+    let Some(provider) = API_KEY_PROVIDERS.get(selection) else {
         println!("Cancelled.");
-        return Ok(());
-    }
+        return Ok(None);
+    };
 
-    interactive_api_key_login_for_provider(API_KEY_PROVIDERS[selection].id).await
+    interactive_api_key_login_for_provider(provider.id).await?;
+    Ok(Some(provider.id))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1449,10 +1507,7 @@ mod tests {
         for (k, v) in entries {
             map.insert(k.to_string(), v);
         }
-        AuthStore {
-            entries: map,
-            copilot_cache: None,
-        }
+        AuthStore { entries: map }
     }
 
     // ── auth_status tests ──
@@ -2108,6 +2163,412 @@ mod tests {
         let result = load_keyring_auth_for_root(&scoped, &shared, &path, index, false);
         assert!(result.is_err());
         assert!(scoped.secrets().is_empty());
+    }
+
+    struct PartlyDenyingStore {
+        inner: MemoryStore,
+        denied: String,
+    }
+
+    impl PartlyDenyingStore {
+        fn denying(provider: &str) -> Self {
+            Self {
+                inner: MemoryStore::default(),
+                denied: auth_keyring_account(provider),
+            }
+        }
+    }
+
+    impl CredentialStore for PartlyDenyingStore {
+        fn get(&self, account: &str) -> Result<Option<String>> {
+            if account == self.denied {
+                bail!("the OS credential store denied access")
+            }
+            self.inner.get(account)
+        }
+        fn set(&self, account: &str, secret: &str) -> Result<()> {
+            self.inner.set(account, secret)
+        }
+        fn delete(&self, account: &str) -> Result<()> {
+            if account == self.denied {
+                bail!("the OS credential store denied access")
+            }
+            self.inner.delete(account)
+        }
+    }
+
+    fn fresh_grant() -> AuthEntry {
+        AuthEntry::OAuth {
+            refresh: "refresh_tok_new_51c0e2".into(),
+            access: "access_tok_new_83b7d4".into(),
+            expires: 1_700_000_000_000,
+        }
+    }
+
+    #[test]
+    fn signing_in_replaces_a_credential_the_store_no_longer_holds() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let keyring = MemoryStore::default();
+        let unscoped = MemoryStore::default();
+        save_keyring_auth(
+            &keyring,
+            &path,
+            &make_store(vec![(
+                "agiworkforce",
+                AuthEntry::OAuth {
+                    refresh: "refresh_tok_old".into(),
+                    access: "access_tok_old".into(),
+                    expires: 1,
+                },
+            )]),
+        )
+        .expect("save");
+        keyring
+            .secrets
+            .lock()
+            .expect("store lock")
+            .remove(&auth_keyring_account("agiworkforce"));
+        let trapped = load_keyring_auth(&keyring, the_saved_index(&path), false)
+            .expect_err("every ordinary read reports the missing credential");
+        assert!(
+            format!("{trapped:#}").contains("`agi login`"),
+            "{trapped:#}"
+        );
+
+        let (mut store, mut unreadable) =
+            recover_keyring_auth_for_root(&keyring, &unscoped, the_saved_index(&path));
+        assert!(store.entries.is_empty());
+        assert!(unreadable.is_empty());
+        apply_replacing_transaction(
+            &mut store,
+            &mut unreadable,
+            |store, _| {
+                store
+                    .entries
+                    .insert("agiworkforce".to_string(), fresh_grant());
+                Ok(())
+            },
+            |saved, kept| first_removal_failure(write_keyring_auth(&keyring, &path, saved, kept)?),
+            |_| {},
+        )
+        .expect("signing in replaces the missing credential");
+
+        let index = the_saved_index(&path);
+        assert_eq!(index.providers, vec!["agiworkforce".to_string()]);
+        let loaded = load_keyring_auth(&keyring, index, false).expect("the new index loads");
+        assert_eq!(loaded.entries.get("agiworkforce"), Some(&fresh_grant()));
+    }
+
+    #[test]
+    fn signing_in_replaces_an_index_another_config_root_wrote() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let keyring = MemoryStore::default();
+        let unscoped = MemoryStore::default();
+        save_keyring_auth(&keyring, &path, &store_with_secrets()).expect("save");
+        let mut foreign = the_saved_index(&path);
+        foreign.scope = Some("another-config-root".to_string());
+        write_owner_only_file(&path, &serde_json::to_string(&foreign).unwrap()).unwrap();
+        assert!(load_keyring_auth_for_root(
+            &keyring,
+            &unscoped,
+            &path,
+            the_saved_index(&path),
+            false
+        )
+        .is_err());
+
+        let (mut store, mut unreadable) =
+            recover_keyring_auth_for_root(&keyring, &unscoped, the_saved_index(&path));
+        assert!(
+            store.entries.is_empty(),
+            "another root's credentials are never adopted"
+        );
+        assert!(unreadable.is_empty());
+        apply_replacing_transaction(
+            &mut store,
+            &mut unreadable,
+            |store, _| {
+                store
+                    .entries
+                    .insert("agiworkforce".to_string(), fresh_grant());
+                Ok(())
+            },
+            |saved, kept| first_removal_failure(write_keyring_auth(&keyring, &path, saved, kept)?),
+            |_| {},
+        )
+        .expect("signing in replaces the foreign index");
+
+        let index = the_saved_index(&path);
+        assert_eq!(index.scope.as_deref(), Some(keyring.scope()));
+        assert_eq!(index.providers, vec!["agiworkforce".to_string()]);
+        let loaded = load_keyring_auth_for_root(&keyring, &unscoped, &path, index, false)
+            .expect("this root reads its own index again");
+        assert_eq!(loaded.entries.get("agiworkforce"), Some(&fresh_grant()));
+        assert!(
+            keyring
+                .get(&auth_keyring_account("openai"))
+                .unwrap()
+                .is_some(),
+            "an entry only another root's index named is never deleted from this root's service"
+        );
+    }
+
+    #[test]
+    fn only_this_roots_own_index_proves_which_entries_it_may_delete() {
+        let keyring = MemoryStore::default();
+        let index = |version: u8, scope: Option<&str>| AuthKeyringIndex {
+            version,
+            storage: AUTH_INDEX_STORAGE.to_string(),
+            providers: vec!["openai".to_string()],
+            removing: Vec::new(),
+            scope: scope.map(str::to_string),
+        };
+        assert!(index_owned_by(
+            &index(AUTH_INDEX_VERSION, Some(keyring.scope())),
+            &keyring
+        ));
+        assert!(index_owned_by(&index(1, None), &keyring));
+        assert!(!index_owned_by(
+            &index(AUTH_INDEX_VERSION, Some("another-config-root")),
+            &keyring
+        ));
+    }
+
+    #[test]
+    fn a_legacy_credential_file_that_cannot_be_used_is_moved_aside_not_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let legacy = dir.path().join("auth.toml");
+        std::fs::write(&legacy, "not a credential").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&legacy, std::fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        let aside = set_aside_unreadable(&legacy).expect("set aside");
+
+        assert!(!legacy.exists());
+        assert_eq!(aside.parent(), legacy.parent());
+        assert!(aside
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("auth.toml.unreadable-")));
+        assert_eq!(std::fs::read_to_string(&aside).unwrap(), "not a credential");
+        assert!(check_file_permissions_secure(&aside));
+    }
+
+    #[test]
+    fn a_sign_out_warning_says_where_the_credential_really_is() {
+        let file = dropped_from_file_store("openai");
+        assert!(!file.contains("still holds"), "{file}");
+        assert!(file.contains("`agi login openai`"), "{file}");
+        let keychain = kept_by_keychain(
+            "openai",
+            &anyhow::anyhow!("the OS credential store denied access"),
+        );
+        assert!(keychain.contains("would not delete"), "{keychain}");
+        assert!(keychain.contains("denied access"), "{keychain}");
+    }
+
+    #[test]
+    fn a_credential_the_store_will_not_return_survives_a_sign_in_and_goes_on_sign_out() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        let keyring = PartlyDenyingStore::denying("openai");
+        let unscoped = MemoryStore::default();
+        save_keyring_auth(&keyring, &path, &store_with_secrets()).expect("save");
+
+        let (mut store, mut unreadable) =
+            recover_keyring_auth_for_root(&keyring, &unscoped, the_saved_index(&path));
+        assert_eq!(
+            store.entries.keys().collect::<Vec<_>>(),
+            vec!["agiworkforce"]
+        );
+        assert_eq!(unreadable.iter().collect::<Vec<_>>(), vec!["openai"]);
+        apply_replacing_transaction(
+            &mut store,
+            &mut unreadable,
+            |store, _| {
+                store
+                    .entries
+                    .insert("agiworkforce".to_string(), fresh_grant());
+                Ok(())
+            },
+            |saved, kept| first_removal_failure(write_keyring_auth(&keyring, &path, saved, kept)?),
+            |_| {},
+        )
+        .expect("signing in works while another credential cannot be read");
+        assert_eq!(
+            the_saved_index(&path).providers,
+            vec!["agiworkforce".to_string(), "openai".to_string()]
+        );
+        assert!(keyring
+            .inner
+            .get(&auth_keyring_account("openai"))
+            .unwrap()
+            .is_some());
+
+        let (mut store, mut unreadable) =
+            recover_keyring_auth_for_root(&keyring, &unscoped, the_saved_index(&path));
+        let mut kept_in_store = Vec::new();
+        apply_replacing_transaction(
+            &mut store,
+            &mut unreadable,
+            |store, unreadable| {
+                store.entries.clear();
+                unreadable.clear();
+                Ok(())
+            },
+            |saved, kept| {
+                kept_in_store = write_keyring_auth(&keyring, &path, saved, kept)?
+                    .into_iter()
+                    .map(|(provider, _)| provider)
+                    .collect();
+                Ok(())
+            },
+            |_| {},
+        )
+        .expect("signing out clears local state even when the store refuses");
+
+        assert_eq!(kept_in_store, vec!["openai".to_string()]);
+        let index = the_saved_index(&path);
+        assert!(index.providers.is_empty());
+        assert_eq!(index.removing, vec!["openai".to_string()]);
+        let loaded = load_keyring_auth(&keyring, index, false).expect("the cleared index loads");
+        assert!(loaded.entries.is_empty());
+    }
+
+    #[test]
+    fn signing_out_forgets_a_managed_credential_that_could_not_be_read() {
+        let mut store = AuthStore::default();
+        let mut unreadable = BTreeSet::from(["agiworkforce".to_string()]);
+        let persisted = std::cell::Cell::new(false);
+        apply_replacing_transaction(
+            &mut store,
+            &mut unreadable,
+            |_, unreadable| Ok(unreadable.remove("agiworkforce")),
+            |_, kept| {
+                assert!(kept.is_empty());
+                persisted.set(true);
+                Ok(())
+            },
+            |removed| assert!(*removed),
+        )
+        .expect("sign-out");
+        assert!(
+            persisted.get(),
+            "forgetting an unreadable name must rewrite the index"
+        );
+
+        apply_replacing_transaction(
+            &mut store,
+            &mut unreadable,
+            |_, _| Ok(()),
+            |_, _| panic!("an unchanged store was written"),
+            |_| {},
+        )
+        .expect("no-op");
+    }
+
+    #[test]
+    fn a_damaged_credential_file_names_the_command_that_replaces_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("auth.json");
+        write_owner_only_file(&path, "not json").unwrap();
+        let error = read_file_store(&path, "not json").expect_err("damaged file");
+        assert!(format!("{error:#}").contains("`agi login`"), "{error:#}");
+    }
+
+    #[tokio::test]
+    async fn copilot_sign_in_refuses_before_any_device_flow() {
+        for name in ["copilot", "Copilot"] {
+            let error = interactive_login_for_provider(Some(name))
+                .await
+                .expect_err("Copilot sign-in is not available");
+            let text = error.to_string();
+            assert!(text.contains("not available in this version"), "{text}");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unknown_login_provider_is_not_offered_copilot() {
+        let error = interactive_login_for_provider(Some("fixture-unknown-provider"))
+            .await
+            .expect_err("unknown provider");
+        assert!(!error.to_string().contains("copilot"), "{error}");
+    }
+
+    #[test]
+    fn the_replacement_command_names_the_provider_it_signs_in() {
+        assert_eq!(sign_in_command("agiworkforce"), "agi login");
+        assert_eq!(sign_in_command("managed_cloud"), "agi login");
+        assert_eq!(sign_in_command("openai"), "agi login openai");
+        assert_eq!(sign_in_command("copilot"), "agi login copilot");
+    }
+
+    #[test]
+    fn a_typed_api_key_is_saved_without_surrounding_whitespace() {
+        assert_eq!(normalized_api_key("sk-x \t").unwrap(), "sk-x");
+        assert_eq!(normalized_api_key("\nsk-x\r\n").unwrap(), "sk-x");
+        assert!(normalized_api_key("sk x").is_err());
+        assert!(normalized_api_key(" \t ").is_err());
+    }
+
+    #[test]
+    fn every_listed_api_key_provider_reports_its_canonical_id() {
+        for provider in API_KEY_PROVIDERS {
+            assert_eq!(
+                api_key_provider(provider.id).map(|found| found.id),
+                Some(provider.id)
+            );
+        }
+    }
+
+    #[test]
+    fn a_credential_from_the_environment_is_reported_with_its_variable() {
+        let rows = environment_auth_status(|name| match name {
+            "ANTHROPIC_API_KEY" => Some("sk-ant-env".to_string()),
+            "AGIWORKFORCE_JWT" => Some("header.payload.signature".to_string()),
+            "OPENAI_API_KEY" => Some("  ".to_string()),
+            _ => None,
+        });
+        let providers: Vec<&str> = rows.iter().map(|row| row.provider.as_str()).collect();
+        assert_eq!(providers, vec!["agiworkforce", "anthropic"]);
+        for row in &rows {
+            assert_eq!(row.auth_type, "env");
+            assert_eq!(row.status, "active");
+            assert!(row.permissions_secure);
+        }
+        assert_eq!(rows[1].last_used.as_deref(), Some("from ANTHROPIC_API_KEY"));
+        let merged = with_environment_auth_status(
+            auth_status_from_store(
+                &make_store(vec![(
+                    "openai",
+                    AuthEntry::ApiKey {
+                        key: "sk-stored".into(),
+                    },
+                )]),
+                0,
+                true,
+                &[],
+            ),
+            |name| match name {
+                "ANTHROPIC_API_KEY" => Some("sk-ant-env".to_string()),
+                _ => None,
+            },
+        );
+        assert_eq!(
+            merged
+                .iter()
+                .map(|row| (row.provider.as_str(), row.auth_type.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("anthropic", "env"), ("openai", "api_key")]
+        );
+        assert!(rows
+            .iter()
+            .all(|row| !format!("{row:?}").contains("sk-ant-env")));
     }
 
     #[test]

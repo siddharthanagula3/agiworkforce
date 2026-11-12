@@ -719,7 +719,9 @@ impl PluginsManager {
             let pp = p.join(".agiworkforce").join("plugins");
             if pp.exists() {
                 // HIGH-2: project-local plugins are tagged as untrusted for hook execution.
-                self.load_from_dir(&pp, true)?;
+                if let Err(error) = self.load_from_dir(&pp, true) {
+                    warn_unreadable_project_plugins(&pp, &error);
+                }
             }
         }
         Ok(&self.plugins)
@@ -732,7 +734,10 @@ impl PluginsManager {
         let account_refusal =
             crate::tier_cache::capability_refusal(crate::tier_cache::PLUGINS_CAPABILITY, "Plugins");
         for entry in std::fs::read_dir(dir)? {
-            let path = entry?.path();
+            let Ok(entry) = entry else {
+                continue;
+            };
+            let path = entry.path();
             if !path.is_dir() {
                 continue;
             }
@@ -1699,6 +1704,22 @@ fn substitute_server(
     Ok(())
 }
 
+fn warn_unreadable_project_plugins(dir: &Path, error: &anyhow::Error) {
+    static WARNED: std::sync::Mutex<Option<HashSet<PathBuf>>> = std::sync::Mutex::new(None);
+    let first = WARNED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_or_insert_with(HashSet::new)
+        .insert(dir.to_path_buf());
+    if first {
+        eprintln!(
+            "[plugins] warning: {} could not be read ({}), so this project's plugins were not loaded; your own plugins still are",
+            crate::terminal_text::sanitize_terminal_text(&dir.display().to_string()),
+            crate::terminal_text::sanitize_terminal_text(&error.to_string())
+        );
+    }
+}
+
 pub fn plugin_path_stays_within_root(plugin_root: &Path, candidate: &Path) -> bool {
     let root = match plugin_root.canonicalize() {
         Ok(path) => path,
@@ -2163,6 +2184,38 @@ mod tests {
         assert_eq!(loaded.len(), 1, "stray no-manifest dir must not be loaded");
         assert_eq!(loaded[0].config_name, "real-plugin");
         assert!(loaded[0].format.is_some());
+    }
+
+    #[test]
+    fn a_project_plugins_path_that_is_a_file_keeps_your_own_plugins_and_hooks() {
+        let home = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        write_test_manifest(
+            &plugins_dir.join("guard-plugin"),
+            r#"{
+              "name": "guard-plugin",
+              "hooks": {"PreToolUse": [{"command": "/opt/guard.sh"}]}
+            }"#,
+        );
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(project.path().join(".agiworkforce")).unwrap();
+        std::fs::write(
+            project.path().join(".agiworkforce").join("plugins"),
+            "not a folder",
+        )
+        .unwrap();
+
+        let mut manager = PluginsManager {
+            global_dir: plugins_dir,
+            plugins: Vec::new(),
+        };
+        let loaded = manager
+            .load_all(Some(project.path()))
+            .expect("an unreadable project plugins path must not fail the load");
+
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].config_name, "guard-plugin");
+        assert!(manager.hook_configs().contains_key("PreToolUse"));
     }
 
     fn local_install(

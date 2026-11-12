@@ -118,6 +118,18 @@ export function buildPanelStyles(): string {
       word-break:break-word;
     }
 
+    .agi-response-area p { margin:0 0 10px; }
+    .agi-response-area ul,
+    .agi-response-area ol { margin:0 0 10px; padding-inline-start:22px; }
+    .agi-response-area li { margin:0 0 4px; }
+    .agi-response-area pre {
+      margin:0 0 10px; padding:10px; overflow-x:auto;
+      background:var(--agi-ext-surface); border:1px solid var(--agi-ext-border);
+      border-radius:8px; white-space:pre;
+    }
+    .agi-response-area code { font-family:ui-monospace,monospace; font-size:0.92em; }
+    .agi-response-area > :last-child { margin-bottom:0; }
+
     .agi-response-area:empty::before {
       content:"Ask anything about this page…";
       color:var(--agi-ext-text-placeholder); font-style:italic;

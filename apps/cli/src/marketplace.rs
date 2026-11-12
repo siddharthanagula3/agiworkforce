@@ -70,23 +70,65 @@ impl InstalledPlugins {
     /// command families converge on one file instead of drifting apart
     /// again on the next read.
     pub fn load(plugins_dir: &Path) -> Self {
-        let path = plugins_dir.join("installed.json");
-        let mut registry: Self = match std::fs::read_to_string(&path) {
-            Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
-            Err(_) => Self::default(),
-        };
+        let mut registry = Self::read(plugins_dir);
         if reconcile_with_disk(plugins_dir, &mut registry) {
             let _ = registry.save(plugins_dir);
         }
         registry
     }
 
-    /// Save installed.json to the plugins directory.
+    /// The registry on disk. A file that does not parse is moved aside and
+    /// named before anything replaces it.
+    fn read(plugins_dir: &Path) -> Self {
+        let path = plugins_dir.join("installed.json");
+        let Ok(contents) = std::fs::read_to_string(&path) else {
+            return Self::default();
+        };
+        let error = match serde_json::from_str::<Self>(&contents) {
+            Ok(registry) => return registry,
+            Err(error) => error,
+        };
+        let kept = plugins_dir.join(format!(
+            "installed.json.corrupt-{}",
+            Utc::now().format("%Y%m%d%H%M%S")
+        ));
+        report_registry_problem(match std::fs::rename(&path, &kept) {
+            Ok(()) => format!(
+                "Plugins: {} could not be read ({error}). It was kept as {}; installed plugins were listed again with user scope and no signature label.",
+                path.display(),
+                kept.display()
+            ),
+            Err(rename_error) => format!(
+                "Plugins: {} could not be read ({error}) and was left as it is ({rename_error}). Fix or move it; plugin changes are not saved until then.",
+                path.display()
+            ),
+        });
+        Self::default()
+    }
+
+    /// Save installed.json to the plugins directory, replacing it whole. A
+    /// file already there that does not parse is never written over.
     pub fn save(&self, plugins_dir: &Path) -> Result<()> {
         let path = plugins_dir.join("installed.json");
+        if let Ok(existing) = std::fs::read_to_string(&path) {
+            if serde_json::from_str::<Self>(&existing).is_err() {
+                bail!(
+                    "{} could not be read; fix or move it before plugins change",
+                    path.display()
+                );
+            }
+        }
         let contents = serde_json::to_string_pretty(self)?;
-        std::fs::write(&path, contents)?;
-        Ok(())
+        crate::mcp::registry::replace_file(&path, &contents)
+    }
+}
+
+fn report_registry_problem(notice: String) {
+    tracing::warn!("{notice}");
+    if crate::tui::tui_active() {
+        crate::tui::push_tui_notice(notice);
+    } else {
+        crate::output::print_warn(&notice);
     }
 }
 
@@ -1143,6 +1185,39 @@ mod tests {
         assert!(out.contains("1.2.0"));
         assert!(out.contains("[user]"));
         assert!(out.contains("1 plugin(s) installed."));
+    }
+
+    #[test]
+    fn a_registry_that_does_not_parse_is_kept_aside_and_never_written_over() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("installed.json");
+        let truncated = r#"{"version": 1, "plugins": {"tool": {"scope": "project""#;
+        std::fs::write(&path, truncated).unwrap();
+
+        let refused = InstalledPlugins::default().save(tmp.path()).unwrap_err();
+        assert!(format!("{refused:#}").contains("installed.json"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), truncated);
+
+        let loaded = InstalledPlugins::load(tmp.path());
+        assert!(loaded.plugins.is_empty());
+        let kept: Vec<PathBuf> = std::fs::read_dir(tmp.path())
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.starts_with("installed.json.corrupt-"))
+            })
+            .collect();
+        assert_eq!(kept.len(), 1, "the unreadable file is kept beside it");
+        assert_eq!(std::fs::read_to_string(&kept[0]).unwrap(), truncated);
+
+        InstalledPlugins::default().save(tmp.path()).unwrap();
+        let saved: InstalledPlugins =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(saved.plugins.is_empty());
     }
 
     #[test]

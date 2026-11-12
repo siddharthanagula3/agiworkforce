@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { execFileSync } from 'node:child_process';
-import { gitIgnoredPaths } from '../data/contextExclusion';
+import { gitIgnoredPaths, resolveContextFile } from '../data/contextExclusion';
 import {
   buildContextAttachment,
   captureEditorContext,
@@ -92,7 +92,7 @@ describe('context exclusion at editor and submission boundaries', () => {
 
     const editor = await withholdGitIgnoredContext(
       resolveEditorContext(new Set()),
-      async () => false,
+      async () => undefined,
     );
     const selection = await buildContextAttachment('selection');
 
@@ -110,18 +110,69 @@ describe('context exclusion at editor and submission boundaries', () => {
     await fs.unlink(file);
     await fs.symlink('.env', file);
 
-    const submitted = await withholdGitIgnoredContext(captured, async () => false);
+    const submitted = await withholdGitIgnoredContext(captured, async () => undefined);
 
     expect(JSON.stringify(submitted)).not.toContain('CONTROLLED_CREDENTIAL_CONTENT');
     expect(submitted.contextFiles).toEqual([]);
   });
 
-  it('withholds context when git cannot establish ignore status', async () => {
+  it('withholds a file that the .gitignore of a folder outside any repository names', async () => {
     const file = path.join(root, 'private.txt');
     await fs.writeFile(path.join(root, '.gitignore'), 'private.txt\n');
     await fs.writeFile(file, 'CONTROLLED_CREDENTIAL_CONTENT');
 
     expect((await gitIgnoredPaths([vscode.Uri.file(file)])).has(file)).toBe(true);
+  });
+
+  it('shares an ordinary file from a folder that is not a git repository', async () => {
+    const file = path.join(root, 'app.ts');
+    await fs.writeFile(file, 'export const ordinary = 1;');
+
+    expect(await resolveContextFile(file)).toMatchObject({ ok: true });
+    expect((await gitIgnoredPaths([vscode.Uri.file(file)])).has(file)).toBe(false);
+  });
+
+  it('applies the .gitignore rules of a folder that is not a git repository', async () => {
+    await fs.writeFile(path.join(root, '.gitignore'), 'private.txt\n');
+    const hidden = path.join(root, 'private.txt');
+    const shared = path.join(root, 'app.ts');
+    await fs.writeFile(hidden, 'CONTROLLED_CREDENTIAL_CONTENT');
+    await fs.writeFile(shared, 'export const ordinary = 1;');
+
+    expect(await resolveContextFile(hidden)).toEqual({ ok: false, reason: 'gitignored' });
+    expect(await resolveContextFile(shared)).toMatchObject({ ok: true });
+  });
+
+  it('shares an ordinary file when git is not installed, and still withholds credentials', async () => {
+    const file = path.join(root, 'app.ts');
+    await fs.writeFile(file, 'export const ordinary = 1;');
+    await fs.writeFile(path.join(root, '.env'), 'CONTROLLED_CREDENTIAL_CONTENT');
+    const originalPath = process.env['PATH'];
+    process.env['PATH'] = path.join(root, 'no-binaries-here');
+    try {
+      expect(await resolveContextFile(file)).toMatchObject({ ok: true });
+      expect(await resolveContextFile(path.join(root, '.env'))).toEqual({
+        ok: false,
+        reason: 'credential',
+      });
+    } finally {
+      process.env['PATH'] = originalPath;
+    }
+  });
+
+  it('never tells the model an untrusted file is ignored by git', async () => {
+    const file = path.join(root, 'app.ts');
+    await fs.writeFile(file, 'export const ordinary = 1;');
+    openControlledFile(file);
+    Object.defineProperty(vscode.workspace, 'isTrusted', { configurable: true, value: false });
+
+    const captured = await captureEditorContext(new Set());
+
+    expect(await resolveContextFile(file)).toEqual({ ok: false, reason: 'unchecked' });
+    expect(captured.texts.join('\n')).not.toContain('ignored by git');
+    expect(captured.texts.join('\n')).toContain(
+      'could not be checked against the git ignore rules',
+    );
   });
 
   it('does not treat an untrusted workspace as proof that a file is shareable', async () => {

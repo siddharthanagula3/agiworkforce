@@ -128,6 +128,8 @@ const MAX_STEER_QUEUE_DEPTH: usize = 20;
 // exact serialized message objects included in `thread/read`.
 const MAX_THREAD_READ_TRANSCRIPT_JSON_BYTES: usize = 3 * 1024 * 1024;
 const PROCESS_TREE_SHUTDOWN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
+const SIDE_QUESTION_WHILE_BUSY: &str =
+    "The agent is working on this thread. Ask the side question when the turn finishes.";
 const SHUTDOWN_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
 /// Tools that build a second `AgentSession` this host never sees.
 const SUBAGENT_SPAWN_TOOLS: [&str; 2] = ["task", "agent"];
@@ -782,6 +784,22 @@ impl CliDeveloperSessionHost {
             }
             None => false,
         }
+    }
+
+    /// Abort every running turn and setup run and wait for their process trees
+    /// to end. Entries stay registered, so the rest of shutdown still collects
+    /// each turn's partial output and repairs its history.
+    async fn stop_running_work(&self) -> std::io::Result<()> {
+        let mut owners = Vec::new();
+        for running in self.running_turns.lock().await.values() {
+            running.handle.abort();
+            owners.push(running.process_owner);
+        }
+        for run in self.setup_runs.lock().await.values() {
+            run.handle.abort();
+            owners.push(run.process_owner);
+        }
+        crate::process_tree::terminate_owners_and_wait(&owners, PROCESS_TREE_SHUTDOWN_TIMEOUT).await
     }
 
     fn stop_every_compaction(&self) {
@@ -3055,9 +3073,21 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "Ask a question about this thread",
             ));
         }
+        if self
+            .running_turns
+            .lock()
+            .await
+            .contains_key(&params.thread_id)
+        {
+            return Err(DeveloperSessionHostError::conflict(
+                SIDE_QUESTION_WHILE_BUSY,
+            ));
+        }
         let session = self.load_execution_agent(&params.thread_id).await?;
         let (config, side) = {
-            let agent = session.lock().await;
+            let agent = session
+                .try_lock()
+                .map_err(|_| DeveloperSessionHostError::conflict(SIDE_QUESTION_WHILE_BUSY))?;
             let config = turn_config_pinned_to_session_route(&self.config, &agent);
             let side = agent.side_query(&config).map_err(invalid_request)?;
             (config, side)
@@ -5616,6 +5646,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         // A summary holds its request open on a model call; stopped here, it
         // returns at once and shutdown does not wait on the model.
         self.stop_every_compaction();
+        // An admitted request can hold the lifecycle guard for minutes, and a
+        // client that gives up on the acknowledgement kills only this process
+        // group. The commands turns started lead their own sessions, so they
+        // are stopped before the wait rather than after it.
+        let early_process_error = self.stop_running_work().await.err();
         let _exclusive = self.lifecycle.write().await;
 
         let running_turns = {
@@ -5726,7 +5761,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .await;
         }
 
-        if let Some(error) = process_shutdown_error {
+        if let Some(error) = early_process_error.or(process_shutdown_error) {
             return Err(internal_error(error));
         }
         if let Some(error) = first_persist_error {
@@ -6954,6 +6989,9 @@ fn settled_stop_reason(
             }
             Some(crate::errors::IncompleteTurnCause::RefusedBySafety) => {
                 AgentEventStopReason::Refusal
+            }
+            Some(crate::errors::IncompleteTurnCause::StreamEndedEarly) => {
+                AgentEventStopReason::Error
             }
             Some(crate::errors::IncompleteTurnCause::NoResponse) | None => {
                 AgentEventStopReason::EndTurn
@@ -10065,6 +10103,136 @@ mod tests {
             .await
             .expect_err("shutdown host must reject new requests");
         assert_eq!(error.code(), -32010);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn shutdown_stops_a_running_turns_command_while_an_admitted_request_holds_it_up() {
+        use nix::errno::Errno;
+        use nix::sys::signal::kill;
+        use nix::unistd::Pid;
+
+        let workspace = tempdir().expect("workspace");
+        let session_store = tempdir().expect("session store");
+        let host = Arc::new(
+            CliDeveloperSessionHost::new_with_store(
+                CliConfig::default(),
+                workspace.path().to_path_buf(),
+                ManagedSessionStore::new(session_store.path().to_path_buf()),
+                false,
+            )
+            .expect("host"),
+        );
+        let pid_file = workspace.path().join("held-shutdown-pid");
+        let script = format!(
+            "printf '%s\\n' \"$$\" > {}; exec sleep 30",
+            crate::sandbox::shell_quote(&pid_file.to_string_lossy()),
+        );
+        let mut command = tokio::process::Command::new("sh");
+        command.arg("-c").arg(script);
+        let process_owner = crate::process_tree::ProcessTreeOwner::new();
+        let handle = tokio::spawn(crate::process_tree::scope(process_owner, async move {
+            let _ = crate::process_tree::output(command, None, None).await;
+        }));
+        let start_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        let process_id = loop {
+            if let Ok(contents) = tokio::fs::read_to_string(&pid_file).await {
+                if let Some(process_id) = contents
+                    .lines()
+                    .next()
+                    .and_then(|line| line.parse::<i32>().ok())
+                {
+                    break process_id;
+                }
+            }
+            assert!(
+                tokio::time::Instant::now() < start_deadline,
+                "the command did not publish its process ID"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        };
+        host.running_turns.lock().await.insert(
+            "thread-held-shutdown".to_string(),
+            RunningTurn {
+                turn_id: "turn-held-shutdown".to_string(),
+                handle,
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
+                process_owner,
+            },
+        );
+
+        let admitted = host.lifecycle.clone().read_owned().await;
+        let shutting_down = tokio::spawn({
+            let host = Arc::clone(&host);
+            async move { host.shutdown().await }
+        });
+        let process_exists = |process_id| match kill(Pid::from_raw(process_id), None) {
+            Ok(()) | Err(Errno::EPERM) => true,
+            Err(Errno::ESRCH) => false,
+            Err(_) => true,
+        };
+        let stop_deadline = tokio::time::Instant::now()
+            + PROCESS_TREE_SHUTDOWN_TIMEOUT
+            + std::time::Duration::from_secs(1);
+        while process_exists(process_id) {
+            assert!(
+                tokio::time::Instant::now() < stop_deadline,
+                "the command outlived a shutdown that an admitted request held up"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert!(
+            !shutting_down.is_finished(),
+            "shutdown still waits for the admitted request before acknowledging"
+        );
+
+        drop(admitted);
+        shutting_down
+            .await
+            .expect("shutdown task")
+            .expect("host shutdown");
+    }
+
+    #[tokio::test]
+    async fn a_side_question_never_waits_on_a_running_turn() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let (host, thread) = managed_thread(workspace.path(), store.path()).await;
+        let ask = || ThreadSideQuestionParams {
+            thread_id: thread.id.clone(),
+            question: "what file is open?".to_string(),
+            request_id: None,
+        };
+        let conflict = DeveloperSessionHostError::conflict("").code();
+        let agent = host.load_agent(&thread.id).await.expect("agent");
+        let held_by_the_turn = agent.lock().await;
+        host.running_turns.lock().await.insert(
+            thread.id.clone(),
+            RunningTurn {
+                turn_id: "turn-running".to_string(),
+                handle: tokio::spawn(async {}),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
+                process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            },
+        );
+
+        let refused =
+            tokio::time::timeout(std::time::Duration::from_secs(5), host.side_question(ask()))
+                .await
+                .expect("answered without waiting for the turn")
+                .expect_err("refused while the turn runs");
+        assert_eq!(refused.code(), conflict);
+
+        host.running_turns.lock().await.clear();
+        let busy =
+            tokio::time::timeout(std::time::Duration::from_secs(5), host.side_question(ask()))
+                .await
+                .expect("answered without waiting on the agent")
+                .expect_err("refused while something holds the agent");
+        assert_eq!(busy.code(), conflict);
+        drop(held_by_the_turn);
     }
 
     #[tokio::test]

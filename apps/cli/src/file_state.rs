@@ -1,9 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::time::SystemTime;
 
 use once_cell::sync::Lazy;
+
+pub const MAX_EDIT_FILE_BYTES: u64 = 2_000_000;
 
 const MAX_READ_FILE_STATE_ENTRIES: usize = 100;
 const READ_FIRST_MESSAGE: &str = "File has not been read yet. Read it first before writing to it.";
@@ -15,7 +16,6 @@ static READ_FILE_STATE: Lazy<Mutex<FileStateCache>> =
 #[derive(Clone)]
 struct FileState {
     content: String,
-    modified: SystemTime,
 }
 
 struct FileStateCache {
@@ -60,6 +60,20 @@ pub fn record_file_write(path: &Path, content: &str) {
     record_file_state(path, content);
 }
 
+pub fn record_files_written(paths: &[PathBuf]) {
+    for path in paths {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            record_file_state(path, &content);
+        }
+    }
+}
+
+pub fn too_large_to_edit_message(len: u64) -> String {
+    format!(
+        "File is too large to edit safely ({len} bytes; limit {MAX_EDIT_FILE_BYTES} bytes). Split the file first."
+    )
+}
+
 pub fn ensure_previously_read_and_fresh(path: &Path) -> std::result::Result<(), String> {
     if !path.exists() {
         return Ok(());
@@ -70,7 +84,9 @@ pub fn ensure_previously_read_and_fresh(path: &Path) -> std::result::Result<(), 
         .map_err(|e| format!("Cannot resolve path for freshness check: {}", e))?;
     let metadata = std::fs::metadata(&key)
         .map_err(|e| format!("Cannot stat file for freshness check: {}", e))?;
-    let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+    if metadata.len() > MAX_EDIT_FILE_BYTES {
+        return Err(too_large_to_edit_message(metadata.len()));
+    }
 
     let state = READ_FILE_STATE
         .lock()
@@ -78,11 +94,9 @@ pub fn ensure_previously_read_and_fresh(path: &Path) -> std::result::Result<(), 
         .and_then(|cache| cache.get(&key).cloned())
         .ok_or_else(|| READ_FIRST_MESSAGE.to_string())?;
 
-    if modified > state.modified {
-        let current = std::fs::read_to_string(&key).map_err(|_| STALE_READ_MESSAGE.to_string())?;
-        if current != state.content {
-            return Err(STALE_READ_MESSAGE.to_string());
-        }
+    let current = std::fs::read_to_string(&key).map_err(|_| STALE_READ_MESSAGE.to_string())?;
+    if current != state.content {
+        return Err(STALE_READ_MESSAGE.to_string());
     }
 
     Ok(())
@@ -92,13 +106,8 @@ fn record_file_state(path: &Path, content: &str) {
     let Ok(key) = path.canonicalize() else {
         return;
     };
-    let Ok(metadata) = std::fs::metadata(&key) else {
-        return;
-    };
-    let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
     let state = FileState {
         content: content.to_string(),
-        modified,
     };
 
     if let Ok(mut cache) = READ_FILE_STATE.lock() {
@@ -164,5 +173,68 @@ mod tests {
             result.expect_err("should reject stale read"),
             STALE_READ_MESSAGE
         );
+    }
+
+    #[test]
+    fn a_change_restored_with_an_older_modification_time_is_still_stale() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("config.yml");
+        std::fs::write(&path, "read: yes\n").expect("write file");
+        let read_mtime = std::fs::metadata(&path)
+            .expect("metadata")
+            .modified()
+            .expect("mtime");
+        record_file_read(&path, "read: yes\n");
+
+        std::fs::write(&path, "restored: from backup\n").expect("restore file");
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .expect("open restored file")
+            .set_modified(read_mtime - std::time::Duration::from_secs(3_600))
+            .expect("set an older modification time");
+
+        assert_eq!(
+            ensure_previously_read_and_fresh(&path)
+                .expect_err("the restored file is not the one read"),
+            STALE_READ_MESSAGE
+        );
+    }
+
+    #[test]
+    fn a_file_over_the_edit_limit_is_refused_as_too_large_not_as_unread() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("generated.txt");
+        std::fs::write(&path, "x".repeat(MAX_EDIT_FILE_BYTES as usize + 1)).expect("write file");
+
+        let refusal = ensure_previously_read_and_fresh(&path).expect_err("too large");
+
+        assert!(refusal.contains("too large to edit"), "{refusal}");
+        assert_ne!(refusal, READ_FIRST_MESSAGE);
+    }
+
+    #[test]
+    fn a_file_between_the_old_read_limit_and_the_edit_limit_can_be_marked_read() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("fixture.txt");
+        let content = "y".repeat(1_500_000);
+        std::fs::write(&path, &content).expect("write file");
+
+        record_file_read(&path, &content);
+
+        assert!(ensure_previously_read_and_fresh(&path).is_ok());
+    }
+
+    #[test]
+    fn files_a_patch_wrote_are_known_to_the_next_edit() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("a.rs");
+        std::fs::write(&path, "fn a() {}\n").expect("write file");
+        record_file_read(&path, "fn a() {}\n");
+        std::fs::write(&path, "fn a() { patched() }\n").expect("patch file");
+
+        record_files_written(std::slice::from_ref(&path));
+
+        assert!(ensure_previously_read_and_fresh(&path).is_ok());
     }
 }

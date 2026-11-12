@@ -827,7 +827,7 @@
           {
             "id": "understandTaskHandoff",
             "title": "Follow background work from the IDE",
-            "description": "Cloud AGI Work runs started on any device show their state, age and pending approvals in the Cloud Tasks view. [Show Cloud Tasks](command:agi-workforce.showCloudTasks)",
+            "description": "Cloud tasks started on any device show their state, age and pending approvals in the Cloud tasks list, and Continue in the Cloud hands this branch to a cloud session. [Show Cloud Tasks](command:agi-workforce.showCloudTasks)",
             "media": {
               "markdown": "media/walkthrough/02-tasks.md"
             },
@@ -838,12 +838,12 @@
           {
             "id": "reviewChanges",
             "title": "Turn intent into a reviewed change",
-            "description": "Attach workspace files, ask AGI to implement a TODO, and inspect the native diff before accepting changes. [Open AGI Settings](command:agi-workforce.openSettings)",
+            "description": "Attach workspace files, ask AGI to implement a TODO, and inspect the native diff before accepting changes. [Open AGI Chat](command:agi-workforce.chat)",
             "media": {
               "markdown": "media/walkthrough/03-review.md"
             },
             "completionEvents": [
-              "onCommand:agi-workforce.openSettings"
+              "onCommand:agi-workforce.chat"
             ]
           },
           {
@@ -1098,6 +1098,30 @@
           "when": "false"
         },
         {
+          "command": "agi-workforce.signInProvider",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshCloudTasks",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshSchedules",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshProjects",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshArtifacts",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshConnectors",
+          "when": "false"
+        },
+        {
           "command": "agi-workforce.openCloudTask",
           "when": "false"
         },
@@ -1225,13 +1249,13 @@
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send."
+          "description": "Attach the active editor file, the current selection and that file's problems to each chat turn. Every attachment shows as a removable chip in the composer before you send. A workspace setting can turn this off, but only your user setting turns it on."
         },
         "agiWorkforce.respectGitIgnore": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "markdownDescription": "Leave files that git ignores out of `@` file search, and send only the path of an ignored file that is open in the editor. Takes effect while `#search.useIgnoreFiles#` is also on."
+          "markdownDescription": "Leave files that git ignores out of `@` file search, and send only the path of an ignored file that is open in the editor. Takes effect while `#search.useIgnoreFiles#` is also on. A workspace setting can turn this on, but only your user setting turns it off."
         },
         "agiWorkforce.telemetryEnabled": {
           "type": "boolean",
@@ -1246,6 +1270,7 @@
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
           "default": true,
+          "scope": "application",
           "description": "Include the memory facts saved to your AGI account with chat turns. Turn this off to stop sending them without deleting them; Code: Memory keeps showing what is stored.",
           "tags": [
             "usesOnlineServices"
@@ -1264,11 +1289,13 @@
         "agiWorkforce.autoApplyFixes": {
           "type": "boolean",
           "default": false,
+          "scope": "application",
           "description": "Automatically apply AI-suggested fixes without showing a diff"
         },
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
           "default": false,
+          "scope": "application",
           "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key.",
           "tags": [
             "usesOnlineServices"
@@ -1309,8 +1336,8 @@
             "Skip approval prompts for workspace/additional-directory, terminal, network-capable command, and configured MCP tool access. Selecting this requires a modal risk confirmation."
           ],
           "default": "auto",
-          "scope": "machine",
-          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is machine-scoped, and Bypass Permissions is confirmed per workspace."
+          "scope": "application",
+          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is a user setting that also applies in remote windows, and Bypass Permissions is confirmed per workspace."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",
@@ -1324,19 +1351,13 @@
             "max"
           ],
           "default": "medium",
-          "scope": "machine",
-          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis. Machine-scoped so a repository cannot raise it."
+          "scope": "application",
+          "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis. A user setting, so a repository cannot raise it, and it also applies in remote windows."
         },
         "agiWorkforce.agent.thinking": {
           "type": "boolean",
           "default": false,
           "description": "Enable extended thinking for cloud-backed editor utilities such as Explain, Fix, diagnostics, and inline completion. This setting does not affect local @agi, sidebar, or editor developer sessions, whose reasoning effort is controlled by the Effort setting."
-        },
-        "agiWorkforce.currentTier": {
-          "type": "string",
-          "default": "unknown",
-          "readOnly": true,
-          "description": "Current subscription tier (read-only, populated on activation). Run 'Code: Show Tier Status' to see full usage details or visit agiworkforce.com/pricing to upgrade."
         },
         "agiWorkforce.activateOnStartup": {
           "type": "boolean",
@@ -1358,7 +1379,7 @@
         "command": "agi-workforce.chat",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
-        "when": "!terminalFocus && !agi-workforce.hasDiff"
+        "when": "!terminalFocus && !editorTextFocus || !terminalFocus && !agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.explain",
@@ -1403,24 +1424,24 @@
         "command": "agi-workforce.acceptCurrentDiff",
         "key": "ctrl+shift+a",
         "mac": "cmd+shift+a",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.rejectCurrentDiff",
         "key": "ctrl+shift+r",
         "mac": "cmd+shift+r",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.acceptDiff",
         "key": "ctrl+shift+enter",
         "mac": "cmd+shift+enter",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor"
       },
       {
         "command": "agi-workforce.rejectDiff",
         "key": "escape",
-        "when": "editorTextFocus && agi-workforce.hasDiff"
+        "when": "editorTextFocus && agi-workforce.diffUnderCursor && !suggestWidgetVisible && !editorHasMultipleSelections && !inSnippetMode && !inlineSuggestionVisible && !parameterHintsVisible && !findWidgetVisible"
       },
       {
         "command": "agi-workforce.acceptAllDiffsGlobal",

@@ -203,3 +203,68 @@ describe('falling back to the DOM when a site tool fails', () => {
     expect(response.fellBackToDom).toBe(true);
   });
 });
+
+describe('filling checkboxes, radio groups and selects in a page form', () => {
+  function seedChoiceForm(): HTMLFormElement {
+    document.body.innerHTML = `
+      <form tool-name="subscribe" tool-description="Subscribe" method="post">
+        <input type="checkbox" name="newsletter" value="yes" />
+        <input type="checkbox" name="terms" value="accepted" checked />
+        <input type="radio" name="plan" value="free" checked />
+        <input type="radio" name="plan" value="pro" />
+        <select name="region"><option value="us">US</option><option value="eu">EU</option></select>
+      </form>`;
+    const form = document.querySelector('form') as HTMLFormElement;
+    form.requestSubmit = vi.fn();
+    return form;
+  }
+
+  const submitted = (form: HTMLFormElement): Record<string, FormDataEntryValue> =>
+    Object.fromEntries(new FormData(form).entries());
+
+  it('checks a box for true and unchecks it for false instead of rewriting its value', async () => {
+    const form = seedChoiceForm();
+
+    const response = await callTool({
+      name: 'subscribe',
+      arguments: { newsletter: true, terms: false },
+    });
+
+    expect(response.success).toBe(true);
+    const data = submitted(form);
+    expect(data['newsletter']).toBe('yes');
+    expect(data).not.toHaveProperty('terms');
+    expect((form.querySelector('[name="newsletter"]') as HTMLInputElement).value).toBe('yes');
+  });
+
+  it('selects the radio whose value matches and leaves every option value alone', async () => {
+    const form = seedChoiceForm();
+
+    await callTool({ name: 'subscribe', arguments: { plan: 'pro' } });
+
+    expect(submitted(form)['plan']).toBe('pro');
+    const values = Array.from(form.querySelectorAll<HTMLInputElement>('[name="plan"]')).map(
+      (radio) => radio.value,
+    );
+    expect(values).toEqual(['free', 'pro']);
+  });
+
+  it('refuses a radio or select value that matches no option, and submits nothing', async () => {
+    const form = seedChoiceForm();
+
+    const radio = await callTool({ name: 'subscribe', arguments: { plan: 'platinum' } });
+    const select = await callTool({ name: 'subscribe', arguments: { region: 'mars' } });
+
+    expect(radio.success).toBe(false);
+    expect(select.success).toBe(false);
+    expect(form.requestSubmit).not.toHaveBeenCalled();
+  });
+
+  it('still sets plain text fields and chosen select options', async () => {
+    const form = seedChoiceForm();
+
+    await callTool({ name: 'subscribe', arguments: { region: 'eu' } });
+
+    expect(submitted(form)['region']).toBe('eu');
+  });
+});

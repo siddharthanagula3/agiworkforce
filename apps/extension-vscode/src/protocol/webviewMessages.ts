@@ -10,6 +10,7 @@ const sendMessage = z.object({
     text: z.string().min(1).max(100_000),
     model: z.string().min(1).max(200).optional(),
     browseWeb: z.boolean().optional(),
+    standalone: z.boolean().optional(),
     followUpBehavior: z.enum(['queue', 'steer']).optional(),
     clientMessageId: z
       .string()
@@ -289,11 +290,6 @@ const reviewTurnChanges = z.object({
   payload: turnChangeTarget,
 });
 
-const undoTurn = z.object({
-  type: z.literal('undoTurn'),
-  payload: turnChangeTarget,
-});
-
 const dismissEditorContext = z.object({
   type: z.literal('dismissEditorContext'),
   payload: z.object({ id: z.string().min(1).max(2048) }),
@@ -348,7 +344,6 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   dismissEditorContext,
   openToolDiff,
   reviewTurnChanges,
-  undoTurn,
   resolveTurnFailure,
   respondToApproval,
   attachFiles,

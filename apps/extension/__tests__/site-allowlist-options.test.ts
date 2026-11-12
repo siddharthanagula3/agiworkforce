@@ -14,7 +14,26 @@ describe('options site allowlist', () => {
     expect(normalizeApprovedSiteOrigin('javascript:alert(1)')).toBeNull();
   });
 
-  it('prefers the active eligible tab and otherwise the most recent eligible tab', () => {
+  it("prefers the most recently used eligible tab over another window's active tab", () => {
+    expect(
+      selectApprovedSiteOrigin([
+        { url: 'https://other-window.example/y', active: true, lastAccessed: 1 },
+        { url: 'https://left-behind.example/x', active: false, lastAccessed: 9 },
+        { url: 'chrome-extension://test/options.html', active: true, lastAccessed: 10 },
+      ]),
+    ).toBe('https://left-behind.example');
+  });
+
+  it('breaks a tie on last use in favour of the active tab', () => {
+    expect(
+      selectApprovedSiteOrigin([
+        { url: 'https://background.example/a', lastAccessed: 5 },
+        { url: 'https://active.example/b', active: true, lastAccessed: 5 },
+      ]),
+    ).toBe('https://active.example');
+  });
+
+  it('prefers the most recent eligible tab and skips tabs that are not web pages', () => {
     expect(
       selectApprovedSiteOrigin([
         { url: 'chrome://extensions', active: true, lastAccessed: 30 },

@@ -66,6 +66,30 @@ describe('reading the highlighted passage on a page', () => {
     expect(readVisibleSelection(1_000)).toBeNull();
   });
 
+  it('reports text highlighted inside a form field without reading it', () => {
+    document.body.innerHTML = '<textarea id="draft">Dear team, rough words here</textarea>';
+    const field = document.getElementById('draft') as HTMLTextAreaElement;
+    field.focus();
+    field.setSelectionRange(11, 22);
+    expect(readVisibleSelection(1_000)).toBe('form-field');
+  });
+
+  it('reports a highlight inside a password field the same way', () => {
+    document.body.innerHTML = '<input id="secret" type="password" value="hunter2" />';
+    const field = document.getElementById('secret') as HTMLInputElement;
+    field.focus();
+    field.setSelectionRange(0, 4);
+    expect(readVisibleSelection(1_000)).toBe('form-field');
+  });
+
+  it('reads nothing from a focused form field that holds no highlight', () => {
+    document.body.innerHTML = '<textarea id="draft">Dear team</textarea>';
+    const field = document.getElementById('draft') as HTMLTextAreaElement;
+    field.focus();
+    field.setSelectionRange(3, 3);
+    expect(readVisibleSelection(1_000)).toBeNull();
+  });
+
   it('reads nothing when nothing is highlighted', () => {
     document.body.innerHTML = '<p id="p">Copy</p>';
     expect(readVisibleSelection(1_000)).toBeNull();

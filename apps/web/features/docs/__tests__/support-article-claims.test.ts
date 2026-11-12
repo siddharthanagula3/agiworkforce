@@ -388,7 +388,8 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(review).toContain('let diff = gather_diff(options).await?;');
     expect(review).toContain('session.send(config, &prompt, Box::new(|_chunk| {})).await?;');
     expect(apply).toMatch(/pub async fn apply_from_file[\s\S]{0,180}apply_git_patch/u);
-    expect(apply).toMatch(/pub async fn apply_from_session[\s\S]{0,550}apply_git_patch/u);
+    expect(apply).toMatch(/pub async fn apply_from_session[\s\S]{0,220}apply_session_diff/u);
+    expect(apply).toMatch(/async fn apply_session_diff[\s\S]{0,900}apply_git_patch/u);
     const article = collapsed('content/support/vscode-extension.md');
     expect(article).toContain('`agi review` sends a Git diff to the selected model for review.');
     expect(article).toContain('`agi apply` applies a diff from a file or saved session.');
@@ -481,7 +482,9 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(credentials).toContain('await setApiKey(context.secrets, apiKey.trim());');
     expect(credentials).toContain('await clearApiKey(context.secrets);');
     expect(setup).toContain('const result = await localRuntimes.restartAll();');
-    expect(setup).toContain('const result = await probeCli(cliPath, runCliVersion);');
+    expect(setup).toContain(
+      'const result = await probeResolvedCli(resolveConfiguredCli(), runCliVersion);',
+    );
     const article = collapsed('content/support/vscode-extension.md');
     expect(article).toContain(
       '**Set API Key** and **Clear API Key** manage the AGI account API key.',

@@ -14,7 +14,8 @@
 
 use anyhow::{bail, Context, Result};
 use serde_json::{Map, Value};
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 const ENABLED_KEY: &str = "mcpServers";
 const DISABLED_KEY: &str = "disabledServers";
@@ -46,12 +47,17 @@ pub struct RegistryEntry {
     pub target: String,
 }
 
-/// The parsed, editable registry file.
+/// The parsed, editable registry file. The loader also accepts a flat
+/// `{ "name": {...} }` map, so a file in that shape is read as enabled servers
+/// and written back flat while nothing in it is turned off; top-level keys the
+/// registry does not own are written back as they were.
 #[derive(Debug, Clone, Default)]
 pub struct McpRegistry {
     path: PathBuf,
     enabled: Map<String, Value>,
     disabled: Map<String, Value>,
+    other: Map<String, Value>,
+    flat: bool,
 }
 
 impl McpRegistry {
@@ -69,45 +75,61 @@ impl McpRegistry {
     /// Load a registry from an explicit path (also the test entry point).
     pub fn load_from(path: impl Into<PathBuf>) -> Result<Self> {
         let path = path.into();
-        let (enabled, disabled) = if path.exists() {
-            let contents = std::fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read MCP registry {}", path.display()))?;
-            let root: Value = serde_json::from_str(&contents)
-                .with_context(|| format!("Invalid JSON in MCP registry {}", path.display()))?;
-            let enabled = object_section(&root, ENABLED_KEY);
-            let disabled = object_section(&root, DISABLED_KEY);
-            (enabled, disabled)
-        } else {
-            (Map::new(), Map::new())
+        if !path.exists() {
+            return Ok(Self {
+                path,
+                ..Self::default()
+            });
+        }
+        let contents = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read MCP registry {}", path.display()))?;
+        let root: Value = serde_json::from_str(&contents)
+            .with_context(|| format!("Invalid JSON in MCP registry {}", path.display()))?;
+        let Value::Object(mut root) = root else {
+            bail!(
+                "MCP registry {} must be a JSON object; fix or move it before changing servers",
+                path.display()
+            );
         };
+        if !root.is_empty() && !root.contains_key(ENABLED_KEY) && !root.contains_key(DISABLED_KEY) {
+            return Ok(Self {
+                path,
+                enabled: root,
+                flat: true,
+                ..Self::default()
+            });
+        }
+        let enabled = take_section(&mut root, ENABLED_KEY, &path)?;
+        let disabled = take_section(&mut root, DISABLED_KEY, &path)?;
         Ok(Self {
             path,
             enabled,
             disabled,
+            other: root,
+            flat: false,
         })
     }
 
-    /// Persist the registry back to disk, preserving any pre-existing top-level
-    /// keys is intentionally NOT done, the registry file is owned by this store.
+    /// Persist the registry, replacing the file whole through a temporary file
+    /// in the same folder so an interrupted write never leaves it truncated.
     pub fn save(&self) -> Result<()> {
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).with_context(|| {
-                format!("Failed to create config directory {}", parent.display())
-            })?;
-        }
-        let mut root = Map::new();
-        root.insert(ENABLED_KEY.to_string(), Value::Object(self.enabled.clone()));
-        if !self.disabled.is_empty() {
-            root.insert(
-                DISABLED_KEY.to_string(),
-                Value::Object(self.disabled.clone()),
-            );
-        }
+        let root = if self.flat && self.disabled.is_empty() {
+            self.enabled.clone()
+        } else {
+            let mut root = self.other.clone();
+            root.insert(ENABLED_KEY.to_string(), Value::Object(self.enabled.clone()));
+            if !self.disabled.is_empty() {
+                root.insert(
+                    DISABLED_KEY.to_string(),
+                    Value::Object(self.disabled.clone()),
+                );
+            }
+            root
+        };
         let serialized = serde_json::to_string_pretty(&Value::Object(root))
             .context("Failed to serialize MCP registry")?;
-        std::fs::write(&self.path, serialized)
-            .with_context(|| format!("Failed to write MCP registry {}", self.path.display()))?;
-        Ok(())
+        replace_file(&self.path, &serialized)
+            .with_context(|| format!("Failed to write MCP registry {}", self.path.display()))
     }
 
     /// True if a server with this name exists in either section.
@@ -233,14 +255,41 @@ fn disabled_entries(registry: &McpRegistry) -> Vec<RegistryEntry> {
         .collect()
 }
 
-fn object_section(root: &Value, key: &str) -> Map<String, Value> {
-    root.get(key)
-        .and_then(Value::as_object)
-        .cloned()
-        .unwrap_or_default()
+fn take_section(
+    root: &mut Map<String, Value>,
+    key: &str,
+    path: &Path,
+) -> Result<Map<String, Value>> {
+    match root.remove(key) {
+        None => Ok(Map::new()),
+        Some(Value::Object(section)) => Ok(section),
+        Some(_) => bail!(
+            "{key} in MCP registry {} must be an object; fix it before changing servers",
+            path.display()
+        ),
+    }
+}
+
+/// Write `contents` to `path` through a temporary file in the same folder and
+/// a rename, so a reader sees the old file or the new one, never a part.
+pub(crate) fn replace_file(path: &Path, contents: &str) -> Result<()> {
+    let folder = path
+        .parent()
+        .filter(|folder| !folder.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(folder)
+        .with_context(|| format!("Failed to create folder {}", folder.display()))?;
+    let mut staged = tempfile::NamedTempFile::new_in(folder)
+        .with_context(|| format!("Failed to stage a file in {}", folder.display()))?;
+    staged.write_all(contents.as_bytes())?;
+    staged.as_file().sync_all()?;
+    staged.persist(path).map_err(|error| error.error)?;
+    Ok(())
 }
 
 fn describe_entry(value: &Value) -> (String, String) {
+    let normalized = super::normalize_nested_transport(value);
+    let value = normalized.as_ref().unwrap_or(value);
     let obj = match value.as_object() {
         Some(obj) => obj,
         None => return ("unknown".to_string(), String::new()),
@@ -490,6 +539,95 @@ mod tests {
         assert!(set_server_enabled_in(&path, "local", true).unwrap());
         assert!(disabled_entries(&McpRegistry::load_from(&path).unwrap()).is_empty());
         assert!(set_server_enabled_in(&path, "elsewhere", false).is_err());
+    }
+
+    #[test]
+    fn adding_to_a_flat_file_keeps_its_servers_and_their_tokens() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("mcp.json");
+        std::fs::write(
+            &path,
+            r#"{"github": {"command": "npx", "args": ["-y", "server-github"], "env": {"GITHUB_TOKEN": "synthetic"}}}"#,
+        )
+        .unwrap();
+
+        let mut reg = McpRegistry::load_from(&path).unwrap();
+        assert_eq!(reg.list().len(), 1, "a flat server is listed");
+        let entry = build_server_entry(TransportKind::Stdio, "notes-mcp", &[]).unwrap();
+        reg.add("notes", entry, false).unwrap();
+        reg.save().unwrap();
+
+        let on_disk: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(on_disk["github"]["env"]["GITHUB_TOKEN"], "synthetic");
+        assert_eq!(on_disk["notes"]["command"], "notes-mcp");
+        assert!(on_disk.get(ENABLED_KEY).is_none(), "the flat shape is kept");
+        let names: Vec<String> = McpRegistry::load_from(&path)
+            .unwrap()
+            .list()
+            .into_iter()
+            .map(|row| row.name)
+            .collect();
+        assert_eq!(names, vec!["github".to_string(), "notes".to_string()]);
+
+        let mut reg = McpRegistry::load_from(&path).unwrap();
+        reg.disable("github").unwrap();
+        reg.save().unwrap();
+        let on_disk: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            on_disk[DISABLED_KEY]["github"]["env"]["GITHUB_TOKEN"],
+            "synthetic"
+        );
+        assert_eq!(on_disk[ENABLED_KEY]["notes"]["command"], "notes-mcp");
+    }
+
+    #[test]
+    fn keys_the_registry_does_not_own_survive_an_edit() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("mcp.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers": {}, "$schema": "https://example.test/schema.json"}"#,
+        )
+        .unwrap();
+        let mut reg = McpRegistry::load_from(&path).unwrap();
+        let entry = build_server_entry(TransportKind::Http, "https://a.example/", &[]).unwrap();
+        reg.add("remote", entry, false).unwrap();
+        reg.save().unwrap();
+        let on_disk: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(on_disk["$schema"], "https://example.test/schema.json");
+        assert_eq!(on_disk[ENABLED_KEY]["remote"]["url"], "https://a.example/");
+    }
+
+    #[test]
+    fn a_file_the_registry_cannot_read_is_named_and_left_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        for (file, contents) in [
+            ("truncated.json", r#"{"mcpServers": {"a": "#),
+            ("list.json", "[]"),
+            ("section.json", r#"{"mcpServers": []}"#),
+        ] {
+            let path = tmp.path().join(file);
+            std::fs::write(&path, contents).unwrap();
+            let error = McpRegistry::load_from(&path).unwrap_err();
+            assert!(
+                format!("{error:#}").contains(file),
+                "{file}: the error names the file: {error:#}"
+            );
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), contents);
+        }
+    }
+
+    #[test]
+    fn a_nested_transport_entry_is_listed_by_its_real_transport() {
+        let (kind, target) = describe_entry(&serde_json::json!({
+            "command": "",
+            "transport": {"type": "http", "url": "https://mcp.example.test/"}
+        }));
+        assert_eq!(kind, "http");
+        assert_eq!(target, "https://mcp.example.test/");
     }
 
     #[test]
