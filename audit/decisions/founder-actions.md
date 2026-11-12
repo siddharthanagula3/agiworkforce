@@ -1180,6 +1180,10 @@ it has that address, so the order matters, and deploys and Fly settings are the 
 5. Confirm the relay's database and the web app's database are the same one: account erasure now
    deletes Remote Control pairing rows through the web app.
 6. Confirm nothing else (a CDN or second proxy) sits in front of Fly for the relay's hostname.
+7. Confirm Fly does not set `SIGNALING_PAIRING_MAX_LIFETIME_MS` above seven days. The 2026-11-11
+   privacy text says a pairing record is kept at most seven days plus about an hour.
+8. Publish the 2026-11-11 privacy text with this relay deploy or after it, never before: the
+   seven-day cap and the expiry sweep it describes exist only in the new relay.
    **Where** Vercel for the web app; the Fly app for the relay; `services/signaling-server/README.md`.
    **Needed input** None beyond the deploys.
    **How to verify completion** A phone pairs with `agi rc`, a long reply streams without being
