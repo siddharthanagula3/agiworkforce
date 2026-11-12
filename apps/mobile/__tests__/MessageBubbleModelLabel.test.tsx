@@ -262,6 +262,11 @@ describe('MessageBubble model label', () => {
     expect(actions).toHaveStyle({ flexDirection: 'row', flexWrap: 'wrap' });
     expect(within(actions).getByText('Retry')).toBeTruthy();
     expect(view.getByTestId('stream-failure-notice-text').parent).not.toBe(actions);
+    expect(
+      view.getByLabelText(
+        'Your plan has no credits left this period, so the reply could not start. Switch to another model or try again later. Tap to try again.',
+      ),
+    ).toHaveStyle({ alignSelf: 'flex-start', maxWidth: '100%' });
   });
 
   it('follows the stored rating when a failed write restores the previous value', () => {

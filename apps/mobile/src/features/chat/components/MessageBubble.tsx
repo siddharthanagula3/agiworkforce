@@ -1770,6 +1770,7 @@ export const MessageBubble = memo(function MessageBubble({
                   paddingVertical: 8,
                   marginTop: 4,
                   alignSelf: 'flex-start',
+                  maxWidth: '100%',
                 }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
