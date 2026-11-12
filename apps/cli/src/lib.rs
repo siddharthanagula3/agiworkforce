@@ -957,11 +957,17 @@ enum Command {
         /// Omit for your AGI account; name a provider (anthropic, openai, google, …) to enter its API key under Your Key; copilot uses its device flow.
         provider: Option<String>,
     },
-    /// Logout from AGI cloud.
+    /// Sign out of your account on this machine. Saved provider API keys and the Copilot sign-in stay.
     Logout {
-        /// Sign out of your AGI account only; provider API keys you saved stay.
+        /// Also remove every saved provider API key and the Copilot sign-in, and run first-time setup again on the next start.
         #[arg(long)]
+        all: bool,
+        /// Kept for scripts that pass it; signing out of the account only is the default.
+        #[arg(long, hide = true, conflicts_with = "all")]
         account_only: bool,
+        /// With --all, remove everything without asking.
+        #[arg(long, requires = "all")]
+        yes: bool,
     },
     /// Show authentication status for all configured providers.
     AuthStatus,
@@ -1730,7 +1736,11 @@ fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
         }
         BackgroundSubcommand::Stop { id } => {
             let run = background::stop(id)?;
-            println!("Stopping background run {}.", run.id);
+            println!(
+                "Stopped background run {} ({}).",
+                run.id,
+                background::state(&run).label()
+            );
             Ok(())
         }
         BackgroundSubcommand::Rm { id } => {
@@ -2108,6 +2118,16 @@ enum McpSubcommand {
         /// Registry name of the server to show.
         name: String,
     },
+    /// Turn a registered MCP server back on for new sessions.
+    Enable {
+        /// Registry name of the server to turn on.
+        name: String,
+    },
+    /// Turn a registered MCP server off without removing it.
+    Disable {
+        /// Registry name of the server to turn off.
+        name: String,
+    },
     /// Let a server's tools, or one tool, run without asking.
     Allow {
         /// Registry name of the server.
@@ -2385,6 +2405,11 @@ fn resolve_resume_payload(reference: &str, fork: bool) -> Result<ResumePayload> 
             // Validate the source before creating a fork so unknown legacy
             // authority cannot be copied into an executable session.
             managed_resume_payload_from_resolved(source.clone())?;
+            if let Some(notice) = sessions::open_db().ok().and_then(|conn| {
+                sessions::kept_copies_notice(&conn, &source.summary.session_id)
+            }) {
+                eprintln!("{notice}");
+            }
             if fork {
                 managed_resume_payload_from_resolved(
                     runtime::session_control::fork_managed_session(reference)?,
@@ -4742,24 +4767,6 @@ async fn models_json_with_discovery(config: &config::CliConfig) -> serde_json::V
     serde_json::Value::Array(models)
 }
 
-/// The URL of a registered remote MCP server, or an error naming why the
-/// OAuth commands do not apply to it.
-fn remote_server_url(registry: &crate::mcp::registry::McpRegistry, name: &str) -> Result<String> {
-    let Some(row) = registry.list().into_iter().find(|row| row.name == name) else {
-        anyhow::bail!(
-            "no MCP server named '{}' in the registry",
-            terminal_text::sanitize_terminal_text(name)
-        )
-    };
-    if row.kind == "stdio" {
-        anyhow::bail!(
-            "'{}' is a stdio server; OAuth applies to remote (--url) servers only",
-            terminal_text::sanitize_terminal_text(name)
-        );
-    }
-    Ok(row.target)
-}
-
 fn run_hooks_command(action: Option<&HooksSubcommand>) -> Result<()> {
     // One implementation for `agi hooks` and the TUI's `/hooks`, so a hook
     // added from either lands in the same file under the same event name.
@@ -4795,7 +4802,12 @@ async fn run_update_install(
     let executable = std::env::current_exe()
         .and_then(std::fs::canonicalize)
         .context("could not tell where this agi is installed")?;
-    let plan = update_check::InstallPlan::new(running, release, &executable);
+    let mut plan = update_check::InstallPlan::new(running, release, &executable);
+    if plan.has_work() {
+        plan.target = plan
+            .target
+            .and_then(update_check::writable_install_directory);
+    }
     for line in plan.render() {
         println!("{line}");
     }
@@ -4822,6 +4834,34 @@ async fn run_update_install(
         release.version
     );
     Ok(())
+}
+
+fn account_sign_out_message(signed_out: &str) -> String {
+    format!(
+        "{signed_out} Saved provider API keys and the Copilot sign-in stay; `agi logout --all` removes them."
+    )
+}
+
+/// The in-session `/logout`: the account only, as a bare `agi logout` does.
+pub(crate) async fn sign_out_of_account_keeping_keys() -> Result<String> {
+    let signed_out = crate::app_server::account::sign_out_of_account().await?;
+    Ok(account_sign_out_message(&signed_out.message()))
+}
+
+fn mcp_switch_message(name: &str, enabled: bool, changed: bool) -> String {
+    let shown = terminal_text::sanitize_terminal_text(name);
+    match (enabled, changed) {
+        (true, true) => {
+            format!("Turned on MCP server '{shown}'. New sessions start it; `/mcp restart` starts it in a running one.")
+        }
+        (true, false) => format!("MCP server '{shown}' is already on."),
+        (false, true) => {
+            format!(
+                "Turned off MCP server '{shown}'. A running session keeps it until `/mcp restart`."
+            )
+        }
+        (false, false) => format!("MCP server '{shown}' is already off."),
+    }
 }
 
 async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
@@ -5046,6 +5086,12 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             let _ = connection.shutdown().await;
             Ok(())
         }
+        McpSubcommand::Enable { name } | McpSubcommand::Disable { name } => {
+            let enabled = matches!(action, McpSubcommand::Enable { .. });
+            let changed = crate::mcp::registry::set_server_enabled(name, enabled)?;
+            println!("{}", mcp_switch_message(name, enabled, changed));
+            Ok(())
+        }
         McpSubcommand::Allow { server, tool }
         | McpSubcommand::Ask { server, tool }
         | McpSubcommand::Block { server, tool }
@@ -5086,13 +5132,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             Ok(())
         }
         McpSubcommand::Login { name } => {
-            remote_server_url(&registry_file, name)?;
-            let entry = registry_file
-                .entry(name)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("no MCP server named '{name}' in the registry"))?;
-            let config: crate::mcp::McpServerConfig = serde_json::from_value(entry)
-                .with_context(|| format!("registry entry for '{name}' is not a server config"))?;
+            let (config, _) = find_sign_in_target(name, &registry_file)?;
             crate::mcp::login_to_remote_server(name, &config).await?;
             println!(
                 "Authorized MCP server '{}'. The token is stored in the OS credential store.",
@@ -5101,12 +5141,8 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             Ok(())
         }
         McpSubcommand::Logout { name } => {
-            let url = remote_server_url(&registry_file, name)?;
-            let config: Option<crate::mcp::McpServerConfig> = registry_file
-                .entry(name)
-                .cloned()
-                .and_then(|entry| serde_json::from_value(entry).ok());
-            let outcome = crate::mcp::logout_from_remote_server(&url, config.as_ref()).await?;
+            let (config, url) = find_sign_in_target(name, &registry_file)?;
+            let outcome = crate::mcp::logout_from_remote_server(&url, Some(&config)).await?;
             let shown = terminal_text::sanitize_terminal_text(name);
             match outcome.revocation {
                 None => println!("No OAuth token was stored for '{shown}'."),
@@ -5308,6 +5344,20 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
 // Session subcommand handler, replay / branch points
 // ---------------------------------------------------------------------------
 
+fn kept_session_copy_lines(copies: &[std::path::PathBuf]) -> Vec<String> {
+    copies
+        .iter()
+        .map(|copy| {
+            format!(
+                "kept copy, open it with: agi --resume {}",
+                terminal_text::sanitize_terminal_text(&sandbox::shell_quote(
+                    &copy.to_string_lossy()
+                ))
+            )
+        })
+        .collect()
+}
+
 async fn handle_session_action(action: SessionAction) -> Result<()> {
     match action {
         SessionAction::List { limit, archived } => {
@@ -5348,30 +5398,46 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                     output::format_message_count(s.message_count as i64),
                     s.created_at.format("%Y-%m-%d %H:%M:%S"),
                 );
+                for line in
+                    kept_session_copy_lines(&runtime::session_control::kept_copies_of(&s.path))
+                {
+                    println!("    {line}");
+                }
             }
             Ok(())
         }
         SessionAction::Show { session_id } => {
             // Inspection remains available for legacy/unknown sessions even
             // though executing them is fail-closed.
-            let messages =
+            let (messages, kept_copies) =
                 match runtime::session_control::resolve_managed_session_reference(&session_id) {
                     Ok(resolved) => {
-                        runtime::session::ManagedSession::load_from_path(resolved.path)?.messages
+                        let kept_copies = kept_session_copy_lines(
+                            &runtime::session_control::kept_copies_of(&resolved.path),
+                        );
+                        (
+                            runtime::session::ManagedSession::load_from_path(resolved.path)?
+                                .messages,
+                            kept_copies,
+                        )
                     }
-                    Err(managed_error) => {
+                    Err(managed_error) => (
                         load_legacy_session_messages(&session_id).map_err(|legacy_error| {
                             managed_error.context(format!(
                                 "Legacy JSON conversation fallback also failed: {legacy_error:#}"
                             ))
-                        })?
-                    }
+                        })?,
+                        Vec::new(),
+                    ),
                 };
             println!(
                 "{}: {} messages",
                 ts::accent_header(session_id),
                 messages.len()
             );
+            for line in kept_copies {
+                println!("  {line}");
+            }
             for (i, msg) in messages.iter().enumerate() {
                 let preview: String = msg.text_content().chars().take(120).collect();
                 println!(
@@ -5606,7 +5672,12 @@ pub async fn run_main() -> Result<()> {
         ));
     }
 
-    if let Some(reason) = crate::app_server::account::renew_managed_session_if_expiring().await {
+    let renewal = if cloud::CloudClient::admit(account_privacy_mode()).is_ok() {
+        crate::app_server::account::renew_managed_session_if_expiring().await
+    } else {
+        None
+    };
+    if let Some(reason) = renewal {
         output::print_info(&reason);
     }
 
@@ -6249,15 +6320,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     apply_patch::print_patch_result(&r);
                     Some(r)
                 } else {
-                    let conn = sessions::open_db()?;
-                    if let Some(s) = sessions::list_sessions(&conn, 1)?.first() {
-                        let r = apply_patch::apply_from_session(&s.id).await?;
-                        apply_patch::print_patch_result(&r);
-                        Some(r)
-                    } else {
-                        eprintln!("No sessions found.");
-                        None
-                    }
+                    let r = apply_patch::apply_latest_in_folder(&std::env::current_dir()?).await?;
+                    apply_patch::print_patch_result(&r);
+                    Some(r)
                 };
                 match result {
                     Some(r) if r.exit_code != 0 => {
@@ -6924,7 +6989,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         println!("No sessions on this device.");
                     } else {
                         println!("On this device:");
-                        println!("{}", sessions::format_session_list(&list));
+                        println!(
+                            "{}",
+                            sessions::format_session_list_with_kept_copies(&conn, &list)
+                        );
                         println!();
                     }
                 }
@@ -6994,11 +7062,21 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Logout ---
-            Command::Logout { account_only } => {
-                let signed_out = if *account_only {
-                    crate::app_server::account::sign_out_of_account().await?
-                } else {
+            Command::Logout {
+                all,
+                account_only,
+                yes,
+            } => {
+                let signed_out = if *all && !*account_only {
+                    if !confirm_destructive(
+                        "Remove every saved provider API key and the Copilot sign-in from this machine and sign out of your account? You will have to enter the keys again.",
+                        *yes,
+                    ) {
+                        return Ok(());
+                    }
                     crate::app_server::account::sign_out_of_every_provider().await?
+                } else {
+                    crate::app_server::account::sign_out_of_account().await?
                 };
                 println!("{}", signed_out.message());
                 Ok(())
@@ -8251,6 +8329,21 @@ enum OneShotTurn {
     Interrupted(String),
 }
 
+async fn interrupt_or_terminate() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        if let Ok(mut terminate) = signal(SignalKind::terminate()) {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {}
+                _ = terminate.recv() => {}
+            }
+            return;
+        }
+    }
+    let _ = tokio::signal::ctrl_c().await;
+}
+
 /// Race a non-interactive turn against Ctrl-C. Losing the race drops the
 /// `send` future, which stops the provider stream and the tool loop; the text
 /// streamed so far comes back so the cancelled turn can be repaired.
@@ -8273,7 +8366,7 @@ async fn send_until_interrupted(
                 on_chunk(chunk);
             }),
         ) => Some(result),
-        _ = tokio::signal::ctrl_c() => None,
+        () = interrupt_or_terminate() => None,
     };
     match finished {
         Some(result) => OneShotTurn::Finished(result),
@@ -8517,17 +8610,29 @@ pub(crate) async fn attach_mcp_manager_for_session(
     include_default_configs: bool,
     include_plugin_configs: bool,
 ) -> Result<()> {
-    if let Some(mgr) = build_mcp_manager(
+    let rebuilt = build_mcp_manager(
         mcp_config_options,
         include_default_configs,
         include_plugin_configs,
         session.privacy_mode,
     )
-    .await?
-    {
-        session.set_mcp_manager(mgr);
-    }
+    .await?;
+    replace_session_mcp_manager(session, rebuilt).await;
     Ok(())
+}
+
+async fn replace_session_mcp_manager(
+    session: &mut agent::AgentSession,
+    rebuilt: Option<mcp::McpManager>,
+) {
+    match rebuilt {
+        Some(manager) => session.set_mcp_manager(manager),
+        None => {
+            if let Some(mut previous) = session.take_mcp_manager() {
+                previous.shutdown_all().await;
+            }
+        }
+    }
 }
 
 /// Load MCP configs, connect all servers, and return the connected manager.
@@ -8603,43 +8708,16 @@ async fn build_mcp_manager_inner(
     elicitation: Option<std::sync::Arc<dyn agiworkforce_mcp::ElicitationHandler>>,
     project: Option<&std::path::Path>,
 ) -> Result<Option<mcp::McpManager>> {
-    if !include_default_configs && !mcp_config_options.has_explicit_sources() {
-        return Ok(None);
-    }
-
-    let mut load_options = mcp_config_options.clone();
-    if !include_default_configs {
-        load_options.strict = true;
-    }
-
-    let mut mcp_configs = mcp::McpManager::load_configs_in(&load_options, project)?;
-    if include_plugin_configs && !load_options.strict {
-        let project = project
-            .map(std::path::Path::to_path_buf)
-            .or_else(|| std::env::current_dir().ok());
-        let mut plugin_mgr = plugins::PluginsManager::new();
-        if plugin_mgr.load_all(project.as_deref()).is_ok() {
-            let (installed, mut from_project) = plugin_mgr.mcp_configs_by_scope();
-            mcp_configs.extend(installed);
-            // A project plugin is repository content a sandboxed command can
-            // write, so its servers start only with the same approval
-            // a project's MCP file needs.
-            if let Some(project) = project.as_deref() {
-                let withheld =
-                    mcp::consent::retain_consented_plugin_servers(project, &mut from_project);
-                if !withheld.is_empty() {
-                    tracing::warn!(project = %project.display(), servers = ?withheld, "project plugin MCP servers withheld until approved");
-                }
-            }
-            mcp_configs.extend(from_project);
-        }
-    }
-
+    let mcp_configs = session_mcp_configs(
+        mcp_config_options,
+        include_default_configs,
+        include_plugin_configs,
+        project,
+    )?;
     if mcp_configs.is_empty() {
         return Ok(None);
     }
 
-    let mut mcp_mgr = mcp::McpManager::new();
     mcp_mgr.start_servers_in(
         project
             .map(std::path::Path::to_path_buf)
@@ -8662,6 +8740,122 @@ async fn build_mcp_manager_inner(
         }
     }
     Ok(Some(mcp_mgr))
+}
+
+/// The servers a session started in `project` (or the current folder) would
+/// connect to, after project approval, with project and user servers winning
+/// a name a plugin also declares, as [`mcp::discover_servers`] orders them.
+fn session_mcp_configs(
+    mcp_config_options: &mcp::McpConfigLoadOptions,
+    include_default_configs: bool,
+    include_plugin_configs: bool,
+    project: Option<&std::path::Path>,
+) -> Result<std::collections::HashMap<String, mcp::McpServerConfig>> {
+    if !include_default_configs && !mcp_config_options.has_explicit_sources() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let mut load_options = mcp_config_options.clone();
+    if !include_default_configs {
+        load_options.strict = true;
+    }
+
+    let mut mcp_configs = mcp::McpManager::load_configs_in(&load_options, project)?;
+    if !load_options.strict {
+        report_mcp_config_problems(&mcp::McpManager::default_config_problems(project));
+    }
+    if include_plugin_configs && !load_options.strict {
+        let project = project
+            .map(std::path::Path::to_path_buf)
+            .or_else(|| std::env::current_dir().ok());
+        let mut plugin_mgr = plugins::PluginsManager::new();
+        if plugin_mgr.load_all(project.as_deref()).is_ok() {
+            let (installed, mut from_project) = plugin_mgr.mcp_configs_by_scope();
+            // A project plugin is repository content a sandboxed command can
+            // write, so its servers start only with the same approval
+            // a project's MCP file needs.
+            if let Some(project) = project.as_deref() {
+                let withheld =
+                    mcp::consent::retain_consented_plugin_servers(project, &mut from_project);
+                if !withheld.is_empty() {
+                    tracing::warn!(project = %project.display(), servers = ?withheld, "project plugin MCP servers withheld until approved");
+                }
+            }
+            for (name, config) in installed.into_iter().chain(from_project) {
+                mcp_configs.entry(name).or_insert(config);
+            }
+        }
+    }
+    Ok(mcp_configs)
+}
+
+fn mcp_config_problem_notice(problem: &str) -> String {
+    format!(
+        "MCP: servers in this file were not loaded: {}",
+        terminal_text::sanitize_terminal_text(problem)
+    )
+}
+
+fn report_mcp_config_problems(problems: &[String]) {
+    for problem in problems {
+        let notice = mcp_config_problem_notice(problem);
+        if crate::tui::tui_active() {
+            crate::tui::push_tui_notice(notice);
+        } else {
+            output::print_warn(&notice);
+        }
+    }
+}
+
+/// The remote server `agi mcp login` and `logout` act on, found among the
+/// servers a session here would load, then among the registry's turned-off
+/// servers, and its URL.
+fn sign_in_target(
+    name: &str,
+    session_servers: &std::collections::HashMap<String, mcp::McpServerConfig>,
+    registry: &crate::mcp::registry::McpRegistry,
+    awaits_approval: bool,
+) -> Result<(mcp::McpServerConfig, String)> {
+    let shown = terminal_text::sanitize_terminal_text(name);
+    let config: mcp::McpServerConfig = match (session_servers.get(name), registry.entry(name)) {
+        (Some(config), _) => config.clone(),
+        (None, Some(entry)) => serde_json::from_value(entry.clone())
+            .with_context(|| format!("registry entry for '{shown}' is not a server config"))?,
+        (None, None) if awaits_approval => anyhow::bail!(
+            "MCP server '{shown}' is named by this project and its launch is not approved yet, so nothing connects to it. Start `agi` in this folder to review it, then sign in."
+        ),
+        (None, None) => anyhow::bail!(
+            "no MCP server named '{shown}' is configured here. Servers from this project's MCP files, your own, imported ones and plugins count; `agi doctor` names a file that could not be read."
+        ),
+    };
+    match config.as_transport() {
+        mcp::McpTransport::Stdio { .. } => anyhow::bail!(
+            "'{shown}' is a stdio server; OAuth applies to remote (--url) servers only"
+        ),
+        mcp::McpTransport::Sse { url, .. } | mcp::McpTransport::Http { url, .. } => {
+            Ok((config, url))
+        }
+    }
+}
+
+fn find_sign_in_target(
+    name: &str,
+    registry: &crate::mcp::registry::McpRegistry,
+) -> Result<(mcp::McpServerConfig, String)> {
+    let project = std::env::current_dir().context("could not read the current folder")?;
+    let session_servers = session_mcp_configs(
+        &mcp::McpConfigLoadOptions::default(),
+        true,
+        true,
+        Some(project.as_path()),
+    )?;
+    let awaits_approval = !session_servers.contains_key(name)
+        && registry.entry(name).is_none()
+        && mcp::discover_servers(&project).into_iter().any(|server| {
+            server.name == name
+                && mcp::consent::server_awaits_approval(&project, server.origin, &server.name)
+        });
+    sign_in_target(name, &session_servers, registry, awaits_approval)
 }
 
 fn sdk_tool_lifecycle_event(
@@ -9265,24 +9459,40 @@ mod tests {
         assert!(confirm_destructive_when("Delete it?", true, true));
     }
 
-    /// Desktop signs the machine out of its own account with `--account-only`;
-    /// a bare `logout` keeps forgetting every provider.
+    /// A bare `logout` leaves saved provider keys alone; removing them is `--all`.
     #[test]
-    fn logout_account_only_is_opt_in() {
-        let scoped = Cli::try_parse_from(["agi", "logout", "--account-only"])
-            .expect("logout --account-only parses");
-        assert!(matches!(
-            scoped.command,
-            Some(Command::Logout { account_only: true })
-        ));
-
+    fn logout_removes_provider_keys_only_when_asked() {
         let bare = Cli::try_parse_from(["agi", "logout"]).expect("logout parses");
         assert!(matches!(
             bare.command,
             Some(Command::Logout {
-                account_only: false
+                all: false,
+                account_only: false,
+                yes: false
             })
         ));
+        let desktop = Cli::try_parse_from(["agi", "logout", "--account-only"])
+            .expect("the desktop flag still parses");
+        assert!(matches!(
+            desktop.command,
+            Some(Command::Logout {
+                all: false,
+                account_only: true,
+                ..
+            })
+        ));
+        let everything =
+            Cli::try_parse_from(["agi", "logout", "--all", "--yes"]).expect("logout --all parses");
+        assert!(matches!(
+            everything.command,
+            Some(Command::Logout {
+                all: true,
+                yes: true,
+                ..
+            })
+        ));
+        assert!(Cli::try_parse_from(["agi", "logout", "--yes"]).is_err());
+        assert!(Cli::try_parse_from(["agi", "logout", "--all", "--account-only"]).is_err());
     }
 
     #[test]
@@ -9582,6 +9792,106 @@ mod tests {
             }) => assert_eq!(transport, RemoteMcpTransport::Http),
             other => panic!("expected mcp add, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn mcp_login_finds_every_server_a_session_here_would_load() {
+        let tmp = tempfile::tempdir().unwrap();
+        let registry = crate::mcp::registry::McpRegistry::load_from(tmp.path().join("mcp.json"))
+            .expect("an empty registry");
+        let mut session_servers = std::collections::HashMap::new();
+        session_servers.insert(
+            "linear".to_string(),
+            mcp::McpServerConfig::http("https://mcp.example.test/mcp", Default::default()),
+        );
+        session_servers.insert(
+            "local".to_string(),
+            mcp::McpServerConfig::stdio("notes-mcp", Vec::new(), Default::default()),
+        );
+
+        let (_, url) = sign_in_target("linear", &session_servers, &registry, false)
+            .expect("a project, imported or plugin server can be signed in to");
+        assert_eq!(url, "https://mcp.example.test/mcp");
+
+        let stdio = sign_in_target("local", &session_servers, &registry, false).unwrap_err();
+        assert!(format!("{stdio:#}").contains("stdio"), "{stdio:#}");
+
+        let waiting = sign_in_target("pending", &session_servers, &registry, true).unwrap_err();
+        assert!(
+            format!("{waiting:#}").contains("not approved"),
+            "{waiting:#}"
+        );
+
+        let unknown = sign_in_target("nowhere", &session_servers, &registry, false).unwrap_err();
+        assert!(format!("{unknown:#}").contains("nowhere"), "{unknown:#}");
+    }
+
+    #[test]
+    fn mcp_login_still_reaches_a_server_turned_off_in_the_registry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("mcp.json");
+        let mut registry = crate::mcp::registry::McpRegistry::load_from(&path).unwrap();
+        let entry = crate::mcp::registry::build_server_entry(
+            crate::mcp::registry::TransportKind::Http,
+            "https://off.example.test/mcp",
+            &[],
+        )
+        .unwrap();
+        registry.add("off", entry, false).unwrap();
+        registry.disable("off").unwrap();
+        let (_, url) =
+            sign_in_target("off", &std::collections::HashMap::new(), &registry, false).unwrap();
+        assert_eq!(url, "https://off.example.test/mcp");
+    }
+
+    #[test]
+    fn mcp_enable_and_disable_parse_and_say_what_changed() {
+        for (verb, enabled) in [("enable", true), ("disable", false)] {
+            let cli = Cli::try_parse_from(["agi", "mcp", verb, "github"])
+                .unwrap_or_else(|error| panic!("agi mcp {verb} parses: {error}"));
+            match cli.command {
+                Some(Command::Mcp {
+                    action: McpSubcommand::Enable { name },
+                }) if enabled => assert_eq!(name, "github"),
+                Some(Command::Mcp {
+                    action: McpSubcommand::Disable { name },
+                }) if !enabled => assert_eq!(name, "github"),
+                other => panic!("expected mcp {verb}, got {other:?}"),
+            }
+        }
+        assert!(mcp_switch_message("github", true, true).contains("Turned on"));
+        assert!(mcp_switch_message("github", false, false).contains("already off"));
+    }
+
+    #[tokio::test]
+    async fn restarting_mcp_with_no_server_left_disconnects_the_last_one() {
+        let sys_ctx = context::gather_system_context();
+        let mut session = agent::AgentSession::new(model_catalog::default_model(), &sys_ctx, None);
+        session.set_mcp_manager(mcp::McpManager::with_discovered_stdio_tool_for_test(
+            "github", "search",
+        ));
+        assert!(session.mcp_info().is_some());
+        replace_session_mcp_manager(&mut session, None).await;
+        assert!(session.mcp_info().is_none());
+        assert!(session.take_mcp_manager().is_none());
+    }
+
+    #[test]
+    fn notices_name_what_was_kept_or_not_loaded() {
+        let signed_out = account_sign_out_message("Logged out from 1 provider.");
+        assert!(signed_out.starts_with("Logged out from 1 provider."));
+        assert!(signed_out.contains("agi logout --all"));
+
+        let problem = mcp_config_problem_notice("/home/u/.mcp.json: invalid JSON: trailing comma");
+        assert!(problem.contains("/home/u/.mcp.json"));
+        assert!(problem.contains("invalid JSON"));
+
+        let copies = kept_session_copy_lines(&[std::path::PathBuf::from(
+            "/tmp/sessions/abc.json.conflict-1",
+        )]);
+        assert_eq!(copies.len(), 1);
+        assert!(copies[0].contains("agi --resume"));
+        assert!(copies[0].contains("abc.json.conflict-1"));
     }
 
     #[test]

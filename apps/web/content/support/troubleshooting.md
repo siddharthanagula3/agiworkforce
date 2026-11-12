@@ -100,9 +100,9 @@ The CLI is {{STATUS.cli}}, and these steps apply to an installed CLI.
 
 `agi login` with no provider signs in to your AGI account. It shows a link and
 a code, opens the link in your browser, and waits while you approve the code
-there, signed in to the same account. If the wait stops with "Device code
-expired. Please run /login again." or "Authorization timed out", the code was
-not approved in time: run `agi login` again for a fresh one.
+there, signed in to the same account. If the wait stops with "The sign-in code
+expired." or "Authorization timed out", the code was not approved in time: run
+`agi login` again for a fresh one.
 
 `agi auth-status` lists every credential the CLI holds and how each one
 authenticates; "No authentication configured." means nothing is stored yet.

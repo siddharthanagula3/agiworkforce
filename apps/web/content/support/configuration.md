@@ -83,8 +83,9 @@ alias agi-work='AGIWORKFORCE_HOME="$HOME/.agiworkforce-work" agi'
 ```
 
 The first `agi-work` run walks you through signing in and setup for the new
-folder. `agi logout` signs out of the folder it runs in and resets its setup,
-so the next run asks again.
+folder. `agi logout` signs out of your account in the folder it runs in and
+keeps that folder's saved provider keys. `agi logout --all` also removes those
+keys and resets its setup, so the next run asks again.
 
 ## MCP servers and hooks
 

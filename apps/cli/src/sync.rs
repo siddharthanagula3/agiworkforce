@@ -60,6 +60,9 @@ pub struct SyncedFile {
     pub content: String,
     /// Hex-encoded SHA256 of `content`.
     pub sha256: String,
+    /// Hex-encoded SHA256 the exporting device recorded at its previous sync.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_sha256: Option<String>,
 }
 
 /// Describes how a file changed since the last sync.
@@ -268,6 +271,7 @@ impl ConfigSync {
     /// channel should redact or encrypt secret-bearing content first.
     pub fn export(home: &Path) -> Result<SyncBundle> {
         let device_id = Self::device_id(home)?;
+        let previous = Self::load_manifest(home)?;
         let now = chrono::Utc::now().to_rfc3339();
         let mut files = HashMap::new();
         let mut secret_bearing_included: Vec<&str> = Vec::new();
@@ -283,7 +287,18 @@ impl ConfigSync {
             if Self::SECRET_BEARING_FILES.contains(rel_path) {
                 secret_bearing_included.push(rel_path);
             }
-            files.insert(rel_path.to_string(), SyncedFile { content, sha256 });
+            let base_sha256 = previous
+                .as_ref()
+                .and_then(|manifest| manifest.files.get(*rel_path))
+                .map(|recorded| recorded.sha256.clone());
+            files.insert(
+                rel_path.to_string(),
+                SyncedFile {
+                    content,
+                    sha256,
+                    base_sha256,
+                },
+            );
         }
 
         if !secret_bearing_included.is_empty() {
@@ -310,10 +325,11 @@ impl ConfigSync {
     ///
     /// Merge strategy:
     /// - Local file absent -> import it
-    /// - Local unchanged since last sync -> overwrite with imported
-    /// - Local changed since last sync -> conflict (keep local, report)
-    /// - `config.toml`: section-level TOML merge (add new keys, don't clobber existing)
-    /// - `mcp.json`: merge server entries (add new, don't remove existing)
+    /// - Bundle copy edited from exactly the local version -> overwrite
+    /// - Otherwise the copies diverged: `config.toml` and `mcp.json` take the
+    ///   remote's missing keys or servers when that keeps every remote value
+    ///   and loses no local comment; anything else keeps the local file,
+    ///   writes `<path>.imported` and reports a conflict
     ///
     /// Preflight rejects unsupported paths, invalid checksums, and existing
     /// symlinks before writes. It does not prevent concurrent filesystem changes
@@ -339,7 +355,6 @@ impl ConfigSync {
             Self::import_path(&canonical_home, rel_path)?;
         }
 
-        let old_manifest = Self::load_manifest(&canonical_home)?;
         let mut report = SyncReport {
             files_updated: Vec::new(),
             files_skipped: Vec::new(),
@@ -369,33 +384,20 @@ impl ConfigSync {
                 continue;
             }
 
-            // Check whether the local file changed since last sync
-            let local_changed_since_sync = match &old_manifest {
-                Some(m) => match m.files.get(rel_path.as_str()) {
-                    Some(old_hash) => old_hash.sha256 != local_hash,
-                    None => true, // wasn't tracked before -> treat as changed
-                },
-                None => true, // no previous sync -> conservative: treat as changed
-            };
-
-            if local_changed_since_sync {
-                let merged = match rel_path.as_str() {
-                    "config.toml" => Self::merge_toml(&local_data, &synced.content).ok(),
-                    "mcp.json" => Self::merge_mcp_json(&local_data, &synced.content).ok(),
-                    _ => None,
-                };
-                if let Some(merged) = merged {
-                    writes.push((rel_path.clone(), merged.into_bytes()));
-                    report.files_updated.push(rel_path.clone());
-                } else {
-                    let copy = format!("{}.imported", rel_path);
-                    Self::import_path(&canonical_home, &copy)?;
-                    writes.push((copy, synced.content.as_bytes().to_vec()));
-                    report.conflicts.push(rel_path.clone());
-                }
-            } else {
+            if synced.base_sha256.as_deref() == Some(local_hash.as_str()) {
                 writes.push((rel_path.clone(), synced.content.as_bytes().to_vec()));
                 report.files_updated.push(rel_path.clone());
+                continue;
+            }
+
+            if let Some(merged) = Self::lossless_merge(rel_path, &local_data, &synced.content) {
+                writes.push((rel_path.clone(), merged.into_bytes()));
+                report.files_updated.push(rel_path.clone());
+            } else {
+                let copy = format!("{}.imported", rel_path);
+                Self::import_path(&canonical_home, &copy)?;
+                writes.push((copy, synced.content.as_bytes().to_vec()));
+                report.conflicts.push(rel_path.clone());
             }
         }
 
@@ -458,6 +460,50 @@ impl ConfigSync {
     }
 
     // ----- Merge helpers -----
+
+    fn lossless_merge(rel_path: &str, local_bytes: &[u8], remote_content: &str) -> Option<String> {
+        match rel_path {
+            "config.toml" => {
+                if std::str::from_utf8(local_bytes).ok()?.contains('#') {
+                    return None;
+                }
+                let merged = Self::merge_toml(local_bytes, remote_content).ok()?;
+                let merged_table: toml::Table = toml::from_str(&merged).ok()?;
+                let remote_table: toml::Table = toml::from_str(remote_content).ok()?;
+                Self::toml_covers(&merged_table, &remote_table).then_some(merged)
+            }
+            "mcp.json" => {
+                let merged = Self::merge_mcp_json(local_bytes, remote_content).ok()?;
+                let merged_json: serde_json::Value = serde_json::from_str(&merged).ok()?;
+                let remote_json: serde_json::Value = serde_json::from_str(remote_content).ok()?;
+                Self::json_covers(&merged_json, &remote_json).then_some(merged)
+            }
+            _ => None,
+        }
+    }
+
+    fn toml_covers(merged: &toml::Table, remote: &toml::Table) -> bool {
+        remote.iter().all(
+            |(key, remote_value)| match (merged.get(key), remote_value) {
+                (Some(toml::Value::Table(merged_sub)), toml::Value::Table(remote_sub)) => {
+                    Self::toml_covers(merged_sub, remote_sub)
+                }
+                (Some(merged_value), _) => merged_value == remote_value,
+                (None, _) => false,
+            },
+        )
+    }
+
+    fn json_covers(merged: &serde_json::Value, remote: &serde_json::Value) -> bool {
+        match (merged.as_object(), remote.as_object()) {
+            (Some(merged), Some(remote)) => remote.iter().all(|(key, remote_value)| {
+                merged
+                    .get(key)
+                    .is_some_and(|merged_value| Self::json_covers(merged_value, remote_value))
+            }),
+            _ => merged == remote,
+        }
+    }
 
     /// Section-level TOML merge: add new top-level keys and sub-table keys from
     /// the remote side without clobbering existing local values.
@@ -543,6 +589,7 @@ mod tests {
             SyncedFile {
                 content: content.to_string(),
                 sha256: ConfigSync::sha256_hex(content.as_bytes()),
+                base_sha256: None,
             },
         );
         SyncBundle {
@@ -1060,7 +1107,11 @@ mod tests {
                 let sha256 = ConfigSync::sha256_hex(content.as_bytes());
                 f.insert(
                     "INSTRUCTIONS.md".to_string(),
-                    SyncedFile { content, sha256 },
+                    SyncedFile {
+                        content,
+                        sha256,
+                        base_sha256: Some(ConfigSync::sha256_hex(b"# Original")),
+                    },
                 );
                 f
             },
@@ -1099,6 +1150,7 @@ mod tests {
                     SyncedFile {
                         content: new_content.clone(),
                         sha256,
+                        base_sha256: Some(ConfigSync::sha256_hex(b"# Original")),
                     },
                 );
                 f
@@ -1174,6 +1226,102 @@ mod tests {
         let status = ConfigSync::status(home_path).unwrap();
         let config_entry = status.iter().find(|(p, _)| p == "config.toml");
         assert_eq!(config_entry.unwrap().1, ChangeType::Deleted);
+    }
+
+    #[test]
+    fn an_older_bundle_never_replaces_newer_local_work() {
+        let device_a = tempfile::tempdir().unwrap();
+        let device_b = tempfile::tempdir().unwrap();
+        for home in [device_a.path(), device_b.path()] {
+            setup_home(home);
+            fs::write(home.join("INSTRUCTIONS.md"), "# Shared v1").unwrap();
+            let manifest = ConfigSync::compute_manifest(home).unwrap();
+            ConfigSync::save_manifest(home, &manifest).unwrap();
+        }
+        fs::write(device_a.path().join("INSTRUCTIONS.md"), "# Edited on A").unwrap();
+        let from_a = ConfigSync::export(device_a.path()).unwrap();
+        let from_b = ConfigSync::export(device_b.path()).unwrap();
+
+        let report = ConfigSync::import(device_a.path(), &from_b).unwrap();
+
+        assert_eq!(report.conflicts, vec!["INSTRUCTIONS.md".to_string()]);
+        assert!(report.files_updated.is_empty());
+        assert_eq!(
+            fs::read_to_string(device_a.path().join("INSTRUCTIONS.md")).unwrap(),
+            "# Edited on A"
+        );
+        assert_eq!(
+            fs::read_to_string(device_a.path().join("INSTRUCTIONS.md.imported")).unwrap(),
+            "# Shared v1"
+        );
+
+        let report = ConfigSync::import(device_b.path(), &from_a).unwrap();
+
+        assert_eq!(report.files_updated, vec!["INSTRUCTIONS.md".to_string()]);
+        assert!(report.conflicts.is_empty());
+        assert_eq!(
+            fs::read_to_string(device_b.path().join("INSTRUCTIONS.md")).unwrap(),
+            "# Edited on A"
+        );
+    }
+
+    #[test]
+    fn a_bundle_without_a_base_never_overwrites_a_differing_local_file() {
+        let home = tempfile::tempdir().unwrap();
+        fs::write(home.path().join("projects.json"), "{\"local\":true}").unwrap();
+        let manifest = ConfigSync::compute_manifest(home.path()).unwrap();
+        ConfigSync::save_manifest(home.path(), &manifest).unwrap();
+
+        let report = ConfigSync::import(home.path(), &bundle_with("projects.json", "{}")).unwrap();
+
+        assert_eq!(report.conflicts, vec!["projects.json".to_string()]);
+        assert_eq!(
+            fs::read_to_string(home.path().join("projects.json")).unwrap(),
+            "{\"local\":true}"
+        );
+    }
+
+    #[test]
+    fn a_config_merge_that_would_drop_a_remote_value_or_a_comment_is_a_conflict() {
+        for local in [
+            "# my model\n[default]\nmodel = \"fixture-local-model\"\n",
+            "[default]\nmodel = \"fixture-local-model\"\n",
+            "# only a comment differs\n[default]\nstream = true\n",
+        ] {
+            let home = tempfile::tempdir().unwrap();
+            fs::write(home.path().join("config.toml"), local).unwrap();
+            let remote = "[default]\nmodel = \"fixture-remote-model\"\nstream = true\n";
+
+            let report =
+                ConfigSync::import(home.path(), &bundle_with("config.toml", remote)).unwrap();
+
+            assert_eq!(report.conflicts, vec!["config.toml".to_string()], "{local}");
+            assert!(report.files_updated.is_empty(), "{local}");
+            assert_eq!(
+                fs::read_to_string(home.path().join("config.toml")).unwrap(),
+                local
+            );
+            assert_eq!(
+                fs::read_to_string(home.path().join("config.toml.imported")).unwrap(),
+                remote
+            );
+        }
+    }
+
+    #[test]
+    fn an_mcp_merge_that_would_keep_a_changed_server_is_a_conflict() {
+        let home = tempfile::tempdir().unwrap();
+        let local = r#"{"mcpServers":{"shared":{"command":"node"}}}"#;
+        fs::write(home.path().join("mcp.json"), local).unwrap();
+        let remote = r#"{"mcpServers":{"shared":{"command":"deno"},"added":{"command":"py"}}}"#;
+
+        let report = ConfigSync::import(home.path(), &bundle_with("mcp.json", remote)).unwrap();
+
+        assert_eq!(report.conflicts, vec!["mcp.json".to_string()]);
+        assert_eq!(
+            fs::read_to_string(home.path().join("mcp.json")).unwrap(),
+            local
+        );
     }
 
     #[test]

@@ -476,8 +476,20 @@ fn other_provider_choice_for_index(selection: usize) -> AuthChoice {
 // API key submenu
 // ─────────────────────────────────────────────────────────────────────────────
 
-async fn run_api_key_flow() -> Result<()> {
-    crate::auth::interactive_api_key_login().await
+async fn run_api_key_flow() -> Result<Option<&'static str>> {
+    crate::auth::interactive_api_key_login_choice().await
+}
+
+fn model_picker_providers_after_key(
+    saved: Option<&'static str>,
+    current: Vec<&'static str>,
+) -> Vec<&'static str> {
+    match saved {
+        Some(provider) if is_catalog_provider(provider) => {
+            model_picker_providers_for_auth_choice(&AuthChoice::ApiKeyProvider(provider))
+        }
+        _ => current,
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -872,7 +884,7 @@ pub async fn run_onboarding() -> Result<bool> {
 
     let chose_local = matches!(&auth_choice, AuthChoice::Local(_));
     let preferred_local_provider = local_provider_preference(&auth_choice);
-    let model_picker_providers = model_picker_providers_for_auth_choice(&auth_choice);
+    let mut model_picker_providers = model_picker_providers_for_auth_choice(&auth_choice);
 
     match auth_choice {
         AuthChoice::Local(_provider) => {
@@ -916,8 +928,14 @@ pub async fn run_onboarding() -> Result<bool> {
                 );
             }
         }
-        AuthChoice::ApiKey => {
-            if let Err(e) = run_api_key_flow().await {
+        AuthChoice::ApiKey => match run_api_key_flow().await {
+            Ok(saved) => {
+                model_picker_providers = model_picker_providers_after_key(
+                    saved,
+                    std::mem::take(&mut model_picker_providers),
+                );
+            }
+            Err(e) => {
                 eprintln!(
                     "\n  {} API key setup failed: {}",
                     ts::warning_header("⚠"),
@@ -928,7 +946,7 @@ pub async fn run_onboarding() -> Result<bool> {
                     ts::muted("You can try again later with /login or `agi login`.")
                 );
             }
-        }
+        },
         AuthChoice::OtherProviders | AuthChoice::Skip => {
             eprintln!("\n  {} Skipped authentication.", ts::muted("→"));
             eprintln!(
@@ -1166,6 +1184,31 @@ mod local_first_run_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_key_for_a_catalog_provider_offers_that_providers_models() {
+        let defaults = DEFAULT_ONBOARDING_PROVIDERS.to_vec();
+        let keyed = model_catalog::providers()
+            .into_iter()
+            .find(|provider| {
+                crate::auth::is_api_key_provider(provider)
+                    && !DEFAULT_ONBOARDING_PROVIDERS.contains(provider)
+            })
+            .expect("the catalog lists a key provider outside the default picker");
+        assert_eq!(
+            model_picker_providers_after_key(Some(keyed), defaults.clone()),
+            vec![keyed]
+        );
+        assert!(!is_catalog_provider("brave"));
+        assert_eq!(
+            model_picker_providers_after_key(Some("brave"), defaults.clone()),
+            defaults
+        );
+        assert_eq!(
+            model_picker_providers_after_key(None, defaults.clone()),
+            defaults
+        );
+    }
 
     #[test]
     fn the_working_path_abbreviates_the_home_directory() {

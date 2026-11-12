@@ -6,6 +6,7 @@ use anyhow::Result;
 use colored::Colorize;
 use tokio::io::AsyncReadExt;
 
+use crate::file_state::MAX_EDIT_FILE_BYTES;
 use crate::permissions::FilePermissionOperation;
 use crate::terminal_style as ts;
 use crate::terminal_text::sanitize_terminal_text;
@@ -17,9 +18,6 @@ use super::common::{
     validate_file_write_path, MAX_FILE_LINES,
 };
 use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
-
-const MAX_TEXT_READ_BYTES: u64 = 1_000_000;
-const MAX_EDIT_FILE_BYTES: u64 = 2_000_000;
 
 #[derive(Debug, Deserialize)]
 struct MultiEditOp {
@@ -154,11 +152,7 @@ async fn read_editable_text_file(
         .await
         .map_err(|e| format!("Failed to inspect file: {e}"))?;
     if metadata.len() > MAX_EDIT_FILE_BYTES {
-        return Err(format!(
-            "File is too large to edit safely ({} bytes; limit {} bytes). Use a narrower patch or split the file first.",
-            metadata.len(),
-            MAX_EDIT_FILE_BYTES
-        ));
+        return Err(crate::file_state::too_large_to_edit_message(metadata.len()));
     }
     tokio::fs::read_to_string(file_path)
         .await
@@ -593,7 +587,7 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         );
     }
 
-    match read_text_file_limited(file_path, MAX_TEXT_READ_BYTES).await {
+    match read_text_file_limited(file_path, MAX_EDIT_FILE_BYTES).await {
         Ok((contents, byte_truncated)) => {
             if !byte_truncated {
                 crate::file_state::record_file_read(file_path, &contents);
@@ -670,7 +664,7 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
             if byte_truncated {
                 output.push_str(&format!(
                     "\n[truncated: read first {} bytes; file was not marked fully read for editing]",
-                    MAX_TEXT_READ_BYTES
+                    MAX_EDIT_FILE_BYTES
                 ));
             }
 
@@ -1290,6 +1284,9 @@ pub(super) async fn execute_apply_patch(
 
     match crate::apply_patch::apply_git_patch(patch, Some(&cwd)).await {
         Ok(r) => {
+            if r.exit_code == 0 {
+                crate::file_state::record_files_written(&patch_paths);
+            }
             let mut out = String::new();
             if !r.applied.is_empty() {
                 out.push_str(&format!("Applied: {}\n", r.applied.join(", ")));
@@ -1579,7 +1576,7 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
             output_parts.push(format!("--- {} ---\n[File not found]", path_str));
             continue;
         }
-        match read_text_file_limited(&file_path, MAX_TEXT_READ_BYTES).await {
+        match read_text_file_limited(&file_path, MAX_EDIT_FILE_BYTES).await {
             Ok((content, byte_truncated)) => {
                 if !byte_truncated {
                     crate::file_state::record_file_read(&file_path, &content);
@@ -1588,7 +1585,7 @@ pub(super) async fn execute_read_many_files(args: &HashMap<String, String>) -> R
                 let truncated = if byte_truncated {
                     format!(
                         "\n[... truncated at {} bytes; file was not marked fully read for editing]",
-                        MAX_TEXT_READ_BYTES
+                        MAX_EDIT_FILE_BYTES
                     )
                 } else if content.lines().count() > MAX_FILE_LINES {
                     format!("\n[... truncated at {} lines]", MAX_FILE_LINES)
@@ -2346,6 +2343,74 @@ mod tests {
         assert_eq!(
             *seen_kind.lock().expect("seen lock"),
             Some(ApprovalRequestKind::FileWrite { path })
+        );
+    }
+
+    fn edit_args(path: &Path, old: &str, new: &str) -> HashMap<String, String> {
+        HashMap::from([
+            ("path".to_string(), path.display().to_string()),
+            ("old_string".to_string(), old.to_string()),
+            ("new_string".to_string(), new.to_string()),
+        ])
+    }
+
+    #[tokio::test]
+    async fn an_edit_right_after_a_patch_to_the_same_file_is_not_refused_as_stale() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("patched.txt");
+        std::fs::write(&path, "old\n").expect("write file");
+        let read_args = HashMap::from([("path".to_string(), path.display().to_string())]);
+        assert!(execute_read_file(&read_args).await.unwrap().success);
+        let target = format!(
+            "{}/patched.txt",
+            folder_in_the_working_directory(tmp.path())
+        );
+        let patch = HashMap::from([(
+            "patch".to_string(),
+            format!("--- a/{target}\n+++ b/{target}\n@@ -1 +1 @@\n-old\n+new\n"),
+        )]);
+
+        let patched = execute_apply_patch(&patch, false, None, None)
+            .await
+            .unwrap();
+        assert!(patched.success, "{}", patched.output);
+        let edited = execute_edit_file(&edit_args(&path, "new", "newer"), false, None)
+            .await
+            .unwrap();
+
+        assert!(edited.success, "{}", edited.output);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "newer\n");
+    }
+
+    #[tokio::test]
+    async fn a_file_the_edit_tools_accept_can_be_read_and_edited_and_a_larger_one_says_too_large() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let editable = tmp.path().join("generated.txt");
+        let body = format!("{}\n", "x".repeat(99)).repeat(15_000);
+        std::fs::write(&editable, format!("{body}unique-marker\n")).expect("write file");
+        let read_args = HashMap::from([("path".to_string(), editable.display().to_string())]);
+        assert!(execute_read_file(&read_args).await.unwrap().success);
+
+        let edited = execute_edit_file(
+            &edit_args(&editable, "unique-marker", "changed"),
+            false,
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(edited.success, "{}", edited.output);
+
+        let oversized = tmp.path().join("oversized.txt");
+        std::fs::write(&oversized, format!("{}\n", "y".repeat(99)).repeat(25_000))
+            .expect("write file");
+        let refused = execute_edit_file(&edit_args(&oversized, "y", "z"), false, None)
+            .await
+            .unwrap();
+        assert!(!refused.success);
+        assert!(
+            refused.output.contains("too large to edit"),
+            "{}",
+            refused.output
         );
     }
 

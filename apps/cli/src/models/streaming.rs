@@ -949,6 +949,10 @@ fn ollama_cloud_base_url(config: &CliConfig) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
+fn renews_session_before_turn(provider: &Provider) -> bool {
+    matches!(provider, Provider::ManagedCloud)
+}
+
 // ---------------------------------------------------------------------------
 // Streaming completion (main entry point)
 // ---------------------------------------------------------------------------
@@ -988,6 +992,15 @@ pub async fn stream_completion(
         .await?;
         result.via_subscription = true;
         return Ok(result);
+    }
+
+    let renewal = if renews_session_before_turn(provider) {
+        crate::app_server::account::renew_managed_session_if_expiring().await
+    } else {
+        None
+    };
+    if let Some(reason) = renewal {
+        tracing::debug!("[streaming] session renewal before the turn: {reason}");
     }
 
     // ---- Fall through to API key auth ----
@@ -1182,6 +1195,13 @@ pub async fn stream_completion(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_managed_turn_renews_the_session_first() {
+        assert!(renews_session_before_turn(&Provider::ManagedCloud));
+        assert!(!renews_session_before_turn(&Provider::Anthropic));
+        assert!(!renews_session_before_turn(&Provider::Google));
+    }
 
     #[test]
     fn inference_client_selection_preserves_canonical_privacy_boundaries() {

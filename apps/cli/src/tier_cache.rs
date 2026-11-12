@@ -507,6 +507,9 @@ fn write_plan_models_cache(context: &ManagedRequestContext, models: &[String]) {
 /// route is judged, so the first verdict a client asks for reads the plan
 /// rather than the bundled vendor rule.
 pub async fn ensure_plan_models_cached() {
+    if !plan_models_fetch_admitted(crate::account_privacy_mode()) {
+        return;
+    }
     let Ok(context) = ManagedRequestContext::capture() else {
         return;
     };
@@ -519,6 +522,10 @@ pub async fn ensure_plan_models_cached() {
         return;
     }
     refresh_plan_models_cache(&context).await;
+}
+
+fn plan_models_fetch_admitted(privacy: crate::platform::runtime::session::PrivacyMode) -> bool {
+    crate::cloud::CloudClient::admit(privacy).is_ok()
 }
 
 async fn refresh_plan_models_cache(context: &ManagedRequestContext) {
@@ -1398,5 +1405,13 @@ mod tests {
         let back: TierCacheEnvelope = toml::from_str(&serialized).expect("should deserialize");
         assert_eq!(back.tier, "pro");
         assert_eq!(back.cached_at, 1_746_000_000);
+    }
+
+    #[test]
+    fn only_a_managed_session_fetches_the_plan_model_list() {
+        use crate::platform::runtime::session::PrivacyMode;
+        assert!(!plan_models_fetch_admitted(PrivacyMode::Local));
+        assert!(!plan_models_fetch_admitted(PrivacyMode::Byok));
+        assert!(plan_models_fetch_admitted(PrivacyMode::Managed));
     }
 }

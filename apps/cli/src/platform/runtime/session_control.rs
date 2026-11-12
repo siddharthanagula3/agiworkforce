@@ -11,7 +11,7 @@ use crate::models::Message;
 
 use super::session::{
     validate_managed_session_id, ManagedSession, ManagedSessionAutoRouting,
-    ManagedSessionForkMetadata, ManagedSessionRoutingAuthority,
+    ManagedSessionForkMetadata, ManagedSessionRoutingAuthority, SESSION_KEPT_COPY_MARKER,
 };
 
 /// Subdirectory under the CLI config directory where managed sessions live.
@@ -531,6 +531,34 @@ pub fn checkpoint_dir(session_path: &Path) -> PathBuf {
     session_path.with_file_name(name)
 }
 
+/// The copies kept beside `session_path` when two writers collided on it,
+/// oldest name first. Each holds turns the session file does not, and each
+/// opens with `agi --resume <path>`.
+pub fn kept_copies_of(session_path: &Path) -> Vec<PathBuf> {
+    let (Some(dir), Some(file_name)) = (
+        session_path.parent(),
+        session_path.file_name().and_then(|name| name.to_str()),
+    ) else {
+        return Vec::new();
+    };
+    let prefix = format!("{file_name}{SESSION_KEPT_COPY_MARKER}");
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut copies: Vec<PathBuf> = entries
+        .flatten()
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.starts_with(&prefix))
+        })
+        .map(|entry| entry.path())
+        .collect();
+    copies.sort();
+    copies
+}
+
 /// Delete a session file together with what is kept beside it: its writer
 /// lease and any copy set aside when two writers collided on it.
 fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference) -> Result<()> {
@@ -557,7 +585,7 @@ fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference
         "{file_name}.{}",
         super::writer_lease::WRITER_LEASE_ARBITER_EXTENSION
     );
-    let conflict_prefix = format!("{file_name}.conflict-");
+    let conflict_prefix = format!("{file_name}{SESSION_KEPT_COPY_MARKER}");
     let Some(dir) = resolved.path.parent() else {
         return Ok(());
     };
@@ -1004,6 +1032,23 @@ mod tests {
             after_unarchive.summary.archived_at.is_none(),
             "unarchive must clear archived_at"
         );
+    }
+
+    #[test]
+    fn the_copies_kept_beside_a_session_are_its_own_and_no_neighbour_s() {
+        let temp_dir = tempdir().unwrap();
+        seed_session(temp_dir.path(), "shared-1a2b");
+        seed_session(temp_dir.path(), "shared-1a2b-other");
+        let dir = managed_session_dir_in(temp_dir.path());
+        let own = dir.join("shared-1a2b.jsonl.conflict-abc123");
+        std::fs::write(&own, "kept").unwrap();
+        std::fs::write(dir.join("shared-1a2b-other.jsonl.conflict-def456"), "kept").unwrap();
+
+        assert_eq!(
+            super::kept_copies_of(&dir.join("shared-1a2b.jsonl")),
+            vec![own]
+        );
+        assert!(super::kept_copies_of(&dir.join("missing.jsonl")).is_empty());
     }
 
     #[test]

@@ -134,6 +134,7 @@ mod tests {
             cache_creation_tokens: 0,
             cost_usd: 0.0125,
             via_subscription: false,
+            managed_request_ids: Vec::new(),
         }
     }
 

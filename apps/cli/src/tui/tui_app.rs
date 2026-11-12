@@ -5913,7 +5913,6 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .map(|registry| registry.list())
                 .unwrap_or_default();
             let configured = crate::mcp::McpManager::load_configs().unwrap_or_default();
-            let tokens = crate::mcp::McpOAuthStore::load().unwrap_or_default();
             let mut names: Vec<String> = configured
                 .keys()
                 .cloned()
@@ -5928,15 +5927,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     let tool_count = tools.iter().filter(|tool| &tool.server_name == name).count();
                     let disabled = registry.iter().any(|row| &row.name == name && !row.enabled);
                     let signed_out_remote = configured.get(name).is_some_and(|config| {
-                        match config.as_transport() {
-                            crate::mcp::McpTransport::Http { url, .. }
-                            | crate::mcp::McpTransport::Sse { url, .. } => {
-                                tokens.get(&url).is_none()
-                                    && tokens.get(url.trim_end_matches('/')).is_none()
-                            }
-                            crate::mcp::McpTransport::Stdio { .. } => false,
-                        }
+                        crate::mcp::credential_state(config)
+                            == crate::mcp::McpCredentialState::NeedsAuth
                     });
+                    let connected = app
+                        .session
+                        .mcp_manager
+                        .as_ref()
+                        .is_some_and(|manager| manager.has_server(name));
                     let status = if disabled {
                         McpStatus::Disabled
                     } else if configured
@@ -5945,7 +5943,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         .is_some()
                     {
                         McpStatus::Blocked
-                    } else if tool_count > 0 {
+                    } else if tool_count > 0 || connected {
                         McpStatus::Connected
                     } else if signed_out_remote {
                         McpStatus::NeedsAuth
@@ -6856,6 +6854,7 @@ pub async fn run(
     // OAUTH_INTERACTIVE_TIMEOUT. The event loop injects the manager once it is
     // ready; until then turns run without MCP tools.
     let mcp_elicitation_handler = Arc::new(crate::mcp::tui_handler::TuiElicitationHandler::new());
+    mcp_config_options.remember_for_restart();
     let mut mcp_attach_join: Option<tokio::task::JoinHandle<Option<crate::mcp::McpManager>>> = {
         let opts = mcp_config_options.clone();
         let privacy_mode = session.privacy_mode;
@@ -6873,11 +6872,11 @@ pub async fn run(
             {
                 Ok(mgr) => mgr,
                 Err(e) => {
-                    // Background task during a live TUI: a raw stderr warning
-                    // would corrupt the alternate screen. Swallow it here; the
-                    // user can inspect MCP state via `/mcp`.
-                    if !crate::tui::tui_active() {
-                        crate::output::print_warn(&format!("MCP config/connect error: {e:#}"));
+                    let notice = format!("MCP config/connect error: {e:#}");
+                    if crate::tui::tui_active() {
+                        crate::tui::push_tui_notice(notice);
+                    } else {
+                        crate::output::print_warn(&notice);
                     }
                     None
                 }
@@ -7612,13 +7611,10 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::RunLogout => {
-                                let text =
-                                    match crate::app_server::account::sign_out_of_every_provider()
-                                        .await
-                                    {
-                                        Ok(signed_out) => signed_out.message(),
-                                        Err(error) => format!("Could not log out: {error:#}"),
-                                    };
+                                let text = match crate::sign_out_of_account_keeping_keys().await {
+                                    Ok(message) => message,
+                                    Err(error) => format!("Could not log out: {error:#}"),
+                                };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
@@ -12919,7 +12915,8 @@ mod tests {
             },
             "Allow this command?",
             vec!["cargo test".to_string()],
-        );
+        )
+        .saving_always_allow(true);
         let overlay = approval_overlay_for(&request);
         assert!(!overlay.always_allow_unavailable);
         let mut terminal =

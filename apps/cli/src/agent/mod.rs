@@ -199,6 +199,7 @@ impl SystemPromptParts {
             .map(|home| {
                 crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
                     home,
+                    self.memory_cwd.as_deref(),
                     privacy_mode,
                     memory_nonce,
                 )
@@ -2117,7 +2118,7 @@ impl AgentSession {
                 Ok(LeaseClaim::HeldBy(holder)) => (
                     holder.holder_id.clone(),
                     format!(
-                        "{} is also writing this session. Both copies of the conversation are kept, but neither sees the other's turns until the session is resumed again. /control take makes this terminal the writer.",
+                        "{} is also writing this session. Neither process sees the other's turns. When one saves over the other, the version it replaces is kept in a copy beside the session, and agi history lists that copy with the command that opens it. /control take makes this terminal the writer.",
                         holder.holder_label
                     ),
                 ),
@@ -2615,6 +2616,7 @@ impl AgentSession {
         let home = CliConfig::config_dir()?;
         crate::memory_pipeline::MemoryPipeline::extract_session_summary(
             &home,
+            self.system_prompt_parts.memory_cwd.as_deref(),
             &self.runtime_session_id,
             unextracted,
             config,
@@ -4097,6 +4099,7 @@ mod tests {
         std::fs::write(memories.join("managed_memories.md"), "- managed fact").expect("managed");
         let memory = crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
             home.path(),
+            None,
             privacy,
             &session.memory_nonce,
         );
@@ -4264,6 +4267,50 @@ mod tests {
         assert!(!managed.contains("byok fact"), "{managed}");
         assert_eq!(session.memory_from_outside(PrivacyMode::Managed), None);
         assert_eq!(session.messages.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn memory_learned_in_one_project_reaches_only_sessions_in_that_project() {
+        let home = tempfile::tempdir().expect("memory home");
+        let project = tempfile::tempdir().expect("project");
+        let other = tempfile::tempdir().expect("other project");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.memory_enabled = true;
+        session.system_prompt_parts.memory_cwd = Some(project.path().to_path_buf());
+        session.messages.push(Message::text(
+            "user",
+            "I always deploy this client with the blue pipeline.",
+        ));
+        session
+            .messages
+            .push(Message::text("assistant", "Understood."));
+
+        crate::memory_pipeline::MemoryPipeline::extract_session_summary(
+            home.path(),
+            session.system_prompt_parts.memory_cwd.as_deref(),
+            &session.runtime_session_id,
+            &session.messages,
+            &CliConfig::default(),
+            None,
+        )
+        .await
+        .expect("summary");
+        crate::memory_pipeline::MemoryPipeline::consolidate(
+            home.path(),
+            &CliConfig::default(),
+            None,
+        )
+        .await
+        .expect("consolidate");
+
+        session.rebuild_system_message_for(PrivacyMode::Local, Some(home.path()));
+        let here = session.messages[0].text_content();
+        assert!(here.contains("blue pipeline"), "{here}");
+
+        session.system_prompt_parts.memory_cwd = Some(other.path().to_path_buf());
+        session.rebuild_system_message_for(PrivacyMode::Local, Some(home.path()));
+        let elsewhere = session.messages[0].text_content();
+        assert!(!elsewhere.contains("blue pipeline"), "{elsewhere}");
     }
 
     #[test]

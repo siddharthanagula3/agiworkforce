@@ -43,7 +43,7 @@ use crate::models::{ContentBlock, Message, MessageContent};
 use crate::runtime::session::{
     validate_managed_session_id, validate_summary_text, ManagedSession,
     MANAGED_SESSION_CWD_MAX_UTF16, MANAGED_SESSION_JSONL_EXTENSION,
-    MANAGED_SESSION_MODEL_MAX_UTF16, MANAGED_SESSION_TITLE_MAX_UTF16,
+    MANAGED_SESSION_MODEL_MAX_UTF16, MANAGED_SESSION_TITLE_MAX_UTF16, SESSION_KEPT_COPY_MARKER,
 };
 use crate::runtime::session_control::{ManagedSessionReference, MANAGED_SESSION_DIR_NAME};
 
@@ -765,6 +765,87 @@ pub fn list_sessions(conn: &Connection, limit: usize) -> Result<Vec<SessionSumma
     list_sessions_in(&conn.base_dir, limit)
 }
 
+fn same_folder(left: &Path, right: &Path) -> bool {
+    let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    canonical(left) == canonical(right)
+}
+
+/// The newest unarchived session whose workspace is `folder`.
+pub fn latest_session_in_folder(conn: &Connection, folder: &Path) -> Result<Option<String>> {
+    Ok(load_all_sessions(&conn.base_dir)?
+        .into_iter()
+        .filter(|(_, session, _)| session.archived_at.is_none())
+        .find(|(_, session, metadata)| {
+            session
+                .workspace_root
+                .clone()
+                .or_else(|| {
+                    metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.cwd.as_ref())
+                        .map(PathBuf::from)
+                })
+                .is_some_and(|root| same_folder(&root, folder))
+        })
+        .map(|(_, session, _)| session.session_id))
+}
+
+/// The copies kept beside each session file when two processes saved it at
+/// once, by session id. Each holds turns the session file does not.
+fn kept_copies_in(base_dir: &Path) -> HashMap<String, Vec<PathBuf>> {
+    let mut copies: HashMap<String, Vec<PathBuf>> = HashMap::new();
+    let Ok(entries) = fs::read_dir(managed_sessions_dir(base_dir)) else {
+        return copies;
+    };
+    for path in entries.flatten().map(|entry| entry.path()) {
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let Some((session_file, _)) = name.rsplit_once(SESSION_KEPT_COPY_MARKER) else {
+            continue;
+        };
+        let Some(session_id) = session_file
+            .strip_suffix(&format!(".{MANAGED_SESSION_JSONL_EXTENSION}"))
+            .or_else(|| session_file.strip_suffix(".json"))
+        else {
+            continue;
+        };
+        copies
+            .entry(session_id.to_string())
+            .or_default()
+            .push(path.clone());
+    }
+    for paths in copies.values_mut() {
+        paths.sort();
+    }
+    copies
+}
+
+pub fn kept_copies(conn: &Connection, session_id: &str) -> Vec<PathBuf> {
+    kept_copies_in(&conn.base_dir)
+        .remove(session_id)
+        .unwrap_or_default()
+}
+
+fn kept_copy_lines(copies: &[PathBuf], indent: &str) -> String {
+    copies
+        .iter()
+        .map(|copy| {
+            format!(
+                "{indent}Turns saved by another agi process were kept apart. Open them with: agi --resume {}\n",
+                crate::sandbox::shell_quote(&copy.to_string_lossy())
+            )
+        })
+        .collect()
+}
+
+/// What to tell a person resuming `session_id` when another process's turns
+/// were kept beside it, or `None` when there are none.
+pub fn kept_copies_notice(conn: &Connection, session_id: &str) -> Option<String> {
+    let copies = kept_copies(conn, session_id);
+    (!copies.is_empty()).then(|| kept_copy_lines(&copies, "").trim_end().to_string())
+}
+
 /// Load all messages for a managed session in chronological order.
 pub fn load_session(conn: &Connection, session_id: &str) -> Result<Vec<Message>> {
     let path = resolve_reference_path(&conn.base_dir, session_id)?;
@@ -907,13 +988,63 @@ fn is_unfinished_import(existing: &[Message], legacy: &[Message]) -> bool {
         })
 }
 
-/// Import legacy JSON conversations into the managed session store.
-pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<usize> {
-    if !json_dir.exists() {
-        return Ok(0);
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct MigrationReport {
+    pub resumable: usize,
+    pub history_only: usize,
+}
+
+impl MigrationReport {
+    pub fn imported(&self) -> usize {
+        self.resumable + self.history_only
     }
 
-    let mut imported = 0usize;
+    pub fn message(&self) -> String {
+        let mut parts = Vec::new();
+        if self.resumable > 0 {
+            parts.push(format!(
+                "Migrated {} conversation(s) that ran on a model on this device; resume them with agi --resume <id>.",
+                self.resumable
+            ));
+        }
+        if self.history_only > 0 {
+            parts.push(format!(
+                "Kept {} conversation(s) as history only: they show in agi history and agi --search, and cannot be resumed, because they do not record which provider and privacy mode they ran on. Start a new session to continue that work.",
+                self.history_only
+            ));
+        }
+        if parts.is_empty() {
+            "No new conversations to migrate.".to_string()
+        } else {
+            parts.join("\n")
+        }
+    }
+}
+
+/// The route a legacy conversation may be resumed on: only a model this
+/// device runs, because a legacy file does not record whether a hosted model
+/// ran on the person's own key or on AGI cloud, and resuming would choose
+/// that trust boundary for them.
+fn local_route_for_legacy_model(
+    model: &str,
+) -> Option<crate::platform::runtime::session::ManagedSessionRoutingAuthority> {
+    let provider = crate::models::resolve_selected_provider(model, None).ok()?;
+    (crate::agent::provider_privacy_mode(&provider)
+        == crate::platform::runtime::session::PrivacyMode::Local)
+        .then(
+            || crate::platform::runtime::session::ManagedSessionRoutingAuthority {
+                privacy_mode: crate::platform::runtime::session::PrivacyMode::Local,
+                provider: crate::models::provider_persistence_name(&provider),
+            },
+        )
+}
+
+/// Import legacy JSON conversations into the managed session store.
+pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<MigrationReport> {
+    let mut report = MigrationReport::default();
+    if !json_dir.exists() {
+        return Ok(report);
+    }
 
     for entry in fs::read_dir(json_dir)
         .with_context(|| format!("Cannot read {}", json_dir.display()))?
@@ -980,12 +1111,22 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<
         let model = json
             .get("model")
             .and_then(|value| value.as_str())
-            .unwrap_or("unknown");
+            .map(str::trim)
+            .filter(|model| !model.is_empty());
         let mut metadata = read_metadata(&conn.base_dir, session_id)?.unwrap_or_default();
         metadata.title = Some(title.to_string());
         metadata.custom_title = true;
-        metadata.model = Some(model.to_string());
+        metadata.model = Some(model.unwrap_or("unknown").to_string());
         write_metadata(&conn.base_dir, session_id, &metadata)?;
+
+        let route = model.and_then(|model| {
+            local_route_for_legacy_model(model).map(|route| (model.to_string(), route))
+        });
+        let resumable = route.is_some();
+        if let Some((model, route)) = route {
+            session.model = Some(model);
+            session.routing_authority = Some(route);
+        }
 
         let already_imported = session.messages.len();
         for message in legacy_messages.into_iter().skip(already_imported) {
@@ -994,10 +1135,14 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<
         session.touch();
         save_session_to_default_path(&conn.base_dir, &session)?;
 
-        imported += 1;
+        if resumable {
+            report.resumable += 1;
+        } else {
+            report.history_only += 1;
+        }
     }
 
-    Ok(imported)
+    Ok(report)
 }
 
 /// Group sessions by date bucket: "Today", "Yesterday", "This Week", or a date string.
@@ -1032,6 +1177,22 @@ pub fn date_group_sessions(sessions: &[SessionSummary]) -> Vec<(String, Vec<&Ses
 
 /// Format a session list for terminal output, grouped by date.
 pub fn format_session_list(sessions: &[SessionSummary]) -> String {
+    format_session_rows(sessions, &HashMap::new())
+}
+
+/// [`format_session_list`], with each session followed by the copies kept
+/// beside it when two processes saved it at once.
+pub fn format_session_list_with_kept_copies(
+    conn: &Connection,
+    sessions: &[SessionSummary],
+) -> String {
+    format_session_rows(sessions, &kept_copies_in(&conn.base_dir))
+}
+
+fn format_session_rows(
+    sessions: &[SessionSummary],
+    kept: &HashMap<String, Vec<PathBuf>>,
+) -> String {
     if sessions.is_empty() {
         return "No sessions found.".to_string();
     }
@@ -1054,6 +1215,9 @@ pub fn format_session_list(sessions: &[SessionSummary]) -> String {
                     &session.model
                 },
             ));
+            if let Some(copies) = kept.get(&session.id) {
+                out.push_str(&kept_copy_lines(copies, "      "));
+            }
         }
     }
 
@@ -1682,8 +1846,121 @@ mod tests {
         .unwrap();
 
         let imported = migrate_json_conversations(&conn, &conversations_dir).unwrap();
-        assert_eq!(imported, 1);
+        assert_eq!(
+            imported,
+            MigrationReport {
+                resumable: 0,
+                history_only: 1
+            }
+        );
         assert_eq!(list_sessions(&conn, 10).unwrap()[0].id, "legacy-session");
+        assert!(
+            imported.message().contains("cannot be resumed"),
+            "{}",
+            imported.message()
+        );
+        let session = load_managed_session_from_path(
+            &find_session_path(&conn.base_dir, "legacy-session").unwrap(),
+        )
+        .unwrap();
+        assert!(session.require_routing_authority().is_err());
+    }
+
+    #[test]
+    fn a_migrated_conversation_that_ran_on_this_device_can_be_resumed() {
+        let (tempdir, conn) = temp_connection();
+        let conversations_dir = tempdir.path().join("conversations");
+        fs::create_dir_all(&conversations_dir).unwrap();
+        fs::write(
+            conversations_dir.join("on-device.json"),
+            serde_json::json!({
+                "id": "on-device",
+                "title": "Local work",
+                "model": "fixture-local-model:latest",
+                "messages": [
+                    { "role": "user", "content": "Hello" },
+                    { "role": "assistant", "content": "Hi" }
+                ]
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let report = migrate_json_conversations(&conn, &conversations_dir).unwrap();
+
+        assert_eq!(report.resumable, 1);
+        assert_eq!(report.history_only, 0);
+        let session =
+            ManagedSession::load_from_path(find_session_path(&conn.base_dir, "on-device").unwrap())
+                .unwrap();
+        let model = session.require_model().unwrap();
+        let authority = session.require_routing_authority().unwrap();
+        assert_eq!(
+            authority.privacy_mode,
+            crate::platform::runtime::session::PrivacyMode::Local
+        );
+        crate::agent::resolve_persisted_session_provider(model, authority, "on-device")
+            .expect("the resumed session's provider matches its model and boundary");
+    }
+
+    #[test]
+    fn copies_kept_when_two_processes_saved_a_session_are_named_in_the_listing() {
+        let (_tempdir, conn) = temp_connection();
+        save_session(&conn, "shared", "Two terminals", "", "/", "").unwrap();
+        save_message(&conn, "shared", &Message::text("user", "mine"), 0).unwrap();
+        let path = find_session_path(&conn.base_dir, "shared").unwrap();
+        let mut first = load_managed_session_from_path(&path).unwrap();
+        let mut second = load_managed_session_from_path(&path).unwrap();
+        first.push_message(Message::text("assistant", "from the first terminal"));
+        first.save_to_path(&path).unwrap();
+        second.push_message(Message::text("assistant", "from the second terminal"));
+        second.save_to_path(&path).unwrap();
+
+        let copies = kept_copies(&conn, "shared");
+        assert_eq!(copies.len(), 1, "{copies:?}");
+        let kept = ManagedSession::load_from_path(&copies[0]).unwrap();
+        assert!(kept
+            .messages
+            .iter()
+            .any(|message| message.text_content() == "from the first terminal"));
+
+        let listing =
+            format_session_list_with_kept_copies(&conn, &list_sessions(&conn, 10).unwrap());
+        let copy = copies[0].to_string_lossy();
+        assert!(listing.contains(&*copy), "{listing}");
+        assert!(listing.contains("agi --resume"), "{listing}");
+        assert!(kept_copies_notice(&conn, "shared").is_some_and(|notice| notice.contains(&*copy)));
+        assert_eq!(kept_copies_notice(&conn, "unrelated"), None);
+        assert!(!format_session_list(&list_sessions(&conn, 10).unwrap()).contains("agi --resume"));
+    }
+
+    #[test]
+    fn the_latest_session_of_a_folder_ignores_newer_sessions_of_other_folders() {
+        let (_tempdir, conn) = temp_connection();
+        let here = tempdir().unwrap();
+        let elsewhere = tempdir().unwrap();
+        save_session(&conn, "here", "", "", &here.path().to_string_lossy(), "").unwrap();
+        save_message(&conn, "here", &Message::text("user", "work here"), 0).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        save_session(
+            &conn,
+            "elsewhere",
+            "",
+            "",
+            &elsewhere.path().to_string_lossy(),
+            "",
+        )
+        .unwrap();
+        save_message(&conn, "elsewhere", &Message::text("user", "work there"), 0).unwrap();
+
+        assert_eq!(
+            latest_session_in_folder(&conn, here.path())
+                .unwrap()
+                .as_deref(),
+            Some("here")
+        );
+        let empty = tempdir().unwrap();
+        assert_eq!(latest_session_in_folder(&conn, empty.path()).unwrap(), None);
     }
 
     fn write_legacy_conversation(dir: &Path, id: &str, turns: &[(&str, &str)]) {
@@ -1719,7 +1996,8 @@ mod tests {
         let imported = migrate_json_conversations(&conn, &conversations_dir).unwrap();
 
         assert_eq!(
-            imported, 1,
+            imported.imported(),
+            1,
             "a prefix left by an interrupted run is not a finished import"
         );
         assert_eq!(
@@ -1730,7 +2008,9 @@ mod tests {
                 .collect::<Vec<_>>()
         );
         assert_eq!(
-            migrate_json_conversations(&conn, &conversations_dir).unwrap(),
+            migrate_json_conversations(&conn, &conversations_dir)
+                .unwrap()
+                .imported(),
             0,
             "a completed import is not imported twice"
         );
@@ -1757,7 +2037,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            migrate_json_conversations(&conn, &conversations_dir).unwrap(),
+            migrate_json_conversations(&conn, &conversations_dir)
+                .unwrap()
+                .imported(),
             0
         );
         assert_eq!(

@@ -139,6 +139,70 @@ pub struct TeamManager {
     transcript: Arc<RwLock<Vec<TeamMessage>>>,
     sent: Arc<AtomicU64>,
     stops: Arc<RwLock<HashMap<String, Arc<AtomicBool>>>>,
+    spend: Arc<std::sync::Mutex<TeamSpend>>,
+}
+
+#[derive(Debug, Default)]
+struct TeamSpend {
+    total_usd: f64,
+    unsettled: Vec<crate::subagent::SubagentUsage>,
+    budget: Option<TeamBudget>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TeamBudget {
+    headroom_usd: f64,
+    spent_at_usd: f64,
+}
+
+struct SpendMark {
+    cost_usd: f64,
+    input_tokens: u32,
+    output_tokens: u32,
+    cache_read_tokens: u32,
+    cache_creation_tokens: u32,
+}
+
+impl SpendMark {
+    fn of(session: &crate::agent::AgentSession) -> Self {
+        Self {
+            cost_usd: session.cost_ledger.total_usd,
+            input_tokens: session.total_input_tokens,
+            output_tokens: session.total_output_tokens,
+            cache_read_tokens: session.total_cache_read_tokens,
+            cache_creation_tokens: session.total_cache_creation_tokens,
+        }
+    }
+
+    fn cost_since(&self, session: &crate::agent::AgentSession) -> f64 {
+        (session.cost_ledger.total_usd - self.cost_usd).max(0.0)
+    }
+
+    fn usage_since(
+        &self,
+        model: &str,
+        session: &crate::agent::AgentSession,
+    ) -> Option<crate::subagent::SubagentUsage> {
+        let now = Self::of(session);
+        let usage = crate::subagent::SubagentUsage {
+            model: model.to_string(),
+            input_tokens: now.input_tokens.saturating_sub(self.input_tokens),
+            output_tokens: now.output_tokens.saturating_sub(self.output_tokens),
+            cache_read_tokens: now.cache_read_tokens.saturating_sub(self.cache_read_tokens),
+            cache_creation_tokens: now
+                .cache_creation_tokens
+                .saturating_sub(self.cache_creation_tokens),
+            cost_usd: self.cost_since(session),
+            via_subscription: false,
+            managed_request_ids: Vec::new(),
+        };
+        let spent = usage.input_tokens > 0
+            || usage.output_tokens > 0
+            || usage.cache_read_tokens > 0
+            || usage.cache_creation_tokens > 0
+            || usage.cost_usd > 0.0;
+        spent.then_some(usage)
+    }
 }
 
 pub struct TeammateLaunch {
@@ -175,7 +239,54 @@ impl TeamManager {
             transcript: Arc::new(RwLock::new(Vec::new())),
             sent: Arc::new(AtomicU64::new(0)),
             stops: Arc::new(RwLock::new(HashMap::new())),
+            spend: Arc::default(),
         }
+    }
+
+    fn spend(&self) -> std::sync::MutexGuard<'_, TeamSpend> {
+        self.spend
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    pub fn set_budget_headroom(&self, headroom_usd: Option<f64>) {
+        let mut spend = self.spend();
+        let spent_at_usd = spend.total_usd;
+        spend.budget = headroom_usd.map(|headroom_usd| TeamBudget {
+            headroom_usd,
+            spent_at_usd,
+        });
+    }
+
+    pub(crate) fn record_teammate_spend(&self, usage: crate::subagent::SubagentUsage) {
+        let mut spend = self.spend();
+        if usage.cost_usd.is_finite() && usage.cost_usd > 0.0 {
+            spend.total_usd += usage.cost_usd;
+        }
+        spend.unsettled.push(usage);
+    }
+
+    pub fn settle_spend_into(&self, ledger: &mut crate::cost_ledger::CostLedger) -> f64 {
+        let unsettled = std::mem::take(&mut self.spend().unsettled);
+        unsettled
+            .iter()
+            .map(|usage| ledger.record_subagent_run(&usage.model, usage.cost_usd))
+            .sum()
+    }
+
+    pub(crate) fn turn_budget_usd(
+        &self,
+        sharers: usize,
+    ) -> Result<Option<f64>, crate::cost_ledger::CostBudget> {
+        let spend = self.spend();
+        let Some(budget) = spend.budget else {
+            return Ok(None);
+        };
+        let pool = crate::cost_ledger::CostBudget::new(
+            budget.headroom_usd,
+            spend.total_usd - budget.spent_at_usd,
+        );
+        pool.child_cap_usd(sharers.max(1)).map(Some).ok_or(pool)
     }
 
     /// Register or spawn a new teammate with a given name, role, and prompt context.
@@ -305,6 +416,7 @@ impl TeamManager {
         }
         self.spawn_teammate(&launch.name, &launch.role, &launch.prompt)
             .await?;
+        self.set_budget_headroom(launch.max_budget_usd);
         let stop = Arc::new(AtomicBool::new(false));
         self.stops
             .write()
@@ -588,7 +700,6 @@ async fn run_teammate(team: TeamManager, launch: TeammateLaunch, stop: Arc<Atomi
     session.permission_mode = launch.permission_mode;
     session.quiet = true;
     session.subagent_depth = 1;
-    session.max_budget_usd = launch.max_budget_usd;
     session.allowed_tools = launch.allowed_tools.clone();
     session
         .disallowed_tools
@@ -612,8 +723,32 @@ async fn run_teammate(team: TeamManager, launch: TeammateLaunch, stop: Arc<Atomi
     loop {
         team.update_teammate_status(&name, TeammateStatus::Active)
             .await;
+        let sharers = team
+            .list_teammates()
+            .await
+            .iter()
+            .filter(|teammate| teammate.status != TeammateStatus::Completed)
+            .count();
+        match team.turn_budget_usd(sharers) {
+            Ok(cap) => session.max_budget_usd = cap,
+            Err(budget) => {
+                let _ = team
+                    .send_message(
+                        &name,
+                        LEAD,
+                        &format!(
+                            "I stopped: the team has used {} of the {} the spend cap left it.",
+                            crate::cost_ledger::format_usd_as_credits(budget.spent_usd),
+                            crate::cost_ledger::format_usd_as_credits(budget.cap_usd)
+                        ),
+                    )
+                    .await;
+                break;
+            }
+        }
         let model = session.model.clone();
         let prompt_chars = prompt.chars().count();
+        let mark = SpendMark::of(&session);
         let turn = {
             let send = session.send(&launch.config, &prompt, Box::new(|_chunk| {}));
             tokio::pin!(send);
@@ -624,19 +759,26 @@ async fn run_teammate(team: TeamManager, launch: TeammateLaunch, stop: Arc<Atomi
             }
         };
         let Some(result) = turn else {
+            if let Some(usage) = mark.usage_since(&model, &session) {
+                team.record_teammate_spend(usage);
+            }
             break;
         };
         let (status, usage, report) = match result {
-            Ok(turn) => (
-                crate::subagent::SubagentStatus::Completed,
-                Some(crate::subagent::SubagentUsage::from_turn(&model, &turn)),
-                turn.response,
-            ),
+            Ok(turn) => {
+                let mut usage = crate::subagent::SubagentUsage::from_turn(&model, &turn);
+                usage.cost_usd = usage.cost_usd.max(mark.cost_since(&session));
+                (
+                    crate::subagent::SubagentStatus::Completed,
+                    Some(usage),
+                    turn.response,
+                )
+            }
             Err(error) => {
                 let message = format!("{error:#}");
                 (
                     crate::subagent::SubagentStatus::Failed(message.clone()),
-                    None,
+                    mark.usage_since(&model, &session),
                     format!("My turn failed: {message}"),
                 )
             }
@@ -651,6 +793,9 @@ async fn run_teammate(team: TeamManager, launch: TeammateLaunch, stop: Arc<Atomi
             usage: usage.as_ref(),
             files_modified: 0,
         });
+        if let Some(usage) = usage {
+            team.record_teammate_spend(usage);
+        }
         let report = if report.trim().is_empty() {
             "I finished without a reply.".to_string()
         } else {
@@ -1039,6 +1184,79 @@ pub async fn execute_list_teammates(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn charged(cost_usd: f64) -> crate::subagent::SubagentUsage {
+        crate::subagent::SubagentUsage {
+            model: "teammate-model".to_string(),
+            output_tokens: 10,
+            cost_usd,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn teammate_turns_reach_the_leads_cost_once() {
+        let team = TeamManager::new();
+        team.record_teammate_spend(charged(0.25));
+        team.record_teammate_spend(charged(0.5));
+        let mut lead = crate::cost_ledger::CostLedger {
+            total_usd: 1.0,
+            ..Default::default()
+        };
+
+        let settled = team.settle_spend_into(&mut lead);
+
+        assert!((settled - 0.75).abs() < 1e-12);
+        assert!((lead.total_usd - 1.75).abs() < 1e-12);
+        assert!((lead.subagent_usd - 0.75).abs() < 1e-12);
+        assert_eq!(lead.subagent_runs, 2);
+        assert!(team.settle_spend_into(&mut lead).abs() < 1e-12);
+        assert!((lead.total_usd - 1.75).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_spend_cap_holds_across_the_whole_team() {
+        let team = TeamManager::new();
+        assert_eq!(team.turn_budget_usd(3), Ok(None));
+        team.record_teammate_spend(charged(5.0));
+        team.set_budget_headroom(Some(2.0));
+
+        let share = team.turn_budget_usd(2).expect("headroom left");
+        assert!((share.expect("a capped share") - 1.0).abs() < 1e-12);
+        team.record_teammate_spend(charged(1.5));
+        let share = team.turn_budget_usd(2).expect("headroom left");
+        assert!((share.expect("a capped share") - 0.25).abs() < 1e-12);
+        team.record_teammate_spend(charged(0.6));
+        let exhausted = team
+            .turn_budget_usd(2)
+            .expect_err("the team spent its headroom");
+        assert!((exhausted.cap_usd - 2.0).abs() < 1e-12);
+        assert!((exhausted.spent_usd - 2.1).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_failed_teammate_turn_still_reports_what_it_spent() {
+        let mut session = crate::agent::AgentSession::new(
+            crate::model_catalog::default_model(),
+            &crate::context::gather_system_context(),
+            None,
+        );
+        session.cost_ledger.total_usd = 0.4;
+        session.total_input_tokens = 100;
+        let mark = SpendMark::of(&session);
+        assert_eq!(mark.usage_since("teammate-model", &session), None);
+
+        session.cost_ledger.total_usd = 0.65;
+        session.total_input_tokens = 900;
+        session.total_output_tokens = 30;
+        let usage = mark
+            .usage_since("teammate-model", &session)
+            .expect("requests made before the failure are spend");
+        assert_eq!(usage.input_tokens, 800);
+        assert_eq!(usage.output_tokens, 30);
+        assert!((usage.cost_usd - 0.25).abs() < 1e-12);
+        assert!((mark.cost_since(&session) - 0.25).abs() < 1e-12);
+    }
 
     #[tokio::test]
     async fn test_spawn_teammate() {

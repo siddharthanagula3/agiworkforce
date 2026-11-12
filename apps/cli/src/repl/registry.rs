@@ -1059,11 +1059,7 @@ pub(super) fn handle_migrate() {
     };
 
     match sessions::migrate_json_conversations(&conn, &conv_dir) {
-        Ok(0) => output::print_info("No new conversations to migrate."),
-        Ok(n) => output::print_info(&format!(
-            "Migrated {} conversation(s) into managed sessions.",
-            n
-        )),
+        Ok(report) => output::print_info(&report.message()),
         Err(e) => output::print_error(&format!("Migration failed: {:#}", e)),
     }
 }
@@ -1643,7 +1639,7 @@ pub async fn mcp_for_display(arg: &str, session: &mut AgentSession) -> CommandOu
         "restart" | "reload" | "test" => {
             match crate::attach_mcp_manager_for_session(
                 session,
-                &crate::mcp::McpConfigLoadOptions::default(),
+                &crate::mcp::McpConfigLoadOptions::for_restart(),
                 true,
                 true,
             )

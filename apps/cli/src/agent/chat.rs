@@ -1054,6 +1054,20 @@ impl AgentSession {
         result
     }
 
+    pub(crate) fn settle_team_spend(&mut self) {
+        let Some(team) = self
+            .team_manager
+            .clone()
+            .filter(|_| self.team_identity.is_none())
+        else {
+            return;
+        };
+        team.settle_spend_into(&mut self.cost_ledger);
+        team.set_budget_headroom(self.max_budget_usd.map(|cap| {
+            crate::cost_ledger::CostBudget::new(cap, self.cost_ledger.total_usd).remaining_usd()
+        }));
+    }
+
     /// Send a user message and run the full agentic loop.
     ///
     /// Consent and the privacy boundary, context compaction, plan-mode
@@ -1067,6 +1081,7 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        self.settle_team_spend();
         #[cfg(unix)]
         let browser = if self.privacy_mode != super::PrivacyMode::Local
             && !matches!(
@@ -1654,11 +1669,13 @@ message -- revise and call `update_plan` again.\n\n",
         self.memory_window_due_at =
             std::time::Instant::now() + crate::memory_pipeline::MEMORY_WINDOW_INTERVAL;
         let home = home.to_path_buf();
+        let project = self.system_prompt_parts.memory_cwd.clone();
         let config = config.clone();
         let route = crate::subagent::InheritedRoute::off_device(self);
         let task = tokio::spawn(async move {
             if let Err(error) = crate::memory_pipeline::MemoryPipeline::extract_session_summary(
                 &home,
+                project.as_deref(),
                 &window_id,
                 &window,
                 &config,
@@ -1865,6 +1882,7 @@ impl TurnHostAdapter<'_> {
             },
             None => None,
         };
+        self.session.settle_team_spend();
         let max_budget_usd = match self.session.max_budget_usd {
             Some(cap) => {
                 let left =
@@ -2988,6 +3006,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                             self.session
                                 .cost_ledger
                                 .record_subagent_run(&spent.model, spent.cost_usd);
+                            self.managed_request_ids.extend(spent.managed_request_ids);
                         }
                         if let Some(sa_result) = mgr.get_result(id).await {
                             crate::tools::ToolResult {
@@ -6031,5 +6050,45 @@ mod tests {
                 .any(|notice| notice == &IncompleteTurnCause::OutputLimitReached.notice()),
             "the TUI must be told the answer was cut; queued: {queued:?}"
         );
+    }
+
+    fn teammate_turn(cost_usd: f64) -> crate::subagent::SubagentUsage {
+        crate::subagent::SubagentUsage {
+            model: "teammate-model".to_string(),
+            output_tokens: 10,
+            cost_usd,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn the_lead_counts_teammate_spend_and_shares_only_what_its_cap_leaves() {
+        let context = crate::context::gather_system_context();
+        let team = crate::teams::TeamManager::new();
+        let mut lead = AgentSession::new(crate::model_catalog::default_model(), &context, None);
+        lead.team_manager = Some(team.clone());
+        lead.max_budget_usd = Some(2.0);
+        lead.cost_ledger.total_usd = 0.5;
+        let mut teammate = AgentSession::new(crate::model_catalog::default_model(), &context, None);
+        teammate.team_manager = Some(team.clone());
+        teammate.team_identity = Some("researcher".to_string());
+
+        team.record_teammate_spend(teammate_turn(0.75));
+        teammate.settle_team_spend();
+        assert!(teammate.cost_ledger.total_usd.abs() < 1e-12);
+
+        lead.settle_team_spend();
+        assert!((lead.cost_ledger.total_usd - 1.25).abs() < 1e-12);
+        assert!((lead.cost_ledger.subagent_usd - 0.75).abs() < 1e-12);
+        let share = team
+            .turn_budget_usd(1)
+            .expect("the cap leaves headroom")
+            .expect("a capped lead caps its team");
+        assert!((share - 0.75).abs() < 1e-12);
+
+        team.record_teammate_spend(teammate_turn(0.75));
+        assert!(team.turn_budget_usd(1).is_err());
+        lead.settle_team_spend();
+        assert!((lead.cost_ledger.total_usd - 2.0).abs() < 1e-12);
     }
 }
