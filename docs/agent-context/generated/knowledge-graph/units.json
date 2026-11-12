@@ -2458,15 +2458,15 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 595,
+      "files": 598,
       "roles": {
         "asset": 12,
         "config": 6,
         "doc": 3,
         "other": 31,
-        "source": 238,
+        "source": 239,
         "style": 3,
-        "test": 302
+        "test": 304
       }
     },
     {

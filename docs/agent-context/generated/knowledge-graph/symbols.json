@@ -60070,6 +60070,9 @@
     "IN_PAGE_PANEL_ENABLED_STORAGE_KEY": [
       "apps/extension/src/features/options/preference-rows.ts"
     ],
+    "IN_PAGE_PROMPT_PORT_PREFIX": [
+      "apps/extension/src/features/content/in-page-panel/promptPort.ts"
+    ],
     "in_repository": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
     ],
