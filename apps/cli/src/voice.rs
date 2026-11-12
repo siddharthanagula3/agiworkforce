@@ -14,7 +14,7 @@ use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::terminal;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -876,10 +876,58 @@ fn resample(samples: &[f32], from_rate: u32, to_rate: u32) -> Vec<f32> {
 // WAV encoding
 // ---------------------------------------------------------------------------
 
-/// Encode PCM samples to a WAV file in a temporary location.
-fn encode_wav(recording: &AudioRecording) -> Result<PathBuf> {
-    let tmp_dir = std::env::temp_dir();
-    let wav_path = tmp_dir.join(format!("agiworkforce_voice_{}.wav", uuid::Uuid::new_v4()));
+const RECORDINGS_DIR: &str = "voice-recordings";
+const RECORDING_FILE: &str = "recording.wav";
+const LOCAL_TRANSCRIPTION_TIMEOUT: Duration = Duration::from_secs(600);
+const STALE_RECORDING_AGE: Duration = Duration::from_secs(3600);
+
+fn recordings_root() -> Result<PathBuf> {
+    let root = CliConfig::config_dir()?.join(RECORDINGS_DIR);
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    builder
+        .create(&root)
+        .with_context(|| format!("Failed to create {}", root.display()))?;
+    Ok(root)
+}
+
+fn sweep_stale_recordings(root: &Path, now: std::time::SystemTime) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let stale = entry
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .ok()
+            .and_then(|modified| now.duration_since(modified).ok())
+            .is_some_and(|age| age >= STALE_RECORDING_AGE);
+        if stale && entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
+}
+
+fn recording_dir_in(root: &Path) -> Result<tempfile::TempDir> {
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("recording-");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o700));
+    }
+    builder
+        .tempdir_in(root)
+        .with_context(|| format!("Failed to create a recording folder in {}", root.display()))
+}
+
+fn encode_wav(recording: &AudioRecording, dir: &Path) -> Result<PathBuf> {
+    let wav_path = dir.join(RECORDING_FILE);
 
     let spec = hound::WavSpec {
         channels: 1,
@@ -888,8 +936,18 @@ fn encode_wav(recording: &AudioRecording) -> Result<PathBuf> {
         sample_format: hound::SampleFormat::Int,
     };
 
-    let mut writer =
-        hound::WavWriter::create(&wav_path, spec).context("Failed to create WAV file")?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options
+        .open(&wav_path)
+        .context("Failed to create WAV file")?;
+    let mut writer = hound::WavWriter::new(std::io::BufWriter::new(file), spec)
+        .context("Failed to create WAV file")?;
 
     for &sample in &recording.samples {
         writer
@@ -921,8 +979,10 @@ async fn transcribe(
     // holds even if the call chain changes in future.
     gate_cloud_egress(backend, privacy_mode, opt_in)?;
 
-    // First encode to WAV
-    let wav_path = encode_wav(recording)?;
+    let root = recordings_root()?;
+    sweep_stale_recordings(&root, std::time::SystemTime::now());
+    let recording_dir = recording_dir_in(&root)?;
+    let wav_path = encode_wav(recording, recording_dir.path())?;
 
     let result = match backend {
         TranscriptionBackend::Managed(token) => {
@@ -943,13 +1003,8 @@ async fn transcribe(
         }
     };
 
-    // Clean up temp WAV file
-    if let Err(e) = std::fs::remove_file(&wav_path) {
-        eprintln!(
-            "[voice] Failed to clean up temp file {}: {}",
-            wav_path.display(),
-            e
-        );
+    if let Err(e) = recording_dir.close() {
+        eprintln!("[voice] Failed to remove the recording: {e}");
     }
 
     result
@@ -1087,21 +1142,30 @@ async fn transcribe_local(
     binary_path: &std::path::Path,
     language: &str,
 ) -> Result<String> {
-    let output = tokio::process::Command::new(binary_path.as_os_str())
-        .arg(wav_path.to_string_lossy().as_ref())
+    let output_dir = wav_path
+        .parent()
+        .context("The recording has no folder for the transcript")?;
+    let mut command = tokio::process::Command::new(binary_path.as_os_str());
+    command
+        .arg(wav_path.as_os_str())
         .arg("--language")
         .arg(language)
         .arg("--output_format")
         .arg("txt")
         .arg("--output_dir")
-        .arg(
-            wav_path
-                .parent()
-                .unwrap_or_else(|| std::path::Path::new("/tmp")),
-        )
-        .output()
+        .arg(output_dir);
+    let output = crate::process_tree::output(command, None, Some(LOCAL_TRANSCRIPTION_TIMEOUT))
         .await
-        .context("Failed to execute local whisper binary")?;
+        .map_err(|error| {
+            if error.kind() == std::io::ErrorKind::TimedOut {
+                anyhow::anyhow!(
+                    "Local whisper did not finish within {} minutes and was stopped",
+                    LOCAL_TRANSCRIPTION_TIMEOUT.as_secs() / 60
+                )
+            } else {
+                anyhow::Error::new(error).context("Failed to execute local whisper binary")
+            }
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1297,6 +1361,42 @@ mod tests {
                 "transcribe() must not cite privacy boundary for LocalBinary backend; got: {msg}"
             );
         }
+    }
+
+    #[test]
+    fn a_recording_is_written_owner_only_and_removed_with_its_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let folder = recording_dir_in(root.path()).unwrap();
+        let recording = AudioRecording {
+            samples: vec![0i16; 16],
+        };
+        let wav = encode_wav(&recording, folder.path()).unwrap();
+        assert!(wav.starts_with(folder.path()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode(folder.path()), 0o700);
+            assert_eq!(mode(&wav), 0o600);
+        }
+        let folder_path = folder.path().to_path_buf();
+        drop(folder);
+        assert!(!wav.exists());
+        assert!(!folder_path.exists());
+    }
+
+    #[test]
+    fn a_recording_left_by_an_interrupted_run_is_removed_once_stale() {
+        let root = tempfile::tempdir().unwrap();
+        let left = recording_dir_in(root.path()).unwrap().keep();
+        std::fs::write(left.join(RECORDING_FILE), b"audio").unwrap();
+        sweep_stale_recordings(root.path(), std::time::SystemTime::now());
+        assert!(left.exists(), "a recording in use is kept");
+        sweep_stale_recordings(
+            root.path(),
+            std::time::SystemTime::now() + STALE_RECORDING_AGE,
+        );
+        assert!(!left.exists());
     }
 
     // -----------------------------------------------------------------------
