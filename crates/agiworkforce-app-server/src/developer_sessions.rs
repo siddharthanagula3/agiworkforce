@@ -984,6 +984,7 @@ pub fn runs_detached(method: &str) -> bool {
             | method::CHECKPOINT_STAGE
             | method::THREAD_REVERT
             | method::THREAD_COMPACT
+            | method::THREAD_SIDE_QUESTION
     )
 }
 

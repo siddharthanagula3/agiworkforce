@@ -47,7 +47,27 @@ pub async fn run_developer_session_stdio(
     capabilities: AppServerCapabilities,
 ) -> Result<()> {
     crate::output::claim_stdout_for_protocol();
-    agiworkforce_app_server::run_developer_session_stdio(host, capabilities).await
+    let terminated_host = Arc::clone(&host);
+    tokio::select! {
+        served = agiworkforce_app_server::run_developer_session_stdio(host, capabilities) => served,
+        Ok(()) = termination_requested() => {
+            terminated_host.shutdown().await.map_err(anyhow::Error::new)
+        }
+    }
+}
+
+/// SIGTERM ends the server the way stdin closing does, through the host's
+/// shutdown, so the commands its turns started do not outlive it.
+#[cfg(unix)]
+async fn termination_requested() -> std::io::Result<()> {
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+    terminate.recv().await;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+async fn termination_requested() -> std::io::Result<()> {
+    std::future::pending().await
 }
 
 /// Serve the Agent Client Protocol on stdio until the editor closes stdin.
