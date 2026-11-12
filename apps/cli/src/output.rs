@@ -635,7 +635,6 @@ pub(crate) struct DiagnosticWriter;
 
 impl std::io::Write for DiagnosticWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        use std::io::Write;
         if crate::tui::tui_active() && std::io::stderr().is_terminal() {
             held_diagnostics().hold(buf, HELD_DIAGNOSTICS_LIMIT_BYTES);
             return Ok(buf.len());
@@ -647,7 +646,6 @@ impl std::io::Write for DiagnosticWriter {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        use std::io::Write;
         std::io::stderr().flush()
     }
 }

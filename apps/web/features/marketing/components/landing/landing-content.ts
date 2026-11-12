@@ -416,7 +416,7 @@ export const CLI_VERSION = '0.0.1';
 export const CLI_TRANSCRIPT = [
   { kind: 'cmd', text: 'agi --version' },
   { kind: 'out', text: `agi ${CLI_VERSION}` },
-  { kind: 'cmd', text: `agi -p ${LOCAL_RUNTIME_ID} "${CONSOLE_PROMPT}"` },
+  { kind: 'cmd', text: `agi --provider ${LOCAL_RUNTIME_ID} --model <model> "${CONSOLE_PROMPT}"` },
   { kind: 'dim', text: `read ${CONSOLE_FILE.name} · ${CONSOLE_FILE.pages} pages · local` },
   { kind: 'out', text: 'Termination: 30 days for convenience, 10 days for breach with cure.' },
   {

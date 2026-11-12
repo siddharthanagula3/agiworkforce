@@ -27,12 +27,16 @@ LEGACY_BINARY_NAME="agiworkforce"
 ARCHIVE_BASENAME="agiworkforce"
 DEFAULT_INSTALL_DIR="$HOME/.agi/bin"
 TAG_PREFIX="v-cli-"
+MIN_GLIBC_VERSION="2.35"
 RELEASE_SIGNING_KEY=''
 
 VERSION=""
 MODIFY_PATH=true
 INSTALL_DIR="$DEFAULT_INSTALL_DIR"
 WORK_DIR=""
+PATH_STATUS=""
+PATH_LINE=""
+PROFILE_FILE=""
 
 fail() {
   echo -e "${RED}$1${NC}" >&2
@@ -68,6 +72,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+version_at_least() {
+  awk -v have="$1" -v need="$2" 'BEGIN {
+    split(have, h, "."); split(need, n, ".")
+    if (h[1] + 0 != n[1] + 0) exit !(h[1] + 0 > n[1] + 0)
+    exit !(h[2] + 0 >= n[2] + 0)
+  }'
+}
+
 detect_platform() {
   local os arch
 
@@ -90,8 +102,16 @@ detect_platform() {
     echo -e "${YELLOW}Rosetta detected, installing the native arm64 build${NC}" >&2
   fi
 
-  if [ "$os" = "linux" ] && ldd --version 2>&1 | grep -qi musl; then
-    fail "musl-based Linux (such as Alpine) is not supported: the published builds need glibc."
+  if [ "$os" = "linux" ]; then
+    local libc glibc
+    libc=$(ldd --version 2>&1 || true)
+    case "$(printf '%s' "$libc" | tr '[:upper:]' '[:lower:]')" in
+      *musl*) fail "musl-based Linux (such as Alpine) is not supported: the published builds need glibc." ;;
+    esac
+    glibc=$(printf '%s\n' "$libc" | awk 'NR == 1 { print $NF }')
+    if [[ "$glibc" =~ ^[0-9]+\.[0-9]+$ ]] && ! version_at_least "$glibc" "$MIN_GLIBC_VERSION"; then
+      fail "This Linux has glibc ${glibc}, and the published builds need glibc ${MIN_GLIBC_VERSION} or newer (Ubuntu 22.04, Debian 12 or newer). Nothing was installed."
+    fi
   fi
 
   echo "${os}-${arch}"
@@ -251,45 +271,90 @@ install_binaries() {
   done
 }
 
-add_to_path() {
-  local platform="$1"
-  [ "$MODIFY_PATH" = "true" ] || return 0
+on_caller_path() {
+  case ":${PATH}:" in
+    *":${INSTALL_DIR}:"*) return 0 ;;
+  esac
+  return 1
+}
 
-  if [[ "$platform" == windows-* ]]; then
-    echo -e "${YELLOW}PowerShell and cmd.exe do not read this shell's profile.${NC}"
-    echo -e "  To use ${BOLD}agi${NC} there, add ${BOLD}${INSTALL_DIR}${NC} to your Windows PATH."
-    echo ""
-  fi
-
-  if echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
-    return 0
-  fi
-
-  local shell_name export_line config_files
-  shell_name=$(basename "${SHELL:-/bin/bash}")
-  export_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
+profile_for_shell() {
+  local shell_name="$1" platform="$2" candidate
   case "$shell_name" in
-    fish)
-      export_line="fish_add_path ${INSTALL_DIR}"
-      config_files="$HOME/.config/fish/config.fish"
+    fish) echo "${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish" ;;
+    zsh) echo "${ZDOTDIR:-$HOME}/.zshrc" ;;
+    bash)
+      if [[ "$platform" == darwin-* ]]; then
+        for candidate in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+          if [ -f "$candidate" ]; then
+            echo "$candidate"
+            return 0
+          fi
+        done
+        echo "$HOME/.bash_profile"
+      else
+        echo "$HOME/.bashrc"
+      fi
       ;;
-    zsh) config_files="${ZDOTDIR:-$HOME}/.zshrc" ;;
-    bash) config_files="$HOME/.bashrc $HOME/.bash_profile" ;;
-    *) config_files="$HOME/.profile" ;;
+    *) echo "$HOME/.profile" ;;
+  esac
+}
+
+add_to_path() {
+  local platform="$1" shell_name
+  shell_name=$(basename "${SHELL:-/bin/bash}")
+  if [ "$shell_name" = "fish" ]; then
+    PATH_LINE="fish_add_path \"${INSTALL_DIR}\""
+  else
+    PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+  fi
+  PROFILE_FILE=$(profile_for_shell "$shell_name" "$platform")
+
+  if on_caller_path; then
+    PATH_STATUS="on-path"
+  elif [ "$MODIFY_PATH" != "true" ]; then
+    PATH_STATUS="manual"
+  elif [ -f "$PROFILE_FILE" ] && grep -Fqx -- "$PATH_LINE" "$PROFILE_FILE"; then
+    PATH_STATUS="present"
+  elif { mkdir -p "$(dirname "$PROFILE_FILE")" && printf '\n# AGI CLI\n%s\n' "$PATH_LINE" >> "$PROFILE_FILE"; } 2>/dev/null; then
+    PATH_STATUS="written"
+  else
+    PATH_STATUS="manual"
+  fi
+}
+
+report_path() {
+  local platform="$1" found
+  case "$PATH_STATUS" in
+    on-path)
+      found=$(command -v "$BINARY_NAME" 2>/dev/null || true)
+      if [ -n "$found" ] && [ "$(dirname "$found")" != "$INSTALL_DIR" ]; then
+        printf '  %bAnother %s at %s comes first on your PATH.%b Run %b%s/%s%b, or remove the other one.\n' \
+          "$YELLOW" "$BINARY_NAME" "$found" "$NC" "$BOLD" "$INSTALL_DIR" "$BINARY_NAME" "$NC"
+      fi
+      ;;
+    written|present)
+      if [ "$PATH_STATUS" = "written" ]; then
+        printf '  Added %s to PATH in %s\n' "$INSTALL_DIR" "$PROFILE_FILE"
+      else
+        printf '  %s already adds %s to PATH\n' "$PROFILE_FILE" "$INSTALL_DIR"
+      fi
+      printf '  %bTo use %s, open a new terminal or run:%b\n' "$YELLOW" "$BINARY_NAME" "$NC"
+      printf '    %b%s%b\n' "$BOLD" "$PATH_LINE" "$NC"
+      ;;
+    manual)
+      printf '  %b%s is not on your PATH.%b Add this line to %s, then open a new terminal or run it here:\n' \
+        "$YELLOW" "$INSTALL_DIR" "$NC" "$PROFILE_FILE"
+      printf '    %b%s%b\n' "$BOLD" "$PATH_LINE" "$NC"
+      ;;
   esac
 
-  local config_file
-  for config_file in $config_files; do
-    if [ -f "$config_file" ]; then
-      if ! grep -q "$INSTALL_DIR" "$config_file" 2>/dev/null; then
-        printf '\n# AGI CLI\n%s\n' "$export_line" >> "$config_file"
-        echo -e "${GREEN}Added ${INSTALL_DIR} to PATH in ${config_file}${NC}"
-      fi
-      break
-    fi
-  done
-
-  export PATH="${INSTALL_DIR}:$PATH"
+  if [[ "$platform" == windows-* ]]; then
+    local windows_dir
+    windows_dir=$(cygpath -w "$INSTALL_DIR" 2>/dev/null || printf '%s' "$INSTALL_DIR")
+    printf '  %bPowerShell and cmd.exe do not read this shell'"'"'s profile.%b To use %s there, add %b%s%b to your Windows PATH.\n' \
+      "$YELLOW" "$NC" "$BINARY_NAME" "$BOLD" "$windows_dir" "$NC"
+  fi
 }
 
 main() {
@@ -311,9 +376,7 @@ main() {
 
   echo ""
   echo -e "${GREEN}${BOLD}Installed ${BINARY_NAME} ${version#"$TAG_PREFIX"} to ${INSTALL_DIR}${NC}"
-  if ! command -v "$BINARY_NAME" >/dev/null 2>&1; then
-    echo -e "  ${YELLOW}Open a new shell, or run:${NC} ${BOLD}export PATH=\"${INSTALL_DIR}:\$PATH\"${NC}"
-  fi
+  report_path "$platform"
   echo -e "  Get started: ${BOLD}agi${NC}"
   echo -e "  Help:        ${BOLD}agi --help${NC}"
   echo ""

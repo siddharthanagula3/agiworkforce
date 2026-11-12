@@ -5028,12 +5028,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 726,
+      "files": 727,
       "roles": {
         "config": 67,
         "doc": 1,
         "other": 21,
-        "source": 379,
+        "source": 380,
         "test": 258
       }
     },

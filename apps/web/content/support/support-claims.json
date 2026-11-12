@@ -6226,6 +6226,56 @@
       ]
     },
     {
+      "id": "cli-installer-glibc-floor",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "The installer refuses an older glibc or a musl-based Linux such as Alpine before it downloads anything.",
+      "implementation": ["apps/web/public/install.sh#MIN_GLIBC_VERSION"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "a glibc below the floor is refused before anything is downloaded"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "musl Linux is refused before anything is downloaded, even though its ldd exits 1"
+        }
+      ]
+    },
+    {
+      "id": "cli-installer-adds-install-dir-to-path",
+      "doc": "install-the-cli",
+      "section": "Getting the binary",
+      "kind": "prose",
+      "sentence": "When `~/.agi/bin` is not already on your `PATH`, the installer adds it to your shell's startup file (`~/.zshrc` for zsh, `~/.bashrc` for bash on Linux, your existing `~/.bash_profile`, `~/.bash_login` or `~/.profile` for bash on macOS, `config.fish` for fish) and names the file.",
+      "implementation": ["apps/web/public/install.sh#profile_for_shell"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "stock macOS zsh with no .zshrc gets one that puts agi on PATH, once"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "Debian or Ubuntu bash appends to the existing .bashrc and says how to use agi now"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "macOS bash with only a .profile writes there instead of hiding it behind a new .bash_profile"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/release/install-script.test.mjs",
+          "name": "fish gets a config.fish line in its own syntax"
+        }
+      ]
+    },
+    {
       "id": "privacy-free-plan-providers-may-train",
       "doc": "privacy-controls",
       "section": "What is stored where",

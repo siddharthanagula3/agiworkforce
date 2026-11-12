@@ -614,7 +614,7 @@
       "versions": [
         {
           "date": "2026-11-11",
-          "summary": "Adds a Browsing history row to Computer use in Chrome. The search is off until you turn it on in the extension's settings and accept Chrome's permission prompt, the extension asks before every search, and it sends the titles, addresses and last visit times of at most 20 matching pages, with secret-looking parts of each address removed and blocked sites left out.",
+          "summary": "Adds a Browsing history row to Computer use in Chrome. The search is off until you turn it on in the extension's settings and accept Chrome's permission prompt, the extension asks before every search, and it sends the titles, addresses and last visit times of at most 20 matching pages, with secret-looking parts of each address removed and blocked sites left out. It also corrects how the extension asks before acting: there are three permission modes, Auto is the default and asks only before crucial steps and controls it cannot identify, purchases are never completed, and an unanswered approval is skipped after 5 minutes, not denied after 30 seconds.",
           "status": "current",
           "published": null
         },

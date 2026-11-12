@@ -199,7 +199,7 @@ jobs:
             archive: tar.gz
             smoke: false
           - target: x86_64-unknown-linux-gnu
-            os: ubuntu-24.04
+            os: ubuntu-22.04
             platform: linux-x64
             archive: tar.gz
             smoke: true
@@ -297,6 +297,34 @@ jobs:
             chmod +x "dist/cli/${CLI_PLATFORM}/bin/agiworkforce"
           fi
 
+      # A gnu binary links the newest glibc symbols of the image it is built
+      # on, so a build image newer than the floor install.sh promises would
+      # ship an agi that refuses to start on a supported distribution.
+      - name: Require the glibc floor the installer promises
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          CLI_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          floor=$(sed -n 's/^MIN_GLIBC_VERSION="\([0-9.]*\)"$/\1/p' apps/web/public/install.sh)
+          if [ -z "$floor" ]; then
+            echo "ERROR: apps/web/public/install.sh names no MIN_GLIBC_VERSION" >&2
+            exit 1
+          fi
+          for binary in "dist/cli/${CLI_PLATFORM}/bin/agi" "dist/cli/${CLI_PLATFORM}/bin/agiworkforce"; do
+            needed=$(readelf -V --wide "$binary" | { grep -o 'GLIBC_[0-9][0-9.]*' || true; } | sed 's/^GLIBC_//' | sort -uV | tail -1)
+            if [ -z "$needed" ]; then
+              echo "ERROR: $binary names no glibc symbol version; readelf could not read it" >&2
+              exit 1
+            fi
+            if [ "$(printf '%s\n%s\n' "$floor" "$needed" | sort -V | tail -1)" != "$floor" ]; then
+              echo "ERROR: $binary needs glibc $needed, above the $floor floor install.sh promises" >&2
+              exit 1
+            fi
+            echo "$binary needs glibc $needed (floor $floor)"
+          done
+
       - name: Archive (tar.gz)
         if: matrix.archive == 'tar.gz'
         shell: bash
@@ -390,9 +418,7 @@ jobs:
             exit 1
           fi
           pinned="$RUNNER_TEMP/pinned-keys"
-          mkdir -p "$pinned"
-          sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' apps/web/public/install.sh \
-            | awk -v dir="$pinned" '/-----BEGIN PUBLIC KEY-----/ { n++ } n { print > (dir "/" n ".pem") }'
+          node scripts/release/release-signing-key.mjs export "$pinned"
 
           ( umask 077 && printf '%s\n' "$AGI_CLI_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-signing.key" )
           if ! openssl ec -in "$RUNNER_TEMP/release-signing.key" -pubout -outform DER -out "$RUNNER_TEMP/signing.der" 2>/dev/null; then
@@ -466,9 +492,7 @@ jobs:
         run: |
           set -euo pipefail
           pinned="$RUNNER_TEMP/pinned-keys"
-          mkdir -p "$pinned"
-          sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' apps/web/public/install.sh \
-            | awk -v dir="$pinned" '/-----BEGIN PUBLIC KEY-----/ { n++ } n { print > (dir "/" n ".pem") }'
+          node scripts/release/release-signing-key.mjs export "$pinned"
           verified=false
           for key in "$pinned"/*.pem; do
             [ -e "$key" ] || continue

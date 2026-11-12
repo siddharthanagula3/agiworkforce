@@ -165,6 +165,21 @@ or a decision that is his; **Lead** steps can be run from this repository with
    every origin the production instance must keep in the same list. Without
    this, store installs cannot sign in.
 
+   Then add the same origin to `CLERK_AUTHORIZED_PARTIES` on the production
+   web deployment (Vercel project settings, Environment Variables,
+   Production), keeping the web origin already in it, for example
+   `https://agiworkforce.com,chrome-extension://<item id>`. The web app checks
+   every bearer token's `azp` against that comma-separated list
+   (`authorizedParties()` in `packages/platform/identity/src/adapters/clerk.ts`;
+   when the variable is empty it admits only the deployment's own origin).
+   Without the extension origin, sign-in in the extension appears to succeed,
+   then every API call answers 401 and the panel falls back to sign-in. A
+   Vercel variable reaches only deployments made after it changes, so set it
+   before the deploy in step 12. Check: `vercel env ls production` lists
+   `CLERK_AUTHORIZED_PARTIES`, and after that deploy the extension signed in
+   with the production build (Release step 2) shows the account and plan
+   rather than the sign-in prompt.
+
 9. **Owner. Admit the extension in the artifact renderer.** `deploy-production.yml`
    job `deploy-sandbox` passes `CWS_EXTENSION_ID` to
    `infrastructure/sandbox/configure.mjs`, which writes `chrome-extension://<item id>`
@@ -186,7 +201,35 @@ or a decision that is his; **Lead** steps can be run from this repository with
 11. **Lead. Raise the version** in `apps/extension/package.json` and
     `apps/extension/manifest.json` to the first store version, which must be
     higher than the draft's. Run the checks under "Release" step 2 and commit.
-12. **Owner decides when; lead runs.** Push the tag
+12. **Owner. Deploy the production web app first, then the lead pushes the
+    tag.** The extension built from `main` calls web routes and request fields
+    that only the current web app has, so production must serve the commit
+    from step 11, or a later one, before a reviewer can open the item. If it
+    does not, a store reviewer finds browser tools failing in any chat saved
+    to the account (the older server drops the caller-tool fields, and the
+    turn ends with a caller-action checkpoint error) and **Add a link** always
+    failing (`/api/page-context/read` does not exist there). That deploy
+    needs the pending migrations applied first: production is recorded
+    through 0391 (`scripts/config/production-migrations-applied.json`), and
+    `apps/web/db/neon` holds 0392 to 0418, including
+    `0397_caller_tool_checkpoints.sql`, which the browser-tool checkpoint
+    writes need. The production workflow runs `pnpm db:migrate -- verify` and
+    refuses to deploy over a pending migration. In order, at a time the owner
+    chooses, because a production apply cannot be undone:
+    1. `pnpm db:migrate -- status --target production` lists what is
+       pending.
+    2. Apply to staging and check it, then to production with
+       `pnpm db:migrate -- apply --target production --confirm-production`
+       (`docs/development/ci-and-deploys.md`, "Schema prerequisites" and
+       "Staging tier"; `docs/runbooks/release-rollback.md` for recovery).
+    3. Deploy web production through `.github/workflows/deploy-production.yml`
+       from a green `main` commit at or after the step 11 commit.
+    4. Check: `pnpm db:migrate -- status --target production` lists 0418 as
+       applied, and
+       `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://agiworkforce.com/api/page-context/read`
+       prints anything but `404`.
+
+    **Owner decides when; lead runs.** Push the tag
     (`git tag v-ext-<version> && scripts/dev/heavy-job.sh git push origin v-ext-<version>`).
     The package job runs, then the publish job waits for the `chrome-web-store`
     approval; rejecting that approval stops the run with nothing uploaded, and
@@ -199,6 +242,7 @@ or a decision that is his; **Lead** steps can be run from this repository with
     when approved. To hold the launch, choose **Defer publish** in the item's
     menu after submission; an approved staged item must be published within 30
     days or it returns to draft.
+
 13. **Lead, after approval.** Run "Verify after submission", then record the
     published permission set at the released tag:
     `node scripts/release/check-chrome-permissions.mjs --write-baseline`. That
@@ -234,7 +278,7 @@ The publish job requests only the `chromewebstore` OAuth scope, refuses a taken-
    and repeat the production authentication, persistence, browser-control, and
    responsive/accessibility checks in
    `audit/blockers/35-chrome-web-store-release-blockers.md`. Do not reuse unpacked-build evidence.
-4. Confirm the published CRX item ID matches `CWS_EXTENSION_ID` and the Clerk production instance allows `chrome-extension://<that-id>`.
+4. Confirm the published CRX item ID matches `CWS_EXTENSION_ID`, the Clerk production instance allows `chrome-extension://<that-id>`, and `CLERK_AUTHORIZED_PARTIES` on the production web deployment lists it (First submission step 8).
 5. Confirm the deployed artifact renderer names `chrome-extension://<that-id>` in its `frame-ancestors` header (First submission step 9). Until it does, the artifact panel shows source instead of a live preview.
 
 ## Recovery and rollback

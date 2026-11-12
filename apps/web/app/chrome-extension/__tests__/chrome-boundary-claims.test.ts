@@ -101,6 +101,16 @@ describe('/chrome-extension, transmission claims', () => {
     expect(collapsed()).not.toMatch(/scoped task permissions|permissions scoped to the task/iu);
   });
 
+  it('describes the site controls the extension has, not permission profiles', () => {
+    const capabilities = copyBlock('CAPABILITIES');
+    expect(capabilities).not.toMatch(/permission profiles?/iu);
+    expect(capabilities).not.toMatch(/allowed actions/iu);
+    expect(capabilities).not.toMatch(/expiry/iu);
+    expect(capabilities).toMatch(/list of approved sites/iu);
+    expect(capabilities).toMatch(/single task/iu);
+    expect(capabilities).toMatch(/Removing a site ends its access/u);
+  });
+
   it(`names the ${CLOUD} gateway as the destination reached from the extension`, () => {
     const source = collapsed();
     expect(source).toMatch(new RegExp(`${CLOUD} gateway`, 'u'));

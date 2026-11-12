@@ -34,7 +34,8 @@ References (read 2026-11-11):
 - <https://code.visualstudio.com/api/extension-guides/workspace-trust>
 - <https://code.visualstudio.com/api/extension-guides/telemetry>
 - <https://github.com/eclipse/openvsx/wiki/Publishing-Extensions>
-- `ovsx` 1.3.0 package README (Trusted Publishing section)
+- `ovsx` 1.3.0 package README (Trusted Publishing section) and its npm
+  publish dates
 - <https://docs.github.com/en/actions/reference/security/oidc> and
   <https://learn.microsoft.com/en-us/cli/azure/ad/app/federated-credential>
 
@@ -164,24 +165,41 @@ rights on `siddharthanagula3/agiworkforce`.
 
 ### Open VSX (VSCodium, Cursor, Windsurf, Gitpod)
 
-The `publish-open-vsx` job is off until `OPEN_VSX_PUBLISH` is `true`, and it
-needs `ovsx` as a pinned development dependency of `apps/extension-vscode`.
+The `publish-open-vsx` job is off until `OPEN_VSX_PUBLISH` is `true`. It runs
+`pnpm --dir apps/extension-vscode exec ovsx publish`, so `ovsx` must first be
+an exact-version development dependency of `apps/extension-vscode`; without it
+the job stops with "Command not found: ovsx" after the Marketplace publish.
 
-1. **Owner.** Create an Eclipse account at
+1. **Lead.** Add the pinned tool through pnpm, so the lockfile records it.
+   `ovsx` 1.3.0 (published 2026-10-16) is the newest version older than the
+   seven-day `minimumReleaseAge` in `pnpm-workspace.yaml` as of 2026-11-11, and
+   its README documents `publish <file> --trusted-publishing`:
+
+   ```bash
+   scripts/dev/heavy-job.sh pnpm --dir apps/extension-vscode add --save-dev --save-exact ovsx@1.3.0
+   grep '"ovsx"' apps/extension-vscode/package.json
+   ```
+
+   Expect `"ovsx": "1.3.0",`. Commit `apps/extension-vscode/package.json` and
+   `pnpm-lock.yaml` together.
+
+2. **Owner.** Create an Eclipse account at
    <https://accounts.eclipse.org/user/register> with the GitHub username that
    signs in to open-vsx.org, sign in at <https://open-vsx.org>, and sign the
    Publisher Agreement from the profile page.
-2. **Owner.** Create a one-time token at
-   <https://open-vsx.org/user-settings/tokens>, create the namespace with
-   `npx ovsx create-namespace agiworkforce -p <token>`, then delete the token
-   and claim verified ownership through the namespace-access request the wiki
-   describes.
-3. **Owner.** Only after "First submission" step 1 shows `open-vsx` protected, register
+3. **Owner.** Create a one-time token at
+   <https://open-vsx.org/user-settings/tokens>, create the namespace with the
+   pinned tool,
+   `pnpm --dir apps/extension-vscode exec ovsx create-namespace agiworkforce -p <token>`,
+   then delete the token and claim verified ownership through the
+   namespace-access request the wiki describes.
+4. **Owner.** Only after "First submission" step 1 shows `open-vsx` protected, register
    repository `siddharthanagula3/agiworkforce`, workflow
    `release-vscode-extension.yml`, environment `open-vsx` under
    <https://open-vsx.org/user-settings/trusted-publishers>. The environment's
    `v-vscode-*`-only policy is what binds that trust to release tags.
-4. **Lead.** Run `node scripts/release/check-release-environments.mjs`, then
+5. **Lead.** With step 1 on `main`, run
+   `node scripts/release/check-release-environments.mjs`, then
    `gh variable set OPEN_VSX_PUBLISH --body true`.
 
 ## Each release
