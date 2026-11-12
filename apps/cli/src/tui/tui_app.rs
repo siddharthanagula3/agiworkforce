@@ -218,6 +218,70 @@ const BELL_AFTER_TURN_OF: std::time::Duration = std::time::Duration::from_secs(1
 
 static EXPAND_TOOL_OUTPUT: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
+
+const CHAT_SCROLL_STEP: u16 = 3;
+
+/// Rows the transcript is scrolled up from the bottom, and the most it could
+/// be scrolled in the last frame drawn. The frame is drawn from a shared
+/// borrow while a turn holds the session, so the draw records what it saw
+/// through atomics.
+#[derive(Default)]
+struct ChatScroll {
+    offset: std::sync::atomic::AtomicU16,
+    max: std::sync::atomic::AtomicU16,
+}
+
+impl ChatScroll {
+    fn offset(&self) -> u16 {
+        self.offset.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn jump_to_bottom(&self) {
+        self.offset.store(0, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn up(&self, rows: u16) {
+        let max = self.max.load(std::sync::atomic::Ordering::Relaxed);
+        let next = self.offset().saturating_add(rows).min(max);
+        self.offset
+            .store(next, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn down(&self, rows: u16) {
+        let next = self.offset().saturating_sub(rows);
+        self.offset
+            .store(next, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Called once per drawn transcript with how far it can scroll now. A
+    /// reader who has scrolled up keeps the same rows in view while output
+    /// grows below them; at the bottom the view follows the output.
+    fn settle(&self, max_scroll: u16) -> u16 {
+        let previous_max = self
+            .max
+            .swap(max_scroll, std::sync::atomic::Ordering::Relaxed);
+        let mut offset = self.offset();
+        if offset > 0 {
+            offset = offset.saturating_add(max_scroll.saturating_sub(previous_max));
+        }
+        let offset = offset.min(max_scroll);
+        self.offset
+            .store(offset, std::sync::atomic::Ordering::Relaxed);
+        offset
+    }
+}
+
+fn scroll_transcript_during_turn(scroll: &ChatScroll, key: &KeyEvent) -> bool {
+    if !modal_key_is_plain(key) {
+        return false;
+    }
+    match key.code {
+        KeyCode::PageUp | KeyCode::Up => scroll.up(CHAT_SCROLL_STEP),
+        KeyCode::PageDown | KeyCode::Down => scroll.down(CHAT_SCROLL_STEP),
+        _ => return false,
+    }
+    true
+}
 const EXPANDED_TOOL_OUTPUT_LINES: usize = 200;
 
 /// Per-tool-type glyph shown before the tool name (distinct from the run-state
@@ -452,7 +516,7 @@ struct TuiApp {
     chat_messages: Vec<ChatMessage>,
     input: String,
     cursor: usize,
-    scroll_offset: u16,
+    chat_scroll: ChatScroll,
     is_loading: bool,
     spinner_tick: u8,
     should_quit: bool,
@@ -677,7 +741,7 @@ impl TuiApp {
             chat_messages,
             input: String::new(),
             cursor: 0,
-            scroll_offset: 0,
+            chat_scroll: ChatScroll::default(),
             is_loading: false,
             spinner_tick: 0,
             should_quit: false,
@@ -979,7 +1043,7 @@ impl TuiApp {
         self.session.clear();
         self.chat_messages.clear();
         self.clear_tool_cells();
-        self.scroll_offset = 0;
+        self.chat_scroll.jump_to_bottom();
         self.sync_stats();
     }
 
@@ -1043,7 +1107,9 @@ impl TuiApp {
         let Some(ov) = self.active_overlay.as_mut() else {
             return None;
         };
-        let action = crossterm_to_keyaction(key);
+        let Some(action) = crossterm_to_keyaction(key) else {
+            return Some(InputAction::None);
+        };
         use crate::tui::widgets::interactive::ViewAction;
         match ov.handle_key(action) {
             ViewAction::Continue => {
@@ -1063,7 +1129,7 @@ impl TuiApp {
                 let command = format!("/{}", tag.trim_start_matches("slash:"));
                 self.input.clear();
                 self.cursor = 0;
-                self.scroll_offset = 0;
+                self.chat_scroll.jump_to_bottom();
                 self.overlay_scroll = 0;
                 self.active_overlay = None;
                 return Some(InputAction::SendMessage(command));
@@ -1397,12 +1463,53 @@ fn build_terminal_title(
     }
 }
 
+// Windows reports AltGr as Ctrl+Alt, so a symbol typed with it (`@` on a German
+// layout) must still reach a text field. Answer keys are ASCII letters and
+// digits, which this never admits.
+fn is_altgr_text(key: &KeyEvent) -> bool {
+    key.modifiers
+        .contains(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        && !key
+            .modifiers
+            .intersects(KeyModifiers::SUPER | KeyModifiers::HYPER | KeyModifiers::META)
+        && matches!(key.code, KeyCode::Char(c) if !c.is_ascii_alphanumeric())
+}
+
+fn modal_key_is_plain(key: &KeyEvent) -> bool {
+    is_altgr_text(key)
+        || !key.modifiers.intersects(
+            KeyModifiers::CONTROL
+                | KeyModifiers::ALT
+                | KeyModifiers::SUPER
+                | KeyModifiers::HYPER
+                | KeyModifiers::META,
+        )
+}
+
+fn is_ctrl_c(key: &KeyEvent) -> bool {
+    key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)
+}
+
+fn input_event(event: Event) -> Option<Event> {
+    match event {
+        Event::Key(key) if key.is_release() => None,
+        other => Some(other),
+    }
+}
+
+fn read_input_event() -> io::Result<Option<Event>> {
+    Ok(input_event(event::read()?))
+}
+
 fn crossterm_to_keyaction(
     key: crossterm::event::KeyEvent,
-) -> crate::tui::widgets::interactive::KeyAction {
+) -> Option<crate::tui::widgets::interactive::KeyAction> {
     use crate::tui::widgets::interactive::KeyAction;
     use crossterm::event::KeyCode;
-    match key.code {
+    if !modal_key_is_plain(&key) {
+        return None;
+    }
+    Some(match key.code {
         KeyCode::Up => KeyAction::Up,
         KeyCode::Down => KeyAction::Down,
         KeyCode::Left => KeyAction::Left,
@@ -1417,8 +1524,8 @@ fn crossterm_to_keyaction(
         KeyCode::PageUp => KeyAction::PageUp,
         KeyCode::PageDown => KeyAction::PageDown,
         KeyCode::Char(c) => KeyAction::Char(c),
-        _ => KeyAction::Char(' '),
-    }
+        _ => return None,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1495,15 +1602,7 @@ fn run_tui_approval_modal(
     ctx: &FrameCtx,
     request: &crate::tui::approval_broker::ApprovalRequest,
     settled_elsewhere: &dyn Fn() -> bool,
-) -> Result<
-    Option<(
-        crate::tui::widgets::approval_overlay::ApprovalChoice,
-        Option<String>,
-    )>,
-> {
-    use crate::tui::widgets::approval_overlay::ApprovalChoice;
-    use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
-
+) -> Result<ApprovalModalOutcome> {
     let mut overlay = approval_overlay_for(request);
     let expires_at = Instant::now() + APPROVAL_EXPIRY;
 
@@ -1512,7 +1611,7 @@ fn run_tui_approval_modal(
             terminal.draw(|frame| {
                 draw_turn_chrome(frame, ctx);
             })?;
-            return Ok(None);
+            return Ok(ApprovalModalOutcome::Unanswered);
         }
         terminal.draw(|frame| {
             let chat_area = draw_turn_chrome(frame, ctx);
@@ -1522,24 +1621,57 @@ fn run_tui_approval_modal(
         })?;
 
         if event::poll(super::motion::FRAME_INTERVAL)? {
-            match event::read()? {
-                Event::Key(key) => match overlay.handle_key(crossterm_to_keyaction(key)) {
-                    ViewAction::Submit(_) | ViewAction::Close => {
+            match read_input_event()? {
+                Some(Event::Key(key)) => {
+                    if let Some(outcome) = approval_modal_key(&mut overlay, key) {
                         // Force a full chrome-only redraw before returning
                         // control to the main loop so no stale overlay
                         // fragments can linger in the terminal's diff state.
                         terminal.draw(|frame| {
                             draw_turn_chrome(frame, ctx);
                         })?;
-                        let note = overlay.note();
-                        return Ok(Some((overlay.result.unwrap_or(ApprovalChoice::No), note)));
+                        return Ok(outcome);
                     }
-                    ViewAction::Continue | ViewAction::SideAction(_) => {}
-                },
-                Event::Paste(text) => overlay.insert_note_text(&sanitize_terminal_text(&text)),
+                }
+                Some(Event::Paste(text)) => {
+                    overlay.insert_note_text(&sanitize_terminal_text(&text))
+                }
                 _ => {}
             }
         }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum ApprovalModalOutcome {
+    Chosen(
+        crate::tui::widgets::approval_overlay::ApprovalChoice,
+        Option<String>,
+    ),
+    Unanswered,
+    StopTurn,
+}
+
+/// Ctrl-C stops the turn here as it does everywhere else during one, and any
+/// other chord is ignored: the answer keys are bare letters, so Ctrl-A must
+/// never read as "a" and save an Always allow.
+fn approval_modal_key(
+    overlay: &mut crate::tui::widgets::approval_overlay::ApprovalOverlayState,
+    key: KeyEvent,
+) -> Option<ApprovalModalOutcome> {
+    use crate::tui::widgets::approval_overlay::ApprovalChoice;
+    use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
+
+    if is_ctrl_c(&key) {
+        return Some(ApprovalModalOutcome::StopTurn);
+    }
+    let action = crossterm_to_keyaction(key)?;
+    match overlay.handle_key(action) {
+        ViewAction::Submit(_) | ViewAction::Close => Some(ApprovalModalOutcome::Chosen(
+            overlay.result.unwrap_or(ApprovalChoice::No),
+            overlay.note(),
+        )),
+        ViewAction::Continue | ViewAction::SideAction(_) => None,
     }
 }
 
@@ -1561,17 +1693,22 @@ fn run_tui_question_modal(
         if !event::poll(super::motion::FRAME_INTERVAL)? {
             continue;
         }
-        match event::read()? {
-            Event::Key(key) => match overlay.handle_key(crossterm_to_keyaction(key)) {
-                ViewAction::Submit(_) | ViewAction::Close => {
-                    terminal.draw(|frame| {
-                        draw_turn_chrome(frame, ctx);
-                    })?;
-                    return Ok(overlay.answer.take());
+        match read_input_event()? {
+            Some(Event::Key(key)) => {
+                let Some(action) = crossterm_to_keyaction(key) else {
+                    continue;
+                };
+                match overlay.handle_key(action) {
+                    ViewAction::Submit(_) | ViewAction::Close => {
+                        terminal.draw(|frame| {
+                            draw_turn_chrome(frame, ctx);
+                        })?;
+                        return Ok(overlay.answer.take());
+                    }
+                    ViewAction::Continue | ViewAction::SideAction(_) => {}
                 }
-                ViewAction::Continue | ViewAction::SideAction(_) => {}
-            },
-            Event::Paste(text) => overlay.insert_text(&sanitize_terminal_text(&text)),
+            }
+            Some(Event::Paste(text)) => overlay.insert_text(&sanitize_terminal_text(&text)),
             _ => {}
         }
     }
@@ -1587,13 +1724,16 @@ fn mcp_elicitation_overlay(
 
 fn handle_mcp_elicitation_event(
     overlay: &mut crate::tui::widgets::elicitation_overlay::ElicitationOverlayState,
-    event: Event,
+    event: Option<Event>,
 ) -> Option<agiworkforce_mcp::ElicitationResponse> {
     use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
 
     let action = match event {
-        Event::Key(key) => overlay.handle_key(crossterm_to_keyaction(key)),
-        Event::Paste(text) => {
+        Some(Event::Key(key)) => match crossterm_to_keyaction(key) {
+            Some(action) => overlay.handle_key(action),
+            None => ViewAction::Continue,
+        },
+        Some(Event::Paste(text)) => {
             for character in sanitize_terminal_text(&text).chars() {
                 let _ = overlay.handle_key(KeyAction::Char(character));
             }
@@ -1625,7 +1765,8 @@ fn run_idle_mcp_elicitation_modal(
             overlay.render_into(frame, chat_area);
         })?;
         if event::poll(super::motion::FRAME_INTERVAL)? {
-            if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
+            if let Some(response) = handle_mcp_elicitation_event(&mut overlay, read_input_event()?)
+            {
                 terminal.draw(|frame| {
                     draw_app_frame(frame, app);
                 })?;
@@ -1650,7 +1791,8 @@ fn run_turn_mcp_elicitation_modal(
             overlay.render_into(frame, chat_area);
         })?;
         if event::poll(super::motion::FRAME_INTERVAL)? {
-            if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
+            if let Some(response) = handle_mcp_elicitation_event(&mut overlay, read_input_event()?)
+            {
                 terminal.draw(|frame| {
                     draw_turn_chrome(frame, ctx);
                 })?;
@@ -1802,7 +1944,11 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
     let input_height = 2
         + attachment_chip_rows(&app.staged_images)
         + generated_chip_rows(&app.generated_images)
-        + composer_content_rows(&app.input);
+        + composer_content_rows(
+            &app.input,
+            app.cursor,
+            composer_text_width(area.width, app.mode),
+        );
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -1998,7 +2144,7 @@ struct FrameCtx<'a> {
     spinner_char: &'a str,
     loading_verb: &'a str,
     awaiting_approval: bool,
-    scroll_offset: u16,
+    chat_scroll: &'a ChatScroll,
     access_mode: crate::design_system::AccessMode,
     /// Session privacy boundary (governs whether a send is allowed). Distinct
     /// from `access_mode`, which only reflects where the active model routes.
@@ -2189,7 +2335,7 @@ impl<'a> FrameCtx<'a> {
             spinner_char: app.spinner_char(),
             loading_verb: LOADING_VERB,
             awaiting_approval: false,
-            scroll_offset: app.scroll_offset,
+            chat_scroll: &app.chat_scroll,
             access_mode: provider_access_mode(&app.session.provider),
             privacy_mode: app.session.privacy_mode,
             mode: app.mode,
@@ -2829,7 +2975,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     }
     let total_lines = lines.len();
     let max_scroll = total_lines.saturating_sub(visible_height) as u16;
-    let effective_scroll = ctx.scroll_offset.min(max_scroll);
+    let effective_scroll = ctx.chat_scroll.settle(max_scroll);
     let scroll_pos = max_scroll.saturating_sub(effective_scroll);
 
     let block = Block::default()
@@ -2889,14 +3035,7 @@ fn parse_inline_md(text: &str, base_style: Style) -> Vec<Span<'static>> {
 fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     use crate::tui::terminal_palette::ui_muted;
 
-    let prompt_char = match app.mode {
-        InteractionMode::Chat => "> ",
-        InteractionMode::Plan => "P ",
-        InteractionMode::AcceptEdits => "A ",
-        InteractionMode::BypassPermissions => "! ",
-        InteractionMode::FullAuto => "F ",
-    };
-
+    let prompt_char = composer_prompt(app.mode);
     let prompt_width = prompt_char_width(prompt_char);
 
     let exit_armed = app
@@ -2962,23 +3101,29 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         .fg(app.mode.color())
         .add_modifier(Modifier::BOLD);
 
-    let lines_text: Vec<&str> = app.input.split('\n').collect();
+    let (rows, cursor_row, cursor_col) = composer_layout(
+        &app.input,
+        app.cursor,
+        composer_text_width(area.width, app.mode),
+    );
+    let visible_rows = usize::from(area.height.saturating_sub(2 + chip_rows)).max(1);
+    let first_row = (cursor_row + 1).saturating_sub(visible_rows);
+    let indent = " ".repeat(usize::from(prompt_width));
     let mut lines: Vec<Line> = leading;
-    lines.extend(lines_text.iter().enumerate().map(|(i, &text)| {
-        if i == 0 {
-            Line::from(vec![
-                Span::styled(prompt_char, prompt_style),
-                Span::styled(text.to_string(), style),
-            ])
-        } else {
-            // Indent continuation lines to align with text after prompt
-            let indent = " ".repeat(prompt_width as usize);
-            Line::from(vec![
-                Span::styled(indent, style),
-                Span::styled(text.to_string(), style),
-            ])
-        }
-    }));
+    lines.extend(
+        rows.into_iter()
+            .enumerate()
+            .skip(first_row)
+            .take(visible_rows)
+            .map(|(index, text)| {
+                let lead = if index == 0 {
+                    Span::styled(prompt_char, prompt_style)
+                } else {
+                    Span::styled(indent.clone(), style)
+                };
+                Line::from(vec![lead, Span::styled(text, style)])
+            }),
+    );
 
     sanitize_terminal_lines(&mut lines);
 
@@ -2986,19 +3131,68 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     frame.render_widget(widget, area);
 
     if !app.is_loading {
-        // Compute cursor (row, col) within the multiline content
-        let cursor_byte = floor_char_boundary(&app.input, app.cursor);
-        let text_before = &app.input[..cursor_byte];
-        let cursor_row = text_before.chars().filter(|&c| c == '\n').count();
-        let line_start_byte = text_before.rfind('\n').map(|p| p + 1).unwrap_or(0);
-        let col_text_width = Line::from(text_before[line_start_byte..].to_string()).width() as u16;
-
-        // Continuation rows align under the first line's text, same as row 0.
-        let indent_width = prompt_width;
-        let cursor_x = area.x + 1 + indent_width + col_text_width;
-        let cursor_y = area.y + 1 + chip_rows + cursor_row as u16;
+        let column = u16::try_from(cursor_col).unwrap_or(u16::MAX);
+        let row = u16::try_from(cursor_row - first_row).unwrap_or(u16::MAX);
+        let cursor_x = (area.x + 1 + prompt_width)
+            .saturating_add(column)
+            .min(area.x + area.width.saturating_sub(2));
+        let cursor_y = (area.y + 1 + chip_rows)
+            .saturating_add(row)
+            .min(area.y + area.height.saturating_sub(2));
         frame.set_cursor_position((cursor_x, cursor_y));
     }
+}
+
+fn composer_prompt(mode: InteractionMode) -> &'static str {
+    match mode {
+        InteractionMode::Chat => "> ",
+        InteractionMode::Plan => "P ",
+        InteractionMode::AcceptEdits => "A ",
+        InteractionMode::BypassPermissions => "! ",
+        InteractionMode::FullAuto => "F ",
+    }
+}
+
+fn composer_text_width(area_width: u16, mode: InteractionMode) -> usize {
+    usize::from(area_width.saturating_sub(2 + prompt_char_width(composer_prompt(mode))))
+}
+
+/// The composer text broken into rows of at most `width` columns, with the
+/// cursor's row and column. A cursor at the end of a full row starts the next
+/// row, so it is never drawn on the border.
+fn composer_layout(input: &str, cursor: usize, width: usize) -> (Vec<String>, usize, usize) {
+    let width = width.max(1);
+    let cursor = floor_char_boundary(input, cursor);
+    let mut rows = Vec::new();
+    let mut at = (0, 0);
+    let mut line_start = 0;
+    let mut encoded = [0u8; 4];
+    for line in input.split('\n') {
+        let mut row = String::new();
+        let mut row_width = 0;
+        for (index, ch) in line.char_indices() {
+            let ch_width = display_width(ch.encode_utf8(&mut encoded));
+            if row_width + ch_width > width && !row.is_empty() {
+                rows.push(std::mem::take(&mut row));
+                row_width = 0;
+            }
+            if line_start + index == cursor {
+                at = (rows.len(), row_width);
+            }
+            row.push(ch);
+            row_width += ch_width;
+        }
+        if line_start + line.len() == cursor {
+            if row_width >= width {
+                rows.push(std::mem::take(&mut row));
+                row_width = 0;
+            }
+            at = (rows.len(), row_width);
+        }
+        rows.push(row);
+        line_start += line.len() + 1;
+    }
+    (rows, at.0, at.1)
 }
 
 /// One row when images are staged for the next turn, none otherwise. The chip
@@ -3039,10 +3233,10 @@ fn generated_chip_line(generated: &[std::path::PathBuf]) -> String {
 }
 
 /// Return the number of display rows needed for the input composer content
-/// (excluding the 2 border rows). Minimum 1, maximum 8.
-fn composer_content_rows(input: &str) -> u16 {
-    let newlines = input.chars().filter(|&c| c == '\n').count() as u16;
-    (newlines + 1).clamp(1, 8)
+/// (excluding the 2 border rows) once wrapped at `width`. Minimum 1, maximum 8.
+fn composer_content_rows(input: &str, cursor: usize, width: usize) -> u16 {
+    let (rows, _, _) = composer_layout(input, cursor, width);
+    u16::try_from(rows.len()).unwrap_or(u16::MAX).clamp(1, 8)
 }
 
 fn prompt_char_width(prompt_char: &str) -> u16 {
@@ -3605,6 +3799,14 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         return action;
     }
 
+    let picker_open = app.agent_picker.visible
+        || app.model_picker.visible
+        || app.effort_picker.visible
+        || app.theme_picker.visible;
+    if picker_open && !modal_key_is_plain(&key) {
+        return InputAction::None;
+    }
+
     // Agent picker mode
     if app.agent_picker.visible {
         return handle_agent_picker_key(app, key);
@@ -3817,7 +4019,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             }
             app.input.clear();
             app.cursor = 0;
-            app.scroll_offset = 0;
+            app.chat_scroll.jump_to_bottom();
             app.pasted_texts.clear();
             app.composer_undo.reset();
             InputAction::SendMessage(text)
@@ -3891,7 +4093,7 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             InputAction::None
         }
         KeyCode::End if app.input.is_empty() || key.modifiers.contains(KeyModifiers::CONTROL) => {
-            app.scroll_offset = 0;
+            app.chat_scroll.jump_to_bottom();
             InputAction::None
         }
         KeyCode::End => {
@@ -4172,7 +4374,7 @@ fn rebuild_transcript_from_session(app: &mut TuiApp) {
         .filter_map(chat_message_from_session)
         .collect();
     app.clear_tool_cells();
-    app.scroll_offset = 0;
+    app.chat_scroll.jump_to_bottom();
 }
 
 const VOICE_TRANSCRIPT_LABEL: &str = "(spoken)";
@@ -4187,7 +4389,7 @@ fn append_session_messages_since(app: &mut TuiApp, first: usize) {
         .filter_map(chat_message_from_session)
         .collect();
     app.chat_messages.extend(added);
-    app.scroll_offset = 0;
+    app.chat_scroll.jump_to_bottom();
 }
 
 fn chat_message_from_session(message: &crate::models::Message) -> Option<ChatMessage> {
@@ -4344,7 +4546,7 @@ async fn image_stop_keys() {
     loop {
         tokio::time::sleep(Duration::from_millis(80)).await;
         while event::poll(Duration::ZERO).unwrap_or(false) {
-            if let Ok(Event::Key(key)) = event::read() {
+            if let Ok(Some(Event::Key(key))) = read_input_event() {
                 if key.code == KeyCode::Esc
                     || (key.code == KeyCode::Char('c')
                         && key.modifiers.contains(KeyModifiers::CONTROL))
@@ -5190,6 +5392,14 @@ fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) ->
         .unwrap_or(normalized)
 }
 
+/// Nested command files are named with `:`, so no command name holds a second
+/// `/`; a first word that does is a path the user is asking about.
+fn is_command_token(token: &str) -> bool {
+    token
+        .strip_prefix('/')
+        .is_some_and(|name| !name.is_empty() && !name.contains('/'))
+}
+
 fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
     if !input.starts_with('/') {
         return SlashResult::NotSlash;
@@ -5603,7 +5813,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             Ok(message) => {
                 app.chat_messages.clear();
                 app.clear_tool_cells();
-                app.scroll_offset = 0;
+                app.chat_scroll.jump_to_bottom();
                 app.sync_stats();
                 SlashResult::SystemMessage(message)
             }
@@ -6389,6 +6599,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 crate::claude_parity::ParityCommandResult::Feedback { kind, message } => {
                     SlashResult::RunFeedback(kind, message)
                 }
+                crate::claude_parity::ParityCommandResult::NotHandled
+                    if is_command_token(parts[0]) =>
+                {
+                    put_back_in_composer(app, input);
+                    SlashResult::SystemMessage(format!(
+                        "Unknown command {}. /help lists the commands.",
+                        parts[0]
+                    ))
+                }
                 crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
             }
         }
@@ -6891,9 +7110,9 @@ async fn run_event_loop(
             let before = (app.input.clone(), app.cursor);
             let action = match queued {
                 Some(text) => InputAction::SendMessage(text),
-                None => match event::read()? {
-                    Event::Key(key) => handle_key_event(app, key),
-                    Event::Paste(text) => {
+                None => match read_input_event()? {
+                    Some(Event::Key(key)) => handle_key_event(app, key),
+                    Some(Event::Paste(text)) => {
                         handle_paste_text(app, &text);
                         InputAction::None
                     }
@@ -7476,11 +7695,11 @@ async fn run_event_loop(
                 }
 
                 InputAction::ScrollUp => {
-                    app.scroll_offset = app.scroll_offset.saturating_add(3);
+                    app.chat_scroll.up(CHAT_SCROLL_STEP);
                 }
 
                 InputAction::ScrollDown => {
-                    app.scroll_offset = app.scroll_offset.saturating_sub(3);
+                    app.chat_scroll.down(CHAT_SCROLL_STEP);
                 }
 
                 // Repaint every cell. This is the escape hatch when anything
@@ -7736,7 +7955,7 @@ async fn send_message_with_prompt(
     app.staged_images.clear();
 
     app.is_loading = true;
-    app.scroll_offset = 0;
+    app.chat_scroll.jump_to_bottom();
     app.stream_buffer.clear();
     app.turn_first_cell = app.tool_cells.len();
     app.stream_start = Some(Instant::now());
@@ -7851,6 +8070,7 @@ async fn send_message_with_prompt(
                 biased;
                 outcome = &mut send_fut => break Some(outcome),
                 _ = broker.notified() => {
+                    let mut stop_turn = false;
                     while let Some(req) = broker.drain_pending().await {
                         // Same disjoint-field construction as the live-frame
                         // `FrameCtx` below: `app.session` is already
@@ -7878,7 +8098,7 @@ async fn send_message_with_prompt(
                             spinner_char: spinner_frame(app.spinner_tick),
                             loading_verb: LOADING_VERB,
                             awaiting_approval: true,
-                            scroll_offset: app.scroll_offset,
+                            chat_scroll: &app.chat_scroll,
                             access_mode: turn_access_mode,
                             privacy_mode: turn_privacy_mode,
                             mode: app.mode,
@@ -7932,21 +8152,34 @@ async fn send_message_with_prompt(
                             });
                             continue;
                         }
-                        let Some((choice, note)) = modal
-                        else {
-                            terminal.clear()?;
-                            broker
-                                .complete(req.id, crate::tui::approval_broker::ApprovalDecision::Timeout)
-                                .await;
-                            app.chat_messages.push(ChatMessage {
-                                role: ChatRole::System,
-                                text: format!(
-                                    "The approval for {} expired after {} minutes without an answer, so it did not run.",
-                                    sanitize_terminal_text(&req.summary),
-                                    APPROVAL_EXPIRY.as_secs() / 60
-                                ),
-                            });
-                            continue;
+                        let (choice, note) = match modal {
+                            ApprovalModalOutcome::Chosen(choice, note) => (choice, note),
+                            ApprovalModalOutcome::StopTurn => {
+                                terminal.clear()?;
+                                broker
+                                    .complete(
+                                        req.id,
+                                        crate::tui::approval_broker::ApprovalDecision::Cancel,
+                                    )
+                                    .await;
+                                stop_turn = true;
+                                break;
+                            }
+                            ApprovalModalOutcome::Unanswered => {
+                                terminal.clear()?;
+                                broker
+                                    .complete(req.id, crate::tui::approval_broker::ApprovalDecision::Timeout)
+                                    .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: format!(
+                                        "The approval for {} expired after {} minutes without an answer, so it did not run.",
+                                        sanitize_terminal_text(&req.summary),
+                                        APPROVAL_EXPIRY.as_secs() / 60
+                                    ),
+                                });
+                                continue;
+                            }
                         };
                         // The modal ran its own key loop over frames ratatui
                         // drew; force the next frame to repaint every cell so
@@ -7964,6 +8197,11 @@ async fn send_message_with_prompt(
                             }
                             _ => {}
                         }
+                    }
+                    if stop_turn {
+                        app.status_notice =
+                            Some(("stopping the turn…".to_string(), Instant::now()));
+                        break None;
                     }
                 }
                 Some(ev) = tool_rx.recv() => {
@@ -7983,8 +8221,8 @@ async fn send_message_with_prompt(
                     // in-flight stream.
                     let mut cancelled = false;
                     while !cancelled && crossterm::event::poll(std::time::Duration::ZERO)? {
-                        match crossterm::event::read()? {
-                            crossterm::event::Event::Key(key) => {
+                        match read_input_event()? {
+                            Some(crossterm::event::Event::Key(key)) => {
                                 cancelled = key.code == crossterm::event::KeyCode::Esc
                                     || (key.code == crossterm::event::KeyCode::Char('c')
                                         && key
@@ -7992,6 +8230,9 @@ async fn send_message_with_prompt(
                                             .contains(crossterm::event::KeyModifiers::CONTROL));
                                 if cancelled {
                                     break;
+                                }
+                                if scroll_transcript_during_turn(&app.chat_scroll, &key) {
+                                    continue;
                                 }
                                 if key.code == crossterm::event::KeyCode::Char('o')
                                     && key
@@ -8021,7 +8262,7 @@ async fn send_message_with_prompt(
                                     _ => app.queued_prompts.push(draft),
                                 }
                             }
-                            crossterm::event::Event::Paste(text) => insert_str_at_cursor(
+                            Some(crossterm::event::Event::Paste(text)) => insert_str_at_cursor(
                                 &mut app.input,
                                 &mut app.cursor,
                                 sanitize_terminal_text(&text).as_ref(),
@@ -8086,7 +8327,7 @@ async fn send_message_with_prompt(
                             LOADING_VERB
                         },
                         awaiting_approval: false,
-                        scroll_offset: app.scroll_offset,
+                        chat_scroll: &app.chat_scroll,
                         access_mode: turn_access_mode,
                         privacy_mode: turn_privacy_mode,
                         mode: app.mode,
@@ -8267,14 +8508,32 @@ async fn send_message_with_prompt(
                 text: "⊘ Stopped".to_string(),
             });
             app.sync_stats();
+            return_queued_prompts_to_composer(app);
         }
     }
 
     app.refresh_workspace_pane();
-    app.scroll_offset = 0;
     render(terminal, app)?;
 
     Ok(())
+}
+
+/// A stopped turn sends nothing on its own: what was queued during it goes
+/// back to the composer, ahead of any draft, for the user to send or drop.
+fn return_queued_prompts_to_composer(app: &mut TuiApp) {
+    let queued = std::mem::take(&mut app.queued_prompts);
+    if !queued.is_empty() {
+        put_back_in_composer(app, &queued.join("\n\n"));
+    }
+}
+
+fn put_back_in_composer(app: &mut TuiApp, text: &str) {
+    app.input = if app.input.trim().is_empty() {
+        text.to_string()
+    } else {
+        format!("{text}\n{}", app.input)
+    };
+    app.cursor = app.input.len();
 }
 
 // ---------------------------------------------------------------------------
@@ -10935,7 +11194,7 @@ mod tests {
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
-            scroll_offset: 0,
+            chat_scroll: &ChatScroll::default(),
             access_mode: crate::design_system::AccessMode::Local,
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
@@ -11041,7 +11300,7 @@ mod tests {
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
-            scroll_offset: 0,
+            chat_scroll: &FIXTURE_CHAT_SCROLL,
             access_mode: crate::design_system::AccessMode::Byok,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             mode: InteractionMode::Chat,
@@ -11521,7 +11780,7 @@ mod tests {
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
-            scroll_offset: 0,
+            chat_scroll: &ChatScroll::default(),
             access_mode: crate::design_system::AccessMode::Local,
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
@@ -11733,7 +11992,7 @@ mod tests {
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
-            scroll_offset: 0,
+            chat_scroll: &ChatScroll::default(),
             access_mode: crate::design_system::AccessMode::Local,
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
@@ -12024,7 +12283,7 @@ mod tests {
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
-            scroll_offset: 0,
+            chat_scroll: &ChatScroll::default(),
             access_mode: crate::design_system::AccessMode::Local,
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
@@ -12644,5 +12903,353 @@ mod tests {
         let rendered = buffer_rows(&terminal, 120);
         assert!(rendered.contains("What's new"), "{rendered}");
         assert!(rendered.contains("Faster startup"), "{rendered}");
+    }
+
+    static FIXTURE_CHAT_SCROLL: ChatScroll = ChatScroll {
+        offset: std::sync::atomic::AtomicU16::new(0),
+        max: std::sync::atomic::AtomicU16::new(0),
+    };
+
+    fn armed_exec_approval() -> crate::tui::widgets::approval_overlay::ApprovalOverlayState {
+        use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
+
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: "cargo test".to_string(),
+            },
+            "Allow this command?",
+            vec!["cargo test".to_string()],
+        );
+        let overlay = approval_overlay_for(&request);
+        assert!(!overlay.always_allow_unavailable);
+        let mut terminal =
+            Terminal::new(ratatui::backend::TestBackend::new(120, 30)).expect("terminal");
+        terminal
+            .draw(|frame| overlay.render_into(frame, frame.area()))
+            .expect("draw");
+        overlay
+    }
+
+    #[test]
+    fn a_control_chord_in_the_approval_dialog_never_answers_it() {
+        for letter in ['a', 'y', 't', 'd', 's', 'n'] {
+            let mut overlay = armed_exec_approval();
+            let chord = KeyEvent::new(KeyCode::Char(letter), KeyModifiers::CONTROL);
+            assert_eq!(
+                approval_modal_key(&mut overlay, chord),
+                None,
+                "Ctrl-{letter} must not answer the approval"
+            );
+            assert!(
+                overlay.result.is_none(),
+                "Ctrl-{letter} chose {:?}",
+                overlay.result
+            );
+        }
+        for modifiers in [KeyModifiers::ALT, KeyModifiers::SUPER] {
+            let mut overlay = armed_exec_approval();
+            let chord = KeyEvent::new(KeyCode::Char('a'), modifiers);
+            assert_eq!(approval_modal_key(&mut overlay, chord), None);
+            assert!(overlay.result.is_none());
+        }
+    }
+
+    #[test]
+    fn ctrl_c_in_the_approval_dialog_stops_the_turn_and_bare_letters_still_answer() {
+        use crate::tui::widgets::approval_overlay::ApprovalChoice;
+
+        let mut overlay = armed_exec_approval();
+        assert_eq!(
+            approval_modal_key(
+                &mut overlay,
+                KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)
+            ),
+            Some(ApprovalModalOutcome::StopTurn)
+        );
+        assert!(overlay.result.is_none(), "stopping must not approve");
+
+        let mut overlay = armed_exec_approval();
+        assert_eq!(
+            approval_modal_key(
+                &mut overlay,
+                KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)
+            ),
+            Some(ApprovalModalOutcome::Chosen(
+                ApprovalChoice::AlwaysAllow,
+                None
+            ))
+        );
+
+        let mut overlay = armed_exec_approval();
+        assert_eq!(
+            approval_modal_key(
+                &mut overlay,
+                KeyEvent::new(KeyCode::Char('Y'), KeyModifiers::SHIFT)
+            ),
+            Some(ApprovalModalOutcome::Chosen(ApprovalChoice::Yes, None))
+        );
+    }
+
+    #[test]
+    fn an_altgr_symbol_reaches_a_dialog_text_field_but_an_altgr_letter_never_answers() {
+        use crate::tui::widgets::interactive::KeyAction;
+        let altgr = KeyModifiers::CONTROL | KeyModifiers::ALT;
+        assert_eq!(
+            crossterm_to_keyaction(KeyEvent::new(KeyCode::Char('@'), altgr)),
+            Some(KeyAction::Char('@'))
+        );
+        for answer in ['a', 'y', 'n', 'd', '1'] {
+            assert_eq!(
+                crossterm_to_keyaction(KeyEvent::new(KeyCode::Char(answer), altgr)),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn modal_keys_drop_chords_and_keys_without_a_binding() {
+        use crate::tui::widgets::interactive::KeyAction;
+
+        assert_eq!(
+            crossterm_to_keyaction(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)),
+            None
+        );
+        assert_eq!(
+            crossterm_to_keyaction(KeyEvent::new(KeyCode::Delete, KeyModifiers::NONE)),
+            None,
+            "Delete must not type a space into a modal text field"
+        );
+        assert_eq!(
+            crossterm_to_keyaction(KeyEvent::new(KeyCode::Char('A'), KeyModifiers::SHIFT)),
+            Some(KeyAction::Char('A'))
+        );
+        assert_eq!(
+            crossterm_to_keyaction(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+            Some(KeyAction::ShiftTab)
+        );
+    }
+
+    #[test]
+    fn a_key_release_is_not_a_second_keypress() {
+        use crossterm::event::KeyEventKind;
+
+        let key = |kind| {
+            Event::Key(KeyEvent::new_with_kind(
+                KeyCode::Char('a'),
+                KeyModifiers::NONE,
+                kind,
+            ))
+        };
+        assert!(input_event(key(KeyEventKind::Release)).is_none());
+        assert!(input_event(key(KeyEventKind::Press)).is_some());
+        assert!(input_event(key(KeyEventKind::Repeat)).is_some());
+        assert!(input_event(Event::Paste("text".to_string())).is_some());
+    }
+
+    #[test]
+    fn a_stopped_turn_returns_its_queued_prompts_to_the_composer() {
+        let mut app = minimal_app();
+        app.queued_prompts = vec!["first".to_string(), "second".to_string()];
+        app.input = "draft".to_string();
+        return_queued_prompts_to_composer(&mut app);
+        assert!(app.queued_prompts.is_empty(), "nothing is left to send");
+        assert_eq!(app.input, "first\n\nsecond\ndraft");
+        assert_eq!(app.cursor, app.input.len());
+
+        let mut app = minimal_app();
+        return_queued_prompts_to_composer(&mut app);
+        assert!(app.input.is_empty());
+    }
+
+    #[test]
+    fn an_unknown_command_is_kept_and_named_instead_of_sent() {
+        let mut app = minimal_app();
+        let SlashResult::SystemMessage(notice) = handle_slash("/claer", &mut app) else {
+            panic!("an unknown command must not reach the model");
+        };
+        assert!(notice.contains("/claer"), "{notice}");
+        assert!(notice.contains("/help"), "{notice}");
+        assert_eq!(app.input, "/claer");
+        assert_eq!(app.cursor, app.input.len());
+
+        let mut app = minimal_app();
+        assert!(matches!(
+            handle_slash("/usr/bin is on my PATH?", &mut app),
+            SlashResult::SendAsPrompt
+        ));
+        assert!(app.input.is_empty());
+    }
+
+    #[test]
+    fn a_command_token_is_one_name_after_the_slash() {
+        assert!(is_command_token("/claer"));
+        assert!(is_command_token("/review:security"));
+        assert!(!is_command_token("/usr/bin"));
+        assert!(!is_command_token("/tmp/a.log"));
+        assert!(!is_command_token("/"));
+        assert!(!is_command_token("claer"));
+    }
+
+    #[test]
+    fn the_composer_wraps_by_display_width_and_moves_a_cursor_off_a_full_row() {
+        let ten = "a".repeat(10);
+        assert_eq!(
+            composer_layout(&ten, ten.len(), 4),
+            (
+                vec!["aaaa".to_string(), "aaaa".to_string(), "aa".to_string()],
+                2,
+                2
+            )
+        );
+        assert_eq!(
+            composer_layout("aaaa", 4, 4),
+            (vec!["aaaa".to_string(), String::new()], 1, 0)
+        );
+        assert_eq!(
+            composer_layout("aaaa", 2, 4),
+            (vec!["aaaa".to_string()], 0, 2)
+        );
+        let wide = "界界界";
+        assert_eq!(
+            composer_layout(wide, wide.len(), 5),
+            (vec!["界界".to_string(), "界".to_string()], 1, 2)
+        );
+        assert_eq!(
+            composer_layout("ab\ncd", 3, 10),
+            (vec!["ab".to_string(), "cd".to_string()], 1, 0)
+        );
+    }
+
+    #[test]
+    fn a_long_line_wraps_in_the_composer_and_keeps_the_cursor_inside_it() {
+        use ratatui::backend::TestBackend;
+
+        let mut app = minimal_app();
+        app.input = (0..120)
+            .map(|n| char::from(b'a' + (n % 26) as u8))
+            .collect();
+        app.cursor = app.input.len();
+        let height = 2 + composer_content_rows(&app.input, app.cursor, 36);
+        assert_eq!(height, 6, "120 columns at 36 a row take four rows");
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 10)).expect("terminal");
+        terminal
+            .draw(|frame| render_input(frame, Rect::new(0, 0, 40, height), &app))
+            .expect("draw");
+        let rendered = buffer_rows(&terminal, 40);
+        assert!(rendered.contains(&app.input[108..]), "{rendered}");
+        let cursor = terminal.get_cursor_position().expect("cursor");
+        assert!(cursor.x < 39 && cursor.y < height - 1, "{cursor:?}");
+        assert_eq!((cursor.x, cursor.y), (1 + 2 + 12, 1 + 3));
+    }
+
+    #[test]
+    fn more_lines_than_the_composer_shows_scroll_to_the_cursor() {
+        use ratatui::backend::TestBackend;
+
+        let mut app = minimal_app();
+        app.input = (1..=12)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        app.cursor = app.input.len();
+        let height = 2 + composer_content_rows(&app.input, app.cursor, 36);
+        assert_eq!(height, 10);
+
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).expect("terminal");
+        terminal
+            .draw(|frame| render_input(frame, Rect::new(0, 0, 40, height), &app))
+            .expect("draw");
+        let rendered = buffer_rows(&terminal, 40);
+        assert!(rendered.contains("line 12"), "{rendered}");
+        assert!(rendered.contains("line 5"), "{rendered}");
+        assert!(!rendered.contains("line 4"), "{rendered}");
+        let cursor = terminal.get_cursor_position().expect("cursor");
+        assert_eq!(cursor.y, 8, "the cursor sits on the last visible row");
+    }
+
+    fn numbered_messages(count: usize) -> Vec<ChatMessage> {
+        (1..=count)
+            .map(|n| ChatMessage {
+                role: ChatRole::User,
+                text: format!("message {n}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn scrolling_up_stops_at_the_top_of_the_transcript() {
+        let statusline = shipped_statusline();
+        let cells: Vec<ToolCell> = Vec::new();
+        let messages = numbered_messages(40);
+        let scroll = ChatScroll::default();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.chat_scroll = &scroll;
+        let mut terminal =
+            Terminal::new(ratatui::backend::TestBackend::new(120, 30)).expect("terminal");
+        terminal
+            .draw(|frame| render_chat(frame, Rect::new(0, 0, 120, 30), &ctx))
+            .expect("draw");
+
+        let max = scroll.max.load(std::sync::atomic::Ordering::Relaxed);
+        assert!(max > CHAT_SCROLL_STEP, "the fixture must overflow the view");
+        for _ in 0..100 {
+            scroll.up(CHAT_SCROLL_STEP);
+        }
+        assert_eq!(scroll.offset(), max);
+        scroll.down(CHAT_SCROLL_STEP);
+        assert_eq!(
+            scroll.offset(),
+            max - CHAT_SCROLL_STEP,
+            "one press moves the view"
+        );
+    }
+
+    #[test]
+    fn new_output_keeps_a_reader_who_scrolled_up_in_place_and_follows_at_the_bottom() {
+        let statusline = shipped_statusline();
+        let cells: Vec<ToolCell> = Vec::new();
+        let scroll = ChatScroll::default();
+        let draw = |messages: &[ChatMessage]| -> String {
+            let mut ctx = layout_fixture_ctx(&statusline, messages, &cells, "High", None);
+            ctx.chat_scroll = &scroll;
+            let mut terminal =
+                Terminal::new(ratatui::backend::TestBackend::new(120, 30)).expect("terminal");
+            terminal
+                .draw(|frame| render_chat(frame, Rect::new(0, 0, 120, 30), &ctx))
+                .expect("draw");
+            buffer_rows(&terminal, 120)
+        };
+
+        assert!(draw(&numbered_messages(40)).contains("message 40"));
+        scroll.up(6);
+        let scrolled = draw(&numbered_messages(40));
+        assert!(!scrolled.contains("message 40"), "{scrolled}");
+        let grown = draw(&numbered_messages(50));
+        assert_eq!(grown, scrolled, "new output moved the rows being read");
+
+        scroll.jump_to_bottom();
+        assert!(draw(&numbered_messages(60)).contains("message 60"));
+        assert!(draw(&numbered_messages(70)).contains("message 70"));
+    }
+
+    #[test]
+    fn page_keys_scroll_the_transcript_during_a_turn() {
+        let scroll = ChatScroll::default();
+        scroll.settle(30);
+        assert!(scroll_transcript_during_turn(
+            &scroll,
+            &KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE)
+        ));
+        assert_eq!(scroll.offset(), CHAT_SCROLL_STEP);
+        assert!(scroll_transcript_during_turn(
+            &scroll,
+            &KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE)
+        ));
+        assert_eq!(scroll.offset(), 0);
+        assert!(!scroll_transcript_during_turn(
+            &scroll,
+            &KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE)
+        ));
     }
 }
