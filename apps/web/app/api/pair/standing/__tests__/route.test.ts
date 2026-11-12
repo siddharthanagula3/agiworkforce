@@ -169,12 +169,14 @@ describe('the relay recheck of a live pairing', () => {
       NextResponse.json({ error: { code: 'feature_disabled' } }, { status: 403 }),
     );
     expect(await standingOf({ pairings: [pairing({ workspace: 'personal' })] })).toEqual(['ended']);
-    const [, gateRequest, feature] = mocks.workspaceGate.mock.calls[0] as [
+    const [, gateRequest, feature, surface] = mocks.workspaceGate.mock.calls[0] as [
       string,
       NextRequest,
       string,
+      string,
     ];
     expect(feature).toBe('remote_control');
+    expect(surface).toBe('unknown');
     expect(gateRequest.headers.get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe('personal');
   });
 

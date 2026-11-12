@@ -2727,6 +2727,18 @@
     "message": "Sign in to share a chat.",
     "description": "Sharing needs a signed-in account"
   },
+  "spHistoryShareLocalOnly": {
+    "message": "Only chats saved to your account can be shared.",
+    "description": "Why Share is unavailable for a chat kept only in this browser"
+  },
+  "spHistoryShareSaveNow": {
+    "message": "Save changes now",
+    "description": "Saves a chat's unsaved changes to the account so it can be shared"
+  },
+  "spHistoryShareSaving": {
+    "message": "Saving this chat to your account. Share it again once it shows Saved to your account.",
+    "description": "Confirms the chat is being saved to the account before it is shared again"
+  },
   "spHistoryShareNotLoaded": {
     "message": "Open this chat once so its messages load, then share it.",
     "description": "A chat listed from the account has not been loaded on this device, so it cannot be shared yet"

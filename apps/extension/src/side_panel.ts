@@ -169,7 +169,10 @@ import {
 } from './features/cloud-bridge/conversationHistoryPull';
 
 import { createChromeShareLink } from './features/cloud-bridge/shareClient';
-import { createHistoryShareLink } from './features/side-panel/historyShare';
+import {
+  createHistoryShareLink,
+  historyShareAvailability,
+} from './features/side-panel/historyShare';
 import {
   assignConversationOwner,
   claimConversationOwner,
@@ -434,6 +437,7 @@ import {
   clearAuthToken,
   ManagedAccessAuthRequiredError,
   ManagedAccessRefusedError,
+  ManagedAccessUnavailableError,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
@@ -617,6 +621,15 @@ function conversationPersistencePresentation(
       state: 'local',
       label: 'Sign in to sync',
       detail: 'This chat is saved on this device until you sign in again.',
+      cloudIcon: false,
+    };
+  }
+  if (sync?.blockedReason === 'policy') {
+    return {
+      state: 'local',
+      label: 'Not syncing',
+      detail:
+        sync.lastError ?? 'This chat is saved on this device while your account refuses sync.',
       cloudIcon: false,
     };
   }
@@ -4448,6 +4461,7 @@ function injectStyles(): void {
     .sp-history-menu-item:hover,
     .sp-history-menu-item:focus-visible { background: var(--agi-ext-hover); }
     .sp-history-menu-item.is-danger { color: var(--agi-ext-danger-text); }
+    .sp-history-menu-item[aria-disabled='true'] { cursor: not-allowed; color: var(--agi-ext-text-muted); }
     .sp-history-menu-item.has-external-mark {
       display: flex;
       align-items: center;
@@ -11957,6 +11971,13 @@ function buildUI(): void {
         if (shared.status === 'retired') return;
         if (shared.status === 'signed-out') throw new Error(t('spHistoryShareSignIn'));
         if (shared.status === 'not-loaded') throw new Error(t('spHistoryShareNotLoaded'));
+        if (shared.status === 'local-only') {
+          throw new Error(shared.message ?? t('spHistoryShareLocalOnly'));
+        }
+        if (shared.status === 'out-of-sync') {
+          offerShareRecovery(shared.message, shared.unsavedChanges);
+          return;
+        }
         const { link } = shared;
         await navigator.clipboard.writeText(link.url);
         confirmRow.remove();
@@ -11976,6 +11997,30 @@ function buildUI(): void {
           createBtn.disabled = false;
         });
     });
+    const offerShareRecovery = (message: string, unsavedChanges: boolean): void => {
+      question.textContent = message;
+      showHistoryStatus(message);
+      actions.querySelector('.sp-drawer-history-share-recovery')?.remove();
+      const cloudConversationId = entry.cloudSync?.conversationId;
+      const recovery = el(
+        'button',
+        { type: 'button', class: 'sp-drawer-history-edit-btn sp-drawer-history-share-recovery' },
+        unsavedChanges || !cloudConversationId
+          ? t('spHistoryShareSaveNow')
+          : t('spHistoryOpenInWeb'),
+      );
+      recovery.addEventListener('click', () => {
+        if (unsavedChanges || !cloudConversationId) {
+          requestCloudConversationSync(entry.id);
+          showHistoryStatus(t('spHistoryShareSaving'));
+          return;
+        }
+        void chrome.tabs.create({
+          url: agiWebUrl(`/chat/${encodeURIComponent(cloudConversationId)}`),
+        });
+      });
+      actions.insertBefore(recovery, cancelBtn);
+    };
     confirmRow.appendChild(question);
     confirmRow.appendChild(buildHelpArticleLink('sharing-conversations', t('spHelpLinkSharing')));
     const actions = el('div', { class: 'sp-drawer-history-edit' });
@@ -12076,18 +12121,28 @@ function buildUI(): void {
       ...(forTitle ? { id: 'sp-title-menu' } : {}),
     });
     const handle = wirePopupMenu(moreBtn, menu);
-    const addItem = (label: string, run: () => void, danger = false): void => {
+    const addItem = (
+      label: string,
+      run: () => void,
+      danger = false,
+      unavailableReason?: string,
+    ): void => {
       const menuItem = el(
         'button',
         {
           type: 'button',
           role: 'menuitem',
           class: danger ? 'sp-history-menu-item is-danger' : 'sp-history-menu-item',
+          ...(unavailableReason ? { 'aria-disabled': 'true', title: unavailableReason } : {}),
         },
         label,
       );
       menuItem.addEventListener('click', () => {
         handle.close();
+        if (unavailableReason) {
+          showHistoryStatus(unavailableReason);
+          return;
+        }
         run();
       });
       menu.appendChild(menuItem);
@@ -12134,7 +12189,12 @@ function buildUI(): void {
       wrapper.appendChild(menu);
       return wrapper;
     }
-    addItem(t('spHistoryShare'), () => confirmHistoryShare(entry, item, moreBtn));
+    addItem(
+      t('spHistoryShare'),
+      () => confirmHistoryShare(entry, item, moreBtn),
+      false,
+      historyShareAvailability(entry) === 'local-only' ? t('spHistoryShareLocalOnly') : undefined,
+    );
     addItem(t('spHistoryRename'), () => startHistoryRename(entry, item, openButton));
     if (!entry.archived) {
       addPin();
@@ -12525,6 +12585,24 @@ function buildUI(): void {
   };
 
   let usageResetTimer: ReturnType<typeof setTimeout> | null = null;
+  let accountRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearAccountRetryTimer(): void {
+    if (accountRetryTimer !== null) clearTimeout(accountRetryTimer);
+    accountRetryTimer = null;
+  }
+
+  function scheduleAccountRetry(retryAfterSeconds: number | undefined, generation: number): void {
+    clearAccountRetryTimer();
+    if (retryAfterSeconds === undefined) return;
+    accountRetryTimer = setTimeout(
+      () => {
+        accountRetryTimer = null;
+        if (generation === cloudAccountRefreshGeneration) void refreshCloudAccountUI();
+      },
+      Math.max(1_000, Math.min(retryAfterSeconds * 1_000, 60_000)),
+    );
+  }
 
   function clearUsageResetTimer(): void {
     if (usageResetTimer !== null) clearTimeout(usageResetTimer);
@@ -12598,6 +12676,7 @@ function buildUI(): void {
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
     clearUsageResetTimer();
+    clearAccountRetryTimer();
     let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
     try {
       authContext = await withTimeout(getManagedCloudAuthContext(forceAuthRefresh), 8_000);
@@ -12682,11 +12761,12 @@ function buildUI(): void {
       }
 
       if (error instanceof ManagedAccessRefusedError) {
-        setManagedCloudChatState('unavailable', {
-          message: error.message,
-          action: 'retry',
-          actionLabel: t('spGateRetry'),
-        });
+        setManagedCloudChatState(
+          'unavailable',
+          error.kind === 'plan'
+            ? { message: error.message, action: 'upgrade', actionLabel: t('spGateViewPlans') }
+            : { message: error.message, action: 'retry', actionLabel: t('spGateRetry') },
+        );
         return;
       }
 
@@ -12710,6 +12790,9 @@ function buildUI(): void {
         action: 'retry',
         actionLabel: t('spGateRetry'),
       });
+      if (error instanceof ManagedAccessUnavailableError) {
+        scheduleAccountRetry(error.retryAfterSeconds, refreshGeneration);
+      }
       return;
     }
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;

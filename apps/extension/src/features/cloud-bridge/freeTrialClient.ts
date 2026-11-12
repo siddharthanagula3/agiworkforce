@@ -68,6 +68,7 @@ import { platformRequestHeaders } from '../../platformHeaders';
 import { UUID_PATTERN } from '../../lib/uuid';
 import { logger } from '../../utils';
 import { readAnsweredModel } from './answeredModel';
+import { readCloudRefusal, retryAfterSentence, type CloudRefusalKind } from './cloudRefusal';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
 import {
   CallerToolContinuationError,
@@ -214,11 +215,24 @@ export class ManagedAccessAuthRequiredError extends Error {
 
 /** A refusal with a reason, such as a workspace policy, that signing in again does not change. */
 export class ManagedAccessRefusedError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly kind: Extract<CloudRefusalKind, 'plan' | 'policy' | 'account' | 'refused'> = 'policy',
+  ) {
     super(message);
     this.name = 'ManagedAccessRefusedError';
   }
 }
+
+/** The server could not answer right now; the session and stored data stand. */
+export class ManagedAccessUnavailableError extends Error {
+  constructor(readonly retryAfterSeconds: number | undefined) {
+    super(`AGI could not check your account right now. ${retryAfterSentence(retryAfterSeconds)}`);
+    this.name = 'ManagedAccessUnavailableError';
+  }
+}
+
+const ACCESS_REFUSED_MESSAGE = 'This AGI account cannot use AGI Cloud from the Chrome extension.';
 
 export class AccountUnavailableError extends Error {
   constructor(
@@ -252,16 +266,25 @@ export async function getManagedModelAccess(
   if (!response.ok || !usageResponse.ok) {
     const failed = !response.ok ? response : usageResponse;
     const status = failed.status;
-    if (status === 401) throw new ManagedAccessAuthRequiredError();
-    if (status === 403) {
-      const refusal = readGatewayErrorBody(await readBoundedErrorBody(failed));
-      if (isGatewayCode(refusal.code, ACCOUNT_UNAVAILABLE_CODE)) {
-        throw new AccountUnavailableError(
-          refusal.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
-          refusal.recoveryPath ?? null,
-        );
-      }
-      if (refusal.message) throw new ManagedAccessRefusedError(refusal.message);
+    const gatewayError =
+      status === 403 ? readGatewayErrorBody(await readBoundedErrorBody(failed.clone())) : {};
+    const refusal = await readCloudRefusal(failed);
+    if (refusal.kind === 'auth') throw new ManagedAccessAuthRequiredError();
+    if (refusal.kind === 'unavailable')
+      throw new ManagedAccessUnavailableError(refusal.retryAfterSeconds);
+    if (isGatewayCode(gatewayError.code, ACCOUNT_UNAVAILABLE_CODE)) {
+      throw new AccountUnavailableError(
+        gatewayError.message ?? ACCOUNT_UNAVAILABLE_MESSAGE,
+        gatewayError.recoveryPath ?? null,
+      );
+    }
+    if (
+      refusal.kind === 'plan' ||
+      refusal.kind === 'policy' ||
+      refusal.kind === 'account' ||
+      refusal.kind === 'refused'
+    ) {
+      throw new ManagedAccessRefusedError(refusal.message ?? ACCESS_REFUSED_MESSAGE, refusal.kind);
     }
     throw new Error(`Account access is unavailable (${status})`);
   }

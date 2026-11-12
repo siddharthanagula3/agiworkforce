@@ -82,7 +82,7 @@ async function accountStanding(
   } catch (error) {
     return isAppError(error) && error.statusCode < SERVER_ERROR_STATUS ? 'ended' : 'unknown';
   }
-  const refusal = await remoteControlStandingRefusal(db, userId, request);
+  const refusal = await remoteControlStandingRefusal(db, userId, request, 'unknown');
   if (!refusal) return 'active';
   return refusal.final ? 'ended' : 'unknown';
 }

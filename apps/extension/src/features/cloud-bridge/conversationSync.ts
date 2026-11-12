@@ -40,6 +40,12 @@ import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClien
 import { platformRequestHeaders } from '../../platformHeaders';
 import { UUID_PATTERN } from '../../lib/uuid';
 import {
+  captureCloudRefusals,
+  classifyCloudRefusal,
+  describeCloudRefusal,
+  type CloudRefusal,
+} from './cloudRefusal';
+import {
   buildExtensionCloudMessageMetadata,
   createExtensionCloudChatClient,
   ManagedCloudOwnerChangedError,
@@ -300,8 +306,10 @@ async function flushEligibleConversation(
   const cloudConversationId = entry?.cloudSync?.conversationId;
   if (!entry || !cloudConversationId) return;
 
+  const refusals = captureCloudRefusals();
   const client = createExtensionCloudChatClient(owner, {
     isCurrent: cloudMirroringEnabledSnapshot,
+    fetchImpl: refusals.fetch,
   });
   let organizationId = entry.cloudSync?.organizationId;
   // `entry` predates the create, so re-reading it would make an accepted project look unsynced.
@@ -344,7 +352,7 @@ async function flushEligibleConversation(
         lastAttemptAt: Date.now(),
       });
     } catch (error) {
-      await handleFlushError(owner, conversationId, error);
+      await handleFlushError(owner, conversationId, error, refusals.last);
       return;
     }
   } else if (createAcknowledged !== true) {
@@ -391,7 +399,7 @@ async function flushEligibleConversation(
             lastAttemptAt: Date.now(),
           });
         } else {
-          await handleFlushError(owner, conversationId, error);
+          await handleFlushError(owner, conversationId, error, refusals.last);
         }
         return;
       }
@@ -454,7 +462,7 @@ async function flushEligibleConversation(
         { signal, organizationId, retryRateLimited: false },
       );
     } catch (error) {
-      await handleFlushError(owner, conversationId, error);
+      await handleFlushError(owner, conversationId, error, refusals.last);
       return;
     }
     await recordCloudMessagesSynced(owner, conversationId, [
@@ -502,16 +510,34 @@ async function flushEligibleConversation(
         retryAfter: undefined,
       });
     } catch (error) {
-      await handleFlushError(owner, conversationId, error);
+      await handleFlushError(owner, conversationId, error, refusals.last);
       return;
     }
   }
+}
+
+const SYNC_REFUSAL_COPY = {
+  refused: 'This account cannot save chats from the Chrome extension.',
+  unavailable: 'Saving to your account is temporarily unavailable.',
+  limitUnit: 'requests',
+};
+
+function syncRefusal(error: unknown, captured: CloudRefusal | null): CloudRefusal | null {
+  if (!(error instanceof ManagedCloudChatHttpError)) return null;
+  if (captured?.status === error.status) return captured;
+  return classifyCloudRefusal(error.status, {
+    error: {
+      ...(error.code ? { code: error.code } : {}),
+      message: error.message.replace(/^HTTP \d{3}: /u, ''),
+    },
+  });
 }
 
 async function handleFlushError(
   owner: ManagedCloudOwner,
   conversationId: string,
   error: unknown,
+  captured: CloudRefusal | null = null,
 ): Promise<void> {
   if (error instanceof ManagedCloudOwnerChangedError) return;
 
@@ -526,10 +552,10 @@ async function handleFlushError(
     return;
   }
 
-  const status = error instanceof ManagedCloudChatHttpError ? error.status : null;
+  const refusal = syncRefusal(error, captured);
   const message = error instanceof Error ? error.message : 'Cloud sync failed.';
 
-  if (status === 401 || status === 403) {
+  if (refusal?.kind === 'auth') {
     await recordCloudSyncState(owner, conversationId, {
       state: 'blocked',
       blockedReason: 'auth',
@@ -539,17 +565,37 @@ async function handleFlushError(
     return;
   }
 
-  if (status === 429) {
+  if (
+    refusal?.kind === 'policy' ||
+    refusal?.kind === 'plan' ||
+    refusal?.kind === 'account' ||
+    refusal?.kind === 'refused'
+  ) {
     await recordCloudSyncState(owner, conversationId, {
-      state: 'error',
-      lastError: message,
+      state: 'blocked',
+      blockedReason: 'policy',
+      lastError: describeCloudRefusal(refusal, SYNC_REFUSAL_COPY),
       lastAttemptAt: now,
-      retryAfter: now + RETRY_AFTER_RATE_LIMIT_MS,
+      retryAfter: now + RETRY_AFTER_SERVER_ERROR_MS,
     });
     return;
   }
 
-  if (status === 404) {
+  if (refusal?.kind === 'unavailable' || refusal?.kind === 'rate_limited') {
+    const fallbackMs =
+      refusal.kind === 'rate_limited' ? RETRY_AFTER_RATE_LIMIT_MS : RETRY_AFTER_SERVER_ERROR_MS;
+    await recordCloudSyncState(owner, conversationId, {
+      state: 'error',
+      lastError: describeCloudRefusal(refusal, SYNC_REFUSAL_COPY),
+      lastAttemptAt: now,
+      retryAfter:
+        now +
+        (refusal.retryAfterSeconds !== undefined ? refusal.retryAfterSeconds * 1000 : fallbackMs),
+    });
+    return;
+  }
+
+  if (refusal?.status === 404) {
     await recordCloudSyncState(owner, conversationId, {
       state: 'blocked',
       blockedReason: 'not-found',

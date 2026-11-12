@@ -1,9 +1,14 @@
-import type { ConversationEntry } from '../background/conversation-history';
-import type { ChromeShareLink, ChromeShareLinkRequest } from '../cloud-bridge/shareClient';
+import { pendingCloudMessages, type ConversationEntry } from '../background/conversation-history';
+import {
+  ChromeShareError,
+  type ChromeShareLink,
+  type ChromeShareLinkRequest,
+} from '../cloud-bridge/shareClient';
 import {
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from '../cloud-bridge/managedCloudAuthority';
+import { UUID_PATTERN } from '../../lib/uuid';
 
 export interface HistoryShareDependencies {
   owner: ManagedCloudOwner;
@@ -18,7 +23,38 @@ export type HistoryShareResult =
   | { status: 'created'; link: ChromeShareLink }
   | { status: 'signed-out' }
   | { status: 'not-loaded' }
+  | { status: 'local-only'; message?: string }
+  | { status: 'out-of-sync'; message: string; unsavedChanges: boolean }
   | { status: 'retired' };
+
+export type HistoryShareAvailability = 'available' | 'local-only';
+
+export function historyShareAvailability(entry: ConversationEntry): HistoryShareAvailability {
+  const sync = entry.cloudSync;
+  if (
+    !sync?.conversationId ||
+    !UUID_PATTERN.test(sync.conversationId) ||
+    sync.createAcknowledged !== true
+  ) {
+    return 'local-only';
+  }
+  if (
+    sync.blockedReason === 'non-cloud-runtime' ||
+    sync.blockedReason === 'not-found' ||
+    sync.blockedReason === 'workspace'
+  ) {
+    return 'local-only';
+  }
+  return entry.messages.some((message) => message.runtime === 'local') ? 'local-only' : 'available';
+}
+
+function hasUnsavedChanges(entry: ConversationEntry): boolean {
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    entry.cloudSync?.state === 'pending' ||
+    entry.cloudSync?.state === 'error'
+  );
+}
 
 export async function createHistoryShareLink(
   dependencies: HistoryShareDependencies,
@@ -31,13 +67,31 @@ export async function createHistoryShareLink(
   const stored = await dependencies.getStored(owner, entryId);
   if (!isLive()) return { status: 'retired' };
   if (!stored || stored.cloudSync?.messagesLoaded === false) return { status: 'not-loaded' };
+  const conversationId = stored.cloudSync?.conversationId;
+  if (historyShareAvailability(stored) === 'local-only' || !conversationId) {
+    return { status: 'local-only' };
+  }
 
-  const link = await dependencies.createLink(auth.token, {
-    title: stored.title,
-    messages: stored.messages.filter((message) => message.content.trim().length > 0),
-    ...(stored.cloudSync?.conversationId
-      ? { conversationId: stored.cloudSync.conversationId }
-      : {}),
-  });
+  let link: ChromeShareLink;
+  try {
+    link = await dependencies.createLink(auth.token, {
+      title: stored.title,
+      messages: stored.messages.filter((message) => message.content.trim().length > 0),
+      conversationId,
+    });
+  } catch (error) {
+    if (!(error instanceof ChromeShareError)) throw error;
+    if (!isLive()) return { status: 'retired' };
+    if (error.kind === 'signed-out') return { status: 'signed-out' };
+    if (error.kind === 'not-saved') return { status: 'local-only', message: error.message };
+    if (error.kind === 'out-of-sync') {
+      return {
+        status: 'out-of-sync',
+        message: error.message,
+        unsavedChanges: hasUnsavedChanges(stored),
+      };
+    }
+    throw error;
+  }
   return isLive() ? { status: 'created', link } : { status: 'retired' };
 }

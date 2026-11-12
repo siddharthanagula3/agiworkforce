@@ -129,7 +129,7 @@ export interface ConversationCloudSyncState {
   totalMessageCount?: number;
   messagesOffset?: number;
   state: 'idle' | 'pending' | 'error' | 'blocked';
-  blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
+  blockedReason?: 'non-cloud-runtime' | 'auth' | 'policy' | 'not-found' | 'workspace';
   lastError?: string;
   lastAttemptAt?: number;
   retryAfter?: number;
@@ -675,6 +675,7 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   if (
     raw['blockedReason'] === 'non-cloud-runtime' ||
     raw['blockedReason'] === 'auth' ||
+    raw['blockedReason'] === 'policy' ||
     raw['blockedReason'] === 'not-found' ||
     raw['blockedReason'] === 'workspace'
   ) {
@@ -1926,7 +1927,9 @@ export function isCloudMetadataPersistenceEligible(entry: ConversationEntry): bo
     UUID_PATTERN.test(sync.conversationId) &&
     sync.organizationId !== undefined &&
     sync.createAcknowledged === true &&
-    (sync.blockedReason === undefined || sync.blockedReason === 'auth')
+    (sync.blockedReason === undefined ||
+      sync.blockedReason === 'auth' ||
+      sync.blockedReason === 'policy')
   );
 }
 
@@ -2110,7 +2113,9 @@ export async function recordCloudMessagesSynced(
     } else {
       delete cloudSync.lastError;
       delete cloudSync.retryAfter;
-      if (cloudSync.blockedReason === 'auth') delete cloudSync.blockedReason;
+      if (cloudSync.blockedReason === 'auth' || cloudSync.blockedReason === 'policy') {
+        delete cloudSync.blockedReason;
+      }
     }
     store.conversations = store.conversations.map((candidate, candidateIndex) =>
       candidateIndex === index ? { ...existing, messages, cloudSync } : candidate,

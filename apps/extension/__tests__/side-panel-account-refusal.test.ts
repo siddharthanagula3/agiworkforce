@@ -170,6 +170,7 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
 import {
   ManagedAccessAuthRequiredError,
   ManagedAccessRefusedError,
+  ManagedAccessUnavailableError,
 } from '../src/features/cloud-bridge/freeTrialClient';
 
 import catalog from '../_locales/en/messages.json';
@@ -223,6 +224,30 @@ describe('a failed account read in the side panel', () => {
       catalogMessage('spGateVerifyFailed', []),
     );
     expect(byId('sp-cloud-gate-action').textContent).toBe(catalogMessage('spGateRetry', []));
+    expect(account.clearedTokens).toBe(0);
+  });
+
+  it('offers the plans for a plan refusal instead of a retry', async () => {
+    await refreshWith(
+      new ManagedAccessRefusedError('Your plan does not include this. Upgrade to use it.', 'plan'),
+    );
+
+    expect(byId('sp-cloud-gate-message').textContent).toBe(
+      'Your plan does not include this. Upgrade to use it.',
+    );
+    expect(byId('sp-cloud-gate-action').textContent).toBe(catalogMessage('spGateViewPlans', []));
+    expect(account.clearedTokens).toBe(0);
+  });
+
+  it('reads the account again on its own once the server said it could', async () => {
+    await refreshWith(new ManagedAccessUnavailableError(1));
+    const reads = account.accessReads;
+    account.failure = null;
+
+    expect(byId('sp-cloud-gate-action').textContent).toBe(catalogMessage('spGateRetry', []));
+    await vi.waitFor(() => expect(account.accessReads).toBeGreaterThan(reads), {
+      timeout: 3_000,
+    });
     expect(account.clearedTokens).toBe(0);
   });
 

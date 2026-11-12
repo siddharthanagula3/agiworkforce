@@ -106,6 +106,7 @@ import {
   getManagedModelAccess,
   ManagedAccessAuthRequiredError,
   ManagedAccessRefusedError,
+  ManagedAccessUnavailableError,
   parseQuotaWarningHeader,
   streamFreeChat,
   streamManagedChatApproval,
@@ -440,7 +441,50 @@ describe('getManagedModelAccess', () => {
     const error = await unavailable;
     expect(error).not.toBeInstanceOf(ManagedAccessAuthRequiredError);
     expect(error).not.toBeInstanceOf(ManagedAccessRefusedError);
-    expect(String((error as Error).message)).toContain('503');
+    expect(error).toBeInstanceOf(ManagedAccessUnavailableError);
+    expect((error as ManagedAccessUnavailableError).retryAfterSeconds).toBe(5);
+  });
+
+  it('tells a plan refusal from a workspace policy by the reason the server gives', async () => {
+    const plan = 'Your plan does not include Cloud in the CLI and VS Code.';
+    fetchMock
+      .mockResolvedValueOnce(activeUsageResponse())
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ error: { code: 'developer_surface_plan_required', message: plan } }),
+          { status: 403 },
+        ),
+      );
+    const planRefusal = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(planRefusal).toBeInstanceOf(ManagedAccessRefusedError);
+    expect(planRefusal).toMatchObject({ kind: 'plan', message: plan });
+
+    const policy = 'Your workspace administrator does not allow access from the Chrome extension.';
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: { type: 'organization_policy', code: 'surface_not_allowed', message: policy },
+        }),
+        { status: 403 },
+      ),
+    );
+    const policyRefusal = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(policyRefusal).toMatchObject({ kind: 'policy', message: policy });
+
+    fetchMock.mockResolvedValueOnce(activeUsageResponse()).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'organization_policy',
+            code: 'workspace_policy_unavailable',
+            message: 'We could not confirm your workspace security settings.',
+          },
+        }),
+        { status: 503, headers: { 'retry-after': '5' } },
+      ),
+    );
+    const policyOutage = await getManagedModelAccess('token').catch((error: unknown) => error);
+    expect(policyOutage).toBeInstanceOf(ManagedAccessUnavailableError);
   });
 
   it('propagates an abort without retrying or converting it into admission', async () => {

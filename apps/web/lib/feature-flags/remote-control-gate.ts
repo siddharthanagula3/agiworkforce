@@ -11,10 +11,11 @@ import {
 } from '@agiworkforce/types';
 
 import { isAppError } from '@/lib/errors';
-import { readSurfaceHint, resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import type { PolicySurface } from '@/lib/services/organization-policy-evaluator';
 
 import { assertCapabilityAvailable } from './capability-gate';
 import { buildFlagSubject } from './flag-evaluation-service';
@@ -94,12 +95,13 @@ export async function remoteControlStandingRefusal(
   db: DatabaseAdapter,
   userId: string,
   request: NextRequest,
+  surface: PolicySurface,
 ): Promise<RemoteControlStandingRefusal | null> {
   const featureGate = await buildWorkspaceFeatureGateResponse(
     userId,
     request,
     'remote_control',
-    resolveCloudChatSurface(request),
+    surface,
   );
   if (featureGate) {
     return { final: featureGate.status !== UNAVAILABLE_STATUS, response: featureGate };

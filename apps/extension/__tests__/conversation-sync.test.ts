@@ -433,6 +433,59 @@ describe('conversation cloud sync', () => {
     expect(entry?.messages[0]?.content).toBe('ask');
   });
 
+  it('shows a workspace policy refusal in its own words instead of asking to sign in', async () => {
+    const reason =
+      'Your workspace administrator has turned off cloud access from the Chrome extension.';
+    await upsertConversation(OWNER, 'conv-policy', cloudMessages(4_500));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? jsonResponse(
+            {
+              error: {
+                type: 'organization_policy',
+                code: 'surface_sync_disabled',
+                message: reason,
+              },
+            },
+            403,
+          )
+        : defaultResponder(request);
+
+    await flushConversation(OWNER, 'conv-policy');
+
+    const entry = await getConversation(OWNER, 'conv-policy');
+    expect(entry?.cloudSync).toMatchObject({
+      state: 'blocked',
+      blockedReason: 'policy',
+      lastError: reason,
+    });
+    expect(entry?.cloudSync?.retryAfter).toBeGreaterThan(Date.now());
+    expect(entry?.messages).toHaveLength(2);
+  });
+
+  it('waits only as long as a slow server asks before trying again', async () => {
+    await upsertConversation(OWNER, 'conv-503', cloudMessages(4_700));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? new Response(
+            JSON.stringify({
+              error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' },
+            }),
+            { status: 503, headers: { 'Content-Type': 'application/json', 'retry-after': '5' } },
+          )
+        : defaultResponder(request);
+
+    const startedAt = Date.now();
+    await flushConversation(OWNER, 'conv-503');
+
+    const entry = await getConversation(OWNER, 'conv-503');
+    expect(entry?.cloudSync?.state).toBe('error');
+    expect(entry?.cloudSync?.blockedReason).toBeUndefined();
+    expect(entry?.cloudSync?.retryAfter).toBeGreaterThanOrEqual(startedAt + 5_000);
+    expect(entry?.cloudSync?.retryAfter).toBeLessThan(Date.now() + 6_000);
+    expect(entry?.messages).toHaveLength(2);
+  }, 10_000);
+
   it('backs off on 429 without a client retry, and the next flush is a no-op', async () => {
     await upsertConversation(OWNER, 'conv-429', cloudMessages(5_000));
     respond = (request) =>

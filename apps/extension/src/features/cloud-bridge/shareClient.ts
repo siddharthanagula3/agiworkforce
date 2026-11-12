@@ -1,6 +1,12 @@
 import { FREE_TRIAL_GATEWAY } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 import { UUID_PATTERN } from '../../lib/uuid';
+import {
+  describeCloudRefusal,
+  readCloudRefusal,
+  type CloudRefusal,
+  type CloudRefusalKind,
+} from './cloudRefusal';
 
 export const SHARE_LINK_PATH = '/api/share';
 const SHARE_TITLE_MAX_CHARS = 200;
@@ -16,18 +22,49 @@ export interface ChromeShareLink {
   expiresAt: string | null;
 }
 
-function errorMessage(body: unknown, status: number): string {
-  if (body && typeof body === 'object') {
-    const error = (body as Record<string, unknown>)['error'];
-    const message =
-      typeof error === 'string'
-        ? error
-        : error && typeof error === 'object'
-          ? (error as Record<string, unknown>)['message']
-          : undefined;
-    if (typeof message === 'string' && message.trim()) return message.trim();
+export type ChromeShareFailureKind =
+  'signed-out' | 'not-saved' | 'out-of-sync' | 'limited' | 'refused' | 'unavailable' | 'failed';
+
+export class ChromeShareError extends Error {
+  constructor(
+    message: string,
+    readonly kind: ChromeShareFailureKind,
+  ) {
+    super(message);
+    this.name = 'ChromeShareError';
   }
-  return `The share link could not be created (${status}).`;
+}
+
+const SHARE_REFUSAL_COPY = {
+  refused: 'This account cannot share chats from the Chrome extension.',
+  unavailable: 'Sharing is temporarily unavailable.',
+  limitUnit: 'share links',
+};
+
+const SHARE_FAILURE_KIND: Readonly<Record<CloudRefusalKind, ChromeShareFailureKind>> = {
+  auth: 'signed-out',
+  invalid: 'not-saved',
+  conflict: 'out-of-sync',
+  rate_limited: 'limited',
+  plan: 'refused',
+  policy: 'refused',
+  account: 'refused',
+  refused: 'refused',
+  unavailable: 'unavailable',
+  failed: 'failed',
+};
+
+function shareFailure(refusal: CloudRefusal): ChromeShareError {
+  if (refusal.kind === 'failed') {
+    return new ChromeShareError(
+      `The share link could not be created (${refusal.status}).`,
+      'failed',
+    );
+  }
+  return new ChromeShareError(
+    describeCloudRefusal(refusal, SHARE_REFUSAL_COPY),
+    SHARE_FAILURE_KIND[refusal.kind],
+  );
 }
 
 export async function createChromeShareLink(
@@ -50,8 +87,8 @@ export async function createChromeShareLink(
         : {}),
     }),
   });
+  if (!response.ok) throw shareFailure(await readCloudRefusal(response));
   const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(errorMessage(body, response.status));
   const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
   const url = record['shareUrl'];
   if (typeof url !== 'string' || !/^https?:\/\//.test(url)) {

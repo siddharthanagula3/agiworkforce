@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { remoteControlStandingRefusal } from '@/lib/feature-flags/remote-control-gate';
@@ -49,8 +50,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   let db: DatabaseAdapter;
   let userId: string;
+  let surface: CloudChatSurface | undefined;
   try {
-    ({ db, userId } = await getUserScopedDb(request));
+    ({ db, userId, surface } = await getUserScopedDb(request));
   } catch (authError) {
     if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const rateLimited = await withRateLimit(request, 'device-link', userId);
   if (rateLimited) return rateLimited;
 
-  const refusal = await remoteControlStandingRefusal(db, userId, request);
+  const refusal = await remoteControlStandingRefusal(db, userId, request, surface ?? 'unknown');
   if (refusal) return refusal.response;
 
   const signalingUrl = process.env['SIGNALING_HTTP_URL'];

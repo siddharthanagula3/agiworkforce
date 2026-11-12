@@ -553,6 +553,62 @@ describe('chat favourites', () => {
   });
 });
 
+describe('sharing from recent chats', () => {
+  async function rowShareItem(content: string): Promise<HTMLButtonElement> {
+    byId('sp-history-btn')!.click();
+    let share!: HTMLButtonElement;
+    await vi.waitFor(() => {
+      const more = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('#sp-recents .sp-drawer-history-more'),
+      ).find((button) => button.getAttribute('aria-label')?.includes(content));
+      expect(more).toBeDefined();
+      more!.click();
+      const menu = more!.parentElement!.querySelector<HTMLElement>('[role="menu"]')!;
+      share = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
+        (item) => item.textContent?.trim() === catalogMessage('spHistoryShare', []),
+      )!;
+      expect(share).toBeDefined();
+    });
+    return share;
+  }
+
+  it('explains, instead of sharing, a chat kept only in this browser', async () => {
+    const content = 'Device only share fixture';
+    const conversationId = await openSavedConversation(content);
+    try {
+      const share = await rowShareItem(content);
+      const reason = catalogMessage('spHistoryShareLocalOnly', []);
+      expect(share.getAttribute('aria-disabled')).toBe('true');
+      expect(share.title).toBe(reason);
+      share.click();
+      expect(document.querySelector('.sp-drawer-history-share-text')).toBeNull();
+      expect(document.querySelector('.sp-drawer-history-error')?.textContent).toBe(reason);
+    } finally {
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
+  it('offers share for a chat saved to the account', async () => {
+    const content = 'Account share fixture';
+    const conversationId = await openSavedConversation(content, {
+      conversationId: '6a1d3f8b-2c4e-4d9f-8b7a-1e3c5d7f9a20',
+      organizationId: null,
+      createAcknowledged: true,
+      state: 'idle',
+    });
+    try {
+      const share = await rowShareItem(content);
+      expect(share.hasAttribute('aria-disabled')).toBe(false);
+      share.click();
+      expect(document.querySelector('.sp-drawer-history-share-text')?.textContent).toBe(
+        catalogMessage('spHistoryShareConfirm', []),
+      );
+    } finally {
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+});
+
 describe('conversation title row', () => {
   it('is hidden until a conversation exists, then names it with an actions menu', async () => {
     expect(byId('sp-title-row')!.hidden).toBe(true);
