@@ -86,6 +86,7 @@ import {
   ensureCloudConversation,
   flushQuestionBeforeTurn,
   queueCloudConversationDeletion,
+  saveConversationNow,
   scheduleConversationSync,
   sweepConversationSync,
   CLOUD_SYNC_TOMBSTONE_KEY,
@@ -503,6 +504,83 @@ describe('conversation cloud sync', () => {
     await flushConversation(OWNER, 'conv-429');
     expect(requests).toHaveLength(countBefore);
   });
+
+  it('saves at once when the user asks, even inside the wait an earlier failure set', async () => {
+    await upsertConversation(OWNER, 'conv-save-now', cloudMessages(5_100));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? jsonResponse({ error: 'Too many requests' }, 429)
+        : defaultResponder(request);
+    await flushConversation(OWNER, 'conv-save-now');
+    const failed = await getConversation(OWNER, 'conv-save-now');
+    expect(failed?.cloudSync?.state).toBe('error');
+    expect(failed?.cloudSync?.retryAfter).toBeGreaterThan(Date.now());
+
+    respond = defaultResponder;
+    const postsBefore = messagePosts().length;
+    await expect(saveConversationNow(OWNER, 'conv-save-now')).resolves.toEqual({
+      status: 'saved',
+    });
+
+    expect(messagePosts().length).toBeGreaterThan(postsBefore);
+    const saved = await getConversation(OWNER, 'conv-save-now');
+    expect(saved?.cloudSync?.state).toBe('idle');
+    expect(saved?.cloudSync?.retryAfter).toBeUndefined();
+    expect(pendingCloudMessages(saved!)).toHaveLength(0);
+  });
+
+  it('reports a failed user save with the reason the account gave', async () => {
+    const reason = 'Your workspace administrator has turned off saving chats from the extension.';
+    await upsertConversation(OWNER, 'conv-save-refused', cloudMessages(5_200));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? jsonResponse(
+            {
+              error: {
+                type: 'organization_policy',
+                code: 'surface_sync_disabled',
+                message: reason,
+              },
+            },
+            403,
+          )
+        : defaultResponder(request);
+
+    await expect(saveConversationNow(OWNER, 'conv-save-refused')).resolves.toEqual({
+      status: 'not-saved',
+      reason,
+    });
+    await expect(saveConversationNow(OWNER, 'conv-save-refused')).resolves.toEqual({
+      status: 'not-saved',
+      reason,
+    });
+    expect(messagePosts()).toHaveLength(2);
+  });
+
+  it('says saving is turned off instead of pretending to save', async () => {
+    await upsertConversation(OWNER, 'conv-save-off', cloudMessages(5_300));
+    setCloudMirroring(false);
+
+    await expect(saveConversationNow(OWNER, 'conv-save-off')).resolves.toEqual({
+      status: 'mirroring-off',
+    });
+    expect(requests).toHaveLength(0);
+  });
+
+  it('never shows a raw transport error as the reason a save failed', async () => {
+    await upsertConversation(OWNER, 'conv-save-raw', cloudMessages(5_400));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? jsonResponse({ error: 'internal stack trace at db.query' }, 500)
+        : defaultResponder(request);
+
+    const outcome = await saveConversationNow(OWNER, 'conv-save-raw');
+
+    expect(outcome).toEqual({
+      status: 'not-saved',
+      reason: 'This chat could not be saved to your account. Try again in a few minutes.',
+    });
+  }, 10_000);
 
   it('retries a 5xx three times with the same message id, then records an error', async () => {
     await upsertConversation(OWNER, 'conv-5xx', cloudMessages(6_000));

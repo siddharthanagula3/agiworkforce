@@ -113,6 +113,7 @@ export type NativeMessageType =
   | 'GET_QUICK_MODE'
   | 'SET_QUICK_MODE'
   | 'SYNC_CONVERSATION'
+  | 'SAVE_CONVERSATION_NOW'
   | 'ENSURE_CLOUD_CONVERSATION'
   | 'DELETE_CLOUD_CONVERSATION'
   | 'START_DOWNLOAD'
@@ -1010,6 +1011,19 @@ export interface SyncConversationMessage extends BaseMessage {
   streaming?: boolean;
 }
 
+export interface SaveConversationNowMessage extends BaseMessage {
+  type: 'SAVE_CONVERSATION_NOW';
+  owner: ManagedCloudOwner;
+  conversationId: string;
+}
+
+export interface SaveConversationNowResponse {
+  success: boolean;
+  status?: 'saved' | 'not-saved' | 'mirroring-off' | 'streaming';
+  reason?: string;
+  error?: string;
+}
+
 export interface EnsureCloudConversationMessage extends BaseMessage {
   type: 'ENSURE_CLOUD_CONVERSATION';
   owner: ManagedCloudOwner;
@@ -1329,6 +1343,7 @@ export type ExtensionMessage =
   | GetQuickModeMessage
   | SetQuickModeMessage
   | SyncConversationMessage
+  | SaveConversationNowMessage
   | EnsureCloudConversationMessage
   | DeleteCloudConversationMessage
   | RunAutofillMessage

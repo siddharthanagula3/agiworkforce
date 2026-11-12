@@ -275,6 +275,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
 
 import { assertDestinationAllowlisted, navigate } from '../src/features/computer-use/cdpDriver';
 import { MAX_RUN_GUIDANCE_CHARS } from '../src/features/computer-use/agentLoop';
+import { USER_TAKEOVER_MAX_MS } from '../src/features/computer-use/runOwnership';
 import { captureEditableTarget } from '../src/features/background/editable-selection';
 import {
   captureEditableSelection,
@@ -527,6 +528,74 @@ describe('background service worker security guards', () => {
     await dispatch({ type: 'REVOKE_SITE_ONCE', grantId });
     expect(await dispatch({ type: 'CHECK_SITE_ONCE', grantId, origin: SITE_A })).toMatchObject({
       success: false,
+    });
+  });
+
+  describe('a side panel closing in one window', () => {
+    function connectPanel(windowId: number, documentId: string): () => void {
+      let onMessage: (message: unknown) => void = () => undefined;
+      let onDisconnect: () => void = () => undefined;
+      const port = {
+        name: 'agi-side-panel',
+        sender: { ...SIDE_PANEL_SENDER, documentId },
+        disconnect: vi.fn(),
+        postMessage: vi.fn(),
+        onMessage: {
+          addListener: vi.fn((listener: (message: unknown) => void) => {
+            onMessage = listener;
+          }),
+        },
+        onDisconnect: {
+          addListener: vi.fn((listener: () => void) => {
+            onDisconnect = listener;
+          }),
+        },
+      };
+      for (const listener of harness.connectListeners) listener(port);
+      onMessage({ windowId });
+      return () => onDisconnect();
+    }
+
+    async function grantOnce(grantId: string): Promise<void> {
+      expect(
+        await dispatch({
+          type: 'GRANT_SITE_ONCE',
+          grantId,
+          origin: SITE_A,
+          hostPermissionAdded: false,
+        }),
+      ).toMatchObject({ success: true });
+    }
+
+    it('keeps one-time access while a panel the restarted worker never heard from is still open', async () => {
+      const grantId = 'site_once_panel-elsewhere';
+      await grantOnce(grantId);
+      harness.chromeMock.runtime.getContexts.mockResolvedValueOnce([
+        { windowId: 7, documentId: 'panel-unregistered' },
+        { windowId: 9, documentId: 'panel-closing' },
+      ]);
+      connectPanel(9, 'panel-closing')();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(await dispatch({ type: 'CHECK_SITE_ONCE', grantId, origin: SITE_A })).toMatchObject({
+        success: true,
+      });
+      await dispatch({ type: 'REVOKE_SITE_ONCE', grantId });
+    });
+
+    it('withdraws one-time access when the last panel anywhere closes', async () => {
+      const grantId = 'site_once_last-panel';
+      await grantOnce(grantId);
+      harness.chromeMock.runtime.getContexts.mockResolvedValueOnce([
+        { windowId: 9, documentId: 'panel-last' },
+      ]);
+      connectPanel(9, 'panel-last')();
+
+      await vi.waitFor(async () =>
+        expect(await dispatch({ type: 'CHECK_SITE_ONCE', grantId, origin: SITE_A })).toMatchObject({
+          success: false,
+        }),
+      );
     });
   });
 
@@ -1586,6 +1655,52 @@ describe('background service worker security guards', () => {
           open: false,
         }),
       );
+    });
+  });
+
+  describe('a task paused while the user has the page', () => {
+    it('ends with its own reason once the page is not handed back in time', async () => {
+      const runId = 'cu_run_takeover_limit';
+      const options = await startRun(runId);
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        expect(await dispatch({ type: 'PAUSE_COMPUTER_USE', runId })).toMatchObject({
+          success: true,
+        });
+        vi.advanceTimersByTime(USER_TAKEOVER_MAX_MS - 1);
+        expect(options.signal.aborted).toBe(false);
+        vi.advanceTimersByTime(1);
+        expect(options.signal.aborted).toBe(true);
+        expect(options.signal.reason).toMatchObject({ reasonCode: 'takeover_expired' });
+        expect(await dispatch({ type: 'GET_COMPUTER_USE_STATE' })).toMatchObject({
+          running: false,
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('keeps waiting for nothing once the page was handed back', async () => {
+      const runId = 'cu_run_takeover_returned';
+      const options = await startRun(runId);
+      const tabs = harness.chromeMock.tabs as unknown as Record<string, unknown>;
+      tabs['update'] = vi.fn(() => Promise.resolve());
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        expect(await dispatch({ type: 'PAUSE_COMPUTER_USE', runId })).toMatchObject({
+          success: true,
+        });
+        expect(await dispatch({ type: 'RESUME_COMPUTER_USE', runId })).toMatchObject({
+          success: true,
+          running: true,
+        });
+        vi.advanceTimersByTime(USER_TAKEOVER_MAX_MS * 2);
+        expect(options.signal.aborted).toBe(false);
+      } finally {
+        vi.useRealTimers();
+        delete tabs['update'];
+        await dispatch({ type: 'CANCEL_COMPUTER_USE', runId });
+      }
     });
   });
 

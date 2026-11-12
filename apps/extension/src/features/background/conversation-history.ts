@@ -1969,6 +1969,14 @@ export function pendingCloudMessages(entry: ConversationEntry): HistoryMessage[]
   );
 }
 
+export function conversationHasUnsavedCloudChanges(entry: ConversationEntry): boolean {
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    entry.cloudSync?.state === 'pending' ||
+    entry.cloudSync?.state === 'error'
+  );
+}
+
 export function conversationProjectNeedsSync(entry: ConversationEntry): boolean {
   if (entry.cloudSync?.conversationId === undefined) return false;
   const synced = entry.cloudSync.syncedProjectId;

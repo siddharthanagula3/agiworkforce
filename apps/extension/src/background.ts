@@ -179,6 +179,7 @@ import {
   COMPUTER_USE_RUN_ID_PATTERN,
   ComputerUseRunCoordinator,
   ComputerUseStartCoordinator,
+  USER_TAKEOVER_MAX_MS,
   type ComputerUseCancellationReason,
   type ComputerUseRunLease,
   type ComputerUseTakeover,
@@ -329,6 +330,7 @@ import {
   ensureCloudConversation,
   flushQuestionBeforeTurn,
   queueCloudConversationDeletion,
+  saveConversationNow,
   scheduleConversationSync,
   sweepConversationSync,
   SYNC_SWEEP_ALARM,
@@ -440,6 +442,8 @@ import type {
   StartComputerUseMessage,
   StartDownloadMessage,
   SyncConversationMessage,
+  SaveConversationNowMessage,
+  SaveConversationNowResponse,
   UpdateScheduledTaskMessage,
   UpdateShortcutMessage,
   WebMCPDiscoverToolsMessage,
@@ -1027,8 +1031,24 @@ function untilHandedBack(lease: ComputerUseRunLease, takeover: ComputerUseTakeov
   });
 }
 
+const takeoverDeadlines = new WeakSet<ComputerUseTakeover>();
+
+function endTakeoverAfterLimit(lease: ComputerUseRunLease, takeover: ComputerUseTakeover): void {
+  if (takeoverDeadlines.has(takeover)) return;
+  takeoverDeadlines.add(takeover);
+  const timer = setTimeout(() => {
+    if (lease.takeover !== takeover || computerUseRuns.getActive() !== lease) return;
+    computerUseStartGeneration += 1;
+    cancelActiveComputerUseRun('takeover_expired', lease.runId);
+  }, USER_TAKEOVER_MAX_MS);
+  const clear = (): void => clearTimeout(timer);
+  void takeover.handedBack.then(clear);
+  lease.controller.signal.addEventListener('abort', clear, { once: true });
+}
+
 function handComputerUseTabToUser(lease: ComputerUseRunLease, reason: string): Promise<void> {
   const takeover = computerUseRuns.beginTakeover(lease, reason);
+  endTakeoverAfterLimit(lease, takeover);
   broadcastComputerUseForCurrentRun(lease, {
     type: 'AGI_CU_STATE',
     status: 'paused',
@@ -1790,9 +1810,24 @@ function handleSidePanelPresencePort(port: chrome.runtime.Port): void {
     const remaining = (openSidePanelWindows.get(registeredWindow) ?? 1) - 1;
     if (remaining > 0) openSidePanelWindows.set(registeredWindow, remaining);
     else openSidePanelWindows.delete(registeredWindow);
-    publishSidePanelPresence(registeredWindow);
-    if (openSidePanelWindows.size === 0) void revokeAllOneTimeSiteGrants();
+    void settleClosedSidePanel(registeredWindow, port.sender?.documentId);
   });
+}
+
+async function settleClosedSidePanel(
+  windowId: number,
+  closingDocumentId: string | undefined,
+): Promise<void> {
+  const remaining = (
+    await chrome.runtime
+      .getContexts({ contextTypes: ['SIDE_PANEL' as chrome.runtime.ContextType] })
+      .catch(() => [])
+  ).filter((panel) => panel.documentId === undefined || panel.documentId !== closingDocumentId);
+  publishSidePanelPresence(
+    windowId,
+    openSidePanelWindows.has(windowId) || remaining.some((panel) => panel.windowId === windowId),
+  );
+  if (remaining.length === 0 && openSidePanelWindows.size === 0) await revokeAllOneTimeSiteGrants();
 }
 
 function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
@@ -1874,6 +1909,35 @@ async function handleRefusedDesktopHandshake(
     state.lastNativeError = DESKTOP_PAIRED_ELSEWHERE;
     await releaseStoredDesktopPairing();
   }
+  return true;
+}
+
+async function releaseRevokedDesktopConnection(
+  port: chrome.runtime.Port,
+  error: unknown,
+): Promise<boolean> {
+  if (!(error instanceof NativeRequestRefused) || error.code !== NATIVE_PAIRING_REJECTED_CODE)
+    return false;
+  if (state.nativePort !== port) return true;
+  logger.warn('Desktop no longer holds this pairing; releasing it here');
+  activePairedBrowserCommand?.driver?.cancel(DESKTOP_PAIRED_ELSEWHERE);
+  rejectPendingNativeRequests(port, DESKTOP_PAIRED_ELSEWHERE);
+  state.nativePort = null;
+  nativeSessionSecret = null;
+  _bgCtx.nativeHandshakeInFlight = false;
+  state.isNativeConnected = false;
+  state.connectionStatus = 'disconnected';
+  state.lastNativeError = DESKTOP_PAIRED_ELSEWHERE;
+  try {
+    port.disconnect();
+  } catch (disconnectError) {
+    logger.debug('Native port disconnect after a revoked pairing failed', disconnectError);
+  }
+  clearNativeReconnectTimer();
+  setNativeReconnectGaveUp(true);
+  await releaseStoredDesktopPairing();
+  setDesktopPaired(false);
+  void notifyConnectionStatusChange();
   return true;
 }
 
@@ -2871,11 +2935,12 @@ async function resumeScheduledTaskJournal(
     { run: cloudRun, alreadyVisibleText: '', signal },
     {
       getAuthToken: async () => credential.token,
-      createClient: (token) =>
+      fetchImpl,
+      createClient: (token, capturingFetch) =>
         createManagedCloudAgentRunClient({
           baseUrl: FREE_TRIAL_GATEWAY,
           getAuthToken: async () => token,
-          fetchImpl,
+          fetchImpl: capturingFetch ?? fetchImpl,
           decorateMutationHeaders: (headers) => ({
             ...headers,
             'X-Requested-With': 'XMLHttpRequest',
@@ -4620,6 +4685,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
         command = response.command ?? null;
       } catch (error) {
         if (!isCurrentConnection()) return;
+        if (await releaseRevokedDesktopConnection(port, error)) return;
         failures += 1;
         logger.debug('Desktop browser command poll failed', error);
         const retryAt =
@@ -4694,6 +4760,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
               }
             } catch (error) {
               if (!driver.signal.aborted) driver.cancel(errorText(error));
+              void releaseRevokedDesktopConnection(port, error);
               return;
             }
           }
@@ -4787,6 +4854,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
           { requireAuthenticatedSession: true, connection },
         );
       } catch (error) {
+        if (await releaseRevokedDesktopConnection(port, error)) return;
         logger.debug('Desktop browser command result was not delivered', error);
       }
     }
@@ -5404,17 +5472,7 @@ async function handleMessageAsync(
         } as ExtensionResponse;
       }
       if (openSidePanelWindows.has(windowId)) return { success: true } as ExtensionResponse;
-      const remaining = (
-        await chrome.runtime
-          .getContexts({ contextTypes: ['SIDE_PANEL' as chrome.runtime.ContextType] })
-          .catch(() => [])
-      ).filter((panel) => panel.documentId === undefined || panel.documentId !== sender.documentId);
-      publishSidePanelPresence(
-        windowId,
-        remaining.some((panel) => panel.windowId === windowId),
-      );
-      if (remaining.length === 0 && openSidePanelWindows.size === 0)
-        await revokeAllOneTimeSiteGrants();
+      await settleClosedSidePanel(windowId, sender.documentId);
       return { success: true } as ExtensionResponse;
     }
 
@@ -6031,6 +6089,26 @@ async function handleMessageAsync(
       // alarm is what brings the mirror back around.
       armMaintenanceAlarm();
       return { success: true } as ExtensionResponse;
+    }
+
+    case 'SAVE_CONVERSATION_NOW': {
+      const saveMsg = message as SaveConversationNowMessage;
+      const saveOwner = normalizeManagedCloudOwner(saveMsg.owner);
+      if (!saveOwner || isRetiredManagedCloudOwner(saveOwner)) {
+        return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
+      }
+      if (typeof saveMsg.conversationId !== 'string' || saveMsg.conversationId.length === 0) {
+        return { success: false, error: 'conversationId is required' } as ExtensionResponse;
+      }
+      const answering = [...activeChatStreams.values()].some(
+        (active) =>
+          active.historyConversationId === saveMsg.conversationId &&
+          sameManagedCloudOwner(active.owner, saveOwner),
+      );
+      const saved: SaveConversationNowResponse = answering
+        ? { success: true, status: 'streaming' }
+        : { success: true, ...(await saveConversationNow(saveOwner, saveMsg.conversationId)) };
+      return saved as ExtensionResponse;
     }
 
     case 'ENSURE_CLOUD_CONVERSATION': {
@@ -8802,6 +8880,7 @@ function mapInPagePromptFailure(
     case 'invalid_request':
     case 'model_not_admitted':
     case 'model_refused':
+    case 'policy_blocked':
       return inPagePromptFailure('request_rejected', result.message);
     default:
       return inPagePromptFailure('retryable_error', result.message, true);

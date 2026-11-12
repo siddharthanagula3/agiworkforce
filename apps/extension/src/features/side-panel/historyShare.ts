@@ -1,4 +1,7 @@
-import { pendingCloudMessages, type ConversationEntry } from '../background/conversation-history';
+import {
+  conversationHasUnsavedCloudChanges,
+  type ConversationEntry,
+} from '../background/conversation-history';
 import {
   ChromeShareError,
   type ChromeShareLink,
@@ -48,14 +51,6 @@ export function historyShareAvailability(entry: ConversationEntry): HistoryShare
   return entry.messages.some((message) => message.runtime === 'local') ? 'local-only' : 'available';
 }
 
-function hasUnsavedChanges(entry: ConversationEntry): boolean {
-  return (
-    pendingCloudMessages(entry).length > 0 ||
-    entry.cloudSync?.state === 'pending' ||
-    entry.cloudSync?.state === 'error'
-  );
-}
-
 export async function createHistoryShareLink(
   dependencies: HistoryShareDependencies,
 ): Promise<HistoryShareResult> {
@@ -88,7 +83,7 @@ export async function createHistoryShareLink(
       return {
         status: 'out-of-sync',
         message: error.message,
-        unsavedChanges: hasUnsavedChanges(stored),
+        unsavedChanges: conversationHasUnsavedCloudChanges(stored),
       };
     }
     throw error;

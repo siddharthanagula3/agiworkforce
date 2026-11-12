@@ -327,6 +327,31 @@ describe('desktop pairing rows', () => {
     expect(rows.element.querySelector('#opt-pairing-label')!.textContent).toBe('spPairingIdle');
   });
 
+  it('offers Pair again once the worker drops a pairing Desktop removed', async () => {
+    let released: () => void = () => undefined;
+    let current = state('paired', { fingerprint: 'ab:cd' });
+    const rows = createDesktopPairingRows({
+      loadPairingState: async () => current,
+      beginPairing: vi.fn(),
+      submitPairingCode: vi.fn(),
+      unpair: vi.fn(),
+      watchRelease: (onRelease) => {
+        released = onRelease;
+      },
+    });
+    await rows.loaded;
+    document.body.appendChild(rows.element);
+    expect(rows.element.querySelector<HTMLButtonElement>('#opt-pair-btn')!.hidden).toBe(true);
+
+    current = state('idle');
+    released();
+    await flush();
+
+    expect(rows.element.querySelector<HTMLButtonElement>('#opt-pair-btn')!.hidden).toBe(false);
+    expect(rows.element.querySelector<HTMLButtonElement>('#opt-unpair-btn')!.hidden).toBe(true);
+    expect(rows.element.querySelector('#opt-pairing-label')!.textContent).toBe('spPairingIdle');
+  });
+
   it('shows why Desktop still holds the pairing after an unpair it could not deliver', async () => {
     const notice = 'Desktop could not be reached to remove the pairing.';
     const rows = createDesktopPairingRows({

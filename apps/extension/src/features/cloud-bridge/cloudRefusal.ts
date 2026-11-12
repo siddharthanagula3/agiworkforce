@@ -1,4 +1,4 @@
-import { ErrorCode } from '@agiworkforce/types';
+import { DenialErrorCode, ErrorCode } from '@agiworkforce/types';
 
 export type CloudRefusalKind =
   | 'auth'
@@ -38,6 +38,19 @@ const POLICY_CODES: ReadonlySet<string> = new Set([
   'surface_sync_disabled',
   'workspace_not_accessible',
   'workspace_policy_unavailable',
+  'managed_compute_disabled',
+  'privacy_mode_not_allowed',
+  'audit_export_disabled',
+  'external_sharing_disabled',
+  'mfa_required',
+  'spend_cap_exceeded',
+  'billing_read_only',
+  'billing_past_due',
+  'code_control_disabled',
+  'code_host_not_allowed',
+  'code_mcp_server_not_allowed',
+  DenialErrorCode.DISABLED_BY_ORGANIZATION,
+  DenialErrorCode.DISABLED_BY_WORKSPACE,
 ]);
 
 const PLAN_CODES: ReadonlySet<string> = new Set([

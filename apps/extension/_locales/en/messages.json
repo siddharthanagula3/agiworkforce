@@ -2736,8 +2736,24 @@
     "description": "Saves a chat's unsaved changes to the account so it can be shared"
   },
   "spHistoryShareSaving": {
-    "message": "Saving this chat to your account. Share it again once it shows Saved to your account.",
-    "description": "Confirms the chat is being saved to the account before it is shared again"
+    "message": "Saving this chat to your account.",
+    "description": "Shown while the chat's unsaved changes are being saved to the account so it can be shared"
+  },
+  "spHistoryShareSaved": {
+    "message": "Saved to your account. Create the link now.",
+    "description": "The chat's changes were saved to the account, so a share link can be created"
+  },
+  "spHistoryShareSaveFailed": {
+    "message": "This chat could not be saved to your account. Try again.",
+    "description": "Saving the chat's changes to the account failed and the server gave no reason"
+  },
+  "spHistoryShareWaitForReply": {
+    "message": "Wait for the reply to finish, then save this chat.",
+    "description": "The chat cannot be saved for sharing while an answer is still being written"
+  },
+  "spHistoryShareMirroringOff": {
+    "message": "Saving chats to your account is turned off. Turn it on in the extension settings, then share this chat.",
+    "description": "The chat cannot be saved for sharing because saving chats to the account is turned off in settings"
   },
   "spHistoryShareNotLoaded": {
     "message": "Open this chat once so its messages load, then share it.",

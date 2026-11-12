@@ -728,11 +728,25 @@ describe('streamFreeChat, a refusal that names its reason', () => {
     },
   );
 
-  it('shows an administrator refusal in the server words instead of an account problem', async () => {
+  it('shows an administrator refusal in the server words as a policy, not a plan', async () => {
     const message = 'Your workspace administrator has turned off web search.';
     fetchMock.mockResolvedValueOnce(refusal('feature_disabled', message));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required', message });
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'policy_blocked', message });
+  });
+
+  it('labels any 403 the workspace policy sends as a policy, whatever its code', async () => {
+    const message = 'Your workspace administrator does not allow access from the Chrome extension.';
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(
+        403,
+        JSON.stringify({
+          error: { type: 'organization_policy', code: 'surface_not_allowed', message },
+        }),
+      ),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'policy_blocked', message });
   });
 
   it('falls back to the fixed sentence when the server gave no reason', async () => {

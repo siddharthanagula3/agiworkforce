@@ -68,7 +68,11 @@ import {
   readPageDocument,
   parseFormObservationReference,
 } from './features/browser-tools/documentBridge';
-import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
+import type {
+  AdoptChatTurnResponse,
+  BrowserContextTabReference,
+  SaveConversationNowResponse,
+} from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
 import { pageChipLabel } from './utils';
@@ -9417,6 +9421,7 @@ function handleStreamError(
         'account_suspended',
         'terms_required',
         'plan_required',
+        'policy_blocked',
         'quota_exceeded',
         'cancelled',
         'invalid_request',
@@ -11997,9 +12002,58 @@ function buildUI(): void {
           createBtn.disabled = false;
         });
     });
-    const offerShareRecovery = (message: string, unsavedChanges: boolean): void => {
+    const tellShareRow = (message: string): void => {
       question.textContent = message;
       showHistoryStatus(message);
+    };
+    const saveBeforeSharing = async (recovery: HTMLButtonElement): Promise<void> => {
+      const owner = _ctx.managedCloudOwner;
+      if (!owner || !sameManagedCloudOwner(entry.owner, owner)) {
+        confirmRow.remove();
+        return;
+      }
+      if (entry.id === _ctx.conversationId && _ctx.isStreaming) {
+        tellShareRow(t('spHistoryShareWaitForReply'));
+        return;
+      }
+      const rowIsLive = (): boolean =>
+        confirmRow.isConnected && sameManagedCloudOwner(_ctx.managedCloudOwner, owner);
+      recovery.disabled = true;
+      createBtn.disabled = true;
+      tellShareRow(t('spHistoryShareSaving'));
+      let outcome: SaveConversationNowResponse | undefined;
+      try {
+        outcome = (await chrome.runtime.sendMessage({
+          type: 'SAVE_CONVERSATION_NOW',
+          owner,
+          conversationId: entry.id,
+        })) as SaveConversationNowResponse | undefined;
+      } catch {
+        outcome = undefined;
+      }
+      if (!rowIsLive()) {
+        confirmRow.remove();
+        return;
+      }
+      recovery.disabled = false;
+      createBtn.disabled = false;
+      if (outcome?.success === true && outcome.status === 'saved') {
+        recovery.remove();
+        tellShareRow(t('spHistoryShareSaved'));
+        createBtn.focus();
+        return;
+      }
+      tellShareRow(
+        outcome?.status === 'streaming'
+          ? t('spHistoryShareWaitForReply')
+          : outcome?.status === 'mirroring-off'
+            ? t('spHistoryShareMirroringOff')
+            : (outcome?.reason ?? t('spHistoryShareSaveFailed')),
+      );
+      recovery.focus();
+    };
+    const offerShareRecovery = (message: string, unsavedChanges: boolean): void => {
+      tellShareRow(message);
       actions.querySelector('.sp-drawer-history-share-recovery')?.remove();
       const cloudConversationId = entry.cloudSync?.conversationId;
       const recovery = el(
@@ -12008,11 +12062,11 @@ function buildUI(): void {
         unsavedChanges || !cloudConversationId
           ? t('spHistoryShareSaveNow')
           : t('spHistoryOpenInWeb'),
-      );
+      ) as HTMLButtonElement;
       recovery.addEventListener('click', () => {
+        if (recovery.disabled) return;
         if (unsavedChanges || !cloudConversationId) {
-          requestCloudConversationSync(entry.id);
-          showHistoryStatus(t('spHistoryShareSaving'));
+          void saveBeforeSharing(recovery);
           return;
         }
         void chrome.tabs.create({
@@ -15356,27 +15410,46 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
 injectStyles();
 
+const PRESENCE_REGISTER_MIN_INTERVAL_MS = 1_000;
+
 function announceSidePanelPresence(): void {
   const presence = assistantHostWindowId().catch(() => undefined);
-  let workerTracksPanel = false;
-  try {
-    const port = chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
-    workerTracksPanel = true;
-    port.onDisconnect.addListener(() => {
-      workerTracksPanel = false;
-    });
+  let trackedPort: chrome.runtime.Port | null = null;
+  let lastRegisterAt = Number.NEGATIVE_INFINITY;
+  const release = (port: chrome.runtime.Port): void => {
+    if (trackedPort === port) trackedPort = null;
+  };
+  const register = (): void => {
+    const now = Date.now();
+    if (trackedPort || now - lastRegisterAt < PRESENCE_REGISTER_MIN_INTERVAL_MS) return;
+    lastRegisterAt = now;
+    let port: chrome.runtime.Port;
+    try {
+      port = chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
+    } catch {
+      return;
+    }
+    trackedPort = port;
+    port.onDisconnect.addListener(() => release(port));
     void presence.then((windowId) => {
-      if (windowId !== undefined) port.postMessage({ windowId });
+      if (windowId === undefined || trackedPort !== port) return;
+      try {
+        port.postMessage({ windowId });
+      } catch {
+        release(port);
+      }
     });
-  } catch {
-    workerTracksPanel = false;
-  }
+  };
+  register();
+  chrome.runtime.onMessage.addListener(() => {
+    register();
+  });
   let hostWindowId: number | undefined;
   void presence.then((windowId) => {
     hostWindowId = windowId;
   });
   window.addEventListener('pagehide', () => {
-    if (workerTracksPanel || hostWindowId === undefined) return;
+    if (trackedPort || hostWindowId === undefined) return;
     void chrome.runtime
       .sendMessage({ type: 'SIDE_PANEL_CLOSED', windowId: hostWindowId })
       .catch(() => undefined);

@@ -372,6 +372,8 @@ describe('command pickup after Desktop has been away', () => {
     for (let step = 0; step < 5; step += 1) await vi.advanceTimersByTimeAsync(61_000);
     const whileAway = polls;
     expect(whileAway).toBeGreaterThanOrEqual(3);
+    expect(harness.localStore['agi_paired_desktop']).toMatchObject({ token: PAIR_TOKEN });
+    expect(harness.ports[0]?.disconnect).not.toHaveBeenCalled();
 
     desktopRunning = true;
     await vi.advanceTimersByTimeAsync(61_000);
@@ -380,6 +382,38 @@ describe('command pickup after Desktop has been away', () => {
     const resumed = polls;
     await vi.advanceTimersByTimeAsync(10_000);
     expect(polls).toBe(resumed);
+  });
+});
+
+describe('a pairing Desktop removes while this browser is connected', () => {
+  it('is dropped here at once, the port is closed and nothing polls again', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'Date'] });
+    harness.localStore['connectedToDesktop'] = true;
+    harness.localStore['agi_paired_desktop'] = {
+      fingerprint: 'eeee',
+      accountId: null,
+      token: PAIR_TOKEN,
+    };
+    let polls = 0;
+    harness.desktop.answer = (message) => {
+      if (message['type'] !== NATIVE_BROWSER_POLL_MESSAGE) return { success: true };
+      polls += 1;
+      return {
+        success: false,
+        code: 'pairing-rejected',
+        error: 'This browser profile is not the one paired with Desktop.',
+      };
+    };
+    await startWorker();
+    await settled(() => harness.localStore['agi_paired_desktop'] === undefined);
+
+    expect(harness.localStore['agi_paired_desktop']).toBeUndefined();
+    expect(harness.localStore['connectedToDesktop']).toBe(false);
+    expect(harness.ports[0]?.disconnect).toHaveBeenCalled();
+    const afterRelease = polls;
+    for (let step = 0; step < 4; step += 1) await vi.advanceTimersByTimeAsync(61_000);
+    expect(polls).toBe(afterRelease);
+    expect(harness.connectNative).toHaveBeenCalledTimes(1);
   });
 });
 

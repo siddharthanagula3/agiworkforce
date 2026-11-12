@@ -233,6 +233,13 @@ export async function settlePendingDesktopRevocation(id: string): Promise<void> 
   await removeLocal([STORAGE_KEY_PENDING_DESKTOP_REVOCATION]);
 }
 
+export function watchDesktopPairingRelease(onRelease: () => void): void {
+  chrome.storage?.onChanged?.addListener((changes, area) => {
+    if (area !== 'local' || !(STORAGE_KEY_PAIRED_DESKTOP in changes)) return;
+    if (changes[STORAGE_KEY_PAIRED_DESKTOP]?.newValue === undefined) onRelease();
+  });
+}
+
 export async function releaseStoredDesktopPairing(): Promise<void> {
   await releasePairedCredentials();
   _state = { ...IDLE_STATE };

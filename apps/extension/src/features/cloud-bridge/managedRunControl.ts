@@ -15,6 +15,12 @@ import {
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TERMINAL_AGENT_TASK_STATES, messageKindForAgentEvent } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
+import {
+  captureCloudRefusals,
+  classifyCloudRefusal,
+  describeCloudRefusal,
+  type CloudRefusal,
+} from './cloudRefusal';
 import { platformRequestHeaders } from '../../platformHeaders';
 import { chatBrowserToolDefinitions } from '../computer-use/chatBrowserTools';
 import {
@@ -32,10 +38,12 @@ export const MANAGED_RUN_CANCELLATION_TIMEOUT_MS = 15_000;
 export const ALL_MANAGED_RUN_STATES = AgentTaskStateSchema.options;
 export const MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS = 15_000;
 
+type RunControlFetch = (input: string, init?: RequestInit) => Promise<Response>;
+
 export interface ChromeManagedRunDependencies {
   getAuthToken: typeof getAuthToken;
-  createClient: (token: string) => ManagedCloudAgentRunClient;
-  fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
+  createClient: (token: string, fetchImpl?: RunControlFetch) => ManagedCloudAgentRunClient;
+  fetchImpl?: RunControlFetch;
   onText?: (text: string) => void | Promise<void>;
   onAgentEvent?: (event: AgentEventEnvelope) => void | Promise<void>;
   onRunReference?: (run: ManagedCloudAgentRunReference) => void | Promise<void>;
@@ -53,18 +61,32 @@ export type ChromeManagedRunControlResult =
   | { status: 'success' }
   | {
       status: 'error';
-      code: 'invalid_request' | 'auth_required' | 'cancelled' | 'server_error' | 'protocol_error';
+      code:
+        | 'invalid_request'
+        | 'auth_required'
+        | 'plan_required'
+        | 'policy_blocked'
+        | 'account_suspended'
+        | 'rate_limited'
+        | 'cancelled'
+        | 'server_error'
+        | 'protocol_error';
       message: string;
+      retryAfterSeconds?: number;
     };
 type ChromeManagedRunControlError = Extract<ChromeManagedRunControlResult, { status: 'error' }>;
 
 export type ChromeManagedRunCancellationResult =
   { status: 'success'; run: CloudAgentRun } | ChromeManagedRunControlError;
 
-function createDefaultClient(token: string): ManagedCloudAgentRunClient {
+function createDefaultClient(
+  token: string,
+  fetchImpl?: RunControlFetch,
+): ManagedCloudAgentRunClient {
   return createManagedCloudAgentRunClient({
     baseUrl: FREE_TRIAL_GATEWAY,
     getAuthToken: async () => token,
+    ...(fetchImpl ? { fetchImpl } : {}),
     decorateMutationHeaders: (headers) => ({
       ...headers,
       'X-Requested-With': 'XMLHttpRequest',
@@ -83,20 +105,59 @@ function validateReference(value: unknown): ManagedCloudAgentRunReference | unde
   return parsed.success ? parsed.data : undefined;
 }
 
+const RUN_REFUSAL_COPY = {
+  refused: 'This AGI account cannot use this AGI Cloud run from the Chrome extension.',
+  unavailable: 'AGI Cloud is temporarily unavailable.',
+  limitUnit: 'requests',
+};
+
+function runRefusal(
+  error: ManagedCloudAgentRunHttpError,
+  captured: CloudRefusal | null,
+): CloudRefusal {
+  if (captured?.status === error.status) return captured;
+  return classifyCloudRefusal(error.status, {
+    error: { message: error.message.replace(/^HTTP \d{3}: /u, '') },
+  });
+}
+
+function refusalResult(refusal: CloudRefusal): ChromeManagedRunControlError | null {
+  const message = describeCloudRefusal(refusal, RUN_REFUSAL_COPY);
+  const retry =
+    refusal.retryAfterSeconds !== undefined ? { retryAfterSeconds: refusal.retryAfterSeconds } : {};
+  switch (refusal.kind) {
+    case 'auth':
+      return { status: 'error', code: 'auth_required', message: 'Sign in to continue AGI Cloud.' };
+    case 'plan':
+      return { status: 'error', code: 'plan_required', message };
+    case 'policy':
+      return { status: 'error', code: 'policy_blocked', message };
+    case 'account':
+      return { status: 'error', code: 'account_suspended', message };
+    case 'refused':
+      return { status: 'error', code: 'invalid_request', message };
+    case 'rate_limited':
+      return { status: 'error', code: 'rate_limited', message, ...retry };
+    case 'unavailable':
+      return { status: 'error', code: 'server_error', message, ...retry };
+    default:
+      return null;
+  }
+}
+
 function errorResult(
   error: unknown,
   signal?: AbortSignal,
   fallbackMessage = 'The AGI Cloud run could not be resumed.',
+  captured: CloudRefusal | null = null,
 ): ChromeManagedRunControlError {
   if (error instanceof ScheduledTaskTransportControl) throw error;
   if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
     return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
   }
-  if (
-    error instanceof ManagedCloudAgentRunHttpError &&
-    (error.status === 401 || error.status === 403)
-  ) {
-    return { status: 'error', code: 'auth_required', message: 'Sign in to continue AGI Cloud.' };
+  if (error instanceof ManagedCloudAgentRunHttpError && error.status > 0) {
+    const refused = refusalResult(runRefusal(error, captured));
+    if (refused) return refused;
   }
   return {
     status: 'error',
@@ -193,55 +254,58 @@ export async function resumeChromeManagedRun(
           originalCallerToolNames.map((name) => ({ function: { name } })),
         )
       : undefined;
+  const refusals = captureCloudRefusals(resolvedDependencies.fetchImpl);
   let askedForBrowserTool = false;
   let sawCanonicalCaller = false;
   let pendingCallerSequence: number | undefined;
   let observedSequence = -1;
 
   try {
-    const followed = await resolvedDependencies.createClient(token).followRun(run.runId, {
-      afterSequence: -1,
-      signal: request.signal,
-      onEvent: async (envelope) => {
-        callerReader?.observe(envelope);
-        if (envelope.sequence > observedSequence) {
-          observedSequence = envelope.sequence;
-          if (pendingCallerSequence !== undefined && envelope.sequence >= pendingCallerSequence)
-            pendingCallerSequence = undefined;
-          if (envelope.event.type === 'caller-tools-requested') {
-            sawCanonicalCaller = true;
-            pendingCallerSequence = envelope.event.nextEventSequence;
-          }
-          if (toolUseJournal.observe(envelope.event)) askedForBrowserTool = true;
-        }
-        if (
-          messageKindForAgentEvent(envelope.event.type) === 'text' &&
-          envelope.event.type === 'text-delta'
-        ) {
-          const reconciled = reconcileManagedCloudPublicText(
-            pendingPublicText,
-            envelope.event.delta,
-          );
-          pendingPublicText = reconciled.pending;
-          if (reconciled.unmatchedIncoming) {
-            emittedTextCharacters += reconciled.unmatchedIncoming.length;
-            if (emittedTextCharacters > MAX_VISIBLE_TEXT_CHARACTERS) {
-              throw new Error('AGI Cloud returned more output than Chrome can safely render.');
+    const followed = await resolvedDependencies
+      .createClient(token, refusals.fetch)
+      .followRun(run.runId, {
+        afterSequence: -1,
+        signal: request.signal,
+        onEvent: async (envelope) => {
+          callerReader?.observe(envelope);
+          if (envelope.sequence > observedSequence) {
+            observedSequence = envelope.sequence;
+            if (pendingCallerSequence !== undefined && envelope.sequence >= pendingCallerSequence)
+              pendingCallerSequence = undefined;
+            if (envelope.event.type === 'caller-tools-requested') {
+              sawCanonicalCaller = true;
+              pendingCallerSequence = envelope.event.nextEventSequence;
             }
-            await resolvedDependencies.onText?.(reconciled.unmatchedIncoming);
+            if (toolUseJournal.observe(envelope.event)) askedForBrowserTool = true;
           }
-        }
-        await resolvedDependencies.onAgentEvent?.(envelope);
-        await publishRun({ lastSequence: envelope.sequence });
-      },
-      onSnapshot: async (snapshot) => {
-        await publishRun({
-          lastSequence: snapshot.nextAfterSequence,
-          state: snapshot.run.state,
-          cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
-        });
-      },
-    });
+          if (
+            messageKindForAgentEvent(envelope.event.type) === 'text' &&
+            envelope.event.type === 'text-delta'
+          ) {
+            const reconciled = reconcileManagedCloudPublicText(
+              pendingPublicText,
+              envelope.event.delta,
+            );
+            pendingPublicText = reconciled.pending;
+            if (reconciled.unmatchedIncoming) {
+              emittedTextCharacters += reconciled.unmatchedIncoming.length;
+              if (emittedTextCharacters > MAX_VISIBLE_TEXT_CHARACTERS) {
+                throw new Error('AGI Cloud returned more output than Chrome can safely render.');
+              }
+              await resolvedDependencies.onText?.(reconciled.unmatchedIncoming);
+            }
+          }
+          await resolvedDependencies.onAgentEvent?.(envelope);
+          await publishRun({ lastSequence: envelope.sequence });
+        },
+        onSnapshot: async (snapshot) => {
+          await publishRun({
+            lastSequence: snapshot.nextAfterSequence,
+            state: snapshot.run.state,
+            cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
+          });
+        },
+      });
     await publishRun({
       lastSequence: followed.lastSequence,
       state: followed.run.state,
@@ -279,7 +343,7 @@ export async function resumeChromeManagedRun(
     }
     return { status: 'success' };
   } catch (error) {
-    return errorResult(error, request.signal);
+    return errorResult(error, request.signal, undefined, refusals.last);
   }
 }
 
@@ -352,6 +416,7 @@ export async function cancelChromeManagedRun(
     () => confirmation.abort(timeoutError),
     MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS,
   );
+  const refusals = captureCloudRefusals(resolvedDependencies.fetchImpl);
   try {
     const cancelAndConfirm = async (): Promise<ChromeManagedRunCancellationResult> => {
       confirmation.signal.throwIfAborted();
@@ -360,7 +425,7 @@ export async function cancelChromeManagedRun(
       if (!token) {
         return { status: 'error', code: 'auth_required', message: 'Sign in to cancel AGI Cloud.' };
       }
-      const client = resolvedDependencies.createClient(token);
+      const client = resolvedDependencies.createClient(token, refusals.fetch);
       const requested = await client.cancelRun(run.runId, { signal: confirmation.signal });
       confirmation.signal.throwIfAborted();
       if (requested.id !== run.runId)
@@ -394,7 +459,7 @@ export async function cancelChromeManagedRun(
         message: UNCONFIRMED_CANCELLATION_MESSAGE,
       };
     }
-    return errorResult(error, signal);
+    return errorResult(error, signal, undefined, refusals.last);
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', forwardAbort);
@@ -415,11 +480,14 @@ export async function cancelAndConfirmChromeManagedRun(
   if (!token) {
     return { status: 'error', code: 'auth_required', message: 'Sign in to confirm cancellation.' };
   }
+  const refusals = captureCloudRefusals(resolvedDependencies.fetchImpl);
   try {
-    const followed = await resolvedDependencies.createClient(token).followRun(value.runId, {
-      afterSequence: value.lastSequence,
-      ...(signal ? { signal } : {}),
-    });
+    const followed = await resolvedDependencies
+      .createClient(token, refusals.fetch)
+      .followRun(value.runId, {
+        afterSequence: value.lastSequence,
+        ...(signal ? { signal } : {}),
+      });
     if (TERMINAL_AGENT_TASK_STATES.has(followed.run.state)) {
       return { status: 'success', run: followed.run };
     }
@@ -436,7 +504,7 @@ export async function cancelAndConfirmChromeManagedRun(
         message: UNCONFIRMED_CANCELLATION_MESSAGE,
       };
     }
-    return errorResult(error, signal);
+    return errorResult(error, signal, undefined, refusals.last);
   }
 }
 
@@ -453,12 +521,13 @@ export async function listChromeManagedRuns(
   if (!token) {
     return { status: 'error', code: 'auth_required', message: 'Sign in to see your tasks.' };
   }
+  const refusals = captureCloudRefusals(resolvedDependencies.fetchImpl);
   try {
     const page = await resolvedDependencies
-      .createClient(token)
+      .createClient(token, refusals.fetch)
       .listRuns({ limit, ...(signal ? { signal } : {}) });
     return { status: 'success', runs: page.runs };
   } catch (error) {
-    return errorResult(error, signal, 'Your tasks could not be loaded.');
+    return errorResult(error, signal, 'Your tasks could not be loaded.', refusals.last);
   }
 }

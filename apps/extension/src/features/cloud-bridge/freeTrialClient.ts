@@ -68,7 +68,12 @@ import { platformRequestHeaders } from '../../platformHeaders';
 import { UUID_PATTERN } from '../../lib/uuid';
 import { logger } from '../../utils';
 import { readAnsweredModel } from './answeredModel';
-import { readCloudRefusal, retryAfterSentence, type CloudRefusalKind } from './cloudRefusal';
+import {
+  classifyCloudRefusal,
+  readCloudRefusal,
+  retryAfterSentence,
+  type CloudRefusalKind,
+} from './cloudRefusal';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
 import {
   CallerToolContinuationError,
@@ -770,6 +775,7 @@ export type FreeTrialChunk =
         | 'account_suspended'
         | 'terms_required'
         | 'plan_required'
+        | 'policy_blocked'
         | 'model_refused'
         | 'rate_limited'
         | 'server_error'
@@ -1244,6 +1250,16 @@ const MODEL_REFUSAL_CODES: ReadonlySet<string> = new Set([
 const MODEL_REFUSED_MESSAGE =
   'This model is not available with your current settings. Choose another model.';
 
+const POLICY_BLOCKED_MESSAGE = 'Your workspace policy does not allow this AGI Cloud request.';
+
+function parsedErrorBody(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
 function retryAfterFromHeader(headers: Headers): number | undefined {
   const raw = headers.get('retry-after')?.trim();
   if (!raw) return undefined;
@@ -1331,6 +1347,16 @@ function accountRefusal(
       message: gatewayError.message ?? MODEL_REFUSED_MESSAGE,
       code: 'model_refused',
     };
+  }
+  if (status === 403) {
+    const refusal = classifyCloudRefusal(status, parsedErrorBody(body), headers);
+    if (refusal.kind === 'policy') {
+      return {
+        type: 'error',
+        message: refusal.message ?? POLICY_BLOCKED_MESSAGE,
+        code: 'policy_blocked',
+      };
+    }
   }
   return {
     type: 'error',

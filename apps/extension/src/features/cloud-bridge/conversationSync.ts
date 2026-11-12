@@ -16,6 +16,7 @@ import {
   blockCloudPersistence,
   claimCloudConversationBinding,
   cloudMessageSyncFingerprint,
+  conversationHasUnsavedCloudChanges,
   conversationFlagsNeedSync,
   conversationMetadataNeedsSync,
   conversationProjectNeedsSync,
@@ -70,6 +71,11 @@ const RETRY_AFTER_RATE_LIMIT_MS = 60_000;
 const RETRY_AFTER_SERVER_ERROR_MS = 5 * 60_000;
 const MAX_TOMBSTONES = 100;
 const FLAG_PULL_MAX_PAGES = 20;
+const MAX_USER_SAVE_ROUNDS = 20;
+
+const SIGN_IN_TO_SAVE_MESSAGE = 'Sign in to save chats to your account.';
+const SAVE_FAILED_MESSAGE =
+  'This chat could not be saved to your account. Try again in a few minutes.';
 
 interface CloudSyncTombstone {
   accountId: string;
@@ -203,6 +209,60 @@ export async function flushQuestionBeforeTurn(
   await flushConversation(owner, conversationId, true);
 }
 
+export type UserConversationSave =
+  { status: 'saved' } | { status: 'not-saved'; reason?: string } | { status: 'mirroring-off' };
+
+function hasOutstandingCloudWork(entry: ConversationEntry): boolean {
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    conversationMetadataNeedsSync(entry) ||
+    entry.cloudSync?.createAcknowledged !== true
+  );
+}
+
+export async function saveConversationNow(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+): Promise<UserConversationSave> {
+  const key = flushKey(owner, conversationId);
+  const scheduled = scheduledFlushes.get(key);
+  if (scheduled) {
+    clearTimeout(scheduled.timer);
+    scheduledFlushes.delete(key);
+  }
+  await inFlightFlushes.get(key)?.done;
+  if (!(await readCloudMirroringEnabled())) return { status: 'mirroring-off' };
+  const initial = await getConversation(owner, conversationId);
+  if (!initial) return { status: 'not-saved' };
+  if (initial.cloudSync?.retryAfter !== undefined) {
+    await recordCloudSyncState(owner, conversationId, { retryAfter: undefined });
+  }
+  let pendingBefore = Number.POSITIVE_INFINITY;
+  for (let round = 0; round < MAX_USER_SAVE_ROUNDS; round += 1) {
+    await flushConversation(owner, conversationId);
+    const entry = await getConversation(owner, conversationId);
+    if (!entry) return { status: 'not-saved' };
+    const sync = entry.cloudSync;
+    if (sync?.state === 'blocked' || sync?.state === 'error') {
+      return { status: 'not-saved', ...(sync.lastError ? { reason: sync.lastError } : {}) };
+    }
+    if (!hasOutstandingCloudWork(entry)) {
+      if (conversationHasUnsavedCloudChanges(entry)) {
+        await recordCloudSyncState(owner, conversationId, {
+          state: 'idle',
+          lastError: undefined,
+          retryAfter: undefined,
+        });
+      }
+      return { status: 'saved' };
+    }
+    const pendingAfter = pendingCloudMessages(entry).length;
+    if (pendingAfter >= pendingBefore) return { status: 'not-saved' };
+    pendingBefore = pendingAfter;
+  }
+  return { status: 'not-saved' };
+}
+
 function combineTimeoutSignal(controller: AbortController): AbortSignal {
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
@@ -240,7 +300,7 @@ async function runConversationFlush(
       await recordCloudSyncState(owner, conversationId, {
         state: 'blocked',
         blockedReason: 'auth',
-        lastError: 'Sign in to save chats to your account.',
+        lastError: SIGN_IN_TO_SAVE_MESSAGE,
         lastAttemptAt: Date.now(),
       });
       return;
@@ -546,20 +606,19 @@ async function handleFlushError(
     await recordCloudSyncState(owner, conversationId, {
       state: 'blocked',
       blockedReason: 'auth',
-      lastError: 'Sign in to save chats to your account.',
+      lastError: SIGN_IN_TO_SAVE_MESSAGE,
       lastAttemptAt: now,
     });
     return;
   }
 
   const refusal = syncRefusal(error, captured);
-  const message = error instanceof Error ? error.message : 'Cloud sync failed.';
 
   if (refusal?.kind === 'auth') {
     await recordCloudSyncState(owner, conversationId, {
       state: 'blocked',
       blockedReason: 'auth',
-      lastError: message,
+      lastError: SIGN_IN_TO_SAVE_MESSAGE,
       lastAttemptAt: now,
     });
     return;
@@ -605,9 +664,10 @@ async function handleFlushError(
     return;
   }
 
+  logger.debug('Conversation cloud save failed', error);
   await recordCloudSyncState(owner, conversationId, {
     state: 'error',
-    lastError: message,
+    lastError: SAVE_FAILED_MESSAGE,
     lastAttemptAt: now,
     retryAfter: now + RETRY_AFTER_SERVER_ERROR_MS,
   });

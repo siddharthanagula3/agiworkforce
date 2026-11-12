@@ -296,6 +296,13 @@ describe('the share link client', () => {
     });
     await expect(shareFailure()).resolves.toMatchObject({ kind: 'refused', message: policy });
 
+    const sharingOff =
+      'Your workspace administrator has turned off public sharing. Links already created are unaffected.';
+    serverAnswers(403, {
+      error: { message: sharingOff, type: 'forbidden', code: 'external_sharing_disabled' },
+    });
+    await expect(shareFailure()).resolves.toMatchObject({ kind: 'refused', message: sharingOff });
+
     serverAnswers(
       503,
       { error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' } },

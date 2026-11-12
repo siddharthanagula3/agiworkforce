@@ -366,6 +366,10 @@ describe('every way a run can end has words for the user', () => {
     }
   });
 
+  it('says how long a paused task waited before it let go of the page', () => {
+    expect(describeCancellationReason('takeover_expired')).toContain('15 minutes');
+  });
+
   it('tells the user in plain words that Chrome’s own Cancel stopped the run', () => {
     expect(describeCancellationReason('debugger_detached')).toContain('debugging bar');
   });
