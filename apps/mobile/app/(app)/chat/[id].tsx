@@ -756,6 +756,8 @@ export default function ChatScreen() {
   );
 
   const pendingSendText = id && isLoadingMessages ? peekConversationSend(id) : null;
+  const conversationStarted =
+    pendingSendText !== null || conversationMessages.some((message) => message.role === 'user');
 
   useEffect(() => {
     if (!id || isStreaming || isLoadingMessages) return;
@@ -2056,7 +2058,10 @@ export default function ChatScreen() {
             and rendering both stacked two input rows on screen at once, which
             is neither reference-03 nor what VoiceInlineBar's own docstring
             promises ("the only thing that changes is the composer"). */}
-        {conversationExecutionMode === 'cloud' && !voiceInlineVisible && !liveVoiceVisible ? (
+        {conversationExecutionMode === 'cloud' &&
+        !conversationStarted &&
+        !voiceInlineVisible &&
+        !liveVoiceVisible ? (
           <WorkModeSwitch />
         ) : null}
         {conversationExecutionMode === 'cloud' &&

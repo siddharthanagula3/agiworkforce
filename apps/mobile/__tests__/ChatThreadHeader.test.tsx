@@ -101,6 +101,7 @@ import ChatScreen from '../app/(app)/chat/[id]';
 import { handOffConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
 import { useChatExecutionStore, useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
+import { useTierStore } from '../src/features/billing/store';
 
 function seedThread(overrides: Record<string, unknown> = {}): void {
   useChatStore.setState({
@@ -165,6 +166,33 @@ describe('Thread header', () => {
     expect(screen.getByText('Teach me fractions')).toBeTruthy();
     expect(screen.getByLabelText('Your message: Teach me fractions. Sending')).toBeTruthy();
     takeConversationSend('thread-1');
+  });
+
+  it('offers Chat and Work only until the first message is sent', () => {
+    useTierStore.setState({ tier: 'pro' });
+    seedThread({ executionMode: 'cloud' });
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByTestId('chat.work-mode.chat')).toBeTruthy();
+
+    act(() => {
+      useChatStore.setState({
+        messages: {
+          'thread-1': [
+            {
+              id: 'first-question',
+              conversationId: 'thread-1',
+              role: 'user',
+              content: 'Plan my week',
+              createdAt: '2026-11-12T00:00:00.000Z',
+            },
+          ],
+        },
+      } as never);
+    });
+
+    expect(screen.queryByTestId('chat.work-mode.chat')).toBeNull();
+    expect(screen.queryByTestId('chat.work-mode.agiwork')).toBeNull();
   });
 
   it('leaves Switch model to the failed turn instead of repeating it in the error bar', () => {
