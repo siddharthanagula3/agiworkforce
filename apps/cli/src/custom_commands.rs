@@ -203,7 +203,15 @@ fn discover_custom_slash_commands_from_roots(
                 continue;
             }
             seen.insert(name.clone(), (path.clone(), root.source));
-            let Ok(raw) = std::fs::read_to_string(&path) else {
+            let raw = if root.source.is_project() {
+                root.path
+                    .parent()
+                    .and_then(Path::parent)
+                    .and_then(|project| crate::project_text::read_within(project, &path))
+            } else {
+                std::fs::read_to_string(&path).ok()
+            };
+            let Some(raw) = raw else {
                 continue;
             };
             let parsed = parse_command_markdown(&raw);

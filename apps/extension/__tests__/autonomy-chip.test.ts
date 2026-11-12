@@ -53,8 +53,8 @@ describe('autonomy chip', () => {
     expect(panel).toContain('changes[ASK_BEFORE_ACTING_KEY]');
     const computerUsePanel = read('src/features/side-panel/computerUsePanel.ts');
     expect(computerUsePanel).toContain('ASK_BEFORE_ACTING_KEY in changes');
-    expect(computerUsePanel).toMatch(
-      /readBrowserPermissionMode\(changes\[ASK_BEFORE_ACTING_KEY\]\?\.newValue\) === 'ask'/,
+    expect(computerUsePanel).toContain(
+      'showMode(readBrowserPermissionMode(changes[ASK_BEFORE_ACTING_KEY]?.newValue))',
     );
   });
 

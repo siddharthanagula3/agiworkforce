@@ -44,6 +44,7 @@ use common::{
     TRUNCATION_TAIL_LINES,
 };
 use dir_ops::{execute_glob, execute_grep_files, execute_list_directory, execute_search_files};
+pub(crate) use file_ops::headless_change_was_refused;
 use file_ops::{
     execute_apply_patch, execute_multiedit, execute_read_file, execute_read_many_files,
     execute_write_file,
@@ -2242,21 +2243,20 @@ async fn execute_browser_command(
 // Tool: batch
 // ---------------------------------------------------------------------------
 
-async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
-    let calls_json = match call
-        .args
+const MAX_BATCH_CALLS: usize = 25;
+
+pub(crate) struct BatchCall {
+    pub name: String,
+    pub args: serde_json::Map<String, Value>,
+}
+
+pub(crate) fn batch_calls(
+    args: &HashMap<String, String>,
+) -> std::result::Result<Vec<BatchCall>, String> {
+    let calls_json = args
         .get("calls")
-        .or_else(|| call.args.get("tool_calls"))
-    {
-        Some(j) => j,
-        None => {
-            return Ok(ToolResult {
-                tool_name: "batch".into(),
-                success: false,
-                output: "Missing required argument: calls (JSON array)".into(),
-            });
-        }
-    };
+        .or_else(|| args.get("tool_calls"))
+        .ok_or_else(|| "Missing required argument: calls (JSON array)".to_string())?;
 
     #[derive(Debug, Deserialize)]
     struct BatchItem {
@@ -2268,48 +2268,34 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
         args: serde_json::Map<String, Value>,
     }
 
-    let parsed: Vec<BatchItem> = serde_json::from_str(calls_json)
-        .map_err(|e| anyhow::anyhow!("Invalid calls JSON: {}", e))?;
+    let parsed: Vec<BatchItem> =
+        serde_json::from_str(calls_json).map_err(|e| format!("Invalid calls JSON: {}", e))?;
 
-    const MAX_BATCH: usize = 25;
-    if parsed.len() > MAX_BATCH {
-        return Ok(ToolResult {
-            tool_name: "batch".into(),
-            success: false,
-            output: format!(
-                "Batch limited to {} tool calls, got {}",
-                MAX_BATCH,
-                parsed.len()
-            ),
-        });
+    if parsed.len() > MAX_BATCH_CALLS {
+        return Err(format!(
+            "Batch limited to {} tool calls, got {}",
+            MAX_BATCH_CALLS,
+            parsed.len()
+        ));
     }
 
-    print_tool_status("batch", &format!("Batch({} tools)", parsed.len()));
-
-    let mut results: Vec<Result<ToolResult>> = Vec::new();
-    for item in &parsed {
-        let name = item
-            .name
-            .as_deref()
-            .or(item.tool.as_deref())
-            .unwrap_or("unknown")
-            .to_string();
-        let args: HashMap<String, String> = item
-            .args
-            .iter()
-            .map(|(k, v)| {
-                let value = match v {
-                    Value::String(s) => s.clone(),
-                    _ => v.to_string(),
-                };
-                (k.clone(), value)
-            })
-            .collect();
-
-        let tool_call = ToolCall { name, args };
-        results.push(execute_tool_with_opts(&tool_call, opts).await);
+    let calls: Vec<BatchCall> = parsed
+        .into_iter()
+        .map(|item| BatchCall {
+            name: item
+                .name
+                .or(item.tool)
+                .unwrap_or_else(|| "unknown".to_string()),
+            args: item.args,
+        })
+        .collect();
+    if calls.iter().any(|call| call.name == "batch") {
+        return Err("A batch cannot contain another batch.".to_string());
     }
+    Ok(calls)
+}
 
+pub(crate) fn batch_result(results: Vec<Result<ToolResult>>) -> ToolResult {
     let mut output_parts = Vec::new();
     let mut success_count = 0usize;
     let total = results.len();
@@ -2335,7 +2321,7 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
         }
     }
 
-    Ok(ToolResult {
+    ToolResult {
         tool_name: "batch".into(),
         success: success_count == total,
         output: format!(
@@ -2344,7 +2330,45 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
             total,
             output_parts.join("\n")
         ),
-    })
+    }
+}
+
+async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolResult> {
+    let calls = match batch_calls(&call.args) {
+        Ok(calls) => calls,
+        Err(output) => {
+            return Ok(ToolResult {
+                tool_name: "batch".into(),
+                success: false,
+                output,
+            });
+        }
+    };
+
+    print_tool_status("batch", &format!("Batch({} tools)", calls.len()));
+
+    let mut results: Vec<Result<ToolResult>> = Vec::new();
+    for item in calls {
+        let args: HashMap<String, String> = item
+            .args
+            .into_iter()
+            .map(|(k, v)| {
+                let value = match v {
+                    Value::String(s) => s,
+                    other => other.to_string(),
+                };
+                (k, value)
+            })
+            .collect();
+
+        let tool_call = ToolCall {
+            name: item.name,
+            args,
+        };
+        results.push(execute_tool_with_opts(&tool_call, opts).await);
+    }
+
+    Ok(batch_result(results))
 }
 
 fn powershell_command_safety(
@@ -4719,6 +4743,29 @@ decision = "deny"
 
         assert!(result.success, "batch should succeed: {}", result.output);
         assert!(result.output.contains("list_directory"));
+    }
+
+    #[test]
+    fn batch_calls_keep_each_inner_call_and_refuse_a_nested_batch() {
+        let calls = batch_calls(&HashMap::from([(
+            "calls".to_string(),
+            serde_json::json!([
+                {"name": "write_file", "args": {"path": "a.txt", "content": "x"}},
+                {"tool": "read_file", "args": {"path": "b.txt"}}
+            ])
+            .to_string(),
+        )]))
+        .unwrap();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].name, "write_file");
+        assert_eq!(calls[0].args.get("path"), Some(&serde_json::json!("a.txt")));
+        assert_eq!(calls[1].name, "read_file");
+
+        let nested = batch_calls(&HashMap::from([(
+            "calls".to_string(),
+            serde_json::json!([{"name": "batch", "args": {"calls": "[]"}}]).to_string(),
+        )]));
+        assert!(nested.is_err_and(|reason| reason.contains("another batch")));
     }
 
     #[tokio::test]

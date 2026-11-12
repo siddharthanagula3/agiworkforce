@@ -478,18 +478,22 @@ pub fn merge_imported_mcp_servers_to_file(
         serde_json::json!({})
     };
 
-    if !root.is_object() {
-        root = serde_json::json!({});
-    }
-
-    if root.get("mcpServers").is_none() {
-        root["mcpServers"] = serde_json::json!({});
-    }
-
-    let mcp_servers = root
-        .get_mut("mcpServers")
-        .and_then(|value| value.as_object_mut())
-        .context("mcpServers must be a JSON object")?;
+    let Some(root_object) = root.as_object_mut() else {
+        anyhow::bail!(
+            "MCP config {} must be a JSON object; fix or move it, then import again",
+            path.display()
+        );
+    };
+    let flat = !root_object.is_empty() && !root_object.contains_key("mcpServers");
+    let mcp_servers = if flat {
+        root_object
+    } else {
+        root_object
+            .entry("mcpServers")
+            .or_insert_with(|| serde_json::json!({}))
+            .as_object_mut()
+            .with_context(|| format!("mcpServers in {} must be a JSON object", path.display()))?
+    };
 
     let mut added = Vec::new();
     let mut skipped_existing = Vec::new();
@@ -506,12 +510,8 @@ pub fn merge_imported_mcp_servers_to_file(
     }
 
     if !dry_run && !added.is_empty() {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("create MCP config dir {}", parent.display()))?;
-        }
         let contents = serde_json::to_string_pretty(&root).context("serialize MCP config")?;
-        std::fs::write(path, format!("{contents}\n"))
+        crate::mcp::registry::replace_file(path, &format!("{contents}\n"))
             .with_context(|| format!("write MCP config {}", path.display()))?;
         #[cfg(unix)]
         {
@@ -1661,6 +1661,37 @@ args = ["mcp"]
         let tail: String = long.chars().skip(long.chars().count() - 39).collect();
         let table = format_table(&[tool_at(long)]);
         assert!(table.contains(&format!("...{tail}")), "{table}");
+    }
+
+    #[test]
+    fn import_into_a_flat_file_keeps_it_flat_and_refuses_one_it_cannot_read() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let source = tmp.path().join("mcp.json");
+        let servers = parse_json_mcp(
+            "claude",
+            r#"{"mcpServers":{"api":{"type":"http","url":"https://mcp.example.test/mcp"}}}"#,
+            &source,
+        );
+        assert_eq!(servers.len(), 1);
+
+        let flat = tmp.path().join(".mcp.json");
+        std::fs::write(
+            &flat,
+            r#"{"github": {"command": "npx", "env": {"GITHUB_TOKEN": "synthetic"}}}"#,
+        )
+        .unwrap();
+        merge_imported_mcp_servers_to_file(&servers, &flat, false).unwrap();
+        let written: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&flat).unwrap()).unwrap();
+        assert!(written.get("mcpServers").is_none(), "{written}");
+        assert_eq!(written["github"]["env"]["GITHUB_TOKEN"], "synthetic");
+        assert_eq!(written["claude:api"]["url"], "https://mcp.example.test/mcp");
+
+        let listed = tmp.path().join("list.json");
+        std::fs::write(&listed, "[]").unwrap();
+        let error = merge_imported_mcp_servers_to_file(&servers, &listed, false).unwrap_err();
+        assert!(format!("{error:#}").contains("list.json"), "{error:#}");
+        assert_eq!(std::fs::read_to_string(&listed).unwrap(), "[]");
     }
 
     #[test]

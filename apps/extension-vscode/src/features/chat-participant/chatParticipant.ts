@@ -347,7 +347,7 @@ export function createChatHandler(
     const memoryInput =
       workspaceState === undefined
         ? undefined
-        : buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
+        : buildMemoryContextInput((await getAccountMemoryStore()?.turnFacts()) ?? []);
     const historicalAuthority = localThreadAuthorityFromHistory(context);
     let threadId = historicalAuthority?.id;
     let threadAuthority: LocalThreadAuthorityMetadata | undefined;

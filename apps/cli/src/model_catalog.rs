@@ -461,6 +461,16 @@ struct SharedModelReasoning {
     capable: Option<bool>,
     #[serde(default, rename = "supportedEfforts")]
     supported_efforts: Vec<String>,
+    #[serde(default)]
+    request: Option<SharedReasoningRequest>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct SharedReasoningRequest {
+    #[serde(default, rename = "effortPath")]
+    effort_path: Option<String>,
+    #[serde(default, rename = "budgetPath")]
+    budget_path: Option<String>,
 }
 
 static SHARED_CATALOG: OnceLock<Option<SharedModelsCatalog>> = OnceLock::new();
@@ -1447,6 +1457,37 @@ pub fn effort_support(model_id: &str) -> EffortSupport {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffortParameter {
+    OutputConfigEffort,
+    ReasoningEffort,
+    ThinkingLevel,
+}
+
+fn capable_reasoning_request(model_id: &str) -> Option<&'static SharedReasoningRequest> {
+    shared_catalog()
+        .and_then(|catalog| direct_model_for_any(catalog, model_id))
+        .and_then(|meta| meta.reasoning.as_ref())
+        .filter(|reasoning| reasoning.capable == Some(true))
+        .and_then(|reasoning| reasoning.request.as_ref())
+}
+
+pub fn effort_parameter(model_id: &str) -> Option<EffortParameter> {
+    match capable_reasoning_request(model_id)?
+        .effort_path
+        .as_deref()?
+    {
+        "output_config.effort" => Some(EffortParameter::OutputConfigEffort),
+        "reasoning_effort" => Some(EffortParameter::ReasoningEffort),
+        "thinkingConfig.thinkingLevel" => Some(EffortParameter::ThinkingLevel),
+        _ => None,
+    }
+}
+
+pub fn accepts_thinking_budget(model_id: &str) -> bool {
+    capable_reasoning_request(model_id).is_some_and(|request| request.budget_path.is_some())
+}
+
 const EFFORT_ORDER: [&str; 7] = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 
 pub fn nearest_supported_effort<'a>(requested: &str, levels: &'a [String]) -> Option<&'a str> {
@@ -1887,6 +1928,37 @@ mod tests {
                 "fallback {provider_model_id} is not a dispatchable catalog model"
             );
         }
+    }
+
+    #[test]
+    fn every_effort_parameter_the_catalog_names_is_one_the_cli_can_send() {
+        let catalog = shared_catalog().expect("embedded catalog must deserialize");
+        let mut named = 0;
+        for model in catalog.models.values() {
+            let Some(request) = model
+                .reasoning
+                .as_ref()
+                .filter(|reasoning| reasoning.capable == Some(true))
+                .and_then(|reasoning| reasoning.request.as_ref())
+            else {
+                continue;
+            };
+            if let Some(path) = request.effort_path.as_deref() {
+                named += 1;
+                assert!(
+                    effort_parameter(&model.id).is_some(),
+                    "{} names {path}, which the CLI does not send",
+                    model.id
+                );
+            }
+            assert_eq!(
+                accepts_thinking_budget(&model.id),
+                request.budget_path.is_some(),
+                "{}",
+                model.id
+            );
+        }
+        assert!(named > 0);
     }
 
     #[test]

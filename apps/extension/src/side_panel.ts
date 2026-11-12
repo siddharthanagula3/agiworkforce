@@ -52,6 +52,7 @@ import {
   TAB_CONTEXT_PICKER_CSS,
   type PageSelection,
 } from './features/side-panel/tabContext';
+import { autofillSuccessMessage } from './features/side-panel/autofillSummary';
 import { closeSelectedBrowserTabs } from './features/browser-tools/tabCleanup';
 import {
   formObservationReference,
@@ -10112,11 +10113,11 @@ function showSelectionNotice(notice: string): void {
 }
 
 async function attachPageSelection(): Promise<void> {
-  editableRewrites.cancel();
-  if (managedCloudChatState !== 'ready' || _ctx.isStreaming) return;
+  if (managedCloudChatState !== 'ready') return;
+  if (_ctx.isStreaming) return showSelectionNotice(t('spSelectionWhileReplying'));
   const generation = _ctx.conversationGeneration;
   let tab: chrome.tabs.Tab | undefined;
-  let selection: PageSelection | null = null;
+  let selection: PageSelection | 'form-field' | null = null;
   try {
     [tab] = await chrome.tabs.query(await activePageQuery());
     if (!tab?.id || !tab.url) return showSelectionNotice('No readable website tab is open.');
@@ -10130,14 +10131,17 @@ async function attachPageSelection(): Promise<void> {
       func: readVisibleSelection,
       args: [MAX_PAGE_TEXT_CHARACTERS],
     });
-    selection = (result?.result as PageSelection | null | undefined) ?? null;
+    selection = (result?.result as PageSelection | 'form-field' | null | undefined) ?? null;
   } catch {
     return showSelectionNotice(PAGE_CONTEXT_BLOCKED_REASON);
   }
   if (!tab.id || !tab.url) return;
+  if (selection === 'form-field') return showSelectionNotice(t('spSelectionInFormField'));
   const prepared = selection && prepareSelectionContext(selection, tab.url);
   if (!prepared) return showSelectionNotice(t('spSelectionNone'));
-  if (generation !== _ctx.conversationGeneration || _ctx.isStreaming) return;
+  if (generation !== _ctx.conversationGeneration) return;
+  if (_ctx.isStreaming) return showSelectionNotice(t('spSelectionWhileReplying'));
+  editableRewrites.cancel();
   pendingSelectionText = prepared.text;
   _ctx.pendingPageContext = prepared.text;
   _ctx.pendingPageContextSource = {
@@ -13354,7 +13358,7 @@ function buildUI(): void {
         { shouldEscalate?: boolean; agentGoal?: string; triggers?: unknown[] } | undefined;
 
       if (!escalation?.shouldEscalate) {
-        cuPanel.showHandoffBanner('No agent escalation needed.', 'success');
+        cuPanel.showHandoffBanner(autofillSuccessMessage(resp), 'success');
         switchTab('computer-use');
         return;
       }
@@ -14748,6 +14752,7 @@ function buildUI(): void {
     const mode = readBrowserPermissionMode(change.newValue);
     renderAutonomyChip(mode);
     if (mode !== 'full') fullAccessNotice.classList.remove('visible');
+    else void discloseFullAccess();
   });
 
   composerBarEnd.appendChild(modelSelectorWrap);
@@ -15511,6 +15516,11 @@ async function attachPageForQuestion(
     updateAttachmentPreview();
     return;
   }
+  if (typeof pending.tabId === 'number' && capture.source.tabId !== pending.tabId) {
+    composerContextNotice = PAGE_CONTEXT_CHANGED_REASON;
+    updateAttachmentPreview();
+    return;
+  }
   if (!pendingPageComposerAvailable(summarize) || !canAdmitComposerMessage(prompt)) {
     composerContextNotice =
       'The page request was not applied because chat is not ready. Try again when it is ready.';
@@ -15627,80 +15637,105 @@ function checkPendingChat(): void {
     if (!pending || Date.now() - pending.timestamp > PENDING_CHAT_TTL_MS) return;
     const identity = pendingChatIdentity(pending);
     if (pendingChatCaptures.has(identity)) return;
-    if (pending.type === 'ask-page' || pending.type === 'summarize') {
-      pendingChatCaptures.add(identity);
-      void attachPageForQuestion(pending, isCurrent)
-        .catch((error: unknown) => {
-          if (isCurrent()) {
-            composerContextNotice = 'The page request could not be completed. Please try again.';
-            updateAttachmentPreview();
-          }
-          console.error('[SidePanel] Failed to handle pending page request:', error);
-        })
-        .finally(() => pendingChatCaptures.delete(identity));
-      return;
-    }
     if (pending.type === 'rewrite-selection' || pending.type === 'rewrite-error') {
-      void Promise.all([assistantHostWindowId(), initialCloudAccountRefresh])
-        .then(async ([windowId]) => {
-          if (!isCurrent()) return;
-          if (windowId !== pending.windowId || typeof windowId !== 'number') return;
-          if (pending.type === 'rewrite-selection' && managedCloudChatState !== 'ready') return;
-          if (Date.now() - pending.timestamp > PENDING_CHAT_TTL_MS) return;
-          const current = (await chrome.storage.session.get('agi_pending_chat'))[
-            'agi_pending_chat'
-          ] as typeof pending;
-          if (
-            current?.type !== pending.type ||
-            current.timestamp !== pending.timestamp ||
-            parseEditableSelectionTarget(current.target)?.id !==
-              parseEditableSelectionTarget(pending.target)?.id
-          )
-            return;
-          const key = `${pending.type}:${pending.timestamp}:${parseEditableSelectionTarget(pending.target)?.id ?? ''}`;
-          if (consumedPendingRewriteKey === key) return;
-          consumedPendingRewriteKey = key;
-          try {
-            await chrome.storage.session.remove('agi_pending_chat');
-          } catch (error) {
-            if (consumedPendingRewriteKey === key) consumedPendingRewriteKey = null;
-            throw error;
-          }
-          if (pending.type === 'rewrite-error') {
-            editableRewrites.cancel();
-            composerContextNotice = pending.text;
-            updateAttachmentPreview();
-          } else await startSelectionRewrite(pending.target);
-        })
-        .catch((error) => {
-          if (!isCurrent()) return;
-          composerContextNotice =
-            error instanceof Error ? error.message : t('spRewriteUnavailable');
-          updateAttachmentPreview();
-        });
+      handlePendingRewrite(pending, isCurrent);
       return;
     }
-
-    if (pending.type === 'ask-selection') {
-      chrome.storage.session.remove('agi_pending_chat').catch(() => {});
-      void attachSelectionForQuestion(pending);
+    if (typeof pending.windowId !== 'number') {
+      handlePendingComposerChat(pending, identity, isCurrent);
       return;
     }
-
-    if (!['ask', 'explain', 'translate'].includes(pending.type)) return;
-    const prompt = pendingChatPrompt(pending);
-    if (!canAdmitComposerMessage(prompt)) {
-      const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
-      if (input && !input.value.trim()) {
-        replaceComposerText(input, prompt);
-        autoResizeInput(input);
-        updateSendButton();
-        void removeHandledPendingChat(pending);
-      }
-      return;
-    }
-    if (sendMessage(prompt)) void removeHandledPendingChat(pending);
+    const claimsPage = pending.type === 'ask-page' || pending.type === 'summarize';
+    if (claimsPage) pendingChatCaptures.add(identity);
+    void assistantHostWindowId()
+      .then((windowId) => {
+        if (claimsPage) pendingChatCaptures.delete(identity);
+        if (!isCurrent() || windowId !== pending.windowId) return;
+        handlePendingComposerChat(pending, identity, isCurrent);
+      })
+      .catch(() => {
+        if (claimsPage) pendingChatCaptures.delete(identity);
+      });
   });
+}
+
+function handlePendingRewrite(pending: PendingComposerChat, isCurrent: () => boolean): void {
+  void Promise.all([assistantHostWindowId(), initialCloudAccountRefresh])
+    .then(async ([windowId]) => {
+      if (!isCurrent()) return;
+      if (windowId !== pending.windowId || typeof windowId !== 'number') return;
+      if (pending.type === 'rewrite-selection' && managedCloudChatState !== 'ready') return;
+      if (Date.now() - pending.timestamp > PENDING_CHAT_TTL_MS) return;
+      const current = (await chrome.storage.session.get('agi_pending_chat'))[
+        'agi_pending_chat'
+      ] as typeof pending;
+      if (
+        current?.type !== pending.type ||
+        current.timestamp !== pending.timestamp ||
+        parseEditableSelectionTarget(current.target)?.id !==
+          parseEditableSelectionTarget(pending.target)?.id
+      )
+        return;
+      const key = `${pending.type}:${pending.timestamp}:${parseEditableSelectionTarget(pending.target)?.id ?? ''}`;
+      if (consumedPendingRewriteKey === key) return;
+      consumedPendingRewriteKey = key;
+      try {
+        await chrome.storage.session.remove('agi_pending_chat');
+      } catch (error) {
+        if (consumedPendingRewriteKey === key) consumedPendingRewriteKey = null;
+        throw error;
+      }
+      if (pending.type === 'rewrite-error') {
+        editableRewrites.cancel();
+        composerContextNotice = pending.text;
+        updateAttachmentPreview();
+      } else await startSelectionRewrite(pending.target);
+    })
+    .catch((error) => {
+      if (!isCurrent()) return;
+      composerContextNotice = error instanceof Error ? error.message : t('spRewriteUnavailable');
+      updateAttachmentPreview();
+    });
+}
+
+function handlePendingComposerChat(
+  pending: PendingComposerChat,
+  identity: string,
+  isCurrent: () => boolean,
+): void {
+  if (pending.type === 'ask-page' || pending.type === 'summarize') {
+    pendingChatCaptures.add(identity);
+    void attachPageForQuestion(pending, isCurrent)
+      .catch((error: unknown) => {
+        if (isCurrent()) {
+          composerContextNotice = 'The page request could not be completed. Please try again.';
+          updateAttachmentPreview();
+        }
+        console.error('[SidePanel] Failed to handle pending page request:', error);
+      })
+      .finally(() => pendingChatCaptures.delete(identity));
+    return;
+  }
+
+  if (pending.type === 'ask-selection') {
+    chrome.storage.session.remove('agi_pending_chat').catch(() => {});
+    void attachSelectionForQuestion(pending);
+    return;
+  }
+
+  if (!['ask', 'explain', 'translate'].includes(pending.type)) return;
+  const prompt = pendingChatPrompt(pending);
+  if (!canAdmitComposerMessage(prompt)) {
+    const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+    if (input && !input.value.trim()) {
+      replaceComposerText(input, prompt);
+      autoResizeInput(input);
+      updateSendButton();
+      void removeHandledPendingChat(pending);
+    }
+    return;
+  }
+  if (sendMessage(prompt)) void removeHandledPendingChat(pending);
 }
 
 async function checkPendingContextHandoff(): Promise<void> {

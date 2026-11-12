@@ -1,5 +1,5 @@
-# Foreground here, background on Web
+# Follow cloud work from the IDE
 
-The VS Code extension currently runs developer sessions while the editor is open.
+**Code: Show Cloud Tasks** lists the cloud tasks on your AGI Cloud account, started from any device, with their state, age and any approval they are waiting on. Approve or reject from the list, or open a task on the web.
 
-Hosted background task creation, status, history, and results remain on the Web Tasks surface. Opening Web Tasks is an explicit handoff; the extension does not pretend a local prompt is running in the cloud.
+**Code: Continue in the Cloud** hands the current branch to a cloud session after you describe the task and confirm the review, which names the branch and the model. Chat in this window keeps running on this machine until you do.

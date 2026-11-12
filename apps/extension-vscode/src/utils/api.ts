@@ -667,6 +667,38 @@ export function parseCloudCompletionError(
   );
 }
 
+function readStreamErrorFields(value: unknown): AgiWorkforceApiError | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const record = value as { message?: unknown; code?: unknown };
+  const message =
+    typeof record.message === 'string' && record.message.trim() !== ''
+      ? record.message
+      : 'AGI Cloud could not finish this response.';
+  const code = typeof record.code === 'string' && record.code !== '' ? record.code : 'STREAM_ERROR';
+  return new AgiWorkforceApiError(message, undefined, code);
+}
+
+function streamFailure(frame: unknown): AgiWorkforceApiError | undefined {
+  if (typeof frame !== 'object' || frame === null) return undefined;
+  const record = frame as {
+    type?: unknown;
+    error?: unknown;
+    choices?: Array<{ delta?: { x_stream_error?: unknown }; finish_reason?: unknown }>;
+  };
+  const topLevel = readStreamErrorFields(record.type === 'error' ? record : record.error);
+  if (topLevel !== undefined) return topLevel;
+  const choice = Array.isArray(record.choices) ? record.choices[0] : undefined;
+  const inBand = readStreamErrorFields(choice?.delta?.x_stream_error);
+  if (inBand !== undefined) return inBand;
+  return choice?.finish_reason === 'error'
+    ? new AgiWorkforceApiError(
+        'AGI Cloud could not finish this response.',
+        undefined,
+        'STREAM_ERROR',
+      )
+    : undefined;
+}
+
 function httpsPostStream(
   urlString: string,
   headers: Record<string, string>,
@@ -706,15 +738,32 @@ function httpsPostStream(
 
       const text = new TextDecoder();
       const frames = new ServerSentEventDecoder();
+      let finished = false;
+      let failure: AgiWorkforceApiError | undefined;
       const deliver = (events: readonly ServerSentEvent[]) => {
         for (const event of events) {
           for (const data of splitJoinedServerSentEventData(event.data)) {
-            if (data === SSE_DONE_DATA) continue;
+            if (failure !== undefined) return;
+            if (data === SSE_DONE_DATA) {
+              finished = true;
+              continue;
+            }
+            let frame: unknown;
             try {
-              onChunk(JSON.parse(data) as ChatCompletionChunk);
+              frame = JSON.parse(data);
             } catch {
               continue;
             }
+            failure = streamFailure(frame);
+            if (failure !== undefined) {
+              cancelListener.dispose();
+              req.destroy();
+              reject(failure);
+              return;
+            }
+            const chunk = frame as ChatCompletionChunk;
+            if (typeof chunk.choices?.[0]?.finish_reason === 'string') finished = true;
+            onChunk(chunk);
           }
         }
       };
@@ -736,6 +785,17 @@ function httpsPostStream(
         cancelListener.dispose();
         deliver(frames.push(text.decode()));
         deliver(frames.finish({ acceptUnterminatedFrame: true }).events);
+        if (failure !== undefined) return;
+        if (!finished) {
+          reject(
+            new AgiWorkforceApiError(
+              'The AGI Cloud response stopped before it finished, so this result is incomplete and was not used. Try again.',
+              undefined,
+              'STREAM_INCOMPLETE',
+            ),
+          );
+          return;
+        }
         resolve();
       });
       res.on('error', (err) => {

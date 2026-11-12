@@ -69,6 +69,7 @@ struct FakeHost {
     notifications: broadcast::Sender<AppServerNotification>,
     shutdown_gate: Mutex<Option<oneshot::Receiver<()>>>,
     worktree_gate: Mutex<Option<oneshot::Receiver<()>>>,
+    side_question_gate: Mutex<Option<oneshot::Receiver<()>>>,
     worktree_panics: std::sync::atomic::AtomicBool,
     managed_worktree_calls: std::sync::atomic::AtomicUsize,
 }
@@ -82,6 +83,7 @@ impl FakeHost {
             notifications,
             shutdown_gate: Mutex::new(None),
             worktree_gate: Mutex::new(None),
+            side_question_gate: Mutex::new(None),
             worktree_panics: std::sync::atomic::AtomicBool::new(false),
             managed_worktree_calls: std::sync::atomic::AtomicUsize::new(0),
         }
@@ -236,6 +238,18 @@ impl DeveloperSessionHost for FakeHost {
                 Vec::new()
             },
             released_worktrees: vec!["0a1b2c3d".to_string()],
+        })
+    }
+
+    async fn side_question(
+        &self,
+        params: ThreadSideQuestionParams,
+    ) -> Result<ThreadSideQuestionResponse, DeveloperSessionHostError> {
+        if let Some(gate) = self.side_question_gate.lock().await.take() {
+            let _ = gate.await;
+        }
+        Ok(ThreadSideQuestionResponse {
+            answer: params.question,
         })
     }
 
@@ -2327,6 +2341,97 @@ async fn a_long_worktree_request_does_not_hold_up_an_approval_on_the_same_connec
         "the approval is answered while the worktree request still runs"
     );
     release_worktree.send(()).unwrap();
+    assert_eq!(next_response_id(&mut responses).await, serde_json::json!(2));
+
+    drop(request_writer);
+    server.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn a_side_question_waiting_on_a_turn_does_not_hold_up_an_interrupt_or_an_approval() {
+    let host = Arc::new(FakeHost::new());
+    let (release_side_question, side_question_gate) = oneshot::channel();
+    *host.side_question_gate.lock().await = Some(side_question_gate);
+    let (mut request_writer, request_reader) = tokio::io::duplex(64 * 1024);
+    let (response_reader, response_writer) = tokio::io::duplex(64 * 1024);
+    let server = tokio::spawn(agiworkforce_app_server::serve_developer_session_io(
+        request_reader,
+        response_writer,
+        host.clone(),
+        capabilities(),
+    ));
+    let mut responses = BufReader::new(response_reader).lines();
+    let send = |request: AppServerRequest| {
+        format!(
+            "{}\n",
+            serde_json::to_string(&request).expect("serialize request")
+        )
+    };
+
+    request_writer
+        .write_all(send(initialize()).as_bytes())
+        .await
+        .unwrap();
+    assert_eq!(next_response_id(&mut responses).await, serde_json::json!(1));
+    request_writer
+        .write_all(
+            send(request(
+                2,
+                method::THREAD_SIDE_QUESTION,
+                ThreadSideQuestionParams {
+                    thread_id: "thread-1".to_string(),
+                    question: "what file is open?".to_string(),
+                    request_id: None,
+                },
+            ))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    request_writer
+        .write_all(
+            send(request(
+                3,
+                method::TURN_INTERRUPT,
+                TurnInterruptParams {
+                    thread_id: "thread-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                },
+            ))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    request_writer
+        .write_all(
+            send(request(
+                4,
+                method::APPROVAL_RESPOND,
+                ApprovalResponseParams {
+                    thread_id: "thread-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    request_id: "approval-1".to_string(),
+                    decision: agiworkforce_protocol::protocol::ReviewDecision::Approved,
+                    note: None,
+                    edited_content: None,
+                },
+            ))
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        next_response_id(&mut responses).await,
+        serde_json::json!(3),
+        "the interrupt is answered while the side question waits"
+    );
+    assert_eq!(
+        next_response_id(&mut responses).await,
+        serde_json::json!(4),
+        "the approval is answered while the side question waits"
+    );
+    release_side_question.send(()).unwrap();
     assert_eq!(next_response_id(&mut responses).await, serde_json::json!(2));
 
     drop(request_writer);

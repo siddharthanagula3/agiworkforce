@@ -66,6 +66,7 @@ export class ChatEditorPanel {
       localRuntimes,
       conversationTreeProvider,
       diffDecorationProvider,
+      false,
     );
     ChatEditorPanel.instances.add(instance);
     ChatEditorPanel.mostRecent = instance;
@@ -92,6 +93,7 @@ export class ChatEditorPanel {
           localRuntimes,
           conversationTreeProvider,
           diffDecorationProvider,
+          true,
         );
         ChatEditorPanel.instances.add(restored);
         ChatEditorPanel.mostRecent = restored;
@@ -135,6 +137,7 @@ export class ChatEditorPanel {
     localRuntimes: LocalRuntimePool,
     conversationTreeProvider: ConversationTreeProvider,
     diffDecorationProvider: DiffDecorationProvider,
+    restore: boolean,
   ) {
     this.stateManager = new ChatStateManager(
       secrets,
@@ -155,6 +158,7 @@ export class ChatEditorPanel {
       localRuntimes,
       diffDecorationProvider,
     );
+    this.stateManager.bindRestoreKey(`panel:${panel.title}`, restore);
     const model = normalizeConfiguredModelId(Config.model());
     this.panel.webview.options = {
       enableScripts: true,
@@ -203,6 +207,11 @@ export class ChatEditorPanel {
 
   resetConversation(): void {
     this.stateManager.resetConversation();
+  }
+
+  resumeConversation(threadId: string): Promise<boolean> {
+    this.panel.reveal();
+    return this.stateManager.resumeConversation(threadId);
   }
 
   private dispose(): void {

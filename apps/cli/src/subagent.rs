@@ -188,6 +188,8 @@ pub struct SubagentUsage {
     pub cache_creation_tokens: u32,
     pub cost_usd: f64,
     pub via_subscription: bool,
+    #[serde(skip)]
+    pub managed_request_ids: Vec<String>,
 }
 
 impl SubagentUsage {
@@ -200,6 +202,7 @@ impl SubagentUsage {
             cache_creation_tokens: turn.cache_creation_tokens,
             cost_usd: turn.cost_usd,
             via_subscription: turn.via_subscription,
+            managed_request_ids: turn.managed_request_ids.clone(),
         }
     }
 
@@ -215,6 +218,7 @@ impl SubagentUsage {
             cache_creation_tokens: session.total_cache_creation_tokens,
             cost_usd: session.cost_ledger.total_usd,
             via_subscription: false,
+            managed_request_ids: Vec::new(),
         };
         let spent = usage.input_tokens > 0
             || usage.output_tokens > 0
@@ -387,6 +391,8 @@ const SUBAGENT_JOIN_POLL_INTERVAL: std::time::Duration = std::time::Duration::fr
 /// The longest one `wait_all` waits for the children still running. A child
 /// stuck in a provider or tool call must not hold the parent's turn.
 const SUBAGENT_WAIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(600);
+
+const ABANDONED_SETTLE_LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Maximum subagent nesting depth. The root interactive session is depth 0; a
 /// subagent it spawns runs at depth 1, and so on. Spawning is refused once a
@@ -697,7 +703,12 @@ impl SubagentManager {
                             Err(failure) => failure.usage.clone(),
                         };
                         *task_spent.write().await = unfinished.clone();
-                        *task_status.write().await = SubagentStatus::Cancelled;
+                        {
+                            let mut status = task_status.write().await;
+                            if matches!(*status, SubagentStatus::Running) {
+                                *status = SubagentStatus::Cancelled;
+                            }
+                        }
                         audit(&SubagentStatus::Cancelled, None, unfinished.as_ref());
                         return;
                     }
@@ -940,6 +951,27 @@ impl SubagentManager {
     /// report it to the parent as timed out. Its handle stays in `entries`;
     /// the thread exits once it sees the flag.
     async fn abandon_unfinished(&self, limit: std::time::Duration) {
+        self.mark_abandoned(limit).await;
+        let deadline = std::time::Instant::now() + ABANDONED_SETTLE_LIMIT;
+        loop {
+            let settling = {
+                let entries = self.entries.read().await;
+                entries.values().any(|entry| {
+                    entry.abandoned
+                        && entry
+                            .handle
+                            .as_ref()
+                            .is_some_and(|handle| !handle.is_finished())
+                })
+            };
+            if !settling || std::time::Instant::now() >= deadline {
+                break;
+            }
+            tokio::time::sleep(SUBAGENT_JOIN_POLL_INTERVAL).await;
+        }
+    }
+
+    async fn mark_abandoned(&self, limit: std::time::Duration) {
         let mut entries = self.entries.write().await;
         for entry in entries.values_mut() {
             if entry.handle.is_none() || entry.abandoned {
@@ -1056,12 +1088,26 @@ async fn run_subagent(
     };
 
     match result {
-        Ok(turn) => Ok((model, turn, transcript_lines(&session.messages))),
+        Ok(turn) => {
+            let turn = with_nested_spend(turn, &session);
+            Ok((model, turn, transcript_lines(&session.messages)))
+        }
         Err(error) => Err(ChildRunFailure {
             error,
             usage: SubagentUsage::from_unfinished_session(&model, &session),
         }),
     }
+}
+
+fn with_nested_spend(
+    mut turn: crate::agent::TurnResult,
+    session: &crate::agent::AgentSession,
+) -> crate::agent::TurnResult {
+    let ledger = session.cost_ledger.total_usd;
+    if ledger.is_finite() && ledger > turn.cost_usd {
+        turn.cost_usd = ledger;
+    }
+    turn
 }
 
 /// Resolve once the cancellation flag is set, polling cooperatively (every
@@ -1817,6 +1863,81 @@ mod tests {
         );
 
         release.store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    #[test]
+    fn a_finished_child_charges_the_parent_for_its_own_children_too() {
+        let mut session = workflow_session(false);
+        let turn = |cost_usd| crate::agent::TurnResult {
+            response: "done".to_string(),
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            cost_usd,
+            via_subscription: false,
+            incomplete: None,
+            managed_request_ids: vec!["child-1".to_string()],
+            sources: Vec::new(),
+        };
+        session.cost_ledger.total_usd = 0.5;
+        let settled = with_nested_spend(turn(0.2), &session);
+        assert!((settled.cost_usd - 0.5).abs() < 1e-12);
+        let usage = SubagentUsage::from_turn("child-model", &settled);
+        assert!((usage.cost_usd - 0.5).abs() < 1e-12);
+        assert_eq!(usage.managed_request_ids, vec!["child-1".to_string()]);
+
+        session.cost_ledger.total_usd = 0.1;
+        let own = with_nested_spend(turn(0.2), &session);
+        assert!((own.cost_usd - 0.2).abs() < 1e-12);
+    }
+
+    #[tokio::test]
+    async fn a_child_cancelled_at_the_limit_still_reports_what_it_spent() {
+        let manager = root_manager();
+        let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let spent: Arc<RwLock<Option<SubagentUsage>>> = Arc::new(RwLock::new(None));
+        let worker_cancelled = cancelled.clone();
+        let worker_spent = spent.clone();
+        let usage = SubagentUsage {
+            model: "child-model".to_string(),
+            output_tokens: 500,
+            cost_usd: 1.25,
+            ..SubagentUsage::default()
+        };
+        let reported = usage.clone();
+        let handle = thread::spawn(move || {
+            while !worker_cancelled.load(std::sync::atomic::Ordering::Acquire) {
+                thread::sleep(std::time::Duration::from_millis(5));
+            }
+            thread::sleep(std::time::Duration::from_millis(300));
+            *worker_spent.blocking_write() = Some(reported);
+        });
+        manager.entries.write().await.insert(
+            "subagent-slow".to_string(),
+            SubagentEntry {
+                id: "subagent-slow".to_string(),
+                role: GENERAL_PURPOSE_ROLE.to_string(),
+                description: "settles late".to_string(),
+                status: Arc::new(RwLock::new(SubagentStatus::Running)),
+                result: Arc::new(RwLock::new(None)),
+                spent,
+                handle: Some(handle),
+                cancelled: cancelled.clone(),
+                abandoned: false,
+            },
+        );
+
+        let outcomes = manager
+            .wait_all_within(std::time::Duration::from_millis(50))
+            .await;
+
+        assert!(cancelled.load(std::sync::atomic::Ordering::Acquire));
+        assert!(matches!(
+            outcomes.as_slice(),
+            [(_, SubagentStatus::Failed(message))] if message.contains("Timed out")
+        ));
+        assert_eq!(manager.get_spent("subagent-slow").await, Some(usage));
     }
 
     fn workflow_session(persisted: bool) -> crate::agent::AgentSession {

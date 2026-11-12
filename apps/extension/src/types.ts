@@ -71,10 +71,12 @@ export type NativeMessageType =
   | 'AGI_CU_SHOW_ACTION'
   | 'AGI_CU_WATCH_INPUT'
   | 'IN_PAGE_PROMPT'
+  | 'CANCEL_IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_EXTENSION_SETTINGS'
   | 'GET_SIDE_PANEL_OPEN'
   | 'GET_PAGE_ACCESS'
+  | 'PAGE_ACCESS_CHANGED'
   | 'GET_AUTOFILL_PROFILE'
   | 'AUTHORIZE_SITE_TOOL_DESTINATION'
   | 'GET_ACCESSIBILITY_TREE'
@@ -650,10 +652,15 @@ export type InPagePromptOutcome =
   | 'request_rejected'
   | 'retryable_error';
 
+export interface CancelInPagePromptMessage extends BaseMessage {
+  type: 'CANCEL_IN_PAGE_PROMPT';
+}
+
 export interface InPagePromptMessage extends BaseMessage {
   type: 'IN_PAGE_PROMPT';
   prompt: string;
   pageContext?: string;
+  requestId?: string;
 }
 
 export type InPagePromptResponse =
@@ -684,6 +691,10 @@ export interface GetSidePanelOpenMessage extends BaseMessage {
 
 export interface GetPageAccessMessage extends BaseMessage {
   type: 'GET_PAGE_ACCESS';
+}
+
+export interface PageAccessChangedMessage extends BaseMessage {
+  type: 'PAGE_ACCESS_CHANGED';
 }
 
 export interface GetAutofillProfileMessage extends BaseMessage {
@@ -1258,10 +1269,12 @@ export type ExtensionMessage =
   | RevokeSiteOnceMessage
   | CheckSiteOnceMessage
   | InPagePromptMessage
+  | CancelInPagePromptMessage
   | OpenSidePanelMessage
   | OpenExtensionSettingsMessage
   | GetSidePanelOpenMessage
   | GetPageAccessMessage
+  | PageAccessChangedMessage
   | GetAutofillProfileMessage
   | AuthorizeSiteToolDestinationMessage
   | GetAccessibilityTreeMessage

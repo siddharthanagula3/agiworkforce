@@ -158,6 +158,58 @@ describe('diff keybinding commands (SIX-14)', () => {
     expect(provider.sessionCount).toBe(1);
   });
 
+  it('leaves a proposal alone when the cursor is outside it, however close', async () => {
+    const { handlers, provider } = registerDiffCommands();
+    const editor = makeEditor(vscode.Uri.file('/mock/workspace/src/app.ts'), 10);
+    vscode.window.activeTextEditor = editor;
+    provider.showDiff(editor, 'old', 'new', new vscode.Range(3, 0, 3, 3));
+
+    expect(provider.rejectCurrentDiff()).toBe(false);
+    await handlers.get('agi-workforce.rejectDiff')?.();
+    await expect(provider.acceptCurrentDiff()).resolves.toBe(false);
+
+    expect(provider.sessionCount).toBe(1);
+    expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
+  });
+
+  it('marks the cursor context only while the cursor is inside a proposal', () => {
+    const { provider } = registerDiffCommands();
+    const editor = makeEditor(vscode.Uri.file('/mock/workspace/src/app.ts'), 3);
+    vscode.window.activeTextEditor = editor;
+    const contextWrites = (): unknown[] =>
+      vi
+        .mocked(vscode.commands.executeCommand)
+        .mock.calls.filter(
+          ([command, key]) => command === 'setContext' && key === 'agi-workforce.diffUnderCursor',
+        )
+        .map(([, , value]) => value);
+
+    const session = provider.showDiff(editor, 'old', 'new', new vscode.Range(3, 0, 3, 3));
+    expect(contextWrites()).toEqual([true]);
+
+    provider.rejectDiff(session.id);
+    expect(contextWrites()).toEqual([true, false]);
+  });
+
+  it('binds no editing key to a window-wide diff flag', () => {
+    const editingKeys = new Set(['escape', 'ctrl+shift+enter', 'ctrl+shift+r', 'ctrl+shift+a']);
+    for (const binding of readKeybindings() as Array<PkgKeybinding & { key?: string }>) {
+      if (!/Diff/.test(binding.command) || !editingKeys.has(binding.key ?? '')) continue;
+      expect(binding.when, binding.command).toContain('agi-workforce.diffUnderCursor');
+      expect(binding.when, binding.command).not.toContain('agi-workforce.hasDiff');
+    }
+    const escape = readKeybindings().find(
+      (binding) => (binding as { key?: string }).key === 'escape' && /Diff/.test(binding.command),
+    );
+    for (const guard of [
+      '!suggestWidgetVisible',
+      '!editorHasMultipleSelections',
+      '!inSnippetMode',
+    ]) {
+      expect(escape?.when).toContain(guard);
+    }
+  });
+
   it('every keybound diff command tolerates a zero-argument invocation', async () => {
     const { handlers } = registerDiffCommands();
     const diffCommands = readKeybindings()

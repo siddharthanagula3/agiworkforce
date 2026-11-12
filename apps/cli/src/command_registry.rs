@@ -48,6 +48,10 @@ pub(crate) fn registry_from_builtins_and_skills(
     let mut registry = CommandRegistry::default();
     registry.extend(builtin_slash_registry_commands());
     for skill in skills {
+        if registry.find(&skill.name).is_some() {
+            tracing::warn!(skill = %skill.name, "a skill shares its name with a command already listed, so the slash command keeps running that command");
+            continue;
+        }
         registry.push(registry_command_from_skill(skill, CommandSource::Project));
     }
     registry
@@ -167,11 +171,20 @@ pub(crate) fn expand_dynamic_slash_invocation(
     name: &str,
     request: &str,
 ) -> Option<std::result::Result<String, String>> {
+    if is_builtin_slash_name(name) {
+        return None;
+    }
     resolve_dynamic_slash_invocation(
         || crate::skills::skill_command_prompt(name, request),
         || expand_plugin_command_invocation(input),
         || crate::custom_commands::expand_custom_slash_invocation(input),
     )
+}
+
+fn is_builtin_slash_name(name: &str) -> bool {
+    builtin_slash_registry_commands()
+        .iter()
+        .any(|command| command.matches_name(name))
 }
 
 fn resolve_dynamic_slash_invocation(
@@ -280,8 +293,13 @@ fn append_tui_shortcuts(help: &mut String) {
     help.push_str("\nKeyboard shortcuts:\n");
     let _ = writeln!(
         help,
-        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits, then Bypass -> FullAuto when started with --allow-dangerously-skip-permissions",
-        "Shift+Tab"
+        "  {:<14} Cycle mode: {} -> {} -> {}, then {} -> {} when started with --allow-dangerously-skip-permissions",
+        "Shift+Tab",
+        crate::tui::MODE_DEFAULT,
+        crate::tui::MODE_PLAN,
+        crate::tui::MODE_AUTO,
+        crate::tui::MODE_BYPASS,
+        crate::tui::MODE_FULL_AUTO
     );
     let _ = writeln!(help, "  {:<14} Open command palette", "/");
     let _ = writeln!(
@@ -315,26 +333,38 @@ fn append_tui_shortcuts(help: &mut String) {
         "Type + Enter"
     );
     let _ = writeln!(help, "  {:<14} Redraw the screen", "Ctrl-L");
-    let _ = writeln!(help, "  {:<14} Clear input", "Ctrl-C");
+    let _ = writeln!(
+        help,
+        "  {:<14} Stop a running turn; otherwise clear the composer, or quit when pressed twice on an empty one",
+        "Ctrl-C"
+    );
     let _ = writeln!(help, "  Customize global actions with [ui.keybindings]");
 
     help.push_str("\nModes (cycle with Shift+Tab):\n");
-    let _ = writeln!(help, "  {:<14} Normal conversation (grey)", "Default");
-    let _ = writeln!(help, "  {:<14} Read-only planning, no edits (blue)", "Plan");
+    let _ = writeln!(
+        help,
+        "  {:<14} Normal conversation (grey)",
+        crate::tui::MODE_DEFAULT
+    );
+    let _ = writeln!(
+        help,
+        "  {:<14} Read-only planning, no edits (blue)",
+        crate::tui::MODE_PLAN
+    );
     let _ = writeln!(
         help,
         "  {:<14} Auto-accept file edits (green)",
-        "AcceptEdits"
+        crate::tui::MODE_AUTO
     );
     let _ = writeln!(
         help,
         "  {:<14} Skip all tool confirmation (yellow)",
-        "Bypass"
+        crate::tui::MODE_BYPASS
     );
     let _ = writeln!(
         help,
         "  {:<14} No prompts at all - extreme caution (red)",
-        "FullAuto"
+        crate::tui::MODE_FULL_AUTO
     );
 }
 
@@ -641,6 +671,43 @@ mod tests {
             resolve_dynamic_slash_invocation(|| None, || None, || None),
             None
         );
+    }
+
+    #[test]
+    fn a_skill_named_like_a_built_in_leaves_the_built_in_alone() {
+        let skill = |name: &str| crate::skills::Skill {
+            name: name.to_string(),
+            description: "A user skill".to_string(),
+            content: String::new(),
+            body: String::new(),
+            path: std::path::PathBuf::from(format!(".agiworkforce/skills/{name}.md")),
+            allow_implicit: true,
+            category: None,
+            required_env_vars: vec![],
+            required_tools: vec![],
+            required_connections: vec![],
+            version: None,
+            content_hash: crate::skills::hash_skill_content(b""),
+            tree_hash: None,
+        };
+        let registry = registry_from_builtins_and_skills(&[skill("review"), skill("tools")]);
+        for name in ["review", "tools"] {
+            let matching: Vec<&RegistryCommand> = registry
+                .commands()
+                .iter()
+                .filter(|command| command.matches_name(name))
+                .collect();
+            assert_eq!(matching.len(), 1, "/{name} is listed once");
+            assert_eq!(
+                matching[0].kind,
+                CommandKind::Local,
+                "/{name} stays built in"
+            );
+            assert!(
+                expand_dynamic_slash_invocation(&format!("/{name}"), name, "").is_none(),
+                "/{name} is never answered by a skill"
+            );
+        }
     }
 
     #[test]

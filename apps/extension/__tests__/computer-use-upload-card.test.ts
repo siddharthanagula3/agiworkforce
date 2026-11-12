@@ -71,6 +71,7 @@ beforeEach(() => {
         lastError: undefined,
         sendMessage: vi.fn(async () => ({ success: true, running: false })),
       },
+      i18n: { getMessage: (key: string) => key, getUILanguage: () => 'en' },
       storage: {
         local: {
           get: vi.fn((_key, callback?: (items: Record<string, unknown>) => void) => {

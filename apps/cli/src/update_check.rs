@@ -142,10 +142,10 @@ pub fn spawn_startup_check(config: &CliConfig, privacy: PrivacyMode) {
         };
         remember_latest_release(&release);
         if compare_versions(running_version(), &release.version) == UpdateVerdict::Available {
-            crate::tui::push_tui_notice(format!(
-                "agi {} is available (you have {}). Install it with: agi update --install",
-                release.version,
-                running_version()
+            let executable = std::env::current_exe().ok();
+            crate::tui::push_tui_notice(update_available_notice(
+                &release.version,
+                executable.as_deref(),
             ));
         } else if let Some(lines) = unseen_release_notes(&release) {
             crate::tui::push_tui_notice(lines.join("\n"));
@@ -244,7 +244,13 @@ fn install_directory(executable: &Path) -> Result<PathBuf, String> {
         .components()
         .any(|part| part.as_os_str().to_string_lossy().ends_with(".app"))
     {
-        return Err("This agi is bundled with AGI Cloud and updates with the app.".to_string());
+        return Err("This agi is bundled with the desktop app and updates with it.".to_string());
+    }
+    if let Some(manager) = package_manager_owning(executable) {
+        return Err(format!(
+            "This agi was installed by {manager}, which keeps track of its files. Update it with {manager}, or remove it there and install the published build with: {}",
+            install_command()
+        ));
     }
     executable.parent().map(Path::to_path_buf).ok_or_else(|| {
         format!(
@@ -252,6 +258,78 @@ fn install_directory(executable: &Path) -> Result<PathBuf, String> {
             install_command()
         )
     })
+}
+
+fn package_manager_owning(executable: &Path) -> Option<&'static str> {
+    let parts: Vec<String> = executable
+        .components()
+        .map(|part| part.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let has = |name: &str| parts.iter().any(|part| part == name);
+    if has("Cellar")
+        || has("Caskroom")
+        || has(".linuxbrew")
+        || executable.starts_with("/opt/homebrew")
+    {
+        return Some("Homebrew");
+    }
+    if executable.starts_with("/nix/store") {
+        return Some("Nix");
+    }
+    if parts
+        .windows(2)
+        .any(|pair| pair[0] == ".cargo" && pair[1] == "bin")
+        || std::env::var_os("CARGO_HOME")
+            .is_some_and(|home| executable.starts_with(Path::new(&home).join("bin")))
+    {
+        return Some("cargo install");
+    }
+    if executable.starts_with("/snap") {
+        return Some("snap");
+    }
+    let system_directories = [
+        "/usr/bin",
+        "/usr/sbin",
+        "/bin",
+        "/sbin",
+        "/usr/lib",
+        "/usr/libexec",
+    ];
+    if system_directories
+        .iter()
+        .any(|directory| executable.starts_with(directory))
+    {
+        return Some("the system package manager");
+    }
+    None
+}
+
+/// The swap renames a staged file into the install directory, so the user
+/// must be able to create files there.
+pub fn writable_install_directory(directory: PathBuf) -> Result<PathBuf, String> {
+    match tempfile::Builder::new()
+        .prefix(".agi-update-probe")
+        .tempfile_in(&directory)
+    {
+        Ok(_) => Ok(directory),
+        Err(error) => Err(format!(
+            "You cannot write to {} ({error}), so this agi cannot replace itself. Update it the way it was installed, or install the published build in your home folder with: {}",
+            directory.display(),
+            install_command()
+        )),
+    }
+}
+
+fn update_available_notice(published: &str, executable: Option<&Path>) -> String {
+    let instruction = match executable.map(install_directory) {
+        Some(Ok(_)) => "Install it with: agi update --install".to_string(),
+        Some(Err(reason)) => reason,
+        None => format!("Install it with: {}", install_command()),
+    };
+    format!(
+        "agi {published} is available (you have {}). {instruction}",
+        running_version()
+    )
 }
 
 /// What `--install` is about to replace, and why it may have nothing to do.
@@ -899,6 +977,80 @@ mod tests {
             assert!(rendered.contains("Will download agi 9.9.9"));
             assert!(rendered.contains("/home/dev/.agi/bin/agi"));
             assert!(rendered.contains("release signing key built into this agi"));
+        }
+    }
+
+    #[test]
+    fn a_build_a_package_manager_owns_is_never_rewritten() {
+        for (path, manager) in [
+            ("/opt/homebrew/Cellar/agi/1.0.0/bin/agi", "Homebrew"),
+            ("/usr/local/Cellar/agi/1.0.0/bin/agi", "Homebrew"),
+            (
+                "/home/linuxbrew/.linuxbrew/Cellar/agi/1.0.0/bin/agi",
+                "Homebrew",
+            ),
+            ("/nix/store/abc-agi-1.0.0/bin/agi", "Nix"),
+            ("/home/dev/.cargo/bin/agi", "cargo install"),
+            ("/usr/bin/agi", "the system package manager"),
+        ] {
+            let plan = InstallPlan::new("1.0.0", &release("9.9.9"), Path::new(path));
+            assert!(!plan.has_work(), "{path} must not be replaced");
+            #[cfg(not(windows))]
+            {
+                let refusal = plan.target.as_ref().unwrap_err();
+                assert!(refusal.contains(manager), "{path}: {refusal}");
+            }
+            #[cfg(windows)]
+            let _ = manager;
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_directory_the_user_cannot_write_is_refused_before_anything_downloads() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = tempfile::tempdir().expect("tempdir");
+        let locked = home.path().join("bin");
+        std::fs::create_dir(&locked).expect("create");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).expect("lock");
+
+        let refusal = writable_install_directory(locked.clone());
+
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).expect("unlock");
+        if nix::unistd::geteuid().is_root() {
+            return;
+        }
+        let refusal = refusal.expect_err("a read-only directory is refused");
+        assert!(refusal.contains(&install_command()), "{refusal}");
+        assert_eq!(
+            writable_install_directory(locked.clone()),
+            Ok(locked),
+            "a writable directory passes"
+        );
+    }
+
+    #[test]
+    fn the_update_notice_names_a_command_that_works_for_the_install() {
+        for bundled in [
+            "/Applications/Desktop.app/Contents/MacOS/agi",
+            "/opt/homebrew/Cellar/agi/1.0.0/bin/agi",
+            "/usr/bin/agi",
+        ] {
+            let notice = update_available_notice("9.9.9", Some(Path::new(bundled)));
+            assert!(notice.starts_with("agi 9.9.9 is available"), "{notice}");
+            assert!(!notice.contains("--install"), "{bundled}: {notice}");
+        }
+
+        let unknown = update_available_notice("9.9.9", None);
+        assert!(unknown.contains(&install_command()), "{unknown}");
+        assert!(!unknown.contains("--install"), "{unknown}");
+
+        #[cfg(not(windows))]
+        {
+            let home = tempfile::tempdir().expect("tempdir");
+            let own = home.path().join("bin").join("agi");
+            let notice = update_available_notice("9.9.9", Some(own.as_path()));
+            assert!(notice.contains("agi update --install"), "{notice}");
         }
     }
 

@@ -114,6 +114,33 @@ describe('memory sheet', () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it('cancels an inline edit on Escape instead of closing the sheet and losing the edit', async () => {
+    const { sheet } = setup([{ id: 'm1', content: 'Prefers metric units' }]);
+    await vi.waitFor(() => expect(document.querySelector('.sp-memory-item')).toBeTruthy());
+    button(document.querySelector('.sp-memory-item')!, message('spMemoryEdit')).click();
+    const edit = document.querySelector<HTMLTextAreaElement>('.sp-memory-edit textarea')!;
+    edit.value = 'A half-typed change';
+
+    edit.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(sheet.element.hidden).toBe(false);
+    await vi.waitFor(() => expect(document.querySelector('.sp-memory-edit')).toBeNull());
+    expect(document.querySelector('.sp-memory-text')?.textContent).toBe('Prefers metric units');
+  });
+
+  it('keeps the memory on Escape in the delete prompt and leaves the sheet open', async () => {
+    const { sheet, sent } = setup([{ id: 'm1', content: 'Prefers metric units' }]);
+    await vi.waitFor(() => expect(document.querySelector('.sp-memory-item')).toBeTruthy());
+    button(document.querySelector('.sp-memory-item')!, message('spMemoryDelete')).click();
+    const confirm = document.querySelector('[role="alertdialog"]')!;
+
+    confirm.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(sheet.element.hidden).toBe(false);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(sent.some((request) => request['type'] === 'DELETE_MEMORY')).toBe(false);
+  });
+
   it('shows the connection warning while displaying cached memory', async () => {
     const send = vi.fn(async (): Promise<unknown> => ({
       success: true,

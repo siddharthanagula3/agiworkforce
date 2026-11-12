@@ -81,6 +81,7 @@ const MCP_PROBE_TIMEOUT_MS = 90_000;
 const INSTALL_TIMEOUT_MS = 5 * 60_000;
 const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
 const HARD_KILL_TIMEOUT_MS = 2_000;
+const STDIN_CLOSE_EXIT_TIMEOUT_MS = 3_000;
 // stdout closes a moment before the process reports its exit; waiting for the
 // exit keeps the CLI's own stderr explanation instead of a bare stream error.
 const STDOUT_END_EXIT_GRACE_MS = 1_500;
@@ -723,6 +724,17 @@ export type McpAuthRequired = z.infer<typeof mcpAuthRequiredSchema>;
 export function readMcpAuthRequired(params: unknown): McpAuthRequired | undefined {
   const parsed = mcpAuthRequiredSchema.safeParse(params);
   return parsed.success ? parsed.data : undefined;
+}
+
+const notificationLagSchema = z.object({
+  code: z.literal('notification_lag'),
+  skipped: z.number().int().nonnegative(),
+});
+
+export function readNotificationLag(notification: AppServerNotification): number | undefined {
+  if (notification.method !== 'server/warning') return undefined;
+  const parsed = notificationLagSchema.safeParse(notification.params);
+  return parsed.success ? parsed.data.skipped : undefined;
 }
 
 const pluginUpdateResponseSchema = pluginListResponseSchema.extend({
@@ -2058,7 +2070,7 @@ export class LocalRuntimeClient {
   restart(): Promise<void> {
     if (this.restartPromise !== undefined) return this.restartPromise;
     const restart = (async () => {
-      await this.disposeProcess(true);
+      await this.disposeProcess(true, 'AGI local runtime process is restarting');
       this.disposed = false;
       delete this.disposePromise;
       await this.initialize();
@@ -2075,15 +2087,15 @@ export class LocalRuntimeClient {
     return restart;
   }
 
-  dispose(): Promise<void> {
-    return this.disposeProcess(false);
+  dispose(reason = 'The AGI local runtime for this folder stopped.'): Promise<void> {
+    return this.disposeProcess(false, reason);
   }
 
-  private disposeProcess(preserveListeners: boolean): Promise<void> {
+  private disposeProcess(preserveListeners: boolean, reason: string): Promise<void> {
     if (this.disposePromise !== undefined) return this.disposePromise;
     this.disposed = true;
     if (!preserveListeners) this.notificationListeners.clear();
-    const restartError = new Error('AGI local runtime process is restarting');
+    const restartError = new Error(reason);
     for (const listener of this.eventListeners) {
       listener({ type: 'runtime_disconnected', error: restartError.message });
     }
@@ -2118,6 +2130,10 @@ export class LocalRuntimeClient {
       );
       graceful = true;
     } catch {
+      if (await this.exitsAfterStdinClose(child, childExitPromise)) {
+        graceful = true;
+        return;
+      }
       const terminateProcessTree =
         this.options.terminateProcessTree ?? terminateLocalRuntimeProcessTree;
       await waitWithTimeout(
@@ -2134,6 +2150,28 @@ export class LocalRuntimeClient {
       if (this.connection === connection || this.child === child) {
         this.resetProcess(restartError, !graceful);
       }
+    }
+  }
+
+  /**
+   * The CLI's own shutdown runs when its stdin closes, and it reaps the command
+   * trees its turns started in their own process groups. A hard kill of the
+   * runtime's group cannot reach those, so the runtime gets that chance first.
+   */
+  private async exitsAfterStdinClose(
+    child: ChildProcessWithoutNullStreams,
+    childExitPromise: Promise<void>,
+  ): Promise<boolean> {
+    try {
+      child.stdin.end();
+      await waitWithTimeout(
+        childExitPromise,
+        STDIN_CLOSE_EXIT_TIMEOUT_MS,
+        'AGI local runtime did not exit after its input closed',
+      );
+      return true;
+    } catch {
+      return false;
     }
   }
 

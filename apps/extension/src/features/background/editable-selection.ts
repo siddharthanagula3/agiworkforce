@@ -1,5 +1,6 @@
 import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
-import { readAdminSitePolicy } from '../site-policy/store';
+import { readAdminSitePolicy, readUserSiteAllowlist } from '../site-policy/store';
+import { t } from '../../i18n';
 import { readUserSiteBlocklist } from '../site-policy/userBlocklist';
 import { normalizeApprovedSiteOrigin } from '../options/site-allowlist';
 import { readPageDocument, sendPageDocumentMessage } from '../browser-tools/documentBridge';
@@ -23,16 +24,13 @@ async function assertInlineSite(url: string): Promise<void> {
     (await readUserSiteBlocklist(undefined, { failClosed: true })).includes(origin)
   )
     throw new Error('This site is blocked for selected-text editing.');
-  // The review button authorizes one captured field, not general site control.
   const evaluation = evaluateSitePolicy(
-    { admin: await readAdminSitePolicy(), userAllowlist: [origin] },
+    { admin: await readAdminSitePolicy(), userAllowlist: await readUserSiteAllowlist() },
     url,
     'automation',
   );
   if (!evaluation.allowed)
-    throw new Error(
-      sitePolicyDenialMessage(evaluation, 'This site is blocked for selected-text editing.'),
-    );
+    throw new Error(sitePolicyDenialMessage(evaluation, t('spRewriteSiteNotApproved')));
 }
 
 export async function captureEditableTarget(

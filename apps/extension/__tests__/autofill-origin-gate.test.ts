@@ -40,6 +40,7 @@ const chromeMock = vi.hoisted(() => {
       },
     },
     _localStore: localStore,
+    _profileReadFails: false,
   };
   (globalThis as Record<string, unknown>).chrome = mock;
   return mock;
@@ -81,6 +82,7 @@ vi.mock('../src/webmcp', () => ({
   callTool: vi.fn().mockResolvedValue({ success: true }),
   watchForToolChanges: vi.fn(),
   startToolChangeReporting: vi.fn(),
+  stopWatchingToolChanges: vi.fn(),
 }));
 
 vi.mock('../src/page-metadata', () => ({
@@ -118,10 +120,18 @@ function pageApproved(): boolean {
 function serviceWorkerReply(message: { type?: string }): Record<string, unknown> {
   if (message.type === 'GET_PAGE_ACCESS')
     return { success: true, approved: pageApproved(), inPagePanel: false };
-  if (message.type === 'GET_AUTOFILL_PROFILE')
-    return pageApproved() && isJobApplicationHostUrl(window.location.href)
-      ? { success: true, profile: chromeMock._localStore[AUTOFILL_PROFILE_STORAGE_KEY] }
-      : { success: false, error: 'Autofill is blocked here.' };
+  if (message.type === 'GET_AUTOFILL_PROFILE') {
+    if (!pageApproved())
+      return {
+        success: false,
+        error: 'Autofill is blocked here, this site is not on your approved-site allowlist',
+      };
+    if (!isJobApplicationHostUrl(window.location.href))
+      return { success: false, error: 'Autofill does not support this page.' };
+    if (chromeMock._profileReadFails)
+      return { success: false, error: 'Your autofill profile could not be read.' };
+    return { success: true, profile: chromeMock._localStore[AUTOFILL_PROFILE_STORAGE_KEY] };
+  }
   return { success: true };
 }
 
@@ -130,6 +140,7 @@ beforeEach(() => {
     serviceWorkerReply(message),
   );
   chromeMock.storage.local.get.mockClear();
+  chromeMock._profileReadFails = false;
 });
 
 function setPageUrl(href: string): void {
@@ -235,6 +246,41 @@ describe('SEC-15, AGI_RUN_AUTOFILL gates the stored profile on the site allowlis
     expect(response.success).toBe(false);
     expect(response.error).toMatch(/allowlist/i);
     expect((document.querySelector('#first_name') as HTMLInputElement).value).toBe('');
+  });
+
+  it('says an approved site that is not a supported application page is unsupported, not unapproved', async () => {
+    chromeMock._localStore['agi_site_allowlist'] = ['https://acme.wd5.myworkdayjobs.com'];
+    setPageUrl('https://acme.wd5.myworkdayjobs.com/en-US/careers/job/1');
+
+    const response = await runAutofill();
+
+    expect(response.success).toBe(false);
+    expect(response.error).toMatch(/does not support this page/i);
+    expect(response.error).not.toMatch(/approved|allowlist/i);
+  });
+
+  it('says a profile that could not be read could not be read, not that the site is unapproved', async () => {
+    chromeMock._localStore['agi_site_allowlist'] = ['https://boards.greenhouse.io'];
+    chromeMock._profileReadFails = true;
+    setPageUrl('https://boards.greenhouse.io/acmecorp/jobs/123');
+
+    const response = await runAutofill();
+
+    expect(response.success).toBe(false);
+    expect(response.error).toMatch(/could not be read/i);
+    expect(response.error).not.toMatch(/approved|allowlist/i);
+  });
+
+  it('tells the user the extension did not answer when the worker is unreachable', async () => {
+    chromeMock.runtime.sendMessage.mockRejectedValueOnce(
+      new Error('Extension context invalidated'),
+    );
+    setPageUrl('https://boards.greenhouse.io/acmecorp/jobs/123');
+
+    const response = await runAutofill();
+
+    expect(response.success).toBe(false);
+    expect(response.error).toMatch(/did not answer/i);
   });
 
   it('fills a real allowlisted ATS page', async () => {

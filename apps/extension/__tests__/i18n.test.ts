@@ -54,6 +54,8 @@ const LOCALIZED_SOURCES = [
   'src/features/onboarding/welcome-page.ts',
   'src/features/side-panel/onboardingPrompt.ts',
   'src/background/task-notifications.ts',
+  'src/features/side-panel/autofillSummary.ts',
+  'src/features/background/editable-selection.ts',
 ] as const;
 
 const PLURAL_SUFFIX = /_(zero|one|two|few|many|other)$/;

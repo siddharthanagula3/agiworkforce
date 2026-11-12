@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use once_cell::sync::Lazy;
@@ -15,6 +16,7 @@ pub(super) const MAX_OUTPUT_BYTES: usize = 50 * 1024;
 pub(super) const MAX_OUTPUT_LINES: usize = 2000;
 pub(super) const TRUNCATION_HEAD_LINES: usize = 30;
 pub(super) const TRUNCATION_TAIL_LINES: usize = 30;
+const TRUNCATION_MARK_RESERVE: usize = 512;
 pub(super) const MAX_FILE_LINES: usize = 2_000;
 pub(super) const MAX_LINE_LENGTH: usize = 2_000;
 pub(crate) const COMMAND_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
@@ -150,12 +152,48 @@ pub(super) fn truncate_output_with_save(tool_name: &str, output: String) -> Stri
 
     let saved_path = save_full_output(tool_name, &output);
     let mut truncated = truncate_by_lines(&lines);
+    if truncated.len() > max_bytes {
+        truncated = truncate_by_bytes(&output, max_bytes);
+    }
 
     if let Some(path) = saved_path {
-        truncated.push_str(&format!("\n[full output saved to {}]", path));
+        truncated.push_str(&format!(
+            "\n[full output saved for the user to {path}, outside the workspace where \
+             read_file cannot open it; narrow the call to see the omitted part]"
+        ));
     }
 
     truncated
+}
+
+/// The first and last bytes of `output` that fit in `max_bytes`, cut on
+/// character boundaries, around a mark that says how much is left out.
+fn truncate_by_bytes(output: &str, max_bytes: usize) -> String {
+    let keep = max_bytes.saturating_sub(TRUNCATION_MARK_RESERVE) / 2;
+    let mut head_end = keep.min(output.len());
+    while !output.is_char_boundary(head_end) {
+        head_end -= 1;
+    }
+    let mut tail_start = output.len().saturating_sub(keep).max(head_end);
+    while !output.is_char_boundary(tail_start) {
+        tail_start += 1;
+    }
+    let omitted = &output[head_end..tail_start];
+    let line_breaks = omitted.matches('\n').count();
+    let mark = if line_breaks == 0 {
+        format!("[... {} bytes omitted ...]", omitted.len())
+    } else {
+        format!(
+            "[... {} lines omitted ({} bytes) ...]",
+            line_breaks,
+            omitted.len()
+        )
+    };
+    format!(
+        "{}\n\n{mark}\n\n{}",
+        &output[..head_end],
+        &output[tail_start..]
+    )
 }
 
 pub(super) fn truncate_by_lines(lines: &[&str]) -> String {
@@ -212,50 +250,169 @@ pub(crate) fn format_size(bytes: u64) -> String {
     }
 }
 
+const DIFF_CELL_BUDGET: usize = 4_000_000;
+
+/// A line diff of `old` and `new` in bounded memory: the common start and
+/// end are set aside, the rest is compared exactly while the comparison table
+/// fits [`DIFF_CELL_BUDGET`], split at lines found once on each side when it
+/// does not, and shown as removed then added where neither works.
 pub(crate) fn generate_simple_diff(old: &str, new: &str) -> String {
     let old_lines: Vec<&str> = old.lines().collect();
     let new_lines: Vec<&str> = new.lines().collect();
-
-    let n = old_lines.len();
-    let m = new_lines.len();
-    let mut dp = vec![vec![0u32; m + 1]; n + 1];
-    for i in (0..n).rev() {
-        for j in (0..m).rev() {
-            dp[i][j] = if old_lines[i] == new_lines[j] {
-                dp[i + 1][j + 1] + 1
-            } else {
-                dp[i + 1][j].max(dp[i][j + 1])
-            };
-        }
-    }
+    let mut budget = DIFF_CELL_BUDGET;
+    let mut marked = Vec::with_capacity(old_lines.len().max(new_lines.len()));
+    diff_lines(&old_lines, &new_lines, true, &mut budget, &mut marked);
 
     let mut result = String::new();
-    let mut i = 0;
-    let mut j = 0;
-    while i < n || j < m {
-        if i < n && j < m && old_lines[i] == new_lines[j] {
-            result.push(' ');
-            result.push_str(old_lines[i]);
-            result.push('\n');
-            i += 1;
-            j += 1;
-        } else if i < n && (j >= m || dp[i + 1][j] >= dp[i][j + 1]) {
-            result.push('-');
-            result.push_str(old_lines[i]);
-            result.push('\n');
-            i += 1;
-        } else {
-            result.push('+');
-            result.push_str(new_lines[j]);
-            result.push('\n');
-            j += 1;
-        }
+    for (mark, line) in marked {
+        result.push(mark);
+        result.push_str(line);
+        result.push('\n');
     }
-
     if result.ends_with('\n') {
         result.pop();
     }
     result
+}
+
+fn diff_lines<'a>(
+    old: &[&'a str],
+    new: &[&'a str],
+    split_at_unique_lines: bool,
+    budget: &mut usize,
+    marked: &mut Vec<(char, &'a str)>,
+) {
+    let prefix = old
+        .iter()
+        .zip(new)
+        .take_while(|(left, right)| left == right)
+        .count();
+    let (old_rest, new_rest) = (&old[prefix..], &new[prefix..]);
+    let suffix = old_rest
+        .iter()
+        .rev()
+        .zip(new_rest.iter().rev())
+        .take_while(|(left, right)| left == right)
+        .count();
+    let old_middle = &old_rest[..old_rest.len() - suffix];
+    let new_middle = &new_rest[..new_rest.len() - suffix];
+
+    marked.extend(old[..prefix].iter().map(|line| (' ', *line)));
+    let cells = (old_middle.len() + 1).saturating_mul(new_middle.len() + 1);
+    let both_sides_changed = !old_middle.is_empty() && !new_middle.is_empty();
+    if both_sides_changed && cells <= *budget {
+        *budget -= cells;
+        compared_line_by_line(old_middle, new_middle, marked);
+    } else if both_sides_changed && split_at_unique_lines {
+        let anchors = lines_found_once_on_each_side(old_middle, new_middle);
+        let (mut old_at, mut new_at) = (0, 0);
+        for (old_index, new_index) in anchors {
+            diff_lines(
+                &old_middle[old_at..old_index],
+                &new_middle[new_at..new_index],
+                false,
+                budget,
+                marked,
+            );
+            marked.push((' ', old_middle[old_index]));
+            old_at = old_index + 1;
+            new_at = new_index + 1;
+        }
+        diff_lines(
+            &old_middle[old_at..],
+            &new_middle[new_at..],
+            false,
+            budget,
+            marked,
+        );
+    } else {
+        removed_then_added(old_middle, new_middle, marked);
+    }
+    marked.extend(
+        old_rest[old_rest.len() - suffix..]
+            .iter()
+            .map(|line| (' ', *line)),
+    );
+}
+
+fn removed_then_added<'a>(old: &[&'a str], new: &[&'a str], marked: &mut Vec<(char, &'a str)>) {
+    marked.extend(old.iter().map(|line| ('-', *line)));
+    marked.extend(new.iter().map(|line| ('+', *line)));
+}
+
+fn compared_line_by_line<'a>(old: &[&'a str], new: &[&'a str], marked: &mut Vec<(char, &'a str)>) {
+    let (n, m) = (old.len(), new.len());
+    let width = m + 1;
+    let mut common = vec![0u32; (n + 1) * width];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            common[i * width + j] = if old[i] == new[j] {
+                common[(i + 1) * width + j + 1] + 1
+            } else {
+                common[(i + 1) * width + j].max(common[i * width + j + 1])
+            };
+        }
+    }
+
+    let (mut i, mut j) = (0, 0);
+    while i < n || j < m {
+        if i < n && j < m && old[i] == new[j] {
+            marked.push((' ', old[i]));
+            i += 1;
+            j += 1;
+        } else if i < n && (j >= m || common[(i + 1) * width + j] >= common[i * width + j + 1]) {
+            marked.push(('-', old[i]));
+            i += 1;
+        } else {
+            marked.push(('+', new[j]));
+            j += 1;
+        }
+    }
+}
+
+/// The pairs of positions of lines that occur exactly once in `old` and once
+/// in `new`, longest run in the same order on both sides.
+fn lines_found_once_on_each_side(old: &[&str], new: &[&str]) -> Vec<(usize, usize)> {
+    let mut seen: HashMap<&str, (usize, usize, usize, usize)> = HashMap::new();
+    for (index, line) in old.iter().enumerate() {
+        let entry = seen.entry(*line).or_insert((0, 0, 0, 0));
+        entry.0 += 1;
+        entry.1 = index;
+    }
+    for (index, line) in new.iter().enumerate() {
+        if let Some(entry) = seen.get_mut(*line) {
+            entry.2 += 1;
+            entry.3 = index;
+        }
+    }
+    let mut pairs: Vec<(usize, usize)> = seen
+        .values()
+        .filter(|entry| entry.0 == 1 && entry.2 == 1)
+        .map(|entry| (entry.1, entry.3))
+        .collect();
+    pairs.sort_unstable();
+
+    let mut tails: Vec<usize> = Vec::new();
+    let mut previous: Vec<Option<usize>> = vec![None; pairs.len()];
+    for (index, &(_, new_index)) in pairs.iter().enumerate() {
+        let length = tails.partition_point(|&tail| pairs[tail].1 < new_index);
+        if length > 0 {
+            previous[index] = Some(tails[length - 1]);
+        }
+        if length == tails.len() {
+            tails.push(index);
+        } else {
+            tails[length] = index;
+        }
+    }
+    let mut chain = Vec::with_capacity(tails.len());
+    let mut cursor = tails.last().copied();
+    while let Some(index) = cursor {
+        chain.push(pairs[index]);
+        cursor = previous[index];
+    }
+    chain.reverse();
+    chain
 }
 
 /// The most lines of a change a prompt carries. A change that is longer says
@@ -323,7 +480,70 @@ pub(super) fn truncate_line(line: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{describe_command, truncate_output_with_save};
+    use super::{describe_command, generate_simple_diff, tool_size_cap, truncate_output_with_save};
+
+    #[test]
+    fn a_one_line_change_in_a_huge_file_is_diffed_without_a_quadratic_table() {
+        let old: String = (0..60_000).map(|i| format!("row {i}\n")).collect();
+        let new = old.replace("row 30000\n", "row thirty thousand\n");
+        let started = std::time::Instant::now();
+
+        let diff = generate_simple_diff(&old, &new);
+
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        assert!(
+            diff.contains("\n-row 30000\n+row thirty thousand\n"),
+            "missing change"
+        );
+        assert_eq!(diff.lines().count(), 60_001);
+    }
+
+    #[test]
+    fn changes_at_both_ends_of_a_huge_file_split_at_lines_found_once() {
+        let old: String = (0..30_000).map(|i| format!("row {i}\n")).collect();
+        let new = format!("{}tail\n", old.replacen("row 0\n", "head\n", 1));
+
+        let diff = generate_simple_diff(&old, &new);
+        let lines: Vec<&str> = diff.lines().collect();
+
+        assert_eq!(&lines[..2], ["-row 0", "+head"]);
+        assert_eq!(lines.last(), Some(&"+tail"));
+        assert_eq!(
+            lines.iter().filter(|line| line.starts_with(' ')).count(),
+            29_999
+        );
+    }
+
+    #[test]
+    fn a_change_too_large_to_compare_is_shown_as_removed_then_added() {
+        let repeated = "same\n".repeat(3_000);
+        let old = format!("first\n{repeated}");
+        let new = format!("{repeated}last\n");
+
+        let diff = generate_simple_diff(&old, &new);
+        let lines: Vec<&str> = diff.lines().collect();
+
+        assert_eq!(lines.len(), 6_002);
+        assert_eq!(
+            lines.iter().filter(|line| line.starts_with('-')).count(),
+            3_001
+        );
+        assert_eq!(
+            lines.iter().filter(|line| line.starts_with('+')).count(),
+            3_001
+        );
+    }
+
+    #[test]
+    fn a_single_line_over_the_cap_is_cut_to_the_cap() {
+        for tool in ["web_fetch", "run_command"] {
+            let cap = tool_size_cap(tool);
+            let output = truncate_output_with_save(tool, "x".repeat(cap * 3));
+
+            assert!(output.len() <= cap + 512, "{tool}: {} bytes", output.len());
+            assert!(output.contains("bytes omitted"), "{tool}");
+        }
+    }
 
     #[test]
     fn every_tools_output_is_redacted_before_it_reaches_the_model_or_the_saved_file() {

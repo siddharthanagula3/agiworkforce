@@ -230,6 +230,28 @@ describe('options data-handling disclosure', () => {
     expect(captured.truncated).toBe(true);
   });
 
+  it('says a page attach also sends form field values, and names the fields it leaves out', () => {
+    const pageInjection = DATA_HANDLING_DISCLOSURES.find((entry) => entry.id === 'page-injection')!;
+    const observation = readSource('src/features/content/pageObservation.ts');
+    const fieldRules = readSource('src/features/content/elementReader.ts');
+
+    expect(observation).toContain('Current form state:');
+    expect(pageInjection.body).toContain('what is currently in its visible form fields');
+
+    for (const [token, words] of [
+      ['password', 'password'],
+      ['cvv', 'payment card'],
+      ['otp', 'one-time code'],
+      ['pin', 'PIN'],
+      ['ssn', 'Social Security number'],
+    ] as const) {
+      expect(fieldRules).toContain(`'${token}'`);
+      expect(pageInjection.body).toContain(words);
+    }
+    expect(observation).toContain("'[Protected field]'");
+    expect(pageInjection.body).toContain('blanked where they appear in the page text');
+  });
+
   it('stores the decline the sync gate reads', async () => {
     const section = createDataHandlingSection({
       get: (key) => chromeMock.storage.local.get(key) as Promise<Record<string, unknown>>,

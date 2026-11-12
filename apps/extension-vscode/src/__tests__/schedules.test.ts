@@ -177,6 +177,20 @@ describe('schedules tree', () => {
     }
   });
 
+  it('says there are no schedules yet and leads to creating one, instead of an empty list', async () => {
+    const client = { listSchedules: vi.fn().mockResolvedValue({ schedules: [], total: 0 }) };
+    const provider = new SchedulesTreeProvider(() => Promise.resolve({ status: 'ready', client }));
+    try {
+      const children = await provider.getChildren();
+
+      expect(children).toHaveLength(1);
+      expect(children[0]?.label).toBe('No schedules yet');
+      expect(children[0]?.command?.command).toBe('agi-workforce.openSchedulesOnWeb');
+    } finally {
+      provider.dispose();
+    }
+  });
+
   it('only accepts a tree item that carries a schedule', () => {
     expect(readScheduleCommandArgument(new ScheduleTreeItem(makeSchedule()))?.id).toBe('sched_1');
     expect(readScheduleCommandArgument({ task: { id: '' } })).toBeUndefined();

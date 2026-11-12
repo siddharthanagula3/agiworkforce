@@ -168,12 +168,21 @@ fn describe_sandbox() -> String {
             lines.push(format!("  Unrestricted was asked for, but {reason}."));
         }
     }
-    lines.push(
-        "  Change it with /sandbox read-only, /sandbox contained or /sandbox unrestricted, \
-         or set sandbox_mode in ~/.agiworkforce/config.toml."
-            .to_string(),
-    );
+    lines.push(sandbox_change_hint(
+        crate::config::CliConfig::config_path().ok().as_deref(),
+    ));
     lines.join("\n")
+}
+
+fn sandbox_change_hint(config_file: Option<&Path>) -> String {
+    let file = config_file.map_or_else(
+        || "your config file".to_string(),
+        |path| path.display().to_string(),
+    );
+    format!(
+        "  Change it with /sandbox read-only, /sandbox contained or /sandbox unrestricted, \
+         or set sandbox_mode in {file}."
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2312,6 +2321,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_sandbox_hint_names_the_config_file_in_use() {
+        let hint = sandbox_change_hint(Some(Path::new("/isolated/agihome/config.toml")));
+        assert!(
+            hint.contains("set sandbox_mode in /isolated/agihome/config.toml."),
+            "{hint}"
+        );
+        assert!(!hint.contains("~/.agiworkforce"), "{hint}");
+        assert!(sandbox_change_hint(None).contains("your config file"));
+    }
+
+    #[test]
     fn a_background_command_carries_the_agent_marker() {
         let cwd = std::env::temp_dir();
         let command =
@@ -3178,6 +3198,7 @@ mod tests {
 
     #[test]
     fn host_git_configuration_stays_read_only_even_in_a_managed_worktree() {
+        crate::platform::runtime::git::use_git_state_dir();
         let Some(git_config) = agiworkforce_worktree::host_git_config_dir() else {
             return;
         };

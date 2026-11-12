@@ -674,6 +674,9 @@
     "accepts_public_client": [
       "apps/desktop/src-tauri/src/sys/commands/mcp_oauth.rs"
     ],
+    "accepts_thinking_budget": [
+      "apps/cli/src/model_catalog.rs"
+    ],
     "acceptsSamplingParameters": [
       "packages/ai/providers/openai/src/sampling.ts"
     ],
@@ -3826,7 +3829,7 @@
       "apps/cli/src/features/hooks/hooks.rs",
       "packages/tools/skills/reference-bundles/skill-creator/scripts/aggregate_benchmark.py"
     ],
-    "aggregate_transformers": [
+    "aggregate_transformers_for": [
       "apps/cli/src/features/hooks/hooks.rs"
     ],
     "AggregateRow": [
@@ -5709,6 +5712,9 @@
     "apply_import_aliases": [
       "tools/skill-vetting/src/skillspector/nodes/analyzers/common.py"
     ],
+    "apply_latest_in_folder": [
+      "apps/cli/src/apply_patch.rs"
+    ],
     "apply_managed_config": [
       "apps/cli/src/config.rs"
     ],
@@ -5746,6 +5752,9 @@
     ],
     "apply_remote_gate": [
       "apps/desktop/src-tauri/src/features/speech/wake.rs"
+    ],
+    "apply_saved_effort": [
+      "apps/cli/src/lib.rs"
     ],
     "apply_saved_network_proxy": [
       "apps/desktop/src-tauri/src/sys/commands/network_proxy.rs"
@@ -6169,6 +6178,9 @@
     "approval_handle": [
       "apps/cli/src/cloud/code_sessions.rs"
     ],
+    "approval_key_help": [
+      "apps/cli/src/tui/widgets/approval_overlay.rs"
+    ],
     "approval_overlay": [
       "apps/cli/src/tui/widgets/mod.rs"
     ],
@@ -6198,6 +6210,9 @@
     "APPROVAL_TIMEOUT_MS": [
       "apps/extension/src/features/computer-use/agentLoop.ts",
       "apps/web/app/agent-permissions/page.test.tsx"
+    ],
+    "approvalAllowsSessionScope": [
+      "apps/extension-vscode/src/features/permissions/approvalScope.ts"
     ],
     "ApprovalAnswer": [
       "apps/extension-vscode/src/features/remote-control/approvalAnswers.ts"
@@ -9882,8 +9897,17 @@
       "packages/ai/routing/src/auto.ts",
       "packages/ai/routing/src/index.ts"
     ],
+    "AUTOFILL_NOT_APPROVED_ERROR": [
+      "apps/extension/src/features/background/contentAccess.ts"
+    ],
     "AUTOFILL_PROFILE_STORAGE_KEY": [
       "apps/extension/src/features/content/autofill/profile-storage.ts"
+    ],
+    "AUTOFILL_PROFILE_UNREADABLE_ERROR": [
+      "apps/extension/src/features/background/contentAccess.ts"
+    ],
+    "AUTOFILL_UNSUPPORTED_PAGE_ERROR": [
+      "apps/extension/src/features/background/contentAccess.ts"
     ],
     "autofillAshby": [
       "apps/extension/src/features/content/autofill/filler.ts"
@@ -9906,8 +9930,14 @@
     "AutofillOutcome": [
       "apps/extension/src/features/side-panel/computerUsePanel.ts"
     ],
+    "AutofillProfileReply": [
+      "apps/extension/src/features/content/workerAccess.ts"
+    ],
     "AutofillResult": [
       "apps/extension/src/features/content/autofill/filler.ts"
+    ],
+    "autofillSuccessMessage": [
+      "apps/extension/src/features/side-panel/autofillSummary.ts"
     ],
     "AUTOFIXABILITY": [
       "packages/guardian/core/src/schema.ts"
@@ -10799,8 +10829,17 @@
     "Batch": [
       "tools/skill-vetting/src/skillspector/llm_analyzer_base.py"
     ],
+    "batch_calls": [
+      "apps/cli/src/features/exec/tools/mod.rs"
+    ],
+    "batch_result": [
+      "apps/cli/src/features/exec/tools/mod.rs"
+    ],
     "batchAnnotations": [
       "packages/guardian/github/src/checks.ts"
+    ],
+    "BatchCall": [
+      "apps/cli/src/features/exec/tools/mod.rs"
     ],
     "batchIntroducesUntrustedContent": [
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts"
@@ -14149,6 +14188,9 @@
     "cached_user_tier": [
       "apps/cli/src/models/gateway_models.rs"
     ],
+    "cachedAccountTier": [
+      "apps/extension-vscode/src/integrations/tierResolver.ts"
+    ],
     "CachedIcon": [
       "apps/web/lib/connectors/directory/icon-fetch.ts"
     ],
@@ -14569,6 +14611,9 @@
     ],
     "cancelImageGenerations": [
       "apps/web/lib/hooks/useMediaGeneration.ts"
+    ],
+    "CancelInPagePromptMessage": [
+      "apps/extension/src/types.ts"
     ],
     "CancellationScope": [
       "packages/contracts/types/src/provider-adapter.ts"
@@ -15819,6 +15864,9 @@
     ],
     "ChangedFile": [
       "apps/web/features/code/components/CodeDiffFile.tsx"
+    ],
+    "changedOrigins": [
+      "apps/extension/src/features/background/pageAccessNotifier.ts"
     ],
     "ChangeExtent": [
       "apps/cli/src/platform/runtime/change_reason.rs"
@@ -19869,6 +19917,9 @@
     "CliProbeResult": [
       "apps/extension-vscode/src/platform/remoteEnvironment.ts"
     ],
+    "cliReadsOwnedWindowCredits": [
+      "scripts/check-protocol-types.mjs"
+    ],
     "CliRelease": [
       "apps/cli/src/update_check.rs"
     ],
@@ -22546,6 +22597,9 @@
     "CodeBlockEditorContext": [
       "packages/ui/unified-chat/src/components/markdown/codeBlockEditor.ts",
       "packages/ui/unified-chat/src/index.ts"
+    ],
+    "codeBlockTargetRefusal": [
+      "apps/extension-vscode/src/platform/codeBlockTarget.ts"
     ],
     "CodeBranchState": [
       "apps/web/features/code/hooks/use-code-branches.ts"
@@ -27605,6 +27659,7 @@
     "contains": [
       "apps/cli/src/cloud/memory.rs",
       "apps/cli/src/mcp/registry.rs",
+      "apps/cli/src/platform/runtime/session_control.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/types.rs",
       "apps/desktop/src-tauri/src/core/agi/executors/mod.rs"
     ],
@@ -31208,6 +31263,9 @@
     ],
     "credential_scope": [
       "apps/desktop/src-tauri/src/core/mcp/config.rs"
+    ],
+    "credential_state": [
+      "apps/cli/src/mcp/mod.rs"
     ],
     "credential_storage_label": [
       "apps/cli/src/auth.rs"
@@ -41727,8 +41785,18 @@
     "EFFORT_LABEL": [
       "packages/contracts/types/src/design-system/effort.ts"
     ],
+    "EFFORT_NOT_TAKEN_NOTE": [
+      "apps/cli/src/claude_parity.rs"
+    ],
+    "effort_parameter": [
+      "apps/cli/src/model_catalog.rs"
+    ],
     "effort_picker": [
       "apps/cli/src/tui/widgets/mod.rs"
+    ],
+    "effort_reaches_model": [
+      "apps/cli/src/models/mod.rs",
+      "apps/cli/src/models/streaming.rs"
     ],
     "effort_support": [
       "apps/cli/src/model_catalog.rs"
@@ -41739,6 +41807,9 @@
     "EffortLevel": [
       "apps/desktop/src-tauri/src/core/llm/mod.rs",
       "apps/web/shared/stores/thinking-store.ts"
+    ],
+    "EffortParameter": [
+      "apps/cli/src/model_catalog.rs"
     ],
     "EffortPickerState": [
       "apps/cli/src/tui/widgets/effort_picker.rs"
@@ -42373,6 +42444,9 @@
       "apps/cli/src/features/exec/tools/mod.rs"
     ],
     "enable_managed_session": [
+      "apps/cli/src/agent/mod.rs"
+    ],
+    "enable_managed_session_as": [
       "apps/cli/src/agent/mod.rs"
     ],
     "enable_team_mode": [
@@ -44436,6 +44510,9 @@
     ],
     "execute_github_create_repo_tool": [
       "apps/desktop/src-tauri/src/core/llm/tool_executor/git_tools.rs"
+    ],
+    "execute_glob": [
+      "apps/cli/src/features/exec/tools/dir_ops/mod.rs"
     ],
     "execute_glob_search_tool": [
       "apps/desktop/src-tauri/src/core/llm/tool_executor/code_tools.rs"
@@ -48991,6 +49068,9 @@
     "for_provider": [
       "apps/cli/src/design_system.rs"
     ],
+    "for_restart": [
+      "apps/cli/src/mcp/mod.rs"
+    ],
     "for_state": [
       "apps/cli/src/trust/mod.rs"
     ],
@@ -49251,6 +49331,9 @@
       "apps/cli/src/output.rs"
     ],
     "format_session_list": [
+      "apps/cli/src/sessions.rs"
+    ],
+    "format_session_list_with_kept_copies": [
       "apps/cli/src/sessions.rs"
     ],
     "format_size": [
@@ -52117,6 +52200,7 @@
       "apps/cli/src/cloud/client.rs",
       "apps/cli/src/features/exec/tools/registry.rs",
       "apps/cli/src/mcp/oauth_store.rs",
+      "apps/cli/src/schedules.rs",
       "apps/cli/src/secure_store.rs",
       "apps/desktop/src-tauri/src/core/artifacts/store.rs",
       "apps/desktop/src-tauri/src/core/mcp/extensions/repository.rs",
@@ -52672,9 +52756,6 @@
     ],
     "get_cookies": [
       "apps/desktop/src-tauri/src/automation/browser/advanced.rs"
-    ],
-    "get_copilot_api_token": [
-      "apps/cli/src/auth.rs"
     ],
     "get_current_log_path": [
       "apps/desktop/src-tauri/src/sys/telemetry/logging.rs",
@@ -55629,6 +55710,9 @@
     "GitToolSpec": [
       "apps/cli/src/platform/runtime/git_tools.rs"
     ],
+    "gitWithholdReason": [
+      "apps/extension-vscode/src/data/contextExclusion.ts"
+    ],
     "glob_match": [
       "apps/cli/src/features/hooks/hooks.rs"
     ],
@@ -57739,6 +57823,10 @@
     ],
     "headingAnchors": [
       "apps/web/lib/server/project-knowledge-anchors.ts"
+    ],
+    "headless_change_was_refused": [
+      "apps/cli/src/features/exec/tools/file_ops/mod.rs",
+      "apps/cli/src/features/exec/tools/mod.rs"
     ],
     "headlessHarnessCommand": [
       "apps/web/features/code/code-runtime.ts"
@@ -59955,6 +60043,9 @@
     "importEcosystemMcpServers": [
       "packages/client/desktop-command-client/src/dotfiles.ts"
     ],
+    "imported": [
+      "apps/cli/src/sessions.rs"
+    ],
     "imported_from": [
       "apps/cli/src/sessions.rs"
     ],
@@ -60057,6 +60148,9 @@
     ],
     "IN_PAGE_PANEL_ENABLED_STORAGE_KEY": [
       "apps/extension/src/features/options/preference-rows.ts"
+    ],
+    "IN_PAGE_PROMPT_PORT_PREFIX": [
+      "apps/extension/src/features/content/in-page-panel/promptPort.ts"
     ],
     "in_repository": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
@@ -61565,7 +61659,7 @@
       "apps/cli/src/tui/widgets/mod.rs",
       "apps/desktop/src-tauri/src/sys/commands/mod.rs"
     ],
-    "interactive_api_key_login": [
+    "interactive_api_key_login_choice": [
       "apps/cli/src/auth.rs"
     ],
     "interactive_api_key_login_for_provider": [
@@ -66260,6 +66354,15 @@
     "keepVoiceSessionAcrossNavigation": [
       "apps/web/features/chat/hooks/use-voice-session.ts"
     ],
+    "kept_copies": [
+      "apps/cli/src/sessions.rs"
+    ],
+    "kept_copies_notice": [
+      "apps/cli/src/sessions.rs"
+    ],
+    "kept_copies_of": [
+      "apps/cli/src/platform/runtime/session_control.rs"
+    ],
     "keptMessageContent": [
       "apps/web/lib/chat-kept-messages.ts"
     ],
@@ -66273,6 +66376,7 @@
       "apps/desktop/src/features/settings/KeptSettingsFileNotice.tsx"
     ],
     "key": [
+      "apps/cli/src/tui/widgets/approval_overlay.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/accelerator.rs"
     ],
     "KEY_ACTOR": [
@@ -66823,6 +66927,9 @@
     "LanguageId": [
       "packages/ui/unified-chat/src/components/markdown/shikiHighlighter.ts"
     ],
+    "languageIdForExtension": [
+      "apps/extension-vscode/src/data/contextBuilder.ts"
+    ],
     "languageLabel": [
       "apps/extension/src/features/side-panel/dictation-language.ts"
     ],
@@ -66905,6 +67012,12 @@
     ],
     "LATEST_PAGE_CONTEXT": [
       "apps/desktop/src-tauri/src/sys/commands/extension.rs"
+    ],
+    "latest_project_session": [
+      "apps/cli/src/platform/runtime/session_control.rs"
+    ],
+    "latest_session_in_folder": [
+      "apps/cli/src/sessions.rs"
     ],
     "LatestBlock": [
       "apps/web/features/marketing/components/FlagshipSections.tsx"
@@ -67819,6 +67932,9 @@
     "lineRange": [
       "packages/client/ide-runtime/src/index.ts",
       "packages/client/ide-runtime/src/session.ts"
+    ],
+    "lineReadPlanWindowCredits": [
+      "scripts/check-protocol-types.mjs"
     ],
     "lines": [
       "packages/ui/unified-chat/src/components/markdown/__fixtures__/markdownStreamCorpus.ts"
@@ -69819,6 +69935,7 @@
       "apps/cli/src/features/plan/plan_mode.rs"
     ],
     "load_from": [
+      "apps/cli/src/config.rs",
       "apps/cli/src/features/plan/plan_mode.rs",
       "apps/cli/src/mcp/registry.rs"
     ],
@@ -71036,6 +71153,9 @@
       "packages/contracts/types/src/generated/protocol/LocalModelListResponse.ts",
       "packages/contracts/types/src/index.ts"
     ],
+    "localModelNotRunningMessage": [
+      "apps/extension-vscode/src/core/cloudModelBoundary.ts"
+    ],
     "LocalModelPartition": [
       "packages/contracts/local-runtime/src/index.ts",
       "packages/contracts/local-runtime/src/inference.ts"
@@ -71757,9 +71877,6 @@
       "scripts/check-llm-log-hygiene.mjs"
     ],
     "login_agiworkforce": [
-      "apps/cli/src/auth.rs"
-    ],
-    "login_copilot": [
       "apps/cli/src/auth.rs"
     ],
     "login_opens_vendor_subscription": [
@@ -75967,6 +76084,9 @@
     "max_duration": [
       "apps/desktop/src-tauri/src/automation/computer_use/types.rs"
     ],
+    "MAX_EDIT_FILE_BYTES": [
+      "apps/cli/src/file_state.rs"
+    ],
     "max_effort_when_thinking_disabled": [
       "apps/desktop/src-tauri/src/core/llm/models_config.rs"
     ],
@@ -76264,7 +76384,8 @@
       "apps/web/lib/identity/pagination.ts"
     ],
     "MAX_PAGE_TEXT_CHARACTERS": [
-      "apps/extension/src/features/content/in-page-panel/pageActions.ts"
+      "apps/extension/src/features/content/in-page-panel/pageActions.ts",
+      "apps/web/app/privacy/__tests__/extension-page-capture-claims.test.ts"
     ],
     "MAX_PAIR_CONFIRM_ATTEMPTS": [
       "packages/contracts/types/src/browser-bridge.ts"
@@ -79453,6 +79574,7 @@
       "apps/cli/src/app_server/account.rs",
       "apps/cli/src/cloud/connectors.rs",
       "apps/cli/src/repl/registry.rs",
+      "apps/cli/src/sessions.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/control.rs",
       "apps/desktop/src-tauri/src/sys/native_confirm.rs",
       "crates/agiworkforce-app-server/src/developer_sessions.rs",
@@ -80242,6 +80364,9 @@
     ],
     "MigrationContractError": [
       "scripts/lib/neon-migrations.mjs"
+    ],
+    "MigrationReport": [
+      "apps/cli/src/sessions.rs"
     ],
     "migrations": [
       "apps/desktop/src-tauri/src/data/db/mod.rs"
@@ -81061,8 +81186,23 @@
     "MOD_SHIFT_ENTER_KEY": [
       "packages/ui/unified-chat/src/composer-editor/extensions/submit-keymap.ts"
     ],
+    "MODE_AUTO": [
+      "apps/cli/src/tui/mod.rs"
+    ],
+    "MODE_BYPASS": [
+      "apps/cli/src/tui/mod.rs"
+    ],
+    "MODE_DEFAULT": [
+      "apps/cli/src/tui/mod.rs"
+    ],
+    "MODE_FULL_AUTO": [
+      "apps/cli/src/tui/mod.rs"
+    ],
     "mode_name": [
       "crates/agiworkforce-sandbox-policy/src/lib.rs"
+    ],
+    "MODE_PLAN": [
+      "apps/cli/src/tui/mod.rs"
     ],
     "ModeKind": [
       "crates/agiworkforce-protocol/bindings/ModeKind.ts",
@@ -82297,6 +82437,9 @@
     ],
     "named_roots": [
       "crates/agiworkforce-sandbox-policy/src/wrap.rs"
+    ],
+    "NamedDefaultKeys": [
+      "apps/cli/src/config.rs"
     ],
     "NamedFileCheckpoint": [
       "apps/desktop/src-tauri/src/core/agent/change_tracker.rs",
@@ -84830,6 +84973,9 @@
     "notifyNewDeviceRegistered": [
       "apps/web/lib/services/account-activity-notifications.ts"
     ],
+    "notifyPageAccessChanged": [
+      "apps/extension/src/features/background/pageAccessNotifier.ts"
+    ],
     "notifyPersistenceFailure": [
       "apps/web/lib/hooks/useChatStream.ts"
     ],
@@ -85279,6 +85425,7 @@
     ],
     "of": [
       "apps/cli/src/mcp/consent.rs",
+      "apps/cli/src/process_tree.rs",
       "apps/cli/src/subagent.rs",
       "apps/desktop/src-tauri/src/core/mcp/config.rs"
     ],
@@ -87989,9 +88136,6 @@
     "OverRevokedTopUpRefund": [
       "apps/web/scripts/mobile-top-up-refund-report/report.ts"
     ],
-    "override_session_id": [
-      "apps/cli/src/agent/mod.rs"
-    ],
     "OverrideLayerPatchSchema": [
       "apps/web/app/api/settings/organization/policy/controls-schema.ts"
     ],
@@ -88234,6 +88378,9 @@
     ],
     "PageAccess": [
       "apps/extension/src/features/content/workerAccess.ts"
+    ],
+    "PageAccessChangedMessage": [
+      "apps/extension/src/types.ts"
     ],
     "PageAction": [
       "apps/desktop/src-tauri/src/sys/commands/extension.rs",
@@ -92025,6 +92172,9 @@
     ],
     "placeholder": [
       "crates/agiworkforce-protocol/src/user_input.rs"
+    ],
+    "placeholder_count": [
+      "apps/cli/src/secret_redaction.rs"
     ],
     "PlaceIdentity": [
       "packages/contracts/types/src/interactive-cards.ts"
@@ -96940,6 +97090,9 @@
     "ProjectedCloudAgentWorkflowEvent": [
       "apps/web/lib/workflows/cloud-agent-workflow-stream.ts"
     ],
+    "projectEdit": [
+      "apps/extension-vscode/src/features/projects/projectActions.ts"
+    ],
     "ProjectEntry": [
       "apps/cli/src/project_registry.rs"
     ],
@@ -101516,6 +101669,9 @@
     "readNoticeFiles": [
       "scripts/lib/third-party-notices.mjs"
     ],
+    "readNotificationLag": [
+      "apps/extension-vscode/src/integrations/localRuntimeClient.ts"
+    ],
     "readNotificationPermission": [
       "apps/web/features/notifications/index.ts",
       "apps/web/features/notifications/lib/web-push-client.ts"
@@ -103016,6 +103172,9 @@
     "record_file_write": [
       "apps/cli/src/file_state.rs"
     ],
+    "record_files_written": [
+      "apps/cli/src/file_state.rs"
+    ],
     "record_finished_in": [
       "apps/desktop/src-tauri/src/sys/commands/chat/interrupted_turns.rs"
     ],
@@ -103100,6 +103259,9 @@
     ],
     "record_success": [
       "apps/desktop/src-tauri/src/core/llm/fallback_chain.rs"
+    ],
+    "record_teammate_spend": [
+      "apps/cli/src/teams.rs"
     ],
     "record_terminal_error": [
       "apps/cli/src/crash_reports/startup_metrics.rs"
@@ -105490,6 +105652,9 @@
     "remember_choice": [
       "apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs"
     ],
+    "remember_for_restart": [
+      "apps/cli/src/mcp/mod.rs"
+    ],
     "remember_latest_release": [
       "apps/cli/src/update_check.rs"
     ],
@@ -106409,6 +106574,9 @@
       "packages/contracts/compliance/src/article50-marker.ts",
       "packages/contracts/compliance/src/index.ts"
     ],
+    "renderAnswerInto": [
+      "apps/extension/src/features/content/in-page-panel/answerMarkdown.ts"
+    ],
     "renderAtomFeed": [
       "apps/web/app/release-notes/changelog-feed.ts"
     ],
@@ -106644,6 +106812,7 @@
       "apps/desktop/src-tauri/src/sys/account/mod.rs"
     ],
     "replace_file": [
+      "apps/cli/src/mcp/registry.rs",
       "apps/cli/src/path_security/file_authority.rs"
     ],
     "REPLACE_IMAGE_LABEL": [
@@ -108700,9 +108869,6 @@
     ],
     "resolve_approval": [
       "apps/cli/src/schedules.rs"
-    ],
-    "resolve_auth": [
-      "apps/cli/src/auth.rs"
     ],
     "resolve_auto_model": [
       "apps/cli/src/model_catalog.rs"
@@ -112580,6 +112746,9 @@
     "rotatePairCredential": [
       "services/signaling-server/src/db.ts"
     ],
+    "rotation_after": [
+      "apps/cli/src/routing/fallback.rs"
+    ],
     "RotationFamilyLock": [
       "apps/web/lib/server/refresh-token-family.ts"
     ],
@@ -115267,6 +115436,12 @@
     ],
     "save_user_hooks_file": [
       "apps/cli/src/features/hooks/hooks.rs"
+    ],
+    "save_user_provider_base_url": [
+      "apps/cli/src/config.rs"
+    ],
+    "save_user_value": [
+      "apps/cli/src/config.rs"
     ],
     "save_value": [
       "apps/cli/src/features/plugins/settings.rs"
@@ -119874,6 +120049,9 @@
     "session_identity": [
       "apps/cli/src/platform/runtime/session.rs"
     ],
+    "SESSION_KEPT_COPY_MARKER": [
+      "apps/cli/src/platform/runtime/session.rs"
+    ],
     "SESSION_KEY_LEN": [
       "apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs"
     ],
@@ -120257,6 +120435,9 @@
       "apps/desktop/src-tauri/src/lib.rs",
       "apps/desktop/src-tauri/src/ui/window/mod.rs"
     ],
+    "set_apart_unfinished_line": [
+      "apps/cli/src/tui/turn_transcript.rs"
+    ],
     "set_app_data_dir": [
       "apps/desktop/src-tauri/src/sys/utils.rs"
     ],
@@ -120277,6 +120458,9 @@
     ],
     "set_batch": [
       "apps/desktop/src-tauri/src/data/settings/service.rs"
+    ],
+    "set_budget_headroom": [
+      "apps/cli/src/teams.rs"
     ],
     "set_cache": [
       "apps/desktop/src-tauri/src/core/llm/llm_router.rs"
@@ -120361,6 +120545,10 @@
     ],
     "set_gate_refusal": [
       "apps/desktop/src-tauri/src/ui/hooks/mod.rs"
+    ],
+    "set_host_git_config_dir": [
+      "crates/agiworkforce-worktree/src/git.rs",
+      "crates/agiworkforce-worktree/src/lib.rs"
     ],
     "set_host_state_dir": [
       "crates/agiworkforce-worktree/src/git.rs",
@@ -121321,6 +121509,12 @@
     "settle_front_app": [
       "apps/desktop/src-tauri/src/automation/computer_use/mod.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/run_start.rs"
+    ],
+    "settle_spend_into": [
+      "apps/cli/src/teams.rs"
+    ],
+    "settle_team_spend": [
+      "apps/cli/src/agent/chat.rs"
     ],
     "settleAbandonedVoiceSessions": [
       "apps/web/app/api/voice/live/sessions/lib/voice-session-settlement.ts"
@@ -122696,6 +122890,9 @@
     "showHelpMenu": [
       "apps/extension-vscode/src/features/help/helpMenu.ts"
     ],
+    "showLlmResultInNewTab": [
+      "apps/extension-vscode/src/platform/applyEdit.ts"
+    ],
     "showLoadingOverlay": [
       "apps/desktop/electron/loadingOverlay.ts"
     ],
@@ -122980,6 +123177,9 @@
     ],
     "sign_out_of_account": [
       "apps/cli/src/app_server/account.rs"
+    ],
+    "sign_out_of_account_keeping_keys": [
+      "apps/cli/src/lib.rs"
     ],
     "sign_out_of_every_provider": [
       "apps/cli/src/app_server/account.rs"
@@ -129512,6 +129712,9 @@
     "SURFACE_PREDICATES": [
       "scripts/check-usage-pool-is-shared.mjs"
     ],
+    "SURFACE_REFRESH_COMMANDS": [
+      "apps/extension-vscode/src/features/surfaces/treeQuickPick.ts"
+    ],
     "SURFACE_REMEDIES": [
       "packages/contracts/types/src/lifecycle-status.ts"
     ],
@@ -132594,6 +132797,9 @@
     "TimeDivider": [
       "apps/mobile/src/features/chat/components/MessageList.tsx"
     ],
+    "TimedOutOutput": [
+      "apps/cli/src/process_tree.rs"
+    ],
     "timedTextTranscript": [
       "apps/extension/src/features/content/in-page-panel/youtubeTranscript.ts"
     ],
@@ -133248,6 +133454,9 @@
     ],
     "toNvidiaNimUpstreamError": [
       "apps/web/app/api/llm/v1/chat/completions/lib/adapter-errors.ts"
+    ],
+    "too_large_to_edit_message": [
+      "apps/cli/src/file_state.rs"
     ],
     "TOO_MANY_REQUESTS_MESSAGE": [
       "apps/desktop/src/lib/errorMessages.ts"
@@ -134879,6 +135088,9 @@
     "trackedRuntimeChildCount": [
       "apps/extension-vscode/src/integrations/runtimeProcessRegistry.ts"
     ],
+    "trackLastTextEditor": [
+      "apps/extension-vscode/src/platform/lastTextEditor.ts"
+    ],
     "trackMessageSave": [
       "apps/web/features/chat/lib/pending-message-saves.ts"
     ],
@@ -134913,6 +135125,9 @@
       "apps/mobile/src/features/settings/personalization/TraitLevelSheet.tsx"
     ],
     "transaction": [
+      "apps/cli/src/auth.rs"
+    ],
+    "transaction_replacing_unreadable": [
       "apps/cli/src/auth.rs"
     ],
     "transaction_with_commit": [
@@ -135739,9 +135954,6 @@
     "try_read_within": [
       "apps/cli/src/project_text.rs"
     ],
-    "try_subscription_auth": [
-      "apps/cli/src/models/provider_dispatch.rs"
-    ],
     "tryOpenDeviceAuthorizationUrl": [
       "apps/extension-vscode/src/features/account-auth/deviceAuth.ts"
     ],
@@ -135843,6 +136055,9 @@
     ],
     "TURN_AGENT_EVENT": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "turn_budget_usd": [
+      "apps/cli/src/teams.rs"
     ],
     "turn_can_start": [
       "apps/cli/src/models/mod.rs",
@@ -145667,6 +145882,9 @@
     "WorkingPrinciple": [
       "apps/cli/src/agent/prompt.rs"
     ],
+    "workingTextEditor": [
+      "apps/extension-vscode/src/platform/lastTextEditor.ts"
+    ],
     "WorkingTreeChange": [
       "packages/contracts/local-runtime/src/developer-sessions.ts",
       "packages/contracts/local-runtime/src/index.ts"
@@ -146806,6 +147024,9 @@
       "packages/contracts/compliance/src/article50-marker.ts",
       "packages/contracts/compliance/src/index.ts"
     ],
+    "writable_install_directory": [
+      "apps/cli/src/update_check.rs"
+    ],
     "writable_new_path": [
       "apps/desktop/src-tauri/src/core/agi/executors/mod.rs"
     ],
@@ -146821,6 +147042,9 @@
     ],
     "write_account_skills": [
       "apps/cli/src/cloud/skills.rs"
+    ],
+    "write_config_file": [
+      "apps/cli/src/config.rs"
     ],
     "write_dotfile_servers": [
       "apps/desktop/src-tauri/src/core/mcp/config.rs"

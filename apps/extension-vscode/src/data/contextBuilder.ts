@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { CODE_REVIEW_DIAGNOSTIC_SOURCE } from '@agiworkforce/ide-runtime';
 import { execFile } from 'child_process';
 import * as path from 'path';
 import { promisify } from 'util';
@@ -87,6 +88,10 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   tf: 'terraform',
   dockerfile: 'dockerfile',
 };
+
+export function languageIdForExtension(extension: string): string | undefined {
+  return LANGUAGE_BY_EXTENSION[extension.toLowerCase()];
+}
 
 export function inferLanguageFromUri(uri: vscode.Uri): string {
   const base = path.basename(uri.fsPath).toLowerCase();
@@ -237,7 +242,11 @@ export class ContextBuilder {
       if (allDiagnostics.length === 0) return [];
 
       const diagnostics = allDiagnostics
-        .filter((d) => d.severity <= vscode.DiagnosticSeverity.Warning)
+        .filter(
+          (d) =>
+            d.severity <= vscode.DiagnosticSeverity.Warning &&
+            d.source !== CODE_REVIEW_DIAGNOSTIC_SOURCE,
+        )
         .slice(0, MAX_DIAGNOSTICS);
       if (diagnostics.length === 0) return [];
 

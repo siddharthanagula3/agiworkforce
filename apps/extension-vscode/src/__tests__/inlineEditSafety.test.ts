@@ -203,6 +203,28 @@ describe('inline edit ownership across asynchronous work', () => {
     },
   );
 
+  it.each(['tests', 'docs'] as const)(
+    'opens the %s result beside the code and never replaces the selection, even with auto-apply on',
+    async (command) => {
+      vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
+        t('applyEdit.applyInline') as never,
+      );
+      vi.spyOn(api, 'chatCompletion').mockResolvedValue(
+        '```typescript\nit("works", () => expect(x).toBe(0));\n```',
+      );
+      const target = editorFixture();
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = target.editor;
+
+      await runInlineCommand(new ExtensionContext() as never, command);
+
+      expectNoWrite(target);
+      expect(target.text()).toBe('const x = 0;');
+      expect(vscode.workspace.openTextDocument).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringContaining('it("works"') }),
+      );
+    },
+  );
+
   it('does not request a completion when the progress token was already cancelled', async () => {
     progress.cancel();
     const run = start();

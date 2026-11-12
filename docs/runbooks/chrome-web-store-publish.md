@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-11
+Last updated: 2026-11-12
 
 Canonical procedure for creating the store item once and releasing every
 version after it.
@@ -193,8 +193,9 @@ or a decision that is his; **Lead** steps can be run from this repository with
     `apps/extension/docs/chrome-web-store-listing.md`: Store listing tab
     (description, category, language, URLs, store icon, screenshots), Privacy
     tab (single purpose, one justification per permission and host as the
-    packaged manifest lists them, remote code "No", the data-use ticks and the
-    three certifications, privacy policy URL), Distribution (free, regions,
+    packaged manifest lists them, remote code "No" with the remote-code text
+    the listing document gives, the data-use ticks and the three
+    certifications, privacy policy URL), Distribution (free, regions,
     visibility), and Test instructions (the listing document's text plus the
     username and password of a production reviewer account the owner creates
     for this, entered only in the Dashboard).
@@ -249,6 +250,27 @@ or a decision that is his; **Lead** steps can be run from this repository with
     replaces `scripts/release/chrome-permissions-baseline.json` with the
     published manifest's lists and clears its `approved` entries, so the next
     release is diffed against what users actually granted.
+14. **Lead, then owner, after approval: make the extension's page true and
+    point the listing at it.** Until the item is live, `/chrome-extension`
+    says the extension is coming soon and offers a notify form, so the
+    listing's Homepage URL stays the site root. Once the item is public:
+    1. **Lead.** In `apps/web/lib/surface-status.ts` set `SURFACE_STATUS.chrome`
+       to `AVAILABLE_NOW_LABEL`, record the item's public listing URL
+       (`https://chromewebstore.google.com/detail/<item id>`) once there, and
+       make the hero and closing calls to action on
+       `apps/web/app/chrome-extension/page.tsx` link to it instead of
+       `NOTIFY_CTA`, with closing text that no longer says the extension is
+       coming soon. Update the notify-page assertions for this page in
+       `apps/web/__tests__/surface-page-claims.test.ts` and
+       `apps/web/__tests__/distribution-state.test.ts` in the same commit.
+    2. **Owner.** Deploy that commit to web production
+       (`.github/workflows/deploy-production.yml`), then check that
+       `https://agiworkforce.com/chrome-extension` shows the new status and
+       its call to action opens the store listing.
+    3. **Owner.** In the Dashboard's Store listing tab set Homepage URL to
+       `https://agiworkforce.com/chrome-extension` and save, then update the
+       Homepage URL row of `apps/extension/docs/chrome-web-store-listing.md`
+       to match.
 
 ## Release
 

@@ -174,17 +174,18 @@ pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
     let mut total = 0usize;
 
     if let Some((path, content)) = global_instructions() {
-        total += estimate_tokens(&content);
-        if total <= MAX_INSTRUCTION_TOKENS {
-            sources.push(InstructionSource {
-                dir: path.parent().map(Path::to_path_buf).unwrap_or_default(),
-                path,
-                content,
-            });
+        let content = if estimate_tokens(&content) <= MAX_INSTRUCTION_TOKENS {
+            content
         } else {
             truncated = true;
-            total = 0;
-        }
+            trim_to_tokens(&content, MAX_INSTRUCTION_TOKENS / 2)
+        };
+        total += estimate_tokens(&content);
+        sources.push(InstructionSource {
+            dir: path.parent().map(Path::to_path_buf).unwrap_or_default(),
+            path,
+            content,
+        });
     }
 
     for dir in dirs.iter().rev() {
@@ -248,6 +249,29 @@ fn global_instructions() -> Option<(std::path::PathBuf, String)> {
         })
 }
 
+fn trim_to_tokens(content: &str, budget: usize) -> String {
+    let chars = content.chars().count();
+    let mut keep = chars.saturating_mul(budget) / estimate_tokens(content).max(1);
+    let mut trimmed: String = content.chars().take(keep).collect();
+    while keep > 0 && estimate_tokens(&trimmed) > budget {
+        keep -= 1;
+        trimmed = content.chars().take(keep).collect();
+    }
+    match trimmed.rfind('\n') {
+        Some(end) if end > 0 => trimmed[..end].to_string(),
+        _ => trimmed,
+    }
+}
+
+fn report_truncated_instructions() {
+    static REPORTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !REPORTED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        eprintln!(
+            "note: your instruction files are over the {MAX_INSTRUCTION_TOKENS}-token budget, so some of them were cut or left out; shorten them to load all of them."
+        );
+    }
+}
+
 fn same_file(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
@@ -258,7 +282,10 @@ fn same_file(a: &Path, b: &Path) -> bool {
 /// Load `AGENTS.md`, `CLAUDE.md`, and AGI instruction files root-first from
 /// the filesystem hierarchy, stopping at the shared 10K-token budget.
 pub fn load_instructions(cwd: &Path) -> Option<String> {
-    let (sources, _) = instruction_sources(cwd);
+    let (sources, truncated) = instruction_sources(cwd);
+    if truncated {
+        report_truncated_instructions();
+    }
     let segments: Vec<String> = sources
         .iter()
         .map(|source| {
@@ -394,6 +421,45 @@ mod tests {
 
         let instructions = load_instructions(&child).expect("instructions");
         assert!(instructions.find("root rule") < instructions.find("child rule"));
+    }
+
+    #[test]
+    fn an_oversized_global_instructions_file_is_trimmed_to_the_budget_not_dropped() {
+        let home = tempfile::tempdir().expect("home");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let line = "Always run the formatter before you finish.\n";
+        let oversized = line.repeat(MAX_INSTRUCTION_TOKENS * 2);
+        assert!(estimate_tokens(&oversized) > MAX_INSTRUCTION_TOKENS);
+        fs::write(home.path().join("instructions.md"), &oversized).expect("global instructions");
+
+        let (sources, truncated) =
+            with_config_home(home.path(), || instruction_sources(cwd.path()));
+        let global = sources
+            .iter()
+            .find(|source| source.path == home.path().join("instructions.md"))
+            .expect("the global file still loads");
+
+        assert!(truncated);
+        assert!(global.content.starts_with("Always run the formatter"));
+        assert!(estimate_tokens(&global.content) <= MAX_INSTRUCTION_TOKENS / 2);
+    }
+
+    #[test]
+    fn an_oversized_global_instructions_file_leaves_room_for_the_repository() {
+        let home = tempfile::tempdir().expect("home");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let oversized =
+            "Always run the formatter before you finish.\n".repeat(MAX_INSTRUCTION_TOKENS * 2);
+        fs::write(home.path().join("instructions.md"), &oversized).expect("global instructions");
+        fs::write(cwd.path().join("AGENTS.md"), "Use the house style.").expect("repository file");
+
+        let (sources, truncated) =
+            with_config_home(home.path(), || instruction_sources(cwd.path()));
+
+        assert!(truncated);
+        assert!(sources
+            .iter()
+            .any(|source| source.content == "Use the house style."));
     }
 
     #[cfg(unix)]

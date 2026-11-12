@@ -508,12 +508,24 @@ impl UserSettings {
     }
 }
 
-/// The directory host git's own configuration file lives in:
-/// `~/.agiworkforce/git`. Every sandbox the CLI and the desktop build keeps
+static HOST_GIT_CONFIG_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+pub fn set_host_git_config_dir(dir: PathBuf) {
+    if dir.is_absolute() {
+        let _ = HOST_GIT_CONFIG_DIR.set(dir);
+    }
+}
+
+/// The directory host git's own configuration file lives in: the one the
+/// host named with [`set_host_git_config_dir`], else `~/.agiworkforce/git`.
+/// Every sandbox the CLI and the desktop build keeps
 /// it read-only (the CLI's `protected_paths_for`, the desktop's
 /// `protected_config_paths`), so no sandboxed command can rewrite what host
 /// git reads as its global configuration. `None` without an absolute home.
 pub fn host_git_config_dir() -> Option<PathBuf> {
+    if let Some(dir) = HOST_GIT_CONFIG_DIR.get() {
+        return Some(dir.clone());
+    }
     std::env::var_os("HOME")
         .filter(|home| !home.is_empty())
         .or_else(|| std::env::var_os("USERPROFILE").filter(|home| !home.is_empty()))
@@ -1210,6 +1222,18 @@ mod tests {
         assert!(!HOST_GIT_HARDENING_KEEPING_HOOKS
             .iter()
             .any(|arg| arg.starts_with("core.hooksPath")));
+    }
+
+    #[test]
+    fn the_host_named_git_config_dir_replaces_the_home_default_and_the_first_name_wins() {
+        let root = tempfile::tempdir().unwrap();
+        let named = root.path().join("agihome").join("git");
+
+        set_host_git_config_dir(PathBuf::from("relative/git"));
+        set_host_git_config_dir(named.clone());
+        set_host_git_config_dir(root.path().join("later"));
+
+        assert_eq!(host_git_config_dir(), Some(named));
     }
 
     #[test]

@@ -12,115 +12,121 @@
 use regex::Regex;
 use std::sync::OnceLock;
 
-fn value_patterns() -> &'static Vec<(Regex, &'static str)> {
-    static PATTERNS: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new();
+#[derive(Clone, Copy)]
+enum Value {
+    Assigned(usize),
+    FlagArgument(usize),
+}
+
+struct Rule {
+    pattern: Regex,
+    replacement: &'static str,
+    value: Option<Value>,
+}
+
+fn rule(pattern: &str, replacement: &'static str, value: Option<Value>) -> Rule {
+    Rule {
+        pattern: Regex::new(pattern).expect("valid redaction pattern"),
+        replacement,
+        value,
+    }
+}
+
+fn value_patterns() -> &'static Vec<Rule> {
+    static PATTERNS: OnceLock<Vec<Rule>> = OnceLock::new();
     PATTERNS.get_or_init(|| {
         vec![
             // Specific vendor formats must run before generic named/bearer rules.
-            (
-                Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").expect("Anthropic key regex"),
+            rule(
+                r"\bsk-ant-[a-zA-Z0-9_-]{20,}",
                 "[REDACTED_ANTHROPIC_KEY]",
+                None,
             ),
-            (
-                Regex::new(r"sk-[a-zA-Z0-9_-]{20,}").expect("OpenAI key regex"),
+            rule(
+                r"\bsk-[a-zA-Z0-9_-]*[a-zA-Z0-9]{16}[a-zA-Z0-9_-]*",
                 "[REDACTED_API_KEY]",
+                None,
             ),
-            (
-                Regex::new(r"AIza[a-zA-Z0-9_-]{30,}").expect("Google key regex"),
-                "[REDACTED_GOOGLE_KEY]",
-            ),
-            (
-                Regex::new(r"gsk_[a-zA-Z0-9]{48,}").expect("Groq key regex"),
-                "[REDACTED_GROQ_KEY]",
-            ),
-            (
-                Regex::new(r"(?:sk|pk|rk)_(?:test|live)_[a-zA-Z0-9]{24,}")
-                    .expect("Stripe key regex"),
+            rule(r"AIza[a-zA-Z0-9_-]{30,}", "[REDACTED_GOOGLE_KEY]", None),
+            rule(r"gsk_[a-zA-Z0-9]{48,}", "[REDACTED_GROQ_KEY]", None),
+            rule(
+                r"(?:sk|pk|rk)_(?:test|live)_[a-zA-Z0-9]{24,}",
                 "[REDACTED_STRIPE_KEY]",
+                None,
             ),
-            (
-                Regex::new(r"(?:AKIA|ASIA)[A-Z0-9]{16}").expect("AWS key regex"),
-                "[REDACTED_AWS_KEY]",
-            ),
-            (
-                Regex::new(
-                    r#"(?i)\baws[_-]?(secret[_-]?access[_-]?key|session[_-]?token)\b['"]?\s*[=:]\s*['"]?[^\s,'"}]{8,}['"]?"#,
-                )
-                .expect("AWS secret regex"),
+            rule(r"(?:AKIA|ASIA)[A-Z0-9]{16}", "[REDACTED_AWS_KEY]", None),
+            rule(
+                r#"(?i)\baws[_-]?(secret[_-]?access[_-]?key|session[_-]?token)\b['"]?\s*[=:]\s*['"]?([^\s,'"}]{8,})['"]?"#,
                 "aws_$1=[REDACTED]",
+                Some(Value::Assigned(2)),
             ),
-            (
-                Regex::new(r"gh[pousr]_[a-zA-Z0-9]{30,}").expect("GitHub token regex"),
+            rule(
+                r"gh[pousr]_[a-zA-Z0-9]{30,}",
                 "[REDACTED_GITHUB_TOKEN]",
+                None,
             ),
-            (
-                Regex::new(r"github_pat_[a-zA-Z0-9_]{22,}").expect("GitHub PAT regex"),
+            rule(
+                r"github_pat_[a-zA-Z0-9_]{22,}",
                 "[REDACTED_GITHUB_TOKEN]",
+                None,
             ),
-            (
-                Regex::new(r"xai-[a-zA-Z0-9]{20,}").expect("xAI key regex"),
-                "[REDACTED_XAI_KEY]",
-            ),
-            (
-                Regex::new(r"xox[baprs]-[A-Za-z0-9-]{10,}").expect("Slack token regex"),
+            rule(r"xai-[a-zA-Z0-9]{20,}", "[REDACTED_XAI_KEY]", None),
+            rule(
+                r"xox[baprs]-[A-Za-z0-9-]{10,}",
                 "[REDACTED_SLACK_TOKEN]",
+                None,
             ),
-            (
-                Regex::new(
-                    r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
-                )
-                .expect("JWT regex"),
+            rule(
+                r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
                 "[REDACTED_JWT]",
+                None,
             ),
-            (
-                Regex::new(r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{8,}")
-                    .expect("bearer token regex"),
+            rule(
+                r"(?i)bearer\s+[a-zA-Z0-9._\-/+=]{8,}",
                 "Bearer [REDACTED_TOKEN]",
+                None,
             ),
-            (
-                Regex::new(
-                    r#"(?i)\b(api[_-]?key|apikey|secret[_-]?key|secret|access[_-]?token|auth[_-]?token|token)\b['"]?\s*[=:]\s*['"]?[^\s,'"}]{8,}['"]?"#,
-                )
-                .expect("named secret regex"),
+            rule(
+                r#"(?i)\b(api[_-]?key|apikey|secret[_-]?key|secret|access[_-]?token|auth[_-]?token|token)\b['"]?\s*[=:]\s*['"]?([^\s,'"}]{8,})['"]?"#,
                 "$1=[REDACTED]",
+                Some(Value::Assigned(2)),
             ),
-            (
-                Regex::new(
-                    r#"(["']?)\b([a-z][A-Za-z0-9]*(?:Secret|Token|Password)|verificationCode)\b(["']?\s*[=:]\s*)(["']?)[^\s,'"}]{8,}(["']?)"#,
-                )
-                .expect("camelCase secret key regex"),
-                "$1$2$3$4[REDACTED]$5",
+            rule(
+                r#"(["']?)\b([a-z][A-Za-z0-9]*(?:Secret|Token|Password)|verificationCode)\b(["']?\s*[=:]\s*)(["']?)([^\s,'"}]{8,})(["']?)"#,
+                "$1$2$3$4[REDACTED]$6",
+                Some(Value::Assigned(5)),
             ),
-            // `-p` only counts as a flag when it is a whole argument: an
-            // unanchored match mangles every hyphenated word (`raw-parallel`).
-            (
-                Regex::new(r"(?im)(^|[ \t])(-p)[ \t]+\S+").expect("password short flag regex"),
-                "${1}${2} [REDACTED]",
+            rule(
+                r"\b(mysql|mysqldump|mysqladmin|mariadb|sshpass)\b([^\n]*?[ \t])-p[ \t]+(\S+)",
+                "${1}${2}-p [REDACTED]",
+                Some(Value::FlagArgument(3)),
             ),
-            (
-                Regex::new(r"(?i)(--password)([= \t][ \t]*)\S+").expect("password long flag regex"),
+            rule(
+                r"(?m)^(-p)[ \t]+(\S+)",
+                "${1} [REDACTED]",
+                Some(Value::FlagArgument(2)),
+            ),
+            rule(
+                r"(?i)(--password)([= \t][ \t]*)(\S+)",
                 "${1}${2}[REDACTED]",
+                Some(Value::FlagArgument(3)),
             ),
-            (
-                Regex::new(
-                    r#"(?i)\b(password|passwd|pwd)\b['"]?\s*[=:]\s*['"]?[^\s,'"}]{8,}['"]?"#,
-                )
-                .expect("password assignment regex"),
+            rule(
+                r#"(?i)\b(password|passwd|pwd)\b['"]?\s*[=:]\s*['"]?([^\s,'"}]{8,})['"]?"#,
                 "$1=[REDACTED]",
+                Some(Value::Assigned(2)),
             ),
             // Any scheme, so a `git remote`/`git push` URL carrying userinfo is
             // redacted the same way a database URL is.
-            (
-                Regex::new(r"(?i)\b([a-z][a-z0-9+.-]*)://[^\s/:@]+:[^\s/@]+@")
-                    .expect("credential URL regex"),
+            rule(
+                r"(?i)\b([a-z][a-z0-9+.-]*)://[^\s/:@]+:[^\s/@]+@",
                 "$1://[CREDENTIALS_REDACTED]@",
+                None,
             ),
-            (
-                Regex::new(
-                    r"(?s)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
-                )
-                .expect("private key regex"),
+            rule(
+                r"(?s)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",
                 "[REDACTED_PRIVATE_KEY]",
+                None,
             ),
         ]
     })
@@ -132,10 +138,70 @@ fn password_line_pattern() -> &'static Regex {
         .get_or_init(|| Regex::new(r"(?im)^.*\bpassw(?:or)?d\b.*$").expect("password line regex"))
 }
 
-fn apply(input: &str, patterns: &[(Regex, &'static str)]) -> String {
+fn placeholder_pattern() -> &'static Regex {
+    static PATTERN: OnceLock<Regex> = OnceLock::new();
+    PATTERN.get_or_init(|| {
+        Regex::new(r"\[(?:REDACTED(?:_[A-Z]+)*|CREDENTIALS_REDACTED)\]")
+            .expect("redaction placeholder regex")
+    })
+}
+
+fn is_code_reference(value: &str) -> bool {
+    let identifier_path = value.contains('.')
+        && value.split('.').all(|segment| {
+            !segment.is_empty() && segment.chars().all(|c| c.is_ascii_alphabetic() || c == '_')
+        });
+    let constant_name = value.contains('_')
+        && value.starts_with(|c: char| c.is_ascii_uppercase())
+        && value
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    value.starts_with('$')
+        || value.contains(&['(', ')', '[', ']', '<', '>', '{'][..])
+        || value.contains("::")
+        || value.contains("->")
+        || identifier_path
+        || constant_name
+}
+
+fn kept_as_written(value: Value, captures: &regex::Captures<'_>) -> bool {
+    match value {
+        Value::Assigned(group) => captures.get(group).is_some_and(|found| {
+            let found = found.as_str().trim_end_matches(';');
+            found.len() < 8 || is_code_reference(found)
+        }),
+        Value::FlagArgument(group) => captures.get(group).is_some_and(|found| {
+            let found = found.as_str();
+            is_code_reference(found)
+                || found.starts_with(&['/', '.', '~'][..])
+                || found
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == ':' || c == '.')
+        }),
+    }
+}
+
+fn apply(input: &str, rules: &[Rule]) -> String {
     let mut redacted = input.to_string();
-    for (pattern, replacement) in patterns {
-        redacted = pattern.replace_all(&redacted, *replacement).into_owned();
+    for rule in rules {
+        redacted = match rule.value {
+            None => rule
+                .pattern
+                .replace_all(&redacted, rule.replacement)
+                .into_owned(),
+            Some(value) => rule
+                .pattern
+                .replace_all(&redacted, |captures: &regex::Captures<'_>| {
+                    if kept_as_written(value, captures) {
+                        captures[0].to_string()
+                    } else {
+                        let mut replaced = String::new();
+                        captures.expand(rule.replacement, &mut replaced);
+                        replaced
+                    }
+                })
+                .into_owned(),
+        };
     }
     redacted
 }
@@ -156,9 +222,69 @@ pub fn redact_tool_output(input: &str) -> String {
     apply(input, value_patterns())
 }
 
+/// How many redaction placeholders `text` carries, the marks
+/// [`redact_tool_output`] puts where a value was.
+pub fn placeholder_count(text: &str) -> usize {
+    placeholder_pattern().find_iter(text).count()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{redact_secrets, redact_tool_output};
+    use super::{placeholder_count, redact_secrets, redact_tool_output};
+
+    #[test]
+    fn ordinary_code_and_commands_reach_the_model_unchanged() {
+        for line in [
+            "RUN mkdir -p /app/data",
+            "docker run -p 8080:80 nginx",
+            "ssh -p 2222 user@host 'uptime'",
+            "  -p 3000:3000 \\",
+            "-p 8080:80",
+            "task-management-application",
+            "const slug = \"sk-dark-mode-toggle-button\";",
+            "  token: process.env.API_TOKEN,",
+            "let token = std::env::var(\"TOKEN\")?;",
+            "  password: hashPassword(input),",
+            "password = req.body.password;",
+            "api_key = ${API_KEY}",
+            "token: GITHUB_TOKEN_VALUE",
+            "secret: boolean;",
+            "sshpass -f ~/.pw ssh -p 2222 host",
+            "mysql -h db -P 3306 -u root",
+        ] {
+            assert_eq!(redact_tool_output(line), line, "mangled: {line}");
+        }
+    }
+
+    #[test]
+    fn password_flags_of_programs_that_take_one_still_lose_their_value() {
+        assert_eq!(
+            redact_tool_output("mysqldump -u root -p s3cretpw app > dump.sql"),
+            "mysqldump -u root -p [REDACTED] app > dump.sql"
+        );
+        assert_eq!(
+            redact_tool_output("sshpass -p hunter22 ssh -p 2222 host"),
+            "sshpass -p [REDACTED] ssh -p 2222 host"
+        );
+        assert_eq!(
+            redact_tool_output("token: abcdef0123456789xyz,"),
+            "token=[REDACTED],"
+        );
+        assert_eq!(
+            redact_tool_output("ya29.a0AfH6SMBx3kq9 token = ya29.a0AfH6SMBx3kq9"),
+            "ya29.a0AfH6SMBx3kq9 token=[REDACTED]"
+        );
+    }
+
+    #[test]
+    fn placeholders_are_counted_wherever_redaction_put_them() {
+        let redacted = redact_tool_output(
+            "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz0123\napi_key = sk-test-secret\n",
+        );
+        assert_eq!(placeholder_count(&redacted), 2, "{redacted}");
+        assert_eq!(placeholder_count("RUN mkdir -p /app/data"), 0);
+        assert_eq!(placeholder_count("x [CREDENTIALS_REDACTED] y"), 1);
+    }
 
     #[test]
     fn redacts_cross_provider_tokens_jwts_and_database_credentials() {

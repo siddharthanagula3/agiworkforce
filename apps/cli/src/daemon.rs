@@ -307,6 +307,7 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
 
     // Validate triggers up-front
     validate_triggers(&enabled)?;
+    let _daemon_lock = acquire_daemon_lock(&CliConfig::config_dir()?.join(DAEMON_LOCK_FILE))?;
 
     let hooks_config = hooks::load_hooks_or_default();
 
@@ -396,12 +397,13 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
             }
             Some(t) => Some(t.clone()),
         };
+        let listener = bind_webhook_listener(port).await?;
         let tx_webhook = tx.clone();
         let mut shutdown_rx_webhook = shutdown_rx.clone();
         background_handles.push(tokio::spawn(async move {
             if let Err(e) = run_webhook_server(
                 webhook_triggers,
-                port,
+                listener,
                 token,
                 tx_webhook,
                 &mut shutdown_rx_webhook,
@@ -449,14 +451,18 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     let mut shutdown_rx_exec = shutdown_rx.clone();
     let config_owned = config.clone();
     let hooks_config_exec = hooks_config.clone();
+    let in_flight = InFlightTriggers::default();
+    let in_flight_exec = in_flight.clone();
+    let log_dir_exec = log_dir.clone();
     let exec_handle = tokio::spawn(async move {
         run_execution_loop(
             rx,
             quiet_periods,
             config_owned,
             hooks_config_exec,
-            log_dir,
+            log_dir_exec,
             semaphore,
+            in_flight_exec,
             &mut shutdown_rx_exec,
         )
         .await;
@@ -477,6 +483,14 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
         futures_util::future::join_all(background_handles),
     )
     .await;
+    for event in in_flight.drain() {
+        record_unfinished_trigger(
+            &log_dir,
+            &event,
+            "interrupted",
+            "The daemon stopped before this run finished.",
+        );
+    }
 
     // Fire DaemonStopped hook
     let hooks_config_final = hooks::load_hooks_or_default();
@@ -489,6 +503,27 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
 
     eprintln!("{} Stopped.", ts::success("daemon:"));
     Ok(())
+}
+
+const DAEMON_LOCK_FILE: &str = "daemon.lock";
+
+fn acquire_daemon_lock(path: &Path) -> Result<std::fs::File> {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+        .with_context(|| format!("open {}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(std::fs::TryLockError::WouldBlock) => bail!(
+            "Another agi daemon is already running on this machine (it holds {}). Stop it first; two daemons would run every trigger twice.",
+            path.display()
+        ),
+        Err(std::fs::TryLockError::Error(error)) => {
+            Err(error).with_context(|| format!("lock {}", path.display()))
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -504,13 +539,9 @@ fn validate_triggers(triggers: &[&TriggerConfig]) -> Result<()> {
                     "Trigger '{}': cron trigger requires a 'cron' field",
                     t.id
                 ))?;
-                // The `cron` crate expects 7-field expressions (sec min hour dom mon dow year)
-                // but users write 5-field ones.  Prepend "0 " for the seconds field.
-                let full = format!("0 {}", expr);
-                Schedule::from_str(&full).context(format!(
-                    "Trigger '{}': invalid cron expression '{}'",
-                    t.id, expr
-                ))?;
+                parse_unix_cron(expr).with_context(|| {
+                    format!("Trigger '{}': invalid cron expression '{}'", t.id, expr)
+                })?;
             }
             TriggerType::Webhook => {
                 if t.prompt.is_none() && t.webhook_path.is_none() {
@@ -537,6 +568,88 @@ fn validate_triggers(triggers: &[&TriggerConfig]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+const WEEKDAYS: [(&str, &str); 7] = [
+    ("SUN", "SUNDAY"),
+    ("MON", "MONDAY"),
+    ("TUE", "TUESDAY"),
+    ("WED", "WEDNESDAY"),
+    ("THU", "THURSDAY"),
+    ("FRI", "FRIDAY"),
+    ("SAT", "SATURDAY"),
+];
+
+fn parse_unix_cron(expr: &str) -> Result<Schedule> {
+    let fields: Vec<&str> = expr.split_whitespace().collect();
+    let [minute, hour, day_of_month, month, day_of_week] = fields.as_slice() else {
+        bail!("a cron schedule has five fields: minute hour day-of-month month day-of-week");
+    };
+    let day_of_week = unix_day_of_week_field(day_of_week)?;
+    let full = format!("0 {minute} {hour} {day_of_month} {month} {day_of_week}");
+    Ok(Schedule::from_str(&full)?)
+}
+
+fn unix_day_of_week_field(field: &str) -> Result<String> {
+    if field == "*" || field == "?" {
+        return Ok(field.to_string());
+    }
+    let mut days = [false; 7];
+    for item in field.split(',') {
+        let (range, step) = match item.split_once('/') {
+            Some((range, step)) => {
+                let step = step
+                    .parse::<usize>()
+                    .ok()
+                    .filter(|step| *step > 0)
+                    .with_context(|| format!("'{item}' needs a whole-number step above zero"))?;
+                (range, step)
+            }
+            None => (item, 1),
+        };
+        let (first, last) = if range == "*" {
+            (0, 6)
+        } else if let Some((start, end)) = range.split_once('-') {
+            (unix_weekday(start)?, unix_weekday(end)?)
+        } else if step == 1 {
+            let day = unix_weekday(range)?;
+            (day, day)
+        } else {
+            bail!("'{item}' puts a step on one day; use a range such as 1-5/2");
+        };
+        if first > last {
+            bail!("'{range}' runs backwards; day-of-week ranges go from 0 (Sunday) to 7 (Sunday)");
+        }
+        for day in (first..=last).step_by(step) {
+            days[day % 7] = true;
+        }
+    }
+    Ok(WEEKDAYS
+        .iter()
+        .zip(days)
+        .filter(|(_, included)| *included)
+        .map(|((short, _), _)| *short)
+        .collect::<Vec<_>>()
+        .join(","))
+}
+
+fn unix_weekday(token: &str) -> Result<usize> {
+    if let Ok(number) = token.parse::<usize>() {
+        if number <= 7 {
+            return Ok(number);
+        }
+        bail!("day of week {number} is out of range; use 0 to 7, where 0 and 7 are Sunday");
+    }
+    let upper = token.to_ascii_uppercase();
+    let upper = match upper.as_str() {
+        "TUES" => "TUE",
+        "THURS" => "THU",
+        other => other,
+    };
+    WEEKDAYS
+        .iter()
+        .position(|(short, long)| upper == *short || upper == *long)
+        .with_context(|| format!("'{token}' is not a day of the week"))
 }
 
 // ---------------------------------------------------------------------------
@@ -567,9 +680,7 @@ async fn run_cron_scheduler(
     let schedules: Vec<(TriggerConfig, Schedule)> = triggers
         .into_iter()
         .filter_map(|t| {
-            let expr = t.cron.as_deref()?;
-            let full = format!("0 {}", expr);
-            let sched = Schedule::from_str(&full).ok()?;
+            let sched = parse_unix_cron(t.cron.as_deref()?).ok()?;
             Some((t, sched))
         })
         .collect();
@@ -578,8 +689,7 @@ async fn run_cron_scheduler(
         return;
     }
 
-    // Track last-fired minute to avoid double-firing
-    let mut last_fired: HashMap<String, String> = HashMap::new();
+    let mut last_checked = Local::now();
 
     loop {
         tokio::select! {
@@ -590,53 +700,73 @@ async fn run_cron_scheduler(
         let now = Local::now();
 
         for (trigger, schedule) in &schedules {
-            // Find the most recent scheduled time that is <= now
-            let window_start = now - chrono::Duration::minutes(1);
-            if let Some(next) = schedule.after(&window_start).next() {
-                // Convert to local for comparison
-                let next_local: chrono::DateTime<Local> = next;
-
-                if next_local <= now {
-                    // Check if we already fired for this minute
-                    let minute_key = next_local.format("%Y-%m-%d %H:%M").to_string();
-                    let already_fired = last_fired
-                        .get(&trigger.id)
-                        .is_some_and(|last| *last == minute_key);
-
-                    if !already_fired {
-                        last_fired.insert(trigger.id.clone(), minute_key);
-
-                        let prompt = trigger
-                            .prompt
-                            .clone()
-                            .unwrap_or_else(|| format!("Cron trigger '{}' fired", trigger.id));
-
-                        eprintln!(
-                            "{} Cron trigger '{}' fired at {}",
-                            ts::accent("daemon:"),
-                            trigger.id,
-                            now.format("%H:%M:%S")
-                        );
-
-                        let event = TriggerEvent {
-                            trigger_id: trigger.id.clone(),
-                            trigger_type: TriggerType::Cron,
-                            prompt,
-                            model: trigger.model.clone(),
-                            context: Some(format!(
-                                "cron={}",
-                                trigger.cron.as_deref().unwrap_or("")
-                            )),
-                        };
-
-                        if tx.send(event).is_err() {
-                            return; // receiver dropped
-                        }
+            let Some((due, count)) = latest_due(schedule, &last_checked, &now) else {
+                continue;
+            };
+            let expr = trigger.cron.as_deref().unwrap_or("");
+            let late = now.signed_duration_since(due) > chrono::Duration::seconds(CRON_LATE_SECS);
+            let context = if late {
+                eprintln!(
+                    "{} Cron trigger '{}' was due at {} while this machine was asleep or busy; running it now{}",
+                    ts::warning("daemon:"),
+                    trigger.id,
+                    due.format("%Y-%m-%d %H:%M"),
+                    if count > 1 {
+                        format!(", once for {count} missed times")
+                    } else {
+                        String::new()
                     }
-                }
+                );
+                format!(
+                    "cron={expr}; late: due at {}, {count} scheduled time(s) missed",
+                    due.to_rfc3339()
+                )
+            } else {
+                eprintln!(
+                    "{} Cron trigger '{}' fired at {}",
+                    ts::accent("daemon:"),
+                    trigger.id,
+                    now.format("%H:%M:%S")
+                );
+                format!("cron={expr}")
+            };
+
+            let event = TriggerEvent {
+                trigger_id: trigger.id.clone(),
+                trigger_type: TriggerType::Cron,
+                prompt: trigger
+                    .prompt
+                    .clone()
+                    .unwrap_or_else(|| format!("Cron trigger '{}' fired", trigger.id)),
+                model: trigger.model.clone(),
+                context: Some(context),
+            };
+
+            if tx.send(event).is_err() {
+                return;
             }
         }
+        last_checked = now;
     }
+}
+
+const CRON_LATE_SECS: i64 = 90;
+
+fn latest_due<Z: chrono::TimeZone>(
+    schedule: &Schedule,
+    last_checked: &chrono::DateTime<Z>,
+    now: &chrono::DateTime<Z>,
+) -> Option<(chrono::DateTime<Z>, usize)> {
+    let mut latest = None;
+    let mut count = 0;
+    for fire in schedule.after(last_checked) {
+        if fire > *now {
+            break;
+        }
+        count += 1;
+        latest = Some(fire);
+    }
+    latest.map(|fire| (fire, count))
 }
 
 // ---------------------------------------------------------------------------
@@ -644,9 +774,18 @@ async fn run_cron_scheduler(
 // ---------------------------------------------------------------------------
 
 /// Run a tiny HTTP server that accepts POST requests to trigger agent execution.
+async fn bind_webhook_listener(port: u16) -> Result<tokio::net::TcpListener> {
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    tokio::net::TcpListener::bind(addr).await.with_context(|| {
+        format!(
+            "Could not listen for webhooks on {addr}; another program may be using port {port}. Change webhook_port in triggers.json or stop that program."
+        )
+    })
+}
+
 async fn run_webhook_server(
     triggers: Vec<TriggerConfig>,
-    port: u16,
+    listener: tokio::net::TcpListener,
     token: Option<String>,
     tx: mpsc::UnboundedSender<TriggerEvent>,
     shutdown_rx: &mut watch::Receiver<bool>,
@@ -687,16 +826,14 @@ async fn run_webhook_server(
         .route("/health", axum::routing::get(|| async { "ok" }))
         .with_state(state);
 
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = listener
+        .local_addr()
+        .context("read the webhook listener address")?;
     eprintln!(
         "{} Webhook server listening on http://{}",
         ts::accent("daemon:"),
         addr
     );
-
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .context(format!("Failed to bind webhook server to port {}", port))?;
 
     let mut shutdown_rx_clone = shutdown_rx.clone();
     axum::serve(listener, app)
@@ -1229,6 +1366,7 @@ impl QuietGate {
 }
 
 /// Process trigger events: spawn agent sessions for each fired trigger.
+#[allow(clippy::too_many_arguments)]
 async fn run_execution_loop(
     mut rx: mpsc::UnboundedReceiver<TriggerEvent>,
     quiet_periods: HashMap<String, std::time::Duration>,
@@ -1236,6 +1374,7 @@ async fn run_execution_loop(
     hooks_config: HooksConfig,
     log_dir: PathBuf,
     semaphore: Arc<Semaphore>,
+    in_flight: InFlightTriggers,
     shutdown_rx: &mut watch::Receiver<bool>,
 ) {
     let quiet_gate = QuietGate::new(quiet_periods);
@@ -1261,6 +1400,7 @@ async fn run_execution_loop(
                 let log_dir = log_dir.clone();
                 let semaphore = semaphore.clone();
                 let quiet_gate = quiet_gate.clone();
+                let in_flight = in_flight.clone();
 
                 // Spawn the trigger and log any panic via the JoinHandle so that
                 // task failures are not silently swallowed (Bug 5 fix).
@@ -1280,10 +1420,14 @@ async fn run_execution_loop(
                         return;
                     }
 
+                    let running = in_flight.begin(&event);
+                    let record = event.clone();
                     if let Err(err)= execute_trigger(event, &config, &hooks_config, &log_dir).await
                     {
                         eprintln!("{} Trigger execution failed: {:#}", ts::danger("daemon:"), err);
+                        record_unfinished_trigger(&log_dir, &record, "error", &format!("{err:#}"));
                     }
+                    in_flight.finish(&running);
                 });
                 // Detach but log panic: spawn a watcher that awaits the handle.
                 tokio::spawn(async move {
@@ -1399,14 +1543,81 @@ async fn execute_trigger(
         );
     }
 
+    let header = if status == "success" {
+        ts::success("daemon:")
+    } else {
+        ts::danger("daemon:")
+    };
     eprintln!(
         "{} Trigger '{}' completed in {:.1}s [{}]",
-        ts::success("daemon:"),
+        header,
         event.trigger_id,
         duration.as_secs_f64(),
         status
     );
     Ok(())
+}
+
+#[derive(Debug, Clone, Default)]
+struct InFlightTriggers(Arc<std::sync::Mutex<HashMap<String, TriggerEvent>>>);
+
+impl InFlightTriggers {
+    fn runs(&self) -> std::sync::MutexGuard<'_, HashMap<String, TriggerEvent>> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn begin(&self, event: &TriggerEvent) -> String {
+        let key = uuid::Uuid::new_v4().simple().to_string();
+        self.runs().insert(key.clone(), event.clone());
+        key
+    }
+
+    fn finish(&self, key: &str) {
+        self.runs().remove(key);
+    }
+
+    fn drain(&self) -> Vec<TriggerEvent> {
+        self.runs().drain().map(|(_, event)| event).collect()
+    }
+}
+
+fn unfinished_trigger_record(
+    event: &TriggerEvent,
+    run_id: &str,
+    status: &str,
+    detail: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "run_id": run_id,
+        "trigger_id": event.trigger_id,
+        "trigger_type": format!("{:?}", event.trigger_type).to_lowercase(),
+        "timestamp": Local::now().to_rfc3339(),
+        "requested_model": event.model,
+        "prompt": redact_secrets(&event.prompt),
+        "context": event.context.as_ref().map(|c| redact_secrets(c)),
+        "status": status,
+        "response": redact_secrets(detail),
+    })
+}
+
+fn record_unfinished_trigger(log_dir: &Path, event: &TriggerEvent, status: &str, detail: &str) {
+    let run_id = uuid::Uuid::new_v4().simple().to_string();
+    let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let log_path = completion_record_path(log_dir, &event.trigger_id, &timestamp, &run_id);
+    let record = unfinished_trigger_record(event, &run_id, status, detail);
+    if let Err(error) = write_completion_record(
+        &log_path,
+        &serde_json::to_string_pretty(&record).unwrap_or_default(),
+    ) {
+        eprintln!(
+            "{} Failed to write log file {}: {}",
+            ts::danger("daemon:"),
+            log_path.display(),
+            error
+        );
+    }
 }
 
 fn completion_record_path(
@@ -1749,6 +1960,160 @@ mod tests {
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_ok());
+    }
+
+    fn fire_weekdays(expr: &str, count: usize) -> Vec<chrono::Weekday> {
+        use chrono::Datelike;
+
+        let sunday: chrono::DateTime<chrono::Utc> =
+            "2026-11-08T00:00:00Z".parse().expect("fixture date");
+        assert_eq!(sunday.weekday(), chrono::Weekday::Sun);
+        let schedule = parse_unix_cron(expr).expect("schedule");
+        schedule
+            .after(&sunday)
+            .take(count)
+            .map(|fire| fire.weekday())
+            .collect()
+    }
+
+    #[test]
+    fn the_help_example_weekday_schedule_fires_monday_to_friday() {
+        use chrono::Weekday;
+
+        assert_eq!(
+            fire_weekdays("0 9 * * 1-5", 6),
+            vec![
+                Weekday::Mon,
+                Weekday::Tue,
+                Weekday::Wed,
+                Weekday::Thu,
+                Weekday::Fri,
+                Weekday::Mon
+            ]
+        );
+    }
+
+    #[test]
+    fn unix_cron_reads_zero_and_seven_as_sunday() {
+        use chrono::Weekday;
+
+        assert_eq!(fire_weekdays("0 9 * * 0", 2), vec![Weekday::Sun; 2]);
+        assert_eq!(fire_weekdays("0 9 * * 7", 2), vec![Weekday::Sun; 2]);
+        assert_eq!(fire_weekdays("0 9 * * 6", 1), vec![Weekday::Sat]);
+        assert_eq!(
+            fire_weekdays("0 9 * * 5-7", 3),
+            vec![Weekday::Sun, Weekday::Fri, Weekday::Sat]
+        );
+        assert_eq!(
+            fire_weekdays("0 9 * * sat,sun", 2),
+            vec![Weekday::Sun, Weekday::Sat]
+        );
+        assert_eq!(
+            fire_weekdays("0 9 * * */2", 4),
+            vec![Weekday::Sun, Weekday::Tue, Weekday::Thu, Weekday::Sat]
+        );
+    }
+
+    #[test]
+    fn unix_cron_refuses_what_it_cannot_read_the_standard_way() {
+        for expr in [
+            "0 9 * *",
+            "0 0 9 * * 1-5",
+            "0 9 * * 8",
+            "0 9 * * 5-1",
+            "0 9 * * 1/2",
+        ] {
+            assert!(parse_unix_cron(expr).is_err(), "{expr} must be refused");
+        }
+    }
+
+    #[test]
+    fn a_cron_time_passed_while_asleep_is_still_due_once() {
+        let at = |text: &str| -> chrono::DateTime<chrono::Utc> { text.parse().expect("time") };
+        let daily = parse_unix_cron("0 9 * * *").expect("schedule");
+
+        let (due, count) = latest_due(
+            &daily,
+            &at("2026-11-09T08:50:00Z"),
+            &at("2026-11-09T09:20:00Z"),
+        )
+        .expect("09:00 was due");
+        assert_eq!(due, at("2026-11-09T09:00:00Z"));
+        assert_eq!(count, 1);
+
+        let (due, count) = latest_due(
+            &daily,
+            &at("2026-11-06T08:50:00Z"),
+            &at("2026-11-09T09:20:00Z"),
+        )
+        .expect("the newest missed time");
+        assert_eq!(due, at("2026-11-09T09:00:00Z"));
+        assert_eq!(count, 4);
+
+        assert!(latest_due(
+            &daily,
+            &at("2026-11-09T09:00:00Z"),
+            &at("2026-11-09T09:20:00Z"),
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn a_second_daemon_is_refused_while_the_first_holds_the_lock() {
+        let dir = tempfile::tempdir().expect("lock dir");
+        let path = dir.path().join(DAEMON_LOCK_FILE);
+        let first = acquire_daemon_lock(&path).expect("first daemon");
+        let refused = acquire_daemon_lock(&path).expect_err("second daemon");
+        assert!(refused.to_string().contains("already running"), "{refused}");
+        drop(first);
+        acquire_daemon_lock(&path).expect("free again once the first daemon exits");
+    }
+
+    #[tokio::test]
+    async fn a_webhook_port_in_use_fails_startup() {
+        let taken = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("fixture listener");
+        let port = taken.local_addr().expect("fixture address").port();
+        let error = bind_webhook_listener(port)
+            .await
+            .expect_err("the port is taken");
+        assert!(error.to_string().contains(&port.to_string()), "{error}");
+    }
+
+    #[test]
+    fn a_trigger_that_fails_or_is_cut_off_leaves_a_record() {
+        let dir = tempfile::tempdir().expect("log dir");
+        let event = TriggerEvent {
+            trigger_id: "nightly".to_string(),
+            trigger_type: TriggerType::Cron,
+            prompt: "Summarize".to_string(),
+            model: Some("auto".to_string()),
+            context: Some("cron=0 9 * * *".to_string()),
+        };
+        let in_flight = InFlightTriggers::default();
+        let finished = in_flight.begin(&event);
+        let cut_off = in_flight.begin(&event);
+        in_flight.finish(&finished);
+        let unfinished = in_flight.drain();
+        assert_eq!(unfinished.len(), 1);
+        assert!(in_flight.drain().is_empty());
+        assert_ne!(finished, cut_off);
+
+        record_unfinished_trigger(dir.path(), &event, "error", "no route for this model");
+        record_unfinished_trigger(dir.path(), &unfinished[0], "interrupted", "stopped");
+
+        let mut statuses: Vec<String> = std::fs::read_dir(dir.path())
+            .expect("records")
+            .map(|entry| {
+                let text = std::fs::read_to_string(entry.expect("entry").path()).expect("record");
+                let record: serde_json::Value = serde_json::from_str(&text).expect("json");
+                assert_eq!(record["trigger_id"], "nightly");
+                record["status"].as_str().expect("status").to_string()
+            })
+            .collect();
+        statuses.sort();
+        assert_eq!(statuses, vec!["error", "interrupted"]);
     }
 
     #[test]

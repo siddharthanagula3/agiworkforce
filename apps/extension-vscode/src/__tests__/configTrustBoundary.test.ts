@@ -56,7 +56,7 @@ describe('user-owned execution-boundary configuration', () => {
     expect(Config.model()).toBe('fixture-user-boundary');
   });
 
-  it('keeps inline completions off when only an untrusted folder turns them on', () => {
+  it('keeps inline completions off when only a folder turns them on, trusted or not', () => {
     const trusted = vscode.workspace.isTrusted;
     stubConfiguration({
       'inlineCompletions.enabled': {
@@ -69,9 +69,65 @@ describe('user-owned execution-boundary configuration', () => {
       (vscode.workspace as { isTrusted: boolean }).isTrusted = false;
       expect(Config.inlineCompletionsEnabled()).toBe(false);
       (vscode.workspace as { isTrusted: boolean }).isTrusted = true;
-      expect(Config.inlineCompletionsEnabled()).toBe(true);
+      expect(Config.inlineCompletionsEnabled()).toBe(false);
     } finally {
       (vscode.workspace as { isTrusted: boolean }).isTrusted = trusted;
     }
+  });
+
+  it.each([
+    ['inlineCompletions.enabled', () => Config.inlineCompletionsEnabled()],
+    ['autoApplyFixes', () => Config.autoApplyFixes()],
+    ['memory.enabled', () => Config.memoryEnabled()],
+  ] as const)('lets only the user turn on %s, even in a trusted repository', (key, read) => {
+    const trusted = vscode.workspace.isTrusted;
+    (vscode.workspace as { isTrusted: boolean }).isTrusted = true;
+    try {
+      stubConfiguration({
+        [key]: { defaultValue: false, globalValue: false, workspaceValue: true },
+      });
+      expect(read()).toBe(false);
+      stubConfiguration({
+        [key]: { defaultValue: false, globalValue: true, workspaceValue: false },
+      });
+      expect(read()).toBe(true);
+    } finally {
+      (vscode.workspace as { isTrusted: boolean }).isTrusted = trusted;
+    }
+  });
+
+  it('lets a repository tighten, but never loosen, the editor context privacy settings', () => {
+    stubConfiguration({
+      respectGitIgnore: { defaultValue: true, globalValue: true, workspaceValue: false },
+      'editorContext.autoAttach': { defaultValue: true, globalValue: false, workspaceValue: true },
+    });
+    expect(Config.respectGitIgnore()).toBe(true);
+    expect(Config.editorContextAutoAttach()).toBe(false);
+
+    stubConfiguration({
+      respectGitIgnore: { defaultValue: true, globalValue: false, workspaceFolderValue: true },
+      'editorContext.autoAttach': { defaultValue: true, globalValue: true, workspaceValue: false },
+    });
+    expect(Config.respectGitIgnore()).toBe(true);
+    expect(Config.editorContextAutoAttach()).toBe(false);
+
+    stubConfiguration({
+      respectGitIgnore: { defaultValue: true, globalValue: false },
+      'editorContext.autoAttach': { defaultValue: true, globalValue: true },
+    });
+    expect(Config.respectGitIgnore()).toBe(false);
+    expect(Config.editorContextAutoAttach()).toBe(true);
+  });
+
+  it('reports a workspace value as an override only when it takes effect', () => {
+    stubConfiguration({
+      autoApplyFixes: { defaultValue: false, workspaceValue: true },
+      respectGitIgnore: { defaultValue: true, globalValue: true, workspaceValue: false },
+      'editorContext.autoAttach': { defaultValue: true, globalValue: true, workspaceValue: false },
+    });
+
+    expect(Config.settingsSnapshot('unknown').workspaceOverrides).toEqual([
+      'editorContext.autoAttach',
+    ]);
   });
 });
