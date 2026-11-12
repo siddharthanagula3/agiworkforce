@@ -203,6 +203,12 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
     ).toMatchObject({ drawerType: 'permanent', swipeEnabled: false });
   });
 
+  it('returns Back from a settings page to the page that opened it, not to a new chat', () => {
+    const appLayout = readFileSync(join(MOBILE_ROOT, 'app', '(app)', '_layout.tsx'), 'utf8');
+
+    expect(appLayout).toMatch(/<Drawer\s+backBehavior="history"/);
+  });
+
   it('keeps secondary controls in a sheet rather than a desktop menu', () => {
     const sheet = readFileSync(
       join(MOBILE_ROOT, 'src', 'features', 'shell', 'ShellSecondarySheet.tsx'),
