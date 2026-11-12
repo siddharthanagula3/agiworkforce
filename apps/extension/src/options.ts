@@ -1320,6 +1320,10 @@ function buildPage(): void {
   const sitePolicySection = createSitePermissionPolicySection({
     get: (key) => chrome.storage.local.get(key),
     set: (items) => chrome.storage.local.set(items),
+    onChanged: (listener) =>
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local') listener(changes);
+      }),
   });
   permSection.appendChild(sitePolicySection.element);
   permSection.appendChild(createHistoryAccessRow().element);

@@ -105,6 +105,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   GET_AUTOFILL_PROFILE: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   AUTHORIZE_SITE_TOOL_DESTINATION: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   IN_PAGE_PROMPT: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
+  CANCEL_IN_PAGE_PROMPT: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   WEBMCP_TOOLS_CHANGED: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   START_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },
   STOP_RECORDING: { senderClass: 'allowlisted-tab', allowsCrossTab: true },

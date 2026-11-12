@@ -7,6 +7,7 @@ import {
   buildComputerUsePanel,
   describeCancellationReason,
 } from '../src/features/side-panel/computerUsePanel';
+import catalog from '../_locales/en/messages.json';
 import { settleAutomationAttempt, startAutomationAttempt } from '@agiworkforce/types';
 
 const sendMessage = vi.fn();
@@ -16,6 +17,10 @@ function stubChrome(): void {
     configurable: true,
     value: {
       runtime: { lastError: undefined, sendMessage },
+      i18n: {
+        getMessage: (key: string) => catalog[key as keyof typeof catalog]?.message ?? '',
+        getUILanguage: () => 'en',
+      },
       storage: {
         local: {
           get: vi.fn((_key: unknown, callback?: (items: Record<string, unknown>) => void) => {
@@ -28,6 +33,10 @@ function stubChrome(): void {
     },
   });
 }
+
+beforeEach(() => {
+  stubChrome();
+});
 
 describe('computer-use visible Stop lifecycle', () => {
   it('distinguishes generic browser-task failures from actual autofill failures', () => {

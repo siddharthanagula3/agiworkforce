@@ -429,3 +429,120 @@ describe('in-page panel header and context chip', () => {
     expect(shadow.querySelector('.agi-panel')?.classList.contains('open')).toBe(true);
   });
 });
+
+function askQuestion(shadow: ShadowRoot, question: string): void {
+  const textarea = shadow.querySelector<HTMLTextAreaElement>('.agi-textarea')!;
+  textarea.value = question;
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  shadow.querySelector<HTMLButtonElement>('.agi-submit-btn')!.click();
+}
+
+describe('in-page panel answers', () => {
+  it('shows list items, paragraphs and emphasis instead of one run of raw Markdown', async () => {
+    chromeHarness.responses.push({
+      success: true,
+      text: 'Key points:\n\n- **First** point\n- Second `code` point\n\n1. Step one\n2. Step two',
+      provider: 'managed_cloud',
+      modelSelection: 'auto',
+    });
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    askQuestion(shadow, 'Summarize');
+
+    await vi.waitFor(() =>
+      expect(shadow.querySelectorAll('.agi-response-area li')).toHaveLength(4),
+    );
+    const area = shadow.querySelector('.agi-response-area')!;
+    expect(area.querySelectorAll('ul > li')).toHaveLength(2);
+    expect(area.querySelectorAll('ol > li')).toHaveLength(2);
+    expect(area.querySelector('li strong')?.textContent).toBe('First');
+    expect(area.querySelector('li code')?.textContent).toBe('code');
+    expect(area.textContent).not.toContain('**');
+  });
+
+  it('never treats what the model wrote as HTML', async () => {
+    chromeHarness.responses.push({
+      success: true,
+      text: '<img src=x onerror="alert(1)"> and <script>alert(2)</script>',
+      provider: 'managed_cloud',
+      modelSelection: 'auto',
+    });
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    askQuestion(shadow, 'Summarize');
+
+    await vi.waitFor(() =>
+      expect(shadow.querySelector('.agi-response-area')?.textContent).toContain('<img'),
+    );
+    expect(shadow.querySelector('.agi-response-area img')).toBeNull();
+    expect(shadow.querySelector('.agi-response-area script')).toBeNull();
+  });
+
+  it('cancels the request in the worker when the panel is closed while it is running', () => {
+    chromeHarness.sendMessage.mockImplementation(
+      (message: { type?: string }, callback?: (result: unknown) => void) => {
+        if (message.type === 'IN_PAGE_PROMPT' && callback) return undefined;
+        return Promise.resolve({ success: true });
+      },
+    );
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    askQuestion(shadow, 'Summarize');
+
+    controller.close();
+
+    expect(chromeHarness.sendMessage).toHaveBeenCalledWith({ type: 'CANCEL_IN_PAGE_PROMPT' });
+  });
+
+  it('does not send a cancellation for a panel that is not waiting on an answer', () => {
+    const { controller } = createInspectablePanel();
+    controller.open();
+    controller.close();
+    expect(chromeHarness.sendMessage).not.toHaveBeenCalledWith({ type: 'CANCEL_IN_PAGE_PROMPT' });
+  });
+});
+
+describe('in-page panel Open in side panel', () => {
+  it('closes only after the worker confirms the side panel opened', async () => {
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    const panel = shadow.querySelector('.agi-panel')!;
+
+    shadow.querySelector<HTMLButtonElement>('.agi-open-side-panel')!.click();
+
+    await vi.waitFor(() => expect(panel.classList.contains('open')).toBe(false));
+  });
+
+  it('stays open and says so when the side panel did not open', async () => {
+    chromeHarness.sendMessage.mockImplementation(() =>
+      Promise.resolve({ success: false, error: 'No side panel for this tab.' }),
+    );
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    const panel = shadow.querySelector('.agi-panel')!;
+
+    shadow.querySelector<HTMLButtonElement>('.agi-open-side-panel')!.click();
+
+    await vi.waitFor(() =>
+      expect(shadow.querySelector('.agi-response-area')?.textContent).toContain(
+        'No side panel for this tab.',
+      ),
+    );
+    expect(panel.classList.contains('open')).toBe(true);
+  });
+
+  it('stays open with a visible message when the worker never answers', async () => {
+    chromeHarness.sendMessage.mockImplementation(() => Promise.reject(new Error('port closed')));
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+
+    shadow.querySelector<HTMLButtonElement>('.agi-open-side-panel')!.click();
+
+    await vi.waitFor(() =>
+      expect(shadow.querySelector('.agi-response-area')?.textContent).toContain(
+        'The side panel could not be opened',
+      ),
+    );
+    expect(shadow.querySelector('.agi-panel')!.classList.contains('open')).toBe(true);
+  });
+});

@@ -137,6 +137,12 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
       item.replaceChildren(form);
       input.focus();
       cancel.addEventListener('click', () => void refresh());
+      form.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        void refresh();
+      });
       form.addEventListener('submit', (event) => {
         event.preventDefault();
         const content = input.value.trim();
@@ -167,6 +173,12 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
       actions.hidden = true;
       item.appendChild(confirm);
       keep.focus();
+      confirm.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        keep.click();
+      });
       keep.addEventListener('click', () => {
         confirm.remove();
         actions.hidden = false;

@@ -242,15 +242,20 @@ export interface PageSelection {
  * Runs inside the page through chrome.scripting, so it may reference nothing
  * outside its own body.
  */
-export function readVisibleSelection(maxCharacters: number): PageSelection | null {
+export function readVisibleSelection(maxCharacters: number): PageSelection | 'form-field' | null {
   const focused = document.activeElement;
-  if (
-    focused instanceof HTMLInputElement ||
-    focused instanceof HTMLTextAreaElement ||
-    focused instanceof HTMLSelectElement
-  ) {
-    return null;
+  if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement) {
+    let start: number | null = null;
+    let end: number | null = null;
+    try {
+      start = focused.selectionStart;
+      end = focused.selectionEnd;
+    } catch {
+      return null;
+    }
+    return start !== null && end !== null && start !== end ? 'form-field' : null;
   }
+  if (focused instanceof HTMLSelectElement) return null;
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
   const excluded =

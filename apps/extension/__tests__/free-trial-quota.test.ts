@@ -162,11 +162,15 @@ function makeRawStreamResponse(payload: string, status = 200): Response {
   } as unknown as Response;
 }
 
-function makeErrorResponse(status: number, bodyText: string): Response {
+function makeErrorResponse(
+  status: number,
+  bodyText: string,
+  headers: Record<string, string> = {},
+): Response {
   return {
     ok: false,
     status,
-    headers: new Headers(),
+    headers: new Headers(headers),
     body: null,
     text: vi.fn().mockResolvedValue(bodyText),
   } as unknown as Response;
@@ -628,6 +632,76 @@ describe('streamFreeChat, auth and quota errors', () => {
     );
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required' });
+  });
+});
+
+describe('streamFreeChat, a refusal that names its reason', () => {
+  const refusal = (code: string, message: string) =>
+    makeErrorResponse(403, JSON.stringify({ error: { code, message } }));
+
+  it.each(['model_may_train', 'no_training_model_available', 'model_not_available'])(
+    'shows the server reason for %s and keeps the model switch available',
+    async (code) => {
+      const message = 'This model may train on your chats. Choose another model.';
+      fetchMock.mockResolvedValueOnce(refusal(code, message));
+      const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+      expect(chunks[0]).toMatchObject({ type: 'error', code: 'model_refused', message });
+    },
+  );
+
+  it('shows an administrator refusal in the server words instead of an account problem', async () => {
+    const message = 'Your workspace administrator has turned off web search.';
+    fetchMock.mockResolvedValueOnce(refusal('feature_disabled', message));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required', message });
+  });
+
+  it('falls back to the fixed sentence when the server gave no reason', async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(403, 'plan gated'));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({
+      code: 'plan_required',
+      message: 'This AGI Cloud capability is not available for the current account.',
+    });
+  });
+});
+
+describe('streamFreeChat, a rate limit that states its wait', () => {
+  it('carries the Retry-After header in seconds', async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}', { 'Retry-After': '30' }));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ code: 'rate_limited', retryAfterSeconds: 30 });
+  });
+
+  it('reads a Retry-After given as an HTTP date', async () => {
+    const at = new Date(Date.now() + 120_000).toUTCString();
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}', { 'Retry-After': at }));
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    const seconds = (chunks[0] as { retryAfterSeconds?: number }).retryAfterSeconds;
+    expect(seconds).toBeGreaterThanOrEqual(115);
+    expect(seconds).toBeLessThanOrEqual(121);
+  });
+
+  it('falls back to the wait in the response body', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(
+        429,
+        JSON.stringify({
+          error: { code: 'RATE_LIMIT_EXCEEDED', retry_after_seconds: 45 },
+        }),
+      ),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(chunks[0]).toMatchObject({ code: 'rate_limited', retryAfterSeconds: 45 });
+  });
+
+  it('states no wait when none was given or the figure is not credible', async () => {
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}'));
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}', { 'Retry-After': '999999999' }));
+    const none = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    const absurd = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    expect(none[0]).not.toHaveProperty('retryAfterSeconds');
+    expect(absurd[0]).not.toHaveProperty('retryAfterSeconds');
   });
 });
 

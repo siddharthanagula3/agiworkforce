@@ -3,6 +3,7 @@ export interface PageCaptureDelivery {
   readActionCount: () => Promise<number>;
   writeActionCount: (count: number) => Promise<void>;
   notify: (title: string, message: string) => void;
+  sent: { title: string; message: string };
 }
 
 export const PAGE_CAPTURE_UNDELIVERED_TITLE = 'Page capture not sent';
@@ -74,5 +75,6 @@ export async function deliverPageCapture(delivery: PageCaptureDelivery): Promise
   }
   const current = await delivery.readActionCount();
   await delivery.writeActionCount(current + 1);
+  delivery.notify(delivery.sent.title, delivery.sent.message);
   return true;
 }

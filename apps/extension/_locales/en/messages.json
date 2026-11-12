@@ -4,7 +4,7 @@
     "description": "chrome://extensions/shortcuts label for the _execute_action command"
   },
   "commandCapturePage": {
-    "message": "Capture current page",
+    "message": "Send a screenshot of the page to Desktop",
     "description": "chrome://extensions/shortcuts label for the capture_page command"
   },
   "menuAskAgi": {
@@ -230,7 +230,7 @@
     "description": "Autonomy chip tooltip while every browser action is confirmed first"
   },
   "spAutonomyFullAccessTooltip": {
-    "message": "AGI acts on your approved sites without asking. It still asks before uploads, downloads, sign-ins, purchases and sensitive input.",
+    "message": "AGI acts on your approved sites without asking. It never completes a purchase and hands it back to you. It still asks before uploads, downloads, sign-ins and sensitive input.",
     "description": "Autonomy chip tooltip while the agent may act without asking"
   },
   "spAutonomyAskFirstAria": {
@@ -401,6 +401,30 @@
       }
     }
   },
+  "spAutofillFilled_one": {
+    "message": "Filled $COUNT$ field. Check it before you submit.",
+    "description": "Computer use banner after Run Autofill filled one field, one plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "spAutofillFilled_other": {
+    "message": "Filled $COUNT$ fields. Check them before you submit.",
+    "description": "Computer use banner after Run Autofill filled fields, every other plural form",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "6"
+      }
+    }
+  },
+  "spAutofillNothingFilled": {
+    "message": "No fields were filled. Check the form before you submit.",
+    "description": "Computer use banner after Run Autofill ran but filled no field"
+  },
   "spDictationSectionTitle": {
     "message": "Dictation",
     "description": "Settings section title for side-panel voice input"
@@ -426,7 +450,7 @@
     "description": "Status while saving the in-page assistant preference"
   },
   "spPageAssistantEnabled": {
-    "message": "Page assistant enabled. Reload approved pages to show it.",
+    "message": "Page assistant enabled. It now shows on your approved sites.",
     "description": "Status after enabling the in-page assistant"
   },
   "spPageAssistantDisabled": {
@@ -3420,8 +3444,16 @@
     "message": "Open side panel",
     "description": "Label of the open-panel keyboard command."
   },
+  "pageCaptureSentTitle": {
+    "message": "Page sent to Desktop",
+    "description": "Notification title after the capture shortcut delivered a screenshot to Desktop."
+  },
+  "pageCaptureSentMessage": {
+    "message": "A screenshot of the current page is waiting in Desktop.",
+    "description": "Notification text after the capture shortcut delivered a screenshot to Desktop."
+  },
   "optShortcutCapturePage": {
-    "message": "Capture page",
+    "message": "Send page screenshot to Desktop",
     "description": "Label of the capture-page keyboard command."
   },
   "optShortcutNotAssigned": {
@@ -3693,7 +3725,7 @@
     "description": "Post-install limit."
   },
   "welcomeCannot2": {
-    "message": "Enter passwords or payment details for you.",
+    "message": "Type a password or payment detail without asking you first.",
     "description": "Post-install limit."
   },
   "welcomeCannot3": {
@@ -3847,7 +3879,7 @@
     "description": "In-panel tour step one: how AGI uses your tabs."
   },
   "obTourShortcutsText": {
-    "message": "Press $OPEN$ to open AGI and $CAPTURE$ to attach the current page.",
+    "message": "Press $OPEN$ to open AGI and $CAPTURE$ to send a screenshot of the page to Desktop.",
     "description": "In-panel tour step two with the keyboard shortcuts currently bound in Chrome.",
     "placeholders": {
       "open": {
@@ -3893,7 +3925,7 @@
     "description": "Link at the foot of the approval-mode menu to the tool approvals help article."
   },
   "spFullAccessNotice": {
-    "message": "Full access is on. AGI acts on your approved sites without asking. It still asks before uploads, downloads, sign-ins, purchases and sensitive input.",
+    "message": "Full access is on. AGI acts on your approved sites without asking. It never completes a purchase and hands it back to you. It still asks before uploads, downloads, sign-ins and sensitive input.",
     "description": "One-time composer notice after choosing Full access. Lists only always-ask reasons approvalPolicy.ts enforces."
   },
   "spFullAccessNoticeDismiss": {
@@ -3907,6 +3939,14 @@
   "spSelectionNone": {
     "message": "Select some text on the page first.",
     "description": "Composer notice when Add selected text finds no highlighted text on the page"
+  },
+  "spSelectionInFormField": {
+    "message": "Text in a form field can't be added. Select text on the page itself.",
+    "description": "Composer notice when Add selected text finds the highlighted text inside a form field such as a text box"
+  },
+  "spSelectionWhileReplying": {
+    "message": "Wait for the reply to finish, then add the selected text.",
+    "description": "Composer notice when Add selected text is used while an answer is still streaming"
   },
   "spSelectionSiteNotApproved": {
     "message": "Approve $HOST$ in Extension settings to add text selected there.",
@@ -4747,11 +4787,11 @@
     "description": "Autonomy chip while the agent acts on the task's sites and asks only before crucial actions"
   },
   "spAutonomyAutoDescription": {
-    "message": "Act on this task's sites, ask before buying, sending, deleting, signing in or downloading",
+    "message": "Act on this task's sites, ask before sending, deleting, signing in or downloading, never complete a purchase",
     "description": "One-line description of the Auto permission mode"
   },
   "spAutonomyAutoTooltip": {
-    "message": "AGI acts on the sites of this task without asking. It stops and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access, downloads a file, closes a tab or runs a tool the website supplies.",
+    "message": "AGI acts on the sites of this task without asking. It never completes a purchase and hands it back to you. It stops and asks before it sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access, downloads a file, closes a tab or runs a tool the website supplies.",
     "description": "Autonomy chip tooltip in Auto mode"
   },
   "spAutonomyAutoAria": {
@@ -4783,6 +4823,10 @@
   "spRewriteSignIn": {
     "message": "Sign in to the extension, then select the text again.",
     "description": "Selected-text rewrite and insertion flow."
+  },
+  "spRewriteSiteNotApproved": {
+    "message": "Approve this site in Extension settings before rewriting text on it.",
+    "description": "Selected-text rewrite flow when the site is not on the approved-sites list."
   },
   "spRewriteUnavailable": {
     "message": "Rewrite unavailable",

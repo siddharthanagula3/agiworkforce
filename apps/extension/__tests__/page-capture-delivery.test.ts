@@ -25,6 +25,7 @@ function harness(send: () => Promise<{ success?: boolean; error?: string } | und
           store.actionCount = count;
         },
         notify,
+        sent: { title: 'Sent title', message: 'Sent message' },
       }),
   };
 }
@@ -56,13 +57,26 @@ describe('capture_page only counts a capture the desktop actually received', () 
     );
   });
 
-  it('counts the capture and stays silent once the desktop confirms delivery', async () => {
+  it('counts the capture and confirms it once the desktop confirms delivery', async () => {
     const h = harness(async () => ({ success: true }));
 
     await expect(h.run()).resolves.toBe(true);
 
     expect(h.store.actionCount).toBe(8);
-    expect(h.notify).not.toHaveBeenCalled();
+    expect(h.notify).toHaveBeenCalledOnce();
+    expect(h.notify).toHaveBeenCalledWith('Sent title', 'Sent message');
+  });
+
+  it('tells the user in the catalog that the shortcut sends a screenshot to Desktop', () => {
+    const catalog = JSON.parse(
+      readFileSync(resolve(here, '..', '_locales/en/messages.json'), 'utf8'),
+    ) as Record<string, { message: string }>;
+    for (const key of ['obTourShortcutsText', 'optShortcutCapturePage', 'commandCapturePage']) {
+      const words = catalog[key]!.message.replace(/\$[A-Z]+\$/g, '');
+      expect(words, key).toMatch(/Desktop/);
+      expect(words, key).not.toMatch(/attach|capture/i);
+    }
+    expect(catalog['pageCaptureSentMessage']!.message).toMatch(/Desktop/);
   });
 
   it('routes the capture_page command through the delivery gate, not fire-and-forget', () => {

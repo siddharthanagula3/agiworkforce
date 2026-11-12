@@ -253,7 +253,7 @@ describe('the approval-mode menu beside +', () => {
     option('Full access').click();
     await vi.waitFor(() => expect(fullAccessNotice().classList.contains('visible')).toBe(true));
     expect(fullAccessNotice().textContent).toContain(
-      'Full access is on. AGI acts on your approved sites without asking. It still asks before uploads, downloads, sign-ins, purchases and sensitive input.',
+      'Full access is on. AGI acts on your approved sites without asking. It never completes a purchase and hands it back to you. It still asks before uploads, downloads, sign-ins and sensitive input.',
     );
     expect(chip().getAttribute('data-mode')).toBe('full');
 

@@ -202,10 +202,12 @@ const TAB = {
   status: 'complete',
 };
 
-function offerSelection(text: string | null): void {
+function offerSelection(text: string | null, inFormField = false): void {
   chromeMock.tabs.query.mockImplementation(async () => [TAB] as never[]);
   chromeMock.scripting.executeScript.mockImplementation(async () => [
-    { result: text === null ? null : { text, truncated: false } },
+    {
+      result: inFormField ? 'form-field' : text === null ? null : { text, truncated: false },
+    },
   ]);
 }
 
@@ -296,6 +298,21 @@ describe('a highlighted passage on the active tab', () => {
       expect(byId('sp-attachment-bar').textContent).toContain(
         'Select some text on the page first.',
       ),
+    );
+    expect(selectionChip()).toBeNull();
+  });
+
+  it('says text in a form field cannot be added, instead of asking the user to select some', async () => {
+    document.getElementById('sp-new-chat-btn')!.click();
+    offerSelection(null, true);
+    selectionItem().click();
+    await vi.waitFor(() =>
+      expect(byId('sp-attachment-bar').textContent).toContain(
+        "Text in a form field can't be added. Select text on the page itself.",
+      ),
+    );
+    expect(byId('sp-attachment-bar').textContent).not.toContain(
+      'Select some text on the page first.',
     );
     expect(selectionChip()).toBeNull();
   });

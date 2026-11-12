@@ -60,3 +60,35 @@ describe('in-page launcher while the real side panel is open', () => {
     expect(launcher().style.getPropertyValue('display')).toBe(before);
   });
 });
+
+describe('in-page launcher following the answer the worker gives', () => {
+  const hosts = (): number =>
+    document.querySelectorAll('[data-agi-launcher], [data-agi-panel]').length;
+
+  it('removes the launcher and panel when the page is no longer approved or the panel is turned off', async () => {
+    await setupInPagePanel({ approved: true, inPagePanel: true });
+    expect(hosts()).toBe(2);
+
+    await setupInPagePanel({ approved: true, inPagePanel: false });
+    expect(hosts()).toBe(0);
+
+    await setupInPagePanel({ approved: true, inPagePanel: true });
+    expect(hosts()).toBe(2);
+
+    await setupInPagePanel({ approved: false, inPagePanel: false });
+    expect(hosts()).toBe(0);
+  });
+
+  it('mounts one launcher however many times it is asked and listens for presence once', async () => {
+    const listenersBefore = chromeMock.listeners.length;
+    await setupInPagePanel({ approved: true, inPagePanel: true });
+    await setupInPagePanel({ approved: true, inPagePanel: true });
+    expect(hosts()).toBe(2);
+
+    await setupInPagePanel({ approved: false, inPagePanel: false });
+    await setupInPagePanel({ approved: true, inPagePanel: true });
+    expect(hosts()).toBe(2);
+    expect(chromeMock.listeners.length).toBe(listenersBefore);
+    await setupInPagePanel({ approved: false, inPagePanel: false });
+  });
+});

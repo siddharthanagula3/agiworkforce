@@ -4,11 +4,12 @@ import {
   readBrowserPermissionMode,
   type BrowserPermissionMode,
 } from '../computer-use/askBeforeActing';
+import { t } from '../../i18n';
 
 export type ApprovedSiteDefault = BrowserPermissionMode;
 
 export const UNAPPROVED_SITE_DEFAULT_HINT =
-  'Auto is the default: AGI acts on the sites a task needs and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access or downloads. Sites you have not approved are blocked until you allow one for a task, and the in-page assistant and page tools run on approved sites only. Full access skips routine confirmations on approved sites and still asks before protected actions.';
+  'Auto is the default: AGI acts on the sites a task needs and asks before it sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access or downloads, and it never completes a purchase for you. Sites you have not approved are blocked until you allow one for a task, and the in-page assistant and page tools run on approved sites only. Full access skips routine confirmations on approved sites and still asks before protected actions.';
 
 export function readApprovedSiteDefault(stored: unknown): ApprovedSiteDefault {
   return readBrowserPermissionMode(stored);
@@ -32,6 +33,7 @@ export function describeApprovedSiteDefault(value: ApprovedSiteDefault): string 
 export interface SitePermissionPolicyStorage {
   get(key: string): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
+  onChanged?(listener: (changes: Record<string, { newValue?: unknown }>) => void): void;
 }
 
 export interface SitePermissionPolicySection {
@@ -72,9 +74,9 @@ export function createSitePermissionPolicySection(
   select.setAttribute('aria-labelledby', 'opt-site-policy-label');
   select.setAttribute('aria-describedby', 'opt-site-policy-description');
   for (const [value, optionLabel] of [
-    ['auto', 'Auto: ask only before crucial actions'],
-    ['ask', 'Ask before each action'],
-    ['full', 'Approved sites: run without asking'],
+    ['auto', t('spAutonomyAuto')],
+    ['ask', t('spAutonomyAskFirst')],
+    ['full', t('spAutonomyFullAccess')],
   ] as const) {
     const option = document.createElement('option');
     option.value = value;
@@ -100,6 +102,13 @@ export function createSitePermissionPolicySection(
       select.disabled = true;
       status.textContent = 'Default site permission could not be loaded.';
     });
+
+  storage.onChanged?.((changes) => {
+    if (!(ASK_BEFORE_ACTING_KEY in changes) || select.disabled) return;
+    current = readApprovedSiteDefault(changes[ASK_BEFORE_ACTING_KEY]?.newValue);
+    select.value = current;
+    status.textContent = describeApprovedSiteDefault(current);
+  });
 
   select.addEventListener('change', () => {
     const next = parseApprovedSiteDefault(select.value);

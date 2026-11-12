@@ -325,6 +325,41 @@ function resolveFormDestination(form: HTMLFormElement): string {
   return new URL(resolved).href;
 }
 
+function applyToolArgument(
+  key: string,
+  value: unknown,
+  fields: ReadonlyArray<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
+): HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null {
+  const first = fields[0];
+  if (!first) return null;
+  const text = String(value);
+  if (first instanceof HTMLInputElement && first.type === 'radio') {
+    const choice = fields.find(
+      (candidate): candidate is HTMLInputElement =>
+        candidate instanceof HTMLInputElement && candidate.value === text,
+    );
+    if (!choice) throw new Error(`"${key}" has no option "${text}".`);
+    choice.checked = true;
+    return choice;
+  }
+  if (first instanceof HTMLInputElement && first.type === 'checkbox') {
+    const checkbox =
+      typeof value === 'boolean'
+        ? first
+        : fields.find(
+            (candidate): candidate is HTMLInputElement =>
+              candidate instanceof HTMLInputElement && candidate.value === text,
+          );
+    if (!checkbox) throw new Error(`"${key}" has no option "${text}".`);
+    checkbox.checked = typeof value === 'boolean' ? value : true;
+    return checkbox;
+  }
+  first.value = text;
+  if (first instanceof HTMLSelectElement && first.value !== text)
+    throw new Error(`"${key}" has no option "${text}".`);
+  return first;
+}
+
 function callToolViaDom(
   name: string,
   args: Record<string, unknown>,
@@ -335,10 +370,13 @@ function callToolViaDom(
   try {
     for (const [key, value] of Object.entries(args)) {
       assertCurrent?.();
-      const field = form.querySelector(`[name="${escapeAttrValue(key)}"]`) as
-        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+      const fields = Array.from(
+        form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+          `[name="${escapeAttrValue(key)}"]`,
+        ),
+      );
+      const field = applyToolArgument(key, value, fields);
       if (field) {
-        field.value = String(value);
         assertCurrent?.();
         field.dispatchEvent(new Event('input', { bubbles: true }));
         assertCurrent?.();

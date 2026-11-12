@@ -30,16 +30,28 @@ export async function requestPageAccess(): Promise<PageAccess> {
   }
 }
 
-export async function requestAutofillProfile(): Promise<JobApplicationProfile | null> {
+export type AutofillProfileReply =
+  { readonly profile: JobApplicationProfile } | { readonly error: string };
+
+const WORKER_UNREACHABLE_ERROR = 'The extension did not answer. Reload the page and try again.';
+
+export async function requestAutofillProfile(): Promise<AutofillProfileReply> {
   try {
     const reply = await askWorker({ type: 'GET_AUTOFILL_PROFILE' });
-    if (reply?.success !== true) return null;
+    if (reply?.success !== true)
+      return {
+        error:
+          typeof reply?.error === 'string' && reply.error ? reply.error : WORKER_UNREACHABLE_ERROR,
+      };
     const profile = reply.profile;
-    return profile && typeof profile === 'object' && !Array.isArray(profile)
-      ? (profile as JobApplicationProfile)
-      : {};
+    return {
+      profile:
+        profile && typeof profile === 'object' && !Array.isArray(profile)
+          ? (profile as JobApplicationProfile)
+          : {},
+    };
   } catch {
-    return null;
+    return { error: WORKER_UNREACHABLE_ERROR };
   }
 }
 
