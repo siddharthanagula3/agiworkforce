@@ -4988,8 +4988,7 @@ export function getWebviewContent(
           var text = codeEl.textContent || '';
           if (b.classList.contains('explain-btn')) {
             var language = getCodeLanguage(codeEl) || '';
-            prefillComposer('Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
-            sendMessage();
+            sendMessage(undefined, 'Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
             return;
           }
           if (b.classList.contains('apply-btn')) {
@@ -5025,8 +5024,7 @@ export function getWebviewContent(
       if (typeof window.agiBindSurfaces === 'function') {
         window.agiBindSurfaces(rootEl, {
           onFollowUp: function(text) {
-            prefillComposer(text);
-            sendMessage();
+            sendMessage(undefined, text);
           },
           copy: function(text) {
             if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
@@ -5087,6 +5085,12 @@ export function getWebviewContent(
       cancelIcon.setAttribute('aria-hidden', 'true');
       cancel.appendChild(cancelIcon);
       edit.addEventListener('click', function () {
+        if (userInput.value.trim() !== '') {
+          edit.title = 'Send or clear what you are typing first, then edit this message.';
+          edit.setAttribute('aria-label', edit.title);
+          userInput.focus();
+          return;
+        }
         vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
         prefillComposer(text);
       });
@@ -5163,16 +5167,17 @@ export function getWebviewContent(
       });
     }
 
-    function sendMessage(oneTurnBehavior) {
+    function sendMessage(oneTurnBehavior, generatedText) {
       if (runtimeBlock !== null) return;
+      const generated = typeof generatedText === 'string';
       const isFollowUp = streaming;
-      const typedText = userInput.value.trim();
-      var sideMatch = typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
+      const typedText = generated ? generatedText.trim() : userInput.value.trim();
+      var sideMatch = generated ? null : typedText.match(/^\\/(?:btw|side)\\s+([\\s\\S]+)$/);
       if (sideMatch) {
         askSideQuestion(sideMatch[1].trim());
         return;
       }
-      const text = typedText || (pendingAttachmentCount === 1
+      const text = generated ? typedText : typedText || (pendingAttachmentCount === 1
         ? 'Please analyze the attached file.'
         : pendingAttachmentCount > 1
           ? 'Please analyze the attached files.'
@@ -5185,7 +5190,7 @@ export function getWebviewContent(
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
       prependAuthor(userMessageEl, 'You said:');
-      appendSentContext(userMessageEl);
+      if (!generated) appendSentContext(userMessageEl);
       appendUserActions(userMessageEl, text);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
@@ -5194,9 +5199,11 @@ export function getWebviewContent(
         userMessageEl.setAttribute('data-delivery-state', 'sending');
         sendingClientMessageId = clientMessageId;
       }
-      userInput.value = '';
-      userInput.style.height = 'auto';
-      saveComposerDraft();
+      if (!generated) {
+        userInput.value = '';
+        userInput.style.height = 'auto';
+        saveComposerDraft();
+      }
       syncSendState();
 
       if (!isFollowUp) {
@@ -5207,14 +5214,15 @@ export function getWebviewContent(
         activePlanCard = null;
       }
 
-      var activeFileReferences = pendingFileReferences
+      var activeFileReferences = generated ? [] : pendingFileReferences
         .filter(function(ref) { return text.indexOf(ref.token) !== -1; })
         .map(function(ref) { return ref.reference; });
       var sendPayload = {
         text: text,
-        browseWeb: browseWebEnabled,
+        browseWeb: generated ? false : browseWebEnabled,
         clientMessageId: clientMessageId
       };
+      if (generated) sendPayload.standalone = true;
       if (activeFileReferences.length > 0) sendPayload.references = activeFileReferences;
       if (isFollowUp) {
         sendPayload.followUpBehavior =
@@ -5224,6 +5232,7 @@ export function getWebviewContent(
       }
       lastSendPayload = sendPayload;
       vscode.postMessage({ type: 'sendMessage', payload: sendPayload });
+      if (generated) return;
       pendingFileReferences = [];
       setBrowseWebEnabled(false);
     }
@@ -5516,9 +5525,10 @@ export function getWebviewContent(
       if (sessionsUnavailable) {
         var notice = document.createElement('div');
         notice.className = 'sessions-sheet-empty';
+        notice.setAttribute('role', 'status');
         notice.textContent = sessionsUnavailable;
         sessionsSheetList.appendChild(notice);
-        return;
+        if (visible.length === 0) return;
       }
       if (visible.length === 0) {
         var empty = document.createElement('div');
@@ -7749,6 +7759,8 @@ export function getWebviewContent(
     var TOOL_SNIPPET_LINES = 40;
 
     function appendTurnChanges(container, turnId, count) {
+      var earlier = messagesEl.querySelectorAll('.turn-changes__review');
+      for (var r = 0; r < earlier.length; r++) earlier[r].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
       row.dataset.turnId = turnId;
@@ -7760,7 +7772,7 @@ export function getWebviewContent(
       review.type = 'button';
       review.className = 'turn-changes__review';
       review.textContent = 'Review changes';
-      review.title = 'Open every file this reply changed in a diff, where each change can be kept or reverted.';
+      review.title = 'Open every file this reply changed in a diff against the last commit, where each change can be kept or reverted. Other uncommitted edits in those files show too.';
       review.addEventListener('click', function () {
         vscode.postMessage({ type: 'reviewTurnChanges', payload: { turnId: turnId } });
       });

@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { setAccountMemoryStore, type AccountMemoryStore } from '../memory/accountMemoryStore';
+import { setChatFocus } from '../features/sidebar-webview/chatFocus';
 import { setupCommands, type CommandDeps } from '../core/commandSetup';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 
@@ -190,5 +191,29 @@ describe('palette entries that a tree row usually fills in', () => {
       command: 'agi-workforce.signInProvider',
       when: 'false',
     });
+  });
+
+  it('opens a fork in the editor chat that asked for it, not in the sidebar', async () => {
+    const panel = {
+      resetConversation: vi.fn(),
+      resumeConversation: vi.fn().mockResolvedValue(true),
+    };
+    const sidebarProvider = { reveal: vi.fn(), resumeConversation: vi.fn() };
+    const handlers = register({
+      sidebarProvider,
+      conversationTreeProvider: { forkThread: vi.fn().mockResolvedValue('fork-1') },
+    });
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('Try another approach');
+    setChatFocus(panel, true);
+    try {
+      await handlers.get('agi-workforce.forkConversation')?.({
+        thread: { id: 'thread-1', title: 'Parser', cwd: '/workspace' },
+      });
+    } finally {
+      setChatFocus(panel, false);
+    }
+
+    expect(panel.resumeConversation).toHaveBeenCalledWith('fork-1');
+    expect(sidebarProvider.resumeConversation).not.toHaveBeenCalled();
   });
 });

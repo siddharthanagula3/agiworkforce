@@ -1417,6 +1417,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.forkConversation', async (item?: ConversationTreeItem) => {
+      const requestingChat = focusedChat();
       const thread = item?.thread ?? (await pickDeveloperSession('Fork which session?'));
       if (thread === undefined) return;
       const title = await vscode.window.showInputBox({
@@ -1431,6 +1432,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
       if (forkedId === null) {
         vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Developer session not found.`);
+        return;
+      }
+      if (requestingChat !== undefined && requestingChat !== sidebarProvider) {
+        await requestingChat.resumeConversation(forkedId);
         return;
       }
       await revealFirstPartyChat();

@@ -105,6 +105,16 @@ export class SchedulesTreeProvider
         limit: SCHEDULES_PAGE_LIMIT,
         offset: 0,
       });
+      if (page.schedules.length === 0) {
+        return [
+          new ScheduleNoticeItem(
+            'No schedules yet',
+            'A schedule runs a task in AGI Cloud on a timetable. Select this item to create one on the web.',
+            'calendar',
+            { command: 'agi-workforce.openSchedulesOnWeb', title: 'Open Schedules on Web' },
+          ),
+        ];
+      }
       return page.schedules.map((task) => new ScheduleTreeItem(task));
     } catch (error) {
       return [

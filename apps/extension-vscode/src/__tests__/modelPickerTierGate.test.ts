@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { BILLING_PLAN_PRICING, getMinimumRequiredTier } from '@agiworkforce/types';
 import {
   canAccessModelForSubscriptionTier,
   getCoreManualModelOptions,
@@ -287,5 +288,24 @@ describe('getModelPickerOptionsForTier, webview <select>', () => {
 
   it('treats every option as reachable when no tier is supplied', () => {
     expect(getModelPickerOptionsForTier().every((o) => o.reachable)).toBe(true);
+  });
+});
+
+describe('model picker plan labels', () => {
+  it('names a plan only when it is the minimum plan the model needs', () => {
+    const planLabels = Object.values(BILLING_PLAN_PRICING).map((plan) => plan.label);
+    const rows = buildGroupedQuickPickItems('pro').filter(
+      (item): item is typeof item & { modelId: string } =>
+        'modelId' in item && typeof item.modelId === 'string',
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      const minimum = getMinimumRequiredTier(row.modelId);
+      const expected = minimum === null ? undefined : BILLING_PLAN_PRICING[minimum].label;
+      const firstWord = (row.description ?? '').split(' ')[0];
+      if (planLabels.includes(firstWord ?? '')) {
+        expect(firstWord, row.modelId).toBe(expected);
+      }
+    }
   });
 });

@@ -789,6 +789,54 @@ describe('cloud request retry policy', () => {
     await expect(askCloud()).resolves.toBe('Hello');
   });
 
+  it('fails, never succeeds, when the server reports a mid-stream error', async () => {
+    queueResponses({
+      status: 200,
+      body:
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Partial review' } }] })}\n\n` +
+        `data: ${JSON.stringify({
+          choices: [
+            {
+              index: 0,
+              delta: {
+                x_stream_error: {
+                  code: 'code_execution_not_performed',
+                  message: 'A required tool step failed.',
+                  retryable: false,
+                },
+              },
+            },
+          ],
+        })}\n\n` +
+        'data: [DONE]\n\n',
+    });
+
+    await expect(askCloud()).rejects.toMatchObject({
+      message: 'A required tool step failed.',
+      code: 'code_execution_not_performed',
+    });
+  });
+
+  it('fails as incomplete when the stream closes before it finished', async () => {
+    queueResponses({
+      status: 200,
+      body: `data: ${JSON.stringify({ choices: [{ delta: { content: 'Half an ans' } }] })}\n\n`,
+    });
+
+    await expect(askCloud()).rejects.toMatchObject({ code: 'STREAM_INCOMPLETE' });
+  });
+
+  it('accepts a stream that ends with a finish reason and no DONE sentinel', async () => {
+    queueResponses({
+      status: 200,
+      body: `data: ${JSON.stringify({
+        choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }],
+      })}\n\n`,
+    });
+
+    await expect(askCloud()).resolves.toBe('Done.');
+  });
+
   it('backs off between attempts instead of hammering the endpoint', async () => {
     queueResponses({ status: 500, body: 'boom' }, { status: 200, body: sseBody('ok') });
     const context = new ExtensionContext();

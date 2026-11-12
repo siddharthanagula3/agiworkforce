@@ -827,7 +827,7 @@
           {
             "id": "understandTaskHandoff",
             "title": "Follow background work from the IDE",
-            "description": "Cloud AGI Work runs started on any device show their state, age and pending approvals in the Cloud Tasks view. [Show Cloud Tasks](command:agi-workforce.showCloudTasks)",
+            "description": "Cloud tasks started on any device show their state, age and pending approvals in the Cloud tasks list, and Continue in the Cloud hands this branch to a cloud session. [Show Cloud Tasks](command:agi-workforce.showCloudTasks)",
             "media": {
               "markdown": "media/walkthrough/02-tasks.md"
             },
@@ -838,12 +838,12 @@
           {
             "id": "reviewChanges",
             "title": "Turn intent into a reviewed change",
-            "description": "Attach workspace files, ask AGI to implement a TODO, and inspect the native diff before accepting changes. [Open AGI Settings](command:agi-workforce.openSettings)",
+            "description": "Attach workspace files, ask AGI to implement a TODO, and inspect the native diff before accepting changes. [Open AGI Chat](command:agi-workforce.chat)",
             "media": {
               "markdown": "media/walkthrough/03-review.md"
             },
             "completionEvents": [
-              "onCommand:agi-workforce.openSettings"
+              "onCommand:agi-workforce.chat"
             ]
           },
           {
@@ -1099,6 +1099,26 @@
         },
         {
           "command": "agi-workforce.signInProvider",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshCloudTasks",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshSchedules",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshProjects",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshArtifacts",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.refreshConnectors",
           "when": "false"
         },
         {

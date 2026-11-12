@@ -57,4 +57,28 @@ describe('VS Code onboarding host contract', () => {
       expect(existsSync(resolve(extensionRoot, step.media.markdown))).toBe(true);
     }
   });
+
+  it('marks each walkthrough step done by the command its own button runs', () => {
+    const extensionRoot = resolve(__dirname, '../..');
+    const packageJson = JSON.parse(
+      readFileSync(resolve(extensionRoot, 'package.json'), 'utf8'),
+    ) as {
+      contributes: {
+        walkthroughs: Array<{
+          steps: Array<{ id: string; description: string; completionEvents: string[] }>;
+        }>;
+      };
+    };
+    for (const walkthrough of packageJson.contributes.walkthroughs) {
+      for (const step of walkthrough.steps) {
+        const linked = [...step.description.matchAll(/\(command:([^)\s]+)\)/gu)].map(
+          (match) => `onCommand:${match[1]}`,
+        );
+        expect(linked, step.id).toEqual(step.completionEvents);
+      }
+    }
+    const tasks = readFileSync(resolve(extensionRoot, 'media/walkthrough/02-tasks.md'), 'utf8');
+    expect(tasks).not.toContain('remain on the Web');
+    expect(tasks).toContain('Show Cloud Tasks');
+  });
 });

@@ -42,7 +42,10 @@ const THREADS = [
 function makeManager(getThreads: () => Promise<ThreadSummary[]>) {
   const context = new vscode.ExtensionContext();
   const posted: ExtToWebviewMessage[] = [];
-  const treeProvider = { getThreads: vi.fn(getThreads) } as unknown as ConversationTreeProvider;
+  const treeProvider = {
+    getThreads: vi.fn(getThreads),
+    listThreads: vi.fn(async () => ({ items: await getThreads(), failures: [] })),
+  } as unknown as ConversationTreeProvider;
   const manager = new ChatStateManager(
     context.secrets,
     context,
@@ -162,5 +165,33 @@ describe('sidebar recent conversations', () => {
     expect(rows.map((row) => row.sourceLabel)).toEqual(['Desktop', 'CLI']);
     expect(rows[0]?.branch).toBe('chore/repo-restructure');
     expect(rows[1]?.branch).toBeUndefined();
+  });
+
+  it('says why the local list is empty when listing failed, instead of claiming there are none', async () => {
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      {
+        listThreads: vi.fn(async () => ({
+          items: [],
+          failures: [{ folderName: 'app', reason: 'AGI CLI not found', restricted: false }],
+        })),
+      } as unknown as ConversationTreeProvider,
+      context.workspaceState,
+    );
+
+    await manager.handleMessage({ type: 'requestSessions', payload: { source: 'local' } });
+
+    expect(posted).toContainEqual({
+      type: 'sessionsList',
+      payload: {
+        source: 'local',
+        rows: [],
+        unavailable: expect.stringContaining('AGI CLI not found'),
+      },
+    });
   });
 });

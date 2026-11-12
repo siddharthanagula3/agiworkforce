@@ -146,6 +146,16 @@ export class CloudTasksTreeProvider
       const page = await resolution.client.listRuns({ limit: CLOUD_TASKS_PAGE_LIMIT });
       const stageOf = (run: CloudAgentRun): CloudRunStage =>
         run.pendingApproval === undefined ? RUN_STAGES[run.workState ?? run.state] : 'needs-you';
+      if (page.runs.length === 0) {
+        return [
+          new CloudTasksNoticeItem(
+            'No cloud tasks yet',
+            'Tasks you start in AGI Cloud, or hand off with Continue in Cloud, appear here. Select this item to open Cloud tasks on the web.',
+            'cloud',
+            { command: 'agi-workforce.openCloudTasksOnWeb', title: 'Open Cloud Tasks on Web' },
+          ),
+        ];
+      }
       return STAGE_GROUPS.flatMap(({ stage, label, icon }) => {
         const runs = page.runs.filter((run) => stageOf(run) === stage);
         return runs.length === 0 ? [] : [new CloudTasksGroupItem(label, runs, icon)];

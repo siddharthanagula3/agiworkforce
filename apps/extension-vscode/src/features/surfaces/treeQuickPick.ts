@@ -123,6 +123,14 @@ export function buildSurfaceRows(
   });
 }
 
+export const SURFACE_REFRESH_COMMANDS: ReadonlySet<string> = new Set([
+  'agi-workforce.refreshCloudTasks',
+  'agi-workforce.refreshSchedules',
+  'agi-workforce.refreshProjects',
+  'agi-workforce.refreshArtifacts',
+  'agi-workforce.refreshConnectors',
+]);
+
 export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Promise<void> {
   const rowActions = options.rowActions ?? [];
   const titleActions = options.titleActions ?? [];
@@ -200,8 +208,12 @@ export async function showSurfaceQuickPick(options: SurfaceQuickPickOptions): Pr
 
     pick.onDidAccept(() => {
       const selected = pick.selectedItems[0];
-      pick.hide();
       const command = selected?.item.command;
+      if (command !== undefined && SURFACE_REFRESH_COMMANDS.has(command.command)) {
+        void load();
+        return;
+      }
+      pick.hide();
       if (command === undefined) return;
       void vscode.commands.executeCommand(command.command, ...(command.arguments ?? []));
     });

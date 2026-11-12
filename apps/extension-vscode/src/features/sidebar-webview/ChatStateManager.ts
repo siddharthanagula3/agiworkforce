@@ -300,6 +300,7 @@ export type WebviewToExtMessage =
         references?: WorkspaceFileReference[];
         followUpBehavior?: ComposerFollowUpBehavior;
         clientMessageId?: string;
+        standalone?: boolean;
       };
     }
   | { type: 'ready' }
@@ -854,6 +855,10 @@ interface DeveloperThreadState {
   disconnected?: boolean;
 }
 
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function manualModelUnlockText(): string {
   const tier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((candidate) =>
     canAccessManualModelSelection(candidate),
@@ -987,6 +992,14 @@ export class ChatStateManager {
         }
       }),
     );
+    const threadRemoved = this._conversationTreeProvider?.onDidRemoveThread;
+    if (threadRemoved !== undefined) {
+      this._editorContextListeners.push(
+        threadRemoved((threadId) => {
+          if (this._thread?.id === threadId) this.resetConversation();
+        }),
+      );
+    }
     if (this._workspaceState !== undefined) {
       this._meterCollapsed = this._workspaceState.get<boolean>(
         'agiWorkforce.usageMeterCollapsed',
@@ -1215,6 +1228,7 @@ export class ChatStateManager {
           msg.payload.references,
           msg.payload.followUpBehavior,
           msg.payload.clientMessageId,
+          msg.payload.standalone === true,
         );
         break;
       }
@@ -1350,9 +1364,14 @@ export class ChatStateManager {
           await vscode.commands.executeCommand(OPEN_CLOUD_CODE_SESSION_COMMAND, msg.payload.id);
           break;
         }
-        if (await this._continueAccountConversationHere(msg.payload.id)) break;
+        const continued = await this._continueAccountConversationHere(msg.payload.id);
+        if (continued === 'opened') break;
         void vscode.window.showInformationMessage(
-          `${PRODUCT_NAMES.code}: this AGI CLI cannot open account chats in VS Code yet, so the chat opened on the web.`,
+          continued === 'no-workspace'
+            ? `${PRODUCT_NAMES.code}: open a folder to continue this chat in VS Code, so the chat opened on the web.`
+            : continued === 'untrusted'
+              ? `${PRODUCT_NAMES.code}: trust this workspace to continue this chat in VS Code, so the chat opened on the web.`
+              : `${PRODUCT_NAMES.code}: this AGI CLI cannot open account chats in VS Code yet, so the chat opened on the web.`,
         );
         await vscode.env.openExternal(
           vscode.Uri.parse(`${getCloudWebOrigin()}/chat/${msg.payload.id}?from=vscode-extension`),
@@ -1500,7 +1519,12 @@ export class ChatStateManager {
 
       case 'reviewTurnChanges': {
         const changed = this._lastChangedTurn;
-        if (changed?.turnId !== msg.payload.turnId) break;
+        if (changed?.turnId !== msg.payload.turnId) {
+          void vscode.window.showInformationMessage(
+            `${PRODUCT_NAMES.code}: only the latest reply's changes can be reviewed here. Use Checkpoints to go back further.`,
+          );
+          break;
+        }
         await openTurnChanges(changed.files);
         break;
       }
@@ -2080,9 +2104,12 @@ export class ChatStateManager {
 
   private async _pushSessions(source: SessionListSource): Promise<void> {
     if (source === 'local') {
-      const threads = ((await this._conversationTreeProvider?.getThreads()) ?? []).filter(
-        (thread) => !isCloudThread(thread),
-      );
+      const listing = (await this._conversationTreeProvider?.listThreads()) ?? {
+        items: [],
+        failures: [],
+      };
+      const threads = listing.items.filter((thread) => !isCloudThread(thread));
+      const [failure] = listing.failures;
       const inputs: SessionRowInput[] = threads.map((thread) => ({
         id: thread.id,
         title: thread.title,
@@ -2091,7 +2118,20 @@ export class ChatStateManager {
         ...(thread.createdBy === undefined ? {} : { origin: thread.createdBy }),
         ...(thread.gitBranch === undefined ? {} : { branch: thread.gitBranch }),
       }));
-      this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
+      this._post({
+        type: 'sessionsList',
+        payload: {
+          source,
+          rows: mergeSessionRows(inputs),
+          ...(failure === undefined
+            ? {}
+            : {
+                unavailable: failure.restricted
+                  ? t('chatNotice.trustBeforeStart')
+                  : `Sessions in ${failure.folderName} could not be listed: ${failure.reason}`,
+              }),
+        },
+      });
       return;
     }
 
@@ -2111,11 +2151,27 @@ export class ChatStateManager {
       return;
     }
     try {
-      const [page, codeSessions, workspaceRepositories] = await Promise.all([
-        resolution.workspace.chat.listConversations({ limit: 50, archived: 'exclude' }),
-        code.status === 'ready' ? code.api.list('open') : null,
+      const [pageResult, codeResult, workspaceRepositories] = await Promise.all([
+        resolution.workspace.chat.listConversations({ limit: 50, archived: 'exclude' }).then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        ),
+        code.status === 'ready'
+          ? code.api.list('open').then(
+              (value) => ({ ok: true as const, value }),
+              (error: unknown) => ({ ok: false as const, error }),
+            )
+          : { ok: true as const, value: null },
         workspaceGitHubRepositories(),
       ]);
+      if (!pageResult.ok && !codeResult.ok) throw pageResult.error;
+      const page = pageResult.ok ? pageResult.value : { conversations: [] };
+      const codeSessions = codeResult.ok ? codeResult.value : null;
+      const partialFailure = !pageResult.ok
+        ? `Cloud chats could not be loaded: ${describeError(pageResult.error)}`
+        : !codeResult.ok
+          ? `AGI Code sessions could not be loaded: ${describeError(codeResult.error)}`
+          : undefined;
       const inWorkspaceRepository = (repositoryUrl: string | null): boolean => {
         if (workspaceRepositories.length === 0) return true;
         const name = repositoryUrl ? githubRepositoryName(repositoryUrl) : null;
@@ -2138,7 +2194,14 @@ export class ChatStateManager {
             ...(session.workingBranch === null ? {} : { branch: session.workingBranch }),
           })),
       ];
-      this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
+      this._post({
+        type: 'sessionsList',
+        payload: {
+          source,
+          rows: mergeSessionRows(inputs),
+          ...(partialFailure === undefined ? {} : { unavailable: partialFailure }),
+        },
+      });
     } catch (error) {
       this._post({
         type: 'sessionsList',
@@ -2716,16 +2779,19 @@ export class ChatStateManager {
     }
   }
 
-  private async _continueAccountConversationHere(conversationId: string): Promise<boolean> {
+  private async _continueAccountConversationHere(
+    conversationId: string,
+  ): Promise<'opened' | 'no-workspace' | 'untrusted' | 'not-imported'> {
     const workspace = await getActiveWorkspaceFolder();
-    if (workspace === undefined || !vscode.workspace.isTrusted) return false;
+    if (workspace === undefined) return 'no-workspace';
+    if (!vscode.workspace.isTrusted) return 'untrusted';
     const provider = this._conversationTreeProvider;
-    if (provider === undefined) return false;
+    if (provider === undefined) return 'not-imported';
     if (!(await provider.adoptAccountConversation(conversationId, workspace.uri.fsPath))) {
-      return false;
+      return 'not-imported';
     }
     await this.resumeConversation(conversationId);
-    return true;
+    return 'opened';
   }
 
   /**
@@ -3776,6 +3842,7 @@ export class ChatStateManager {
     references: unknown = [],
     followUpBehavior: ComposerFollowUpBehavior = Config.composerFollowUpBehavior(),
     clientMessageId = `host-${++this._clientMessageSeq}`,
+    standalone = false,
   ): Promise<void> {
     this._resumeAttemptSeq++;
     const request: PendingChatSend = {
@@ -3785,7 +3852,7 @@ export class ChatStateManager {
       ...(model === undefined ? {} : { model }),
       browseWeb,
       references: Array.isArray(references) ? references.filter(isWorkspaceFileReference) : [],
-      attachments: this._pendingAttachments.splice(0),
+      attachments: standalone ? [] : this._pendingAttachments.splice(0),
       editorContext: captureEditorContext(new Set(this._dismissedEditorContext)),
     };
     this._dismissedEditorContext.clear();

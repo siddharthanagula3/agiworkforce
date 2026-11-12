@@ -209,6 +209,11 @@ export class ChatEditorPanel {
     this.stateManager.resetConversation();
   }
 
+  resumeConversation(threadId: string): Promise<boolean> {
+    this.panel.reveal();
+    return this.stateManager.resumeConversation(threadId);
+  }
+
   private dispose(): void {
     setChatFocus(this, false);
     ChatEditorPanel.instances.delete(this);

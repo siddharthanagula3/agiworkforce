@@ -54,7 +54,8 @@ function searchItem(hit: SessionSearchHit): SessionPickItem {
 }
 
 export async function showSessionsHistory(provider: ConversationTreeProvider): Promise<void> {
-  const threads = await provider.getThreads();
+  const { items: threads, failures } = await provider.listThreads();
+  reportFailures(failures);
   const archivedEntry: SessionPickItem = {
     label: `$(archive) ${t('archived.title')}`,
     alwaysShow: true,

@@ -50,6 +50,19 @@ import * as accountAccess from '../features/surfaces/accountAccess';
 import * as proposedChangeReview from '../features/permissions/proposedChangeReview';
 import * as tierResolver from '../integrations/tierResolver';
 
+function completeTurnFor(harness: { emit(event: LocalRuntimeEvent): void }): Promise<void> {
+  harness.emit({
+    type: 'turn_completed',
+    threadId: 'thread-1',
+    turnId: 'turn-1',
+    status: 'completed',
+    response: 'done',
+    inputTokens: 1,
+    outputTokens: 1,
+  });
+  return Promise.resolve();
+}
+
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
     id: 'thread-1',
@@ -774,6 +787,63 @@ describe('ChatStateManager local turn lifecycle', () => {
       filePath: expect.any(String),
     });
     expect(posted).toContainEqual(expect.objectContaining({ type: 'diffProposed' }));
+  });
+
+  it('leaves staged attachments for the user when a generated prompt is sent', async () => {
+    const harness = makeHarness();
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 6,
+            dataUrl: 'data:text/plain;base64,U0VDUkVU',
+          },
+        ],
+      },
+    });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Explain this code', standalone: true },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await completeTurnFor(harness);
+    await send;
+
+    expect(JSON.stringify(harness.runtime.startTurn.mock.calls[0]?.[0])).not.toContain('notes.txt');
+    expect(harness.posted).not.toContainEqual(
+      expect.objectContaining({ type: 'attachmentsConsumed' }),
+    );
+  });
+
+  it('clears the chat when the session it shows is archived or deleted elsewhere', async () => {
+    const removed = new vscode.EventEmitter<string>();
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const harness = makeHarness();
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      { onDidRemoveThread: removed.event, refresh: vi.fn() } as unknown as ConversationTreeProvider,
+      context.workspaceState,
+      harness.pool,
+    );
+    const send = manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hi' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await completeTurnFor(harness);
+    await send;
+    expect(manager.activeThreadId()).toBe('thread-1');
+
+    removed.fire('another-thread');
+    expect(manager.activeThreadId()).toBe('thread-1');
+    removed.fire('thread-1');
+
+    expect(manager.activeThreadId()).toBeUndefined();
+    expect(posted).toContainEqual({ type: 'conversationCleared' });
+    manager.dispose();
   });
 
   it('persists onboarding completion in global extension state', async () => {

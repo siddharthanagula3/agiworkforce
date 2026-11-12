@@ -119,6 +119,8 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     vscode.TreeItem | undefined | null | void
   >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+  private readonly _onDidRemoveThread = new vscode.EventEmitter<string>();
+  readonly onDidRemoveThread = this._onDidRemoveThread.event;
   private readonly runtimeByThread = new Map<
     string,
     { runtime: LocalRuntimeClient; cwd: string }
@@ -152,10 +154,15 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
   }
 
   async getThreads(): Promise<ThreadSummary[]> {
+    return (await this.listThreads()).items;
+  }
+
+  async listThreads(): Promise<SessionListing<ThreadSummary>> {
     const folders = getAllWorkspaceFolders();
     this.runtimeByThread.clear();
-    this.listingFailures = [];
-    if (folders.length === 0) return [];
+    const failures: SessionListingFailure[] = [];
+    this.listingFailures = failures;
+    if (folders.length === 0) return { items: [], failures };
     const pages = await Promise.all(
       folders.map(async (folder) => {
         try {
@@ -185,7 +192,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
             `[${PRODUCT_NAMES.code}] failed to list sessions for ${folder.uri.fsPath}`,
             error,
           );
-          this.listingFailures.push({
+          failures.push({
             folderName: folder.name,
             reason: describeListingFailure(error),
             ...(error instanceof WorkspaceNotTrustedError ? { restricted: true } : {}),
@@ -194,7 +201,10 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
         }
       }),
     );
-    return pages.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+    return {
+      items: pages.flat().sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)),
+      failures,
+    };
   }
 
   async getArchivedThreads(): Promise<SessionListing<ThreadSummary>> {
@@ -344,6 +354,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     await owner.runtime.archiveThread(threadId);
     this.runtimeByThread.delete(threadId);
     this.refresh();
+    this._onDidRemoveThread.fire(threadId);
     return true;
   }
 
@@ -361,11 +372,13 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
     await owner.runtime.deleteThread(threadId);
     this.runtimeByThread.delete(threadId);
     this.refresh();
+    this._onDidRemoveThread.fire(threadId);
     return true;
   }
 
   dispose(): void {
     this._onDidChangeTreeData.dispose();
+    this._onDidRemoveThread.dispose();
     this.runtimeByThread.clear();
   }
 }
