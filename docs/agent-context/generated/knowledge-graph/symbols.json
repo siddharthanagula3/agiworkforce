@@ -6186,7 +6186,8 @@
       "apps/desktop/src-tauri/src/core/agent/tests/mod.rs"
     ],
     "APPROVAL_TIMEOUT_MS": [
-      "apps/extension/src/features/computer-use/agentLoop.ts"
+      "apps/extension/src/features/computer-use/agentLoop.ts",
+      "apps/web/app/agent-permissions/page.test.tsx"
     ],
     "ApprovalAnswer": [
       "apps/extension-vscode/src/features/remote-control/approvalAnswers.ts"
@@ -33722,7 +33723,8 @@
       "apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs"
     ],
     "DEFAULT_BROWSER_PERMISSION_MODE": [
-      "apps/extension/src/features/computer-use/askBeforeActing.ts"
+      "apps/extension/src/features/computer-use/askBeforeActing.ts",
+      "apps/web/app/agent-permissions/page.test.tsx"
     ],
     "DEFAULT_CALLER_TOOL_MAX_STEPS": [
       "packages/contracts/cloud-contracts/src/index.ts",
