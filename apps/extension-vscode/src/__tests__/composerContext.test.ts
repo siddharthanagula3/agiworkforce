@@ -324,13 +324,20 @@ describe('editor context chips', () => {
 
   it('sends nothing when the workspace turns automatic attachment off', () => {
     activeFile('const a = 1;');
-    vi.mocked(vscode.workspace.getConfiguration).mockReturnValueOnce({
+    const getConfiguration = vi.mocked(vscode.workspace.getConfiguration);
+    const usual = getConfiguration.getMockImplementation();
+    getConfiguration.mockReturnValue({
       get: vi.fn(() => false),
       update: vi.fn(),
       has: vi.fn(),
       inspect: vi.fn(() => ({ defaultValue: true, globalValue: true, workspaceValue: false })),
     } as never);
 
-    expect(resolveEditorContext(new Set())).toEqual({ chips: [], contextFiles: [], texts: [] });
+    try {
+      expect(resolveEditorContext(new Set())).toEqual({ chips: [], contextFiles: [], texts: [] });
+    } finally {
+      if (usual) getConfiguration.mockImplementation(usual);
+      else getConfiguration.mockReset();
+    }
   });
 });

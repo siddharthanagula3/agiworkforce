@@ -5,6 +5,7 @@ import {
   loadPairingState,
   submitPairingCode,
   unpair,
+  watchDesktopPairingRelease,
   type PairingState,
 } from '../native-bridge/pairing';
 import { el } from '../side-panel/dom';
@@ -14,6 +15,7 @@ export interface PairingApi {
   loadPairingState(): Promise<PairingState>;
   submitPairingCode(code: string): Promise<PairingState>;
   unpair(): Promise<PairingState>;
+  watchRelease?(onRelease: () => void): void;
 }
 
 export interface DesktopPairingRows {
@@ -21,7 +23,13 @@ export interface DesktopPairingRows {
   loaded: Promise<void>;
 }
 
-const browserPairing: PairingApi = { beginPairing, loadPairingState, submitPairingCode, unpair };
+const browserPairing: PairingApi = {
+  beginPairing,
+  loadPairingState,
+  submitPairingCode,
+  unpair,
+  watchRelease: watchDesktopPairingRelease,
+};
 
 export function createDesktopPairingRows(api: PairingApi = browserPairing): DesktopPairingRows {
   const element = el('div', { id: 'opt-pairing' });
@@ -182,5 +190,8 @@ export function createDesktopPairingRows(api: PairingApi = browserPairing): Desk
   });
 
   const loaded = api.loadPairingState().then(apply);
+  api.watchRelease?.(() => {
+    void api.loadPairingState().then(apply);
+  });
   return { element, loaded };
 }

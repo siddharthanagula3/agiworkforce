@@ -75,4 +75,41 @@ describe('account page-context reader', () => {
       ),
     ).rejects.toThrow();
   });
+  it('says what the daily page-read limit is, in the server words, when it is reached', async () => {
+    const resetAt = '2026-11-13T00:00:00.000Z';
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      Response.json(
+        {
+          error: {
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please wait before trying again.',
+            reason: 'rate_limit:page-read-account-day',
+            retry_after_seconds: 3600,
+            reset_at: resetAt,
+          },
+          rateLimit: { limit: 500, remaining: 0, reset: resetAt, retry_after_seconds: 3600 },
+        },
+        { status: 429, headers: { 'Retry-After': '3600' } },
+      ),
+    );
+    const failure = await readChromeLinkedPage(result.url, { owner }, { getAuth: auth, fetchImpl })
+      .then(() => null)
+      .catch((error: unknown) => error as Error);
+
+    expect(failure?.message).toContain('Too many requests. Please wait before trying again.');
+    expect(failure?.message).toContain('The limit is 500 page reads.');
+    expect(failure?.message).toContain('It resets');
+  });
+
+  it('asks the user to try again later when the reader is briefly unavailable', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      Response.json(
+        { error: { code: 'SERVICE_UNAVAILABLE', message: 'Service temporarily unavailable' } },
+        { status: 503, headers: { 'retry-after': '5' } },
+      ),
+    );
+    await expect(
+      readChromeLinkedPage(result.url, { owner }, { getAuth: auth, fetchImpl }),
+    ).rejects.toThrow('The page reader is temporarily unavailable. Try again in 5 seconds.');
+  });
 });

@@ -86,6 +86,15 @@ export class FakeStore {
       }
       return this.answer({ data: removed, error: null });
     });
+    vi.mocked(db.deleteExpiredSessions).mockImplementation((expiredBefore, limit, liveCodes) => {
+      const live = new Set(liveCodes);
+      const expired = [...this.rows.values()]
+        .filter((row) => row.expires_at < expiredBefore && !live.has(row.code))
+        .sort((a, b) => a.expires_at - b.expires_at)
+        .slice(0, limit);
+      for (const row of expired) this.rows.delete(row.code);
+      return this.answer({ data: expired.length, error: null });
+    });
     vi.mocked(db.extendSessionExpiry).mockImplementation((code, expiresAt) => {
       const row = this.rows.get(code);
       if (row && row.expires_at < expiresAt) row.expires_at = expiresAt;
@@ -105,7 +114,27 @@ export interface InProcessRelay {
   ws: string;
 }
 
-export async function startInProcessRelay(store: FakeStore): Promise<InProcessRelay> {
+export const RELAY_DEFAULTS: Readonly<Record<string, string | undefined>> = {
+  WS_CONNECTION_LIMIT: undefined,
+  WS_MESSAGE_LIMIT: undefined,
+  WS_PARTICIPANT_MESSAGES_PER_SECOND: undefined,
+  WS_PARTICIPANT_MESSAGE_BURST: undefined,
+  SIGNALING_STANDING_URL: undefined,
+  SIGNALING_STANDING_RECHECK_MS: undefined,
+  SIGNALING_STANDING_MAX_STALE_MS: undefined,
+  SIGNALING_PAIRING_MAX_LIFETIME_MS: undefined,
+};
+
+export const RAISED_LIMITS: Readonly<Record<string, string | undefined>> = {
+  ...RELAY_DEFAULTS,
+  WS_CONNECTION_LIMIT: '10000',
+  WS_MESSAGE_LIMIT: '10000',
+};
+
+export async function startInProcessRelay(
+  store: FakeStore,
+  env: Readonly<Record<string, string | undefined>> = RAISED_LIMITS,
+): Promise<InProcessRelay> {
   store.install();
   const port = await freePort();
   Object.assign(process.env, {
@@ -113,9 +142,11 @@ export async function startInProcessRelay(store: FakeStore): Promise<InProcessRe
     SIGNALING_PORT: String(port),
     SIGNALING_HOST: '127.0.0.1',
     SIGNALING_INTERNAL_SECRET: INTERNAL_SECRET,
-    WS_CONNECTION_LIMIT: '10000',
-    WS_MESSAGE_LIMIT: '10000',
   });
+  for (const [name, value] of Object.entries(env)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
   await import('../../src/index.js');
   const http = `http://127.0.0.1:${port}`;
   const deadline = Date.now() + 10_000;

@@ -1,4 +1,5 @@
 import type { WebSocket } from 'ws';
+import { envPositiveInteger } from './env.js';
 import { logger } from './logger.js';
 import {
   MAX_CONNECTIONS_PER_IP,
@@ -6,7 +7,14 @@ import {
   CONNECTION_IDLE_TIMEOUT_MS,
   SESSION_LONG_TTL_MS,
   STALE_CONNECTION_CHECK_INTERVAL_MS,
+  WS_MISSED_PONGS_BEFORE_TERMINATE,
+  WS_PING_INTERVAL_MS_DEFAULT,
 } from './constants.js';
+
+export const WS_PING_INTERVAL_MS = envPositiveInteger(
+  'WS_PING_INTERVAL_MS',
+  WS_PING_INTERVAL_MS_DEFAULT,
+);
 
 interface ConnectionInfo {
   socket: WebSocket;
@@ -15,10 +23,17 @@ interface ConnectionInfo {
   lastActivity: number;
   correlationId: string;
   deviceId?: string;
+  unansweredPings: number;
 }
 
 interface RemoveConnectionMetadata {
-  trigger?: 'socket_close' | 'server_cleanup' | 'server_shutdown' | 'error' | 'device_revoked';
+  trigger?:
+    | 'socket_close'
+    | 'server_cleanup'
+    | 'server_shutdown'
+    | 'error'
+    | 'device_revoked'
+    | 'ping_timeout';
   closeCode?: number;
   closeReason?: string;
 }
@@ -45,8 +60,9 @@ class ConnectionManager {
   private deviceSockets = new Map<string, Set<WebSocket>>();
   private revokedDevices = new Map<string, number>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
 
-  start(): void {
+  start(pingIntervalMs: number = WS_PING_INTERVAL_MS): void {
     if (this.cleanupInterval) {
       return;
     }
@@ -55,6 +71,7 @@ class ConnectionManager {
       this.cleanupIdleConnections();
       this.forgetLapsedRevocations();
     }, STALE_CONNECTION_CHECK_INTERVAL_MS);
+    this.pingInterval = setInterval(() => this.pingConnections(), pingIntervalMs);
 
     logger.info('Connection manager started');
   }
@@ -64,7 +81,49 @@ class ConnectionManager {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
     }
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
     logger.info('Connection manager stopped');
+  }
+
+  /**
+   * A socket whose peer vanished without a FIN never closes on its own, and it
+   * holds its role in the pairing until it does. Each tick pings every socket;
+   * one that has left the last pings unanswered is terminated, which fires its
+   * close handler and releases the role.
+   */
+  pingConnections(): number {
+    let terminated = 0;
+    for (const [socket, info] of this.connections.entries()) {
+      if (info.unansweredPings >= WS_MISSED_PONGS_BEFORE_TERMINATE) {
+        logger.debug(
+          { ip: info.ip, correlationId: info.correlationId, unanswered: info.unansweredPings },
+          'Terminating a connection that stopped answering pings',
+        );
+        this.removeConnection(socket, {
+          trigger: 'ping_timeout',
+          closeCode: 1006,
+          closeReason: 'ping_timeout',
+        });
+        try {
+          socket.terminate();
+        } catch {
+          // A socket that cannot be terminated is already gone; its bookkeeping is released.
+        }
+        terminated++;
+        continue;
+      }
+      info.unansweredPings += 1;
+      try {
+        socket.ping();
+      } catch {
+        // A ping that cannot be written counts as unanswered; the next tick terminates it.
+      }
+    }
+    if (terminated > 0) logger.info({ terminated }, 'Terminated unresponsive connections');
+    return terminated;
   }
 
   canConnect(ip: string): boolean {
@@ -80,6 +139,7 @@ class ConnectionManager {
       connectedAt: now,
       lastActivity: now,
       correlationId,
+      unansweredPings: 0,
     };
 
     this.connections.set(socket, info);
@@ -271,6 +331,7 @@ class ConnectionManager {
     const info = this.connections.get(socket);
     if (info) {
       info.lastActivity = Date.now();
+      info.unansweredPings = 0;
     }
   }
 

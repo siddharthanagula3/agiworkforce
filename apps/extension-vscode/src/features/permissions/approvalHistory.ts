@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
+import { readAccountRefusal } from '../../utils/accountRefusal';
 
 export const SHOW_APPROVAL_HISTORY_COMMAND = 'agi-workforce.showApprovalHistory';
 
@@ -43,7 +44,10 @@ export async function showApprovalHistory(secrets: vscode.SecretStorage): Promis
     const response = await fetch(`${origin}${APPROVAL_HISTORY_PATH}`, {
       headers: { Authorization: `Bearer ${token}`, ...platformRequestHeaders() },
     });
-    if (!response.ok) throw new Error(`${PRODUCT_BRAND} answered HTTP ${response.status}`);
+    if (!response.ok) {
+      const refusal = await readAccountRefusal(response);
+      throw new Error(refusal?.message ?? `${PRODUCT_BRAND} answered HTTP ${response.status}`);
+    }
     history = ApprovalHistorySchema.parse(await response.json());
   } catch (error) {
     void vscode.window.showErrorMessage(

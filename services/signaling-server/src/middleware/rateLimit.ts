@@ -6,6 +6,8 @@ import {
   WS_BLACKLIST_THRESHOLD_DEFAULT,
   WS_CONNECTION_LIMIT_DEFAULT,
   WS_MESSAGE_LIMIT_DEFAULT,
+  WS_PARTICIPANT_MESSAGE_BURST_DEFAULT,
+  WS_PARTICIPANT_MESSAGES_PER_SECOND_DEFAULT,
   WS_RATE_LIMIT_WINDOW_MS_DEFAULT,
 } from '../constants.js';
 import { logger } from '../logger.js';
@@ -32,7 +34,22 @@ export const WS_BLACKLIST_THRESHOLD = envPositiveInteger(
   WS_BLACKLIST_THRESHOLD_DEFAULT,
 );
 
+export const WS_PARTICIPANT_MESSAGES_PER_SECOND = envPositiveInteger(
+  'WS_PARTICIPANT_MESSAGES_PER_SECOND',
+  WS_PARTICIPANT_MESSAGES_PER_SECOND_DEFAULT,
+);
+
+export const WS_PARTICIPANT_MESSAGE_BURST = envPositiveInteger(
+  'WS_PARTICIPANT_MESSAGE_BURST',
+  WS_PARTICIPANT_MESSAGE_BURST_DEFAULT,
+);
+
 const CLEANUP_INTERVAL_MS = 60_000;
+
+interface TokenBucket {
+  tokens: number;
+  refilledAt: number;
+}
 
 interface RateLimitEntry {
   count: number;
@@ -53,6 +70,9 @@ export interface RateLimitResult {
   reason?: string;
 }
 
+export type ParticipantCharge =
+  { kind: 'within' } | { kind: 'throttle'; resumeAfterMs: number } | { kind: 'flooding' };
+
 export class WebSocketRateLimiter {
   private connectionLimits = new Map<string, RateLimitEntry>();
 
@@ -60,13 +80,15 @@ export class WebSocketRateLimiter {
 
   private blacklist = new Map<string, BlacklistEntry>();
 
+  private participantBuckets = new Map<string, TokenBucket>();
+
   private cleanupHandle: ReturnType<typeof setInterval>;
 
   constructor() {
     this.cleanupHandle = setInterval(() => this.cleanup(), CLEANUP_INTERVAL_MS);
   }
 
-  getClientIp(req: IncomingMessage): string {
+  getClientIp(req: IncomingMessage): string | null {
     return resolveClientIp(req);
   }
 
@@ -123,6 +145,32 @@ export class WebSocketRateLimiter {
     }
 
     return this.checkLimit(ip, this.messageLimits, WS_MESSAGE_LIMIT, 'message_flood');
+  }
+
+  chargeParticipantMessage(participant: string, now: number = Date.now()): ParticipantCharge {
+    const bucket = this.participantBuckets.get(participant) ?? {
+      tokens: WS_PARTICIPANT_MESSAGE_BURST,
+      refilledAt: now,
+    };
+    const elapsedMs = Math.max(0, now - bucket.refilledAt);
+    bucket.tokens = Math.min(
+      WS_PARTICIPANT_MESSAGE_BURST,
+      bucket.tokens + (elapsedMs * WS_PARTICIPANT_MESSAGES_PER_SECOND) / 1000,
+    );
+    bucket.refilledAt = now;
+    bucket.tokens -= 1;
+    this.participantBuckets.set(participant, bucket);
+
+    if (bucket.tokens >= 0) return { kind: 'within' };
+    if (bucket.tokens < -WS_PARTICIPANT_MESSAGE_BURST) return { kind: 'flooding' };
+    return {
+      kind: 'throttle',
+      resumeAfterMs: Math.ceil((-bucket.tokens * 1000) / WS_PARTICIPANT_MESSAGES_PER_SECOND),
+    };
+  }
+
+  forgetParticipant(participant: string): void {
+    this.participantBuckets.delete(participant);
   }
 
   private checkLimit(
@@ -202,11 +250,18 @@ export class WebSocketRateLimiter {
         this.blacklist.delete(ip);
       }
     }
+
+    for (const [participant, bucket] of this.participantBuckets.entries()) {
+      if (bucket.refilledAt < cutoff) {
+        this.participantBuckets.delete(participant);
+      }
+    }
   }
 
   getStats(): {
     activeConnections: number;
     activeMessages: number;
+    activeParticipants: number;
     blacklistedIps: number;
     topOffenders: Array<{ ip: string; violations: number }>;
   } {
@@ -232,6 +287,7 @@ export class WebSocketRateLimiter {
     return {
       activeConnections: this.connectionLimits.size,
       activeMessages: this.messageLimits.size,
+      activeParticipants: this.participantBuckets.size,
       blacklistedIps: this.blacklist.size,
       topOffenders: topOffenders.slice(0, 10),
     };

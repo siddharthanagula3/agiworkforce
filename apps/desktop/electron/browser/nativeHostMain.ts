@@ -43,6 +43,7 @@ function bridgeUrl(): string {
 async function relay(
   token: string,
   extensionId: string | null,
+  pairToken: string | null,
   message: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (!token) {
@@ -58,7 +59,7 @@ async function relay(
         'Content-Type': 'application/json',
         [NATIVE_HOST_TOKEN_HEADER]: token,
       },
-      body: JSON.stringify({ extensionId, message }),
+      body: JSON.stringify({ extensionId, pairToken, message }),
       signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
     });
     if (!response.ok) {
@@ -75,6 +76,15 @@ async function relay(
   } catch {
     return { success: false, error: `${PRODUCT_NAMES.desktop} is not running.` };
   }
+}
+
+function pairTokenFromConnect(message: Record<string, unknown>): string | null {
+  const supplied = message['pair_token'];
+  return typeof supplied === 'string' && supplied.length > 0 ? supplied : null;
+}
+
+function withoutPairToken(message: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(message).filter(([key]) => key !== 'pair_token'));
 }
 
 function extensionOriginFromArgv(argv: readonly string[]): string | undefined {
@@ -95,6 +105,7 @@ function runNativeHost(): void {
   const session = new NativeSession(extensionOriginFromArgv(process.argv));
   const token = readToken();
   const reader = createNativeMessageReader();
+  let pairToken: string | null = null;
 
   const write = (payload: Record<string, unknown>): void => {
     process.stdout.write(encodeNativeMessage(payload));
@@ -117,7 +128,13 @@ function runNativeHost(): void {
     }
 
     const isConnect = envelope.message['type'] === 'connect';
-    const body = await relay(token, session.extensionId, envelope.message);
+    if (isConnect) pairToken = pairTokenFromConnect(envelope.message);
+    const body = await relay(
+      token,
+      session.extensionId,
+      pairToken,
+      isConnect ? withoutPairToken(envelope.message) : envelope.message,
+    );
     const signed = session.signResponse(envelope.id, body, Date.now());
     write(isConnect ? { ...signed, session_secret: session.secretHex } : signed);
   };

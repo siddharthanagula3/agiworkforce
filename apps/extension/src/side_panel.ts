@@ -68,7 +68,11 @@ import {
   readPageDocument,
   parseFormObservationReference,
 } from './features/browser-tools/documentBridge';
-import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
+import type {
+  AdoptChatTurnResponse,
+  BrowserContextTabReference,
+  SaveConversationNowResponse,
+} from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
 import { pageChipLabel } from './utils';
@@ -169,7 +173,10 @@ import {
 } from './features/cloud-bridge/conversationHistoryPull';
 
 import { createChromeShareLink } from './features/cloud-bridge/shareClient';
-import { createHistoryShareLink } from './features/side-panel/historyShare';
+import {
+  createHistoryShareLink,
+  historyShareAvailability,
+} from './features/side-panel/historyShare';
 import {
   assignConversationOwner,
   claimConversationOwner,
@@ -432,6 +439,9 @@ import {
   getManagedModelAccess,
   AccountUnavailableError,
   clearAuthToken,
+  ManagedAccessAuthRequiredError,
+  ManagedAccessRefusedError,
+  ManagedAccessUnavailableError,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
@@ -615,6 +625,15 @@ function conversationPersistencePresentation(
       state: 'local',
       label: 'Sign in to sync',
       detail: 'This chat is saved on this device until you sign in again.',
+      cloudIcon: false,
+    };
+  }
+  if (sync?.blockedReason === 'policy') {
+    return {
+      state: 'local',
+      label: 'Not syncing',
+      detail:
+        sync.lastError ?? 'This chat is saved on this device while your account refuses sync.',
       cloudIcon: false,
     };
   }
@@ -1337,6 +1356,8 @@ function activityRequiresRender(
     next.entries.some((entry, index) => entry !== previous.entries[index])
   );
 }
+
+const SHARE_SAVE_WAIT_MAX_MS = 24 * 60 * 60_000;
 
 function requestCloudConversationSync(conversationId = _ctx.conversationId): void {
   const owner = _ctx.managedCloudOwner;
@@ -4446,6 +4467,7 @@ function injectStyles(): void {
     .sp-history-menu-item:hover,
     .sp-history-menu-item:focus-visible { background: var(--agi-ext-hover); }
     .sp-history-menu-item.is-danger { color: var(--agi-ext-danger-text); }
+    .sp-history-menu-item[aria-disabled='true'] { cursor: not-allowed; color: var(--agi-ext-text-muted); }
     .sp-history-menu-item.has-external-mark {
       display: flex;
       align-items: center;
@@ -6908,30 +6930,30 @@ function finishComposerBrowserTask(
   });
 }
 
+async function confirmComposerBrowserRun(run: ComposerBrowserRun): Promise<void> {
+  let state: ComputerUseCommandResponse | undefined;
+  try {
+    state = await chrome.runtime.sendMessage({ type: 'GET_COMPUTER_USE_STATE' });
+  } catch {
+    noteComposerBrowserActivity(run);
+    return;
+  }
+  if (composerBrowserRun !== run) return;
+  if (state?.running === false || (state?.running === true && state.runId !== run.runId)) {
+    finishComposerBrowserTask(
+      run,
+      run.finalMessage ?? 'The background service is no longer tracking this browser task.',
+      run.finalMessage === null,
+    );
+    return;
+  }
+  noteComposerBrowserActivity(run);
+}
+
 function noteComposerBrowserActivity(run: ComposerBrowserRun): void {
   if (composerBrowserRun !== run) return;
   if (run.activityTimer) clearTimeout(run.activityTimer);
-  run.activityTimer = setTimeout(() => {
-    void (async () => {
-      let state: ComputerUseCommandResponse | undefined;
-      try {
-        state = await chrome.runtime.sendMessage({ type: 'GET_COMPUTER_USE_STATE' });
-      } catch {
-        noteComposerBrowserActivity(run);
-        return;
-      }
-      if (composerBrowserRun !== run) return;
-      if (state?.running === false || (state?.running === true && state.runId !== run.runId)) {
-        finishComposerBrowserTask(
-          run,
-          run.finalMessage ?? 'The background service is no longer tracking this browser task.',
-          run.finalMessage === null,
-        );
-        return;
-      }
-      noteComposerBrowserActivity(run);
-    })();
-  }, 90_000);
+  run.activityTimer = setTimeout(() => void confirmComposerBrowserRun(run), 90_000);
 }
 
 function cancelComposerBrowserTask(reason: 'user_stopped' | 'user_cleared' = 'user_stopped'): void {
@@ -7091,8 +7113,19 @@ function startComposerBrowserTask(
   return outcome;
 }
 
-function respondToBrowserApproval(response: ComputerUseApprovalResponseMessage): void {
-  void chrome.runtime.sendMessage(response).catch(() => undefined);
+function respondToBrowserApproval(
+  run: ComposerBrowserRun,
+  response: ComputerUseApprovalResponseMessage,
+): void {
+  void chrome.runtime
+    .sendMessage(response)
+    .then((reply: ComputerUseCommandResponse | undefined) => {
+      if (reply?.success === true || composerBrowserRun !== run) return;
+      if (response.allowed)
+        run.controls.setError(reply?.error ?? 'The approval could not be delivered.');
+      void confirmComposerBrowserRun(run);
+    })
+    .catch(() => undefined);
 }
 
 function showInlineBrowserApproval(
@@ -7112,7 +7145,7 @@ function showInlineBrowserApproval(
       : undefined;
   if (!requestId || runGeneration === undefined || tabId === undefined) return;
   const deny = (): void =>
-    respondToBrowserApproval({
+    respondToBrowserApproval(run, {
       type: 'AGI_CU_APPROVE_RESPONSE',
       requestId,
       runId: run.runId,
@@ -7184,7 +7217,7 @@ function showInlineBrowserApproval(
     },
     resolve: (decision, upload) => {
       const allowed = decision !== 'skip' && composerBrowserRun === run;
-      respondToBrowserApproval({
+      respondToBrowserApproval(run, {
         type: 'AGI_CU_APPROVE_RESPONSE',
         requestId,
         runId: run.runId,
@@ -9390,6 +9423,7 @@ function handleStreamError(
         'account_suspended',
         'terms_required',
         'plan_required',
+        'policy_blocked',
         'quota_exceeded',
         'cancelled',
         'invalid_request',
@@ -11944,6 +11978,13 @@ function buildUI(): void {
         if (shared.status === 'retired') return;
         if (shared.status === 'signed-out') throw new Error(t('spHistoryShareSignIn'));
         if (shared.status === 'not-loaded') throw new Error(t('spHistoryShareNotLoaded'));
+        if (shared.status === 'local-only') {
+          throw new Error(shared.message ?? t('spHistoryShareLocalOnly'));
+        }
+        if (shared.status === 'out-of-sync') {
+          offerShareRecovery(shared.message, shared.unsavedChanges);
+          return;
+        }
         const { link } = shared;
         await navigator.clipboard.writeText(link.url);
         confirmRow.remove();
@@ -11963,6 +12004,103 @@ function buildUI(): void {
           createBtn.disabled = false;
         });
     });
+    const tellShareRow = (message: string): void => {
+      question.textContent = message;
+      showHistoryStatus(message);
+    };
+    const saveBeforeSharing = async (recovery: HTMLButtonElement): Promise<void> => {
+      const owner = _ctx.managedCloudOwner;
+      if (!owner || !sameManagedCloudOwner(entry.owner, owner)) {
+        confirmRow.remove();
+        return;
+      }
+      if (entry.id === _ctx.conversationId && _ctx.isStreaming) {
+        tellShareRow(t('spHistoryShareWaitForReply'));
+        return;
+      }
+      const rowIsLive = (): boolean =>
+        confirmRow.isConnected && sameManagedCloudOwner(_ctx.managedCloudOwner, owner);
+      recovery.disabled = true;
+      createBtn.disabled = true;
+      tellShareRow(t('spHistoryShareSaving'));
+      let outcome: SaveConversationNowResponse | undefined;
+      try {
+        outcome = (await chrome.runtime.sendMessage({
+          type: 'SAVE_CONVERSATION_NOW',
+          owner,
+          conversationId: entry.id,
+        })) as SaveConversationNowResponse | undefined;
+      } catch {
+        outcome = undefined;
+      }
+      if (!rowIsLive()) {
+        confirmRow.remove();
+        return;
+      }
+      createBtn.disabled = false;
+      if (outcome?.success === true && outcome.status === 'saved') {
+        recovery.remove();
+        tellShareRow(t('spHistoryShareSaved'));
+        createBtn.focus();
+        return;
+      }
+      if (outcome?.status === 'refused') {
+        recovery.remove();
+        tellShareRow(outcome.reason ?? t('spHistoryShareSaveRefused'));
+        cancelBtn.focus();
+        return;
+      }
+      const waitMs = outcome?.retryAt !== undefined ? outcome.retryAt - Date.now() : 0;
+      if (outcome?.status === 'not-saved' && waitMs > 0) {
+        const at = new Date(outcome.retryAt!).toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+        tellShareRow(
+          [outcome.reason, t('spHistoryShareSaveAgainAt', [at])].filter(Boolean).join(' '),
+        );
+        setTimeout(
+          () => {
+            if (recovery.isConnected) recovery.disabled = false;
+          },
+          Math.min(waitMs, SHARE_SAVE_WAIT_MAX_MS),
+        );
+        cancelBtn.focus();
+        return;
+      }
+      recovery.disabled = false;
+      tellShareRow(
+        outcome?.status === 'streaming'
+          ? t('spHistoryShareWaitForReply')
+          : outcome?.status === 'mirroring-off'
+            ? t('spHistoryShareMirroringOff')
+            : (outcome?.reason ?? t('spHistoryShareSaveFailed')),
+      );
+      recovery.focus();
+    };
+    const offerShareRecovery = (message: string, unsavedChanges: boolean): void => {
+      tellShareRow(message);
+      actions.querySelector('.sp-drawer-history-share-recovery')?.remove();
+      const cloudConversationId = entry.cloudSync?.conversationId;
+      const recovery = el(
+        'button',
+        { type: 'button', class: 'sp-drawer-history-edit-btn sp-drawer-history-share-recovery' },
+        unsavedChanges || !cloudConversationId
+          ? t('spHistoryShareSaveNow')
+          : t('spHistoryOpenInWeb'),
+      ) as HTMLButtonElement;
+      recovery.addEventListener('click', () => {
+        if (recovery.disabled) return;
+        if (unsavedChanges || !cloudConversationId) {
+          void saveBeforeSharing(recovery);
+          return;
+        }
+        void chrome.tabs.create({
+          url: agiWebUrl(`/chat/${encodeURIComponent(cloudConversationId)}`),
+        });
+      });
+      actions.insertBefore(recovery, cancelBtn);
+    };
     confirmRow.appendChild(question);
     confirmRow.appendChild(buildHelpArticleLink('sharing-conversations', t('spHelpLinkSharing')));
     const actions = el('div', { class: 'sp-drawer-history-edit' });
@@ -12063,18 +12201,28 @@ function buildUI(): void {
       ...(forTitle ? { id: 'sp-title-menu' } : {}),
     });
     const handle = wirePopupMenu(moreBtn, menu);
-    const addItem = (label: string, run: () => void, danger = false): void => {
+    const addItem = (
+      label: string,
+      run: () => void,
+      danger = false,
+      unavailableReason?: string,
+    ): void => {
       const menuItem = el(
         'button',
         {
           type: 'button',
           role: 'menuitem',
           class: danger ? 'sp-history-menu-item is-danger' : 'sp-history-menu-item',
+          ...(unavailableReason ? { 'aria-disabled': 'true', title: unavailableReason } : {}),
         },
         label,
       );
       menuItem.addEventListener('click', () => {
         handle.close();
+        if (unavailableReason) {
+          showHistoryStatus(unavailableReason);
+          return;
+        }
         run();
       });
       menu.appendChild(menuItem);
@@ -12121,7 +12269,12 @@ function buildUI(): void {
       wrapper.appendChild(menu);
       return wrapper;
     }
-    addItem(t('spHistoryShare'), () => confirmHistoryShare(entry, item, moreBtn));
+    addItem(
+      t('spHistoryShare'),
+      () => confirmHistoryShare(entry, item, moreBtn),
+      false,
+      historyShareAvailability(entry) === 'local-only' ? t('spHistoryShareLocalOnly') : undefined,
+    );
     addItem(t('spHistoryRename'), () => startHistoryRename(entry, item, openButton));
     if (!entry.archived) {
       addPin();
@@ -12512,6 +12665,24 @@ function buildUI(): void {
   };
 
   let usageResetTimer: ReturnType<typeof setTimeout> | null = null;
+  let accountRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearAccountRetryTimer(): void {
+    if (accountRetryTimer !== null) clearTimeout(accountRetryTimer);
+    accountRetryTimer = null;
+  }
+
+  function scheduleAccountRetry(retryAfterSeconds: number | undefined, generation: number): void {
+    clearAccountRetryTimer();
+    if (retryAfterSeconds === undefined) return;
+    accountRetryTimer = setTimeout(
+      () => {
+        accountRetryTimer = null;
+        if (generation === cloudAccountRefreshGeneration) void refreshCloudAccountUI();
+      },
+      Math.max(1_000, Math.min(retryAfterSeconds * 1_000, 60_000)),
+    );
+  }
 
   function clearUsageResetTimer(): void {
     if (usageResetTimer !== null) clearTimeout(usageResetTimer);
@@ -12585,6 +12756,7 @@ function buildUI(): void {
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
     clearUsageResetTimer();
+    clearAccountRetryTimer();
     let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
     try {
       authContext = await withTimeout(getManagedCloudAuthContext(forceAuthRefresh), 8_000);
@@ -12631,14 +12803,18 @@ function buildUI(): void {
     const accountSummaryPromise = fetchAccountSummary(token).catch(() => null);
 
     let access: ManagedModelAccess;
+    let sessionEnded = false;
     try {
       try {
         access = await getManagedModelAccess(token);
       } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes('Authentication')) throw error;
+        if (!(error instanceof ManagedAccessAuthRequiredError)) throw error;
         const renewed = await getManagedCloudAuthContext(true);
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
-        if (!renewed || !sameManagedCloudOwner(authContext?.owner, renewed.owner)) throw error;
+        if (!renewed || !sameManagedCloudOwner(authContext?.owner, renewed.owner)) {
+          sessionEnded = true;
+          throw error;
+        }
         access = await getManagedModelAccess(renewed.token);
       }
     } catch (error) {
@@ -12664,7 +12840,20 @@ function buildUI(): void {
         return;
       }
 
-      if (error instanceof Error && error.message.includes('Authentication')) {
+      if (error instanceof ManagedAccessRefusedError) {
+        setManagedCloudChatState(
+          'unavailable',
+          error.kind === 'plan'
+            ? { message: error.message, action: 'upgrade', actionLabel: t('spGateViewPlans') }
+            : { message: error.message, action: 'retry', actionLabel: t('spGateRetry') },
+        );
+        return;
+      }
+
+      // A rejected request alone is not a sign-out: the server can refuse a
+      // live session while it is degraded. Only the auth layer failing to
+      // renew the same session ends it here.
+      if (error instanceof ManagedAccessAuthRequiredError && sessionEnded) {
         await transitionManagedCloudOwner(null);
         await clearAuthToken();
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
@@ -12681,6 +12870,9 @@ function buildUI(): void {
         action: 'retry',
         actionLabel: t('spGateRetry'),
       });
+      if (error instanceof ManagedAccessUnavailableError) {
+        scheduleAccountRetry(error.retryAfterSeconds, refreshGeneration);
+      }
       return;
     }
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
@@ -13078,7 +13270,8 @@ function buildUI(): void {
         status === 'running' &&
         typeof runId === 'string' &&
         runGeneration !== undefined &&
-        !isComposerBrowserRunId(runId)
+        !isComposerBrowserRunId(runId) &&
+        cuPanel.acceptsRunWindow(m['windowId'])
       ) {
         cuPanel.setRunState(true, runId, runGeneration);
         cuPanel.setPaused(false);
@@ -13180,13 +13373,24 @@ function buildUI(): void {
             forTask: decision === 'allow-for-task',
             ...(allowed && uploadBinding && upload ? { uploadBinding, upload } : {}),
           };
-          void chrome.runtime.sendMessage(response).catch(() => {
-            if (allowed && sameManagedCloudOwner(owner, _ctx.managedCloudOwner))
-              cuPanel.showHandoffBanner(
-                'The upload approval could not be delivered. No website upload was confirmed.',
-                'error',
-              );
-          });
+          void chrome.runtime
+            .sendMessage(response)
+            .then((reply: ComputerUseCommandResponse | undefined) => {
+              if (reply?.success === true || !cuPanel.ownsRun(runId)) return;
+              if (allowed)
+                cuPanel.showHandoffBanner(
+                  reply?.error ?? 'The approval could not be delivered.',
+                  'browser_error',
+                );
+              cuPanel.confirmRunState();
+            })
+            .catch(() => {
+              if (allowed && sameManagedCloudOwner(owner, _ctx.managedCloudOwner))
+                cuPanel.showHandoffBanner(
+                  'The upload approval could not be delivered. No website upload was confirmed.',
+                  'error',
+                );
+            });
         },
         uploadBinding
           ? {
@@ -15232,16 +15436,50 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 
 injectStyles();
 
+const PRESENCE_REGISTER_MIN_INTERVAL_MS = 1_000;
+
 function announceSidePanelPresence(): void {
-  try {
-    const port = chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
-    port.onDisconnect.addListener(() => setTimeout(announceSidePanelPresence, 1_000));
-    void assistantHostWindowId().then((windowId) => {
-      if (windowId !== undefined) port.postMessage({ windowId });
+  const presence = assistantHostWindowId().catch(() => undefined);
+  let trackedPort: chrome.runtime.Port | null = null;
+  let lastRegisterAt = Number.NEGATIVE_INFINITY;
+  const release = (port: chrome.runtime.Port): void => {
+    if (trackedPort === port) trackedPort = null;
+  };
+  const register = (): void => {
+    const now = Date.now();
+    if (trackedPort || now - lastRegisterAt < PRESENCE_REGISTER_MIN_INTERVAL_MS) return;
+    lastRegisterAt = now;
+    let port: chrome.runtime.Port;
+    try {
+      port = chrome.runtime.connect({ name: SIDE_PANEL_PORT_NAME });
+    } catch {
+      return;
+    }
+    trackedPort = port;
+    port.onDisconnect.addListener(() => release(port));
+    void presence.then((windowId) => {
+      if (windowId === undefined || trackedPort !== port) return;
+      try {
+        port.postMessage({ windowId });
+      } catch {
+        release(port);
+      }
     });
-  } catch {
-    setTimeout(announceSidePanelPresence, 5_000);
-  }
+  };
+  register();
+  chrome.runtime.onMessage.addListener(() => {
+    register();
+  });
+  let hostWindowId: number | undefined;
+  void presence.then((windowId) => {
+    hostWindowId = windowId;
+  });
+  window.addEventListener('pagehide', () => {
+    if (trackedPort || hostWindowId === undefined) return;
+    void chrome.runtime
+      .sendMessage({ type: 'SIDE_PANEL_CLOSED', windowId: hostWindowId })
+      .catch(() => undefined);
+  });
 }
 announceSidePanelPresence();
 followThemePreference();

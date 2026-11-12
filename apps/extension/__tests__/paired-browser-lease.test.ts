@@ -380,6 +380,11 @@ describe('paired desktop browser commands', () => {
     harness.localStore['agi_site_allowlist'] = [SITE];
     harness.localStore['agi_cu_browser_control_consent'] = [SITE];
     harness.localStore['connectedToDesktop'] = true;
+    harness.localStore['agi_paired_desktop'] = {
+      fingerprint: 'ab12',
+      accountId: null,
+      token: 'c'.repeat(64),
+    };
     resetTabs();
     await import('../src/background');
     await waitForPoll();

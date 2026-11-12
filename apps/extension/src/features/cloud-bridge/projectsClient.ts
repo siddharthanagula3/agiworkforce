@@ -6,20 +6,37 @@ import {
   type ManagedCloudProjectsClient,
 } from '@agiworkforce/cloud-contracts';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
+import {
+  captureCloudRefusals,
+  classifyCloudRefusal,
+  describeCloudRefusal,
+  type CloudRefusal,
+} from './cloudRefusal';
 import { platformRequestHeaders } from '../../platformHeaders';
+
+type ProjectsFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface ChromeProjectsDependencies {
   getAuthToken: typeof getAuthToken;
-  createProjectsClient: (token: string) => ManagedCloudProjectsClient;
+  createProjectsClient: (token: string, fetchImpl?: ProjectsFetch) => ManagedCloudProjectsClient;
+  fetchImpl?: ProjectsFetch;
 }
 
 export type ChromeProjectsErrorCode =
-  'auth_required' | 'cancelled' | 'invalid_request' | 'server_error';
+  | 'auth_required'
+  | 'plan_required'
+  | 'policy_blocked'
+  | 'unavailable'
+  | 'refused'
+  | 'cancelled'
+  | 'invalid_request'
+  | 'server_error';
 
 export interface ChromeProjectsError {
   status: 'error';
   code: ChromeProjectsErrorCode;
   message: string;
+  retryAfterSeconds?: number;
 }
 
 export type ChromeProjectListResult =
@@ -33,10 +50,14 @@ function surfaceHeaders(token: string): Record<string, string> {
   };
 }
 
-function createDefaultProjectsClient(token: string): ManagedCloudProjectsClient {
+function createDefaultProjectsClient(
+  token: string,
+  fetchImpl?: ProjectsFetch,
+): ManagedCloudProjectsClient {
   return createManagedCloudProjectsClient({
     baseUrl: FREE_TRIAL_GATEWAY,
     getHeaders: () => surfaceHeaders(token),
+    ...(fetchImpl ? { fetchImpl } : {}),
   });
 }
 
@@ -51,18 +72,61 @@ function signedOut(): ChromeProjectsError {
   return { status: 'error', code: 'auth_required', message: SIGNED_OUT_MESSAGE };
 }
 
-export function describeProjectsFailure(error: unknown, signal?: AbortSignal): ChromeProjectsError {
+const PROJECTS_REFUSAL_COPY = {
+  refused: 'Projects are not available for this account.',
+  unavailable: 'Projects are temporarily unavailable.',
+  limitUnit: 'requests',
+};
+
+function projectsHttpMessage(error: ManagedCloudProjectsHttpError): string {
+  return error.message.replace(/^HTTP \d{3}: /u, '').trim();
+}
+
+export function describeProjectsFailure(
+  error: unknown,
+  signal?: AbortSignal,
+  captured?: CloudRefusal | null,
+): ChromeProjectsError {
   if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
     return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
   }
-  const status = error instanceof ManagedCloudProjectsHttpError ? error.status : null;
-  if (status === 401 || status === 403) return signedOut();
-  if (status === 400 || status === 422) {
-    return {
-      status: 'error',
-      code: 'invalid_request',
-      message: error instanceof Error ? error.message : 'That project could not be saved.',
-    };
+  const refusal =
+    error instanceof ManagedCloudProjectsHttpError
+      ? captured?.status === error.status
+        ? captured
+        : classifyCloudRefusal(error.status, {})
+      : null;
+  if (refusal) {
+    const message = describeCloudRefusal(refusal, PROJECTS_REFUSAL_COPY);
+    switch (refusal.kind) {
+      case 'auth':
+        return signedOut();
+      case 'plan':
+        return { status: 'error', code: 'plan_required', message };
+      case 'policy':
+        return { status: 'error', code: 'policy_blocked', message };
+      case 'unavailable':
+      case 'rate_limited':
+        return {
+          status: 'error',
+          code: 'unavailable',
+          message,
+          ...(refusal.retryAfterSeconds !== undefined
+            ? { retryAfterSeconds: refusal.retryAfterSeconds }
+            : {}),
+        };
+      case 'account':
+      case 'refused':
+        return { status: 'error', code: 'refused', message };
+      case 'invalid':
+        return {
+          status: 'error',
+          code: 'invalid_request',
+          message: refusal.message ?? projectsHttpMessage(error as ManagedCloudProjectsHttpError),
+        };
+      default:
+        break;
+    }
   }
   return {
     status: 'error',
@@ -77,12 +141,13 @@ async function withProjectsClient<T>(
   run: (client: ManagedCloudProjectsClient) => Promise<T>,
 ): Promise<{ status: 'success'; value: T } | ChromeProjectsError> {
   const deps = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const capture = captureCloudRefusals(deps.fetchImpl);
   try {
     const token = await deps.getAuthToken();
     if (!token) return signedOut();
-    return { status: 'success', value: await run(deps.createProjectsClient(token)) };
+    return { status: 'success', value: await run(deps.createProjectsClient(token, capture.fetch)) };
   } catch (error) {
-    return describeProjectsFailure(error, signal);
+    return describeProjectsFailure(error, signal, capture.last);
   }
 }
 

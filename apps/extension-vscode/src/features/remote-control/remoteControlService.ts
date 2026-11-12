@@ -52,7 +52,15 @@ const pairingResponseSchema = z.object({
   pairTokens: z.object({ desktop: z.string().min(1) }),
 });
 
-const pairingErrorSchema = z.object({ error: z.string().min(1) });
+const pairingErrorSchema = z.object({
+  error: z.union([z.string().min(1), z.object({ message: z.string().min(1) })]),
+});
+
+export function pairingRefusalMessage(body: unknown): string | undefined {
+  const refusal = pairingErrorSchema.safeParse(body);
+  if (!refusal.success) return undefined;
+  return typeof refusal.data.error === 'string' ? refusal.data.error : refusal.data.error.message;
+}
 
 interface RemoteRoot {
   id: string;
@@ -150,10 +158,7 @@ async function requestPairing(token: string): Promise<RemoteControlStartRequest>
   });
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const refusal = pairingErrorSchema.safeParse(body);
-    throw new RemoteControlUnavailable(
-      refusal.success ? refusal.data.error : t('remote.pairFailed'),
-    );
+    throw new RemoteControlUnavailable(pairingRefusalMessage(body) ?? t('remote.pairFailed'));
   }
   const pairing = pairingResponseSchema.safeParse(body);
   if (!pairing.success) throw new RemoteControlUnavailable(t('remote.pairFailed'));

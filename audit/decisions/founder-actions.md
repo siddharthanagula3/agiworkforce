@@ -1162,3 +1162,61 @@ fixed now; each is a product or disclosure call the founder reserves.
    **What remains after founder action** Nothing in engineering unless a call is reversed.
    **Impact** NON-BLOCKING
    **Status** FOUNDER ACTION REQUIRED
+
+## [Remote Control] Deploy the web app, set the relay's standing address, then deploy the relay
+
+**Why founder assistance is required**
+The 2026-11-12 relay fixes make the relay ask the web app whether each live pairing may continue
+(account, sign-in, plan, workspace policy). In production the relay refuses every registration until
+it has that address, so the order matters, and deploys and Fly settings are the owner's.
+**Exact action**
+
+1. Deploy the web app first, so `/api/pair/standing` exists.
+2. Set `SIGNALING_STANDING_URL=https://<canonical web host>/api/pair/standing` on the relay's Fly
+   app, and confirm `SIGNALING_INTERNAL_SECRET` is identical on the relay and the web app.
+3. Unset any `WS_MESSAGE_LIMIT`, `TRUSTED_PROXY_HOPS` or `TRUST_PROXY` value set on Fly, so the
+   reviewed values in `services/signaling-server/fly.toml` apply.
+4. Deploy the relay, then check `/admin/config-backup` shows nothing missing.
+5. Confirm the relay's database and the web app's database are the same one: account erasure now
+   deletes Remote Control pairing rows through the web app.
+6. Confirm nothing else (a CDN or second proxy) sits in front of Fly for the relay's hostname.
+7. Confirm Fly does not set `SIGNALING_PAIRING_MAX_LIFETIME_MS` above seven days. The 2026-11-11
+   privacy text says a pairing record is kept at most seven days plus about an hour.
+8. Publish the 2026-11-11 privacy text with this relay deploy or after it, never before: the
+   seven-day cap and the expiry sweep it describes exist only in the new relay.
+   **Where** Vercel for the web app; the Fly app for the relay; `services/signaling-server/README.md`.
+   **Needed input** None beyond the deploys.
+   **How to verify completion** A phone pairs with `agi rc`, a long reply streams without being
+   cut, and turning Remote Control off for the workspace ends the pairing within about a minute.
+   **What remains after founder action** Nothing in engineering.
+   **Impact** BLOCKING for the relay deploy only: deploying the relay without step 2 stops Remote
+   Control for everyone until it is set.
+   **Status** FOUNDER ACTION REQUIRED
+
+## [Code and CLI sign-in] Decide whether a refresh credential used twice within seconds still revokes the device session
+
+**Why founder assistance is required**
+Two VS Code windows can renew the same device session at the same moment. The server treats the
+second use of a refresh credential as a stolen-credential replay, revokes the whole session family
+and signs the user out everywhere. The 2026-11-12 client fix makes a window re-read the stored
+credential before renewing and adopt a session another window already renewed, which narrows the
+race but cannot close it when both requests are in flight. Closing it changes the replay-detection
+policy and its audit trail, which is a security decision.
+**Exact action** Choose one:
+
+1. Keep today's rule (any second use revokes). Simultaneous renewals stay a rare forced sign-in.
+2. Recommended: for a short window after first use (30 to 60 seconds), when the family is not
+   revoked, answer a new non-revoking refusal and issue nothing. The client then adopts the stored
+   session. A thief inside the window gains no credential.
+3. Return the same successor within the window. That needs the successor stored encrypted for the
+   grace period.
+   **Where** `apps/web/app/api/auth/device/refresh/route.ts`; the error list in
+   `packages/contracts/cloud-contracts/src/device-authorization.ts`; `rotateAccountSession` in
+   `apps/extension-vscode/src/utils/api.ts`.
+   **Needed input** The choice, and the window length for option 2 or 3.
+   **How to verify completion** Two windows renewing together both stay signed in, and a replay
+   after the window still revokes the family.
+   **What remains after founder action** Engineering implements the chosen option on the server and
+   in the two clients.
+   **Impact** NOT BLOCKING for any release.
+   **Status** FOUNDER DECISION REQUIRED

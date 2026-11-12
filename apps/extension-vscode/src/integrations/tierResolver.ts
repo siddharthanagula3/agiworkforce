@@ -9,7 +9,7 @@ import {
   type PlatformCapability,
   type UIPlanTier,
 } from '@agiworkforce/types';
-import { fetchTierInfo, type TierInfo } from '../utils/api';
+import { fetchTierInfo, getAccountAuthState, type TierInfo } from '../utils/api';
 import { onAccountTierMayHaveChanged } from './tierRevalidation';
 
 /**
@@ -170,6 +170,11 @@ export async function clearAccountTierCache(context: vscode.ExtensionContext): P
   await Promise.all(updates);
 }
 
+/**
+ * A failed read keeps the cached tier while the account session is still held:
+ * an outage, a lockdown or a policy refusal says nothing about the plan, and
+ * only a signed-out or expired session means the tier no longer belongs here.
+ */
 export async function refreshAccountTierCache(
   context: vscode.ExtensionContext,
   loadTier: AccountTierLoader = fetchTierInfo,
@@ -182,6 +187,10 @@ export async function refreshAccountTierCache(
   }
   const tier = coerceTier(tierInfo?.tier);
   if (tier === undefined) {
+    if ((await getAccountAuthState(context.secrets)).status === 'signed-in') {
+      await markAccountTierStale(context);
+      return coerceTier(context.globalState.get<string>(CACHED_TIER_KEY));
+    }
     await clearAccountTierCache(context);
     return undefined;
   }

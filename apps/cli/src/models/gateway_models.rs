@@ -19,6 +19,7 @@ use crate::tier_cache::UserTier;
 const FETCH_TIMEOUT: Duration = Duration::from_secs(12);
 const MAX_RESPONSE_BYTES: usize = 1_048_576;
 const MAX_MODELS: usize = 512;
+const INSUFFICIENT_SCOPE_CODE: &str = "insufficient_scope";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GatewayModel {
@@ -82,6 +83,36 @@ fn models_endpoint(raw_base: &str) -> Result<String> {
     })
 }
 
+fn refusal_message(status: u16, body: &serde_json::Value) -> String {
+    if status == 503 {
+        return "managed model discovery is temporarily unavailable (HTTP 503); try again in a few seconds"
+            .to_string();
+    }
+    let error = body.get("error");
+    let code = error
+        .and_then(|error| error.get("code"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    if code.eq_ignore_ascii_case(INSUFFICIENT_SCOPE_CODE) {
+        return "managed model discovery credential lacks the models:read scope (HTTP 403)"
+            .to_string();
+    }
+    error
+        .and_then(|error| error.get("message"))
+        .and_then(serde_json::Value::as_str)
+        .map(|message| {
+            crate::approval_audit::sanitize_field(message)
+                .trim()
+                .to_string()
+        })
+        .filter(|message| !message.is_empty())
+        .unwrap_or_else(|| {
+            format!(
+                "managed model discovery was refused (HTTP {status}); sign in on the web to see why"
+            )
+        })
+}
+
 async fn fetch_from_endpoint(
     client: &reqwest::Client,
     endpoint: &str,
@@ -105,21 +136,10 @@ async fn fetch_from_endpoint(
             "managed model discovery rejected the saved credential (HTTP 401); run `agi login`"
         );
     }
-    if status.as_u16() == 403 {
+    if matches!(status.as_u16(), 403 | 503) {
         let body: serde_json::Value = response.json().await.unwrap_or_default();
-        let error = body.get("error");
-        let code = error
-            .and_then(|error| error.get("code"))
-            .and_then(|code| code.as_str())
-            .unwrap_or("");
-        if matches!(code, "account_unavailable" | "passkey_required") {
-            let message = error
-                .and_then(|error| error.get("message"))
-                .and_then(|message| message.as_str())
-                .unwrap_or("This account cannot be used right now; sign in on the web to see why.");
-            anyhow::bail!("{message}");
-        }
-        anyhow::bail!("managed model discovery credential lacks the models:read scope (HTTP 403)");
+        let refusal = refusal_message(status.as_u16(), &body);
+        anyhow::bail!("{refusal}");
     }
     if !status.is_success() {
         anyhow::bail!("managed model discovery returned HTTP {}", status.as_u16());
@@ -440,6 +460,72 @@ mod tests {
             .expect_err("401 must be surfaced");
         server.abort();
         assert!(error.to_string().contains("run `agi login`"));
+    }
+
+    #[tokio::test]
+    async fn a_locked_down_workspace_is_reported_with_the_server_sentence() {
+        let router = Router::new().route(
+            "/models",
+            get(|| async move {
+                (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({
+                        "error": {
+                            "code": "FORBIDDEN",
+                            "message": "This workspace is locked down while an incident is investigated. Contact support."
+                        },
+                        "requestId": "r1"
+                    })),
+                )
+                    .into_response()
+            }),
+        );
+        let (endpoint, server) = spawn_server(router).await;
+        let error = fetch_from_endpoint(&reqwest::Client::new(), &endpoint, Some("token"))
+            .await
+            .expect_err("403 must be surfaced");
+        server.abort();
+        let text = error.to_string();
+        assert!(text.contains("locked down"), "{text}");
+        assert!(!text.contains("scope"), "{text}");
+    }
+
+    #[test]
+    fn a_refusal_shows_the_server_sentence_whatever_the_code_case() {
+        for body in [
+            serde_json::json!({"error": {"code": "ACCOUNT_UNAVAILABLE", "message": "This account is suspended."}}),
+            serde_json::json!({"error": {"code": "PASSKEY_REQUIRED", "message": "This account is suspended."}}),
+            serde_json::json!({"error": {"type": "organization_policy", "code": "surface_not_allowed", "message": "This account is suspended."}}),
+            serde_json::json!({"error": {"code": "SUBSCRIPTION_REQUIRED", "message": "This account is suspended.", "details": {"code": "schedules_not_in_plan"}}}),
+        ] {
+            assert_eq!(refusal_message(403, &body), "This account is suspended.");
+        }
+    }
+
+    #[test]
+    fn only_a_scope_refusal_names_the_scope() {
+        for code in ["insufficient_scope", "INSUFFICIENT_SCOPE"] {
+            let body = serde_json::json!({"error": {"code": code, "message": "API key does not have the required scope"}});
+            assert!(refusal_message(403, &body).contains("models:read scope"));
+        }
+        let unexplained = refusal_message(403, &serde_json::Value::Null);
+        assert!(!unexplained.contains("scope"), "{unexplained}");
+        assert!(unexplained.contains("HTTP 403"), "{unexplained}");
+    }
+
+    #[test]
+    fn an_unavailable_service_asks_for_a_retry_instead_of_a_scope() {
+        let body = serde_json::json!({"error": {"code": "SERVICE_UNAVAILABLE", "message": "Service temporarily unavailable"}});
+        let text = refusal_message(503, &body);
+        assert!(text.contains("temporarily unavailable"), "{text}");
+        assert!(text.contains("try again"), "{text}");
+    }
+
+    #[test]
+    fn a_refusal_sentence_is_one_line_without_terminal_escapes() {
+        let body =
+            serde_json::json!({"error": {"code": "FORBIDDEN", "message": "Locked\n\u{1b}[2Jdown"}});
+        assert_eq!(refusal_message(403, &body), "Locked down");
     }
 
     #[tokio::test]

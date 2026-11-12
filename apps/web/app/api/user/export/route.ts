@@ -2368,6 +2368,8 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
 ];
 
 export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
+  signaling_sessions:
+    'Remote Control pairing records: the pairing code, the paired device ids and the rotating relay credential. A live credential, not subject content, and the relay deletes each one an hour after it expires.',
   token_credits:
     "The internal credit ledger: allocation, consumption, flagship caps and the microUSD columns behind them. That is this product's cost accounting, not the subject's personal data. What the subject actually did is exported as top_up_purchases and the managed usage summary.",
   managed_usage_requests:

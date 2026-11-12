@@ -75,6 +75,7 @@ export type NativeMessageType =
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_EXTENSION_SETTINGS'
   | 'GET_SIDE_PANEL_OPEN'
+  | 'SIDE_PANEL_CLOSED'
   | 'GET_PAGE_ACCESS'
   | 'PAGE_ACCESS_CHANGED'
   | 'GET_AUTOFILL_PROFILE'
@@ -84,6 +85,7 @@ export type NativeMessageType =
   | 'STOP_RECORDING'
   | 'GET_RECORDED_ACTIONS'
   | 'SET_RECORDING_VALUE_CAPTURE'
+  | 'RECORDING_ACTION'
   | 'FIND_ELEMENTS'
   | 'FILL_FIELDS'
   | 'BUILD_ACCESSIBILITY_TREE'
@@ -111,6 +113,7 @@ export type NativeMessageType =
   | 'GET_QUICK_MODE'
   | 'SET_QUICK_MODE'
   | 'SYNC_CONVERSATION'
+  | 'SAVE_CONVERSATION_NOW'
   | 'ENSURE_CLOUD_CONVERSATION'
   | 'DELETE_CLOUD_CONVERSATION'
   | 'START_DOWNLOAD'
@@ -689,6 +692,11 @@ export interface GetSidePanelOpenMessage extends BaseMessage {
   type: 'GET_SIDE_PANEL_OPEN';
 }
 
+export interface SidePanelClosedMessage extends BaseMessage {
+  type: 'SIDE_PANEL_CLOSED';
+  windowId: number;
+}
+
 export interface GetPageAccessMessage extends BaseMessage {
   type: 'GET_PAGE_ACCESS';
 }
@@ -735,6 +743,11 @@ export interface GetRecordedActionsMessage extends BaseMessage {
 export interface SetRecordingValueCaptureMessage extends BaseMessage {
   type: 'SET_RECORDING_VALUE_CAPTURE';
   enabled: boolean;
+}
+
+export interface RecordingActionMessage extends BaseMessage {
+  type: 'RECORDING_ACTION';
+  action: unknown;
 }
 
 export interface RecordingResponse {
@@ -837,6 +850,7 @@ export interface SavedShortcut {
   prompt?: string;
   startUrl?: string;
   scheduled?: boolean;
+  ownerAccountId?: string | null;
 }
 
 export interface SaveShortcutMessage extends BaseMessage {
@@ -997,6 +1011,20 @@ export interface SyncConversationMessage extends BaseMessage {
   streaming?: boolean;
 }
 
+export interface SaveConversationNowMessage extends BaseMessage {
+  type: 'SAVE_CONVERSATION_NOW';
+  owner: ManagedCloudOwner;
+  conversationId: string;
+}
+
+export interface SaveConversationNowResponse {
+  success: boolean;
+  status?: 'saved' | 'not-saved' | 'refused' | 'mirroring-off' | 'streaming';
+  reason?: string;
+  retryAt?: number;
+  error?: string;
+}
+
 export interface EnsureCloudConversationMessage extends BaseMessage {
   type: 'ENSURE_CLOUD_CONVERSATION';
   owner: ManagedCloudOwner;
@@ -1099,6 +1127,7 @@ export interface CancelComputerUseMessage extends BaseMessage {
   type: 'CANCEL_COMPUTER_USE';
   runId?: string;
   reason?: 'account_changed' | 'panel_closed' | 'user_cleared' | 'user_stopped';
+  windowId?: number;
 }
 
 /**
@@ -1130,6 +1159,7 @@ export interface ComputerUseCommandResponse {
   paused?: boolean;
   pauseReason?: string;
   tabId?: number;
+  windowId?: number;
   error?: string;
 }
 
@@ -1273,6 +1303,7 @@ export type ExtensionMessage =
   | OpenSidePanelMessage
   | OpenExtensionSettingsMessage
   | GetSidePanelOpenMessage
+  | SidePanelClosedMessage
   | GetPageAccessMessage
   | PageAccessChangedMessage
   | GetAutofillProfileMessage
@@ -1283,6 +1314,7 @@ export type ExtensionMessage =
   | StopRecordingMessage
   | GetRecordedActionsMessage
   | SetRecordingValueCaptureMessage
+  | RecordingActionMessage
   | FindElementsMessage
   | FillFieldsMessage
   | BridgeUrlChangedMessage
@@ -1312,6 +1344,7 @@ export type ExtensionMessage =
   | GetQuickModeMessage
   | SetQuickModeMessage
   | SyncConversationMessage
+  | SaveConversationNowMessage
   | EnsureCloudConversationMessage
   | DeleteCloudConversationMessage
   | RunAutofillMessage

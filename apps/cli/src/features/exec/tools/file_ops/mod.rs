@@ -2546,7 +2546,12 @@ mod tests {
             .unwrap();
 
         assert!(edited.success, "{}", edited.output);
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "newer\n");
+        assert_eq!(
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .replace("\r\n", "\n"),
+            "newer\n"
+        );
     }
 
     #[tokio::test]

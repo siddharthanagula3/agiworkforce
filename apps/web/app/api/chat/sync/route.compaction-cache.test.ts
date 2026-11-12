@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildChatSyncGateResponse: vi.fn(async () => null),
+}));
 import { NextRequest } from 'next/server';
 import { StatementScanPostgres } from '@/lib/services/__tests__/statement-scan-postgres';
 

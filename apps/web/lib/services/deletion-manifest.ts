@@ -226,6 +226,7 @@ const OPERATIONAL_RECORD = [
   'scim_groups',
   'scim_provisioned_users',
   'scim_tokens',
+  'signaling_sessions',
   'slack_account_links',
   'slack_installations',
   'slack_link_requests',
@@ -403,8 +404,20 @@ const NON_TABLE_STORES: readonly RetentionEntry[] = [
   },
 ];
 
+const SIGNALING_SESSIONS_STORE = 'signaling_sessions';
+const SIGNALING_EXPIRY_SWEEP_PATH =
+  'services/signaling-server src/expired-pairings.ts expiry sweep of expired pairings';
+/**
+ * The relay is its own deployable, so its ceiling is stated rather than
+ * imported: a pairing ends at most seven days after it was made and the sweep
+ * deletes it about an hour after it expires, which rounds up to eight whole
+ * days. deletion-manifest.test.ts pins this to services/signaling-server.
+ */
+export const SIGNALING_SESSION_MAXIMUM_AGE_DAYS = 8;
+
 function maximumAgeDays(store: string): number | null {
   if (store === 'security_audit_logs') return SECURITY_AUDIT_LOG_RETENTION_DAYS;
+  if (store === SIGNALING_SESSIONS_STORE) return SIGNALING_SESSION_MAXIMUM_AGE_DAYS;
   const purges = FINANCIAL_RETENTION_RULES.filter(
     (rule) => rule.action === 'purge' && rule.table === store,
   );
@@ -430,7 +443,8 @@ function deletionPath(entry: {
   if (entry.erasedWithTenant) paths.push('lib/server/organization-erasure.ts');
   if (entry.cascadesFrom) paths.push(`cascade from ${entry.cascadesFrom}`);
   if (entry.anonymised) paths.push('subject detached at erasure');
-  if (entry.store === 'security_audit_logs') paths.push(SECURITY_LOG_RETENTION_CRON_PATH);
+  if (entry.store === SIGNALING_SESSIONS_STORE) paths.push(SIGNALING_EXPIRY_SWEEP_PATH);
+  else if (entry.store === 'security_audit_logs') paths.push(SECURITY_LOG_RETENTION_CRON_PATH);
   else if (entry.maximumAgeDays !== null) paths.push('lib/billing/financial-record-retention.ts');
   return paths.length > 0 ? paths.join('; ') : null;
 }

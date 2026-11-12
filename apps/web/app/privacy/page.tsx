@@ -443,10 +443,12 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
       <>
         <strong>Examples:</strong> push tokens for the mobile apps. For a desktop download: a hashed
         IP, the user-agent, the referring page and a coarse country in the download record, and
-        separately, your <em>unhashed</em> IP address in our server logs.
+        separately, your <em>unhashed</em> IP address in our server logs. When you pair a device for
+        Remote Control: a pairing record holding the pairing code, your account and the workspace it
+        was made in, the paired device identifiers and a rotating connection credential.
         <br />
-        <strong>Why, and how it is protected:</strong> delivering notifications you asked for, and
-        understanding which builds are being downloaded.{' '}
+        <strong>Why, and how it is protected:</strong> delivering notifications you asked for,
+        connecting the devices you paired, and understanding which builds are being downloaded.{' '}
         <strong>
           Two caveats. The hash in the download record uses a fixed salt, so it is pseudonymous
           rather than anonymous: anyone holding both the hash and a candidate address can confirm a
@@ -784,6 +786,20 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
         cap on every sandbox (matching the resume mapping&rsquo;s own 24-hour expiry) and reclaims
         it at that cap or as soon as the mapping no longer points to it, whichever comes first. A
         sandbox that is merely paused gives its slot up after two hours rather than twenty-four.
+      </>
+    ),
+  },
+  {
+    label: 'Remote Control pairings',
+    value: (
+      <>
+        <strong>Retention:</strong> while the pairing lasts, at most seven days from when it was
+        made, plus about an hour after it expires.
+        <br />
+        <strong>Enforced by:</strong> the signaling server deletes the pairing record when either
+        device ends the pairing; otherwise its sweep deletes it about an hour after the pairing
+        expires. Deleting your account deletes it too. It is left out of your data export because it
+        holds a live credential.
       </>
     ),
   },

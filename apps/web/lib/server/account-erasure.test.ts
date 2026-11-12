@@ -688,6 +688,19 @@ describe('eraseUserAccountData', () => {
     expect(report.complete).toBe(false);
   });
 
+  it('erases the relay pairings that name the account in their metadata', async () => {
+    primeDb({});
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(
+      executedStatements().some((sql) =>
+        sql.includes("delete from public.signaling_sessions where metadata ->> 'userId' = $1"),
+      ),
+    ).toBe(true);
+    expect(report.tables['signaling_sessions']).toEqual({ deleted: true });
+  });
+
   it('erases every listed table, anonymizes shared rows, and removes the profile last', async () => {
     primeDb({
       knowledgeRows: [{ storage_uri: 'knowledge/doc.pdf' }],
@@ -702,9 +715,10 @@ describe('eraseUserAccountData', () => {
     expect(mocks.deleteObject).toHaveBeenCalledWith('av.png');
 
     const statements = executedStatements();
-    for (const { table, column, alsoColumn } of USER_SCOPED_TABLES) {
+    for (const { table, column, alsoColumn, jsonKey } of USER_SCOPED_TABLES) {
+      const target = jsonKey === undefined ? column : `${column} ->> '${jsonKey}'`;
       const subject =
-        alsoColumn === undefined ? `${column} = $1` : `(${column} = $1 or ${alsoColumn} = $1)`;
+        alsoColumn === undefined ? `${target} = $1` : `(${target} = $1 or ${alsoColumn} = $1)`;
       expect(
         statements.some((sql) => sql.includes(`delete from public.${table} where ${subject}`)),
         `${table}.${column} still names an account that no longer exists`,

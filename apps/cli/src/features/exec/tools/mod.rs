@@ -35,6 +35,7 @@ pub(crate) async fn browser_site_refusal(url: &str) -> Option<String> {
 use bash::{execute_command_output, execute_command_stop, execute_run_command};
 pub(crate) use common::format_size;
 pub(crate) use common::generate_simple_diff;
+pub(crate) use common::CHANGE_LINES_NOT_SHOWN;
 pub(crate) use common::COMMAND_TIMEOUT;
 use common::{describe_command, print_tool_status, truncate_output_with_save};
 #[cfg(test)]
@@ -567,6 +568,100 @@ fn saved_permission_commands(tool_name: &str, args: &HashMap<String, String>) ->
     }
 }
 
+pub(crate) enum WorkspacePolicyGate {
+    Unruled,
+    Allowed,
+    Approved,
+    Refused(ToolResult),
+}
+
+pub(crate) async fn workspace_policy_gate(
+    canonical_name: &str,
+    args: &HashMap<String, String>,
+    workspace_root: Option<&std::path::Path>,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<WorkspacePolicyGate> {
+    let Some(workspace_root) = workspace_root else {
+        return Ok(WorkspacePolicyGate::Unruled);
+    };
+    let policy = crate::platform::policy::PolicyEngine::load_layered(workspace_root)?;
+    if !policy.has_rules() {
+        return Ok(WorkspacePolicyGate::Unruled);
+    }
+    let primary_argument = policy_primary_argument(canonical_name, args);
+    let resolution = policy.resolve(canonical_name, &primary_argument);
+    let denied_by = match resolution.layer {
+        Some(crate::platform::policy::PolicyLayer::Managed) => {
+            "your organization's managed policy".to_string()
+        }
+        Some(crate::platform::policy::PolicyLayer::User) => {
+            "the policy rules in your user config".to_string()
+        }
+        _ => format!("{}/.agiworkforce/policy.toml", workspace_root.display()),
+    };
+    let reason = resolution
+        .reason
+        .as_deref()
+        .map(|reason| format!(" {reason}"))
+        .unwrap_or_default();
+    let decision = effective_workspace_policy_decision(
+        resolution,
+        workspace_policy_is_trusted(workspace_root),
+    );
+    match decision {
+        crate::platform::policy::PolicyDecision::Deny => {
+            Ok(WorkspacePolicyGate::Refused(ToolResult {
+                tool_name: canonical_name.to_string(),
+                success: false,
+                output: format!(
+                    "Tool `{canonical_name}` is denied by {denied_by} and was not run.{reason}"
+                ),
+            }))
+        }
+        crate::platform::policy::PolicyDecision::Allow => Ok(WorkspacePolicyGate::Allowed),
+        crate::platform::policy::PolicyDecision::Ask => {
+            let approval_argument = if canonical_name == "command_output" {
+                args.get("id").cloned().unwrap_or_default()
+            } else {
+                primary_argument
+            };
+            let request = ApprovalRequest::new(
+                ApprovalRequestKind::WorkspacePolicy {
+                    tool_name: canonical_name.to_string(),
+                    primary_argument: approval_argument.clone(),
+                },
+                format!("Workspace policy requires approval for `{canonical_name}`"),
+                vec![
+                    format!("workspace: {}", workspace_root.display()),
+                    format!("argument: {approval_argument}"),
+                ],
+            )
+            .with_tool_subject(canonical_name, serde_json::to_value(args)?)
+            .requiring_explicit_decision();
+            let allowed = if let Some(decision) = request_approval(approval_callback, request).await
+            {
+                approval_allows(decision)
+            } else {
+                crate::output::confirm(
+                    format!("Workspace policy requires approval for `{canonical_name}`. Allow it?"),
+                    false,
+                )
+            };
+            if allowed {
+                Ok(WorkspacePolicyGate::Approved)
+            } else {
+                Ok(WorkspacePolicyGate::Refused(ToolResult {
+                    tool_name: canonical_name.to_string(),
+                    success: false,
+                    output: format!(
+                        "Tool `{canonical_name}` was not approved under the workspace policy."
+                    ),
+                }))
+            }
+        }
+    }
+}
+
 async fn execute_tool_with_opts_and_permissions(
     call: &ToolCall,
     opts: &ToolExecOptions,
@@ -676,86 +771,23 @@ async fn execute_tool_with_scoped_permissions(
     // Set when the user approved this exact call under the policy prompt, so the
     // trust gate below does not ask a second time for one command.
     let mut approved_this_call = false;
-    if let Some(workspace_root) = opts.workspace_root.as_deref() {
-        let policy = crate::platform::policy::PolicyEngine::load_layered(workspace_root)?;
-        if policy.has_rules() {
-            let primary_argument = policy_primary_argument(canonical_name, &call.args);
-            let resolution = policy.resolve(canonical_name, &primary_argument);
-            let denied_by = match resolution.layer {
-                Some(crate::platform::policy::PolicyLayer::Managed) => {
-                    "your organization's managed policy".to_string()
-                }
-                Some(crate::platform::policy::PolicyLayer::User) => {
-                    "the policy rules in your user config".to_string()
-                }
-                _ => format!("{}/.agiworkforce/policy.toml", workspace_root.display()),
-            };
-            let reason = resolution
-                .reason
-                .as_deref()
-                .map(|reason| format!(" {reason}"))
-                .unwrap_or_default();
-            let decision = effective_workspace_policy_decision(
-                resolution,
-                workspace_policy_is_trusted(workspace_root),
-            );
-            match decision {
-                crate::platform::policy::PolicyDecision::Deny => {
-                    return Ok(ToolResult {
-                        tool_name: canonical_name.to_string(),
-                        success: false,
-                        output: format!(
-                            "Tool `{canonical_name}` is denied by {denied_by} and was not run.{reason}"
-                        ),
-                    });
-                }
-                crate::platform::policy::PolicyDecision::Allow => {
-                    require_confirm = false;
-                }
-                crate::platform::policy::PolicyDecision::Ask => {
-                    let approval_argument = if canonical_name == "command_output" {
-                        call.args.get("id").cloned().unwrap_or_default()
-                    } else {
-                        primary_argument.clone()
-                    };
-                    let request = ApprovalRequest::new(
-                        ApprovalRequestKind::WorkspacePolicy {
-                            tool_name: canonical_name.to_string(),
-                            primary_argument: approval_argument.clone(),
-                        },
-                        format!("Workspace policy requires approval for `{canonical_name}`"),
-                        vec![
-                            format!("workspace: {}", workspace_root.display()),
-                            format!("argument: {approval_argument}"),
-                        ],
-                    )
-                    .with_tool_subject(canonical_name, serde_json::to_value(&call.args)?)
-                    .requiring_explicit_decision();
-                    let allowed = if let Some(decision) =
-                        request_approval(opts.approval_callback.as_ref(), request).await
-                    {
-                        approval_allows(decision)
-                    } else {
-                        crate::output::confirm(format!(
-                                "Workspace policy requires approval for `{canonical_name}`. Allow it?"
-                            ), false)
-                    };
-                    if !allowed {
-                        return Ok(ToolResult {
-                            tool_name: canonical_name.to_string(),
-                            success: false,
-                            output: format!(
-                                "Tool `{canonical_name}` was not approved under the workspace policy."
-                            ),
-                        });
-                    }
-                    // The workspace policy approval is the one authoritative prompt
-                    // for this invocation; do not immediately ask a second time in
-                    // the tool-specific executor.
-                    require_confirm = false;
-                    approved_this_call = true;
-                }
-            }
+    match workspace_policy_gate(
+        canonical_name,
+        &call.args,
+        opts.workspace_root.as_deref(),
+        opts.approval_callback.as_ref(),
+    )
+    .await?
+    {
+        WorkspacePolicyGate::Refused(refusal) => return Ok(refusal),
+        WorkspacePolicyGate::Unruled => {}
+        WorkspacePolicyGate::Allowed => require_confirm = false,
+        // The workspace policy approval is the one authoritative prompt for this
+        // invocation; do not immediately ask a second time in the tool-specific
+        // executor.
+        WorkspacePolicyGate::Approved => {
+            require_confirm = false;
+            approved_this_call = true;
         }
     }
 

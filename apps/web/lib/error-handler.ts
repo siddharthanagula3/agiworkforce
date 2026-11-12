@@ -5,7 +5,7 @@ import {
   ATTR_URL_PATH,
 } from '@opentelemetry/semantic-conventions';
 import { REQUEST_ID_HEADER, isWellFormedRequestId } from '@agiworkforce/cloud-contracts';
-import { DenialErrorCode } from '@agiworkforce/types';
+import { DenialErrorCode, ErrorCode } from '@agiworkforce/types';
 import { AppError, createError } from './errors';
 import {
   API_CONTRACT_VERSION,
@@ -40,6 +40,7 @@ import {
   type TraceContext,
 } from './observability/trace-context';
 import { applySensitiveNoStore } from './private-cache-policy';
+import { serviceUnavailableRetryHeaders } from './service-unavailable-retry';
 
 const HTTP_SERVER_SPAN = 'http.server';
 const HTTP_SERVER_SPAN_KIND: SpanKind = 'server';
@@ -113,7 +114,12 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
         },
         requestId,
       },
-      { status: error.statusCode },
+      {
+        status: error.statusCode,
+        ...(error.code === ErrorCode.SERVICE_UNAVAILABLE
+          ? { headers: serviceUnavailableRetryHeaders() }
+          : {}),
+      },
     );
   }
 

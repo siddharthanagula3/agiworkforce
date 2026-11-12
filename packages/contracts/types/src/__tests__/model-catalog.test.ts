@@ -646,7 +646,7 @@ describe('model catalog helpers', () => {
   it('never labels a picker capability tier with the name of a billing plan', () => {
     const planLabels = new Set(Object.values(BILLING_PLAN_PRICING).map((plan) => plan.label));
     const tierLabels = new Set(
-      getCoreManualModelOptions().map((option) => option.detail.split(' · ')[0] ?? option.detail),
+      getCoreManualModelOptions().flatMap((option) => option.detail.split(' · ').slice(0, 1)),
     );
 
     expect(tierLabels.size).toBeGreaterThan(0);

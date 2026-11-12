@@ -6931,6 +6931,20 @@
     {
       "surface": "web",
       "kind": "endpoint",
+      "url": "/api/pair/standing",
+      "file": "apps/web/app/api/pair/standing/route.ts",
+      "segments": [
+        "api",
+        "pair",
+        "standing"
+      ],
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
       "url": "/api/partners/apply",
       "file": "apps/web/app/api/partners/apply/route.ts",
       "segments": [

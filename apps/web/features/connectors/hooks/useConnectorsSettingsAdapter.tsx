@@ -1,7 +1,7 @@
 'use client';
 
 import { Switch, translateUiPlural } from '@agiworkforce/ui';
-import { connectorsReleased } from '@agiworkforce/types';
+import { ErrorCode, connectorsReleased } from '@agiworkforce/types';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -87,9 +87,31 @@ const TOOL_PERMISSIONS_LABEL = 'Tool permissions';
 const TOOL_PERMISSIONS_HINT = 'Choose when the assistant may use each of this connector’s tools.';
 
 class LoadFailure extends Error {
-  constructor(readonly status: number | null) {
+  constructor(
+    readonly status: number | null,
+    readonly refusal: string | null = null,
+  ) {
     super(`load failed: ${status ?? 'network'}`);
   }
+}
+
+const ORGANIZATION_POLICY_REFUSAL = 'organization_policy';
+const MAX_REFUSAL_CHARS = 500;
+const SERVICE_UNAVAILABLE_STATUS = 503;
+
+const RefusalBodySchema = z.object({
+  error: z.object({
+    type: z.string().optional(),
+    code: z.string().optional(),
+    message: z.string().trim().min(1).max(MAX_REFUSAL_CHARS),
+  }),
+});
+
+function workspaceRefusalSentence(body: unknown): string | null {
+  const parsed = RefusalBodySchema.safeParse(body);
+  if (!parsed.success) return null;
+  const { type, code, message } = parsed.data.error;
+  return type === ORGANIZATION_POLICY_REFUSAL || code === ErrorCode.FORBIDDEN ? message : null;
 }
 
 function loadFailureMessage(subject: string, error: unknown): string {
@@ -99,8 +121,14 @@ function loadFailureMessage(subject: string, error: unknown): string {
       : typeof (error as { status?: unknown })?.status === 'number'
         ? (error as { status: number }).status
         : null;
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     return `Your session expired. Reload the page to sign back in, then reopen ${subject}.`;
+  }
+  if (status === 403 && error instanceof LoadFailure && error.refusal) {
+    return error.refusal;
+  }
+  if (status === SERVICE_UNAVAILABLE_STATUS) {
+    return `${subject} could not be loaded because the service is temporarily unavailable. Try again in a moment.`;
   }
   if (status !== null && status >= 500) {
     return `${subject} could not be loaded because the server returned an error. This is not a problem with your connection, retry, or contact support if it persists.`;
@@ -115,6 +143,7 @@ class ConnectorLoadError extends Error {
   constructor(
     readonly kind: 'invalid-data' | 'status',
     readonly status: number | null = null,
+    readonly refusal: string | null = null,
   ) {
     super(kind);
   }
@@ -438,11 +467,10 @@ export function useConnectorsSettingsAdapter({
           fetch('/api/github/installations', requestOptions),
           fetch(CUSTOM_CONNECTORS_PATH, requestOptions),
         ]);
-        if (!connectorsResponse.ok || !customResponse.ok) {
-          const status = [connectorsResponse, customResponse].find(
-            (response) => !response.ok,
-          )?.status;
-          throw new ConnectorLoadError('status', status ?? null);
+        const failed = [connectorsResponse, customResponse].find((response) => !response.ok);
+        if (failed) {
+          const refusal = workspaceRefusalSentence(await failed.json().catch(() => null));
+          throw new ConnectorLoadError('status', failed.status, refusal);
         }
         const [connectorsJson, customJson] = await Promise.all([
           connectorsResponse.json(),
@@ -506,7 +534,9 @@ export function useConnectorsSettingsAdapter({
             ? 'Connectors returned data this page could not read. Try again, or contact support if it persists.'
             : loadFailureMessage(
                 'Connectors',
-                error instanceof ConnectorLoadError ? new LoadFailure(error.status) : error,
+                error instanceof ConnectorLoadError
+                  ? new LoadFailure(error.status, error.refusal)
+                  : error,
               ),
         );
       }

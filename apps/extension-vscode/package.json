@@ -1270,8 +1270,8 @@
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
           "default": true,
-          "scope": "application",
-          "description": "Include the memory facts saved to your AGI account with chat turns. Turn this off to stop sending them without deleting them; Code: Memory keeps showing what is stored.",
+          "scope": "resource",
+          "description": "Include the memory facts saved to your AGI account with chat turns. Turn this off to stop sending them without deleting them; Code: Memory keeps showing what is stored. A workspace or folder setting can turn this off, but only your user setting turns it on.",
           "tags": [
             "usesOnlineServices"
           ]
@@ -1289,14 +1289,14 @@
         "agiWorkforce.autoApplyFixes": {
           "type": "boolean",
           "default": false,
-          "scope": "application",
-          "description": "Automatically apply AI-suggested fixes without showing a diff"
+          "scope": "resource",
+          "description": "Automatically apply AI-suggested fixes without showing a diff. A workspace or folder setting can turn this off, but only your user setting turns it on."
         },
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
           "default": false,
-          "scope": "application",
-          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key.",
+          "scope": "resource",
+          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key. A workspace or folder setting can turn this off, but only your user setting turns it on.",
           "tags": [
             "usesOnlineServices"
           ]

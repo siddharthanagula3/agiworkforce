@@ -8,6 +8,8 @@ import {
   usageWorkloadLabel,
 } from '@agiworkforce/types';
 import { setupCommands, type CommandDeps } from '../core/commandSetup';
+import { signIn } from '../features/surfaces/accountAccess';
+import { cachedAccountTier } from '../integrations/tierResolver';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { getTokenCounter } from '../data/tokenCounter';
 import { modelDisplayLabel } from '../features/model-picker/modelConstants';
@@ -24,6 +26,12 @@ import type { UsageHistory } from '../protocol/apiResponses';
 import { requireCatalogModel } from './catalogModelFixtures';
 import { ExtensionContext } from './__mocks__/vscode';
 type ScanModule0 = typeof import('../utils/api');
+type AccountAccessModule = typeof import('../features/surfaces/accountAccess');
+
+vi.mock('../features/surfaces/accountAccess', async (importOriginal) => ({
+  ...(await importOriginal<AccountAccessModule>()),
+  signIn: vi.fn(),
+}));
 
 vi.mock('../utils/api', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
@@ -97,6 +105,8 @@ function registerHandlers(context: ExtensionContext): Map<string, Handler> {
       memoryTreeProvider: unused,
       diffDecorationProvider: unused,
       diagnosticsProvider: unused,
+      artifactsTreeProvider: unused,
+      artifactContentProvider: unused,
     } as unknown as CommandDeps,
   );
   return handlers;
@@ -267,5 +277,27 @@ describe('compare plans command', () => {
     expect(vi.mocked(vscode.env.openExternal).mock.calls[0]?.[0].toString()).toBe(
       `${getCloudWebOrigin()}/pricing?from=vscode-extension-plans`,
     );
+  });
+});
+
+describe('signing in as another account', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetSubsystemHealthForTests();
+  });
+
+  it("never shows the previous account's plan when the first plan read fails", async () => {
+    const context = new ExtensionContext();
+    await context.globalState.update('tierStatus.cachedTier', 'max');
+    await context.globalState.update('tierStatus.cachedAtMs', Date.now());
+    await context.secrets.store('agiWorkforce.accountToken', 'second-account-token');
+    vi.mocked(signIn).mockResolvedValue(true);
+    vi.mocked(fetchTierInfo).mockResolvedValue(undefined);
+    const handlers = registerHandlers(context);
+
+    await handlers.get('agi-workforce.signIn')?.();
+
+    expect(fetchTierInfo).toHaveBeenCalled();
+    expect(cachedAccountTier(context as unknown as vscode.ExtensionContext)).toBeUndefined();
   });
 });

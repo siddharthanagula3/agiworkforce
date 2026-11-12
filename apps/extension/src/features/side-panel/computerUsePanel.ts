@@ -22,6 +22,9 @@ import {
   BROWSER_CONTROL_CONSENT_HEADLINE,
 } from '../computer-use/browserControlConsent';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
+import { WORKER_RESTARTED_REASON } from '../computer-use/runMarker';
+import { USER_TAKEOVER_MAX_MS } from '../computer-use/runOwnership';
+import { assistantHostWindowId } from '../surface/assistantPanel';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { t } from '../../i18n';
 import { buildImageViewerButton } from './mediaViewer';
@@ -816,8 +819,11 @@ const CANCELLATION_REASON_COPY: Record<string, string> = {
   tab_intent_changed:
     'The tab left the page this run was approved for, so the run was stopped before acting. Go back to that page and start the task again.',
   tab_removed: 'The tab this run was driving was closed.',
+  takeover_expired: `The page was not handed back within ${USER_TAKEOVER_MAX_MS / 60_000} minutes, so the task ended and AGI let go of the tab. Start the task again to continue.`,
   user_cleared: 'The run was stopped when the log was cleared.',
   user_stopped: 'You stopped the run.',
+  [WORKER_RESTARTED_REASON]:
+    'Chrome stopped the extension in the background, so this task ended and nothing more will happen on the page. Start the task again to continue.',
 };
 
 export function describeCancellationReason(reason: unknown): string | null {
@@ -1085,7 +1091,9 @@ export interface ComputerUsePanelAPI {
   setRunState(running: boolean, runId?: string, generation?: number): void;
   setPaused(paused: boolean, reason?: string): void;
   ownsRun(runId: unknown): boolean;
+  acceptsRunWindow(windowId: unknown): boolean;
   noteRunActivity(): void;
+  confirmRunState(): void;
 }
 
 export function buildComputerUsePanel(): ComputerUsePanelAPI {
@@ -1229,6 +1237,13 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   let runStateRevision = 0;
   let cancellationPending = false;
   let panelClosed = false;
+  let hostWindowId: number | undefined;
+  const hostWindow = assistantHostWindowId()
+    .then((windowId) => {
+      hostWindowId = windowId;
+      return windowId;
+    })
+    .catch(() => undefined);
   const pendingApprovals = new Set<() => void>();
   const dismissPendingApprovals = (): void => {
     for (const dismiss of [...pendingApprovals]) dismiss();
@@ -1349,6 +1364,10 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     return typeof runId === 'string' && activeRunId === runId;
   }
 
+  function acceptsRunWindow(windowId: unknown): boolean {
+    return typeof windowId !== 'number' || windowId === hostWindowId;
+  }
+
   function noteRunActivity(): void {
     if (!activeRunId) return;
     armRunActivityWatchdog();
@@ -1424,9 +1443,10 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     if (activeRunId || panelClosed) return;
     const generation = activeRunGeneration;
     const revision = runStateRevision;
-    const state = await readBackgroundRunState();
+    const [state, windowId] = await Promise.all([readBackgroundRunState(), hostWindow]);
     if (state?.success !== true || state.running !== true || typeof state.runId !== 'string')
       return;
+    if (typeof state.windowId === 'number' && state.windowId !== windowId) return;
     if (
       panelClosed ||
       activeRunId ||
@@ -1497,11 +1517,13 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     const runId = activeRunId;
     if (!runId) return;
     activeRunId = null;
-    void chrome.runtime.sendMessage({
+    const closing: CancelComputerUseMessage = {
       type: 'CANCEL_COMPUTER_USE',
       runId,
       reason: 'panel_closed',
-    });
+      ...(hostWindowId === undefined ? {} : { windowId: hostWindowId }),
+    };
+    void chrome.runtime.sendMessage(closing);
   });
 
   void adoptBackgroundRun();
@@ -2126,6 +2148,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     setRunState,
     setPaused,
     ownsRun,
+    acceptsRunWindow,
     noteRunActivity,
+    confirmRunState: () => void reconcileRunState(),
   };
 }

@@ -418,6 +418,7 @@ fn lines_found_once_on_each_side(old: &[&str], new: &[&str]) -> Vec<(usize, usiz
 /// The most lines of a change a prompt carries. A change that is longer says
 /// so in the prompt, so nothing is approved as if it had been shown.
 pub(crate) const PROMPT_CHANGE_LINES: usize = 400;
+pub(crate) const CHANGE_LINES_NOT_SHOWN: &str = "more line(s) of this change are not shown here";
 
 /// `text` as the lines of a change, each after `mark`: `+` for what is
 /// added, `-` for what is removed.
@@ -432,9 +433,7 @@ pub(crate) fn capped_change(mut lines: Vec<String>) -> Vec<String> {
     if lines.len() > PROMPT_CHANGE_LINES {
         let hidden = lines.len() - PROMPT_CHANGE_LINES;
         lines.truncate(PROMPT_CHANGE_LINES);
-        lines.push(format!(
-            "… {hidden} more line(s) of this change are not shown here"
-        ));
+        lines.push(format!("… {hidden} {CHANGE_LINES_NOT_SHOWN}"));
     }
     lines
 }

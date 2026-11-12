@@ -129,10 +129,11 @@ export interface ConversationCloudSyncState {
   totalMessageCount?: number;
   messagesOffset?: number;
   state: 'idle' | 'pending' | 'error' | 'blocked';
-  blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
+  blockedReason?: 'non-cloud-runtime' | 'auth' | 'policy' | 'not-found' | 'workspace';
   lastError?: string;
   lastAttemptAt?: number;
   retryAfter?: number;
+  retryAfterStatedByServer?: boolean;
 }
 
 export interface ConversationEntry {
@@ -675,6 +676,7 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   if (
     raw['blockedReason'] === 'non-cloud-runtime' ||
     raw['blockedReason'] === 'auth' ||
+    raw['blockedReason'] === 'policy' ||
     raw['blockedReason'] === 'not-found' ||
     raw['blockedReason'] === 'workspace'
   ) {
@@ -689,6 +691,7 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   }
   if (typeof raw['retryAfter'] === 'number' && Number.isFinite(raw['retryAfter'])) {
     normalized.retryAfter = raw['retryAfter'];
+    if (raw['retryAfterStatedByServer'] === true) normalized.retryAfterStatedByServer = true;
   }
   const isEmpty =
     normalized.state === 'idle' &&
@@ -1926,7 +1929,9 @@ export function isCloudMetadataPersistenceEligible(entry: ConversationEntry): bo
     UUID_PATTERN.test(sync.conversationId) &&
     sync.organizationId !== undefined &&
     sync.createAcknowledged === true &&
-    (sync.blockedReason === undefined || sync.blockedReason === 'auth')
+    (sync.blockedReason === undefined ||
+      sync.blockedReason === 'auth' ||
+      sync.blockedReason === 'policy')
   );
 }
 
@@ -1963,6 +1968,14 @@ export function pendingCloudMessages(entry: ConversationEntry): HistoryMessage[]
       (message.cloudSyncedAt === undefined ||
         message.cloudSyncedChars !== message.content.length ||
         message.cloudSyncedFingerprint !== cloudMessageSyncFingerprint(message)),
+  );
+}
+
+export function conversationHasUnsavedCloudChanges(entry: ConversationEntry): boolean {
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    entry.cloudSync?.state === 'pending' ||
+    entry.cloudSync?.state === 'error'
   );
 }
 
@@ -2110,7 +2123,10 @@ export async function recordCloudMessagesSynced(
     } else {
       delete cloudSync.lastError;
       delete cloudSync.retryAfter;
-      if (cloudSync.blockedReason === 'auth') delete cloudSync.blockedReason;
+      delete cloudSync.retryAfterStatedByServer;
+      if (cloudSync.blockedReason === 'auth' || cloudSync.blockedReason === 'policy') {
+        delete cloudSync.blockedReason;
+      }
     }
     store.conversations = store.conversations.map((candidate, candidateIndex) =>
       candidateIndex === index ? { ...existing, messages, cloudSync } : candidate,

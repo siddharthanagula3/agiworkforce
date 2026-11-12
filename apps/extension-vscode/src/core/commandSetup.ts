@@ -242,6 +242,8 @@ const upgradeUrl = (): string => `${getCloudWebOrigin()}/pricing`;
 const SWITCH_MODEL_ANYWAY = 'Switch anyway';
 
 const MEMORY_TURN_ON_ACTION = 'Turn memory on';
+const MEMORY_KEPT_OFF_BY_WORKSPACE =
+  "Memory stays off here: this workspace's settings turn it off, and your user setting cannot turn it back on.";
 
 async function requireMemoryEnabledForCapture(context: vscode.ExtensionContext): Promise<boolean> {
   if (Config.memoryEnabled()) return true;
@@ -251,7 +253,10 @@ async function requireMemoryEnabledForCapture(context: vscode.ExtensionContext):
     MEMORY_TURN_ON_ACTION,
   );
   if (choice !== MEMORY_TURN_ON_ACTION) return false;
-  return Config.update(context, { key: 'memory.enabled', value: true });
+  await Config.update(context, { key: 'memory.enabled', value: true });
+  if (Config.memoryEnabled()) return true;
+  vscode.window.showInformationMessage(MEMORY_KEPT_OFF_BY_WORKSPACE);
+  return false;
 }
 
 function contextCommandTarget(
@@ -1202,6 +1207,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (ok) {
         artifactContentProvider.clear();
         artifactsTreeProvider.refresh();
+        await clearAccountTierCache(context);
         await refreshAccountTierCache(context);
         sidebarProvider.refreshAccountPresentation();
         ChatEditorPanel.refreshAccountPresentation();
@@ -1995,6 +2001,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const next = !Config.memoryEnabled();
       await Config.update(context, { key: 'memory.enabled', value: next });
       void memoryTreeProvider.refresh();
+      if (Config.memoryEnabled() !== next) {
+        vscode.window.showInformationMessage(MEMORY_KEPT_OFF_BY_WORKSPACE);
+        return;
+      }
       vscode.window.showInformationMessage(
         next
           ? 'Memory on, saved facts are included with your turns.'

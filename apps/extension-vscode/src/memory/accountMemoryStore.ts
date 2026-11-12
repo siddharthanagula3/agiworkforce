@@ -7,7 +7,13 @@ import {
   selectNextCursor,
   type SyncMemoryRecord,
 } from '@agiworkforce/sync';
-import { getAccountToken, getAccountAuthState, getCloudWebOrigin } from '../utils/api';
+import {
+  confirmAccountTokenRejected,
+  getAccountToken,
+  getAccountAuthState,
+  getCloudWebOrigin,
+  reviewRejectedAccountToken,
+} from '../utils/api';
 import {
   AccountMemoryUnauthorizedError,
   createAccountMemoryClient,
@@ -113,6 +119,8 @@ export class AccountMemoryStore {
     private readonly client: AccountMemoryClient = createAccountMemoryClient({
       baseUrl: getCloudWebOrigin(),
       getAuthToken: () => getAccountToken(secrets),
+      reviewRejectedToken: (token) => reviewRejectedAccountToken(secrets, token),
+      confirmRejectedToken: (token) => confirmAccountTokenRejected(secrets, token),
     }),
   ) {}
 

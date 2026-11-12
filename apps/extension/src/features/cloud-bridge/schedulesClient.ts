@@ -13,14 +13,30 @@ import {
   type ManagedCloudSchedulesClient,
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
-import { FREE_TRIAL_GATEWAY, getAuthToken, getManagedModelAccess } from './freeTrialClient';
+import {
+  FREE_TRIAL_GATEWAY,
+  getAuthToken,
+  getManagedModelAccess,
+  ManagedAccessAuthRequiredError,
+  ManagedAccessRefusedError,
+  ManagedAccessUnavailableError,
+} from './freeTrialClient';
+import {
+  captureCloudRefusals,
+  classifyCloudRefusal,
+  describeCloudRefusal,
+  readCloudRefusal,
+  type CloudRefusal,
+} from './cloudRefusal';
 import { platformRequestHeaders } from '../../platformHeaders';
 
 export const CHROME_SCHEDULE_PAGE_SIZE = MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE;
 
+type SchedulesFetch = (input: string, init?: RequestInit) => Promise<Response>;
+
 export interface ChromeSchedulesDependencies {
   getAuthToken: typeof getAuthToken;
-  createClient: (token: string) => ManagedCloudSchedulesClient;
+  createClient: (token: string, fetchImpl?: SchedulesFetch) => ManagedCloudSchedulesClient;
   newIdempotencyKey: () => string;
   fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
 }
@@ -36,12 +52,21 @@ const ScheduleDetailsSchema = ManagedCloudScheduleMutationSchema.pick({
   prompt: true,
 });
 
-export type ChromeSchedulesErrorCode = 'auth_required' | 'cancelled' | 'server_error';
+export type ChromeSchedulesErrorCode =
+  | 'auth_required'
+  | 'plan_required'
+  | 'policy_blocked'
+  | 'unavailable'
+  | 'refused'
+  | 'cancelled'
+  | 'server_error';
 
 export interface ChromeSchedulesError {
   status: 'error';
   code: ChromeSchedulesErrorCode;
   message: string;
+  retryAfterSeconds?: number;
+  upgradePath?: string;
 }
 
 export type ChromeScheduleModelsResult =
@@ -95,10 +120,14 @@ function scheduleHeaders(token: string): Record<string, string> {
   };
 }
 
-function createDefaultClient(token: string): ManagedCloudSchedulesClient {
+function createDefaultClient(
+  token: string,
+  fetchImpl?: SchedulesFetch,
+): ManagedCloudSchedulesClient {
   return createManagedCloudSchedulesClient({
     baseUrl: FREE_TRIAL_GATEWAY,
     getHeaders: () => scheduleHeaders(token),
+    ...(fetchImpl ? { fetchImpl } : {}),
   });
 }
 
@@ -116,15 +145,80 @@ function signedOut(): ChromeSchedulesError {
   };
 }
 
+const SCHEDULES_REFUSAL_COPY = {
+  refused: 'Schedules are not available for this account.',
+  unavailable: 'Schedules are temporarily unavailable.',
+  limitUnit: 'requests',
+};
+
+function refusalFromError(error: unknown): CloudRefusal | null {
+  if (error instanceof ManagedAccessUnavailableError) {
+    return {
+      kind: 'unavailable',
+      status: 503,
+      ...(error.retryAfterSeconds !== undefined
+        ? { retryAfterSeconds: error.retryAfterSeconds }
+        : {}),
+    };
+  }
+  if (error instanceof ManagedAccessRefusedError) {
+    return { kind: error.kind, status: 403, message: error.message };
+  }
+  if (error instanceof ManagedCloudSchedulesHttpError && error.status > 0) {
+    return classifyCloudRefusal(error.status, {
+      error: { ...(error.code ? { code: error.code } : {}), message: error.message },
+    });
+  }
+  return null;
+}
+
+function schedulesRefusal(refusal: CloudRefusal): ChromeSchedulesError | null {
+  const message = describeCloudRefusal(refusal, SCHEDULES_REFUSAL_COPY);
+  switch (refusal.kind) {
+    case 'auth':
+      return signedOut();
+    case 'plan':
+      return {
+        status: 'error',
+        code: 'plan_required',
+        message,
+        ...(refusal.upgradePath ? { upgradePath: refusal.upgradePath } : {}),
+      };
+    case 'policy':
+      return { status: 'error', code: 'policy_blocked', message };
+    case 'unavailable':
+    case 'rate_limited':
+      return {
+        status: 'error',
+        code: 'unavailable',
+        message,
+        ...(refusal.retryAfterSeconds !== undefined
+          ? { retryAfterSeconds: refusal.retryAfterSeconds }
+          : {}),
+      };
+    case 'account':
+    case 'refused':
+      return { status: 'error', code: 'refused', message };
+    default:
+      return null;
+  }
+}
+
 export function describeSchedulesFailure(
   error: unknown,
   signal?: AbortSignal,
+  captured?: CloudRefusal | null,
 ): ChromeSchedulesError {
   if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
     return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
   }
-  const status = error instanceof ManagedCloudSchedulesHttpError ? error.status : null;
-  if (status === 401 || status === 403) return signedOut();
+  if (error instanceof ManagedAccessAuthRequiredError) return signedOut();
+  const refusal =
+    error instanceof ManagedCloudSchedulesHttpError && captured?.status === error.status
+      ? captured
+      : refusalFromError(error);
+  const described = refusal ? schedulesRefusal(refusal) : null;
+  if (described) return described;
   return {
     status: 'error',
     code: 'server_error',
@@ -138,12 +232,13 @@ async function withSchedulesClient<T>(
   run: (client: ManagedCloudSchedulesClient, deps: ChromeSchedulesDependencies) => Promise<T>,
 ): Promise<{ status: 'success'; value: T } | ChromeSchedulesError> {
   const deps = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const capture = captureCloudRefusals(deps.fetchImpl);
   try {
     const token = await deps.getAuthToken();
     if (!token) return signedOut();
-    return { status: 'success', value: await run(deps.createClient(token), deps) };
+    return { status: 'success', value: await run(deps.createClient(token, capture.fetch), deps) };
   } catch (error) {
-    return describeSchedulesFailure(error, signal);
+    return describeSchedulesFailure(error, signal, capture.last);
   }
 }
 
@@ -211,19 +306,6 @@ export async function deleteChromeSchedule(
   return { status: 'success' };
 }
 
-async function scheduleRequestFailure(response: Response): Promise<ManagedCloudSchedulesHttpError> {
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  const error = body['error'];
-  const message =
-    error && typeof error === 'object' ? (error as Record<string, unknown>)['message'] : error;
-  return new ManagedCloudSchedulesHttpError(
-    typeof message === 'string' && message.trim()
-      ? message.trim()
-      : `Request failed (${response.status}).`,
-    response.status,
-  );
-}
-
 export async function updateChromeScheduleDetails(
   scheduleId: string,
   details: ChromeScheduleDetails,
@@ -253,7 +335,14 @@ export async function updateChromeScheduleDetails(
         ...(options.signal ? { signal: options.signal } : {}),
       },
     );
-    if (!response.ok) throw await scheduleRequestFailure(response);
+    if (!response.ok) {
+      const refused = schedulesRefusal(await readCloudRefusal(response));
+      if (refused) return refused;
+      throw new ManagedCloudSchedulesHttpError(
+        `Request failed (${response.status}).`,
+        response.status,
+      );
+    }
     const parsed = ManagedCloudScheduleResponseSchema.safeParse(
       await response.json().catch(() => undefined),
     );

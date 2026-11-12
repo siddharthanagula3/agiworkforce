@@ -1,6 +1,8 @@
 import 'server-only';
 
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { evaluateWorkspaceAccess } from '@/lib/managed-compute-gate';
+import { isPolicyUnavailable } from '@/lib/services/organization-policy-evaluator';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   CONNECTOR_OAUTH_RESULT_CONNECTOR_PARAM,
@@ -156,8 +158,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   let userId: string;
   let db: DatabaseAdapter;
   let organizationId: string | null;
+  let surface: CloudChatSurface | undefined;
   try {
-    ({ db, userId, organizationId } = await getUserScopedDb(request));
+    ({ db, userId, organizationId, surface } = await getUserScopedDb(request));
   } catch (authError) {
     if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
@@ -249,6 +252,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   // organization's data starts moving, which is here. It resolves the active
   // workspace, so it runs only once this request is going to attempt a
   // connection.
+  const access = await evaluateWorkspaceAccess(userId, request, surface ?? 'unknown');
+  if (!access.allowed) {
+    return isPolicyUnavailable(access)
+      ? fail(OAUTH_START_STATUS_UNAVAILABLE, 503, access.reason)
+      : fail(OAUTH_START_STATUS_POLICY_BLOCKED, 403, access.reason);
+  }
+
   const policyDecision = await evaluateConnectorPolicyForUser({
     db,
     userId,
@@ -257,7 +267,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     isCustom: Boolean(!provider && discovered),
     url: provider?.mcpUrl ?? discovered?.mcpUrl ?? null,
     request,
-    surface: resolveCloudChatSurface(request),
+    surface: surface ?? 'unknown',
   });
   if (!policyDecision.allowed) {
     return fail(OAUTH_START_STATUS_POLICY_BLOCKED, 403, policyDecision.reason);
