@@ -413,14 +413,59 @@ export function rustPlanWindowCredits(source) {
   return credits.size === 0 ? null : credits;
 }
 
+function readWindow(literal) {
+  return literal === 'null' ? 'none' : readNumber(literal);
+}
+
 export function tsPlanWindowCredits(source) {
   const credits = new Map(
     [
       ...source.matchAll(
-        /^\s*'?([\w-]+)'?: \{\s*monthlyCredits: ([\d_]+),\s*weeklyCredits: ([\d_]+),\s*fiveHourCredits: ([\d_]+),/gm,
+        /^\s*'?([\w-]+)'?: \{\s*monthlyCredits: ([\d_]+),\s*weeklyCredits: ([\d_]+),\s*fiveHourCredits: ([\d_]+|null),/gm,
       ),
-    ].map((match) => [match[1], [match[4], match[3], match[2]].map(readNumber).join('/')]),
+    ].map((match) => [match[1], [match[4], match[3], match[2]].map(readWindow).join('/')]),
   );
+  return credits.size === 0 ? null : credits;
+}
+
+export function cliReadsOwnedWindowCredits(source) {
+  return [...source.matchAll(/include_str!\(\s*"([^"]+)"\s*\)/g)].some(
+    (match) =>
+      path.normalize(path.join(path.dirname(CLI_PLANS), match[1])) === MANAGED_USAGE_LIMITS_OWNER,
+  );
+}
+
+export function lineReadPlanWindowCredits(source) {
+  const start = source.indexOf('export const MANAGED_USAGE_LIMITS:');
+  if (start === -1) return null;
+  const credits = new Map();
+  let plan = null;
+  let window = {};
+  for (const raw of source.slice(start).split('\n')) {
+    const line = raw.trim();
+    const heading = line.match(/^([\w-]+): \{$/)?.[1];
+    if (plan === null) {
+      if (heading !== undefined && !credits.has(heading)) {
+        plan = heading;
+        window = {};
+      }
+      continue;
+    }
+    if (line.startsWith('}')) {
+      const { fiveHourCredits, weeklyCredits, monthlyCredits } = window;
+      if ([fiveHourCredits, weeklyCredits, monthlyCredits].every((value) => value !== undefined)) {
+        credits.set(plan, [fiveHourCredits, weeklyCredits, monthlyCredits].join('/'));
+      }
+      plan = null;
+      continue;
+    }
+    const separator = line.replace(/,$/, '').indexOf(': ');
+    if (separator === -1) continue;
+    const key = line.slice(0, separator);
+    const value = line.replace(/,$/, '').slice(separator + 2);
+    if (key === 'fiveHourCredits') window[key] = readWindow(value);
+    else if (key === 'weeklyCredits' || key === 'monthlyCredits') window[key] = readNumber(value);
+  }
   return credits.size === 0 ? null : credits;
 }
 
@@ -530,6 +575,7 @@ export function checkCliUsageMirror(root = repoRoot) {
   const billingCatalog = read(BILLING_CATALOG) ?? '';
   const cliPlans = read(CLI_PLANS) ?? '';
   const ownedWorkloads = tsStringMap(billingCatalog, 'USAGE_WORKLOAD_LABELS');
+  const usageLimitsOwner = read(MANAGED_USAGE_LIMITS_OWNER) ?? '';
   problems.push(
     ...compareMaps(
       'Capability labels',
@@ -544,8 +590,10 @@ export function checkCliUsageMirror(root = repoRoot) {
     ),
     ...compareMaps(
       'Plan window credits',
-      tsPlanWindowCredits(read(MANAGED_USAGE_LIMITS_OWNER) ?? ''),
-      rustPlanWindowCredits(cliPlans),
+      tsPlanWindowCredits(usageLimitsOwner),
+      cliReadsOwnedWindowCredits(cliPlans)
+        ? lineReadPlanWindowCredits(usageLimitsOwner)
+        : rustPlanWindowCredits(cliPlans),
     ),
     ...compareMaps(
       'Workload labels (CLI)',
