@@ -140,6 +140,11 @@ impl ManagedSessionStore {
         save_session_in(&self.base_dir, session)
     }
 
+    pub fn contains(&self, session_id: &str) -> Result<bool> {
+        let session_id = validate_managed_session_id(session_id)?;
+        Ok(find_session_path_in(&self.base_dir, session_id).is_some())
+    }
+
     pub fn archive(&self, reference: ManagedSessionReference) -> Result<()> {
         let resolved = self.resolve(reference)?;
         let mut session = load_session_from_path(&resolved.path)?;
@@ -392,6 +397,23 @@ fn latest_managed_session_in(base_dir: &Path) -> Result<Option<ResolvedManagedSe
         .map(reference_from_summary))
 }
 
+fn latest_project_session_in(
+    base_dir: &Path,
+    project_dir: &Path,
+) -> Result<Option<ResolvedManagedSessionReference>> {
+    let project = crate::project_scope::resolve_project_scope(project_dir);
+    Ok(list_managed_sessions_in(base_dir)?
+        .into_iter()
+        .filter(|summary| summary.archived_at.is_none())
+        .find(|summary| {
+            summary
+                .workspace_root
+                .as_deref()
+                .is_some_and(|root| crate::project_scope::resolve_project_scope(root) == project)
+        })
+        .map(reference_from_summary))
+}
+
 fn resolve_managed_session_reference_in(
     base_dir: &Path,
     reference: ManagedSessionReference,
@@ -584,6 +606,14 @@ pub fn latest_managed_session() -> Result<Option<ResolvedManagedSessionReference
     latest_managed_session_in(&CliConfig::config_dir()?)
 }
 
+/// The newest session that is not archived and was started in the same
+/// project as `project_dir`.
+pub fn latest_project_session(
+    project_dir: &Path,
+) -> Result<Option<ResolvedManagedSessionReference>> {
+    latest_project_session_in(&CliConfig::config_dir()?, project_dir)
+}
+
 /// Resolve a session reference string into a specific session file.
 pub fn resolve_managed_session_reference(
     reference: impl AsRef<str>,
@@ -648,6 +678,40 @@ mod tests {
             vec![message("hi")],
         );
         save_session_in(base, &session).unwrap();
+    }
+
+    #[test]
+    fn continuing_picks_the_newest_live_session_of_this_project_only() {
+        let store = tempdir().unwrap();
+        let project = tempdir().unwrap();
+        let elsewhere = tempdir().unwrap();
+        let seed = |id: &str, root: &std::path::Path, minute: u32, archived: bool| {
+            let at = Utc.with_ymd_and_hms(2026, 9, 13, 8, minute, 0).unwrap();
+            let mut session =
+                ManagedSession::with_messages(id.to_string(), at, vec![message("hi")]);
+            session.workspace_root = Some(root.to_path_buf());
+            if archived {
+                session.archived_at = Some(at);
+            }
+            save_session_in(store.path(), &session).unwrap();
+        };
+        seed("this-project-older", project.path(), 1, false);
+        seed("this-project-newer", project.path(), 2, false);
+        seed("this-project-archived", project.path(), 3, true);
+        seed("other-project-newest", elsewhere.path(), 4, false);
+
+        let latest = super::latest_project_session_in(store.path(), project.path())
+            .unwrap()
+            .expect("a session of this project");
+        assert_eq!(latest.summary.session_id, "this-project-newer");
+
+        let unrelated = tempdir().unwrap();
+        assert!(
+            super::latest_project_session_in(store.path(), unrelated.path())
+                .unwrap()
+                .is_none(),
+            "a project with no sessions continues nothing from another project"
+        );
     }
 
     #[test]

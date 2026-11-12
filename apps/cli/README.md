@@ -212,7 +212,8 @@ agi -m "<primary-model>,<fallback-model>,<local-model>" "refactor main.rs"
 ### 4. Session replay / fork
 
 Every session is persisted under `~/.agiworkforce/managed_sessions/`.
-List, inspect, and fork from any turn:
+List, inspect, and fork from any turn. `--at-turn N` counts your prompts from
+0 and keeps everything that answered prompt N, tool calls included:
 
 ```bash
 agi session list
@@ -220,6 +221,14 @@ agi session show <id>
 agi session fork <id> --at-turn 2 --as refactor-alt
 agi --resume refactor-alt
 ```
+
+`-c` (also `--continue`) picks up the newest session started in this project,
+archived ones left out, in the interactive interface and with `--print` or
+`agi "<prompt>"` alike. `--session-id <id>` starts a new session under that id,
+so `--resume <id>` and `agi session show <id>` find it; an id already in use is
+refused. Ctrl-C during `agi exec`, `--print` or `agi "<prompt>"` stops the
+turn and every command it started, saves the session so it resumes cleanly, and
+exits with status 130.
 
 ## Output styles
 

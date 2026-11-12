@@ -241,8 +241,8 @@ pub struct Cli {
     #[arg(long)]
     stdin: bool,
 
-    /// Continue conversation from last session
-    #[arg(short = 'c', long)]
+    /// Continue the newest session started in this project
+    #[arg(short = 'c', long, alias = "continue")]
     continue_session: bool,
 
     /// Print output without any formatting (raw text only)
@@ -1778,6 +1778,11 @@ fn run_background_command(action: &BackgroundSubcommand) -> Result<()> {
     }
 }
 
+/// The commands that diagnose or repair a config file the CLI cannot read.
+fn runs_without_a_valid_config(cli: &Cli) -> bool {
+    matches!(cli.command, Some(Command::Doctor { .. } | Command::Init))
+}
+
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
     if cli.dump_system_prompt {
         return false;
@@ -2418,7 +2423,8 @@ fn resumed_model(managed: Option<&ManagedResumeSession>, fallback: &str) -> Stri
 }
 
 fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
-    if let Some(resolved) = runtime::session_control::latest_managed_session()? {
+    let project_dir = std::env::current_dir()?;
+    if let Some(resolved) = runtime::session_control::latest_project_session(&project_dir)? {
         let session_id = resolved.summary.session_id.clone();
         return Ok(Some((
             session_id,
@@ -5388,27 +5394,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             let source = runtime::session::ManagedSession::load_from_path(&source_resolved.path)?;
             source.require_model()?;
             source.require_routing_authority()?;
-            let mut messages = source.messages.clone();
-            if let Some(turn) = at_turn {
-                // Truncate to the first `turn` user→assistant pairs.
-                let mut user_seen = 0usize;
-                let mut keep_to = messages.len();
-                for (i, m) in messages.iter().enumerate() {
-                    if m.role == "user" {
-                        if user_seen == turn {
-                            keep_to = i + 1;
-                            if let Some(next) = messages.get(i + 1) {
-                                if next.role == "assistant" {
-                                    keep_to = i + 2;
-                                }
-                            }
-                            break;
-                        }
-                        user_seen += 1;
-                    }
-                }
-                messages.truncate(keep_to);
-            }
+            let messages = fork_transcript(source.messages.clone(), at_turn);
             // Derive a safe session ID from --as (slugify) or auto-generate.
             let new_id = if let Some(ref name) = as_name {
                 // Slugify: lowercase, replace non-alphanumeric with '-', collapse runs.
@@ -5677,8 +5663,9 @@ async fn settle_session_worktree(worktree: &runtime::worktree::SessionWorktree) 
             }
         }
         Ok(_) => eprintln!(
-            "Kept the worktree {path} on branch {}. Return to it with: agi --worktree {} --continue. Remove it with: git worktree remove {path}",
-            worktree.branch, worktree.name
+            "Kept the worktree {path} on branch {}. Return to it with: {}. Remove it with: git worktree remove {path}",
+            worktree.branch,
+            worktree_return_hint(&worktree.name)
         ),
         Err(error) => eprintln!(
             "Kept the worktree {path} because its state could not be checked: {error:#}"
@@ -5823,11 +5810,22 @@ async fn run_cli(cli: Cli) -> Result<()> {
 
     // Commands outside a trusted project still get global config and explicit
     // environment overrides, but repository-controlled config remains unread.
-    let mut app_config = if project_trusted {
-        config::CliConfig::load_merged()?
+    let loaded_config = if project_trusted {
+        config::CliConfig::load_merged()
     } else {
-        config::CliConfig::load_without_project()?
+        config::CliConfig::load_without_project()
     };
+    let mut app_config = match loaded_config {
+        Ok(config) => config,
+        Err(error) if runs_without_a_valid_config(&cli) => {
+            output::print_warn(&format!("{error:#}. Continuing with built-in defaults."));
+            config::CliConfig::default()
+        }
+        Err(error) => return Err(error),
+    };
+    if app_config.default.keep_history == Some(false) {
+        cli_options::set_session_persistence_enabled(false);
+    }
     let user_sandbox_mode = config::CliConfig::load()
         .ok()
         .and_then(|config| config.default.sandbox_mode);
@@ -5872,6 +5870,16 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 json,
             } => {
                 crate::tools::forbid_terminal_questions();
+                let exec_stdin = read_piped_stdin(cli.stdin || prompt.as_str() == "-")?;
+                let exec_files = launch_file_context(&cli)?;
+                let exec_prompt = build_final_prompt(
+                    Some(prompt.as_str()),
+                    exec_stdin.as_deref(),
+                    &exec_files.text,
+                )
+                .unwrap_or_default();
+                let exec_system_prompt = resolve_system_prompt(&cli)?;
+                let effort_max_turns = apply_run_overrides(&cli, &mut app_config);
                 // Honor an explicit model: exec-level --model first, then the
                 // top-level --model, then config. Mirrors the provider fallback
                 // below, without this, `agi --model X exec` silently dropped X
@@ -5902,7 +5910,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 let mut session = agent::AgentSession::new_checked(
                     &m,
                     &sys_ctx,
-                    None,
+                    exec_system_prompt.as_deref(),
                     exec_provider_override.as_deref(),
                 )?;
                 session.set_additional_context_dirs(
@@ -5936,7 +5944,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     session.plan_mode = true;
                 }
                 session.quiet = true;
-                session.enable_managed_session()?;
+                session.max_turns = cli.max_turns.or(effort_max_turns);
+                session.max_budget_usd = cli.max_budget_usd;
+                apply_named_agent(&mut session, cli.agent.as_deref());
+                session.enable_managed_session_as(cli.session_id_override.as_deref())?;
                 attach_mcp_manager_for_session(
                     &mut session,
                     &normalized_cli_options.mcp_config_load_options(),
@@ -5944,6 +5955,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     false,
                 )
                 .await?;
+                if !exec_files.images.is_empty() {
+                    session.pending_image_blocks = exec_files.images;
+                }
                 let is_json = *json;
                 let json_events = cli.json_events;
                 let session_id = session
@@ -5973,6 +5987,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             .emit_stdout();
                         })));
                 }
+                if json_events && session.max_budget_usd.is_some() {
+                    session.on_budget_exhausted = Some(budget_exhausted_events(session_id.clone()));
+                }
                 let provider_label = format!("{:?}", session.provider).to_lowercase();
 
                 if json_events {
@@ -5990,75 +6007,39 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 }
 
                 let session_id_for_chunks = session_id.clone();
-                // Accumulate streamed text so a SIGINT can reconcile session
-                // history with the partial reply (the TUI does the same via its
-                // shared stream buffer on the Esc/Ctrl-C cancel path).
-                let partial_buffer = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-                let partial_sink = std::sync::Arc::clone(&partial_buffer);
-                // Race the turn against Ctrl-C. Cancellation reuses the TUI's
-                // mechanism: dropping the `send()` future aborts the in-flight
-                // provider stream and tool loop (tokio::select! drops the losing
-                // branch), then `finalize_cancelled_turn` repairs history.
-                let outcome = tokio::select! {
-                    result = session.send(
-                        &app_config,
-                        prompt,
-                        Box::new(move |chunk| {
-                            if let Ok(mut buf) = partial_sink.lock() {
-                                buf.push_str(chunk);
+                let turn = send_until_interrupted(
+                    &mut session,
+                    &app_config,
+                    &exec_prompt,
+                    Box::new(move |chunk| {
+                        if json_events {
+                            agent_events::AgentEvent::MessageDelta {
+                                session_id: session_id_for_chunks.clone(),
+                                text: chunk.to_string(),
                             }
-                            if json_events {
-                                agent_events::AgentEvent::MessageDelta {
-                                    session_id: session_id_for_chunks.clone(),
-                                    text: chunk.to_string(),
-                                }
-                                .emit_stdout();
-                            } else if !is_json {
-                                output::print_assistant_chunk(chunk);
-                            }
-                        }),
-                    ) => Some(result),
-                    _ = tokio::signal::ctrl_c() => None,
-                };
-                let Some(result) = outcome else {
-                    // First SIGINT: the send future was dropped above, which
-                    // cancelled the stream. A second Ctrl-C during shutdown
-                    // exits immediately.
-                    tokio::spawn(async {
-                        let _ = tokio::signal::ctrl_c().await;
-                        terminals::stop_all();
-                        std::process::exit(130);
-                    });
-                    let partial = partial_buffer
-                        .lock()
-                        .map(|buf| buf.clone())
-                        .unwrap_or_default();
-                    session.cancel_turn(&partial).await;
-                    // The repair `finalize_cancelled_turn` just made lives only
-                    // in memory, and the turn-end persist never runs on this
-                    // path. Without this write the session file ends on a lone
-                    // user message, so `agi resume` reopens it with two user
-                    // turns in a row. Report and continue: a failed write must
-                    // not change the interrupt's exit code.
-                    if let Err(error) = session.persist_managed_session() {
-                        tracing::warn!("failed to persist the cancelled turn: {error:#}");
-                    }
-                    use std::io::Write as _;
-                    let _ = io::stdout().flush();
-                    if json_events {
-                        agent_events::AgentEvent::Finished {
-                            session_id: session_id.clone(),
-                            reason: "interrupted",
+                            .emit_stdout();
+                        } else if !is_json {
+                            output::print_assistant_chunk(chunk);
                         }
-                        .emit_stdout();
-                    } else {
-                        eprintln!();
-                        eprintln!("Interrupted, turn cancelled before completion.");
+                    }),
+                )
+                .await;
+                let result = match turn {
+                    OneShotTurn::Finished(result) => result,
+                    OneShotTurn::Interrupted(partial) => {
+                        cancel_interrupted_turn(&mut session, &partial).await;
+                        if json_events {
+                            agent_events::AgentEvent::Finished {
+                                session_id: session_id.clone(),
+                                reason: "interrupted",
+                            }
+                            .emit_stdout();
+                        } else {
+                            eprintln!();
+                            eprintln!("Interrupted, turn cancelled before completion.");
+                        }
+                        exit_interrupted()
                     }
-                    // 130 = 128 + SIGINT, the conventional exit code.
-                    terminals::stop_all();
-                    end_process_cleanly();
-                    std::process::exit(130);
                 };
                 match result {
                     Ok(turn) => {
@@ -7713,17 +7694,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
 
     // Detect piped stdin early (before --cost check, since cost+stdin should work)
     let is_piped = !io::stdin().is_terminal();
-    let stdin_content = if is_piped || cli.stdin || cli.prompt.as_deref() == Some("-") {
-        let mut buf = String::new();
-        io::stdin().read_to_string(&mut buf)?;
-        if buf.is_empty() {
-            None
-        } else {
-            Some(buf)
-        }
-    } else {
-        None
-    };
+    let stdin_content = read_piped_stdin(cli.stdin || cli.prompt.as_deref() == Some("-"))?;
 
     // --cost with no prompt and no stdin: just show pricing info
     if cli.cost && cli.prompt.is_none() && stdin_content.is_none() {
@@ -7732,35 +7703,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
         return Ok(());
     }
 
-    // Apply --effort preset (before individual overrides so explicit flags win)
-    let effort_max_turns = match cli.effort {
-        Some(EffortLevel::Low) => {
-            app_config.default.max_tokens = 2048;
-            app_config.default.temperature = Some(0.3);
-            Some(3usize)
-        }
-        Some(EffortLevel::Medium) => None, // use defaults
-        Some(EffortLevel::High) => {
-            app_config.default.max_tokens = 16384;
-            Some(50usize)
-        }
-        Some(EffortLevel::Max) => {
-            app_config.default.max_tokens = 32768;
-            Some(100usize)
-        }
-        None => None,
-    };
-
-    // Apply CLI overrides to config (explicit flags override effort presets)
-    if let Some(ref max_tokens) = cli.max_tokens {
-        app_config.default.max_tokens = *max_tokens;
-    }
-    if cli.no_stream {
-        app_config.default.stream = false;
-    }
-    if let Some(temp) = cli.temperature {
-        app_config.default.temperature = Some(temp);
-    }
+    let effort_max_turns = apply_run_overrides(&cli, &mut app_config);
 
     // Resolve model.
     //
@@ -7853,15 +7796,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
         );
     }
 
-    // Read file contents for -f flag, text files and images are handled separately
-    let mut file_context_result = read_file_contexts(&cli.files)?;
-
-    if let Some(ref handoff_url) = cli.context_url {
-        let handoff = context_handoff::parse_context_handoff_url(handoff_url)?;
-        file_context_result
-            .text
-            .insert_str(0, &handoff.to_prompt_context());
-    }
+    let file_context_result = launch_file_context(&cli)?;
 
     // Gather system context
     let sys_context = context::gather_system_context();
@@ -7873,51 +7808,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
         &file_context_result.text,
     );
 
-    // --system-prompt-file: read base system prompt from file (wins over --system-prompt).
-    let file_base_prompt: Option<String> = if let Some(ref path) = cli.system_prompt_file {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => Some(contents),
-            Err(e) => {
-                anyhow::bail!("--system-prompt-file: cannot read '{}': {}", path, e);
-            }
-        }
-    } else {
-        None
-    };
-
-    // --append-system-prompt-file: read append content from file.
-    let file_append_prompt: Option<String> = if let Some(ref path) = cli.append_system_prompt_file {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => Some(contents),
-            Err(e) => {
-                anyhow::bail!("--append-system-prompt-file: cannot read '{}': {}", path, e);
-            }
-        }
-    } else {
-        None
-    };
-
-    // Build effective system prompt (base + append).
-    // Priority: file contents win over inline flags when both are provided.
-    let resolved_base = file_base_prompt.as_deref().or(cli.system_prompt.as_deref());
-    let resolved_append = {
-        // Combine inline append and file append with a newline separator when both present.
-        match (
-            cli.append_system_prompt.as_deref(),
-            file_append_prompt.as_deref(),
-        ) {
-            (Some(inline), Some(from_file)) => Some(format!("{}\n\n{}", inline, from_file)),
-            (Some(inline), None) => Some(inline.to_string()),
-            (None, Some(from_file)) => Some(from_file.to_string()),
-            (None, None) => None,
-        }
-    };
-    let effective_system_prompt = match (resolved_base, resolved_append.as_deref()) {
-        (Some(base), Some(append)) => Some(format!("{}\n\n{}", base, append)),
-        (Some(base), None) => Some(base.to_string()),
-        (None, Some(append)) => Some(append.to_string()),
-        (None, None) => None,
-    };
+    let effective_system_prompt = resolve_system_prompt(&cli)?;
 
     // --dump-system-prompt: assemble the system prompt the way AgentSession::new
     // would for this route, print it to stdout, and exit. No API call.
@@ -7988,6 +7879,13 @@ async fn run_cli(cli: Cli) -> Result<()> {
         crate::tools::forbid_terminal_questions();
         let oneshot_resume = match cli.session.as_ref().or(cli.resume.as_ref()) {
             Some(reference) => resolve_resume_payload(reference, cli.fork_session)?.1,
+            None if cli.continue_session => match resolve_latest_resume_payload()? {
+                Some((_, (_, managed_session))) => managed_session,
+                None => {
+                    eprintln!("No saved session in this project to continue; starting a new one.");
+                    None
+                }
+            },
             None => None,
         };
         return run_oneshot(
@@ -8069,7 +7967,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
             Some(payload)
         } else {
-            eprintln!("No saved sessions to continue.");
+            eprintln!("No saved session in this project to continue.");
             None
         }
     } else {
@@ -8346,6 +8244,225 @@ pub fn exit_with_error(e: &anyhow::Error) -> ! {
 fn end_process_cleanly() {
     runtime::writer_lease::release_process_leases();
     output::release_held_diagnostics();
+}
+
+enum OneShotTurn {
+    Finished(Result<agent::TurnResult>),
+    Interrupted(String),
+}
+
+/// Race a non-interactive turn against Ctrl-C. Losing the race drops the
+/// `send` future, which stops the provider stream and the tool loop; the text
+/// streamed so far comes back so the cancelled turn can be repaired.
+async fn send_until_interrupted(
+    session: &mut agent::AgentSession,
+    config: &config::CliConfig,
+    prompt: &str,
+    mut on_chunk: models::StreamCallback,
+) -> OneShotTurn {
+    let streamed = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let sink = std::sync::Arc::clone(&streamed);
+    let finished = tokio::select! {
+        result = session.send(
+            config,
+            prompt,
+            Box::new(move |chunk| {
+                if let Ok(mut buffer) = sink.lock() {
+                    buffer.push_str(chunk);
+                }
+                on_chunk(chunk);
+            }),
+        ) => Some(result),
+        _ = tokio::signal::ctrl_c() => None,
+    };
+    match finished {
+        Some(result) => OneShotTurn::Finished(result),
+        None => OneShotTurn::Interrupted(
+            streamed
+                .lock()
+                .map(|buffer| buffer.clone())
+                .unwrap_or_default(),
+        ),
+    }
+}
+
+/// The turn-end save never runs for a cancelled turn, so without this write
+/// the session file ends on a lone prompt and a resume shows two prompts in a
+/// row. A failed write must not change the interrupt's exit code.
+async fn cancel_interrupted_turn(session: &mut agent::AgentSession, partial: &str) {
+    tokio::spawn(async {
+        let _ = tokio::signal::ctrl_c().await;
+        exit_interrupted();
+    });
+    session.cancel_turn(partial).await;
+    if let Err(error) = session.persist_managed_session() {
+        tracing::warn!("failed to persist the cancelled turn: {error:#}");
+    }
+    use std::io::Write as _;
+    let _ = io::stdout().flush();
+}
+
+/// Commands the agent started lead their own process group, so the terminal's
+/// SIGINT never reaches them; they are killed here before the process leaves.
+fn exit_interrupted() -> ! {
+    process_tree::kill_all_process_trees();
+    terminals::stop_all();
+    end_process_cleanly();
+    std::process::exit(130)
+}
+
+fn budget_exhausted_events(session_id: String) -> agent::BudgetSink {
+    agent::BudgetSink(Box::new(move |cumulative, limit| {
+        agent_events::AgentEvent::BudgetExhausted {
+            session_id: session_id.clone(),
+            cumulative_dollars: cumulative,
+            limit_dollars: limit,
+        }
+        .emit_stdout();
+    }))
+}
+
+fn apply_named_agent(session: &mut agent::AgentSession, agent_name: Option<&str>) {
+    let Some(name) = agent_name else {
+        return;
+    };
+    match agents::find_agent(name) {
+        Some(agent_def) => agent_def.apply_to_session(session),
+        None => eprintln!(
+            "Warning: agent '{}' not found. Continuing without agent.",
+            name
+        ),
+    }
+}
+
+fn read_piped_stdin(requested: bool) -> Result<Option<String>> {
+    if !requested && io::stdin().is_terminal() {
+        return Ok(None);
+    }
+    let mut buf = String::new();
+    io::stdin().read_to_string(&mut buf)?;
+    Ok((!buf.is_empty()).then_some(buf))
+}
+
+fn launch_file_context(cli: &Cli) -> Result<FileContextResult> {
+    let mut file_context = read_file_contexts(&cli.files)?;
+    if let Some(ref handoff_url) = cli.context_url {
+        let handoff = context_handoff::parse_context_handoff_url(handoff_url)?;
+        file_context
+            .text
+            .insert_str(0, &handoff.to_prompt_context());
+    }
+    Ok(file_context)
+}
+
+/// `--system-prompt-file` wins over `--system-prompt`; inline and file appends
+/// are joined in that order.
+fn resolve_system_prompt(cli: &Cli) -> Result<Option<String>> {
+    let file_base_prompt = match cli.system_prompt_file.as_deref() {
+        Some(path) => Some(std::fs::read_to_string(path).map_err(|error| {
+            anyhow::anyhow!("--system-prompt-file: cannot read '{}': {}", path, error)
+        })?),
+        None => None,
+    };
+    let file_append_prompt = match cli.append_system_prompt_file.as_deref() {
+        Some(path) => Some(std::fs::read_to_string(path).map_err(|error| {
+            anyhow::anyhow!(
+                "--append-system-prompt-file: cannot read '{}': {}",
+                path,
+                error
+            )
+        })?),
+        None => None,
+    };
+    let base = file_base_prompt.as_deref().or(cli.system_prompt.as_deref());
+    let append = match (
+        cli.append_system_prompt.as_deref(),
+        file_append_prompt.as_deref(),
+    ) {
+        (Some(inline), Some(from_file)) => Some(format!("{}\n\n{}", inline, from_file)),
+        (Some(inline), None) => Some(inline.to_string()),
+        (None, Some(from_file)) => Some(from_file.to_string()),
+        (None, None) => None,
+    };
+    Ok(match (base, append.as_deref()) {
+        (Some(base), Some(append)) => Some(format!("{}\n\n{}", base, append)),
+        (Some(base), None) => Some(base.to_string()),
+        (None, Some(append)) => Some(append.to_string()),
+        (None, None) => None,
+    })
+}
+
+/// `--effort`, then the explicit `--max-tokens`, `--no-stream` and
+/// `--temperature` over it. Returns the turn limit the effort preset implies.
+fn apply_run_overrides(cli: &Cli, config: &mut config::CliConfig) -> Option<usize> {
+    let effort_max_turns = match cli.effort {
+        Some(EffortLevel::Low) => {
+            config.default.max_tokens = 2048;
+            config.default.temperature = Some(0.3);
+            Some(3usize)
+        }
+        Some(EffortLevel::Medium) => None,
+        Some(EffortLevel::High) => {
+            config.default.max_tokens = 16384;
+            Some(50usize)
+        }
+        Some(EffortLevel::Max) => {
+            config.default.max_tokens = 32768;
+            Some(100usize)
+        }
+        None => None,
+    };
+    if let Some(max_tokens) = cli.max_tokens {
+        config.default.max_tokens = max_tokens;
+    }
+    if cli.no_stream {
+        config.default.stream = false;
+    }
+    if let Some(temperature) = cli.temperature {
+        config.default.temperature = Some(temperature);
+    }
+    effort_max_turns
+}
+
+fn worktree_return_hint(name: &str) -> String {
+    format!("agi --worktree {name} -c")
+}
+
+fn user_prompt(message: &models::Message) -> bool {
+    message.role == "user"
+        && match &message.content {
+            models::MessageContent::Text(_) => true,
+            models::MessageContent::Blocks(blocks) => !blocks
+                .iter()
+                .any(|block| matches!(block, models::ContentBlock::ToolResult { .. })),
+        }
+}
+
+/// `--at-turn N` keeps user prompts 0 through N with everything that answered
+/// them, tool calls included. Tool results travel as user messages, so they
+/// are never counted as turns, and a call the source left unanswered is closed.
+fn fork_transcript(
+    mut messages: Vec<models::Message>,
+    at_turn: Option<usize>,
+) -> Vec<models::Message> {
+    if let Some(at_turn) = at_turn {
+        let mut prompts_seen = 0usize;
+        let cut = messages.iter().position(|message| {
+            if !user_prompt(message) {
+                return false;
+            }
+            if prompts_seen > at_turn {
+                return true;
+            }
+            prompts_seen += 1;
+            false
+        });
+        if let Some(cut) = cut {
+            messages.truncate(cut);
+        }
+    }
+    agent::mark_interrupted_tool_calls(&mut messages);
+    messages
 }
 
 pub fn run_to_exit_code() -> std::process::ExitCode {
@@ -8656,31 +8773,12 @@ pub async fn run_oneshot(
     if matches!(permission_mode, cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }
-    // Wire --agent: load the named agent definition and apply overrides to the session.
-    if let Some(ref name) = agent_name {
-        match agents::find_agent(name) {
-            Some(agent_def) => {
-                agent_def.apply_to_session(&mut session);
-            }
-            None => {
-                eprintln!(
-                    "Warning: agent '{}' not found. Continuing without agent.",
-                    name
-                );
-            }
-        }
-    }
+    apply_named_agent(&mut session, agent_name.as_deref());
     let resuming = resume_session.is_some();
     if let Some((managed, path)) = resume_session {
         session.load_managed_conversation(managed, path)?;
     }
-    session.enable_managed_session()?;
-    // Wire --session-id: override the auto-generated session UUID with the
-    // caller-supplied one.  Must be called after enable_managed_session so
-    // the managed session object exists.
-    if let Some(sid) = session_id_override.as_ref().filter(|_| !resuming) {
-        session.override_session_id(sid)?;
-    }
+    session.enable_managed_session_as(session_id_override.as_deref().filter(|_| !resuming))?;
     if let Some(seed) = auto_route_seed {
         session.auto_routing_tier = Some(seed.tier);
         session.set_managed_auto_routing(Some(seed.state));
@@ -8689,8 +8787,8 @@ pub async fn run_oneshot(
     // managed session entirely, so an explicit `--session-id` has to be read
     // straight from the flag, otherwise a caller that opted out of disk
     // persistence would silently lose the id it correlates events by. When
-    // persistence is on this is the same value `override_session_id` just
-    // wrote, so the two paths agree.
+    // persistence is on this is the id the session was created under, so the
+    // two paths agree.
     let event_session_id = wire_session_id(
         session_id_override.as_deref(),
         resuming,
@@ -8710,15 +8808,7 @@ pub async fn run_oneshot(
         let managed_id = event_session_id
             .clone()
             .unwrap_or_else(|| "(no session)".to_string());
-        session.on_budget_exhausted =
-            Some(agent::BudgetSink(Box::new(move |cumulative, limit| {
-                agent_events::AgentEvent::BudgetExhausted {
-                    session_id: managed_id.clone(),
-                    cumulative_dollars: cumulative,
-                    limit_dollars: limit,
-                }
-                .emit_stdout();
-            })));
+        session.on_budget_exhausted = Some(budget_exhausted_events(managed_id));
     }
     attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
 
@@ -8802,14 +8892,29 @@ pub async fn run_oneshot(
 
         let start = std::time::Instant::now();
         let delta_context = stream_context.clone();
-        let result = session
-            .send(
-                config,
-                prompt,
-                Box::new(move |chunk| delta_context.emit_text_delta(chunk)),
-            )
-            .await;
+        let turn = send_until_interrupted(
+            &mut session,
+            config,
+            prompt,
+            Box::new(move |chunk| delta_context.emit_text_delta(chunk)),
+        )
+        .await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        let result = match turn {
+            OneShotTurn::Finished(result) => result,
+            OneShotTurn::Interrupted(partial) => {
+                cancel_interrupted_turn(&mut session, &partial).await;
+                writer
+                    .emit(&SdkEvent::StatusUpdate(StatusUpdateEvent {
+                        session_id,
+                        reason: StatusUpdateReason::SessionEnd,
+                        detail: Some(format!("{}ms (interrupted)", duration_ms)),
+                    }))
+                    .await
+                    .ok();
+                exit_interrupted()
+            }
+        };
 
         match result {
             Ok(turn) => {
@@ -8871,8 +8976,17 @@ pub async fn run_oneshot(
         // Pretty-printed single JSON object, non-streaming, for shell users
         // running `agi -p '...' --output-format json`.
         let start = std::time::Instant::now();
-        let result = session.send(config, prompt, Box::new(|_chunk| {})).await;
+        let turn =
+            send_until_interrupted(&mut session, config, prompt, Box::new(|_chunk| {})).await;
         let duration_ms = start.elapsed().as_millis() as u64;
+        let result = match turn {
+            OneShotTurn::Finished(result) => result,
+            OneShotTurn::Interrupted(partial) => {
+                cancel_interrupted_turn(&mut session, &partial).await;
+                eprintln!("Interrupted, turn cancelled before completion.");
+                exit_interrupted()
+            }
+        };
 
         match result {
             Ok(turn) => {
@@ -8907,25 +9021,30 @@ pub async fn run_oneshot(
             }
         }
     } else if output_mode == OneShotOutputMode::RawText {
-        // Raw text mode: no spinner, no cost, no formatting
-        let result = session
-            .send(
-                config,
-                prompt,
-                Box::new(|chunk| {
-                    output::print_assistant_chunk(chunk);
-                }),
-            )
-            .await;
+        let turn = send_until_interrupted(
+            &mut session,
+            config,
+            prompt,
+            Box::new(|chunk| {
+                output::print_assistant_chunk(chunk);
+            }),
+        )
+        .await;
 
-        match result {
-            Ok(_turn) => {
+        match turn {
+            OneShotTurn::Finished(Ok(_turn)) => {
                 output::print_assistant_end();
             }
-            Err(e) => {
+            OneShotTurn::Finished(Err(e)) => {
                 output::print_assistant_end();
-                eprintln!("{}", e);
+                eprintln!("{}", errors::terminal_text(&e));
                 exit_with_error(&e);
+            }
+            OneShotTurn::Interrupted(partial) => {
+                cancel_interrupted_turn(&mut session, &partial).await;
+                output::print_assistant_end();
+                eprintln!("Interrupted, turn cancelled before completion.");
+                exit_interrupted();
             }
         }
     } else {
@@ -8935,20 +9054,32 @@ pub async fn run_oneshot(
         let md_cb = std::sync::Arc::clone(&md);
         session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
-        let result = session
-            .send(
-                config,
-                prompt,
-                Box::new(move |chunk| {
-                    if let Ok(mut renderer) = md_cb.lock() {
-                        output::print_assistant_chunk_formatted(&mut renderer, chunk);
-                    }
-                }),
-            )
-            .await;
+        let turn = send_until_interrupted(
+            &mut session,
+            config,
+            prompt,
+            Box::new(move |chunk| {
+                if let Ok(mut renderer) = md_cb.lock() {
+                    output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                }
+            }),
+        )
+        .await;
         session.transcript_renderer = None;
 
         spinner.finish_and_clear();
+        let result = match turn {
+            OneShotTurn::Finished(result) => result,
+            OneShotTurn::Interrupted(partial) => {
+                cancel_interrupted_turn(&mut session, &partial).await;
+                if let Ok(mut renderer) = md.lock() {
+                    output::flush_markdown(&mut renderer);
+                }
+                output::print_assistant_end();
+                eprintln!("Interrupted, turn cancelled before completion.");
+                exit_interrupted()
+            }
+        };
 
         // Flush remaining markdown buffer
         if let Ok(mut renderer) = md.lock() {
@@ -9878,44 +10009,137 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn session_id_override_wires_to_managed_session() {
-        // Behavioral test: override_session_id() actually mutates the managed
-        // session's session_id so managed_session_id() returns the caller value.
-        //
-        // Takes the session-persistence policy lock because this test depends on
-        // the default (persistence on) while the `--no-session-persistence`
-        // tests flip that process-wide policy.
+    async fn a_requested_session_id_is_the_id_resume_and_show_find() {
         let _policy = cli_options::session_persistence_policy_lock();
         let sys_ctx = context::gather_system_context();
-        // Source the model ID from the canonical catalog (models.json) rather than
-        // a hardcoded literal, per the locked no-hardcoded-model-IDs rule.
         let model = model_catalog::default_model();
+        let requested = format!("requested-{}", uuid::Uuid::new_v4());
         let mut session = agent::AgentSession::new(model, &sys_ctx, None);
         session
-            .enable_managed_session()
-            .expect("enable_managed_session should succeed");
-        let auto_id = session
-            .managed_session_id()
-            .expect("session should exist after enable")
-            .to_string();
-        assert!(
-            !auto_id.is_empty(),
-            "auto-generated session id should not be empty"
-        );
+            .enable_managed_session_as(Some(requested.as_str()))
+            .expect("a new session takes the requested id");
+        assert_eq!(session.managed_session_id(), Some(requested.as_str()));
 
-        let custom = "test-override-id-behavioral";
-        session
-            .override_session_id(custom)
-            .expect("override_session_id should succeed");
+        let resolved = runtime::session_control::resolve_managed_session_reference(&requested)
+            .expect("the requested id resolves the way --resume and session show resolve it");
+        assert_eq!(resolved.summary.session_id, requested);
         assert_eq!(
-            session.managed_session_id(),
-            Some(custom),
-            "managed_session_id should reflect the overridden id"
+            resolved.path.file_stem().and_then(|stem| stem.to_str()),
+            Some(requested.as_str())
         );
-        assert_ne!(
-            session.managed_session_id(),
-            Some(auto_id.as_str()),
-            "id should have changed from the auto-generated value"
+    }
+
+    fn transcript_message(role: &str, blocks: Vec<models::ContentBlock>) -> models::Message {
+        models::Message::blocks(role, blocks)
+    }
+
+    fn prompt_and_tool_transcript() -> Vec<models::Message> {
+        vec![
+            models::Message::text("system", "system"),
+            models::Message::text("user", "first prompt"),
+            transcript_message(
+                "assistant",
+                vec![models::ContentBlock::ToolUse {
+                    id: "call-1".to_string(),
+                    name: "run_command".to_string(),
+                    input: serde_json::json!({ "command": "true" }),
+                }],
+            ),
+            transcript_message(
+                "user",
+                vec![models::ContentBlock::ToolResult {
+                    tool_use_id: "call-1".to_string(),
+                    content: "ok".to_string(),
+                    is_error: false,
+                }],
+            ),
+            models::Message::text("assistant", "DONE"),
+            models::Message::text("user", "second prompt"),
+            models::Message::text("assistant", "TWO"),
+        ]
+    }
+
+    #[test]
+    fn forking_at_a_turn_counts_prompts_and_keeps_the_whole_answer() {
+        let at_first = fork_transcript(prompt_and_tool_transcript(), Some(0));
+        assert_eq!(at_first.len(), 5, "cut after the first prompt's answer");
+        assert_eq!(at_first[4].text_content(), "DONE");
+
+        let at_second = fork_transcript(prompt_and_tool_transcript(), Some(1));
+        assert_eq!(at_second.len(), 7, "the second prompt and its answer stay");
+        assert_eq!(at_second[6].text_content(), "TWO");
+
+        assert_eq!(fork_transcript(prompt_and_tool_transcript(), None).len(), 7);
+    }
+
+    #[test]
+    fn a_fork_never_ends_on_an_unanswered_tool_call() {
+        let mut interrupted = prompt_and_tool_transcript();
+        interrupted.truncate(3);
+
+        let forked = fork_transcript(interrupted, Some(0));
+
+        let last = forked.last().expect("transcript");
+        assert_eq!(last.role, "user");
+        assert!(matches!(
+            &last.content,
+            models::MessageContent::Blocks(blocks)
+                if matches!(blocks.as_slice(), [models::ContentBlock::ToolResult { tool_use_id, .. }] if tool_use_id == "call-1")
+        ));
+    }
+
+    #[test]
+    fn the_worktree_return_hint_is_a_command_that_parses_and_continues() {
+        let hint = worktree_return_hint("feature-x");
+        let cli = Cli::try_parse_from(hint.split_whitespace()).expect("the printed hint parses");
+        assert!(cli.continue_session);
+        assert_eq!(cli.worktree.as_deref(), Some("feature-x"));
+        let long = Cli::try_parse_from(["agi", "--continue"]).expect("--continue is accepted");
+        assert!(long.continue_session);
+    }
+
+    #[test]
+    fn exec_takes_the_run_limits_and_effort_the_top_level_run_takes() {
+        let cli = Cli::try_parse_from([
+            "agi",
+            "--effort",
+            "low",
+            "--max-tokens",
+            "1024",
+            "--max-budget-usd",
+            "1",
+            "exec",
+            "go",
+        ])
+        .expect("parses");
+        let mut config = config::CliConfig::default();
+        let effort_turns = apply_run_overrides(&cli, &mut config);
+        assert_eq!(cli.max_turns.or(effort_turns), Some(3));
+        assert_eq!(config.default.max_tokens, 1024, "an explicit flag wins");
+        assert_eq!(cli.max_budget_usd, Some(1.0));
+    }
+
+    #[test]
+    fn system_prompt_files_win_over_inline_flags_and_appends_join() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let base = dir.path().join("base.txt");
+        std::fs::write(&base, "from file").expect("write");
+        let base_arg = base.display().to_string();
+        let cli = Cli::try_parse_from([
+            "agi",
+            "--system-prompt",
+            "inline",
+            "--system-prompt-file",
+            base_arg.as_str(),
+            "--append-system-prompt",
+            "extra",
+            "exec",
+            "go",
+        ])
+        .expect("parses");
+        assert_eq!(
+            resolve_system_prompt(&cli).expect("resolves").as_deref(),
+            Some("from file\n\nextra")
         );
     }
 

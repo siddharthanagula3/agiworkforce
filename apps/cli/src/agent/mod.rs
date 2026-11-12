@@ -1914,6 +1914,14 @@ impl AgentSession {
     /// created and no session-index row is written, so the run leaves no trace
     /// under `~/.agiworkforce/`.
     pub fn enable_managed_session(&mut self) -> Result<()> {
+        self.enable_managed_session_as(None)
+    }
+
+    /// Like [`Self::enable_managed_session`], but a new session takes
+    /// `requested_id` (`--session-id`) as its id and file name, so `--resume`,
+    /// `session show` and `session fork` find it under that id. An id that
+    /// already names a stored session is refused instead of overwritten.
+    pub fn enable_managed_session_as(&mut self, requested_id: Option<&str>) -> Result<()> {
         if !self.session_persistence {
             return Ok(());
         }
@@ -1921,19 +1929,36 @@ impl AgentSession {
             return Ok(());
         }
         let store = crate::runtime::session_control::ManagedSessionStore::user_config()?;
-        self.initialize_managed_session(&store)?;
+        self.create_managed_session_in(&store, requested_id)?;
         self.sync_managed_session_metadata()
+    }
+
+    fn create_managed_session_in(
+        &mut self,
+        store: &crate::runtime::session_control::ManagedSessionStore,
+        requested_id: Option<&str>,
+    ) -> Result<()> {
+        let session_id = match requested_id {
+            Some(requested) => {
+                if store.contains(requested)? {
+                    anyhow::bail!(
+                        "A session with id '{requested}' already exists. Continue it with --resume {requested}, or choose another --session-id."
+                    );
+                }
+                requested.to_string()
+            }
+            None => uuid::Uuid::new_v4().to_string(),
+        };
+        self.initialize_managed_session(store, session_id)
     }
 
     fn initialize_managed_session(
         &mut self,
         store: &crate::runtime::session_control::ManagedSessionStore,
+        session_id: String,
     ) -> Result<()> {
-        let mut managed_session = ManagedSession::with_messages(
-            uuid::Uuid::new_v4().to_string(),
-            chrono::Utc::now(),
-            self.messages.clone(),
-        );
+        let mut managed_session =
+            ManagedSession::with_messages(session_id, chrono::Utc::now(), self.messages.clone());
         managed_session.model = Some(self.model.clone());
         managed_session.routing_authority = Some(self.current_routing_authority());
         managed_session.memory_nonce = Some(self.memory_nonce.clone());
@@ -1949,24 +1974,6 @@ impl AgentSession {
         self.current_plan_path = current_plan_path;
         self.plan_rejection_feedback = plan_rejection_feedback;
         self.checkpoint_log = carried.moved_into(std::mem::take(&mut self.checkpoint_log));
-        Ok(())
-    }
-
-    /// Override the managed session ID with a caller-supplied UUID.  This must
-    /// be called after `enable_managed_session` so the session object exists.
-    /// Useful for embedder-driven flows that pre-allocate session IDs.
-    pub fn override_session_id(&mut self, session_id: &str) -> Result<()> {
-        if !self.session_persistence {
-            return Ok(());
-        }
-        crate::runtime::session::validate_managed_session_id(session_id)?;
-        if let Some(ref mut ms) = self.managed_session {
-            ms.session_id = session_id.to_string();
-            if let Some(ref path) = self.managed_session_path {
-                ms.save_to_path(path)?;
-            }
-            self.sync_managed_session_metadata()?;
-        }
         Ok(())
     }
 
@@ -3204,7 +3211,7 @@ mod tests {
         let expected_plan = serde_json::to_value(&session.current_plan).expect("plan");
 
         session
-            .initialize_managed_session(&store)
+            .create_managed_session_in(&store, None)
             .expect("initialize fixture");
 
         assert!(session.plan_approved);
@@ -3224,6 +3231,42 @@ mod tests {
         assert_eq!(
             serde_json::to_value(&saved.current_plan).expect("saved plan"),
             expected_plan
+        );
+    }
+
+    #[test]
+    fn a_requested_session_id_names_the_session_file_and_is_never_overwritten() {
+        let temp = tempfile::tempdir().expect("session fixture");
+        let store =
+            crate::runtime::session_control::ManagedSessionStore::new(temp.path().to_path_buf());
+        let requested = "11111111-2222-4333-8444-555555555555";
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.set_session_persistence(true);
+
+        session
+            .create_managed_session_in(&store, Some(requested))
+            .expect("create under the requested id");
+
+        assert_eq!(session.managed_session_id(), Some(requested));
+        let resolved = store
+            .resolve(
+                crate::runtime::session_control::ManagedSessionReference::SessionId(
+                    requested.to_string(),
+                ),
+            )
+            .expect("the requested id resolves");
+        assert_eq!(
+            resolved.path.file_stem().and_then(|stem| stem.to_str()),
+            Some(requested)
+        );
+
+        let mut second = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        second.set_session_persistence(true);
+        assert!(
+            second
+                .create_managed_session_in(&store, Some(requested))
+                .is_err(),
+            "an id that names a stored session must not be reused"
         );
     }
 
@@ -5164,8 +5207,8 @@ mod tests {
             .persist_managed_session()
             .expect("persist_managed_session must succeed as a no-op");
         session
-            .override_session_id("attempted-rename")
-            .expect("override_session_id must succeed as a no-op");
+            .enable_managed_session_as(Some("attempted-rename"))
+            .expect("enable_managed_session_as must succeed as a no-op");
 
         let after = std::fs::read_to_string(&path).expect("read file after persist");
         assert_eq!(
