@@ -31,7 +31,7 @@ import {
 } from './features/sidebar-webview/sessionReceipt';
 import { resolveCloudCodeAgentModel, PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 import { resolveTierSync } from './integrations/tierResolver';
-import { Config } from './platform/config';
+import { Config, resolveConfiguredCli } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
 import { normalizeConfiguredModelId } from './features/model-picker/modelConstants';
@@ -52,11 +52,7 @@ import { LocalRuntimeClient } from './integrations/localRuntimeClient';
 import { LocalRuntimePool } from './integrations/localRuntimePool';
 import { refreshAccountTierCache, watchAccountTierInvalidation } from './integrations/tierResolver';
 import { getExtensionVersion } from './platform/version';
-import {
-  describeRemoteEnvironment,
-  nodeCliResolutionHost,
-  resolveCliPath,
-} from './platform/remoteEnvironment';
+import { describeRemoteEnvironment } from './platform/remoteEnvironment';
 import { ChatEditorPanel } from './providers/chatEditorPanel';
 import {
   buildPullRequestReviewPrompt,
@@ -126,7 +122,8 @@ export function activate(context: vscode.ExtensionContext): void {
   const localRuntimes = new LocalRuntimePool(
     (cwd) =>
       new LocalRuntimeClient({
-        cliPath: () => resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
+        cliPath: resolveConfiguredCli,
+        workspaceTrusted: () => vscode.workspace.isTrusted,
         memoryEnabled: () => Config.memoryEnabled(),
         bypassPermissionsAvailable: () => Config.agentMode() === 'bypass',
         workspaceConsentAtMs: () => workspaceConsent.consentAtMs(cwd),

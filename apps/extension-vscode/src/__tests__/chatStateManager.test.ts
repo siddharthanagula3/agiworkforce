@@ -21,12 +21,12 @@ import {
   isAutoPickerModelId,
 } from '../features/model-picker/modelConstants';
 import {
+  LocalRuntimeClient,
   LocalRuntimeProtocolError,
-  type LocalRuntimeClient,
   type LocalRuntimeEvent,
 } from '../integrations/localRuntimeClient';
-import type { LocalRuntimePool } from '../integrations/localRuntimePool';
-import type { ConversationTreeProvider } from '../features/trees/conversationTreeProvider';
+import { LocalRuntimePool } from '../integrations/localRuntimePool';
+import { ConversationTreeProvider } from '../features/trees/conversationTreeProvider';
 import {
   setContextPanelInstance,
   validateWorkspaceContextFile,
@@ -434,6 +434,48 @@ describe('ChatStateManager local turn lifecycle', () => {
         retryable: false,
       },
     });
+  });
+
+  it('renders the sidebar for an untrusted workspace without starting the CLI', async () => {
+    vscode.workspace.isTrusted = false;
+    const spawn = vi.fn();
+    const pool = new LocalRuntimePool(
+      (cwd) =>
+        new LocalRuntimeClient({
+          cliPath: '/usr/local/bin/agi',
+          workspaceTrusted: () => vscode.workspace.isTrusted,
+          cwd,
+          clientVersion: '0.3.0',
+          spawn,
+        }),
+    );
+    const context = new vscode.ExtensionContext();
+    const posted: ExtToWebviewMessage[] = [];
+    const manager = new ChatStateManager(
+      context.secrets,
+      context,
+      (message) => posted.push(message),
+      new ConversationTreeProvider(pool),
+      context.workspaceState,
+      pool,
+    );
+
+    await manager.handleMessage({ type: 'ready' });
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        type: 'runtimeStatus',
+        payload: expect.objectContaining({ status: 'workspace-untrusted' }),
+      }),
+    );
+    expect(posted).toContainEqual(
+      expect.objectContaining({
+        type: 'recentConversations',
+        payload: expect.objectContaining({ total: 0 }),
+      }),
+    );
+    await pool.shutdownAll();
   });
 
   it.each([

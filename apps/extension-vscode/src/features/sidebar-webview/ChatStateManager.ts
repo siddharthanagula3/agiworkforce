@@ -79,7 +79,9 @@ import {
   cliAcquisitionHint,
   CLI_NOT_FOUND_MARKER,
   LocalRuntimeProtocolError,
+  MANAGE_WORKSPACE_TRUST_COMMAND,
   readMcpAuthRequired,
+  WorkspaceNotTrustedError,
   writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
@@ -1169,7 +1171,7 @@ export class ChatStateManager {
       }
 
       case 'manageWorkspaceTrust': {
-        await vscode.commands.executeCommand('workbench.trust.manage');
+        await vscode.commands.executeCommand(MANAGE_WORKSPACE_TRUST_COMMAND);
         break;
       }
 
@@ -2555,7 +2557,7 @@ export class ChatStateManager {
     if (hint?.category === 'permission' && !vscode.workspace.isTrusted) {
       void vscode.window.showWarningMessage(warning, MANAGE_TRUST_LABEL).then((choice) => {
         if (choice !== MANAGE_TRUST_LABEL) return;
-        void vscode.commands.executeCommand('workbench.trust.manage');
+        void vscode.commands.executeCommand(MANAGE_WORKSPACE_TRUST_COMMAND);
       });
       return false;
     }
@@ -3484,16 +3486,7 @@ export class ChatStateManager {
           return [];
         }
         if (!vscode.workspace.isTrusted) {
-          this._runtimeReady = false;
-          this._localModelProviders.clear();
-          this._post({
-            type: 'runtimeStatus',
-            payload: {
-              status: 'workspace-untrusted',
-              message:
-                'Review and trust this workspace before AGI reads files, runs commands, or starts a local runtime.',
-            },
-          });
+          this._postWorkspaceUntrusted();
           return [];
         }
         if (this._localRuntimes === undefined) {
@@ -3524,6 +3517,10 @@ export class ChatStateManager {
       }
       return response.models;
     } catch (error) {
+      if (error instanceof WorkspaceNotTrustedError) {
+        this._postWorkspaceUntrusted();
+        return [];
+      }
       this._runtimeReady = false;
       this._post({
         type: 'runtimeStatus',
@@ -3537,6 +3534,19 @@ export class ChatStateManager {
       });
       return [];
     }
+  }
+
+  private _postWorkspaceUntrusted(): void {
+    this._runtimeReady = false;
+    this._localModelProviders.clear();
+    this._post({
+      type: 'runtimeStatus',
+      payload: {
+        status: 'workspace-untrusted',
+        message:
+          'Review and trust this workspace before AGI reads files, runs commands, or starts a local runtime.',
+      },
+    });
   }
 
   private _postProviderBadge(modelId: string): void {

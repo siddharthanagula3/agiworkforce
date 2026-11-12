@@ -6,10 +6,13 @@ import {
   ACCOUNT_MEMORY_CURSOR_KEY,
   ACCOUNT_MEMORY_VERSIONS_KEY,
   WORKSPACE_MEMORY_ADOPTED_KEY,
+  WORKSPACE_MEMORY_DECLINED_KEY,
+  COPY_WORKSPACE_NOTES_ACTION,
   describeRefusals,
   jwtSubject,
 } from '../memory/accountMemoryStore';
 import { MEMORY_STORE_KEY } from '../memory/memoryStore';
+import { Config } from '../platform/config';
 import {
   AccountMemoryUnauthorizedError,
   INITIAL_CURSOR,
@@ -409,19 +412,30 @@ describe('AccountMemoryStore', () => {
     expect(store.turnFacts()).toEqual([]);
   });
 
-  it('promotes facts written before memory was an account feature, exactly once', async () => {
-    const workspaceState = makeMemento({
+  function legacyWorkspace() {
+    return makeMemento({
       [MEMORY_STORE_KEY]: [
         { id: 'mem_1', text: 'Prefer tabs', createdAt: '2026-01-01T00:00:00.000Z' },
       ],
     });
-    const push = vi.fn(async (items: MemoryPushItem[]) => ({
+  }
+
+  function acceptingPush() {
+    return vi.fn(async (items: MemoryPushItem[]) => ({
       protocolVersion: 2 as const,
       applied: items.map((item) => ({ id: item.id, server_version: '2' })),
       conflicts: [],
       rejected: [],
       cursor: '2',
     }));
+  }
+
+  it('copies notes an earlier version saved here only after the user agrees, exactly once', async () => {
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
+      COPY_WORKSPACE_NOTES_ACTION as never,
+    );
+    const workspaceState = legacyWorkspace();
+    const push = acceptingPush();
     const store = new AccountMemoryStore(
       makeMemento(),
       makeSecrets(SIGNED_IN_TOKEN),
@@ -430,6 +444,8 @@ describe('AccountMemoryStore', () => {
     );
 
     await store.refresh();
+    await vi.waitFor(() => expect(workspaceState.get(WORKSPACE_MEMORY_ADOPTED_KEY)).toBe(true));
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledOnce();
     expect(push).toHaveBeenCalledTimes(1);
     expect(push.mock.calls[0]![0][0]).toEqual(
       expect.objectContaining({ content: 'Prefer tabs', baseVersion: INITIAL_CURSOR }),
@@ -438,7 +454,50 @@ describe('AccountMemoryStore', () => {
 
     await store.refresh();
     expect(push).toHaveBeenCalledTimes(1);
-    expect(workspaceState.get(WORKSPACE_MEMORY_ADOPTED_KEY)).toBe(true);
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledOnce();
+  });
+
+  it('uploads nothing and asks nothing while memory is off', async () => {
+    const memory = vi.spyOn(Config, 'memoryEnabled').mockReturnValue(false);
+    const workspaceState = legacyWorkspace();
+    const push = acceptingPush();
+    const store = new AccountMemoryStore(
+      makeMemento(),
+      makeSecrets(SIGNED_IN_TOKEN),
+      workspaceState,
+      makeClient({ push }),
+    );
+
+    await store.refresh();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    memory.mockRestore();
+    expect(push).not.toHaveBeenCalled();
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    expect(workspaceState.get(WORKSPACE_MEMORY_ADOPTED_KEY)).toBeUndefined();
+  });
+
+  it('asks each account once and uploads nothing when the user does not agree', async () => {
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
+    const workspaceState = legacyWorkspace();
+    const push = acceptingPush();
+    const store = new AccountMemoryStore(
+      makeMemento(),
+      makeSecrets(SIGNED_IN_TOKEN),
+      workspaceState,
+      makeClient({ push }),
+    );
+
+    await store.refresh();
+    await vi.waitFor(() =>
+      expect(workspaceState.get(WORKSPACE_MEMORY_DECLINED_KEY)).toEqual(['user_abc']),
+    );
+    await store.refresh();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(vscode.window.showInformationMessage).toHaveBeenCalledOnce();
+    expect(push).not.toHaveBeenCalled();
+    expect(workspaceState.get(WORKSPACE_MEMORY_ADOPTED_KEY)).toBeUndefined();
   });
 
   it('discards a cache that belongs to a different account', async () => {

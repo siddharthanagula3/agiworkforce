@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   cliProbeMessage,
   describeRemoteEnvironment,
   probeCli,
+  probeResolvedCli,
   resolveCliPath,
   type CliResolutionHost,
 } from '../platform/remoteEnvironment';
@@ -17,6 +18,7 @@ function host(
     homedir: '/home/dev',
     pathVariable: '/usr/bin:/bin',
     isExecutableFile: (candidate) => executables.includes(candidate),
+    workspaceRoots: [],
     ...overrides,
   };
 }
@@ -39,24 +41,63 @@ describe('remote environments', () => {
 });
 
 describe('resolving the CLI inside the environment', () => {
+  const found = (path: string) => ({ ok: true, path });
+
   it('finds the CLI on the PATH the remote server started with', () => {
-    expect(resolveCliPath('agi', host(['/usr/bin/agi']))).toBe('/usr/bin/agi');
+    expect(resolveCliPath('agi', host(['/usr/bin/agi']))).toEqual(found('/usr/bin/agi'));
   });
 
   it('finds an installer-placed CLI the remote server PATH leaves out', () => {
-    expect(resolveCliPath('agi', host(['/home/dev/.agi/bin/agi']))).toBe('/home/dev/.agi/bin/agi');
-    expect(resolveCliPath('agi', host(['/home/dev/.cargo/bin/agi']))).toBe(
-      '/home/dev/.cargo/bin/agi',
+    expect(resolveCliPath('agi', host(['/home/dev/.agi/bin/agi']))).toEqual(
+      found('/home/dev/.agi/bin/agi'),
+    );
+    expect(resolveCliPath('agi', host(['/home/dev/.cargo/bin/agi']))).toEqual(
+      found('/home/dev/.cargo/bin/agi'),
     );
   });
 
   it('keeps an explicit path, expanding the home directory of the remote user', () => {
-    expect(resolveCliPath('~/tools/agi', host([]))).toBe('/home/dev/tools/agi');
-    expect(resolveCliPath('/opt/agi/bin/agi', host([]))).toBe('/opt/agi/bin/agi');
+    expect(resolveCliPath('~/tools/agi', host([]))).toEqual(found('/home/dev/tools/agi'));
+    expect(resolveCliPath('/opt/agi/bin/agi', host([]))).toEqual(found('/opt/agi/bin/agi'));
   });
 
-  it('returns the configured name unchanged when nothing matches, so the failure names it', () => {
-    expect(resolveCliPath('agi', host([]))).toBe('agi');
+  it('never hands a bare name back to be spawned when nothing matches', () => {
+    expect(resolveCliPath('agi', host([]))).toEqual({
+      ok: false,
+      configured: 'agi',
+      reason: 'not-found',
+    });
+    expect(resolveCliPath('  ', host([]))).toEqual({ ok: false, configured: '', reason: 'empty' });
+  });
+
+  it('refuses a relative path, which would resolve against the workspace', () => {
+    expect(resolveCliPath('./bin/agi', host(['./bin/agi']))).toEqual({
+      ok: false,
+      configured: './bin/agi',
+      reason: 'relative',
+    });
+  });
+
+  it('skips relative PATH entries and PATH entries inside an open workspace folder', () => {
+    const planted = host(['bin/agi', '/repo/tools/agi', '/usr/local/bin/agi'], {
+      pathVariable: 'bin:/repo/tools:/usr/local/bin',
+      workspaceRoots: ['/repo'],
+    });
+    expect(resolveCliPath('agi', planted)).toEqual(found('/usr/local/bin/agi'));
+  });
+
+  it('does not let a planted agi.exe in the workspace stand in on Windows', () => {
+    const windows = host(['C:\\repo\\agi.exe'], {
+      platform: 'win32',
+      homedir: 'C:\\Users\\dev',
+      pathVariable: '.;C:\\repo;C:\\Windows',
+      workspaceRoots: ['c:\\Repo'],
+    });
+    expect(resolveCliPath('agi', windows)).toEqual({
+      ok: false,
+      configured: 'agi',
+      reason: 'not-found',
+    });
   });
 
   it('tries the Windows executable suffixes', () => {
@@ -65,7 +106,7 @@ describe('resolving the CLI inside the environment', () => {
       homedir: 'C:\\Users\\dev',
       pathVariable: 'C:\\Tools;C:\\Windows',
     });
-    expect(resolveCliPath('agi', windows)).toBe('C:\\Tools\\agi.exe');
+    expect(resolveCliPath('agi', windows)).toEqual(found('C:\\Tools\\agi.exe'));
   });
 });
 
@@ -76,6 +117,20 @@ describe('testing the CLI in the environment', () => {
     expect(cliProbeMessage(result, describeRemoteEnvironment('wsl'))).toBe(
       `${PRODUCT_NAMES.code}: agi 1.4.0 runs from /usr/bin/agi in WSL.`,
     );
+  });
+
+  it('reports an unresolved CLI without running anything', async () => {
+    const runVersion = vi.fn(async () => 'agi 1.4.0');
+    const result = await probeResolvedCli(
+      { ok: false, configured: 'agi', reason: 'not-found' },
+      runVersion,
+    );
+    expect(runVersion).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      ok: false,
+      cliPath: 'agi',
+      reason: 'was not found on the PATH or in the usual install folders',
+    });
   });
 
   it('says the CLI is missing inside the remote and how to fix it', async () => {

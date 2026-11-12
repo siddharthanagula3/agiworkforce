@@ -2,7 +2,11 @@ import { EventEmitter } from 'node:events';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
+import {
+  LocalRuntimeClient,
+  WorkspaceNotTrustedError,
+  type SpawnLocalRuntime,
+} from '../integrations/localRuntimeClient';
 import {
   AGENT_EVENT_SCHEMA_VERSION,
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
@@ -356,9 +360,51 @@ function fakeRuntime(
 describe('LocalRuntimeClient', () => {
   afterEach(() => vi.useRealTimers());
 
+  it('never starts the CLI for a folder in Restricted Mode, whichever caller asks', async () => {
+    const runtime = fakeRuntime();
+    let trusted = false;
+    const client = new LocalRuntimeClient({
+      workspaceTrusted: () => trusted,
+      cliPath: '/usr/local/bin/agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.listThreads({ cwd: '/workspace' })).rejects.toBeInstanceOf(
+      WorkspaceNotTrustedError,
+    );
+    await expect(client.listLocalModels()).rejects.toThrow('Restricted Mode');
+    await expect(client.initialize()).rejects.toBeInstanceOf(WorkspaceNotTrustedError);
+    expect(runtime.spawn).not.toHaveBeenCalled();
+
+    trusted = true;
+    await client.initialize();
+    expect(runtime.spawn).toHaveBeenCalledOnce();
+    await client.dispose();
+  });
+
+  it('refuses an unresolved CLI instead of spawning a bare name', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
+      cliPath: () => ({ ok: false, configured: 'agi', reason: 'not-found' }),
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow(
+      /^AGI_CLI_NOT_FOUND: The AGI CLI could not be started\. "agi" was not found/u,
+    );
+    expect(runtime.spawn).not.toHaveBeenCalled();
+    await client.dispose();
+  });
+
   it('passes bypass launch authority only from the trusted consent callback', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -379,6 +425,7 @@ describe('LocalRuntimeClient', () => {
   it('keeps launch authority off when the consent callback refuses it', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -397,6 +444,7 @@ describe('LocalRuntimeClient', () => {
     const runtime = fakeRuntime();
     let consented = false;
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -432,6 +480,7 @@ describe('LocalRuntimeClient', () => {
     const runtime = fakeRuntime();
     let consented = false;
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -462,6 +511,7 @@ describe('LocalRuntimeClient', () => {
   it('rejects servers that can silently ignore security-sensitive turn controls', async () => {
     const runtime = fakeRuntime(4);
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -475,6 +525,7 @@ describe('LocalRuntimeClient', () => {
   it('rejects a future protocol until the extension explicitly supports it', async () => {
     const runtime = fakeRuntime(9);
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -492,6 +543,7 @@ describe('LocalRuntimeClient', () => {
     async (serverVersion) => {
       const runtime = fakeRuntime(8, { serverVersion });
       const client = new LocalRuntimeClient({
+        workspaceTrusted: () => true,
         cliPath: 'agi',
         cwd: '/workspace',
         clientVersion: '0.3.0',
@@ -508,6 +560,7 @@ describe('LocalRuntimeClient', () => {
   it('names the CLI as the side to update when an older server answers protocol 7', async () => {
     const runtime = fakeRuntime(7);
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -538,6 +591,7 @@ describe('LocalRuntimeClient', () => {
         },
       });
       const client = new LocalRuntimeClient({
+        workspaceTrusted: () => true,
         cliPath: 'agi',
         cwd: '/workspace',
         clientVersion: '0.3.0',
@@ -560,6 +614,7 @@ describe('LocalRuntimeClient', () => {
   ])('refuses a handshake declaring agent event schema %i', async (schemaVersion, action) => {
     const runtime = fakeRuntime(8, { initializeExtra: { agentEventSchemaVersion: schemaVersion } });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -580,6 +635,7 @@ describe('LocalRuntimeClient', () => {
       },
     });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -596,6 +652,7 @@ describe('LocalRuntimeClient', () => {
   it('reads a trust mode it does not know as unknown rather than dropping the thread', async () => {
     const runtime = fakeRuntime(8, { trustMode: 'sovereign_cloud' });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -610,6 +667,7 @@ describe('LocalRuntimeClient', () => {
   it('reads an origin and a status it does not know as unknown, on the same terms', async () => {
     const runtime = fakeRuntime(8, { createdBy: 'phone', threadStatus: 'hibernating' });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -625,6 +683,7 @@ describe('LocalRuntimeClient', () => {
   it('rejects a runtime that cannot carry approval decisions', async () => {
     const runtime = fakeRuntime(8, { approvals: false });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -638,6 +697,7 @@ describe('LocalRuntimeClient', () => {
   it('gives an actionable upgrade error for the legacy CLI handshake', async () => {
     const runtime = fakeRuntime(8, { legacyInitialize: true });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -653,6 +713,7 @@ describe('LocalRuntimeClient', () => {
   it('launches the configured CLI in the workspace and uses typed thread/turn methods', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: '/opt/agi/bin/agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -686,6 +747,7 @@ describe('LocalRuntimeClient', () => {
   it('surfaces a standard null-id JSON-RPC parse error from the runtime', async () => {
     const runtime = fakeRuntime(8, { ignoreMethods: ['initialize'] });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -712,6 +774,7 @@ describe('LocalRuntimeClient', () => {
   it('forwards streamed notifications and rejects server errors', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -733,6 +796,7 @@ describe('LocalRuntimeClient', () => {
   it('validates developer-session events before exposing them to UI code', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -759,6 +823,7 @@ describe('LocalRuntimeClient', () => {
   it('carries the measured context apart from the turn’s summed tokens, and nothing from an older CLI', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -801,6 +866,7 @@ describe('LocalRuntimeClient', () => {
   it('exposes canonical progress and tool execution events and ignores malformed envelopes', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -902,6 +968,7 @@ describe('LocalRuntimeClient', () => {
   it('skips an agent event kind it does not know and files an unknown tool category under other', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -955,6 +1022,7 @@ describe('LocalRuntimeClient', () => {
   it('emits MCP lifecycle status and ignores unrelated notifications without closing the stream', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -985,6 +1053,7 @@ describe('LocalRuntimeClient', () => {
   it('exposes interrupted turns as terminal runtime events', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1004,6 +1073,7 @@ describe('LocalRuntimeClient', () => {
   it('keeps a failed turn whose failure names a plan-first code, and one it has never seen', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1068,6 +1138,7 @@ describe('LocalRuntimeClient', () => {
   it('carries a wait and a reference the runtime sent, and leaves both out when it sent neither', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1137,6 +1208,7 @@ describe('LocalRuntimeClient', () => {
   it('carries the risk the runtime classified, and stays silent for one that classified none', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1185,6 +1257,7 @@ describe('LocalRuntimeClient', () => {
   it('routes steering, cancellation, and approvals through the same runtime', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1229,6 +1302,7 @@ describe('LocalRuntimeClient', () => {
       initializeExtra: { capabilities: { ...capabilities, threadDelete: true } },
     });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1244,6 +1318,7 @@ describe('LocalRuntimeClient', () => {
 
     const older = fakeRuntime();
     const olderClient = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1257,6 +1332,7 @@ describe('LocalRuntimeClient', () => {
   it('reads and archives runtime-owned thread history', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1288,6 +1364,7 @@ describe('LocalRuntimeClient', () => {
     };
     const runtime = fakeRuntime(8, { childTasks: [child] });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1298,6 +1375,7 @@ describe('LocalRuntimeClient', () => {
 
     const malformed = fakeRuntime(8, { childTasks: [{ ...child, state: 'invented' }] });
     const malformedClient = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1312,6 +1390,7 @@ describe('LocalRuntimeClient', () => {
   it('rejects thread history that omits the protocol-v7 truncation signal', async () => {
     const runtime = fakeRuntime(8, { omitTranscriptTruncated: true });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1327,6 +1406,7 @@ describe('LocalRuntimeClient', () => {
     async (provider) => {
       const runtime = fakeRuntime(8, { provider });
       const client = new LocalRuntimeClient({
+        workspaceTrusted: () => true,
         cliPath: 'agi',
         cwd: '/workspace',
         clientVersion: '0.3.0',
@@ -1341,6 +1421,7 @@ describe('LocalRuntimeClient', () => {
   it('discovers local model ids and providers through the shared runtime', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1360,6 +1441,7 @@ describe('LocalRuntimeClient', () => {
   it('asks the host to re-resolve reachability only when told to refresh', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1380,6 +1462,7 @@ describe('LocalRuntimeClient', () => {
   it('resumes a persisted thread through the runtime owner', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1399,6 +1482,7 @@ describe('LocalRuntimeClient', () => {
   it('launches a replacement app-server after the workspace process exits', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1418,7 +1502,8 @@ describe('LocalRuntimeClient', () => {
     const runtime = fakeRuntime();
     let cliPath = '/opt/agi/bin/agi-old';
     const client = new LocalRuntimeClient({
-      cliPath: () => cliPath,
+      workspaceTrusted: () => true,
+      cliPath: () => ({ ok: true, path: cliPath }),
       cwd: '/workspace',
       clientVersion: '0.3.0',
       spawn: runtime.spawn,
@@ -1451,6 +1536,7 @@ describe('LocalRuntimeClient', () => {
   it('preserves existing event subscriptions across an in-place restart', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1479,6 +1565,7 @@ describe('LocalRuntimeClient', () => {
   it('notifies active UI adapters when the app-server disconnects', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1498,6 +1585,7 @@ describe('LocalRuntimeClient', () => {
   it('treats a closed stdout stream as a runtime disconnect', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1537,6 +1625,7 @@ describe('LocalRuntimeClient', () => {
       return child;
     }) as unknown as SpawnLocalRuntime;
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1550,6 +1639,7 @@ describe('LocalRuntimeClient', () => {
   it('forwards the workspace consent the editor recorded for the folder', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1573,6 +1663,7 @@ describe('LocalRuntimeClient', () => {
   it('forwards no workspace consent when the editor withholds it', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1593,6 +1684,7 @@ describe('LocalRuntimeClient', () => {
       child.emit('exit', null, 'SIGKILL');
     });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1618,6 +1710,7 @@ describe('LocalRuntimeClient', () => {
       child.emit('exit', null, 'SIGKILL');
     });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1635,6 +1728,7 @@ describe('LocalRuntimeClient', () => {
     const runtime = fakeRuntime(8, { exitOnShutdown: false });
     const terminateProcessTree = vi.fn(async () => undefined);
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1659,6 +1753,7 @@ describe('LocalRuntimeClient', () => {
   it('notifies active UI adapters synchronously when configuration disposes the client', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1694,6 +1789,7 @@ describe('LocalRuntimeClient', () => {
     }) as unknown as SpawnLocalRuntime;
 
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1724,6 +1820,7 @@ describe('LocalRuntimeClient', () => {
     }) as unknown as SpawnLocalRuntime;
 
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: '/opt/missing/agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1735,6 +1832,7 @@ describe('LocalRuntimeClient', () => {
 
   it('refuses an empty cliPath with a message that names the setting', async () => {
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: '   ',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1762,6 +1860,7 @@ describe('LocalRuntimeClient', () => {
     }) as unknown as SpawnLocalRuntime;
 
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: '/opt/agi/agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1789,6 +1888,7 @@ describe('LocalRuntimeClient', () => {
       },
     });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1815,6 +1915,7 @@ describe('LocalRuntimeClient', () => {
       },
     });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1827,6 +1928,7 @@ describe('LocalRuntimeClient', () => {
   it('validates every protocol 8 response against its schema before returning it', async () => {
     const runtime = fakeRuntime();
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',
@@ -1877,6 +1979,7 @@ describe('LocalRuntimeClient', () => {
   it('rejects a protocol 8 answer that does not match its declared shape', async () => {
     const runtime = fakeRuntime(8, { malformedV8: true });
     const client = new LocalRuntimeClient({
+      workspaceTrusted: () => true,
       cliPath: 'agi',
       cwd: '/workspace',
       clientVersion: '0.3.0',

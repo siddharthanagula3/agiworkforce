@@ -7,6 +7,8 @@ import * as analytics from '../features/analytics/productAnalytics';
 import * as recovery from '../core/cloudUtilityErrorActions';
 import { t } from '../l10n';
 import { ExtensionContext } from './__mocks__/vscode';
+import { setEditorUtilityChat } from '../features/editor-utilities';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
@@ -137,6 +139,30 @@ describe('inline edit ownership across asynchronous work', () => {
     expect(target.edit).not.toHaveBeenCalled();
     expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
   }
+
+  it.each(['fix', 'refactor', 'tests', 'docs'] as const)(
+    'runs %s in the chat on a Local default model instead of sending it to AGI Cloud',
+    async (command) => {
+      vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+      vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('a.ts');
+      const completion = vi.spyOn(api, 'chatCompletion');
+      const chat = vi.fn();
+      setEditorUtilityChat(chat);
+      const target = editorFixture();
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = target.editor;
+      try {
+        await runInlineCommand(new ExtensionContext() as never, command);
+      } finally {
+        setEditorUtilityChat(undefined);
+      }
+
+      expect(completion).not.toHaveBeenCalled();
+      expectNoWrite(target);
+      expect(chat).toHaveBeenCalledOnce();
+      expect(String(chat.mock.calls[0]?.[0])).toContain('a.ts, lines 1-1:');
+      expect(String(chat.mock.calls[0]?.[0])).toContain('const x = 0;');
+    },
+  );
 
   it.each(['untrusted', 'credential'] as const)(
     'keeps the existing %s outbound refusal before the request',

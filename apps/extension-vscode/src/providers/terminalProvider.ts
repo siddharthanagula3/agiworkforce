@@ -14,7 +14,9 @@ import {
 import {
   classifyCloudUtilityFailure,
   showCloudUtilityErrorActions,
+  showLocalModelRefusal,
 } from '../core/cloudUtilityErrorActions';
+import { cloudUtilityModel, LocalModelSelectedError } from '../core/cloudModelBoundary';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { buildExplainTerminalPrompt, runEditorUtility } from '../features/editor-utilities';
 import {
@@ -22,15 +24,16 @@ import {
   getWorkspaceDisplayName,
   shellExecutableForCurrentPlatform,
 } from '../platform/workspaceFolders';
-import { Config } from '../platform/config';
+import { resolveConfiguredCli } from '../platform/config';
+import {
+  cliProbeMessage,
+  describeRemoteEnvironment,
+  unresolvedCliProbe,
+} from '../platform/remoteEnvironment';
 import { setTerminalOutputSource, type TerminalOutput } from '../data/terminalOutput';
 
 const TERMINAL_NAME = PRODUCT_NAMES.code;
 
-/**
- * A bare `agi` on PATH should read as `agi login openai` in the terminal, not
- * as `'agi' login openai`. Quoting is for paths that need it.
- */
 const CLI_PATH_NEEDS_NO_QUOTES = /^[A-Za-z0-9._\-/\\:]+$/u;
 
 function quoteCliPathIfNeeded(cliPath: string): string {
@@ -170,6 +173,10 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
     context: string,
     cancellationToken: vscode.CancellationToken,
   ): Promise<string | undefined> {
+    const selected = cloudUtilityModel();
+    if (selected.route === 'local') {
+      throw new LocalModelSelectedError(selected.model, 'Suggest Terminal Command');
+    }
     const workspaceFolder = getWorkspaceDisplayName();
     const platform =
       process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
@@ -365,7 +372,17 @@ export function activateTerminal(
         );
         return;
       }
-      provider.runCommand(`${quoteCliPathIfNeeded(Config.cliPath())} login ${providerId}`);
+      const cli = resolveConfiguredCli();
+      if (!cli.ok) {
+        vscode.window.showWarningMessage(
+          cliProbeMessage(
+            unresolvedCliProbe(cli),
+            describeRemoteEnvironment(vscode.env.remoteName),
+          ),
+        );
+        return;
+      }
+      provider.runCommand(`${quoteCliPathIfNeeded(cli.path)} login ${providerId}`);
     }),
     vscode.commands.registerCommand('agi-workforce.explainTerminal', async () => {
       await runEditorUtility(buildExplainTerminalPrompt(await provider.captureOutput()));
@@ -374,6 +391,13 @@ export function activateTerminal(
 
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.suggestCommand', async () => {
+      const selected = cloudUtilityModel();
+      if (selected.route === 'local') {
+        await showLocalModelRefusal(
+          new LocalModelSelectedError(selected.model, 'Suggest Terminal Command'),
+        );
+        return;
+      }
       const contextParts: string[] = [];
 
       const editor = vscode.window.activeTextEditor;

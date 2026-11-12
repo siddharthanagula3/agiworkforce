@@ -7,11 +7,20 @@ import {
   validateSuggestedCommand,
 } from '../providers/terminalProvider';
 import { chatCompletion } from '../utils/api';
+import { Config, resolveConfiguredCli } from '../platform/config';
+import { LocalModelSelectedError } from '../core/cloudModelBoundary';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 type ScanModule0 = typeof import('../utils/api');
+type ConfigModule = typeof import('../platform/config');
 
 vi.mock('../utils/api', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
   return { ...actual, chatCompletion: vi.fn() };
+});
+
+vi.mock('../platform/config', async (importOriginal) => {
+  const actual = await importOriginal<ConfigModule>();
+  return { ...actual, resolveConfiguredCli: vi.fn() };
 });
 
 interface SuggestionItem {
@@ -231,6 +240,18 @@ describe('F19, the gate is wired to terminal.sendText, not just exported', () =>
     (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = undefined;
   });
 
+  it('refuses command suggestions on a Local default model and sends nothing', async () => {
+    const model = vi.spyOn(Config, 'model').mockReturnValue(SYNTHETIC_LOCAL_MODEL_ID);
+    try {
+      await expect(
+        new TerminalProvider({} as vscode.SecretStorage).suggestCommand('context', token()),
+      ).rejects.toBeInstanceOf(LocalModelSelectedError);
+    } finally {
+      model.mockRestore();
+    }
+    expect(chatCompletion).not.toHaveBeenCalled();
+  });
+
   it('marks an interpreter one-liner BLOCKED in the QuickPick and never runs it', async () => {
     const terminal = spyTerminal();
     let offered: SuggestionItem[] = [];
@@ -336,28 +357,44 @@ describe('provider sign-in', () => {
     vi.clearAllMocks();
   });
 
-  it('runs the CLI login for the provider the failure named, unquoted on a bare PATH name', () => {
+  it('runs the CLI login for the provider the failure named, by the resolved absolute path', () => {
+    vi.mocked(resolveConfiguredCli).mockReturnValue({ ok: true, path: '/usr/local/bin/agi' });
+
     const terminal = registerAndRun('deepseek');
 
-    expect(terminal.sendText).toHaveBeenCalledWith('agi login deepseek');
+    expect(terminal.sendText).toHaveBeenCalledWith('/usr/local/bin/agi login deepseek');
   });
 
   it('quotes a CLI path that needs it, and only then', () => {
-    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-      get: vi.fn((key: string) => (key === 'cliPath' ? '/Applications/My Tools/agi' : undefined)),
-      update: vi.fn(),
-      has: vi.fn(),
-      inspect: vi.fn(() => ({ globalValue: '/Applications/My Tools/agi' })),
-    } as never);
+    vi.mocked(resolveConfiguredCli).mockReturnValue({
+      ok: true,
+      path: '/Applications/My Tools/agi',
+    });
 
     const terminal = registerAndRun('deepseek');
 
     expect(terminal.sendText).toHaveBeenCalledWith("'/Applications/My Tools/agi' login deepseek");
   });
 
+  it('types nothing into the terminal when no CLI resolves to an absolute path', () => {
+    vi.mocked(resolveConfiguredCli).mockReturnValue({
+      ok: false,
+      configured: 'agi',
+      reason: 'not-found',
+    });
+
+    const terminal = registerAndRun('deepseek');
+
+    expect(terminal.sendText).not.toHaveBeenCalled();
+    expect(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0]).toContain(
+      'was not found on the PATH',
+    );
+  });
+
   it.each(['deep seek; rm -rf /', '$(whoami)', '', 42])(
     'refuses %p rather than letting it reach a shell',
     (argument) => {
+      vi.mocked(resolveConfiguredCli).mockReturnValue({ ok: true, path: '/usr/local/bin/agi' });
       const terminal = registerAndRun(argument);
 
       expect(terminal.sendText).not.toHaveBeenCalled();

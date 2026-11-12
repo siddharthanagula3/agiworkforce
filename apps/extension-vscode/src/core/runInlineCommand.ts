@@ -9,6 +9,8 @@ import {
   showCloudUtilityErrorActions,
 } from './cloudUtilityErrorActions';
 import { describeOutboundRefusal } from './outboundContentGuard';
+import { cloudUtilityModel } from './cloudModelBoundary';
+import { runEditorUtility } from '../features/editor-utilities';
 
 export type InlineCommand = 'fix' | 'refactor' | 'tests' | 'docs';
 
@@ -21,6 +23,15 @@ export function commandLabel(command: string): string {
   };
   return labels[command] ?? command;
 }
+
+const LOCAL_CHAT_INSTRUCTIONS: Readonly<Record<InlineCommand, string>> = {
+  fix: 'Find and fix the bugs or issues in this code. Make the fix in the file and explain each change.',
+  refactor:
+    'Refactor this code to improve readability, maintainability, and performance. Make the change in the file and explain each change.',
+  tests:
+    'Write comprehensive unit tests for this code, covering edge cases, error paths, and happy paths. Put them where this project keeps its tests.',
+  docs: 'Add clear, accurate documentation comments (JSDoc, TSDoc or docstrings as appropriate) to this code in the file.',
+};
 
 interface InlineCommandTarget {
   readonly editor: vscode.TextEditor;
@@ -86,6 +97,16 @@ async function runInlineCommandOnTarget(
   }
 
   const lang = editor.document.languageId;
+  if (cloudUtilityModel().route === 'local') {
+    const path = vscode.workspace.asRelativePath(editor.document.uri);
+    await runEditorUtility({
+      ok: true,
+      prompt:
+        `${LOCAL_CHAT_INSTRUCTIONS[command]}\n\n${path}, lines ${explicitRange.start.line + 1}-${explicitRange.end.line + 1}:\n` +
+        `\`\`\`${lang}\n${selectedText}\n\`\`\``,
+    });
+    return;
+  }
   const planModeEnabled = Config.planModeActive();
   const autoApplyFixes = Config.autoApplyFixes();
 

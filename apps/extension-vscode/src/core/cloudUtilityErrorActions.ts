@@ -22,10 +22,20 @@ import {
   normalizeConfiguredModelId,
 } from '../features/model-picker/modelConstants';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
+import { LocalModelSelectedError } from './cloudModelBoundary';
 import { planDisplayLabel } from '../features/account-auth/planLabel';
 
 export type CloudUtilityFailureKind =
-  'cancelled' | 'account-auth' | 'api-key' | 'paywall' | 'usage-limit' | 'retryable' | 'unknown';
+  | 'cancelled'
+  | 'account-auth'
+  | 'api-key'
+  | 'paywall'
+  | 'usage-limit'
+  | 'local-model'
+  | 'retryable'
+  | 'unknown';
+
+const CHOOSE_MODEL_ACTION = 'Choose Model';
 
 export interface CloudUtilityErrorActionOptions {
   title: string;
@@ -57,6 +67,7 @@ const VIEW_USAGE_LABEL = RECOVERY_LABELS.view_usage;
 const USAGE_PATH = '/settings/usage';
 
 export function classifyCloudUtilityFailure(error: unknown): CloudUtilityFailureKind {
+  if (error instanceof LocalModelSelectedError) return 'local-model';
   if (error instanceof AgiWorkforcePaywallError) return 'paywall';
   if (error instanceof AgiWorkforceUsageLimitError) return 'usage-limit';
   if (error instanceof AgiWorkforceApiError) {
@@ -217,12 +228,27 @@ async function showPaywallActions(
   }
 }
 
+export async function showLocalModelRefusal(error: LocalModelSelectedError): Promise<void> {
+  const choice = await vscode.window.showWarningMessage(
+    `${PRODUCT_NAMES.code}: ${error.message}`,
+    CHOOSE_MODEL_ACTION,
+  );
+  if (choice === CHOOSE_MODEL_ACTION) {
+    await vscode.commands.executeCommand('agi-workforce.selectModel');
+  }
+}
+
 export async function showCloudUtilityErrorActions(
   error: unknown,
   options: CloudUtilityErrorActionOptions,
 ): Promise<void> {
   const kind = classifyCloudUtilityFailure(error);
   if (kind === 'cancelled') return;
+
+  if (kind === 'local-model' && error instanceof LocalModelSelectedError) {
+    await showLocalModelRefusal(error);
+    return;
+  }
 
   const message = `${options.title}, ${failureMessage(error)}`;
   if (kind === 'account-auth') {

@@ -9,6 +9,7 @@
 import { getBillingPlanPricing, isBillingPlanTier } from '@agiworkforce/types';
 import { DEVELOPER_REASONING_EFFORTS } from '@agiworkforce/local-runtime-contract';
 import * as vscode from 'vscode';
+import { nodeCliResolutionHost, resolveCliPath, type CliResolution } from './remoteEnvironment';
 import {
   enforceAgentModeConsent,
   setAgentEffortWithConsent,
@@ -174,6 +175,9 @@ export const Config = {
     return get<boolean>('memory.enabled', DEFAULTS.memoryEnabled);
   },
   inlineCompletionsEnabled(): boolean {
+    if (!vscode.workspace.isTrusted) {
+      return getUserScoped<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
+    }
     return get<boolean>('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
   },
   inlineCompletionsDebounceMs(): number {
@@ -273,3 +277,12 @@ export const Config = {
 } as const;
 
 export const __CONFIG_DEFAULTS = DEFAULTS;
+
+export function resolveConfiguredCli(): CliResolution {
+  return resolveCliPath(
+    Config.cliPath(),
+    nodeCliResolutionHost(
+      (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+    ),
+  );
+}
