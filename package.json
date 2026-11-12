@@ -431,8 +431,8 @@
     "generate:repo-tree": "node scripts/generate-repo-tree.mjs"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.5.3",
-    "@commitlint/config-conventional": "^20.5.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@eslint/js": "^9.39.5",
     "@neondatabase/serverless": "^1.2.0",
     "@playwright/test": "^1.64.1",
@@ -448,7 +448,7 @@
     "husky": "^9.1.7",
     "istanbul-lib-coverage": "3.2.2",
     "knip": "^6.44.1",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.6.0",
     "pg": "^8.23.1",
     "playwright": "^1.64.1",
     "prettier": "^3.9.10",
