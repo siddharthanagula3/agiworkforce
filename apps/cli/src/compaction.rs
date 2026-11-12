@@ -178,7 +178,7 @@ pub fn instruction_sources(cwd: &Path) -> (Vec<InstructionSource>, bool) {
             content
         } else {
             truncated = true;
-            trim_to_tokens(&content, MAX_INSTRUCTION_TOKENS)
+            trim_to_tokens(&content, MAX_INSTRUCTION_TOKENS / 2)
         };
         total += estimate_tokens(&content);
         sources.push(InstructionSource {
@@ -441,7 +441,25 @@ mod tests {
 
         assert!(truncated);
         assert!(global.content.starts_with("Always run the formatter"));
-        assert!(estimate_tokens(&global.content) <= MAX_INSTRUCTION_TOKENS);
+        assert!(estimate_tokens(&global.content) <= MAX_INSTRUCTION_TOKENS / 2);
+    }
+
+    #[test]
+    fn an_oversized_global_instructions_file_leaves_room_for_the_repository() {
+        let home = tempfile::tempdir().expect("home");
+        let cwd = tempfile::tempdir().expect("cwd");
+        let oversized =
+            "Always run the formatter before you finish.\n".repeat(MAX_INSTRUCTION_TOKENS * 2);
+        fs::write(home.path().join("instructions.md"), &oversized).expect("global instructions");
+        fs::write(cwd.path().join("AGENTS.md"), "Use the house style.").expect("repository file");
+
+        let (sources, truncated) =
+            with_config_home(home.path(), || instruction_sources(cwd.path()));
+
+        assert!(truncated);
+        assert!(sources
+            .iter()
+            .any(|source| source.content == "Use the house style."));
     }
 
     #[cfg(unix)]

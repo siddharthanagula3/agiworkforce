@@ -204,7 +204,10 @@ fn discover_custom_slash_commands_from_roots(
             }
             seen.insert(name.clone(), (path.clone(), root.source));
             let raw = if root.source.is_project() {
-                crate::project_text::read_within(&root.path, &path)
+                root.path
+                    .parent()
+                    .and_then(Path::parent)
+                    .and_then(|project| crate::project_text::read_within(project, &path))
             } else {
                 std::fs::read_to_string(&path).ok()
             };
