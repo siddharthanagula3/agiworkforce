@@ -4048,6 +4048,37 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('settles the composer when Stop arrives and nothing is running', async () => {
+    const harness = makeHarness();
+
+    await harness.manager.handleMessage({ type: 'cancel' });
+
+    expect(harness.posted).toContainEqual({ type: 'done' });
+    expect(harness.runtime.interruptTurn).not.toHaveBeenCalled();
+  });
+
+  it('marks only the refused follow-up as failed while a turn keeps running', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix it' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const before = harness.posted.length;
+
+    harness.manager.rejectUnreadableSend('msg-too-long');
+
+    const after = harness.posted.slice(before);
+    expect(after).toEqual([
+      {
+        type: 'followUpStatus',
+        payload: expect.objectContaining({ kind: 'error', clientMessageId: 'msg-too-long' }),
+      },
+    ]);
+    await completeTurnFor(harness);
+    await send;
+  });
+
   it('stops before turn dispatch when cancellation arrives during thread startup', async () => {
     const harness = makeHarness();
     let resolveThread!: (thread: ThreadSummary) => void;

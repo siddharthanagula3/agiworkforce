@@ -4,7 +4,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 import { vscodeApiStub } from './vscodeApiStub';
-import type { ComposerBinding } from '../protocol/webviewMessages';
+import {
+  MAX_SEND_MESSAGE_CHARS,
+  MAX_SIDE_QUESTION_CHARS,
+  type ComposerBinding,
+} from '../protocol/webviewMessages';
 
 const registeredWindowListeners: Array<() => void> = [];
 function clearWindowListeners(): void {
@@ -192,5 +196,36 @@ describe('composer send state and controls', () => {
     expect(css).toMatch(/\.plus-btn\[aria-expanded="true"\]/);
     expect(css).toMatch(/\.plus-menu \{[^}]*var\(--bg-popover\)/);
     expect(css).toMatch(/\.slash-menu \{[^}]*var\(--bg-popover\)/);
+  });
+  it('refuses an over-long message visibly, keeps its text and never starts sending', () => {
+    const post = boot();
+    const long = 'x'.repeat(MAX_SEND_MESSAGE_CHARS + 1);
+    type(long);
+
+    send().click();
+
+    expect(post.mock.calls.some((c) => c[0]?.type === 'sendMessage')).toBe(false);
+    expect(input().value).toBe(long);
+    expect(document.querySelector('.message.user')).toBeNull();
+    expect(send().getAttribute('aria-label')).toBe('Send');
+    const status = document.getElementById('followUpStatus')!;
+    expect(status.classList.contains('error')).toBe(true);
+    expect(status.textContent).toContain('100,001 / 100,000 characters');
+
+    type('short');
+    expect(status.textContent).toBe('');
+  });
+  it('refuses an over-long side question and keeps it in the composer', () => {
+    const post = boot();
+    const question = `/btw ${'y'.repeat(MAX_SIDE_QUESTION_CHARS + 1)}`;
+    type(question);
+
+    send().click();
+
+    expect(post.mock.calls.some((c) => c[0]?.type === 'sideQuestion')).toBe(false);
+    expect(input().value).toBe(question);
+    expect(document.getElementById('followUpStatus')!.textContent).toContain(
+      'Side question too long to send',
+    );
   });
 });

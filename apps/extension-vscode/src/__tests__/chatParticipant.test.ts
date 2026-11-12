@@ -7,6 +7,7 @@ afterEach(async () => {
   contextFixture = undefined;
 });
 import * as vscode from 'vscode';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import type { ThreadSummary } from '@agiworkforce/types';
 import {
@@ -1677,5 +1678,147 @@ describe('chat participant session usage', () => {
     await response;
 
     expect(getTokenCounter().requestCount).toBe(0);
+  });
+});
+
+describe('chat participant automatic editor context', () => {
+  const SECRET = 'CONTROLLED_SECRET_VALUE';
+
+  function configure(autoAttach: boolean): void {
+    vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
+      () =>
+        ({
+          get: vi.fn((key: string, defaultValue?: unknown) =>
+            key === 'model' ? 'auto' : defaultValue,
+          ),
+          update: vi.fn().mockResolvedValue(undefined),
+          has: vi.fn().mockReturnValue(false),
+          inspect: vi.fn((key: string) =>
+            key === 'model'
+              ? { key, globalValue: 'auto' }
+              : key === 'editorContext.autoAttach'
+                ? { key, globalValue: autoAttach }
+                : undefined,
+          ),
+        }) as unknown as vscode.WorkspaceConfiguration,
+    );
+  }
+
+  function openEditor(filePath: string): void {
+    vscode.window.activeTextEditor = {
+      document: {
+        uri: vscode.Uri.file(filePath),
+        fileName: filePath,
+        languageId: 'plaintext',
+        isUntitled: false,
+        isDirty: false,
+        lineCount: 1,
+        getText: () => `${SECRET}=1`,
+      },
+      selection: new vscode.Selection(0, 0, 0, 0),
+    } as unknown as vscode.TextEditor;
+  }
+
+  async function turnInputFor(root: string): Promise<{ input: string; shown: string }> {
+    const listeners = new Set<(event: LocalRuntimeEvent) => void>();
+    const runtime = {
+      startThread: vi.fn().mockResolvedValue(threadSummary({ cwd: root })),
+      startTurn: vi.fn().mockResolvedValue({ id: 'turn-1' }),
+      interruptTurn: vi.fn().mockResolvedValue(undefined),
+      onEvent: vi.fn((listener: (event: LocalRuntimeEvent) => void) => {
+        listeners.add(listener);
+        return { dispose: () => listeners.delete(listener) };
+      }),
+    };
+    const pool = {
+      forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
+    } as unknown as LocalRuntimePool;
+    const context = new vscode.ExtensionContext();
+    const markdown = vi.fn();
+    const handler = createChatHandler(context.secrets, undefined, context.globalState, pool);
+    const response = handler(
+      request(undefined, 'Why does the app fail to start?'),
+      { history: [] } as vscode.ChatContext,
+      { progress: vi.fn(), markdown, button: vi.fn() } as unknown as vscode.ChatResponseStream,
+      {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(() => ({ dispose: vi.fn() })),
+      } as unknown as vscode.CancellationToken,
+    );
+    await vi.waitFor(() => expect(runtime.startTurn).toHaveBeenCalledOnce());
+    for (const listener of listeners) {
+      listener({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+    }
+    await response;
+    const call = runtime.startTurn.mock.calls[0] as unknown as [{ input: unknown[] }];
+    return {
+      input: JSON.stringify(call[0].input),
+      shown: markdown.mock.calls.map(([text]) => String(text)).join('\n'),
+    };
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vscode.workspace.isTrusted = true;
+    setContextPanelInstance({ getContextFiles: () => [] } as unknown as ContextPanelProvider);
+    contextFixture = await workspaceFileFixture(['.env', 'src/app.ts', 'local.settings.json']);
+    await fs.writeFile(path.join(contextFixture.root, '.gitignore'), 'local.settings.json\n');
+    configure(true);
+  });
+
+  afterEach(() => {
+    vscode.window.activeTextEditor = undefined;
+  });
+
+  it('withholds an open credential file and says so to the model and the user', async () => {
+    const root = contextFixture!.root;
+    openEditor(path.join(root, '.env'));
+
+    const { input, shown } = await turnInputFor(root);
+
+    expect(input).not.toContain(SECRET);
+    expect(input).toContain(
+      'Its contents are withheld from this conversation because the file matches the credential-file policy',
+    );
+    expect(shown).toContain('matches the credential-file policy');
+  });
+
+  it('withholds an open file that git ignores', async () => {
+    const root = contextFixture!.root;
+    openEditor(path.join(root, 'local.settings.json'));
+
+    const { input } = await turnInputFor(root);
+
+    expect(input).not.toContain(SECRET);
+    expect(input).toContain('because the file is ignored by git');
+  });
+
+  it('attaches nothing from the open file while automatic editor context is off', async () => {
+    const root = contextFixture!.root;
+    configure(false);
+    openEditor(path.join(root, 'src/app.ts'));
+
+    const { input } = await turnInputFor(root);
+
+    expect(input).not.toContain(SECRET);
+    expect(input).not.toContain('<untrusted_editor_context>');
+  });
+
+  it('still attaches an ordinary open file', async () => {
+    const root = contextFixture!.root;
+    openEditor(path.join(root, 'src/app.ts'));
+
+    const { input } = await turnInputFor(root);
+
+    expect(input).toContain(SECRET);
+    expect(input).toContain('<untrusted_editor_context>');
   });
 });

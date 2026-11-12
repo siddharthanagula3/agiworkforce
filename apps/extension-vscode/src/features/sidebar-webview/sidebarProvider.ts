@@ -7,7 +7,10 @@ import { Config } from '../../platform/config';
 import { ChatStateManager, type ExtToWebviewMessage } from './ChatStateManager';
 import { shouldShowOnboarding } from '../onboarding/onboardingState';
 import { getWebviewContent, getNonce, webviewResourceRoots } from './webviewContent';
-import { parseBoundWebviewMessage } from '../../protocol/webviewMessages';
+import {
+  describeRejectedWebviewMessage,
+  parseBoundWebviewMessage,
+} from '../../protocol/webviewMessages';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
 import { resolveTierSync } from '../../integrations/tierResolver';
 import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
@@ -93,15 +96,20 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     this._messageListener?.dispose();
     this._messageListener = webviewView.webview.onDidReceiveMessage(async (msg) => {
-      const parsed = parseBoundWebviewMessage(msg, {
+      const binding = {
         origin: SidebarProvider.viewId.replace(/\./gu, '-'),
         epoch: this._stateManager.conversationEpoch(),
-      });
+      };
+      const parsed = parseBoundWebviewMessage(msg, binding);
       if (parsed === undefined) {
+        const rejected = describeRejectedWebviewMessage(msg, binding);
         console.warn(
           `[${PRODUCT_NAMES.code}] dropping a webview message that is malformed or belongs to a replaced conversation`,
-          msg,
+          { type: rejected.type, reason: rejected.reason },
         );
+        if (rejected.reason === 'schema' && rejected.type === 'sendMessage') {
+          this._stateManager.rejectUnreadableSend(rejected.clientMessageId);
+        }
         return;
       }
       if (parsed.type === 'viewFocused' || parsed.type === 'viewBlurred') {
@@ -124,8 +132,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     // to open the panel over.
     this._visibilityListener = webviewView.onDidChangeVisibility?.(() => {
       this._refreshBadge();
-      if (webviewView.visible) void this._stateManager.syncStoredTranscript();
-      else setChatFocus(this, false);
+      this._stateManager.setEditorContextTracking(webviewView.visible);
+      if (webviewView.visible) {
+        void this._stateManager.syncStoredTranscript();
+        void this._stateManager.pushEditorContext();
+      } else setChatFocus(this, false);
     });
 
     webviewView.onDidDispose(() => {
@@ -137,6 +148,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this._visibilityListener?.dispose();
       delete this._visibilityListener;
       this._attention.record('seen');
+      this._stateManager.setEditorContextTracking(false);
       this._stateManager.cancelInFlight();
       delete this._view;
     });
@@ -290,7 +302,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   public pushEditorContext(): void {
-    void this._stateManager.pushEditorContext();
+    this._stateManager.refreshEditorContext();
   }
 
   public activeRoute(): ModelRoute | undefined {

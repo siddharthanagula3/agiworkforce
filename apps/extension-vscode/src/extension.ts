@@ -29,7 +29,7 @@ import {
   SHOW_SESSION_ACTIVITY_COMMAND,
   showSessionReceipt,
 } from './features/sidebar-webview/sessionReceipt';
-import { resolveCloudCodeAgentModel, PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
+import { resolveCloudCodeAgentModel, PRODUCT_NAMES } from '@agiworkforce/types';
 import { resolveTierSync } from './integrations/tierResolver';
 import { Config, resolveConfiguredCli } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
@@ -495,8 +495,6 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  void checkInlineCompletionsFirstRun(context);
-
   watchAccountTierInvalidation(context);
   context.subscriptions.push(trackLastTextEditor());
   whenInUse(() => {
@@ -510,22 +508,4 @@ export async function deactivate(): Promise<void> {
   const localRuntimes = activeLocalRuntimes;
   activeLocalRuntimes = undefined;
   await localRuntimes?.shutdownAll();
-}
-
-async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext): Promise<void> {
-  if (!Config.inlineCompletionsEnabled()) return;
-
-  const alreadyShown = context.globalState.get<boolean>('inlineCompletions.firstRunNoticeShown');
-  if (alreadyShown === true) return;
-
-  await vscode.window.showInformationMessage(
-    `${PRODUCT_NAMES.code} inline completions are now active. On each keystroke, up to ` +
-      `~100 lines of surrounding code are sent to the ${PRODUCT_BRAND} API for ` +
-      'suggestion. Files in the sensitive-file denylist (.env, .pem, .ssh/, ' +
-      'credentials, secrets.json, etc.) are automatically excluded. Manage in ' +
-      `Settings → ${PRODUCT_NAMES.code}.`,
-    'Got it',
-  );
-
-  await context.globalState.update('inlineCompletions.firstRunNoticeShown', true);
 }

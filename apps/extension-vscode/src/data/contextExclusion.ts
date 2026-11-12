@@ -143,8 +143,10 @@ export async function resolveContextFile(filePath: string): Promise<ContextFileR
     return { ok: false, reason: 'excluded' };
   if (honoursGitIgnore(resolved.folder)) {
     if (!vscode.workspace.isTrusted) return { ok: false, reason: 'unchecked' };
-    const lexicalIgnore = await gitWithholdReason(filePath);
-    if (lexicalIgnore !== undefined) return { ok: false, reason: lexicalIgnore };
+    if (resolved.resolvedPath !== filePath) {
+      const lexicalIgnore = await gitWithholdReason(filePath);
+      if (lexicalIgnore !== undefined) return { ok: false, reason: lexicalIgnore };
+    }
     const relative = toPosix(path.relative(resolved.folder.uri.fsPath, resolved.resolvedPath));
     const ignored = await checkIgnore(resolved.folder.uri.fsPath, [relative]);
     if (ignored === undefined) return { ok: false, reason: 'unchecked' };
@@ -287,4 +289,67 @@ export async function gitWithholdReason(
 
 export async function isGitIgnored(filePath: string): Promise<boolean> {
   return (await gitWithholdReason(filePath)) !== undefined;
+}
+
+const RESOLUTION_CACHE_TTL_MS = 30_000;
+const RESOLUTION_CACHE_MAX_ENTRIES = 64;
+const IGNORE_RULE_SETTINGS = [
+  'files.exclude',
+  'search.exclude',
+  'search.useIgnoreFiles',
+  'agiWorkforce.respectGitIgnore',
+] as const;
+
+export type ContextFileResolver = (filePath: string) => Promise<ContextFileResolution>;
+
+export class ContextResolutionCache implements vscode.Disposable {
+  private readonly entries = new Map<
+    string,
+    { expiresAt: number; resolution: Promise<ContextFileResolution> }
+  >();
+  private readonly subscriptions: vscode.Disposable[];
+
+  constructor(private readonly ttlMs = RESOLUTION_CACHE_TTL_MS) {
+    const clear = (): void => this.clear();
+    const watcher = vscode.workspace.createFileSystemWatcher('**/.gitignore');
+    this.subscriptions = [
+      watcher,
+      watcher.onDidCreate(clear),
+      watcher.onDidChange(clear),
+      watcher.onDidDelete(clear),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (IGNORE_RULE_SETTINGS.some((section) => event.affectsConfiguration(section))) clear();
+      }),
+      vscode.workspace.onDidGrantWorkspaceTrust(clear),
+      vscode.workspace.onDidChangeWorkspaceFolders(clear),
+    ];
+  }
+
+  readonly resolve: ContextFileResolver = (filePath) => {
+    const now = Date.now();
+    const cached = this.entries.get(filePath);
+    if (cached !== undefined && cached.expiresAt > now) return cached.resolution;
+    const resolution = resolveContextFile(filePath).catch((): ContextFileResolution => ({
+      ok: false,
+      reason: 'unavailable',
+    }));
+    this.entries.delete(filePath);
+    this.entries.set(filePath, { expiresAt: now + this.ttlMs, resolution });
+    while (this.entries.size > RESOLUTION_CACHE_MAX_ENTRIES) {
+      const oldest = this.entries.keys().next().value;
+      if (oldest === undefined) break;
+      this.entries.delete(oldest);
+    }
+    return resolution;
+  };
+
+  clear(): void {
+    this.entries.clear();
+  }
+
+  dispose(): void {
+    this.entries.clear();
+    for (const subscription of this.subscriptions) subscription.dispose();
+    this.subscriptions.length = 0;
+  }
 }

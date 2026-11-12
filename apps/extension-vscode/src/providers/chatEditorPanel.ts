@@ -13,7 +13,10 @@ import {
 } from '../features/sidebar-webview/webviewContent';
 import { alertSessionActivity } from '../features/sidebar-webview/sessionActivityAlert';
 import { setChatFocus } from '../features/sidebar-webview/chatFocus';
-import { parseBoundWebviewMessage } from '../protocol/webviewMessages';
+import {
+  describeRejectedWebviewMessage,
+  parseBoundWebviewMessage,
+} from '../protocol/webviewMessages';
 import { type ConversationTreeProvider } from '../features/trees';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
 import { resolveTierSync } from '../integrations/tierResolver';
@@ -179,15 +182,17 @@ export class ChatEditorPanel {
     );
     this.disposables.push(
       this.panel.webview.onDidReceiveMessage(async (message) => {
-        const parsed = parseBoundWebviewMessage(message, {
-          origin: this.origin,
-          epoch: this.stateManager.conversationEpoch(),
-        });
+        const binding = { origin: this.origin, epoch: this.stateManager.conversationEpoch() };
+        const parsed = parseBoundWebviewMessage(message, binding);
         if (parsed === undefined) {
+          const rejected = describeRejectedWebviewMessage(message, binding);
           console.warn(
             `[${PRODUCT_NAMES.code}] dropping an editor-chat webview message that is malformed or belongs to a replaced conversation`,
-            message,
+            { type: rejected.type, reason: rejected.reason },
           );
+          if (rejected.reason === 'schema' && rejected.type === 'sendMessage') {
+            this.stateManager.rejectUnreadableSend(rejected.clientMessageId);
+          }
           return;
         }
         if (parsed.type === 'viewFocused' || parsed.type === 'viewBlurred') {
@@ -199,7 +204,11 @@ export class ChatEditorPanel {
       }),
       this.panel.onDidChangeViewState((event) => {
         if (event.webviewPanel.active) ChatEditorPanel.mostRecent = this;
-        if (event.webviewPanel.visible) void this.stateManager.syncStoredTranscript();
+        this.stateManager.setEditorContextTracking(event.webviewPanel.visible);
+        if (event.webviewPanel.visible) {
+          void this.stateManager.syncStoredTranscript();
+          void this.stateManager.pushEditorContext();
+        }
       }),
     );
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);

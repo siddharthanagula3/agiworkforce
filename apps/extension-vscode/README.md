@@ -154,9 +154,13 @@ explanations.
   AGI command, or reopen an AGI session, unless you turn on
   `agiWorkforce.activateOnStartup`.
 - Inline completions are **off** by default; enabling them sends surrounding
-  code to AGI Cloud, and files matching the sensitive-file denylist (`.env`,
-  `.pem`, `.ssh/`, credentials, `secrets.json`, and similar) are excluded. A
-  restricted workspace cannot turn them on from its own settings.
+  code to AGI Cloud when you pause typing in a workspace file, at most 100
+  lines and about 6,000 characters before the cursor. Nothing is sent until you
+  close the first-use notice. Files matching the sensitive-file denylist
+  (`.env`, `.pem`, `.ssh/`, credentials, `secrets.json`, and similar), files
+  withheld by git ignore rules or `files.exclude` and `search.exclude`, unsaved
+  new files, settings and other non-file editors are excluded. A restricted
+  workspace cannot turn them on from its own settings.
 - A Local default model is never swapped for an AGI Cloud model. With one
   selected, Fix, Refactor, Generate Tests and Generate Docs run in the chat on
   that model, and Code Review, Suggest Terminal Command and inline completions,
