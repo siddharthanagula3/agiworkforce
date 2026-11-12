@@ -1521,6 +1521,24 @@
       ]
     },
     {
+      "id": "delete-cancel-restores-renewal",
+      "doc": "delete-your-account",
+      "section": "Changing your mind",
+      "kind": "prose",
+      "sentence": "If deleting the account stops your web plan from renewing, cancelling the deletion turns its renewal back on.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/cancel/route.ts",
+        "apps/web/lib/server/account-deletion-plan-renewal.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/cancel/__tests__/route.test.ts",
+          "name": "turns renewal back on after the cancellation commits and says so"
+        }
+      ]
+    },
+    {
       "id": "delete-sole-owner-is-refused",
       "doc": "delete-your-account",
       "section": "Before you confirm",
@@ -1536,37 +1554,35 @@
       ]
     },
     {
-      "id": "delete-renewing-plan-is-refused",
+      "id": "delete-stops-web-renewal",
       "doc": "delete-your-account",
       "section": "Before you confirm",
       "kind": "prose",
-      "sentence": "If your paid plan still renews, the request is refused and nothing is scheduled.",
-      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "sentence": "If your plan is billed on the web and still renews, deleting your account turns its renewal off, so you are not charged again.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/route.ts",
+        "apps/web/lib/server/account-deletion-plan-renewal.ts"
+      ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
-          "name": "refuses deletion with 409 while a paid subscription is %s"
+          "name": "schedules deletion and sets the plan to end at period end, tagged with the deadline"
         }
       ]
     },
     {
-      "id": "delete-after-cancelling-is-immediate",
+      "id": "delete-store-plan-keeps-billing",
       "doc": "delete-your-account",
       "section": "Before you confirm",
       "kind": "prose",
-      "sentence": "Cancel the plan first, on the web in Settings, Billing, or with Apple or Google if you bought it there, and then you can delete your account straight away, without waiting for the plan to end.",
+      "sentence": "If you bought the plan from Apple or Google, deleting your account does not cancel it: the confirmation says so and links to the page where you cancel it with the store.",
       "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
-          "name": "tells a renewing web subscriber where to cancel and that deletion is then immediate"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
-          "name": "sends an App Store subscriber to Apple to cancel"
+          "name": "schedules deletion for a renewing %s plan and says billing continues there"
         }
       ]
     },
@@ -1590,6 +1606,21 @@
           "kind": "test",
           "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
           "name": "cancels the live Stripe subscription before any row is touched"
+        }
+      ]
+    },
+    {
+      "id": "delete-refused-while-payment-collected",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "While a payment on the plan is still being collected, the request is refused and nothing is scheduled.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "still refuses a renewing past-due %s plan while its payment is collected"
         }
       ]
     },

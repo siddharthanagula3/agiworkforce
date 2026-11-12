@@ -246,21 +246,31 @@ What the request does:
   Settings → Data Controls, which also offers a full local export (chats,
   memory, settings, installed models) that runs entirely on the device.
 
-A Free-plan account is scheduled straight away. When the server refuses, nothing
-is scheduled and the app shows the server's reason:
+A Free-plan account is scheduled straight away. A paid plan does not stop the
+deletion either:
 
-- **A paid plan that still renews.** This version sells nothing, so such a plan
-  was bought on the web (or, for an older store purchase, through Apple or
-  Google). The message tells the person to cancel it there first, so that a
-  renewal cannot charge after the account is gone, and names where. The app does
-  not link to the web billing page, in line with the link policy above. Once the
-  plan is cancelled, Delete Account schedules deletion straight away; there is
-  no wait for the paid period to end.
-- **A paid plan already cancelled** is not a refusal: deletion is scheduled
-  straight away, and the remaining paid time ends when erasure runs. The
-  confirmation and the receipt both say that the unused time is not refunded.
-- **A payment still being collected** on a cancelled plan: deletion is refused
-  until it is settled.
+- **A paid plan that still renews, bought on the web.** Scheduling the deletion
+  also sets the plan not to renew, so no renewal can charge after the account
+  is gone. If the person undoes the deletion inside the window, the renewal is
+  turned back on.
+- **A paid plan that still renews, bought through Apple or Google** (an older
+  store purchase; this version sells nothing). We cannot cancel it, so the
+  deletion is scheduled and the receipt says that the store keeps billing until
+  the person cancels there, with a link to the store's own subscription
+  settings.
+- **A paid plan already cancelled**: deletion is scheduled straight away.
+
+In every paid case the remaining paid time ends when erasure runs, and the
+confirmation and the receipt both say that the unused time is not refunded.
+
+When the server refuses, nothing is scheduled and the app shows the server's
+reason:
+
+- **A payment still being collected**: deletion is refused until it is settled.
+- **A plan change already scheduled** on a web plan: the message asks the person
+  to keep their current plan in Billing first.
+- **A plan billed by invoice, or one whose purchase cannot be identified**: the
+  message asks the person to contact support.
 - **The only owner of a workspace**: the message names the workspace and asks
   for another owner or for the workspace to be deleted first.
 

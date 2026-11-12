@@ -1085,6 +1085,7 @@ export function ArtifactFullScreen({
           </View>
         ) : (
           <ScrollView
+            keyboardShouldPersistTaps="handled"
             style={{ flex: 1 }}
             contentContainerStyle={{
               padding: 16,
@@ -1140,6 +1141,7 @@ export function ArtifactFullScreen({
 
             {isMonospace ? (
               <ScrollView
+                keyboardShouldPersistTaps="handled"
                 horizontal
                 showsHorizontalScrollIndicator
                 style={{

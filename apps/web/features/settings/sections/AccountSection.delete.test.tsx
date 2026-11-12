@@ -128,6 +128,7 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     );
     expect(screen.getByText(/Choose Continue to sign out/)).toBeInTheDocument();
     expect(screen.queryByText(/permanently erased on/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('delete-account-store-billing-link')).not.toBeInTheDocument();
 
     // Sign-out must not fire before the user acknowledges the dialog.
     expect(mockLogout).not.toHaveBeenCalled();
@@ -139,6 +140,42 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     expect(mockLogout).toHaveBeenCalledWith({ sessionId: 'session-1' });
     expect(mockSignOut).toHaveBeenCalledWith({ sessionId: 'session-1', redirectUrl: '/' });
     await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/'));
+  });
+
+  it('links to the store subscription page when a store plan keeps billing', async () => {
+    const manageUrl = 'https://play.google.com/store/account/subscriptions';
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/settings/sessions' && init?.method === 'GET') {
+        return jsonResponse({ sessions: [], totalCount: 0 });
+      }
+      if (url === '/api/user/delete-account' && init?.method === 'GET') {
+        return jsonResponse({
+          pending: false,
+          canCancel: false,
+          requestedAt: null,
+          scheduledFor: null,
+        });
+      }
+      if (url === '/api/user/delete-account' && init?.method === 'DELETE') {
+        return jsonResponse({
+          message: `Account deletion scheduled. Google Play keeps charging you until you cancel it there: ${manageUrl}`,
+          scheduledFor: '2026-08-16T12:00:00.000Z',
+          status: 'pending',
+          statusReason: 'Deletion is scheduled and has not started.',
+          storeBilling: { store: 'google', manageUrl },
+        });
+      }
+      throw new Error(`Unexpected request: ${url} ${init?.method ?? 'GET'}`);
+    });
+
+    renderAccountSection();
+    await openAndSubmitDelete();
+
+    const link = await screen.findByTestId('delete-account-store-billing-link');
+    expect(link).toHaveTextContent('Cancel your subscription in Google Play');
+    expect(link).toHaveAttribute('href', manageUrl);
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
   it('still forces navigation home if sign-out itself fails after a successful deletion', async () => {

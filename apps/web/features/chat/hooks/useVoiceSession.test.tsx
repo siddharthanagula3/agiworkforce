@@ -181,6 +181,51 @@ describe('useVoiceSession', () => {
     expect(live.start.mock.calls[0]?.[0]).toMatchObject({ conversationId: 'conv-1' });
   });
 
+  it('discards a conversation it created when the voice session fails to start', async () => {
+    live.start.mockRejectedValueOnce(new Error('mic blocked'));
+    const onDiscardConversation = vi.fn();
+    const view = renderHook(() =>
+      useVoiceSession({
+        managed: true,
+        turnActive: false,
+        conversationId: null,
+        onSend: () => true,
+        onTranscript: vi.fn(),
+        onEnsureConversation: async (_authority, bindConversation) => {
+          bindConversation('conv-1');
+          return 'conv-1';
+        },
+        onDiscardConversation,
+      }),
+    );
+    await act(async () => {
+      view.result.current.enter();
+    });
+    await waitFor(() => expect(onDiscardConversation).toHaveBeenCalledWith('conv-1'));
+    expect(onDiscardConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an existing conversation when the voice session fails to start', async () => {
+    live.start.mockRejectedValueOnce(new Error('mic blocked'));
+    const onDiscardConversation = vi.fn();
+    const view = renderHook(() =>
+      useVoiceSession({
+        managed: true,
+        turnActive: false,
+        conversationId: 'conv-1',
+        onSend: () => true,
+        onTranscript: vi.fn(),
+        onEnsureConversation: async () => 'conv-1',
+        onDiscardConversation,
+      }),
+    );
+    await act(async () => {
+      view.result.current.enter();
+    });
+    await waitFor(() => expect(view.result.current.state.status).toBe(VOICE_SESSION_STATUS.error));
+    expect(onDiscardConversation).not.toHaveBeenCalled();
+  });
+
   it('does not start managed transport for a Local destination', async () => {
     const view = renderHook(() =>
       useVoiceSession({

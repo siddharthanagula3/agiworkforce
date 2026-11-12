@@ -23,7 +23,6 @@ import {
   STUDY_MODES,
   STUDY_MODE_DESCRIPTIONS,
   STUDY_MODE_LABELS,
-  composeStudyInstruction,
   normalizeStudyTopic,
   sortStudySessions,
   studyConversationTitle,
@@ -272,12 +271,6 @@ export function StudyPage({
           />
           Start with a personal study plan
         </label>
-
-        {normalizedTopic !== null && (
-          <p className="rounded-md border border-border px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            {composeStudyInstruction({ topic: normalizedTopic, mode, level })}
-          </p>
-        )}
 
         <div className="flex items-center gap-3">
           <button

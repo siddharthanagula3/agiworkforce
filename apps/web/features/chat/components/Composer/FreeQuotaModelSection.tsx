@@ -281,13 +281,15 @@ export function FreeQuotaModelSection({
   selectedId,
   onSelect,
   fallback,
+  defaultExpanded = true,
 }: {
   sources: FreeModelSources;
   selectedId: string;
   onSelect: (id: string) => void;
   fallback: { name: string; row: ReactNode } | null;
+  defaultExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [moreOpen, setMoreOpen] = useState(false);
   const [explainedRow, setExplainedRow] = useState<string | null>(null);
   const [query, setQuery] = useState('');

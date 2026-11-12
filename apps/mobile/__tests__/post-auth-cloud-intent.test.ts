@@ -213,7 +213,6 @@ describe('NEW-mqa-05, every Cloud entry point stages the intent', () => {
     const api = readFileSync(join(__dirname, '..', 'services', 'api.ts'), 'utf8');
 
     expect(api).not.toMatch(/expo-router|\/\(auth\)\//);
-    expect(api).toContain('oweSignInForEndedSession');
   });
 
   it.each(entryPoints)(

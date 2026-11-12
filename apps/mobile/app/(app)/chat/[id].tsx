@@ -756,6 +756,8 @@ export default function ChatScreen() {
   );
 
   const pendingSendText = id && isLoadingMessages ? peekConversationSend(id) : null;
+  const conversationStarted =
+    pendingSendText !== null || conversationMessages.some((message) => message.role === 'user');
 
   useEffect(() => {
     if (!id || isStreaming || isLoadingMessages) return;
@@ -861,16 +863,19 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!conversation) return;
     setAppMode(conversationExecutionMode);
-    const preferredModel =
-      conversationExecutionMode === 'cloud'
-        ? conversation.model &&
-          executionModeForSelection(conversation.model, conversationExecutionMode) === 'cloud' &&
-          isSelectableModelIdForAccess(conversation.model, cloudUnlocked, subscriptionTier)
-          ? conversation.model
-          : (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID)
-        : conversation.model &&
-            executionModeForSelection(conversation.model, conversationExecutionMode) === 'local'
-          ? conversation.model
+    const currentModel = useModelStore.getState().selectedModel;
+    const fitsConversation = (modelId: string | null | undefined): modelId is string =>
+      Boolean(modelId) &&
+      executionModeForSelection(modelId as string, conversationExecutionMode) ===
+        conversationExecutionMode &&
+      (conversationExecutionMode === 'local' ||
+        isSelectableModelIdForAccess(modelId as string, cloudUnlocked, subscriptionTier));
+    const preferredModel = fitsConversation(conversation.model)
+      ? conversation.model
+      : fitsConversation(currentModel)
+        ? currentModel
+        : conversationExecutionMode === 'cloud'
+          ? (getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID)
           : readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID);
 
     if (!preferredModel) return;
@@ -947,6 +952,7 @@ export default function ChatScreen() {
       };
     }
     if (
+      !failureShownInTurn &&
       sendFailureCode &&
       sendFailureCode.message === sendError &&
       offersModelSwitch(sendFailureCode.code)
@@ -962,6 +968,7 @@ export default function ChatScreen() {
     return null;
   }, [
     clearError,
+    failureShownInTurn,
     handleOpenCloudSignIn,
     handleOpenModelPicker,
     localRecoveryAction,
@@ -2054,7 +2061,10 @@ export default function ChatScreen() {
             and rendering both stacked two input rows on screen at once, which
             is neither reference-03 nor what VoiceInlineBar's own docstring
             promises ("the only thing that changes is the composer"). */}
-        {conversationExecutionMode === 'cloud' && !voiceInlineVisible && !liveVoiceVisible ? (
+        {conversationExecutionMode === 'cloud' &&
+        !conversationStarted &&
+        !voiceInlineVisible &&
+        !liveVoiceVisible ? (
           <WorkModeSwitch />
         ) : null}
         {conversationExecutionMode === 'cloud' &&

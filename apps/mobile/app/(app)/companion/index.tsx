@@ -36,6 +36,7 @@ import {
   startHealthChecks,
   stopHealthChecks,
   stopReconnectRecovery,
+  resumeReconnectCountdown,
   requestAgentRefresh,
   manualReconnect,
 } from '@/services/companion';
@@ -123,6 +124,11 @@ export default function CompanionScreen() {
       stopHealthChecks();
     };
   }, [status, hasSeenDemo]);
+
+  useEffect(() => {
+    if (!FEATURES.companion || !FEATURES.dispatch) return;
+    if (status === 'reconnecting') resumeReconnectCountdown();
+  }, [status]);
 
   useEffect(() => stopReconnectRecovery, []);
 
@@ -239,7 +245,11 @@ export default function CompanionScreen() {
 
       {status === 'reconnecting' && (
         <View className="mx-4 mb-3">
-          <ReconnectingBanner countdown={reconnectCountdown} onReconnect={manualReconnect} />
+          <ReconnectingBanner
+            countdown={reconnectCountdown}
+            reason={error}
+            onReconnect={manualReconnect}
+          />
         </View>
       )}
 

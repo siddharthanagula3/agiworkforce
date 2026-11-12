@@ -9,7 +9,6 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
-import { oweSignInForEndedSession } from '@/src/features/auth/services/endedSession';
 import {
   createUploadTask,
   getInfoAsync,
@@ -50,9 +49,6 @@ let _refreshBackoffUntil = 0;
 let _accountGeneration = 0;
 const _activeAccountUploads = new Set<UploadTask>();
 const MAX_REFRESH_FAILURES = 3;
-// The account's own identity route. A 403 there is the server refusing the
-// account itself (deleted, suspended, locked), not one action being denied.
-const ACCOUNT_IDENTITY_PATH = '/api/me';
 const REFRESH_TIMEOUT_MS = 10_000;
 const PASSKEY_REQUIRED_CODE = 'PASSKEY_REQUIRED';
 const PASSKEY_REQUIRED_MESSAGE =
@@ -137,10 +133,6 @@ async function refusedForPasskey(response: Response): Promise<boolean> {
   }
 }
 
-function isAccountIdentityPath(path: string): boolean {
-  return path === ACCOUNT_IDENTITY_PATH || path.startsWith(`${ACCOUNT_IDENTITY_PATH}?`);
-}
-
 interface AccountUnavailableRefusal {
   message: string;
   recoveryPath: string | null;
@@ -219,17 +211,6 @@ export async function recoverStreamSession(account: CloudAccountEpoch): Promise<
   assertCloudAccountEpochCurrent(account);
   assertApiAccountGeneration(accountGeneration);
   return refreshed;
-}
-
-// A refusal is not the end of the session: Clerk alone says when that has
-// happened, and the root layout opens sign-in when it does.
-function endRefusedAccountSession(): void {
-  oweSignInForEndedSession();
-  invalidateCloudAccount();
-  clearLocalCloudAccountState();
-  clearAuthSession().catch((err) => {
-    console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
-  });
 }
 
 interface RequestOptions {
@@ -373,12 +354,6 @@ async function sendRequest(
         handleAccountUnavailable(refusal);
         throw new Error(`HTTP 403: ${refusal.message}`);
       }
-    }
-
-    if (response.status === 403 && isAccountIdentityPath(path)) {
-      release();
-      endRefusedAccountSession();
-      throw new Error('HTTP 403: This account can no longer be used on this device.');
     }
 
     return { response, release };

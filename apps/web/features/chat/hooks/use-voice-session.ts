@@ -84,6 +84,7 @@ export interface UseVoiceSessionOptions {
     authority: RequestAuthority,
     bindConversation: (id: string) => void,
   ) => Promise<string | null>;
+  onDiscardConversation?: ((conversationId: string) => void) | undefined;
   onTranscript: (
     conversationId: string,
     turn: LiveTranscriptTurn,
@@ -135,6 +136,7 @@ interface TranscriptSink {
     authority: RequestAuthority,
     bindConversation: (id: string) => void,
   ) => Promise<string | null>;
+  onDiscardConversation?: ((conversationId: string) => void) | undefined;
   onTranscript: (
     conversationId: string,
     turn: LiveTranscriptTurn,
@@ -575,6 +577,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
     store.setBackendBusy(false);
     return true;
   };
+  const startedWithoutConversation = owner.conversationId === null;
   const operation = Promise.resolve()
     .then(async () => {
       owner.authority.assertCurrent();
@@ -689,6 +692,10 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
       return session;
     })
     .catch((error: unknown) => {
+      if (!owner.session && startedWithoutConversation && owner.conversationId) {
+        sink.onDiscardConversation?.(owner.conversationId);
+        owner.conversationId = null;
+      }
       if (controller.owner === owner) controller.starting = null;
       if (controller.owner !== owner || owner.ended || !destinationIsCurrent(owner)) throw error;
       controller.starting = null;
@@ -716,6 +723,7 @@ export function useVoiceSession({
   onSend,
   onStartWorkTask,
   onEnsureConversation,
+  onDiscardConversation,
   onTranscript,
   onCaption,
 }: UseVoiceSessionOptions): VoiceSessionController {
@@ -755,6 +763,7 @@ export function useVoiceSession({
     conversationId,
     onStartWorkTask,
     onEnsureConversation,
+    onDiscardConversation,
     onTranscript,
     onCaption,
   });
@@ -765,6 +774,7 @@ export function useVoiceSession({
     conversationId,
     onStartWorkTask,
     onEnsureConversation,
+    onDiscardConversation,
     onTranscript,
     onCaption,
   };

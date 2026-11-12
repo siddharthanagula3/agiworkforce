@@ -223,12 +223,19 @@ describe('Capabilities settings screen', () => {
     ).toBeTruthy();
   });
 
+  it('says on screen why a locked Cloud switch cannot be changed', () => {
+    const { getAllByText } = render(<CapabilitiesScreen />);
+
+    expect(getAllByText('Sign in to change this Managed Cloud preference.')).toHaveLength(4);
+  });
+
   it('enables the Cloud preference switches after cloud access is unlocked', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
 
-    const { getByLabelText } = render(<CapabilitiesScreen />);
+    const { getByLabelText, queryByText } = render(<CapabilitiesScreen />);
 
     expect(getByLabelText(WEB_SEARCH_LABEL)).not.toBeDisabled();
+    expect(queryByText('Sign in to change this Managed Cloud preference.')).toBeNull();
   });
 
   it('binds the Web search row to the persisted send-path preference', () => {
