@@ -31,8 +31,10 @@ import {
 import {
   isPolicyUnavailable,
   WORKSPACE_POLICY_UNAVAILABLE_DECISION,
+  type PolicyAsk,
   type PolicySurface,
 } from '@/lib/services/organization-policy-evaluator';
+import { serviceUnavailableRetryHeaders } from '@/lib/service-unavailable-retry';
 
 export const MANAGED_COMPUTE_PRIVATE_BETA_ENV = 'AGI_MANAGED_COMPUTE_PRIVATE_BETA';
 export const MANAGED_COMPUTE_BETA_HEADER = 'x-agi-managed-compute-beta';
@@ -157,6 +159,48 @@ export async function buildOrganizationPolicyGateResponse(
   );
 }
 
+async function decideWorkspacePolicy(
+  userId: string,
+  request: NextRequest,
+  ask: PolicyAsk,
+  logScope: string,
+): Promise<PolicyGateResult> {
+  try {
+    return await evaluateActiveWorkspacePolicy(getNeonDb(), userId, ask, request);
+  } catch (error) {
+    logger.error(
+      { error, userId, resource: ask.resource },
+      `[${logScope}] policy unavailable; denied`,
+    );
+    return { ...WORKSPACE_POLICY_UNAVAILABLE_DECISION, organizationId: null };
+  }
+}
+
+function workspacePolicyRefusal(
+  decision: PolicyGateResult,
+  detail: Record<string, unknown>,
+  headers?: HeadersInit,
+): NextResponse {
+  const unavailable = isPolicyUnavailable(decision);
+  const responseHeaders = new Headers(headers);
+  if (unavailable) {
+    for (const [name, value] of Object.entries(serviceUnavailableRetryHeaders())) {
+      responseHeaders.set(name, value);
+    }
+  }
+  return NextResponse.json(
+    {
+      error: {
+        message: decision.reason,
+        type: 'organization_policy',
+        code: decision.code,
+        ...detail,
+      },
+    },
+    { status: unavailable ? 503 : 403, headers: responseHeaders },
+  );
+}
+
 export async function buildWorkspaceFeatureGateResponse(
   userId: string,
   request: NextRequest,
@@ -164,37 +208,69 @@ export async function buildWorkspaceFeatureGateResponse(
   surface: PolicySurface,
   headers?: HeadersInit,
 ): Promise<NextResponse | null> {
-  let decision;
-  try {
-    decision = await evaluateActiveWorkspacePolicy(
-      getNeonDb(),
-      userId,
-      { resource: 'feature', feature, surface },
-      request,
-    );
-  } catch (error) {
-    logger.error({ error, userId, feature }, '[workspace-feature] policy unavailable; denied');
-    decision = { ...WORKSPACE_POLICY_UNAVAILABLE_DECISION, organizationId: null };
-  }
-
+  const decision = await decideWorkspacePolicy(
+    userId,
+    request,
+    { resource: 'feature', feature, surface },
+    'workspace-feature',
+  );
   if (decision.allowed) return null;
 
   logger.warn(
     { userId, organizationId: decision.organizationId, code: decision.code, feature, surface },
     '[workspace-feature] denied by workspace policy',
   );
+  return workspacePolicyRefusal(decision, { feature }, headers);
+}
 
-  return NextResponse.json(
-    {
-      error: {
-        message: decision.reason,
-        type: 'organization_policy',
-        code: decision.code,
-        feature,
-      },
-    },
-    { status: isPolicyUnavailable(decision) ? 503 : 403, headers },
+export function evaluateWorkspaceAccess(
+  userId: string,
+  request: NextRequest,
+  surface: PolicySurface,
+): Promise<PolicyGateResult> {
+  return decideWorkspacePolicy(
+    userId,
+    request,
+    { resource: 'workspace_access', surface },
+    'workspace-access',
   );
+}
+
+export async function buildWorkspaceAccessGateResponse(
+  userId: string,
+  request: NextRequest,
+  surface: PolicySurface,
+  headers?: HeadersInit,
+): Promise<NextResponse | null> {
+  const decision = await evaluateWorkspaceAccess(userId, request, surface);
+  if (decision.allowed) return null;
+
+  logger.warn(
+    { userId, organizationId: decision.organizationId, code: decision.code, surface },
+    '[workspace-access] denied by workspace policy',
+  );
+  return workspacePolicyRefusal(decision, {}, headers);
+}
+
+export async function buildChatSyncGateResponse(
+  userId: string,
+  request: NextRequest,
+  surface: PolicySurface,
+  headers?: HeadersInit,
+): Promise<NextResponse | null> {
+  const decision = await decideWorkspacePolicy(
+    userId,
+    request,
+    { resource: 'chat_sync', surface },
+    'chat-sync',
+  );
+  if (decision.allowed) return null;
+
+  logger.warn(
+    { userId, organizationId: decision.organizationId, code: decision.code, surface },
+    '[chat-sync] denied by workspace policy',
+  );
+  return workspacePolicyRefusal(decision, {}, headers);
 }
 
 const PROVIDER_EGRESS_REFUSALS: Readonly<

@@ -4,8 +4,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import {
+  buildWorkspaceAccessGateResponse,
+  buildWorkspaceFeatureGateResponse,
+} from '@/lib/managed-compute-gate';
 import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
 import { parseProjectRequest } from '@/lib/project-request-validation';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -38,7 +40,10 @@ async function handleGetProjects(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
+
+  const accessGate = await buildWorkspaceAccessGateResponse(userId, request, surface ?? 'unknown');
+  if (accessGate) return accessGate;
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -114,7 +119,7 @@ async function handleGetProjects(request: NextRequest) {
 }
 
 async function handleCreateProject(request: NextRequest) {
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
@@ -126,7 +131,7 @@ async function handleCreateProject(request: NextRequest) {
     userId,
     request,
     'projects',
-    resolveCloudChatSurface(request),
+    surface ?? 'unknown',
   );
   if (featureGate) return featureGate;
 

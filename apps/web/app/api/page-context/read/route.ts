@@ -22,6 +22,12 @@ async function handleReadPage(request: NextRequest): Promise<NextResponse> {
   if (csrfError) return csrfError as NextResponse;
   const limited = await withRateLimit(request, 'page-read', `user:${userId}`);
   if (limited) return limited;
+  const overDailyAllowance = await withRateLimit(
+    request,
+    'page-read-account-day',
+    `user:${userId}`,
+  );
+  if (overDailyAllowance) return overDailyAllowance;
   const input = await readValidatedJsonBody(
     request,
     ManagedCloudPageReadRequestSchema,

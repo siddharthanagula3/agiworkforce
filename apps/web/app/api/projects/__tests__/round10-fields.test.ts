@@ -133,6 +133,7 @@ vi.mock('@/lib/managed-compute-gate', async () => ({
   ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
 
   buildWorkspaceFeatureGateResponse: mockWorkspaceFeatureGate,
+  buildWorkspaceAccessGateResponse: vi.fn(async () => null),
 }));
 
 import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
@@ -543,6 +544,31 @@ describe('POST /api/projects · round-10 fields', () => {
       expect.any(String),
     );
     expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('asks the workspace about the client the credential is bound to, not an unknown one', async () => {
+    const { getUserScopedDb } = await import('@/lib/server/rls-db');
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockNeonQuery(...args) },
+      userId: 'user-abc',
+      organizationId: null,
+      surface: 'vscode',
+    } as never);
+    mockWorkspaceFeatureGate.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'surface_not_allowed' } }), {
+        status: 403,
+      }) as unknown as null,
+    );
+
+    const res = await POST(makePostRequest({ name: 'Governed project' }));
+
+    expect(res.status).toBe(403);
+    expect(mockWorkspaceFeatureGate).toHaveBeenCalledWith(
+      'user-abc',
+      expect.anything(),
+      'projects',
+      'vscode',
+    );
   });
 
   it('POST accepts round-10 fields and maps them in the response', async () => {

@@ -145,9 +145,11 @@ export async function isTenantLockedDown(organizationId: string | null): Promise
 
 export async function assertTenantNotLockedDown(organizationId: string | null): Promise<void> {
   if (await isTenantLockedDown(organizationId)) {
-    throw createError.forbidden(
-      'This workspace is locked down while an incident is investigated. Contact support.',
-    );
+    throw createError
+      .forbidden(
+        'This workspace is locked down while an incident is investigated. Contact support.',
+      )
+      .asUserSafe();
   }
 }
 

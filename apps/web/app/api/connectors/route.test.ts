@@ -1,5 +1,16 @@
 import { SELECTIVELY_RELEASED_CONNECTOR_IDS } from '@agiworkforce/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+const { mockWorkspaceAccessGate } = vi.hoisted(() => ({
+  mockWorkspaceAccessGate: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+}));
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildWorkspaceAccessGateResponse: mockWorkspaceAccessGate,
+}));
 import { NextRequest } from 'next/server';
 import {
   connectorIdsWithMcpEndpoint,
@@ -272,6 +283,52 @@ type McpDirectoryTargetsModule = typeof import('@/lib/connectors/mcp-directory-t
 type OauthStoreModule = typeof import('@/lib/connectors/oauth-store');
 
 type TypesModule = typeof import('@agiworkforce/types');
+
+describe('/api/connectors, which clients may reach the workspace', () => {
+  const refusal = () =>
+    new Response(JSON.stringify({ error: { code: 'surface_not_allowed' } }), { status: 403 });
+
+  function boundTo(surface: string): void {
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: {
+        query: (...args: unknown[]) => mocks.query(...args),
+        execute: (...args: unknown[]) => mocks.execute(...args),
+      },
+      userId: 'user-1',
+      organizationId: null,
+      surface,
+    } as never);
+  }
+
+  it('lists nothing for a client the workspace does not allow', async () => {
+    vi.clearAllMocks();
+    boundTo('chrome');
+    mockWorkspaceAccessGate.mockResolvedValueOnce(refusal());
+
+    const response = await GET(new NextRequest('http://localhost:3000/api/connectors'));
+
+    expect(response.status).toBe(403);
+    expect(mockWorkspaceAccessGate).toHaveBeenCalledWith('user-1', expect.anything(), 'chrome');
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it('connects nothing for a client the workspace does not allow', async () => {
+    vi.clearAllMocks();
+    boundTo('vscode');
+    mockWorkspaceAccessGate.mockResolvedValueOnce(refusal());
+
+    const response = await POST(
+      new NextRequest('http://localhost:3000/api/connectors', {
+        method: 'POST',
+        body: JSON.stringify({ connectorId: 'linear' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockWorkspaceAccessGate).toHaveBeenCalledWith('user-1', expect.anything(), 'vscode');
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+});
 
 describe('/api/connectors tenant scope', () => {
   it('reads the connector list through the rls scoped handle', async () => {

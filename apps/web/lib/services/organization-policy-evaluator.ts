@@ -21,7 +21,8 @@ export type PolicyAsk =
       surface?: PolicySurface;
       country?: string | null;
     }
-  | { resource: 'chat_sync'; surface: PolicySurface }
+  | { resource: 'workspace_access'; surface: PolicySurface; country?: string | null }
+  | { resource: 'chat_sync'; surface: PolicySurface; country?: string | null }
   | { resource: 'privacy_mode'; mode: PrivacyMode }
   | { resource: 'audit_export' }
   | { resource: 'external_sharing' }
@@ -299,7 +300,20 @@ export function evaluateOrganizationPolicy(
       };
     }
 
+    case 'workspace_access': {
+      const restriction = accessRestriction(policy, ask.surface, ask.country, obligations);
+      if (restriction) return restriction;
+      return {
+        allowed: true,
+        code: 'allowed',
+        reason: 'Allowed by workspace policy.',
+        obligations,
+      };
+    }
+
     case 'chat_sync': {
+      const restriction = accessRestriction(policy, ask.surface, ask.country, obligations);
+      if (restriction) return restriction;
       if (!surfaceIsSyncable(policy, ask.surface)) {
         return {
           allowed: false,

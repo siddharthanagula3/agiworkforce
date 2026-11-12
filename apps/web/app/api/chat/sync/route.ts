@@ -22,6 +22,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withIsoTimestamps } from '@/lib/server/iso-timestamps';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { buildChatSyncGateResponse } from '@/lib/managed-compute-gate';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
 import { revokeSharesOfDeletedConversations } from '@/lib/services/shared-session-revocation';
@@ -79,7 +80,10 @@ async function handlePull(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation-read');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, surface } = await getUserScopedDb(request);
+
+  const syncGate = await buildChatSyncGateResponse(userId, request, surface ?? 'unknown');
+  if (syncGate) return syncGate;
 
   const url = new URL(request.url);
   const sinceRaw = url.searchParams.get('since') ?? '0';
@@ -502,13 +506,16 @@ function countNewSyncItems(items: ReadonlyArray<{ baseVersion: string }>): numbe
 }
 
 async function handlePush(request: NextRequest) {
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const { db, userId, organizationId, surface } = await getUserScopedDb(request);
 
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
+
+  const syncGate = await buildChatSyncGateResponse(userId, request, surface ?? 'unknown');
+  if (syncGate) return syncGate;
 
   let rawBody: unknown;
   try {

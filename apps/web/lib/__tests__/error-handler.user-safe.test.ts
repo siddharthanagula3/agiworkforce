@@ -19,6 +19,20 @@ describe('handleError message exposure', () => {
     expect((await bodyOf(response)).error.message).toBe('Service temporarily unavailable');
   });
 
+  it('tells a client when to try an unavailable dependency again', () => {
+    const response = handleError(
+      createError.serviceUnavailable('Unable to verify account status.'),
+    );
+    expect(response.status).toBe(503);
+    expect(Number(response.headers.get('retry-after'))).toBeGreaterThan(0);
+  });
+
+  it('gives no retry hint for a capability this deployment does not offer', () => {
+    const response = handleError(createError.capabilityUnavailable('Not offered here.'));
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBeNull();
+  });
+
   it('delivers a 503 message marked user-safe', async () => {
     const reason = WORKSPACE_POLICY_UNAVAILABLE_DECISION.reason;
     const response = handleError(createError.serviceUnavailable(reason).asUserSafe());

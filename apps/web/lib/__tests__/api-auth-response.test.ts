@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { unauthorizedResponseFor } = await import('../api-auth-response');
+const { isAuthGateRefusal, unauthorizedResponseFor } = await import('../api-auth-response');
 const { MfaRequiredError } = await import('../mfa-policy-gate');
 const { IpNotAllowedError } = await import('../ip-allow-list-gate');
 const { createError } = await import('../errors');
@@ -42,5 +42,40 @@ describe('unauthorizedResponseFor', () => {
     expect(response.status).toBe(401);
     const body = await response.json();
     expect(body).toEqual({ error: 'Authentication required' });
+  });
+});
+
+describe('isAuthGateRefusal', () => {
+  it('passes a dependency that could not answer through as 503 with a retry hint', async () => {
+    const outage = createError.serviceUnavailable('Unable to verify account status.');
+
+    expect(isAuthGateRefusal(outage)).toBe(true);
+    const response = unauthorizedResponseFor(outage);
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toMatch(/^\d+$/);
+    const body = await response.json();
+    expect(body.error.code).toBe('SERVICE_UNAVAILABLE');
+  });
+
+  it('passes a workspace lockdown through as 403 with its own words', async () => {
+    const lockdown = createError
+      .forbidden('This workspace is locked down while an incident is investigated.')
+      .asUserSafe();
+
+    expect(isAuthGateRefusal(lockdown)).toBe(true);
+    const response = unauthorizedResponseFor(lockdown);
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error).toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'This workspace is locked down while an incident is investigated.',
+    });
+  });
+
+  it('treats only a 401 as a credential failure', () => {
+    expect(isAuthGateRefusal(createError.unauthorized())).toBe(false);
+    expect(isAuthGateRefusal(new Error('boom'))).toBe(false);
   });
 });
