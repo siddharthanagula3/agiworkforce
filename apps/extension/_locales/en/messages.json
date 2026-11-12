@@ -4303,8 +4303,32 @@
     "description": "Button that pauses AGI so the user can use the page"
   },
   "spBrowserTakeOverTitle": {
-    "message": "Pause AGI and use the page yourself. It continues when you hand it back.",
-    "description": "Tooltip of the Take over button"
+    "message": "Pause AGI and use the page yourself. If you do not hand it back within $MINUTES$ minutes, the task ends.",
+    "description": "Tooltip of the Take over button; states how long the paused task waits before it ends",
+    "placeholders": {
+      "minutes": {
+        "content": "$1",
+        "example": "15"
+      }
+    }
+  },
+  "cuTakeoverByUserReason": {
+    "message": "You have the page.",
+    "description": "Paused reason after the user pressed Take over; the takeover limit sentence follows it"
+  },
+  "cuTakeoverByInputReason": {
+    "message": "You started using the page, so AGI stopped acting on it.",
+    "description": "Paused reason after the user clicked or typed on the page during a task; the takeover limit sentence follows it"
+  },
+  "cuTakeoverLimit": {
+    "message": "If the page is not handed back within $MINUTES$ minutes, the task ends.",
+    "description": "Follows every paused reason, including one the model gave when it handed the page over; states the takeover limit",
+    "placeholders": {
+      "minutes": {
+        "content": "$1",
+        "example": "15"
+      }
+    }
   },
   "spBrowserHandBack": {
     "message": "Hand back",

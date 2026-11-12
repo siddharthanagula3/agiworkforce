@@ -15,6 +15,7 @@ export type ComputerUseCancellationReason =
   | 'user_stopped';
 
 export const USER_TAKEOVER_MAX_MS = 15 * 60_000;
+export const USER_TAKEOVER_MAX_MINUTES = String(USER_TAKEOVER_MAX_MS / 60_000);
 
 export interface ComputerUseRunLease {
   readonly runId: string;

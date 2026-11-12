@@ -21,6 +21,7 @@ import {
   conversationMetadataNeedsSync,
   conversationProjectNeedsSync,
   deleteConversation,
+  earliestCloudSyncRetryAt,
   getConversation,
   isCloudMetadataPersistenceEligible,
   listConversations,
@@ -60,6 +61,7 @@ import {
 
 export const CLOUD_SYNC_TOMBSTONE_KEY = 'agi_cloud_sync_tombstones_v1';
 export const SYNC_SWEEP_ALARM = 'agi-conversation-sync-sweep';
+export const CONVERSATION_SYNC_RETRY_ALARM = 'agi-conversation-sync-retry';
 export const CONVERSATION_SYNC_CURSOR_KEY = 'agi_cloud_conversation_cursor_v1';
 
 const INITIAL_SYNC_CURSOR = '0';
@@ -145,6 +147,7 @@ export async function sweepConversationSync(onAuthUnavailable?: () => void): Pro
       onAuthUnavailable?.();
       return false;
     }
+    await reconcileConversationSyncRetryAlarm(current.owner);
     const retained = await withTombstoneStore(readTombstones);
     return (
       retained.some((row) => row.accountId === current.owner.accountId) ||
@@ -154,6 +157,26 @@ export async function sweepConversationSync(onAuthUnavailable?: () => void): Pro
     logger.debug('Conversation sync sweep failed', error);
     return true;
   }
+}
+
+let retryAlarmTail: Promise<void> = Promise.resolve();
+
+function reconcileConversationSyncRetryAlarm(owner: ManagedCloudOwner): Promise<void> {
+  retryAlarmTail = retryAlarmTail
+    .then(async () => {
+      const retryAt = await earliestCloudSyncRetryAt(owner);
+      if (retryAt === undefined) {
+        await chrome.alarms.clear(CONVERSATION_SYNC_RETRY_ALARM);
+        return;
+      }
+      const scheduled = await chrome.alarms.get(CONVERSATION_SYNC_RETRY_ALARM);
+      if (scheduled?.scheduledTime === retryAt) return;
+      await chrome.alarms.create(CONVERSATION_SYNC_RETRY_ALARM, { when: retryAt });
+    })
+    .catch((error: unknown) => {
+      logger.debug('Conversation sync retry alarm could not be set', error);
+    });
+  return retryAlarmTail;
 }
 
 export function abortConversationSyncForOwnerChange(): void {
@@ -225,8 +248,34 @@ function serverWaitPending(entry: ConversationEntry, now = Date.now()): number |
     : undefined;
 }
 
-function unsavedOutcome(entry: ConversationEntry): UserConversationSave {
+async function blockStillHolds(
+  owner: ManagedCloudOwner,
+  entry: ConversationEntry,
+): Promise<boolean> {
   const sync = entry.cloudSync;
+  if (sync?.state !== 'blocked') return false;
+  switch (sync.blockedReason) {
+    case undefined:
+      return false;
+    case 'auth': {
+      const context = await getManagedCloudAuthContext();
+      return !context || !sameManagedCloudOwner(context.owner, owner);
+    }
+    case 'policy':
+      return sync.retryAfter !== undefined && sync.retryAfter > Date.now();
+    default:
+      return true;
+  }
+}
+
+async function unsavedOutcome(
+  owner: ManagedCloudOwner,
+  entry: ConversationEntry,
+): Promise<UserConversationSave> {
+  const sync = entry.cloudSync;
+  if (sync?.state === 'blocked' && !(await blockStillHolds(owner, entry))) {
+    return { status: 'not-saved' };
+  }
   const reason = sync?.lastError ? { reason: sync.lastError } : {};
   if (sync?.state === 'blocked') return { status: 'refused', ...reason };
   const retryAt = serverWaitPending(entry);
@@ -255,11 +304,13 @@ export async function saveConversationNow(
   if (!(await readCloudMirroringEnabled())) return { status: 'mirroring-off' };
   const initial = await getConversation(owner, conversationId);
   if (!initial) return { status: 'not-saved' };
-  if (initial.cloudSync?.state === 'blocked' || serverWaitPending(initial) !== undefined) {
-    return unsavedOutcome(initial);
+  if ((await blockStillHolds(owner, initial)) || serverWaitPending(initial) !== undefined) {
+    return unsavedOutcome(owner, initial);
   }
-  if (initial.cloudSync?.retryAfter !== undefined) {
+  const wasBlocked = initial.cloudSync?.state === 'blocked';
+  if (wasBlocked || initial.cloudSync?.retryAfter !== undefined) {
     await recordCloudSyncState(owner, conversationId, {
+      ...(wasBlocked ? { state: 'pending', blockedReason: undefined, lastError: undefined } : {}),
       retryAfter: undefined,
       retryAfterStatedByServer: undefined,
     });
@@ -270,7 +321,7 @@ export async function saveConversationNow(
     const entry = await getConversation(owner, conversationId);
     if (!entry) return { status: 'not-saved' };
     if (entry.cloudSync?.state === 'blocked' || entry.cloudSync?.state === 'error') {
-      return unsavedOutcome(entry);
+      return unsavedOutcome(owner, entry);
     }
     if (!hasOutstandingCloudWork(entry)) {
       if (conversationHasUnsavedCloudChanges(entry)) {
@@ -628,6 +679,13 @@ function serverStatedWaitMs(refusal: CloudRefusal, now: number): number | undefi
   return Math.min(resetAt - now, MAX_SERVER_WAIT_MS);
 }
 
+function refusalTimedByItsWait(refusal: CloudRefusal): CloudRefusal {
+  if (refusal.retryAfterSeconds === undefined || refusal.resetAt === undefined) return refusal;
+  const timed = { ...refusal };
+  delete timed.resetAt;
+  return timed;
+}
+
 async function handleFlushError(
   owner: ManagedCloudOwner,
   conversationId: string,
@@ -682,11 +740,12 @@ async function handleFlushError(
     const statedMs = serverStatedWaitMs(refusal, now);
     await recordCloudSyncState(owner, conversationId, {
       state: 'error',
-      lastError: describeCloudRefusal(refusal, SYNC_REFUSAL_COPY),
+      lastError: describeCloudRefusal(refusalTimedByItsWait(refusal), SYNC_REFUSAL_COPY),
       lastAttemptAt: now,
       retryAfter: now + (statedMs ?? fallbackMs),
       retryAfterStatedByServer: statedMs !== undefined ? true : undefined,
     });
+    await reconcileConversationSyncRetryAlarm(owner);
     return;
   }
 
@@ -708,6 +767,7 @@ async function handleFlushError(
     retryAfter: now + RETRY_AFTER_SERVER_ERROR_MS,
     retryAfterStatedByServer: undefined,
   });
+  await reconcileConversationSyncRetryAlarm(owner);
 }
 
 // Production tombstone writers are background message/sweep handlers. This tail

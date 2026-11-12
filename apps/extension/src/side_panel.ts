@@ -12052,10 +12052,11 @@ function buildUI(): void {
       }
       const waitMs = outcome?.retryAt !== undefined ? outcome.retryAt - Date.now() : 0;
       if (outcome?.status === 'not-saved' && waitMs > 0) {
-        const at = new Date(outcome.retryAt!).toLocaleTimeString(undefined, {
-          hour: 'numeric',
-          minute: '2-digit',
-        });
+        const retryAt = new Date(outcome.retryAt!);
+        const at =
+          retryAt.toDateString() === new Date().toDateString()
+            ? retryAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+            : retryAt.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
         tellShareRow(
           [outcome.reason, t('spHistoryShareSaveAgainAt', [at])].filter(Boolean).join(' '),
         );
