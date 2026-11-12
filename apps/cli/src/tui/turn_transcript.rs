@@ -62,9 +62,54 @@ pub(crate) fn has_visible_text(entries: &[TurnEntry]) -> bool {
         .any(|entry| matches!(entry, TurnEntry::Text(text) if !text.trim().is_empty()))
 }
 
+pub(crate) fn set_apart_unfinished_line(entries: &mut [TurnEntry]) {
+    let Some(TurnEntry::Text(text)) = entries.last_mut() else {
+        return;
+    };
+    if text.ends_with('\n') {
+        return;
+    }
+    let Some(line_break) = text.rfind('\n') else {
+        return;
+    };
+    if text[..line_break].ends_with('\n') || text[line_break + 1..].trim().is_empty() {
+        return;
+    }
+    text.insert(line_break, '\n');
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unfinished_last_line_of_a_stopped_turn_stands_apart() {
+        let mut entries = vec![TurnEntry::Text(
+            "33. Gray Wolf\n34. Arctic Wolf\n3".to_string(),
+        )];
+        set_apart_unfinished_line(&mut entries);
+        assert_eq!(
+            entries,
+            vec![TurnEntry::Text(
+                "33. Gray Wolf\n34. Arctic Wolf\n\n3".to_string()
+            )]
+        );
+
+        for unchanged in [
+            "a finished line\n",
+            "one line in progress",
+            "a paragraph\n\nalready apart",
+            "trailing blank\n  ",
+        ] {
+            let mut entries = vec![TurnEntry::Text(unchanged.to_string())];
+            set_apart_unfinished_line(&mut entries);
+            assert_eq!(entries, vec![TurnEntry::Text(unchanged.to_string())]);
+        }
+
+        let mut ends_with_a_tool = vec![TurnEntry::Text("a\nb".to_string()), TurnEntry::Tool];
+        set_apart_unfinished_line(&mut ends_with_a_tool);
+        assert_eq!(ends_with_a_tool[0], TurnEntry::Text("a\nb".to_string()));
+    }
     use crate::tui::app_event::ToolStatus;
 
     fn queued(call_id: &str) -> TuiAppEvent {

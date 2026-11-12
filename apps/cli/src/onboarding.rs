@@ -105,6 +105,18 @@ pub(crate) fn fast_mode_cost_note(model: &str) -> Option<String> {
     })
 }
 
+fn welcome_identity_lines(working_path: String) -> Vec<String> {
+    let mut lines = vec![format!(
+        "{} {}",
+        ts::brand_header(format!("Welcome to {}", crate::PRODUCT_NAME)),
+        ts::header(format!("v{}", env!("CARGO_PKG_VERSION"))),
+    )];
+    if !working_path.is_empty() {
+        lines.push(ts::muted(working_path).to_string());
+    }
+    lines
+}
+
 fn print_welcome_banner() {
     let logo = r#"
      _    ____ ___     ____ _     ___
@@ -115,18 +127,8 @@ fn print_welcome_banner() {
     "#;
 
     eprintln!("{}", ts::brand(logo));
-    eprintln!(
-        "  {} {}",
-        ts::brand_header(format!("Welcome to {}", crate::PRODUCT_NAME)),
-        ts::header(format!("v{}", env!("CARGO_PKG_VERSION"))),
-    );
-    eprintln!(
-        "  {}",
-        ts::muted(model_catalog::display_name(model_catalog::default_model()))
-    );
-    let working_path = current_working_path();
-    if !working_path.is_empty() {
-        eprintln!("  {}", ts::muted(working_path));
+    for line in welcome_identity_lines(current_working_path()) {
+        eprintln!("  {line}");
     }
     eprintln!(
         "\n  {}\n",
@@ -792,14 +794,23 @@ fn print_safety_notes() {
     eprintln!();
 }
 
-const PERMISSION_MODE_CHOICES: [&str; 3] = [
-    "Ask            Asks before file edits and commands, except read-only ones like ls (recommended)",
-    "Auto           File edits and safe commands run, unknown and dangerous ones ask",
-    "Plan first     Read-only until you approve a plan",
-];
+fn permission_mode_choices() -> [String; 3] {
+    [
+        (
+            crate::tui::MODE_DEFAULT,
+            "Asks before file edits and commands, except read-only ones like ls (recommended)",
+        ),
+        (
+            crate::tui::MODE_AUTO,
+            "File edits and safe commands run, unknown and dangerous ones ask",
+        ),
+        (crate::tui::MODE_PLAN, "Read-only until you approve a plan"),
+    ]
+    .map(|(name, meaning)| format!("{name:<15}{meaning}"))
+}
 
 fn select_permission_mode() -> Result<PermissionMode> {
-    let choices = &PERMISSION_MODE_CHOICES;
+    let choices = permission_mode_choices();
 
     eprintln!(
         "  {}\n",
@@ -1245,8 +1256,18 @@ mod tests {
     }
 
     #[test]
+    fn the_welcome_names_no_model_before_one_is_chosen() {
+        let lines = welcome_identity_lines("~/projects/fixture".to_string()).join("\n");
+        let default_name = model_catalog::display_name(model_catalog::default_model());
+        assert!(!lines.contains(&default_name), "{lines}");
+        assert!(lines.contains(crate::PRODUCT_NAME), "{lines}");
+        assert!(lines.contains("~/projects/fixture"), "{lines}");
+    }
+
+    #[test]
     fn the_second_permission_choice_describes_the_auto_posture() {
-        let auto = PERMISSION_MODE_CHOICES[1];
+        let choices = permission_mode_choices();
+        let auto = &choices[1];
         assert!(auto.starts_with("Auto"), "{auto}");
         assert!(auto.contains("safe commands run"), "{auto}");
         assert!(auto.contains("unknown and dangerous ones ask"), "{auto}");
@@ -1272,8 +1293,9 @@ mod tests {
 
     #[test]
     fn the_default_permission_choice_names_what_runs_without_asking() {
-        let ask = PERMISSION_MODE_CHOICES[0];
-        assert!(ask.starts_with("Ask"), "{ask}");
+        let choices = permission_mode_choices();
+        let ask = &choices[0];
+        assert!(ask.starts_with(crate::tui::MODE_DEFAULT), "{ask}");
         assert!(ask.contains("read-only"), "{ask}");
         assert!(!ask.contains("every"), "{ask}");
     }

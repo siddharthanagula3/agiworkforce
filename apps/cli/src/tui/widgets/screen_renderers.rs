@@ -128,6 +128,7 @@ pub enum McpStatus {
     NeedsAuth,
     Failed,
     Blocked,
+    Starting,
 }
 
 impl McpStatus {
@@ -138,6 +139,7 @@ impl McpStatus {
             McpStatus::NeedsAuth => "△ needs authentication",
             McpStatus::Failed => "✘ failed",
             McpStatus::Blocked => "⊘ blocked by your workspace",
+            McpStatus::Starting => "… starting",
         }
     }
 }
@@ -228,6 +230,7 @@ pub fn render_mcp_detail(
             McpStatus::Connected => "Disable",
             McpStatus::NeedsAuth => "Authenticate",
             McpStatus::Failed => "Retry connection",
+            McpStatus::Starting => "Wait for it to connect",
             McpStatus::Blocked => unreachable!(),
         };
         body.push(format!("  ❯ 1. {action}"));

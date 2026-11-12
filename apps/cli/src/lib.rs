@@ -2475,6 +2475,48 @@ fn resumed_model(managed: Option<&ManagedResumeSession>, fallback: &str) -> Stri
         .unwrap_or_else(|| fallback.to_string())
 }
 
+async fn open_resume_subcommands_interactively(cli: &mut Cli) -> Result<()> {
+    match cli.command.take() {
+        Some(Command::Resume {
+            session_id,
+            cloud,
+            teleport,
+        }) => match resume_subcommand_target(session_id.as_deref(), cloud, teleport).await? {
+            Some(id) => cli.resume = Some(id),
+            None => cli.continue_session = true,
+        },
+        Some(Command::Fork { session_id }) => {
+            cli.resume = Some(session_id);
+            cli.fork_session = true;
+        }
+        other => cli.command = other,
+    }
+    Ok(())
+}
+
+async fn resume_subcommand_target(
+    session_id: Option<&str>,
+    cloud: bool,
+    teleport: bool,
+) -> Result<Option<String>> {
+    if teleport {
+        return Ok(Some(teleport_code_session(session_id).await?));
+    }
+    let Some(id) = session_id else {
+        return Ok(None);
+    };
+    if cloud {
+        return Ok(Some(adopt_hosted_conversation(id).await?));
+    }
+    match resolve_resume_payload(id, false) {
+        Ok(_) => Ok(Some(id.to_string())),
+        Err(local_error) => match adopt_hosted_conversation(id).await {
+            Ok(adopted) => Ok(Some(adopted)),
+            Err(_) => Err(local_error),
+        },
+    }
+}
+
 fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
     let project_dir = std::env::current_dir()?;
     if let Some(resolved) = runtime::session_control::latest_project_session(&project_dir)? {
@@ -5712,7 +5754,12 @@ pub async fn run_main() -> Result<()> {
         enter_repo_directory(repo)?;
     }
 
-    let interactive = cli.prompt.is_none() && cli.command.is_none() && !cli.stdin;
+    let interactive = cli.prompt.is_none()
+        && matches!(
+            cli.command,
+            None | Some(Command::Resume { .. } | Command::Fork { .. })
+        )
+        && !cli.stdin;
     output::set_screen_reader(screen_reader && interactive);
     let session_worktree = match cli.worktree.as_deref() {
         Some(requested) => Some(enter_session_worktree(requested).await?),
@@ -5770,7 +5817,7 @@ async fn settle_session_worktree(worktree: &runtime::worktree::SessionWorktree) 
     }
 }
 
-async fn run_cli(cli: Cli) -> Result<()> {
+async fn run_cli(mut cli: Cli) -> Result<()> {
     // Install the single logging owner before anything else runs so `-v/--verbose`
     // and `--debug[=categories]` actually change what `tracing` emits. Without
     // this, every `tracing::{debug,info,warn}` call in the crate went nowhere and
@@ -5954,6 +6001,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
             tokio::spawn(crash_reports::upload_pending(dir));
         }
     }
+
+    open_resume_subcommands_interactively(&mut cli).await?;
 
     // --- Subcommand dispatch ---
     if let Some(ref command) = cli.command {
@@ -6213,105 +6262,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 }
             }
             Command::Background { action } => run_background_command(action),
-            Command::Resume {
-                session_id,
-                cloud,
-                teleport,
-            } => {
-                let resolved_id = match (session_id, cloud) {
-                    _ if *teleport => Some(teleport_code_session(session_id.as_deref()).await?),
-                    (Some(id), true) => Some(adopt_hosted_conversation(id).await?),
-                    (Some(id), false) => Some(match resolve_resume_payload(id, false) {
-                        Ok(_) => id.clone(),
-                        Err(local_error) => match adopt_hosted_conversation(id).await {
-                            Ok(adopted) => adopted,
-                            Err(_) => return Err(local_error),
-                        },
-                    }),
-                    (None, _) => None,
-                };
-                let (session_label, (mut messages, managed_session)) = match resolved_id.as_ref() {
-                    Some(id) => (id.clone(), resolve_resume_payload(id, false)?),
-                    None => resolve_latest_resume_payload()?
-                        .ok_or_else(|| anyhow::anyhow!("No sessions found"))?,
-                };
-                let interrupted = agent::mark_interrupted_tool_calls(&mut messages);
-                if interrupted > 0 {
-                    eprintln!(
-                        "The last turn stopped while {interrupted} tool {} still running. The assistant is told {} result is unknown and checks before relying on {}.",
-                        if interrupted == 1 { "call was" } else { "calls were" },
-                        if interrupted == 1 { "its" } else { "their" },
-                        if interrupted == 1 { "it" } else { "them" }
-                    );
-                }
-                if messages.is_empty() {
-                    eprintln!("Warning: session '{}' has no messages.", session_label);
-                } else {
-                    eprintln!(
-                        "Resuming session '{}' ({} messages).",
-                        session_label,
-                        messages.len()
-                    );
-                }
-                let model = resumed_model(managed_session.as_ref(), &app_config.default.model);
-                repl::run_repl(
-                    &mut app_config,
-                    &model,
-                    &sys_ctx,
-                    None,
-                    Some(messages),
-                    managed_session,
-                    None,
-                    false,
-                    routing::fallback::FallbackChain::default(),
-                    None,
-                    false,
-                    false,
-                    false,
-                    None,
-                    cli_options::PermissionMode::Default,
-                    false,
-                    normalized_cli_options.allowed_tools.clone(),
-                    normalized_cli_options.disallowed_tools.clone(),
-                    normalized_cli_options.mcp_config_load_options(),
-                    None,
-                    None,
-                )
-                .await
-            }
-            Command::Fork { session_id } => {
-                let (messages, managed_session) = resolve_resume_payload(session_id, true)?;
-                eprintln!(
-                    "{} Forked session '{}' ({} messages)",
-                    ts::accent_header("fork:"),
-                    session_id,
-                    messages.len()
-                );
-                let model = resumed_model(managed_session.as_ref(), &app_config.default.model);
-                repl::run_repl(
-                    &mut app_config,
-                    &model,
-                    &sys_ctx,
-                    None,
-                    Some(messages),
-                    managed_session,
-                    None,
-                    false,
-                    routing::fallback::FallbackChain::default(),
-                    None,
-                    false,
-                    false,
-                    false,
-                    None,
-                    cli_options::PermissionMode::Default,
-                    false,
-                    normalized_cli_options.allowed_tools.clone(),
-                    normalized_cli_options.disallowed_tools.clone(),
-                    normalized_cli_options.mcp_config_load_options(),
-                    None,
-                    None,
-                )
-                .await
+            Command::Resume { .. } | Command::Fork { .. } => {
+                unreachable!("resume and fork open the interactive session above")
             }
             Command::Session { action } => handle_session_action(action.clone()).await,
             Command::Review {
@@ -8078,9 +8030,24 @@ async fn run_cli(cli: Cli) -> Result<()> {
     } else {
         None
     };
-    let (resume_messages, resume_managed_session) = match resume_payload {
+    let (mut resume_messages, resume_managed_session) = match resume_payload {
         Some((messages, managed_session)) => (Some(messages), managed_session),
         None => (None, None),
+    };
+    if let Some(messages) = resume_messages.as_mut() {
+        let interrupted = agent::mark_interrupted_tool_calls(messages);
+        if interrupted > 0 {
+            eprintln!(
+                "The last turn stopped while {interrupted} tool {} still running. The assistant is told {} result is unknown and checks before relying on {}.",
+                if interrupted == 1 { "call was" } else { "calls were" },
+                if interrupted == 1 { "its" } else { "their" },
+                if interrupted == 1 { "it" } else { "them" }
+            );
+        }
+    }
+    let model = match (&cli.model, cli.auto) {
+        (None, false) => resumed_model(resume_managed_session.as_ref(), &model),
+        _ => model,
     };
 
     // Resolve team mode from --team flag or AGI_TEAM env var
@@ -9279,6 +9246,7 @@ pub async fn run_oneshot(
         let spinner = output::create_spinner("Thinking...");
         let md = std::sync::Arc::new(std::sync::Mutex::new(markdown::MarkdownRenderer::new()));
         let md_cb = std::sync::Arc::clone(&md);
+        let spinner_cb = spinner.clone();
         session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
         let turn = send_until_interrupted(
@@ -9286,6 +9254,9 @@ pub async fn run_oneshot(
             config,
             prompt,
             Box::new(move |chunk| {
+                if !spinner_cb.is_finished() {
+                    spinner_cb.finish_and_clear();
+                }
                 if let Ok(mut renderer) = md_cb.lock() {
                     output::print_assistant_chunk_formatted(&mut renderer, chunk);
                 }
@@ -9340,6 +9311,47 @@ pub async fn run_oneshot(
 
 #[cfg(test)]
 mod tests {
+
+    #[tokio::test]
+    async fn resume_and_fork_open_the_interactive_session_with_the_given_flags() {
+        let mut fork = Cli::try_parse_from([
+            "agiworkforce",
+            "--permission-mode",
+            "plan",
+            "-m",
+            "fixture-model",
+            "fork",
+            "abc",
+        ])
+        .expect("fork parses");
+        open_resume_subcommands_interactively(&mut fork)
+            .await
+            .expect("fork routes without a lookup");
+        assert!(fork.command.is_none());
+        assert_eq!(fork.resume.as_deref(), Some("abc"));
+        assert!(fork.fork_session);
+        assert_eq!(
+            fork.permission_mode,
+            Some(cli_options::PermissionMode::Plan)
+        );
+        assert_eq!(fork.model.as_deref(), Some("fixture-model"));
+
+        let mut latest =
+            Cli::try_parse_from(["agiworkforce", "--no-tui", "resume"]).expect("resume parses");
+        open_resume_subcommands_interactively(&mut latest)
+            .await
+            .expect("resume without an id needs no lookup");
+        assert!(latest.command.is_none());
+        assert!(latest.continue_session);
+        assert!(latest.resume.is_none());
+        assert!(latest.no_tui);
+
+        let mut other = Cli::try_parse_from(["agiworkforce", "doctor"]).expect("doctor parses");
+        open_resume_subcommands_interactively(&mut other)
+            .await
+            .expect("other commands pass through");
+        assert!(matches!(other.command, Some(Command::Doctor { .. })));
+    }
 
     #[test]
     fn a_resumed_conversation_keeps_the_model_it_was_held_on() {

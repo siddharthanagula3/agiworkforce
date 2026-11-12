@@ -1338,13 +1338,13 @@ pub fn handle_output_style(session: &mut AgentSession, arg: &str) -> String {
                     )
                 }
             };
-            if !output_style_known(name) {
+            let Some(name) = output_style_named(name) else {
                 return format!(
                     "No output style named `{name}`. Run /output-style to list them. Output style unchanged: {}.",
                     session.output_style
                 );
-            }
-            session.apply_output_style(name);
+            };
+            session.apply_output_style(&name);
             if session_only {
                 format!(
                     "Output style: {} for this session only; your saved default is unchanged.",
@@ -1364,14 +1364,15 @@ pub fn output_style_arg_persists(arg: &str) -> bool {
     let mut words = arg.split_whitespace();
     matches!(
         (words.next(), words.next()),
-        (Some(name), None) if !crate::output_styles::is_command_action(name) && output_style_known(name)
+        (Some(name), None) if !crate::output_styles::is_command_action(name) && output_style_named(name).is_some()
     )
 }
 
-fn output_style_known(name: &str) -> bool {
+fn output_style_named(name: &str) -> Option<String> {
     crate::output_styles::load_all()
-        .iter()
-        .any(|style| style.name == name)
+        .into_iter()
+        .find(|style| style.name.eq_ignore_ascii_case(name))
+        .map(|style| style.name)
 }
 
 fn output_style_overview(session: &AgentSession) -> String {
@@ -3133,6 +3134,15 @@ mod tests {
             },
             None,
         )
+    }
+
+    #[test]
+    fn an_output_style_is_selected_whatever_case_it_is_typed_in() {
+        let mut session = test_session();
+        let message = handle_output_style(&mut session, "CONCISE --session");
+        assert_eq!(session.output_style, "concise", "{message}");
+        assert!(output_style_arg_persists("Explanatory"));
+        assert!(!output_style_arg_persists("no-such-style"));
     }
 
     #[test]

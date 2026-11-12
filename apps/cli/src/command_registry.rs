@@ -293,8 +293,13 @@ fn append_tui_shortcuts(help: &mut String) {
     help.push_str("\nKeyboard shortcuts:\n");
     let _ = writeln!(
         help,
-        "  {:<14} Cycle mode: Default -> Plan -> AcceptEdits, then Bypass -> FullAuto when started with --allow-dangerously-skip-permissions",
-        "Shift+Tab"
+        "  {:<14} Cycle mode: {} -> {} -> {}, then {} -> {} when started with --allow-dangerously-skip-permissions",
+        "Shift+Tab",
+        crate::tui::MODE_DEFAULT,
+        crate::tui::MODE_PLAN,
+        crate::tui::MODE_AUTO,
+        crate::tui::MODE_BYPASS,
+        crate::tui::MODE_FULL_AUTO
     );
     let _ = writeln!(help, "  {:<14} Open command palette", "/");
     let _ = writeln!(
@@ -328,26 +333,38 @@ fn append_tui_shortcuts(help: &mut String) {
         "Type + Enter"
     );
     let _ = writeln!(help, "  {:<14} Redraw the screen", "Ctrl-L");
-    let _ = writeln!(help, "  {:<14} Clear input", "Ctrl-C");
+    let _ = writeln!(
+        help,
+        "  {:<14} Stop a running turn; otherwise clear the composer, or quit when pressed twice on an empty one",
+        "Ctrl-C"
+    );
     let _ = writeln!(help, "  Customize global actions with [ui.keybindings]");
 
     help.push_str("\nModes (cycle with Shift+Tab):\n");
-    let _ = writeln!(help, "  {:<14} Normal conversation (grey)", "Default");
-    let _ = writeln!(help, "  {:<14} Read-only planning, no edits (blue)", "Plan");
+    let _ = writeln!(
+        help,
+        "  {:<14} Normal conversation (grey)",
+        crate::tui::MODE_DEFAULT
+    );
+    let _ = writeln!(
+        help,
+        "  {:<14} Read-only planning, no edits (blue)",
+        crate::tui::MODE_PLAN
+    );
     let _ = writeln!(
         help,
         "  {:<14} Auto-accept file edits (green)",
-        "AcceptEdits"
+        crate::tui::MODE_AUTO
     );
     let _ = writeln!(
         help,
         "  {:<14} Skip all tool confirmation (yellow)",
-        "Bypass"
+        crate::tui::MODE_BYPASS
     );
     let _ = writeln!(
         help,
         "  {:<14} No prompts at all - extreme caution (red)",
-        "FullAuto"
+        crate::tui::MODE_FULL_AUTO
     );
 }
 

@@ -795,6 +795,7 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
     let spinner = output::create_spinner("Thinking...");
     let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
     let md_cb = std::sync::Arc::clone(&md);
+    let spinner_cb = spinner.clone();
     session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
     let result = session
@@ -802,6 +803,9 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
             config,
             &full_input,
             Box::new(move |chunk| {
+                if !spinner_cb.is_finished() {
+                    spinner_cb.finish_and_clear();
+                }
                 if let Ok(mut renderer) = md_cb.lock() {
                     output::print_assistant_chunk_formatted(&mut renderer, chunk);
                 }
