@@ -287,8 +287,9 @@ of the candidate first.
 
 **Lead.** At the step 11 commit, with the step 5 values exported (`CLERK_PUBLISHABLE_KEY`,
 `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`, `CWS_EXTENSION_ID`), run
-`scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/extension package`, unzip
-`apps/extension/extension.zip` into a new folder, and hand that folder to the owner.
+`scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/extension package`, unzip the
+`extension.zip` it writes in the extension's folder into a new folder, and hand that folder to
+the owner.
 
 ### Set up once
 

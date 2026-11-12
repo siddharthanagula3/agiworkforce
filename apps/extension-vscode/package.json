@@ -58,9 +58,12 @@
         "agiWorkforce.apiEndpoint",
         "agiWorkforce.cliPath",
         "agiWorkforce.model",
+        "agiWorkforce.autoApplyFixes",
+        "agiWorkforce.memory.enabled",
         "agiWorkforce.telemetryEnabled",
         "agiWorkforce.activateOnStartup",
         "agiWorkforce.useTerminal",
+        "agiWorkforce.inlineCompletions.enabled",
         "agiWorkforce.inlineCompletions.debounceMs"
       ]
     },
