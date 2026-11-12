@@ -2256,8 +2256,8 @@ pub fn config_for_display(arg: &str, config: &mut CliConfig) -> CommandOutcome {
             let key = sub_parts[1].trim();
             let value = sub_parts[2].trim();
             match config.set_value(key, value) {
-                Ok(()) => match config.save() {
-                    Ok(()) => CommandOutcome::Info(format!("{} = {} (saved)", key, value)),
+                Ok(()) => match CliConfig::save_user_value(key, value) {
+                    Ok(_) => CommandOutcome::Info(format!("{} = {} (saved)", key, value)),
                     Err(e) => {
                         CommandOutcome::Warn(format!("Set in memory but failed to save: {:#}", e))
                     }

@@ -58,6 +58,7 @@ pub fn run_doctor(config: &CliConfig, json: bool) -> Result<()> {
 
 pub fn collect_doctor_report(config: &CliConfig) -> DoctorReport {
     let mut checks = Vec::new();
+    checks.push(config_file_check());
     checks.extend(runtime_dependency_checks());
     checks.extend(auth_checks());
     checks.extend(sandbox_checks());
@@ -149,6 +150,53 @@ pub fn format_text_report(report: &DoctorReport) -> String {
     }
 
     lines.join("\n")
+}
+
+fn config_file_check() -> DoctorCheck {
+    match CliConfig::config_path() {
+        Ok(path) => config_file_check_at(&path),
+        Err(err) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Fail,
+            format!("could not resolve the config file: {err:#}"),
+            vec![],
+        ),
+    }
+}
+
+fn config_file_check_at(path: &Path) -> DoctorCheck {
+    if !path.exists() {
+        return check(
+            "config.file",
+            "config file",
+            DoctorStatus::Pass,
+            format!(
+                "{} does not exist yet; built-in defaults apply",
+                path.display()
+            ),
+            vec![],
+        );
+    }
+    match CliConfig::load_from(path) {
+        Ok(_) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Pass,
+            format!("{} loads", path.display()),
+            vec![],
+        ),
+        Err(err) => check(
+            "config.file",
+            "config file",
+            DoctorStatus::Fail,
+            format!("{err:#}"),
+            vec![format!(
+                "agi runs on built-in defaults until {} is fixed or moved aside",
+                path.display()
+            )],
+        ),
+    }
 }
 
 fn runtime_dependency_checks() -> Vec<DoctorCheck> {
@@ -807,6 +855,25 @@ fn stale_branches(days: i64) -> Option<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_config_file_that_does_not_parse_fails_the_check_and_names_the_file() {
+        let home = tempfile::tempdir().expect("temp home");
+        let path = home.path().join("config.toml");
+        std::fs::write(&path, "[default]\nprovider = \"oll").expect("write config");
+
+        let result = config_file_check_at(&path);
+
+        assert_eq!(result.status, DoctorStatus::Fail);
+        assert!(
+            result.message.contains(&path.display().to_string()),
+            "{}",
+            result.message
+        );
+
+        std::fs::write(&path, "[default]\nstream = true\n").expect("write config");
+        assert_eq!(config_file_check_at(&path).status, DoctorStatus::Pass);
+    }
 
     #[test]
     fn summary_prefers_fail_over_warn() {

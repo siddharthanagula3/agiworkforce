@@ -200,6 +200,26 @@ pub struct DefaultConfig {
     /// chose that model from one who never chose.
     #[serde(skip)]
     pub model_chosen: bool,
+
+    #[serde(skip)]
+    pub(crate) named: NamedDefaultKeys,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct NamedDefaultKeys {
+    provider: bool,
+    stream: bool,
+    max_tokens: bool,
+}
+
+impl NamedDefaultKeys {
+    fn read(contents: &str) -> Self {
+        Self {
+            provider: names_default_key(contents, "provider"),
+            stream: names_default_key(contents, "stream"),
+            max_tokens: names_default_key(contents, "max_tokens"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -258,16 +278,21 @@ impl DefaultConfig {
             mcp_initialize_timeout: None,
             mcp_call_tool_timeout: None,
             model_chosen: false,
+            named: NamedDefaultKeys::default(),
         }
     }
 }
 
-fn names_default_model(contents: &str) -> bool {
+fn names_default_key(contents: &str, key: &str) -> bool {
     toml::from_str::<toml::Table>(contents).is_ok_and(|root| {
         root.get("default")
             .and_then(toml::Value::as_table)
-            .is_some_and(|default| default.contains_key("model"))
+            .is_some_and(|default| default.contains_key(key))
     })
+}
+
+fn names_default_model(contents: &str) -> bool {
+    names_default_key(contents, "model")
 }
 
 impl Default for CliConfig {
@@ -425,15 +450,17 @@ impl CliConfig {
         Self::load_from(&Self::config_path()?)
     }
 
-    fn load_from(path: &std::path::Path) -> Result<Self> {
+    pub(crate) fn load_from(path: &std::path::Path) -> Result<Self> {
         if !path.exists() {
             return Ok(Self::default());
         }
 
-        let contents = std::fs::read_to_string(path).context("Failed to read config file")?;
-        let mut loaded: CliConfig =
-            toml::from_str(&contents).context("Failed to parse config.toml")?;
+        let contents = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        let mut loaded: CliConfig = toml::from_str(&contents)
+            .with_context(|| format!("Failed to parse {}", path.display()))?;
         loaded.default.model_chosen = names_default_model(&contents);
+        loaded.default.named = NamedDefaultKeys::read(&contents);
         let mut config = Self::with_builtin_defaults(loaded);
         config.source.global_path = Some(path.to_path_buf());
         Ok(config)
@@ -461,6 +488,7 @@ impl CliConfig {
         let contents = std::fs::read_to_string(&project_config).ok()?;
         let mut config: CliConfig = toml::from_str(&contents).ok()?;
         config.default.model_chosen = names_default_model(&contents);
+        config.default.named = NamedDefaultKeys::read(&contents);
         config.source.project_path = Some(project_config);
         Some(config)
     }
@@ -711,16 +739,13 @@ impl CliConfig {
             self.default.model = other.default.model.clone();
             self.default.model_chosen |= other.default.model_chosen;
         }
-        // If other has a non-default provider, use it
-        if other.default.provider != default_provider() {
+        if other.default.named.provider || other.default.provider != default_provider() {
             self.default.provider = other.default.provider.clone();
         }
-        // If other has a non-default max_tokens, use it
-        if other.default.max_tokens != default_max_tokens() {
+        if other.default.named.max_tokens || other.default.max_tokens != default_max_tokens() {
             self.default.max_tokens = other.default.max_tokens;
         }
-        // If other has a non-default stream, use it
-        if other.default.stream != default_stream() {
+        if other.default.named.stream || other.default.stream != default_stream() {
             self.default.stream = other.default.stream;
         }
         // If other has temperature set, use it
@@ -802,12 +827,36 @@ impl CliConfig {
 
     fn written_toml(&self) -> Result<String> {
         let mut written = toml::Value::try_from(self).context("Failed to serialize config")?;
-        if !self.default.model_chosen {
-            if let Some(default) = written
-                .get_mut("default")
-                .and_then(toml::Value::as_table_mut)
-            {
+        if let Some(default) = written
+            .get_mut("default")
+            .and_then(toml::Value::as_table_mut)
+        {
+            if !self.default.model_chosen {
                 default.remove("model");
+            }
+            if self.default.provider == default_provider() {
+                default.remove("provider");
+            }
+            if self.default.stream == default_stream() {
+                default.remove("stream");
+            }
+            if self.default.max_tokens == default_max_tokens() {
+                default.remove("max_tokens");
+            }
+        }
+        let builtin = Self::default().providers;
+        if let Some(providers) = written
+            .get_mut("providers")
+            .and_then(toml::Value::as_table_mut)
+        {
+            for (name, provider) in &self.providers {
+                let unchanged = builtin.get(name).is_some_and(|built_in| {
+                    built_in.api_key_env == provider.api_key_env
+                        && built_in.base_url == provider.base_url
+                });
+                if unchanged {
+                    providers.remove(name);
+                }
             }
         }
         toml::to_string_pretty(&written).context("Failed to serialize config")
@@ -817,22 +866,92 @@ impl CliConfig {
     pub fn save(&self) -> Result<()> {
         let dir = Self::config_dir()?;
         std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
+        write_config_file(&Self::config_path()?, &self.written_toml()?)
+    }
 
-        let path = Self::config_path()?;
-        std::fs::write(&path, self.written_toml()?).context("Failed to write config file")?;
+    /// Persist one setting in the user's own config file. The session's
+    /// merged config carries project, environment, policy and one-run values
+    /// that must never reach the user's file, so only `key` is written.
+    pub fn save_user_value(key: &str, value: &str) -> Result<PathBuf> {
+        let path = Self::user_config_path_for_write()?;
+        Self::save_user_value_at(&path, key, value)?;
+        Ok(path)
+    }
 
-        // SEV-CLI-12 fix: config.toml may carry provider configuration that the
-        // user expects to remain private (custom base_urls, env-var key names,
-        // model preferences, fallback chains). The other CLI state files
-        // (credential indexes/fallbacks and permissions.toml) all chmod 0o600 after
-        // write; config.toml was the outlier inheriting the umask (0o644 on a
-        // typical Unix shell), making it world-readable. Match the rest.
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-        }
-        Ok(())
+    fn save_user_value_at(path: &std::path::Path, key: &str, value: &str) -> Result<()> {
+        let before = Self::load_from(path)?;
+        let mut after = before.clone();
+        after.set_value(key, value)?;
+        let before_toml = toml::Value::try_from(&before).context("Failed to serialize config")?;
+        let after_toml = toml::Value::try_from(&after).context("Failed to serialize config")?;
+        let model_newly_chosen = after.default.model_chosen && !before.default.model_chosen;
+        edit_config_at(path, |root| {
+            for section in ["default", "ui", "telemetry", "updates"] {
+                let empty = toml::Table::new();
+                let old = before_toml
+                    .get(section)
+                    .and_then(toml::Value::as_table)
+                    .unwrap_or(&empty);
+                let new = after_toml
+                    .get(section)
+                    .and_then(toml::Value::as_table)
+                    .unwrap_or(&empty);
+                let mut changed: Vec<(String, Option<toml::Value>)> = Vec::new();
+                for (field, value) in new {
+                    let newly_chosen =
+                        section == "default" && field == "model" && model_newly_chosen;
+                    if old.get(field) != Some(value) || newly_chosen {
+                        changed.push((field.clone(), Some(value.clone())));
+                    }
+                }
+                for (field, _) in old {
+                    if !new.contains_key(field) {
+                        changed.push((field.clone(), None));
+                    }
+                }
+                if changed.is_empty() {
+                    continue;
+                }
+                let table = config_table(root, section)?;
+                for (field, value) in changed {
+                    match value {
+                        Some(value) => {
+                            table.insert(field, value);
+                        }
+                        None => {
+                            table.remove(&field);
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// Persist a provider's base URL in the user's own config file only.
+    pub fn save_user_provider_base_url(provider: &str, base_url: &str) -> Result<PathBuf> {
+        let path = Self::user_config_path_for_write()?;
+        let mut entry = Self::load_from(&path)?
+            .providers
+            .get(provider)
+            .cloned()
+            .unwrap_or(ProviderConfig {
+                api_key_env: None,
+                base_url: None,
+            });
+        entry.base_url = Some(base_url.to_string());
+        let rendered = toml::Value::try_from(entry).context("Failed to serialize provider")?;
+        edit_config_at(&path, |root| {
+            config_table(root, "providers")?.insert(provider.to_string(), rendered);
+            Ok(())
+        })?;
+        Ok(path)
+    }
+
+    fn user_config_path_for_write() -> Result<PathBuf> {
+        let dir = Self::config_dir()?;
+        std::fs::create_dir_all(&dir).context("Failed to create config directory")?;
+        Ok(dir.join("config.toml"))
     }
 
     /// Persist only `[ui]` settings to the current/project config file.
@@ -919,13 +1038,7 @@ impl CliConfig {
 
         let contents = toml::to_string_pretty(&toml::Value::Table(root))
             .context("Failed to serialize project config")?;
-        std::fs::write(&path, contents)
-            .with_context(|| format!("Failed to write {}", path.display()))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-        }
+        write_config_file(&path, &contents)?;
         self.source.project_path = Some(path.clone());
         Ok(path)
     }
@@ -1401,6 +1514,67 @@ fn resolve_config_dir(
 
     let system_home = system_home.context("Could not determine home directory")?;
     Ok(system_home.join(".agiworkforce"))
+}
+
+fn edit_config_at(
+    path: &std::path::Path,
+    edit: impl FnOnce(&mut toml::Table) -> Result<()>,
+) -> Result<()> {
+    let mut root: toml::Table = if path.exists() {
+        let contents = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read {}", path.display()))?;
+        toml::from_str(&contents).with_context(|| format!("Failed to parse {}", path.display()))?
+    } else {
+        toml::Table::new()
+    };
+    edit(&mut root)?;
+    let contents =
+        toml::to_string_pretty(&toml::Value::Table(root)).context("Failed to serialize config")?;
+    write_config_file(path, &contents)
+}
+
+/// Replaced through a temporary file in the same directory so an interrupted
+/// write never leaves a truncated config. A symlinked config is written at its
+/// target so the link survives.
+pub(crate) fn write_config_file(path: &std::path::Path, contents: &str) -> Result<()> {
+    let target = if path.is_symlink() {
+        std::fs::canonicalize(path)
+            .with_context(|| format!("Failed to resolve {}", path.display()))?
+    } else {
+        path.to_path_buf()
+    };
+    let dir = target
+        .parent()
+        .with_context(|| format!("{} has no parent directory", target.display()))?;
+    if std::fs::metadata(&target).is_ok_and(|metadata| metadata.permissions().readonly()) {
+        bail!("{} is read-only, so nothing was saved", target.display());
+    }
+    let staged = tempfile::NamedTempFile::new_in(dir)
+        .with_context(|| format!("Failed to create a temporary file in {}", dir.display()))?;
+    std::fs::write(staged.path(), contents)
+        .with_context(|| format!("Failed to write {}", staged.path().display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(staged.path(), std::fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("Failed to restrict {}", staged.path().display()))?;
+    }
+    staged
+        .persist(target.as_path())
+        .map_err(|error| anyhow::anyhow!("Failed to replace {}: {}", target.display(), error))?;
+    Ok(())
+}
+
+fn config_table<'a>(root: &'a mut toml::Table, name: &str) -> Result<&'a mut toml::Table> {
+    let value = root
+        .entry(name.to_string())
+        .or_insert_with(|| toml::Value::Table(toml::Table::new()));
+    if !value.is_table() {
+        *value = toml::Value::Table(toml::Table::new());
+    }
+    value
+        .as_table_mut()
+        .with_context(|| format!("Failed to update [{name}] config table"))
 }
 
 fn ensure_config_dir(dir: &std::path::Path) -> Result<()> {
@@ -2789,6 +2963,172 @@ model = "fixture-config-model"
         CliConfig::with_builtin_defaults(loaded)
             .validate()
             .expect("an unknown key must not fail validation");
+    }
+
+    fn default_table(table: &toml::Table) -> Option<&toml::Table> {
+        table.get("default").and_then(toml::Value::as_table)
+    }
+
+    #[test]
+    fn a_saved_config_holds_only_the_values_someone_chose() {
+        let mut config = CliConfig::default();
+        config.ui.reduced_motion = Some(true);
+        if let Some(ollama) = config.providers.get_mut("ollama") {
+            ollama.base_url = Some("http://127.0.0.1:9".to_string());
+        }
+        let written: toml::Table =
+            toml::from_str(&config.written_toml().expect("serialise")).expect("parses");
+
+        for key in ["model", "provider", "stream", "max_tokens"] {
+            assert!(
+                !default_table(&written).is_some_and(|default| default.contains_key(key)),
+                "{key} was written although nothing chose it"
+            );
+        }
+        let providers: Vec<&String> = written
+            .get("providers")
+            .and_then(toml::Value::as_table)
+            .map(|providers| providers.iter().map(|(name, _)| name).collect())
+            .unwrap_or_default();
+        assert_eq!(
+            providers,
+            vec!["ollama"],
+            "only the changed provider is kept"
+        );
+        assert_eq!(
+            written
+                .get("ui")
+                .and_then(|ui| ui.get("reduced_motion"))
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn a_repository_can_set_a_value_back_to_its_builtin_default() {
+        let _guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let home = tempfile::tempdir().unwrap();
+        let checkout = tempfile::tempdir().unwrap();
+        let other_provider = ["ollama", "openai"]
+            .into_iter()
+            .find(|provider| *provider != default_provider())
+            .expect("a provider other than the default");
+        let user_file = home.path().join("config.toml");
+        std::fs::write(
+            &user_file,
+            format!(
+                "[default]\nprovider = \"{other_provider}\"\nstream = false\nmax_tokens = {}\n",
+                default_max_tokens() * 2
+            ),
+        )
+        .unwrap();
+        let repository_dir = checkout.path().join(".agiworkforce");
+        std::fs::create_dir_all(&repository_dir).unwrap();
+        std::fs::write(
+            repository_dir.join("config.toml"),
+            format!(
+                "[default]\nprovider = \"{}\"\nstream = true\nmax_tokens = {}\n",
+                default_provider(),
+                default_max_tokens()
+            ),
+        )
+        .unwrap();
+
+        let merged = CliConfig::from_layers(
+            CliConfig::load_from(&user_file).expect("user layer"),
+            CliConfig::load_project_config_from(checkout.path()),
+            &crate::platform::policy::managed::ManagedPolicyState::Absent,
+        )
+        .expect("merged");
+
+        assert_eq!(merged.default.provider, default_provider());
+        assert!(merged.default.stream);
+        assert_eq!(merged.default.max_tokens, default_max_tokens());
+    }
+
+    #[test]
+    fn saving_one_setting_writes_only_that_key_into_the_user_file() {
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("config.toml");
+        std::fs::write(
+            &path,
+            "[default]\nreasoning_effort = \"low\"\nunreleased_key = 1\n",
+        )
+        .unwrap();
+
+        CliConfig::save_user_value_at(&path, "reduced-motion", "true").expect("save");
+
+        let written: toml::Table =
+            toml::from_str(&std::fs::read_to_string(&path).unwrap()).expect("parses");
+        let default = default_table(&written).expect("[default] kept");
+        assert_eq!(
+            default
+                .get("reasoning_effort")
+                .and_then(toml::Value::as_str),
+            Some("low")
+        );
+        assert!(
+            default.contains_key("unreleased_key"),
+            "a key this build does not know survives"
+        );
+        for key in ["model", "provider", "stream", "max_tokens"] {
+            assert!(!default.contains_key(key), "{key} must not be written");
+        }
+        assert!(written.get("providers").is_none());
+        assert_eq!(
+            written
+                .get("ui")
+                .and_then(|ui| ui.get("reduced_motion"))
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
+
+        CliConfig::save_user_value_at(&path, "model", crate::model_catalog::default_model())
+            .expect("save model");
+        assert!(
+            CliConfig::load_from(&path)
+                .expect("reload")
+                .default
+                .model_chosen,
+            "naming the default model is still a choice"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_config_write_replaces_the_file_whole_and_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("config.toml");
+        std::fs::write(&path, "[ui]\ntheme = \"dark\"\n").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        write_config_file(&path, "[ui]\nreduced_motion = true\n").expect("write");
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "[ui]\nreduced_motion = true\n"
+        );
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        let leftovers = std::fs::read_dir(home.path()).unwrap().count();
+        assert_eq!(leftovers, 1, "no temporary file is left beside the config");
+    }
+
+    #[test]
+    fn a_config_that_does_not_parse_is_named_by_its_full_path() {
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join("config.toml");
+        std::fs::write(&path, "[default]\nprovider = \"oll").unwrap();
+
+        let error = CliConfig::load_from(&path).expect_err("a truncated file must not load");
+
+        assert!(
+            format!("{error:#}").contains(&path.display().to_string()),
+            "{error:#}"
+        );
     }
 }
 

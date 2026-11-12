@@ -754,13 +754,7 @@ fn edit_default_config(edit: impl FnOnce(&mut toml::Table)) -> Result<()> {
 
     let rendered = toml::to_string_pretty(&toml::Value::Table(root))
         .context("Failed to serialize config.toml")?;
-    std::fs::write(&config_path, rendered)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
+    crate::config::write_config_file(&config_path, &rendered)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1037,10 +1031,7 @@ pub async fn run_onboarding() -> Result<bool> {
         ))
     );
     let bell = crate::output::confirm("  Ring the terminal bell when a long turn finishes?", false);
-    let saved = crate::config::CliConfig::load().and_then(|mut config| {
-        config.set_value("bell", &bell.to_string())?;
-        config.save()
-    });
+    let saved = crate::config::CliConfig::save_user_value("bell", &bell.to_string());
     if let Err(e) = saved {
         eprintln!(
             "  {} Failed to save the notification choice: {}",

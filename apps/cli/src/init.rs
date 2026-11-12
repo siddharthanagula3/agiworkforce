@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::fs;
 use std::path::Path;
 
-use crate::config::CliConfig;
+use crate::config::write_config_file;
 
 pub fn init_home_dir(home: &Path) -> Result<()> {
     let dirs = [
@@ -39,17 +39,15 @@ pub fn home_receipt(home: &Path) -> String {
     format!("Initialized {} directory structure.", home.display())
 }
 
-/// Generate `~/.agiworkforce/config.toml` from `CliConfig::default()` if it doesn't exist.
+/// Every value stays commented out: a value written here would read as the
+/// user's choice and pin it against later built-in defaults.
 fn write_default_config(home: &Path) -> Result<()> {
     let config_path = home.join("config.toml");
     if config_path.exists() {
         return Ok(());
     }
 
-    let default_config = CliConfig::default();
-    let toml_body = toml::to_string_pretty(&default_config)?;
-
-    let header = format!(
+    let contents = format!(
         r#"# AGI CLI Configuration
 # Global: {global}
 # Project override: .agiworkforce/config.toml
@@ -70,21 +68,17 @@ fn write_default_config(home: &Path) -> Result<()> {
 #
 # [default]
 # temperature = 0.7
-	# fallback_chain = ["<primary-model-from-agi-models-list>", "<backup-model-from-agi-models-list>"]
-	# fast_model = "<fast-model-from-agi-models-list>"
-	# sandbox_mode = "contained" # or "read-only", "unrestricted"
-	# review_model = "<review-model-from-agi-models-list>"
-	# cloud_model = "<cloud-model-from-agi-models-list>"
+# model = "<model-from-agi-models-list>"
+# fallback_chain = ["<primary-model-from-agi-models-list>", "<backup-model-from-agi-models-list>"]
+# fast_model = "<fast-model-from-agi-models-list>"
+# sandbox_mode = "contained" # or "read-only", "unrestricted"
+# review_model = "<review-model-from-agi-models-list>"
+# cloud_model = "<cloud-model-from-agi-models-list>"
 
 "#,
         global = config_path.display()
     );
-
-    let contents = format!("{}{}", header, toml_body);
-    fs::write(&config_path, &contents)
-        .with_context(|| format!("Failed to write config to {}", config_path.display()))?;
-
-    Ok(())
+    write_config_file(&config_path, &contents)
 }
 
 /// Generate `~/.agiworkforce/instructions.md` if it doesn't exist.
@@ -308,6 +302,27 @@ mod tests {
         );
         assert!(!home_receipt(home.path()).starts_with("Initialized ~"));
         assert!(!global_line.starts_with("# Global: ~"));
+    }
+
+    #[test]
+    fn a_fresh_home_holds_no_setting_the_user_did_not_choose() {
+        let home = tempfile::tempdir().expect("temp home");
+        init_home_dir(home.path()).expect("init home");
+        let path = home.path().join("config.toml");
+        let written = fs::read_to_string(&path).expect("read config");
+        let set_lines: Vec<&str> = written
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .collect();
+        assert!(set_lines.is_empty(), "values written: {set_lines:?}");
+
+        let loaded = crate::config::CliConfig::load_from(&path).expect("the template loads");
+        assert!(!loaded.default.model_chosen);
+        assert_eq!(
+            loaded.default.model,
+            crate::config::CliConfig::default().default.model
+        );
     }
 
     #[test]
