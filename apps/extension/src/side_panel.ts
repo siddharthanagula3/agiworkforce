@@ -1357,6 +1357,8 @@ function activityRequiresRender(
   );
 }
 
+const SHARE_SAVE_WAIT_MAX_MS = 24 * 60 * 60_000;
+
 function requestCloudConversationSync(conversationId = _ctx.conversationId): void {
   const owner = _ctx.managedCloudOwner;
   if (!owner) return;
@@ -12035,7 +12037,6 @@ function buildUI(): void {
         confirmRow.remove();
         return;
       }
-      recovery.disabled = false;
       createBtn.disabled = false;
       if (outcome?.success === true && outcome.status === 'saved') {
         recovery.remove();
@@ -12043,6 +12044,31 @@ function buildUI(): void {
         createBtn.focus();
         return;
       }
+      if (outcome?.status === 'refused') {
+        recovery.remove();
+        tellShareRow(outcome.reason ?? t('spHistoryShareSaveRefused'));
+        cancelBtn.focus();
+        return;
+      }
+      const waitMs = outcome?.retryAt !== undefined ? outcome.retryAt - Date.now() : 0;
+      if (outcome?.status === 'not-saved' && waitMs > 0) {
+        const at = new Date(outcome.retryAt!).toLocaleTimeString(undefined, {
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+        tellShareRow(
+          [outcome.reason, t('spHistoryShareSaveAgainAt', [at])].filter(Boolean).join(' '),
+        );
+        setTimeout(
+          () => {
+            if (recovery.isConnected) recovery.disabled = false;
+          },
+          Math.min(waitMs, SHARE_SAVE_WAIT_MAX_MS),
+        );
+        cancelBtn.focus();
+        return;
+      }
+      recovery.disabled = false;
       tellShareRow(
         outcome?.status === 'streaming'
           ? t('spHistoryShareWaitForReply')

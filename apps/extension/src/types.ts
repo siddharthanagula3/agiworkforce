@@ -1019,8 +1019,9 @@ export interface SaveConversationNowMessage extends BaseMessage {
 
 export interface SaveConversationNowResponse {
   success: boolean;
-  status?: 'saved' | 'not-saved' | 'mirroring-off' | 'streaming';
+  status?: 'saved' | 'not-saved' | 'refused' | 'mirroring-off' | 'streaming';
   reason?: string;
+  retryAt?: number;
   error?: string;
 }
 

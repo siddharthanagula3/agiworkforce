@@ -72,6 +72,7 @@ const RETRY_AFTER_SERVER_ERROR_MS = 5 * 60_000;
 const MAX_TOMBSTONES = 100;
 const FLAG_PULL_MAX_PAGES = 20;
 const MAX_USER_SAVE_ROUNDS = 20;
+const MAX_SERVER_WAIT_MS = 24 * 60 * 60_000;
 
 const SIGN_IN_TO_SAVE_MESSAGE = 'Sign in to save chats to your account.';
 const SAVE_FAILED_MESSAGE =
@@ -210,7 +211,27 @@ export async function flushQuestionBeforeTurn(
 }
 
 export type UserConversationSave =
-  { status: 'saved' } | { status: 'not-saved'; reason?: string } | { status: 'mirroring-off' };
+  | { status: 'saved' }
+  | { status: 'not-saved'; reason?: string; retryAt?: number }
+  | { status: 'refused'; reason?: string }
+  | { status: 'mirroring-off' };
+
+function serverWaitPending(entry: ConversationEntry, now = Date.now()): number | undefined {
+  const sync = entry.cloudSync;
+  return sync?.retryAfterStatedByServer === true &&
+    sync.retryAfter !== undefined &&
+    sync.retryAfter > now
+    ? sync.retryAfter
+    : undefined;
+}
+
+function unsavedOutcome(entry: ConversationEntry): UserConversationSave {
+  const sync = entry.cloudSync;
+  const reason = sync?.lastError ? { reason: sync.lastError } : {};
+  if (sync?.state === 'blocked') return { status: 'refused', ...reason };
+  const retryAt = serverWaitPending(entry);
+  return { status: 'not-saved', ...reason, ...(retryAt !== undefined ? { retryAt } : {}) };
+}
 
 function hasOutstandingCloudWork(entry: ConversationEntry): boolean {
   return (
@@ -234,17 +255,22 @@ export async function saveConversationNow(
   if (!(await readCloudMirroringEnabled())) return { status: 'mirroring-off' };
   const initial = await getConversation(owner, conversationId);
   if (!initial) return { status: 'not-saved' };
+  if (initial.cloudSync?.state === 'blocked' || serverWaitPending(initial) !== undefined) {
+    return unsavedOutcome(initial);
+  }
   if (initial.cloudSync?.retryAfter !== undefined) {
-    await recordCloudSyncState(owner, conversationId, { retryAfter: undefined });
+    await recordCloudSyncState(owner, conversationId, {
+      retryAfter: undefined,
+      retryAfterStatedByServer: undefined,
+    });
   }
   let pendingBefore = Number.POSITIVE_INFINITY;
   for (let round = 0; round < MAX_USER_SAVE_ROUNDS; round += 1) {
     await flushConversation(owner, conversationId);
     const entry = await getConversation(owner, conversationId);
     if (!entry) return { status: 'not-saved' };
-    const sync = entry.cloudSync;
-    if (sync?.state === 'blocked' || sync?.state === 'error') {
-      return { status: 'not-saved', ...(sync.lastError ? { reason: sync.lastError } : {}) };
+    if (entry.cloudSync?.state === 'blocked' || entry.cloudSync?.state === 'error') {
+      return unsavedOutcome(entry);
     }
     if (!hasOutstandingCloudWork(entry)) {
       if (conversationHasUnsavedCloudChanges(entry)) {
@@ -252,6 +278,7 @@ export async function saveConversationNow(
           state: 'idle',
           lastError: undefined,
           retryAfter: undefined,
+          retryAfterStatedByServer: undefined,
         });
       }
       return { status: 'saved' };
@@ -568,6 +595,7 @@ async function flushEligibleConversation(
         blockedReason: undefined,
         lastError: undefined,
         retryAfter: undefined,
+        retryAfterStatedByServer: undefined,
       });
     } catch (error) {
       await handleFlushError(owner, conversationId, error, refusals.last);
@@ -591,6 +619,13 @@ function syncRefusal(error: unknown, captured: CloudRefusal | null): CloudRefusa
       message: error.message.replace(/^HTTP \d{3}: /u, ''),
     },
   });
+}
+
+function serverStatedWaitMs(refusal: CloudRefusal, now: number): number | undefined {
+  if (refusal.retryAfterSeconds !== undefined) return refusal.retryAfterSeconds * 1000;
+  const resetAt = refusal.resetAt ? Date.parse(refusal.resetAt) : Number.NaN;
+  if (!Number.isFinite(resetAt) || resetAt <= now) return undefined;
+  return Math.min(resetAt - now, MAX_SERVER_WAIT_MS);
 }
 
 async function handleFlushError(
@@ -636,6 +671,7 @@ async function handleFlushError(
       lastError: describeCloudRefusal(refusal, SYNC_REFUSAL_COPY),
       lastAttemptAt: now,
       retryAfter: now + RETRY_AFTER_SERVER_ERROR_MS,
+      retryAfterStatedByServer: undefined,
     });
     return;
   }
@@ -643,13 +679,13 @@ async function handleFlushError(
   if (refusal?.kind === 'unavailable' || refusal?.kind === 'rate_limited') {
     const fallbackMs =
       refusal.kind === 'rate_limited' ? RETRY_AFTER_RATE_LIMIT_MS : RETRY_AFTER_SERVER_ERROR_MS;
+    const statedMs = serverStatedWaitMs(refusal, now);
     await recordCloudSyncState(owner, conversationId, {
       state: 'error',
       lastError: describeCloudRefusal(refusal, SYNC_REFUSAL_COPY),
       lastAttemptAt: now,
-      retryAfter:
-        now +
-        (refusal.retryAfterSeconds !== undefined ? refusal.retryAfterSeconds * 1000 : fallbackMs),
+      retryAfter: now + (statedMs ?? fallbackMs),
+      retryAfterStatedByServer: statedMs !== undefined ? true : undefined,
     });
     return;
   }
@@ -670,6 +706,7 @@ async function handleFlushError(
     lastError: SAVE_FAILED_MESSAGE,
     lastAttemptAt: now,
     retryAfter: now + RETRY_AFTER_SERVER_ERROR_MS,
+    retryAfterStatedByServer: undefined,
   });
 }
 

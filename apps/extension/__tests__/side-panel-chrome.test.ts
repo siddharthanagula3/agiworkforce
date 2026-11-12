@@ -697,6 +697,52 @@ describe('saving a chat so it can be shared', () => {
     }
   });
 
+  it('keeps Save changes now off until the time the account asked to wait', async () => {
+    const { conversationId, restore } = await shareRecovery('Save wait share fixture', {
+      success: true,
+      status: 'not-saved',
+      reason: 'Too many requests.',
+      retryAt: Date.now() + 120_000,
+    });
+    try {
+      vi.useFakeTimers({ toFake: ['setTimeout'] });
+      recoveryButton()!.click();
+      await vi.waitFor(() =>
+        expect(shareText()).toContain(
+          catalogMessage('spHistoryShareSaveAgainAt', ['@']).split('@')[0]!,
+        ),
+      );
+      expect(shareText()).toContain('Too many requests.');
+      expect(recoveryButton()!.disabled).toBe(true);
+      const sends = chromeMock.sent.filter((m) => m.type === 'SAVE_CONVERSATION_NOW').length;
+      recoveryButton()!.click();
+      expect(chromeMock.sent.filter((m) => m.type === 'SAVE_CONVERSATION_NOW')).toHaveLength(sends);
+      vi.advanceTimersByTime(120_000);
+      expect(recoveryButton()!.disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      restore();
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
+  it('drops Save changes now when the account refuses for a reason a retry cannot fix', async () => {
+    const reason = 'Your workspace administrator has turned off saving chats from the extension.';
+    const { conversationId, restore } = await shareRecovery('Save refused share fixture', {
+      success: true,
+      status: 'refused',
+      reason,
+    });
+    try {
+      recoveryButton()!.click();
+      await vi.waitFor(() => expect(shareText()).toBe(reason));
+      expect(recoveryButton()).toBeNull();
+    } finally {
+      restore();
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
   it('says why the save failed and lets the user try again', async () => {
     const reason = 'Your workspace administrator has turned off saving chats from the extension.';
     const { conversationId, restore } = await shareRecovery('Save failed share fixture', {

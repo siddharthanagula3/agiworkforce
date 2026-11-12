@@ -245,6 +245,12 @@ export async function releaseStoredDesktopPairing(): Promise<void> {
   _state = { ...IDLE_STATE };
 }
 
+export async function releaseStoredDesktopPairingOf(token: string): Promise<boolean> {
+  if ((await readDesktopPairToken()) !== token) return false;
+  await releaseStoredDesktopPairing();
+  return true;
+}
+
 /**
  * True when a stored pairing must not stay attached to `signedInAccountId`.
  * An unknown sign-in is the caller's problem: this only answers for an

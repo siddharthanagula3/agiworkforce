@@ -529,7 +529,7 @@ describe('conversation cloud sync', () => {
     expect(pendingCloudMessages(saved!)).toHaveLength(0);
   });
 
-  it('reports a failed user save with the reason the account gave', async () => {
+  it('reports a refused user save with the account reason and does not ask again', async () => {
     const reason = 'Your workspace administrator has turned off saving chats from the extension.';
     await upsertConversation(OWNER, 'conv-save-refused', cloudMessages(5_200));
     respond = (request) =>
@@ -547,14 +547,42 @@ describe('conversation cloud sync', () => {
         : defaultResponder(request);
 
     await expect(saveConversationNow(OWNER, 'conv-save-refused')).resolves.toEqual({
-      status: 'not-saved',
+      status: 'refused',
       reason,
     });
     await expect(saveConversationNow(OWNER, 'conv-save-refused')).resolves.toEqual({
-      status: 'not-saved',
+      status: 'refused',
       reason,
     });
-    expect(messagePosts()).toHaveLength(2);
+    expect(messagePosts()).toHaveLength(1);
+  });
+
+  it('keeps to the wait a rate limit stated and says until when', async () => {
+    await upsertConversation(OWNER, 'conv-save-wait', cloudMessages(5_250));
+    respond = (request) =>
+      request.url.endsWith('/messages')
+        ? new Response(
+            JSON.stringify({
+              error: { code: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests.' },
+            }),
+            { status: 429, headers: { 'Content-Type': 'application/json', 'Retry-After': '120' } },
+          )
+        : defaultResponder(request);
+    const startedAt = Date.now();
+
+    const first = await saveConversationNow(OWNER, 'conv-save-wait');
+    expect(first).toMatchObject({
+      status: 'not-saved',
+      reason: expect.stringContaining('Too many'),
+    });
+    const retryAt = (first as { retryAt?: number }).retryAt!;
+    expect(retryAt).toBeGreaterThanOrEqual(startedAt + 120_000);
+    expect(retryAt).toBeLessThan(Date.now() + 121_000);
+    expect(messagePosts()).toHaveLength(1);
+
+    respond = defaultResponder;
+    await expect(saveConversationNow(OWNER, 'conv-save-wait')).resolves.toEqual(first);
+    expect(messagePosts()).toHaveLength(1);
   });
 
   it('says saving is turned off instead of pretending to save', async () => {

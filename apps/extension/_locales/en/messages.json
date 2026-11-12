@@ -2743,6 +2743,20 @@
     "message": "Saved to your account. Create the link now.",
     "description": "The chat's changes were saved to the account, so a share link can be created"
   },
+  "spHistoryShareSaveAgainAt": {
+    "message": "You can save it again after $TIME$.",
+    "description": "The account asked to wait before the chat is saved again; says when Save changes now works again",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "3:42 PM"
+      }
+    }
+  },
+  "spHistoryShareSaveRefused": {
+    "message": "Your account does not allow this chat to be saved, so it cannot be shared.",
+    "description": "The account refused saving the chat for a reason retrying cannot fix, and gave no sentence of its own"
+  },
   "spHistoryShareSaveFailed": {
     "message": "This chat could not be saved to your account. Try again.",
     "description": "Saving the chat's changes to the account failed and the server gave no reason"

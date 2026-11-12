@@ -417,6 +417,63 @@ describe('a pairing Desktop removes while this browser is connected', () => {
   });
 });
 
+describe('a refusal of an older pairing never removes a newer one', () => {
+  const NEWER = {
+    fingerprint: 'dddd',
+    accountId: null,
+    token: 'd'.repeat(64),
+  };
+
+  it('keeps a pairing stored while the old connection was being refused, and reconnects with it', async () => {
+    harness.localStore['connectedToDesktop'] = true;
+    harness.localStore['agi_paired_desktop'] = {
+      fingerprint: 'eeee',
+      accountId: null,
+      token: PAIR_TOKEN,
+    };
+    let polls = 0;
+    harness.desktop.answer = (message) => {
+      if (message['type'] !== NATIVE_BROWSER_POLL_MESSAGE) return { success: true };
+      polls += 1;
+      if (polls > 1) return null;
+      harness.localStore['agi_paired_desktop'] = { ...NEWER };
+      return { success: false, code: 'pairing-rejected', error: 'Not the paired profile.' };
+    };
+    await startWorker();
+    await settled(() => harness.connectNative.mock.calls.length >= 2);
+    await settled(() => polls >= 2);
+
+    expect(harness.localStore['agi_paired_desktop']).toEqual(NEWER);
+    expect(harness.ports[0]?.disconnect).toHaveBeenCalled();
+    const connects = harness.posted.filter((message) => message['type'] === 'connect');
+    expect(connects.at(-1)).toMatchObject({ pair_token: NEWER.token });
+  });
+
+  it('keeps a newer pairing when the refused handshake used the older token', async () => {
+    harness.localStore['connectedToDesktop'] = true;
+    harness.localStore['agi_paired_desktop'] = {
+      fingerprint: 'eeee',
+      accountId: null,
+      token: PAIR_TOKEN,
+    };
+    let connects = 0;
+    harness.desktop.answer = (message) => {
+      if (message['type'] === NATIVE_BROWSER_POLL_MESSAGE) return null;
+      if (message['type'] !== 'connect') return { success: true };
+      connects += 1;
+      if (connects > 1) return { success: true };
+      harness.localStore['agi_paired_desktop'] = { ...NEWER };
+      return { success: false, code: 'pairing-rejected', error: 'Not the paired profile.' };
+    };
+    await startWorker();
+    await settled(() => connects >= 1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(harness.localStore['agi_paired_desktop']).toEqual(NEWER);
+    expect(harness.localStore['connectedToDesktop']).not.toBe(false);
+  });
+});
+
 describe('an unpair Desktop could not hear is finished later', () => {
   it('records the unpair as owed with the token when Desktop is closed', async () => {
     harness.localStore['agi_paired_desktop'] = {

@@ -133,6 +133,7 @@ export interface ConversationCloudSyncState {
   lastError?: string;
   lastAttemptAt?: number;
   retryAfter?: number;
+  retryAfterStatedByServer?: boolean;
 }
 
 export interface ConversationEntry {
@@ -690,6 +691,7 @@ function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | u
   }
   if (typeof raw['retryAfter'] === 'number' && Number.isFinite(raw['retryAfter'])) {
     normalized.retryAfter = raw['retryAfter'];
+    if (raw['retryAfterStatedByServer'] === true) normalized.retryAfterStatedByServer = true;
   }
   const isEmpty =
     normalized.state === 'idle' &&
@@ -2121,6 +2123,7 @@ export async function recordCloudMessagesSynced(
     } else {
       delete cloudSync.lastError;
       delete cloudSync.retryAfter;
+      delete cloudSync.retryAfterStatedByServer;
       if (cloudSync.blockedReason === 'auth' || cloudSync.blockedReason === 'policy') {
         delete cloudSync.blockedReason;
       }

@@ -402,6 +402,7 @@ import {
   readDesktopPairToken,
   readPendingDesktopRevocation,
   releaseStoredDesktopPairing,
+  releaseStoredDesktopPairingOf,
   settlePendingDesktopRevocation,
   type PendingDesktopRevocation,
 } from './features/native-bridge/pairing';
@@ -1899,18 +1900,20 @@ function connectToNativeHost(): void {
  */
 async function handleRefusedDesktopHandshake(
   error: unknown,
-  revocation: PendingDesktopRevocation | null,
+  credential: { token: string; revocation: PendingDesktopRevocation | null },
 ): Promise<boolean> {
   if (!(error instanceof NativeRequestRefused) || error.code !== NATIVE_PAIRING_REJECTED_CODE)
     return false;
-  if (revocation) {
-    await settlePendingDesktopRevocation(revocation.id);
-  } else {
-    state.lastNativeError = DESKTOP_PAIRED_ELSEWHERE;
-    await releaseStoredDesktopPairing();
+  if (credential.revocation) {
+    await settlePendingDesktopRevocation(credential.revocation.id);
+    return true;
   }
+  if (!(await releaseStoredDesktopPairingOf(credential.token))) return false;
+  state.lastNativeError = DESKTOP_PAIRED_ELSEWHERE;
   return true;
 }
+
+const nativePortPairTokens = new WeakMap<chrome.runtime.Port, string>();
 
 async function releaseRevokedDesktopConnection(
   port: chrome.runtime.Port,
@@ -1919,24 +1922,37 @@ async function releaseRevokedDesktopConnection(
   if (!(error instanceof NativeRequestRefused) || error.code !== NATIVE_PAIRING_REJECTED_CODE)
     return false;
   if (state.nativePort !== port) return true;
-  logger.warn('Desktop no longer holds this pairing; releasing it here');
-  activePairedBrowserCommand?.driver?.cancel(DESKTOP_PAIRED_ELSEWHERE);
-  rejectPendingNativeRequests(port, DESKTOP_PAIRED_ELSEWHERE);
+  const portToken = nativePortPairTokens.get(port);
+  const released = portToken !== undefined && (await releaseStoredDesktopPairingOf(portToken));
+  if (state.nativePort !== port) return true;
+  const reason = released
+    ? DESKTOP_PAIRED_ELSEWHERE
+    : 'This browser was paired with Desktop again, so the earlier connection was closed.';
+  logger.warn(
+    released
+      ? 'Desktop no longer holds this pairing; releasing it here'
+      : 'Desktop refused an earlier pairing; keeping the newer one',
+  );
+  activePairedBrowserCommand?.driver?.cancel(reason);
+  rejectPendingNativeRequests(port, reason);
   state.nativePort = null;
   nativeSessionSecret = null;
   _bgCtx.nativeHandshakeInFlight = false;
   state.isNativeConnected = false;
   state.connectionStatus = 'disconnected';
-  state.lastNativeError = DESKTOP_PAIRED_ELSEWHERE;
+  state.lastNativeError = released ? DESKTOP_PAIRED_ELSEWHERE : null;
   try {
     port.disconnect();
   } catch (disconnectError) {
-    logger.debug('Native port disconnect after a revoked pairing failed', disconnectError);
+    logger.debug('Native port disconnect after a refused pairing failed', disconnectError);
   }
   clearNativeReconnectTimer();
-  setNativeReconnectGaveUp(true);
-  await releaseStoredDesktopPairing();
-  setDesktopPaired(false);
+  if (released) {
+    setNativeReconnectGaveUp(true);
+    setDesktopPaired(false);
+  } else {
+    connectToNativeHost();
+  }
   void notifyConnectionStatusChange();
   return true;
 }
@@ -1951,6 +1967,7 @@ function openNativeConnection(credential: {
 
     logger.info('Connecting to native host', { host: NATIVE_HOST_NAME });
     const port = chrome.runtime.connectNative(NATIVE_HOST_NAME);
+    nativePortPairTokens.set(port, credential.token);
     state.nativePort = port;
     nativeSessionSecret = null;
     state.isNativeConnected = false;
@@ -2015,7 +2032,7 @@ function openNativeConnection(credential: {
         state.connectionStatus = 'disconnected';
         state.nativePort = null;
         state.lastNativeError = error instanceof Error ? error.message : 'Native handshake failed';
-        if (await handleRefusedDesktopHandshake(error, credential.revocation)) {
+        if (await handleRefusedDesktopHandshake(error, credential)) {
           clearNativeReconnectTimer();
           setNativeReconnectGaveUp(true);
           setDesktopPaired(false);
