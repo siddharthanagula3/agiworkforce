@@ -1270,11 +1270,17 @@
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
           "default": true,
-          "scope": "resource",
-          "description": "Include the memory facts saved to your AGI account with chat turns. Turn this off to stop sending them without deleting them; Code: Memory keeps showing what is stored. A workspace or folder setting can turn this off, but only your user setting turns it on.",
+          "scope": "application",
+          "description": "Include the memory facts saved to your AGI account with chat turns. Turn this off to stop sending them without deleting them; Code: Memory keeps showing what is stored. Only your own user settings can change this. To keep memory off in one repository, folder or remote machine, set agiWorkforce.optOut.memory there.",
           "tags": [
             "usesOnlineServices"
           ]
+        },
+        "agiWorkforce.optOut.memory": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Keep memory off here. Set this in a repository, folder, dev container or remote settings file to stop saved memory facts going with chat turns from this place. It can only turn memory off, never on."
         },
         "agiWorkforce.hoverEnabled": {
           "type": "boolean",
@@ -1289,17 +1295,29 @@
         "agiWorkforce.autoApplyFixes": {
           "type": "boolean",
           "default": false,
+          "scope": "application",
+          "description": "Automatically apply AI-suggested fixes without showing a diff. Only your own user settings can turn this on. To keep it off in one repository, folder or remote machine, set agiWorkforce.optOut.autoApplyFixes there."
+        },
+        "agiWorkforce.optOut.autoApplyFixes": {
+          "type": "boolean",
+          "default": false,
           "scope": "resource",
-          "description": "Automatically apply AI-suggested fixes without showing a diff. A workspace or folder setting can turn this off, but only your user setting turns it on."
+          "description": "Always show a diff before an AI fix is applied here. Set this in a repository, folder, dev container or remote settings file to turn off Auto Apply Fixes for this place. It can only turn the feature off, never on."
         },
         "agiWorkforce.inlineCompletions.enabled": {
           "type": "boolean",
           "default": false,
-          "scope": "resource",
-          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key. A workspace or folder setting can turn this off, but only your user setting turns it on.",
+          "scope": "application",
+          "description": "Send surrounding code to AGI Cloud for ghost-text inline completions. Sensitive files are excluded. Requires browser sign-in or an AGI API key. Only your own user settings can turn this on. To keep it off in one repository, folder or remote machine, set agiWorkforce.optOut.inlineCompletions there.",
           "tags": [
             "usesOnlineServices"
           ]
+        },
+        "agiWorkforce.optOut.inlineCompletions": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Keep inline completions off here. Set this in a repository, folder, dev container or remote settings file so no surrounding code is sent for completions from this place. It can only turn completions off, never on."
         },
         "agiWorkforce.inlineCompletions.debounceMs": {
           "type": "number",

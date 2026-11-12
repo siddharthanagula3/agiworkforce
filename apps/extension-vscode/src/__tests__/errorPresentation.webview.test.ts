@@ -10,6 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { requireCatalogModel } from './catalogModelFixtures';
+import { ACCOUNT_REFUSAL_TEXT_MAX_LENGTH } from '../utils/accountRefusal';
 
 import {
   presentChatError,
@@ -434,6 +435,19 @@ describe('presentChatError', () => {
     expect(presented.category).toBe(category);
     expect(presented.retryable).toBe(false);
     expect(presented.action).toBeUndefined();
+  });
+
+  it('bounds the server wording of a refusal to one short line', () => {
+    const presented = presentChatError(
+      `[agi-cloud] API error (HTTP 403): ${JSON.stringify({
+        error: { code: 'FORBIDDEN', message: `Locked.\n${'x'.repeat(5_000)}` },
+      })}`,
+    );
+
+    expect(presented.headline.startsWith('Locked. x')).toBe(true);
+    expect(presented.headline).not.toContain('\n');
+    expect(Array.from(presented.headline)).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
+    expect(presented.category).toBe('permission');
   });
 
   it('shows the server wording for an outage and lets the user retry', () => {

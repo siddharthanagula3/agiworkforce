@@ -164,6 +164,7 @@ interface Session {
   lastHeartbeatAt: number;
   standing: PairingStandingState;
   previousCredentials: Partial<Record<Role, PairCredential>>;
+  ended: boolean;
 }
 
 interface PendingApproval {
@@ -255,10 +256,17 @@ const publicHttpUrl = envText('SIGNALING_HTTP_URL') ?? `http://${host}:${port}`;
 const publicWsUrl =
   envText('SIGNALING_WS_URL') ??
   `${publicHttpUrl.startsWith('https') ? 'wss' : 'ws'}://${host}:${port}${wsPath}`;
-const pairingMaxLifetimeMs = envPositiveInteger(
+const requestedPairingLifetimeMs = envPositiveInteger(
   'SIGNALING_PAIRING_MAX_LIFETIME_MS',
   PAIRING_MAX_LIFETIME_MS_DEFAULT,
 );
+const pairingMaxLifetimeMs = Math.min(requestedPairingLifetimeMs, PAIRING_MAX_LIFETIME_MS_DEFAULT);
+if (requestedPairingLifetimeMs > PAIRING_MAX_LIFETIME_MS_DEFAULT) {
+  logger.warn(
+    { requestedMs: requestedPairingLifetimeMs, maximumMs: PAIRING_MAX_LIFETIME_MS_DEFAULT },
+    'SIGNALING_PAIRING_MAX_LIFETIME_MS may only shorten the pairing lifetime; the larger value was ignored',
+  );
+}
 const standing = standingConfig();
 const processStartedAt = Date.now();
 const release = releaseIdentity();
@@ -1645,6 +1653,7 @@ async function registerWithCredential(
     return;
   }
 
+  session.lastHeartbeatAt = Date.now();
   const admission = await admitStanding(session);
   if (socket.readyState !== WebSocket.OPEN) return;
   if (admission === 'unknown') {
@@ -1656,7 +1665,15 @@ async function registerWithCredential(
     refuseRetryably(socket);
     return;
   }
-  if (admission === 'ended' || activeSessions.get(message.code) !== session) {
+  if (admission === 'displaced') {
+    logger.warn(
+      { correlationId, code: message.code, role: message.role },
+      'Registration deferred: the pairing session was replaced while it was being confirmed',
+    );
+    refuseRetryably(socket);
+    return;
+  }
+  if (admission === 'ended') {
     socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
     socket.close();
     return;
@@ -1954,6 +1971,7 @@ async function loadSession(
       pending: null,
     },
     previousCredentials: {},
+    ended: false,
   };
   activeSessions.set(code, session);
   return { kind: 'session', session };
@@ -2069,6 +2087,7 @@ function disconnectParticipants(
 }
 
 function endPairing(session: Session): void {
+  session.ended = true;
   disconnectParticipants(session);
   activeSessions.delete(session.code);
   pendingApprovals.delete(session.code);
@@ -2166,14 +2185,17 @@ function displaceParticipant(session: Session, occupant: Participant, correlatio
   }
 }
 
-type StandingAdmission = 'active' | 'ended' | 'unknown';
+type StandingAdmission = 'active' | 'ended' | 'displaced' | 'unknown';
 
 async function admitStanding(session: Session): Promise<StandingAdmission> {
   if (standing.mode === 'disabled') return 'active';
   if (standing.mode === 'unconfigured') return 'unknown';
   if (Date.now() - session.standing.confirmedAt < standing.recheckMs) return 'active';
-  await recheckStanding([session]);
-  if (activeSessions.get(session.code) !== session) return 'ended';
+  await recheckStanding([session], { urgent: true });
+  if (session.ended || pendingDeletions.has(session.code) || isSessionExpired(session)) {
+    return 'ended';
+  }
+  if (activeSessions.get(session.code) !== session) return 'displaced';
   return Date.now() - session.standing.holdSince < standing.maxStaleMs ? 'active' : 'unknown';
 }
 
@@ -2203,11 +2225,19 @@ const standingQueue = createBatchQueue<Session>({
   onError: (error) => logger.error({ error }, 'Pairing standing check failed unexpectedly'),
 });
 
-async function recheckStanding(sessions: readonly Session[]): Promise<void> {
+async function recheckStanding(
+  sessions: readonly Session[],
+  { urgent = false }: { urgent?: boolean } = {},
+): Promise<void> {
   await Promise.all(
     sessions.map((session) => {
-      session.standing.pending ??= standingQueue.enqueue(session);
-      return session.standing.pending;
+      if (session.standing.pending) {
+        if (urgent) standingQueue.prioritize(session);
+        return session.standing.pending;
+      }
+      const pending = standingQueue.enqueue(session, { urgent });
+      session.standing.pending = pending;
+      return pending;
     }),
   );
 }

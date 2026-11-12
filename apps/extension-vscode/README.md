@@ -137,6 +137,11 @@ The most used ones:
 | `agiWorkforce.apiEndpoint`                  | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
 | `agiWorkforce.telemetryEnabled`             | `false`                               | Product usage events, also subject to VS Code's own telemetry setting.                           |
 
+Memory, inline completions and auto-apply can only be turned on in your own
+user settings. A repository, folder, dev container or remote settings file can
+keep one of them off with `agiWorkforce.optOut.memory`,
+`agiWorkforce.optOut.inlineCompletions` or `agiWorkforce.optOut.autoApplyFixes`.
+
 Run **Code: Open Settings** for the full list with inline
 explanations.
 

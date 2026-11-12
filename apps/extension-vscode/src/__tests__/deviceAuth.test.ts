@@ -14,6 +14,7 @@ import {
   type DeviceAuthPost,
 } from '../features/account-auth/deviceAuth';
 import { getAccountRefreshToken, getAccountToken } from '../utils/api';
+import { ACCOUNT_REFUSAL_TEXT_MAX_LENGTH } from '../utils/accountRefusal';
 
 const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
@@ -296,6 +297,51 @@ describe('VS Code device session renewal', () => {
     await expect(
       refreshDeviceSession('https://agiworkforce.com', 'renewal-credential', post),
     ).resolves.toEqual({ kind: 'unavailable' });
+  });
+
+  it('bounds the reason an unavailable account is given to one short line without links', async () => {
+    const post = vi.fn<DeviceAuthPost>().mockResolvedValue({
+      status: 403,
+      body: JSON.stringify({
+        error: 'account_unavailable',
+        error_description: `Suspended [details](command:workbench.action.terminal.new).\n${'x'.repeat(5_000)}`,
+      }),
+    });
+
+    const result = await refreshDeviceSession(
+      'https://agiworkforce.com',
+      'renewal-credential',
+      post,
+    );
+
+    expect(result.kind).toBe('account-unavailable');
+    const message = result.kind === 'account-unavailable' ? result.message : '';
+    expect(message.startsWith('Suspended [details] (command:')).toBe(true);
+    expect(message).not.toContain('\n');
+    expect(message).not.toContain('](');
+    expect(Array.from(message)).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
+  });
+
+  it('bounds the reason a refused sign-in is given to one short line', async () => {
+    const post = vi.fn<DeviceAuthPost>().mockResolvedValue({
+      status: 403,
+      body: JSON.stringify({
+        error: 'account_unavailable',
+        error_description: `Refused.\n${'x'.repeat(5_000)}`,
+      }),
+    });
+
+    const result = await pollDeviceAuthorization(
+      'https://agiworkforce.com',
+      '8cc8544f-7d36-4ec3-aae2-ce49740fa59c',
+      post,
+    );
+
+    expect(result.kind).toBe('rejected');
+    const message = result.kind === 'rejected' ? result.message : '';
+    expect(message.startsWith('Refused. x')).toBe(true);
+    expect(message).not.toContain('\n');
+    expect(Array.from(message)).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
   });
 });
 

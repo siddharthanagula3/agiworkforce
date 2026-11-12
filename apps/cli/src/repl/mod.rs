@@ -790,10 +790,15 @@ fn with_security_review_scope(input: &str) -> Option<String> {
 
 async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_input: String) {
     match session.reload_if_changed_on_disk() {
-        Ok(true) => output::print_info(
-            "This conversation continued in another app; your message continues from its saved version.",
-        ),
-        Ok(false) => {}
+        Ok(Some(saved_mode)) => {
+            output::print_info(
+                "This conversation continued in another app; your message continues from its saved version.",
+            );
+            if let Some(saved) = saved_mode {
+                output::print_info(&kept_mode_notice(saved, session.permission_mode));
+            }
+        }
+        Ok(None) => {}
         Err(error) => output::print_warn(&format!(
             "This conversation changed in another app and could not be reloaded: {error:#}"
         )),
@@ -872,6 +877,17 @@ pub(super) fn reset_loaded_session_stats(session: &mut AgentSession) {
         .iter()
         .filter(|message| message.role == "user")
         .count() as u32;
+}
+
+pub(super) fn kept_mode_notice(
+    saved: crate::cli_options::PermissionMode,
+    kept: crate::cli_options::PermissionMode,
+) -> String {
+    format!(
+        "The session was saved in {} mode; this terminal stays in {} mode.",
+        saved.name(),
+        kept.name()
+    )
 }
 
 fn collect_multiline(first_line: &str, editor: &mut DefaultEditor) -> Result<String> {

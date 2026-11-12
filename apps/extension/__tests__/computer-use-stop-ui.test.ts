@@ -8,6 +8,7 @@ import {
   describeCancellationReason,
 } from '../src/features/side-panel/computerUsePanel';
 import catalog from '../_locales/en/messages.json';
+import { USER_TAKEOVER_MAX_MS } from '../src/features/computer-use/runOwnership';
 import { settleAutomationAttempt, startAutomationAttempt } from '@agiworkforce/types';
 
 const sendMessage = vi.fn();
@@ -18,7 +19,21 @@ function stubChrome(): void {
     value: {
       runtime: { lastError: undefined, sendMessage },
       i18n: {
-        getMessage: (key: string) => catalog[key as keyof typeof catalog]?.message ?? '',
+        getMessage: (key: string, substitutions: string[] = []) => {
+          const entry = (
+            catalog as Record<
+              string,
+              { message: string; placeholders?: Record<string, { content: string }> }
+            >
+          )[key];
+          if (!entry) return '';
+          return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (_match, name: string) =>
+            (entry.placeholders?.[name.toLowerCase()]?.content ?? '').replace(
+              /\$(\d)/g,
+              (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
+            ),
+          );
+        },
         getUILanguage: () => 'en',
       },
       storage: {
@@ -368,6 +383,13 @@ describe('every way a run can end has words for the user', () => {
 
   it('says how long a paused task waited before it let go of the page', () => {
     expect(describeCancellationReason('takeover_expired')).toContain('15 minutes');
+  });
+
+  it('says on Take over how long the task waits, instead of promising to wait forever', () => {
+    const api = buildComputerUsePanel();
+    const takeOver = api.panelEl.querySelector<HTMLButtonElement>('.sp-cu-takeover-btn');
+    expect(takeOver?.title).toContain(`${USER_TAKEOVER_MAX_MS / 60_000} minutes`);
+    expect(takeOver?.title).not.toMatch(/continues when you hand it back|\$MINUTES\$/);
   });
 
   it('tells the user in plain words that Chrome’s own Cancel stopped the run', () => {

@@ -2013,29 +2013,51 @@ export function conversationMetadataNeedsSync(entry: ConversationEntry): boolean
   );
 }
 
+function owesCloudSync(entry: ConversationEntry, owner: ManagedCloudOwner): boolean {
+  if (!sameManagedCloudOwner(entry.owner, owner)) return false;
+  if (!isCloudMetadataPersistenceEligible(entry)) return false;
+  if (
+    entry.cloudSync?.blockedReason === 'not-found' ||
+    entry.cloudSync?.blockedReason === 'workspace'
+  ) {
+    return false;
+  }
+  return (
+    pendingCloudMessages(entry).length > 0 ||
+    (entry.cloudSync?.conversationId !== undefined &&
+      (conversationMetadataNeedsSync(entry) ||
+        entry.cloudSync.organizationId === undefined ||
+        entry.cloudSync.createAcknowledged !== true))
+  );
+}
+
 export async function listConversationsNeedingCloudSync(
   owner: ManagedCloudOwner,
 ): Promise<ConversationEntry[]> {
   assertManagedCloudOwner(owner);
   const now = Date.now();
-  return (await readAfterMutations()).conversations.filter((entry) => {
-    if (!sameManagedCloudOwner(entry.owner, owner)) return false;
-    if (!isCloudMetadataPersistenceEligible(entry)) return false;
-    if (entry.cloudSync?.retryAfter !== undefined && entry.cloudSync.retryAfter > now) return false;
-    if (
-      entry.cloudSync?.blockedReason === 'not-found' ||
-      entry.cloudSync?.blockedReason === 'workspace'
-    ) {
-      return false;
+  return (await readAfterMutations()).conversations.filter(
+    (entry) =>
+      !(entry.cloudSync?.retryAfter !== undefined && entry.cloudSync.retryAfter > now) &&
+      owesCloudSync(entry, owner),
+  );
+}
+
+export async function earliestCloudSyncRetryAt(
+  owner: ManagedCloudOwner,
+): Promise<number | undefined> {
+  assertManagedCloudOwner(owner);
+  const now = Date.now();
+  let earliest: number | undefined;
+  for (const entry of (await readAfterMutations()).conversations) {
+    const retryAfter = entry.cloudSync?.retryAfter;
+    if (entry.cloudSync?.state === 'blocked' || retryAfter === undefined || retryAfter <= now) {
+      continue;
     }
-    return (
-      pendingCloudMessages(entry).length > 0 ||
-      (entry.cloudSync?.conversationId !== undefined &&
-        (conversationMetadataNeedsSync(entry) ||
-          entry.cloudSync.organizationId === undefined ||
-          entry.cloudSync.createAcknowledged !== true))
-    );
-  });
+    if (earliest !== undefined && retryAfter >= earliest) continue;
+    if (owesCloudSync(entry, owner)) earliest = retryAfter;
+  }
+  return earliest;
 }
 
 export async function claimCloudConversationBinding(

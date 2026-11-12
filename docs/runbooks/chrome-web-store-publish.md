@@ -230,6 +230,10 @@ or a decision that is his; **Lead** steps can be run from this repository with
        `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://agiworkforce.com/api/page-context/read`
        prints anything but `404`.
 
+    Before the tag is pushed, the owner runs "Manual checks in Chrome" below on
+    the release candidate against this deploy, and the tag waits until every
+    check that applies has passed.
+
     **Owner decides when; lead runs.** Push the tag
     (`git tag v-ext-<version> && scripts/dev/heavy-job.sh git push origin v-ext-<version>`).
     The package job runs, then the publish job waits for the `chrome-web-store`
@@ -272,13 +276,186 @@ or a decision that is his; **Lead** steps can be run from this repository with
        Homepage URL row of `apps/extension/docs/chrome-web-store-listing.md`
        to match.
 
+## Manual checks in Chrome
+
+These checks need a person and a real Chrome; no test can run them. They take 30 to 45 minutes.
+Run them on the release candidate, after the production web deploy and its migrations in First
+submission step 12 and before the tag is pushed in that step, and again for each later release
+(Release step 2). The first-draft ZIP is not for these checks: it has no key, so loaded unpacked it
+gets an ID that Clerk never allows, and sign-in fails. Write down the Chrome version and the commit
+of the candidate first.
+
+**Lead.** At the step 11 commit, with the step 5 values exported (`CLERK_PUBLISHABLE_KEY`,
+`CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`, `CWS_EXTENSION_ID`), run
+`scripts/dev/heavy-job.sh pnpm --filter @agiworkforce/extension package`, unzip the
+`extension.zip` it writes in the extension's folder into a new folder, and hand that folder to
+the owner.
+
+### Set up once
+
+1. Use Chrome 132 or later (`chrome://settings/help` shows the version). The extension does not
+   load on an older Chrome.
+2. Put the candidate folder from the lead somewhere it can stay, as Chrome reads the extension from
+   it.
+3. Open `chrome://extensions`, turn on **Developer mode** (top right), choose **Load unpacked** and
+   pick that folder. Pin the extension from Chrome's puzzle-piece menu.
+4. The ID on the extension's card in `chrome://extensions` must equal the Item ID from First
+   submission step 4. If it does not, stop: this is the wrong build. Then open the side panel and
+   sign in with your test account.
+5. Pick two ordinary websites where clicking around does no harm. Approve the first with **Always
+   allow on this site** when the extension asks. Leave the second unapproved.
+6. For the Desktop pairing checks you need the Desktop app open on this Mac, and a second Chrome
+   profile with the same folder loaded unpacked. Ask the lead whether the installed Desktop has the
+   pairing changes from this release.
+7. Check 7 needs a second Chrome window. Check 20 needs a second account on the Free plan.
+
+### Site access and "Allow for this task"
+
+1. On the unapproved website, open the side panel and attach the page. When asked, choose **Allow
+   for this task**. You should see "Allowed <site> this time", and the extension's **Details** page
+   in `chrome://extensions` lists that site under **Site access**.
+2. Quit Chrome completely (Cmd+Q) and open it again. Without using the extension, look at **Site
+   access** again. The site from check 1 is gone, and the approved website is still there.
+3. On the approved website, set the permission mode to **Ask first** and start a task that clicks
+   something, for example "Click the first link on this page". When the approval card appears, wait
+   2 minutes without touching anything, then press **Allow**. The click happens. Do not open the
+   extension's DevTools during this check, as that hides the fault it looks for.
+4. Start another task with two steps. Press **Skip** on the first card and **Allow** on the second.
+   The skipped step is not done, and the allowed one is.
+5. Start a task and leave its approval card open. In a new tab open
+   `chrome://serviceworker-internals`, find the entry for the extension's ID and press **Stop**.
+   Go back and press **Allow**. You should see "This request is no longer waiting for an answer, so
+   nothing was done." and then "Chrome stopped the extension in the background, so this task ended
+   and nothing more will happen on the page. Start the task again to continue." The tab leaves the
+   AGI tab group.
+
+### Side panel and running tasks
+
+6. Leave the side panel open and idle for 3 minutes. Note whether the extension's entry in
+   `chrome://serviceworker-internals` shows it stopped, and whether it stays stopped when you
+   reload that page over the next minute. Close the panel. If the page assistant is on, note
+   whether its button shows again on the approved website in that window.
+7. Open the side panel in window A and wait one minute. Open the side panel in window B. In window
+   A, start a task on the unapproved website and choose **Allow for this task**.
+   - Window B's panel shows no **Stop** for window A's task.
+   - Close window B's panel. The task in window A keeps going, and the site stays under **Site
+     access**.
+   - Close window A's panel. The task ends with "The side panel closed, so the run was stopped.",
+     and the site is gone from **Site access**.
+8. This takes 15 minutes, so start it and do checks 16 and 18 in another window meanwhile. Do not
+   quit Chrome or sign out until it ends. On the approved website, start a task and press **Take
+   over**. The paused notice says "You have the page. If the page is not handed back within 15
+   minutes, the task ends." Do not press **Hand back**. After 15 minutes you should see "The page
+   was not handed back within 15 minutes, so the task ended and AGI let go of the tab. Start the
+   task again to continue.", and the tab leaves the AGI tab group.
+
+### Desktop pairing
+
+If the installed Desktop predates this release, skip checks 9 to 15 and note them as skipped.
+
+9. In the side panel menu choose **Desktop connection**, then **Pair with Desktop**, and type the
+   code Desktop shows. **Extension settings** shows **Paired**. In Desktop, **Settings**,
+   **Capabilities**, the **Chrome** section shows "Paired and answering".
+10. In the second profile, open **Extension settings**. It shows **Not paired** with **Pair with
+    Desktop**. In a Desktop chat, ask for the title of the page open in Chrome. The answer names
+    the first profile's page, never the second profile's.
+11. Quit Desktop and wait 2 minutes. **Extension settings** still shows **Paired**. Open Desktop
+    and, without touching Chrome, ask for the page title again within a minute. It answers. Then
+    quit Chrome. After about a minute Desktop shows "Paired, not answering right now". Open Chrome
+    again.
+12. Quit Desktop. In **Extension settings** press **Unpair** and confirm. You should see "Unpaired
+    in this browser, but Desktop could not be reached to remove the pairing. It is removed the next
+    time Desktop is open while Chrome is running, or you can remove it in Desktop's settings now."
+    Open Desktop and use the side panel for a few minutes. Note whether, and after how long,
+    Desktop's **Chrome** section stops showing a paired browser.
+13. Pair again as in check 9. In Desktop's **Chrome** section press **Unpair** and confirm. Within
+    about 40 seconds **Extension settings** shows **Not paired** with **Pair with Desktop**. Pairing
+    again works without pressing **Unpair** in the extension first.
+14. Open **Extension settings** in two tabs. In Desktop, unpair. In the first tab pair again at
+    once. Note what each tab shows after a minute, and whether Desktop shows "Paired and
+    answering".
+15. Sign out of the extension and pair with Desktop. Sign in, quit and reopen Chrome, then sign out.
+    **Extension settings** shows **Not paired**, and Desktop shows no paired browser.
+
+### Recording shortcuts
+
+16. In **Extension settings** press **Start recording**. On the approved website type in a field,
+    then follow a link to another page. Settings says "Recording stopped because the page loaded a
+    new address. Name it to save the steps recorded before that." Save it and replay it. It repeats
+    the steps from before the link.
+17. Turn on **Capture typed values (passwords, card numbers, one-time codes, PINs and ID numbers are
+    never recorded)**. Record typing into a password field on the approved website, without
+    submitting, and save it. Note whether the password shows anywhere in the saved shortcut. Then
+    sign out: recorded shortcuts are gone and prompt shortcuts stay.
+
+### Saving and sharing chats
+
+18. In **Extension settings** turn off **Save Managed Cloud chats to my account**, start a chat,
+    then turn the setting back on. In **Recent chats**, open that chat's menu. **Share** is greyed,
+    and clicking it shows "Only chats saved to your account can be shared." Note whether hovering
+    over **Share** shows the same sentence.
+19. With saving on, send a message, and within a few seconds open the chat's menu,
+    **Share**, **Create link**. You should see "This chat has changes that are not saved to your
+    account yet. Wait for them to save, then share again." and **Save changes now**. Press it: you
+    see "Saving this chat to your account.", then "Saved to your account. Create the link now."
+    **Create link** then copies a link.
+
+### Refusals and limits
+
+20. Signed in with the Free account, open **Schedules** and try to create a schedule. You should
+    see "Free plans do not include scheduled tasks. Upgrade to schedule unattended runs." and no
+    **Sign in** button.
+
+### Only if you can set this up
+
+21. Paired with Desktop, on a practice checkout page with no real card or saved payment details,
+    ask a Desktop chat to type a card number into the card field, then to click **Place order**. Do
+    not use a real shop. Both are refused, with "This is a password, payment or one-time code field;
+    the user has to fill it in themselves." and "Not done: this completes a purchase or payment,
+    which the extension never does for another app. The user has to check the amount and finish it
+    in the browser." Nothing is typed or clicked.
+22. On a page with three identical buttons that do no harm, record a click on the third and replay
+    it. The third button is clicked.
+23. On a page with a file upload field, in **Ask first**, ask a task to upload a file. An **Approve
+    file upload** card appears; **Allow** uploads the file.
+24. In a workspace that blocks the Chrome extension, send a chat. You see the administrator's
+    sentence, with no **Upgrade**, **View plans** or switch-model action. Reopen a chat whose AGI
+    Cloud task was interrupted: you see the administrator's sentence and stay signed in.
+25. In a workspace that turns off chat saving from Chrome, send a message. The chat shows **Not
+    syncing** with the administrator's sentence. Turn saving back on: within about 5 minutes it
+    shows **Saved to your account**.
+26. In a workspace with public sharing off, share a saved chat. You should see "Your workspace
+    administrator has turned off public sharing. Links already created are unaffected."
+27. In a workspace with projects turned off, choose **Move to project** on a chat. You see the
+    administrator's sentence.
+28. On an account that has created 50 share links today, create one more. You
+    should see "Too many requests. Please wait before trying again. The limit is 50 share links.
+    It resets <date and time>."
+29. On an account that has read 500 linked pages today, use **Add a web page by link**. You should
+    see "Too many requests. Please wait before trying again. The limit is 500 page reads. It resets
+    <date and time>."
+30. While the lead makes the account check answer "temporarily unavailable" with a 5-second wait,
+    open the side panel. You see "We could not verify your AGI Cloud account." with **Retry**, the
+    panel reads the account again by itself about 5 seconds later, and you stay signed in. Note
+    whether your autofill profile is still listed in **Extension settings**.
+31. While the lead makes chat saving answer "too many requests" with a 2-minute
+    wait, use **Share** and then **Save changes now**. The button turns off, the row says "You can
+    save it again after <time>.", and the button comes back on after two minutes. Run it once
+    more, and this time close the side panel during the wait and leave Chrome alone for three
+    minutes. Note whether the chat's latest message is then on the web app.
+
+### If a check fails
+
+Note the check number and what you saw, then go on to the next check.
+
 ## Release
 
 1. Update both source versions and any user-facing listing copy/assets affected by the release.
 2. Run `pnpm --filter @agiworkforce/extension test:e2e` against the
    production-configured unpacked build, then complete the release evidence
    matrix in `audit/blockers/35-chrome-web-store-release-blockers.md` against
-   that candidate.
+   that candidate. Then run "Manual checks in Chrome" on that unpacked build,
+   against the production web app it calls, before the tag is pushed.
 3. Commit the version and release notes, then create and push `v-ext-<version>`.
 4. Approve the `chrome-web-store` environment only after inspecting the uploaded artifact name and SHA-256 from the package job.
 

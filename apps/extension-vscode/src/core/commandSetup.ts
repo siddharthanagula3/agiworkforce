@@ -205,7 +205,7 @@ import { showPlanComparison } from '../features/account-auth/planComparison';
 import { planDisplayLabel } from '../features/account-auth/planLabel';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import { getExtensionVersion } from '../platform/version';
-import { Config, resolveConfiguredCli } from '../platform/config';
+import { Config, optOutSettingFor, resolveConfiguredCli } from '../platform/config';
 import {
   MANAGE_WORKSPACE_TRUST_COMMAND,
   WorkspaceNotTrustedError,
@@ -242,11 +242,14 @@ const upgradeUrl = (): string => `${getCloudWebOrigin()}/pricing`;
 const SWITCH_MODEL_ANYWAY = 'Switch anyway';
 
 const MEMORY_TURN_ON_ACTION = 'Turn memory on';
-const MEMORY_KEPT_OFF_BY_WORKSPACE =
-  "Memory stays off here: this workspace's settings turn it off, and your user setting cannot turn it back on.";
+const MEMORY_KEPT_OFF_HERE = `Memory stays off here because ${optOutSettingFor('memory.enabled')} is on for this workspace. Your user setting was not changed.`;
 
 async function requireMemoryEnabledForCapture(context: vscode.ExtensionContext): Promise<boolean> {
   if (Config.memoryEnabled()) return true;
+  if (Config.memoryOptedOutHere()) {
+    vscode.window.showInformationMessage(MEMORY_KEPT_OFF_HERE);
+    return false;
+  }
   const choice = await vscode.window.showWarningMessage(
     'Memory is off, so saved facts are not sent with any turn.',
     { modal: true },
@@ -254,9 +257,7 @@ async function requireMemoryEnabledForCapture(context: vscode.ExtensionContext):
   );
   if (choice !== MEMORY_TURN_ON_ACTION) return false;
   await Config.update(context, { key: 'memory.enabled', value: true });
-  if (Config.memoryEnabled()) return true;
-  vscode.window.showInformationMessage(MEMORY_KEPT_OFF_BY_WORKSPACE);
-  return false;
+  return Config.memoryEnabled();
 }
 
 function contextCommandTarget(
@@ -1998,17 +1999,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     register('agi-workforce.memory.toggle', async () => {
-      const next = !Config.memoryEnabled();
-      await Config.update(context, { key: 'memory.enabled', value: next });
-      void memoryTreeProvider.refresh();
-      if (Config.memoryEnabled() !== next) {
-        vscode.window.showInformationMessage(MEMORY_KEPT_OFF_BY_WORKSPACE);
+      const next = !Config.memoryUserSetting();
+      if (next && Config.memoryOptedOutHere()) {
+        vscode.window.showInformationMessage(MEMORY_KEPT_OFF_HERE);
         return;
       }
+      await Config.update(context, { key: 'memory.enabled', value: next });
+      void memoryTreeProvider.refresh();
       vscode.window.showInformationMessage(
         next
-          ? 'Memory on, saved facts are included with your turns.'
-          : 'Memory off, saved facts stay stored but are not sent.',
+          ? 'Memory turned on in your user settings, saved facts are included with your turns.'
+          : 'Memory turned off in your user settings, saved facts stay stored but are not sent.',
       );
     }),
 
