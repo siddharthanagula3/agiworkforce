@@ -44,7 +44,7 @@ import {
 import { Config, __CONFIG_DEFAULTS, type ExtensionAgentEffort } from '../platform/config';
 import { platformRequestHeaders } from '../platform/platformHeaders';
 import { t } from '../l10n';
-import { accountRefusalKind, parseRetryAfterMs } from './accountRefusal';
+import { accountRefusalKind, boundedRefusalText, parseRetryAfterMs } from './accountRefusal';
 
 export interface LlmChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -711,11 +711,8 @@ export function parseCloudCompletionError(
       : undefined;
   const code = typeof nested?.['code'] === 'string' ? nested['code'] : undefined;
   const message =
-    typeof nested?.['message'] === 'string' && nested['message'].trim() !== ''
-      ? nested['message'].trim()
-      : typeof parsed?.['message'] === 'string' && parsed['message'].trim() !== ''
-        ? parsed['message'].trim()
-        : undefined;
+    (typeof nested?.['message'] === 'string' ? boundedRefusalText(nested['message']) : undefined) ??
+    (typeof parsed?.['message'] === 'string' ? boundedRefusalText(parsed['message']) : undefined);
   const requiredTier =
     typeof nested?.['requiredTier'] === 'string'
       ? nested['requiredTier']
@@ -777,9 +774,8 @@ function readStreamErrorFields(value: unknown): AgiWorkforceApiError | undefined
   if (typeof value !== 'object' || value === null) return undefined;
   const record = value as { message?: unknown; code?: unknown };
   const message =
-    typeof record.message === 'string' && record.message.trim() !== ''
-      ? record.message
-      : 'AGI Cloud could not finish this response.';
+    (typeof record.message === 'string' ? boundedRefusalText(record.message) : undefined) ??
+    'AGI Cloud could not finish this response.';
   const code = typeof record.code === 'string' && record.code !== '' ? record.code : 'STREAM_ERROR';
   return new AgiWorkforceApiError(message, undefined, code);
 }
@@ -936,6 +932,7 @@ interface StreamCallbacks {
 }
 
 export type ManagedRequestBilling = 'settle-now' | 'deferred';
+export type CloudRequestAttempts = 'retry-server-failures' | 'single';
 
 export interface ManagedRequestCompletion {
   requestId: string;
@@ -953,6 +950,7 @@ export async function streamChatCompletion(
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
   billing: ManagedRequestBilling = 'settle-now',
+  attempts: CloudRequestAttempts = 'retry-server-failures',
 ): Promise<void> {
   const requestBody = buildCloudUtilityChatCompletionRequest(messages, overrideModel);
   const credential = await getCloudCredential(secrets);
@@ -1001,6 +999,7 @@ export async function streamChatCompletion(
         ),
       () => !tokenDelivered && !cancellationToken.isCancellationRequested,
       cancellationToken,
+      attempts === 'single' ? 0 : undefined,
     );
   const isUnauthorized = (error: unknown): boolean =>
     error instanceof AgiWorkforceApiError && error.statusCode === 401;
@@ -1080,6 +1079,7 @@ export async function chatCompletion(
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
   billing: ManagedRequestBilling = 'settle-now',
+  attempts: CloudRequestAttempts = 'retry-server-failures',
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -1107,6 +1107,7 @@ export async function chatCompletion(
       cancellationToken,
       overrideModel,
       billing,
+      attempts,
     ).catch(safeReject);
   });
 }
@@ -1307,14 +1308,15 @@ function readHttpErrorBody(
   } catch {
     error = undefined;
   }
-  const message = typeof error?.message === 'string' ? error.message.trim() : '';
+  const message =
+    typeof error?.message === 'string' ? boundedRefusalText(error.message) : undefined;
   const code = typeof error?.code === 'string' ? error.code : undefined;
   const retryAfter = headers['retry-after'];
   const retryAfterMs = parseRetryAfterMs(Array.isArray(retryAfter) ? retryAfter[0] : retryAfter);
   return {
     kind: 'http-error',
     status,
-    ...(message === '' ? {} : { message }),
+    ...(message === undefined ? {} : { message }),
     ...(code === undefined ? {} : { code }),
     ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
   };

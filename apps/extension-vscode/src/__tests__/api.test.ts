@@ -43,6 +43,7 @@ import {
   classifyManagedQuotaErrorCode,
 } from '@agiworkforce/types';
 import { ExtensionContext } from './__mocks__/vscode';
+import { ACCOUNT_REFUSAL_TEXT_MAX_LENGTH } from '../utils/accountRefusal';
 import { readFileSync } from 'fs';
 
 vi.mock('https', () => ({ request: vi.fn() }));
@@ -1504,6 +1505,21 @@ describe('a refusal from the account API is not a sign-out', () => {
     });
   });
 
+  it('bounds the server wording in the usage history to one short line', async () => {
+    const secrets = await signedIn();
+    answerAccountApi({
+      status: 403,
+      body: { error: { code: 'FORBIDDEN', message: `Locked.\n${'x'.repeat(5_000)}` } },
+    });
+
+    const result = await fetchUsageHistory(secrets);
+
+    const reason = result.kind === 'unavailable' ? result.reason : '';
+    expect(reason.startsWith('Locked. x')).toBe(true);
+    expect(reason).not.toContain('\n');
+    expect(Array.from(reason)).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
+  });
+
   it('renews, rather than ending the session, when the token expired while the request was out', async () => {
     let now = 1_750_000_000_000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
@@ -1723,6 +1739,31 @@ describe('a refusal from the account API is not a sign-out', () => {
       await expect(getAccountAuthState(secrets)).resolves.toMatchObject({ status: 'signed-in' });
     });
 
+    it('sends one request and reports the stated wait when asked for a single attempt', async () => {
+      const secrets = await signedIn();
+      const bearers = answerChat(
+        { status: 503, headers: { 'retry-after': '30' }, body: '{}' },
+        { status: 200, body: sse('Never asked') },
+      );
+      const outcome = streamChatCompletion(
+        secrets,
+        [{ role: 'user', content: 'hi' }],
+        { onToken: () => undefined, onDone: () => undefined },
+        cancellation,
+        undefined,
+        'deferred',
+        'single',
+      ).then(
+        () => 'answered',
+        (error: unknown) => error,
+      );
+
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      await expect(outcome).resolves.toMatchObject({ statusCode: 503, retryAfterMs: 30_000 });
+      expect(bearers).toHaveLength(1);
+    });
+
     it('waits at least as long as the server asked before retrying a 503', async () => {
       const secrets = await signedIn();
       const bearers = answerChat(
@@ -1790,6 +1831,24 @@ describe('what the server says about a refused request', () => {
       code: 'surface_not_allowed',
       message: 'Your workspace does not allow this client.',
     });
+  });
+
+  it('bounds refusal wording to one short line and breaks link syntax', () => {
+    const long = `Locked [Run](command:workbench.action.terminal.new).\n${'x'.repeat(5_000)}`;
+    const shown = [
+      parseCloudCompletionError(
+        403,
+        JSON.stringify({ error: { code: 'FORBIDDEN', message: long } }),
+      ),
+      parseCloudCompletionError(503, JSON.stringify({ message: long })),
+    ].map((error) => error.message);
+
+    for (const text of shown) {
+      expect(text.startsWith('Locked [Run] (command:workbench.action.terminal.new). x')).toBe(true);
+      expect(text).not.toContain('](');
+      expect(text).not.toContain('\n');
+      expect(Array.from(text)).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
+    }
   });
 
   it('renders the developer surface plan refusal exactly as the server worded it', () => {

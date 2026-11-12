@@ -19,10 +19,15 @@ import {
   getCloudWebOrigin,
   setAccountToken,
 } from '../../utils/api';
+import { boundedRefusalText } from '../../utils/accountRefusal';
 import { getExtensionUserAgent } from '../../platform/version';
 import { describeRemoteEnvironment } from '../../platform/remoteEnvironment';
 
 const REQUEST_TIMEOUT_MS = 10_000;
+const ACCOUNT_UNAVAILABLE_FALLBACK =
+  'This AGI Cloud account cannot be used right now. Sign in on the web to see why.';
+const SIGN_IN_REJECTED_FALLBACK =
+  'AGI Cloud could not complete the device sign-in request. Start again.';
 const BROWSER_OPEN_CONFIRM_TIMEOUT_MS = 2_500;
 const REMOTE_BROWSER_OPEN_CONFIRM_TIMEOUT_MS = 8_000;
 
@@ -95,20 +100,30 @@ export function requestDeviceAuthorization(
   return requestSharedDeviceAuthorization(origin, post, 'vscode');
 }
 
-export function pollDeviceAuthorization(
+export async function pollDeviceAuthorization(
   origin: string,
   deviceCode: string,
   post: DeviceAuthPost = postJson,
 ): Promise<DeviceAuthorizationPollResult> {
-  return pollSharedDeviceAuthorization(origin, deviceCode, post);
+  const result = await pollSharedDeviceAuthorization(origin, deviceCode, post);
+  if (result.kind !== 'rejected') return result;
+  return {
+    kind: 'rejected',
+    message: boundedRefusalText(result.message) ?? SIGN_IN_REJECTED_FALLBACK,
+  };
 }
 
-export function refreshDeviceSession(
+export async function refreshDeviceSession(
   origin: string,
   refreshToken: string,
   post: DeviceAuthPost = postJson,
 ): Promise<DeviceSessionRefreshResult> {
-  return refreshSharedDeviceSession(origin, refreshToken, post);
+  const result = await refreshSharedDeviceSession(origin, refreshToken, post);
+  if (result.kind !== 'account-unavailable') return result;
+  return {
+    kind: 'account-unavailable',
+    message: boundedRefusalText(result.message) ?? ACCOUNT_UNAVAILABLE_FALLBACK,
+  };
 }
 
 export async function revokeDeviceAuthorization(

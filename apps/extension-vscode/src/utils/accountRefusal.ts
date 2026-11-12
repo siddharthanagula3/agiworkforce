@@ -36,8 +36,10 @@ const STATUS_PREFIX = /^HTTP (\d{3}):\s*/u;
 const BARE_STATUS = /^HTTP \d{3}$/u;
 export const ACCOUNT_REFUSAL_TEXT_MAX_LENGTH = 240;
 
-function boundedRefusalText(text: string): string | undefined {
-  const line = text.replace(/\s+/gu, ' ').trim();
+const NOTIFICATION_LINK_OPENING = /\]\(/gu;
+
+export function boundedRefusalText(text: string): string | undefined {
+  const line = text.replace(/\s+/gu, ' ').trim().replace(NOTIFICATION_LINK_OPENING, '] (');
   if (line === '') return undefined;
   const characters = Array.from(line);
   if (characters.length <= ACCOUNT_REFUSAL_TEXT_MAX_LENGTH) return line;

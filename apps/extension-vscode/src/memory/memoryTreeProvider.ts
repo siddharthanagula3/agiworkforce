@@ -3,7 +3,7 @@ import type { MemoryCategory } from '@agiworkforce/agent-core';
 import { type MemoryFact } from './memoryStore';
 import type { AccountMemoryStatus, AccountMemoryStore } from './accountMemoryStore';
 import type { MemoryScope } from './accountMemoryClient';
-import { Config } from '../platform/config';
+import { Config, optOutSettingFor } from '../platform/config';
 import { getCloudWebOrigin } from '../utils/api';
 
 const MAX_LABEL_CHARS = 60;
@@ -167,7 +167,10 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
       this._onDidChangeTreeData.fire();
     });
     this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('agiWorkforce.memory.enabled')) {
+      if (
+        event.affectsConfiguration('agiWorkforce.memory.enabled') ||
+        event.affectsConfiguration(optOutSettingFor('memory.enabled'))
+      ) {
         this._onDidChangeTreeData.fire();
       }
     });
