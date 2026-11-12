@@ -997,7 +997,7 @@ mod tests {
         assert!(s.result.is_none());
         assert!(!s.is_done());
         assert!(
-            s.render_text().contains("[Yes]"),
+            s.render_text().contains("[y Yes]"),
             "the highlighted button must render as the selected one"
         );
     }
@@ -1412,7 +1412,7 @@ mod tests {
             assert!(text.contains("src/main.rs"), "{key:?}: {text}");
             assert!(text.contains("src/lib.rs"), "{key:?}: {text}");
             assert!(text.contains("Apply this patch?"), "{key:?}: {text}");
-            assert!(text.contains("[ Yes ]"), "{key:?}: {text}");
+            assert!(text.contains("[ y Yes ]"), "{key:?}: {text}");
         }
     }
 
