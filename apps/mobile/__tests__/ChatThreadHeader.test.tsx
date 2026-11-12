@@ -99,7 +99,7 @@ jest.mock('@/lib/mmkv', () => {
 
 import ChatScreen from '../app/(app)/chat/[id]';
 import { handOffConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
-import { useChatStore } from '../stores/chatStore';
+import { useChatExecutionStore, useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
 
 function seedThread(overrides: Record<string, unknown> = {}): void {
@@ -165,6 +165,53 @@ describe('Thread header', () => {
     expect(screen.getByText('Teach me fractions')).toBeTruthy();
     expect(screen.getByLabelText('Your message: Teach me fractions. Sending')).toBeTruthy();
     takeConversationSend('thread-1');
+  });
+
+  it('leaves Switch model to the failed turn instead of repeating it in the error bar', () => {
+    const failure = 'The model is busy right now. Try again or pick another model.';
+    seedThread();
+    useChatStore.setState({
+      messages: {
+        'thread-1': [
+          {
+            id: 'question',
+            conversationId: 'thread-1',
+            role: 'user',
+            content: 'Hello',
+            createdAt: '2026-11-12T00:00:00.000Z',
+          },
+          {
+            id: 'failed-answer',
+            conversationId: 'thread-1',
+            role: 'assistant',
+            content: '',
+            createdAt: '2026-11-12T00:00:01.000Z',
+            metadata: { streamError: { message: failure, code: 'provider_overloaded' } },
+          },
+        ],
+      },
+    } as never);
+    useChatExecutionStore.setState({
+      error: failure,
+      failureCode: { message: failure, code: 'provider_overloaded' },
+    } as never);
+
+    const screen = render(<ChatScreen />);
+
+    expect(screen.queryByText('Switch model')).toBeNull();
+  });
+
+  it('offers Switch model in the error bar when no turn shows the failure', () => {
+    const failure = 'The model is busy right now. Try again or pick another model.';
+    seedThread();
+    useChatExecutionStore.setState({
+      error: failure,
+      failureCode: { message: failure, code: 'provider_overloaded' },
+    } as never);
+
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByText('Switch model')).toBeTruthy();
   });
 
   it('clips the thread to its own frame so a reply never draws over the composer controls', () => {

@@ -947,6 +947,7 @@ export default function ChatScreen() {
       };
     }
     if (
+      !failureShownInTurn &&
       sendFailureCode &&
       sendFailureCode.message === sendError &&
       offersModelSwitch(sendFailureCode.code)
@@ -962,6 +963,7 @@ export default function ChatScreen() {
     return null;
   }, [
     clearError,
+    failureShownInTurn,
     handleOpenCloudSignIn,
     handleOpenModelPicker,
     localRecoveryAction,
