@@ -140,6 +140,37 @@ export interface ReadServerSentEventsOptions {
   maximumFrameCharacters?: number;
   acceptUnterminatedFinalFrame?: boolean;
   onChunk?: () => void;
+  signal?: AbortSignal;
+}
+
+function abortReason(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error('The stream was aborted.');
+  error.name = 'AbortError';
+  return error;
+}
+
+// React Native's fetch leaves a pending body read unsettled when its request is
+// aborted, so the read races the signal itself rather than trusting the body.
+function readUnlessAborted<T>(
+  reader: ReadableStreamDefaultReader<T>,
+  signal: AbortSignal,
+): Promise<ReadableStreamReadResult<T>> {
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+    reader.read().then(
+      (result) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(result);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
 }
 
 function isByteStream(
@@ -165,7 +196,9 @@ export async function* readServerSentEvents(
   let reachedEnd = false;
   try {
     for (;;) {
-      const { value, done } = await reader.read();
+      const { value, done } = options.signal
+        ? await readUnlessAborted(reader, options.signal)
+        : await reader.read();
       if (done) {
         reachedEnd = true;
         break;
