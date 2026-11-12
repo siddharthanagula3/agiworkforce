@@ -71,7 +71,7 @@ jobs:
             echo "ERROR: VS Code release tags must use v-vscode-X.Y.Z or v-vscode-X.Y.Z-<channel>.<n>" >&2
             exit 1
           fi
-          if [ "$(git describe --tags --exact-match HEAD)" != "$SELECTED_TAG" ]; then
+          if ! git tag --points-at HEAD | grep -Fx -- "$SELECTED_TAG" >/dev/null; then
             echo "ERROR: checked-out commit is not the selected release tag $SELECTED_TAG" >&2
             exit 1
           fi

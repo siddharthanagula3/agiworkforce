@@ -23,6 +23,18 @@ against it, and installs `agi` to `~/.agi/bin`. It refuses anything it cannot
 verify, and says so when no signed release is published yet. On Windows, run
 it in Git Bash or WSL. There is no npm package or Homebrew tap.
 
+Each release carries builds for macOS (Apple silicon and Intel), Windows (x64
+and arm64) and Linux (x64 and arm64) with glibc 2.35 or newer, such as Ubuntu
+22.04 or Debian 12 and later. The installer refuses an older glibc or a
+musl-based Linux such as Alpine before it downloads anything.
+
+When `~/.agi/bin` is not already on your `PATH`, the installer adds it to your
+shell's startup file (`~/.zshrc` for zsh, `~/.bashrc` for bash on Linux, your
+existing `~/.bash_profile`, `~/.bash_login` or `~/.profile` for bash on macOS,
+`config.fish` for fish) and names the file. Open a new terminal before running
+`agi`, or run the line it prints in the current one. `--no-modify-path` leaves
+your startup files alone and prints the line to add instead.
+
 `agi update` compares your build with the newest release, and
 `agi update --install` installs that release after verifying its signature with
 the key built into your `agi`. The Desktop app is built to carry its own copy of
@@ -39,7 +51,7 @@ backward-compatible alias.
 agi login                # sign in to your AGI account (device code in the browser)
 agi login anthropic      # or use your own provider key (BYOK), pasted when prompted
 agi auth-status    # every configured provider, and how it authenticates
-agi --list-models  # what you can actually route to right now
+agi --list-models  # the model catalog, plus the local models it finds
 agi exec "what files are in this directory?"
 agi                # the interactive terminal UI
 ```
