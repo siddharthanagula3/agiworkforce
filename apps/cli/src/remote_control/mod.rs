@@ -738,13 +738,22 @@ pub async fn run<H: DeveloperSessionHost + 'static>(
     workspace: &Path,
     privacy: PrivacyMode,
 ) -> Result<()> {
-    run_with(host, workspace, privacy, stop_on_ctrl_c(), print_status).await
+    run_with(
+        host,
+        workspace,
+        privacy,
+        false,
+        stop_on_ctrl_c(),
+        print_status,
+    )
+    .await
 }
 
 pub async fn run_with<H: DeveloperSessionHost + 'static>(
     host: Arc<H>,
     workspace: &Path,
     privacy: PrivacyMode,
+    terminal_approver: bool,
     stop: Stop,
     status: impl Fn(RemoteControlStatus) + Send + Sync + 'static,
 ) -> Result<()> {
@@ -771,7 +780,8 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
             root_id(workspace),
             folder.clone(),
             workspace.to_string_lossy().to_string(),
-        ),
+        )
+        .with_terminal_approver(terminal_approver),
         pairing,
         secret,
         dispatch: None,
@@ -1311,9 +1321,14 @@ mod tests {
             let statuses = Arc::new(std::sync::Mutex::new(0usize));
             let seen = Arc::clone(&statuses);
             let (_sender, stop) = tokio::sync::watch::channel(false);
-            let refused = run_with(Arc::new(host), workspace.path(), mode, stop, move |_| {
-                *seen.lock().unwrap() += 1
-            })
+            let refused = run_with(
+                Arc::new(host),
+                workspace.path(),
+                mode,
+                false,
+                stop,
+                move |_| *seen.lock().unwrap() += 1,
+            )
             .await
             .expect_err("Remote Control must be refused outside Cloud mode");
             assert_eq!(

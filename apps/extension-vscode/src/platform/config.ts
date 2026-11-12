@@ -146,10 +146,40 @@ function userChoiceNarrowedByWorkspace(
   return repositoryValues<boolean>(key).includes(privateValue) ? privateValue : userValue;
 }
 
+const OPT_OUT_SETTING_BY_FEATURE = {
+  'memory.enabled': 'optOut.memory',
+  'inlineCompletions.enabled': 'optOut.inlineCompletions',
+  autoApplyFixes: 'optOut.autoApplyFixes',
+} as const satisfies Partial<Record<MutableConfigKey, string>>;
+
+export type OptOutFeature = keyof typeof OPT_OUT_SETTING_BY_FEATURE;
+export const OPT_OUT_SETTING_KEYS = Object.values(OPT_OUT_SETTING_BY_FEATURE);
+
+export function optOutSettingFor(feature: OptOutFeature): string {
+  return `agiWorkforce.${OPT_OUT_SETTING_BY_FEATURE[feature]}`;
+}
+
+function isOptOutFeature(key: MutableConfigKey): key is OptOutFeature {
+  return key in OPT_OUT_SETTING_BY_FEATURE;
+}
+
+function optedOutHere(feature: OptOutFeature): boolean {
+  const key = OPT_OUT_SETTING_BY_FEATURE[feature];
+  const inspected = vscode.workspace.getConfiguration('agiWorkforce').inspect<boolean>(key);
+  return inspected?.globalValue === true || repositoryValues<boolean>(key).includes(true);
+}
+
+function userChoiceUnlessOptedOut(feature: OptOutFeature, fallback: boolean): boolean {
+  return getUserScoped<boolean>(feature, fallback) && !optedOutHere(feature);
+}
+
 function workspaceOverrides(values: MutableConfigValues): MutableConfigKey[] {
   const configuration = vscode.workspace.getConfiguration('agiWorkforce');
   return SETTINGS_PANEL_SETTING_KEYS.filter((key) => {
-    if (repositoryValues<unknown>(key).length === 0) return false;
+    const overridden = isOptOutFeature(key)
+      ? optedOutHere(key)
+      : repositoryValues<unknown>(key).length > 0;
+    if (!overridden) return false;
     const inspected = configuration.inspect<unknown>(key);
     return values[key] !== (inspected?.globalValue ?? inspected?.defaultValue);
   });
@@ -191,17 +221,19 @@ export const Config = {
     return get<boolean>('codeLensEnabled', DEFAULTS.codeLensEnabled);
   },
   autoApplyFixes(): boolean {
-    return userChoiceNarrowedByWorkspace('autoApplyFixes', DEFAULTS.autoApplyFixes, false);
+    return userChoiceUnlessOptedOut('autoApplyFixes', DEFAULTS.autoApplyFixes);
   },
   memoryEnabled(): boolean {
-    return userChoiceNarrowedByWorkspace('memory.enabled', DEFAULTS.memoryEnabled, false);
+    return userChoiceUnlessOptedOut('memory.enabled', DEFAULTS.memoryEnabled);
+  },
+  memoryUserSetting(): boolean {
+    return getUserScoped<boolean>('memory.enabled', DEFAULTS.memoryEnabled);
+  },
+  memoryOptedOutHere(): boolean {
+    return optedOutHere('memory.enabled');
   },
   inlineCompletionsEnabled(): boolean {
-    return userChoiceNarrowedByWorkspace(
-      'inlineCompletions.enabled',
-      DEFAULTS.inlineCompletionsEnabled,
-      false,
-    );
+    return userChoiceUnlessOptedOut('inlineCompletions.enabled', DEFAULTS.inlineCompletionsEnabled);
   },
   inlineCompletionsDebounceMs(): number {
     return get<number>('inlineCompletions.debounceMs', DEFAULTS.inlineCompletionsDebounceMs);

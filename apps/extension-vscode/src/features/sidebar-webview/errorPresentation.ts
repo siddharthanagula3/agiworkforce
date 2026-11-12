@@ -15,7 +15,11 @@
 
 import { modelDisplayLabel, providerDisplayLabel } from '../model-picker/modelConstants';
 import { t, tPlural, type MessageKey } from '../../l10n';
-import { accountRefusalKind, type AccountRefusalKind } from '../../utils/accountRefusal';
+import {
+  accountRefusalKind,
+  boundedRefusalText,
+  type AccountRefusalKind,
+} from '../../utils/accountRefusal';
 
 export type ChatErrorCategory =
   | 'network'
@@ -157,8 +161,8 @@ function accountRefusalIn(body: string): Classification | undefined {
     const error = parsed?.error as { code?: unknown; message?: unknown } | undefined;
     if (typeof error?.code !== 'string' || typeof error.message !== 'string') return undefined;
     const kind = accountRefusalKind(error.code);
-    const headline = error.message.trim();
-    if (kind === undefined || headline === '') return undefined;
+    const headline = boundedRefusalText(error.message);
+    if (kind === undefined || headline === undefined) return undefined;
     return { category: REFUSAL_CATEGORY[kind], headline, retryable: kind === 'unavailable' };
   } catch {
     return undefined;

@@ -10,6 +10,7 @@ import {
   type LlmChatMessage,
 } from '../../utils/api';
 import { Config } from '../../platform/config';
+import { accountRefusalKind } from '../../utils/accountRefusal';
 import { isCredentialPath } from '../../utils/pathSafety';
 import {
   limitResetAt,
@@ -35,6 +36,7 @@ const MAX_SUFFIX_HINT_CHARS = 500;
 const CACHE_TTL_MS = 15_000;
 const CACHE_MAX_ENTRIES = 16;
 const RETRY_AFTER_PAUSE_MS = 15 * 60_000;
+const SERVICE_UNAVAILABLE_PAUSE_MS = 60_000;
 
 function namesSecretFile(filePath: string): boolean {
   const name = path.basename(filePath);
@@ -78,11 +80,16 @@ function textAfterCursor(
 }
 
 function failureNeedsPause(error: unknown): boolean {
-  return (
-    error instanceof AgiWorkforcePaywallError ||
-    (error instanceof AgiWorkforceApiError &&
-      (error.code === 'ACCOUNT_AUTH_REQUIRED' || error.code === 'INVALID_API_KEY'))
-  );
+  if (error instanceof AgiWorkforcePaywallError) return true;
+  if (!(error instanceof AgiWorkforceApiError)) return false;
+  if (error.code === 'ACCOUNT_AUTH_REQUIRED' || error.code === 'INVALID_API_KEY') return true;
+  const refusal = accountRefusalKind(error.code);
+  return error.statusCode === 403 && (refusal === 'policy' || refusal === 'account');
+}
+
+function serviceUnavailablePauseMs(error: unknown): number | undefined {
+  if (!(error instanceof AgiWorkforceApiError) || error.statusCode !== 503) return undefined;
+  return Math.min(error.retryAfterMs ?? SERVICE_UNAVAILABLE_PAUSE_MS, RETRY_AFTER_PAUSE_MS);
 }
 
 interface CachedCompletion {
@@ -279,7 +286,14 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     ];
 
     try {
-      const response = await chatCompletion(this.secrets, messages, token, undefined, 'deferred');
+      const response = await chatCompletion(
+        this.secrets,
+        messages,
+        token,
+        undefined,
+        'deferred',
+        'single',
+      );
       if (token.isCancellationRequested) {
         return [];
       }
@@ -305,6 +319,11 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
         }
         const resetMs = resetAt === null ? Number.NaN : Date.parse(resetAt);
         if (Number.isFinite(resetMs)) this.pausedUntilMs = resetMs;
+        return [];
+      }
+      const unavailableForMs = serviceUnavailablePauseMs(error);
+      if (unavailableForMs !== undefined) {
+        this.pausedUntilMs = Date.now() + unavailableForMs;
         return [];
       }
       if (failureNeedsPause(error)) {

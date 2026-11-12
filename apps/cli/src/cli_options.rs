@@ -141,6 +141,8 @@ pub struct LaunchPermissionMode {
     pub mode: PermissionMode,
     pub requested: bool,
     pub repository: Option<PermissionMode>,
+    pub explicit_yes: bool,
+    pub explicit_skip: bool,
 }
 
 impl LaunchPermissionMode {
@@ -294,11 +296,15 @@ mod tests {
             mode,
             requested: true,
             repository: None,
+            explicit_yes: false,
+            explicit_skip: false,
         };
         let no_flag = |mode| LaunchPermissionMode {
             mode,
             requested: false,
             repository: None,
+            explicit_yes: false,
+            explicit_skip: false,
         };
 
         assert_eq!(flag(Plan).after_load(Plan, Some(AcceptEdits), None), Plan);
@@ -338,6 +344,8 @@ mod tests {
             mode: Plan,
             requested: false,
             repository: Some(Plan),
+            explicit_yes: false,
+            explicit_skip: false,
         };
         assert_eq!(
             repository_plan.after_load(Plan, Some(AcceptEdits), None),
@@ -348,6 +356,8 @@ mod tests {
             mode: AcceptEdits,
             requested: false,
             repository: None,
+            explicit_yes: false,
+            explicit_skip: false,
         };
         assert_eq!(
             narrowed_by_agent.after_load(default, Some(AcceptEdits), None),
@@ -358,6 +368,8 @@ mod tests {
             mode: AcceptEdits,
             requested: true,
             repository: Some(Plan),
+            explicit_yes: false,
+            explicit_skip: false,
         };
         assert_eq!(
             flag_over_repository.after_load(AcceptEdits, Some(Plan), None),

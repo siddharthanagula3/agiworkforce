@@ -7,6 +7,7 @@ import {
 } from '../features/remote-control/remoteControlService';
 import type { LocalRuntimePool } from '../integrations/localRuntimePool';
 import * as api from '../utils/api';
+import { ACCOUNT_REFUSAL_TEXT_MAX_LENGTH } from '../utils/accountRefusal';
 
 const hostStart = vi.hoisted(() => vi.fn());
 const hostStop = vi.hoisted(() => vi.fn());
@@ -184,6 +185,17 @@ describe('Remote Control pairing refusal wording', () => {
         error: { type: 'organization_policy', code: 'feature_disabled', message: 'Blocked here.' },
       }),
     ).toBe('Blocked here.');
+  });
+
+  it('bounds any refusal wording to one short line without links', () => {
+    const long = `Blocked [open](https://example.com/x).\n${'x'.repeat(5_000)}`;
+
+    for (const body of [{ error: long }, { error: { code: 'FORBIDDEN', message: long } }]) {
+      const shown = pairingRefusalMessage(body) ?? '';
+      expect(shown.startsWith('Blocked [open] (https://example.com/x). x')).toBe(true);
+      expect(shown).not.toContain('\n');
+      expect(Array.from(shown)).toHaveLength(ACCOUNT_REFUSAL_TEXT_MAX_LENGTH);
+    }
   });
 
   it('has no wording for a body that is not a refusal', () => {

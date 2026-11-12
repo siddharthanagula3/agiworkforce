@@ -75,71 +75,100 @@ describe('user-owned execution-boundary configuration', () => {
     }
   });
 
-  it.each([
-    ['inlineCompletions.enabled', () => Config.inlineCompletionsEnabled()],
-    ['autoApplyFixes', () => Config.autoApplyFixes()],
-    ['memory.enabled', () => Config.memoryEnabled()],
-  ] as const)(
-    'lets a trusted repository turn off %s, but only the user turn it on',
-    (key, read) => {
+  const optOutFeatures = [
+    [
+      'inlineCompletions.enabled',
+      'optOut.inlineCompletions',
+      () => Config.inlineCompletionsEnabled(),
+    ],
+    ['autoApplyFixes', 'optOut.autoApplyFixes', () => Config.autoApplyFixes()],
+    ['memory.enabled', 'optOut.memory', () => Config.memoryEnabled()],
+  ] as const;
+
+  it.each(optOutFeatures)(
+    'takes %s only from the user value, and lets %s turn it off, trusted or not',
+    (key, optOut, read) => {
       const trusted = vscode.workspace.isTrusted;
-      (vscode.workspace as { isTrusted: boolean }).isTrusted = true;
       try {
-        stubConfiguration({
-          [key]: { defaultValue: false, globalValue: false, workspaceValue: true },
-        });
-        expect(read()).toBe(false);
-        stubConfiguration({
-          [key]: { defaultValue: false, globalValue: true, workspaceValue: false },
-        });
-        expect(read()).toBe(false);
-        stubConfiguration({
-          [key]: { defaultValue: false, globalValue: true, workspaceFolderValue: false },
-        });
-        expect(read()).toBe(false);
-        stubConfiguration({ [key]: { defaultValue: false, globalValue: true } });
-        expect(read()).toBe(true);
+        for (const isTrusted of [true, false]) {
+          (vscode.workspace as { isTrusted: boolean }).isTrusted = isTrusted;
+          stubConfiguration({
+            [key]: { defaultValue: false, globalValue: false, workspaceValue: true },
+          });
+          expect(read()).toBe(false);
+          stubConfiguration({
+            [key]: { defaultValue: false, globalValue: true },
+            [optOut]: { defaultValue: false, workspaceValue: true },
+          });
+          expect(read()).toBe(false);
+          stubConfiguration({
+            [key]: { defaultValue: false, globalValue: true },
+            [optOut]: { defaultValue: false, workspaceFolderValue: true },
+          });
+          expect(read()).toBe(false);
+          stubConfiguration({
+            [key]: { defaultValue: false, globalValue: true },
+            [optOut]: { defaultValue: false, workspaceValue: false },
+          });
+          expect(read()).toBe(true);
+          stubConfiguration({ [key]: { defaultValue: false, globalValue: true } });
+          expect(read()).toBe(true);
+        }
       } finally {
         (vscode.workspace as { isTrusted: boolean }).isTrusted = trusted;
       }
     },
   );
 
-  it.each([
-    ['inlineCompletions.enabled', () => Config.inlineCompletionsEnabled()],
-    ['autoApplyFixes', () => Config.autoApplyFixes()],
-    ['memory.enabled', () => Config.memoryEnabled()],
-  ] as const)(
-    'turns off %s for the whole window when any folder of a multi-root workspace does',
-    (key, read) => {
+  it.each(optOutFeatures)(
+    'keeps %s off in a remote window whose remote settings set %s',
+    (key, optOut, read) => {
+      const remoteName = vscode.env.remoteName;
+      (vscode.env as { remoteName: string | undefined }).remoteName = 'dev-container';
+      try {
+        stubConfiguration({
+          [key]: { defaultValue: false, globalValue: true },
+          [optOut]: { defaultValue: false, globalValue: true },
+        });
+        expect(read()).toBe(false);
+      } finally {
+        (vscode.env as { remoteName: string | undefined }).remoteName = remoteName;
+      }
+    },
+  );
+
+  it.each(optOutFeatures)(
+    'turns off %s for the whole window when any folder of a multi-root workspace sets %s',
+    (key, optOut, read) => {
       const folders = vscode.workspace.workspaceFolders;
       const personal = { uri: vscode.Uri.file('/work/personal'), name: 'personal', index: 0 };
       const client = { uri: vscode.Uri.file('/work/client'), name: 'client', index: 1 };
       const byFolder = new Map<string, InspectedValues>([
-        [personal.uri.fsPath, { defaultValue: false, globalValue: true }],
-        [
-          client.uri.fsPath,
-          { defaultValue: false, globalValue: true, workspaceFolderValue: false },
-        ],
+        [personal.uri.fsPath, { defaultValue: false }],
+        [client.uri.fsPath, { defaultValue: false, workspaceFolderValue: true }],
       ]);
       (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = [personal, client];
       vi.mocked(vscode.workspace.getConfiguration).mockImplementation(((
         _section?: string,
         scope?: { fsPath?: string },
       ) => {
-        const values =
+        const optOutValues =
           (scope?.fsPath === undefined ? undefined : byFolder.get(scope.fsPath)) ??
-          ({ defaultValue: false, globalValue: true } satisfies InspectedValues);
+          ({ defaultValue: false } satisfies InspectedValues);
+        const values: Record<string, InspectedValues> = {
+          [key]: { defaultValue: false, globalValue: true },
+          [optOut]: optOutValues,
+        };
         return {
           get: vi.fn(),
-          inspect: vi.fn((inspectedKey: string) => (inspectedKey === key ? values : undefined)),
+          inspect: vi.fn((inspectedKey: string) => values[inspectedKey]),
           update: vi.fn().mockResolvedValue(undefined),
           has: vi.fn().mockReturnValue(false),
         };
       }) as never);
       try {
         expect(read()).toBe(false);
-        byFolder.set(client.uri.fsPath, { defaultValue: false, globalValue: true });
+        byFolder.set(client.uri.fsPath, { defaultValue: false, workspaceFolderValue: false });
         expect(read()).toBe(true);
       } finally {
         (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = folders;
@@ -173,14 +202,17 @@ describe('user-owned execution-boundary configuration', () => {
   it('reports a workspace value as an override only when it takes effect', () => {
     stubConfiguration({
       autoApplyFixes: { defaultValue: false, workspaceValue: true },
-      'memory.enabled': { defaultValue: true, globalValue: true, workspaceValue: false },
+      'memory.enabled': { defaultValue: true, globalValue: true },
+      'optOut.memory': { defaultValue: false, workspaceValue: true },
+      'inlineCompletions.enabled': { defaultValue: false, globalValue: false },
+      'optOut.inlineCompletions': { defaultValue: false, workspaceValue: true },
       respectGitIgnore: { defaultValue: true, globalValue: true, workspaceValue: false },
       'editorContext.autoAttach': { defaultValue: true, globalValue: true, workspaceValue: false },
     });
 
-    expect(Config.settingsSnapshot('unknown').workspaceOverrides).toEqual([
-      'memory.enabled',
-      'editorContext.autoAttach',
-    ]);
+    const snapshot = Config.settingsSnapshot('unknown');
+    expect(snapshot.workspaceOverrides).toEqual(['memory.enabled', 'editorContext.autoAttach']);
+    expect(snapshot.values.autoApplyFixes).toBe(false);
+    expect(snapshot.values['memory.enabled']).toBe(false);
   });
 });

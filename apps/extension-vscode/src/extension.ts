@@ -31,7 +31,7 @@ import {
 } from './features/sidebar-webview/sessionReceipt';
 import { resolveCloudCodeAgentModel, PRODUCT_NAMES } from '@agiworkforce/types';
 import { resolveTierSync } from './integrations/tierResolver';
-import { Config, resolveConfiguredCli } from './platform/config';
+import { Config, optOutSettingFor, resolveConfiguredCli } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
 import {
@@ -437,7 +437,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
       const runtimeSetting = e.affectsConfiguration('agiWorkforce.cliPath')
         ? 'the CLI path'
-        : e.affectsConfiguration('agiWorkforce.memory.enabled')
+        : e.affectsConfiguration('agiWorkforce.memory.enabled') ||
+            e.affectsConfiguration(optOutSettingFor('memory.enabled'))
           ? 'the memory setting'
           : undefined;
       if (runtimeSetting !== undefined) {
@@ -466,7 +467,10 @@ export function activate(context: vscode.ExtensionContext): void {
         sidebarProvider?.pushUsageMeter();
       }
 
-      if (e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled')) {
+      if (
+        e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled') ||
+        e.affectsConfiguration(optOutSettingFor('inlineCompletions.enabled'))
+      ) {
         syncInlineCompletionProvider?.();
         void validateAdvancedFeatureFlags(context);
       }

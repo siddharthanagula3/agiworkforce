@@ -726,6 +726,50 @@ describe('saving a chat so it can be shared', () => {
     }
   });
 
+  it.each([
+    [
+      'names the day of a wait that ends tomorrow',
+      'Save wait tomorrow fixture',
+      20 * 60 * 60_000,
+      true,
+    ],
+    [
+      'gives only the time of a wait that ends today',
+      'Save wait today fixture',
+      30 * 60_000,
+      false,
+    ],
+  ])('%s', async (_name, content, waitMs, dated) => {
+    const answer: Record<string, unknown> = {
+      success: true,
+      status: 'not-saved',
+      reason: 'Too many requests.',
+    };
+    const { conversationId, restore } = await shareRecovery(content, answer);
+    try {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+      vi.setSystemTime(new Date(2026, 10, 12, 16, 0, 0));
+      const retryAt = new Date(Date.now() + waitMs);
+      answer['retryAt'] = retryAt.getTime();
+      recoveryButton()!.click();
+      await vi.waitFor(() =>
+        expect(shareText()).toContain(
+          catalogMessage('spHistoryShareSaveAgainAt', ['@']).split('@')[0]!,
+        ),
+      );
+      const day = retryAt.toLocaleDateString(undefined, { dateStyle: 'medium' });
+      const time = retryAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      expect(shareText()).toContain(time);
+      if (dated) expect(shareText()).toContain(day);
+      else expect(shareText()).not.toContain(day);
+      expect(recoveryButton()!.disabled).toBe(true);
+    } finally {
+      vi.useRealTimers();
+      restore();
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
   it('drops Save changes now when the account refuses for a reason a retry cannot fix', async () => {
     const reason = 'Your workspace administrator has turned off saving chats from the extension.';
     const { conversationId, restore } = await shareRecovery('Save refused share fixture', {
