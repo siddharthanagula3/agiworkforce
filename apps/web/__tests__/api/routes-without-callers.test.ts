@@ -73,6 +73,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     url: '/api/webhooks/slack-interactions',
     why: 'Slack calls this with a signed interaction payload',
   },
+  {
+    url: '/api/pair/standing',
+    why: 'the Remote Control relay in services/signaling-server calls this at the URL configured as SIGNALING_STANDING_URL',
+  },
 
   // Another surface or the browser reaches these without naming the path in
   // committed source.

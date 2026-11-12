@@ -150,6 +150,11 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
     call: /verifyGooglePubSubPushIdentity\s*\(/,
     reason: 'Google Pub/Sub presents a signed push identity token; no user session is involved.',
   },
+  'pair/standing/route.ts': {
+    call: /isRelayCaller\s*\(/,
+    reason:
+      'Only the Remote Control relay calls this, with the shared SIGNALING_INTERNAL_SECRET as its Bearer token; no user session is read.',
+  },
   'scim/v2/Groups/[groupId]/route.ts': {
     call: /withScim\s*\(/,
     reason: 'The identity provider authenticates with its SCIM bearer token.',

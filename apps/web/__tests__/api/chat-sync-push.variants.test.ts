@@ -21,6 +21,12 @@ const db: {
   transaction: (fn) => fn(db),
 };
 
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildChatSyncGateResponse: vi.fn(async () => null),
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db,
