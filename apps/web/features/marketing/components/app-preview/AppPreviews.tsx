@@ -761,7 +761,7 @@ const TERMINAL_ACCESS: Record<TerminalRouteMode, string> = {
   managed: 'Cloud',
 };
 
-const TERMINAL_CHOICES = ['Yes', 'No', 'Allow Session', 'Always Allow'];
+const TERMINAL_CHOICES = ['y Yes', 'n No', 's Allow Session', 'a Always allow'];
 
 export type TerminalView = 'approval' | 'changes';
 
