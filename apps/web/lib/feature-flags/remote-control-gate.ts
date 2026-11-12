@@ -15,7 +15,10 @@ import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
 import { logger } from '@/lib/logger';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
-import type { PolicySurface } from '@/lib/services/organization-policy-evaluator';
+import type {
+  PolicySurface,
+  RequestOriginRules,
+} from '@/lib/services/organization-policy-evaluator';
 
 import { assertCapabilityAvailable } from './capability-gate';
 import { buildFlagSubject } from './flag-evaluation-service';
@@ -57,7 +60,7 @@ export async function remoteControlPlanRefusal(
 ): Promise<NextResponse | null> {
   let plan: BillingPlanTier;
   try {
-    plan = await resolveEntitledPlanTier(db, userId);
+    plan = await resolveEntitledPlanTier(db, userId, { throwOnSeatLookupError: true });
   } catch (error) {
     logger.error({ error, userId }, '[remote-control] plan unreadable; pairing refused');
     return NextResponse.json({ error: PLAN_UNREADABLE }, { status: 503 });
@@ -96,12 +99,15 @@ export async function remoteControlStandingRefusal(
   userId: string,
   request: NextRequest,
   surface: PolicySurface,
+  options: { originRules?: RequestOriginRules } = {},
 ): Promise<RemoteControlStandingRefusal | null> {
   const featureGate = await buildWorkspaceFeatureGateResponse(
     userId,
     request,
     'remote_control',
     surface,
+    undefined,
+    options,
   );
   if (featureGate) {
     return { final: featureGate.status !== UNAVAILABLE_STATUS, response: featureGate };

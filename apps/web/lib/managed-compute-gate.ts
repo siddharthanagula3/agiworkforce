@@ -33,6 +33,7 @@ import {
   WORKSPACE_POLICY_UNAVAILABLE_DECISION,
   type PolicyAsk,
   type PolicySurface,
+  type RequestOriginRules,
 } from '@/lib/services/organization-policy-evaluator';
 import { serviceUnavailableRetryHeaders } from '@/lib/service-unavailable-retry';
 
@@ -207,11 +208,17 @@ export async function buildWorkspaceFeatureGateResponse(
   feature: WorkspaceFeature,
   surface: PolicySurface,
   headers?: HeadersInit,
+  options: { originRules?: RequestOriginRules } = {},
 ): Promise<NextResponse | null> {
   const decision = await decideWorkspacePolicy(
     userId,
     request,
-    { resource: 'feature', feature, surface },
+    {
+      resource: 'feature',
+      feature,
+      surface,
+      ...(options.originRules ? { originRules: options.originRules } : {}),
+    },
     'workspace-feature',
   );
   if (decision.allowed) return null;

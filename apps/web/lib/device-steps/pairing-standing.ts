@@ -82,7 +82,9 @@ async function accountStanding(
   } catch (error) {
     return isAppError(error) && error.statusCode < SERVER_ERROR_STATUS ? 'ended' : 'unknown';
   }
-  const refusal = await remoteControlStandingRefusal(db, userId, request, 'unknown');
+  const refusal = await remoteControlStandingRefusal(db, userId, request, 'unknown', {
+    originRules: 'skip',
+  });
   if (!refusal) return 'active';
   return refusal.final ? 'ended' : 'unknown';
 }
@@ -91,7 +93,9 @@ async function accountStanding(
  * Whether each live pairing may continue. The account, the workspace policy,
  * the plan and the switch are asked once per account and workspace in a batch;
  * the devices are asked per pairing. Anything that cannot be read is `unknown`,
- * which the relay holds rather than ends.
+ * which the relay holds rather than ends. No end-user request reaches this
+ * check, so the workspace's rules on where a request comes from are not asked
+ * again: they were judged on the requests that created and claimed the pairing.
  */
 export async function evaluatePairingStanding(
   pairings: readonly PairingStandingQuery[],
