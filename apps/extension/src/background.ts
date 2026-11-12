@@ -32,6 +32,7 @@ import {
 } from './features/background/scheduled-task-transport';
 import { renderShortcutPrompt } from './features/side-panel/pageCommands';
 import { streamFailureText } from './features/side-panel/chat-state';
+import { IN_PAGE_PROMPT_PORT_PREFIX } from './features/content/in-page-panel/promptPort';
 import type {
   BrowserContextTabReference,
   ChatChunkMessage,
@@ -471,6 +472,8 @@ interface ActiveChatStream {
   panelDetached?: boolean;
   settlement?: Promise<void>;
   inPageTabId?: number;
+  inPageOrigin?: string;
+  inPageRequestId?: string;
 }
 
 const activeChatStreams = new Map<string, ActiveChatStream>();
@@ -1570,6 +1573,7 @@ function initialize(): void {
   chrome.runtime.onMessage.addListener(handleMessage);
   chrome.runtime.onConnect.addListener(handleManagedChatKeepalivePort);
   chrome.runtime.onConnect.addListener(handleSidePanelPresencePort);
+  chrome.runtime.onConnect.addListener(handleInPagePromptPort);
   void sweepTransientHostPermissions(false);
   void initializeSyncedPreferences(chrome.storage, (error) => {
     logger.warn('Failed to mirror a cross-device preference', error);
@@ -3876,6 +3880,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     new Set(Array.isArray(previous) ? (previous as string[]) : []),
     siteAllowlistCache,
   );
+  cancelInPagePromptsOnUnapprovedOrigins();
   void notifyPageAccessChanged((origin) => changed.has(origin));
 });
 
@@ -3893,6 +3898,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
       adminSitePolicyPublication.publish(owner, () => {
         adminSitePolicyCache = policy;
         cancelActiveRunUnlessOriginStillApproved(isOriginApprovedForAutomation);
+        cancelInPagePromptsOnUnapprovedOrigins();
         void notifyPageAccessChanged(() => true);
       });
     });
@@ -5665,6 +5671,9 @@ async function handleMessageAsync(
         typeof pageContext === 'string' ? pageContext : undefined,
         sender.tab?.url ?? sender.url,
         sender.tab?.id,
+        typeof (message as InPagePromptMessage).requestId === 'string'
+          ? (message as InPagePromptMessage).requestId
+          : undefined,
       );
     }
 
@@ -7154,10 +7163,6 @@ chrome.commands.onCommand.addListener((command) => {
   }
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  if (changeInfo.status === 'loading') cancelInPagePrompts(tabId);
-});
-
 async function captureCurrentPage(): Promise<void> {
   if (!state.isNativeConnected) {
     showNotification(PAGE_CAPTURE_UNDELIVERED_TITLE, PAGE_CAPTURE_UNAVAILABLE_MESSAGE);
@@ -8443,12 +8448,43 @@ function mapInPagePromptFailure(
   }
 }
 
-function cancelInPagePrompts(tabId: number): void {
+function cancelInPagePrompts(tabId: number, requestId?: string): void {
   for (const active of activeChatStreams.values()) {
     if (active.inPageTabId !== tabId) continue;
+    if (requestId !== undefined && active.inPageRequestId !== requestId) continue;
     active.cancelRequested = true;
     active.controller.abort();
   }
+}
+
+function cancelInPagePromptsOnUnapprovedOrigins(): void {
+  for (const active of activeChatStreams.values()) {
+    if (active.inPageTabId === undefined) continue;
+    if (active.inPageOrigin && isOriginApprovedForAutomation(active.inPageOrigin)) continue;
+    active.cancelRequested = true;
+    active.controller.abort();
+  }
+}
+
+const MAX_CLOSED_IN_PAGE_REQUESTS = 50;
+const closedInPageRequests = new Set<string>();
+
+function handleInPagePromptPort(port: chrome.runtime.Port): void {
+  if (!port.name.startsWith(IN_PAGE_PROMPT_PORT_PREFIX)) return;
+  const tabId = port.sender?.tab?.id;
+  if (port.sender?.id !== chrome.runtime.id || typeof tabId !== 'number') {
+    port.disconnect();
+    return;
+  }
+  const requestId = port.name.slice(IN_PAGE_PROMPT_PORT_PREFIX.length);
+  port.onDisconnect.addListener(() => {
+    closedInPageRequests.add(requestId);
+    if (closedInPageRequests.size > MAX_CLOSED_IN_PAGE_REQUESTS) {
+      const oldest = closedInPageRequests.values().next().value;
+      if (oldest !== undefined) closedInPageRequests.delete(oldest);
+    }
+    cancelInPagePrompts(tabId, requestId);
+  });
 }
 
 async function handleInPagePrompt(
@@ -8456,9 +8492,13 @@ async function handleInPagePrompt(
   pageContext?: string,
   senderUrl?: string,
   senderTabId?: number,
+  requestId?: string,
 ): Promise<InPagePromptResponse> {
   if (!prompt.trim()) {
     return inPagePromptFailure('request_rejected', 'Enter a question or choose a page action.');
+  }
+  if (requestId !== undefined && closedInPageRequests.has(requestId)) {
+    return inPagePromptFailure('cancelled', 'Request cancelled.');
   }
   let credential: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
   try {
@@ -8486,6 +8526,8 @@ async function handleInPagePrompt(
     cancelRequested: false,
     cancelNotified: false,
     ...(senderTabId !== undefined ? { inPageTabId: senderTabId } : {}),
+    ...(senderUrl ? { inPageOrigin: originOfUrl(senderUrl) } : {}),
+    ...(requestId !== undefined ? { inPageRequestId: requestId } : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
   let result: ChromeManagedChatResult;

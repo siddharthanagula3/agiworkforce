@@ -1,6 +1,6 @@
 const INLINE_PATTERN = /(\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\s][^*\n]*\*)/;
 const BULLET = /^\s*[-*+]\s+(.*)$/;
-const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
+const NUMBERED = /^\s*(\d+)[.)]\s+(.*)$/;
 const HEADING = /^\s{0,3}#{1,6}\s+(.*)$/;
 const FENCE = /^\s*```/;
 
@@ -50,6 +50,15 @@ export function renderAnswerInto(container: HTMLElement, text: string): void {
     list = null;
     listKind = null;
   };
+  const nextItemKind = (from: number): 'ul' | 'ol' | null => {
+    for (let next = from; next < lines.length; next += 1) {
+      const candidate = lines[next] ?? '';
+      if (!candidate.trim()) continue;
+      if (BULLET.test(candidate)) return 'ul';
+      return NUMBERED.test(candidate) ? 'ol' : null;
+    }
+    return null;
+  };
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
@@ -71,7 +80,7 @@ export function renderAnswerInto(container: HTMLElement, text: string): void {
     }
     if (!line.trim()) {
       closeParagraph();
-      closeList();
+      if (listKind === null || nextItemKind(index + 1) !== listKind) closeList();
       continue;
     }
     const heading = HEADING.exec(line);
@@ -94,10 +103,13 @@ export function renderAnswerInto(container: HTMLElement, text: string): void {
       if (!list || listKind !== kind) {
         list = document.createElement(kind);
         listKind = kind;
+        if (numbered && Number(numbered[1]) > 1) {
+          (list as HTMLOListElement).start = Number(numbered[1]);
+        }
         container.appendChild(list);
       }
       const entry = document.createElement('li');
-      appendInline(entry, item[1] ?? '');
+      appendInline(entry, (bullet ? bullet[1] : numbered?.[2]) ?? '');
       list.appendChild(entry);
       continue;
     }

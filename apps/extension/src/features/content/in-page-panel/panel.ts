@@ -29,6 +29,7 @@ import {
 } from './pageActions';
 import type { PageAction } from './pageActions';
 import { renderAnswerInto } from './answerMarkdown';
+import { IN_PAGE_PROMPT_PORT_PREFIX } from './promptPort';
 import { readYouTubeTranscript } from './youtubeTranscript';
 import { setImportantStyles } from './launcher';
 import { buildPanelStyles, PANEL_SLIDE_MS } from './panelStyles';
@@ -180,6 +181,16 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   };
 }
 
+let activePromptPort: chrome.runtime.Port | null = null;
+
+function openPromptPort(requestId: string): chrome.runtime.Port | null {
+  try {
+    return chrome.runtime.connect({ name: `${IN_PAGE_PROMPT_PORT_PREFIX}${requestId}` });
+  } catch {
+    return null;
+  }
+}
+
 async function streamPrompt(
   prompt: string,
   pageContext: string,
@@ -195,10 +206,14 @@ async function streamPrompt(
   cursor.className = 'agi-thinking';
   responseArea.appendChild(cursor);
 
+  const requestId = crypto.randomUUID();
+  const port = openPromptPort(requestId);
+  activePromptPort = port;
+
   try {
     const response = await new Promise<InPagePromptResponse>((resolve, reject) => {
       chrome.runtime.sendMessage(
-        { type: 'IN_PAGE_PROMPT', prompt, pageContext },
+        { type: 'IN_PAGE_PROMPT', prompt, pageContext, requestId },
         (result: unknown) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
@@ -231,6 +246,8 @@ async function streamPrompt(
       openSidePanel,
     );
   } finally {
+    if (activePromptPort === port) activePromptPort = null;
+    port?.disconnect();
     setBusy(false);
   }
 }
@@ -669,6 +686,7 @@ export function createPanel(): {
       rebuildChips,
     );
     if (hideTimer !== null) clearTimeout(hideTimer);
+    activePromptPort?.disconnect();
     host.remove();
   }
 

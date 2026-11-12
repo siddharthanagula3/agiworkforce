@@ -13,6 +13,8 @@
 
 import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import catalog from '../_locales/en/messages.json';
+import { streamFailureText } from '../src/features/side-panel/chat-state';
 import {
   canAccessModelForSubscriptionTier,
   classifyManagedQuotaErrorCode,
@@ -680,6 +682,37 @@ describe('streamFreeChat, a rate limit that states its wait', () => {
     const seconds = (chunks[0] as { retryAfterSeconds?: number }).retryAfterSeconds;
     expect(seconds).toBeGreaterThanOrEqual(115);
     expect(seconds).toBeLessThanOrEqual(121);
+  });
+
+  it('does not say try again twice once a wait is stated', async () => {
+    type Entry = { message: string; placeholders?: Record<string, { content: string }> };
+    Object.assign(globalThis.chrome as object, {
+      i18n: {
+        getUILanguage: () => 'en',
+        getMessage: (key: string, substitutions: string[] = []) => {
+          const entry = (catalog as Record<string, Entry>)[key];
+          if (!entry) return '';
+          return entry.message.replace(/\$([A-Z_]+)\$/g, (_match, name: string) => {
+            const index = Number(
+              (entry.placeholders?.[name.toLowerCase()]?.content ?? '$0').slice(1),
+            );
+            return substitutions[index - 1] ?? '';
+          });
+        },
+      },
+    });
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}', { 'Retry-After': '30' }));
+    const stated = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+    fetchMock.mockResolvedValueOnce(makeErrorResponse(429, '{}'));
+    const unstated = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    const withWait = streamFailureText((stated[0] as { message: string }).message, {
+      retryAfterSeconds: (stated[0] as { retryAfterSeconds?: number }).retryAfterSeconds,
+    });
+    const withoutWait = streamFailureText((unstated[0] as { message: string }).message, {});
+    expect(withWait.match(/Try again/g)).toHaveLength(1);
+    expect(withWait).toContain('30 seconds');
+    expect(withoutWait.match(/Try again/g)).toHaveLength(1);
   });
 
   it('falls back to the wait in the response body', async () => {

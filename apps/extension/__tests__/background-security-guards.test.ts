@@ -34,6 +34,7 @@ const harness = vi.hoisted(() => {
   const nativeListeners: Array<(message: unknown) => void> = [];
   const contextMenuListeners: Array<(info: unknown, tab: unknown) => void> = [];
   const tabRemovedListeners: Array<(tabId: number) => void> = [];
+  const connectListeners: Array<(port: unknown) => void> = [];
   const tabUpdatedListeners: Array<(tabId: number, changeInfo: Record<string, unknown>) => void> =
     [];
   const storageListeners: Array<(changes: Record<string, unknown>, area: string) => void> = [];
@@ -109,7 +110,13 @@ const harness = vi.hoisted(() => {
         }),
         removeListener: vi.fn(),
       },
-      onConnect: event(),
+      onConnect: {
+        addListener: vi.fn((listener: (typeof connectListeners)[number]) => {
+          connectListeners.push(listener);
+        }),
+        removeListener: vi.fn(),
+        hasListener: vi.fn(() => false),
+      },
       onInstalled: event(),
       onStartup: event(),
       onSuspend: event(),
@@ -231,6 +238,7 @@ const harness = vi.hoisted(() => {
     contextMenuListeners,
     tabRemovedListeners,
     tabUpdatedListeners,
+    connectListeners,
     storageListeners,
     captured,
     debuggerMock,
@@ -679,7 +687,7 @@ describe('background service worker security guards', () => {
       tab: { id: RUN_TAB_ID, windowId: 7, url: `${SITE_A}/start` },
     };
 
-    async function startOnPageRequest(): Promise<AbortSignal> {
+    async function startOnPageRequest(requestId?: string): Promise<AbortSignal> {
       await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
       let signal: AbortSignal | undefined;
       harness.executeChat.mockImplementationOnce((request: { signal: AbortSignal }) => {
@@ -687,11 +695,28 @@ describe('background service worker security guards', () => {
         return new Promise(() => undefined);
       });
       void dispatch(
-        { type: 'IN_PAGE_PROMPT', prompt: 'Summarize', pageContext: 'text' },
+        { type: 'IN_PAGE_PROMPT', prompt: 'Summarize', pageContext: 'text', requestId },
         pageSender,
       );
       await vi.waitFor(() => expect(signal).toBeDefined());
       return signal!;
+    }
+
+    function connectPromptPort(requestId: string, sender: Record<string, unknown> = pageSender) {
+      let onDisconnect: () => void = () => undefined;
+      const port = {
+        name: `agi-in-page-prompt:${requestId}`,
+        sender,
+        disconnect: vi.fn(),
+        onMessage: { addListener: vi.fn() },
+        onDisconnect: {
+          addListener: vi.fn((listener: () => void) => {
+            onDisconnect = listener;
+          }),
+        },
+      };
+      for (const listener of harness.connectListeners) listener(port);
+      return { port, disconnect: () => onDisconnect() };
     }
 
     it('is cancelled when the tab is closed', async () => {
@@ -701,11 +726,64 @@ describe('background service worker security guards', () => {
       expect(signal.aborted).toBe(true);
     });
 
-    it('is cancelled when the tab starts loading another page', async () => {
-      const signal = await startOnPageRequest();
+    it('keeps running when a single-page site changes its address and the tab reports loading', async () => {
+      const signal = await startOnPageRequest('request-spa');
+      const page = connectPromptPort('request-spa');
       for (const listener of harness.tabUpdatedListeners)
-        listener(RUN_TAB_ID, { status: 'loading', url: `${SITE_A}/next` });
+        listener(RUN_TAB_ID, { status: 'loading', url: `${SITE_A}/next-route` });
+      expect(signal.aborted).toBe(false);
+      page.disconnect();
+    });
+
+    it('is cancelled when the page that asked is gone, which closes its port', async () => {
+      const signal = await startOnPageRequest('request-gone');
+      const page = connectPromptPort('request-gone');
+      expect(signal.aborted).toBe(false);
+      page.disconnect();
       expect(signal.aborted).toBe(true);
+    });
+
+    it('is not cancelled by the port of a different request on the same tab', async () => {
+      const signal = await startOnPageRequest('request-live');
+      const finished = connectPromptPort('request-finished');
+      finished.disconnect();
+      expect(signal.aborted).toBe(false);
+      connectPromptPort('request-live').disconnect();
+    });
+
+    it('is refused at once when its page went away before the request arrived', async () => {
+      connectPromptPort('request-early').disconnect();
+      await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      const reply = await dispatch(
+        {
+          type: 'IN_PAGE_PROMPT',
+          prompt: 'Summarize',
+          pageContext: 'text',
+          requestId: 'request-early',
+        },
+        pageSender,
+      );
+      expect(reply).toMatchObject({ success: false, outcome: 'cancelled' });
+    });
+
+    it('ignores a prompt port opened by anything but this extension in a tab', () => {
+      const foreign = connectPromptPort('request-foreign', { id: 'someone-else' });
+      expect(foreign.port.disconnect).toHaveBeenCalled();
+    });
+
+    it('is cancelled the moment the site loses its approval', async () => {
+      const signal = await startOnPageRequest('request-revoked');
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_B]);
+      expect(signal.aborted).toBe(true);
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B]);
+    });
+
+    it('is left running when a different site loses its approval', async () => {
+      const signal = await startOnPageRequest('request-unrelated');
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_A]);
+      expect(signal.aborted).toBe(false);
+      putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B]);
+      for (const listener of harness.tabRemovedListeners) listener(RUN_TAB_ID);
     });
 
     it('is cancelled when the panel on that tab says it was closed', async () => {

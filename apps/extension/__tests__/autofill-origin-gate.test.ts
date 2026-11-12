@@ -82,6 +82,7 @@ vi.mock('../src/webmcp', () => ({
   callTool: vi.fn().mockResolvedValue({ success: true }),
   watchForToolChanges: vi.fn(),
   startToolChangeReporting: vi.fn(),
+  stopWatchingToolChanges: vi.fn(),
 }));
 
 vi.mock('../src/page-metadata', () => ({

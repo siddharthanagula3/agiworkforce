@@ -14752,6 +14752,7 @@ function buildUI(): void {
     const mode = readBrowserPermissionMode(change.newValue);
     renderAutonomyChip(mode);
     if (mode !== 'full') fullAccessNotice.classList.remove('visible');
+    else void discloseFullAccess();
   });
 
   composerBarEnd.appendChild(modelSelectorWrap);

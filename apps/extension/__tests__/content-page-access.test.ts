@@ -32,6 +32,8 @@ const harness = vi.hoisted(() => {
     pageAccess,
     chromeMock,
     setupInPagePanel: vi.fn().mockResolvedValue(undefined),
+    discoverAllTools: vi.fn(() => ({ supported: false, tools: [], url: '', timestamp: 0 })),
+    stopWatchingToolChanges: vi.fn(),
   };
 });
 
@@ -44,9 +46,10 @@ vi.mock('../src/jobAutofill', () => ({ runPlatformJobAutofill: vi.fn() }));
 
 vi.mock('../src/webmcp', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/webmcp')>()),
-  discoverAllTools: vi.fn(() => ({ supported: false, tools: [], url: '', timestamp: 0 })),
+  discoverAllTools: harness.discoverAllTools,
   callTool: vi.fn(),
   startToolChangeReporting: vi.fn(),
+  stopWatchingToolChanges: harness.stopWatchingToolChanges,
 }));
 
 vi.mock('../src/page-metadata', () => ({ extractPageMetadata: vi.fn(() => ({})) }));
@@ -87,6 +90,8 @@ beforeEach(() => {
   harness.pageAccess.inPagePanel = true;
   harness.chromeMock.runtime.sendMessage.mockReset();
   harness.setupInPagePanel.mockClear();
+  harness.discoverAllTools.mockClear();
+  harness.stopWatchingToolChanges.mockClear();
   resetWorkerReplies();
   Reflect.deleteProperty(document, 'prerendering');
 });
@@ -205,5 +210,57 @@ describe('PAGE_ACCESS_CHANGED', () => {
       expect.anything(),
     );
     expect(harness.setupInPagePanel).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('a page whose approval is withdrawn', () => {
+  it('stops watching for site tools and starts again when approval returns', async () => {
+    const content = await loadContent();
+    await vi.waitFor(() => expect(sentTypes()).toContain('TAB_READY'));
+
+    harness.pageAccess.approved = false;
+    harness.pageAccess.inPagePanel = false;
+    await deliver(content, { type: 'PAGE_ACCESS_CHANGED' });
+    expect(harness.stopWatchingToolChanges).toHaveBeenCalledTimes(1);
+
+    harness.chromeMock.runtime.sendMessage.mockClear();
+    harness.pageAccess.approved = true;
+    harness.pageAccess.inPagePanel = true;
+    await deliver(content, { type: 'PAGE_ACCESS_CHANGED' });
+    expect(sentTypes().filter((type) => type === 'TAB_READY')).toHaveLength(1);
+  });
+
+  it('cancels the pending start of site-tool discovery if approval goes first', async () => {
+    const timers: Array<{ handle: unknown; delay: unknown }> = [];
+    const realSetTimeout = globalThis.setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      callback: () => void,
+      delay?: number,
+    ) => {
+      const handle = realSetTimeout(callback, delay);
+      timers.push({ handle, delay });
+      return handle;
+    }) as typeof setTimeout);
+    const clear = vi.spyOn(globalThis, 'clearTimeout');
+
+    const content = await loadContent();
+    await vi.waitFor(() => expect(sentTypes()).toContain('TAB_READY'));
+    const discoveryTimer = timers.find((timer) => timer.delay === 1_000);
+    expect(discoveryTimer).toBeDefined();
+
+    harness.pageAccess.approved = false;
+    harness.pageAccess.inPagePanel = false;
+    await deliver(content, { type: 'PAGE_ACCESS_CHANGED' });
+
+    expect(clear).toHaveBeenCalledWith(discoveryTimer!.handle);
+  });
+
+  it('does nothing extra for a page that was never approved', async () => {
+    harness.pageAccess.approved = false;
+    harness.pageAccess.inPagePanel = false;
+    const content = await loadContent();
+    await vi.waitFor(() => expect(harness.setupInPagePanel).toHaveBeenCalled());
+    await deliver(content, { type: 'PAGE_ACCESS_CHANGED' });
+    expect(harness.stopWatchingToolChanges).not.toHaveBeenCalled();
   });
 });

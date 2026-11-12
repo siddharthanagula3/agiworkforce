@@ -660,6 +660,7 @@ export interface InPagePromptMessage extends BaseMessage {
   type: 'IN_PAGE_PROMPT';
   prompt: string;
   pageContext?: string;
+  requestId?: string;
 }
 
 export type InPagePromptResponse =

@@ -1276,7 +1276,10 @@ function accountRefusal(
     const retryAfterSeconds = retryAfterFromHeader(headers) ?? retryAfterFromBody(body);
     return {
       type: 'error',
-      message: 'AGI Cloud is receiving too many requests. Try again shortly.',
+      message:
+        retryAfterSeconds === undefined
+          ? 'AGI Cloud is receiving too many requests. Try again shortly.'
+          : 'AGI Cloud is receiving too many requests.',
       code: 'rate_limited',
       ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     };

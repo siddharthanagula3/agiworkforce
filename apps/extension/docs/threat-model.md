@@ -242,7 +242,7 @@ then fences page context as untrusted data through the same Managed Cloud chat
 handler. Redaction is mitigation rather than a promise to identify every
 sensitive value. Sign-in, plan, usage, account, rate-limit, cancellation, and
 provider failures return typed UI outcomes; the panel must not render them as a
-successful assistant answer. There is no Local, BYOK, or Desktop-chat fallback.
+successful assistant answer. There is no Local, BYOK, or Desktop-chat fallback. An on-page request is cancelled when its page goes away (the port it opened for the request closes), when its tab closes, when the user closes or removes the panel, and the moment its site loses approval.
 
 Pixel screenshots and pasted images are not text-redacted. They can contain
 credentials, health information, private messages, or other sensitive pixels.

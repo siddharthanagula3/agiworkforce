@@ -40,7 +40,12 @@ import {
 } from './features/content/autofill/filler';
 import { makeEscalationDecision } from './features/computer-use/escalationEngine';
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from './features/content/autofill/ashby';
-import { discoverAllTools, callTool, startToolChangeReporting } from './webmcp';
+import {
+  discoverAllTools,
+  callTool,
+  startToolChangeReporting,
+  stopWatchingToolChanges,
+} from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import { setupInPagePanel } from './inPagePanel/setup';
 import { isDomSmallEnoughToRead } from './dom-helpers';
@@ -156,12 +161,23 @@ function startApprovedFeatures(): void {
   }
 }
 
+function stopApprovedFeatures(): void {
+  if (!approvedStartupDone) return;
+  approvedStartupDone = false;
+  if (webmcpStartTimer !== null) {
+    clearTimeout(webmcpStartTimer);
+    webmcpStartTimer = null;
+  }
+  stopWatchingToolChanges();
+}
+
 async function applyPageAccess(request: Promise<PageAccess>): Promise<void> {
   const generation = ++pageAccessGeneration;
   const access = await request;
   if (generation !== pageAccessGeneration) return;
   await setupInPagePanel(access, logger);
   if (access.approved) startApprovedFeatures();
+  else stopApprovedFeatures();
 }
 
 function refreshPageAccess(): Promise<void> {
@@ -1407,8 +1423,11 @@ function sendWebMCPTools(tools: WebMCPToolInfo[], url: string): void {
     });
 }
 
+let webmcpStartTimer: ReturnType<typeof setTimeout> | null = null;
+
 function initWebMCP(): void {
-  setTimeout(() => {
+  webmcpStartTimer = setTimeout(() => {
+    webmcpStartTimer = null;
     let discoveredTools: WebMCPToolInfo[] = [];
     try {
       const discovery = discoverAllTools();
