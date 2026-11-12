@@ -150,3 +150,34 @@ describe('model catalogue - the capability filters read as toggles', () => {
     expect(within(group).queryAllByRole('option')).toHaveLength(0);
   });
 });
+
+describe('model catalogue - rail counts', () => {
+  it('counts every row the developer lists, locked or not', () => {
+    render(
+      <ModelCatalogue
+        entries={[
+          entry(),
+          entry({ id: 'fixture-locked', displayName: 'Locked Fixture', admitted: false }),
+        ]}
+        developers={[
+          { key: 'openai', label: 'OpenAI', admittedCount: 1, totalCount: 2 },
+          { key: 'xai', label: 'xAI', admittedCount: 0, totalCount: 0 },
+        ]}
+        favouriteModelIds={[]}
+        recentModelIds={[]}
+        selectedModelId="fixture-other-model"
+        query=""
+        onQueryChange={vi.fn()}
+        onSelect={vi.fn()}
+        onToggleFavourite={vi.fn()}
+        onBack={vi.fn()}
+        isEnvironmentLocked={() => ({ locked: false })}
+      />,
+    );
+
+    const rail = screen.getAllByRole('tab').filter((b) => /OpenAI/.test(b.textContent ?? ''));
+    expect(rail[0]?.textContent).toContain('2');
+    const xai = screen.getAllByRole('tab').filter((b) => /^xAI/.test(b.textContent ?? ''));
+    expect(xai[0]?.textContent).toContain('0');
+  });
+});

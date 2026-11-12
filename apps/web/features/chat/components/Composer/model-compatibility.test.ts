@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  getDefaultAutoRoutingProfile,
   getProviderOfferings,
   getSelectableModels,
   providerOfferingDisplayName,
@@ -209,6 +210,11 @@ describe('evaluateModelCompatibility', () => {
     const result = evaluateModelCompatibility('not-a-catalogued-id', request());
     expect(result.findings.map((finding) => finding.code)).toEqual(['unknown_model']);
     expect(result.budgetTokens).toBeNull();
+  });
+
+  it('raises no unknown-model warning for the Auto id, which routes rather than names a model', () => {
+    const result = evaluateModelCompatibility(getDefaultAutoRoutingProfile().id, request());
+    expect(result.findings).toEqual([]);
   });
 
   it('claims nothing when no model is selected yet', () => {

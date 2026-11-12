@@ -1,6 +1,7 @@
 import { estimateTokens } from '@agiworkforce/routing';
 import {
   getModelMetadataById,
+  isAutoModeModelId,
   getProviderOffering,
   providerOfferingDisplayName,
 } from '@agiworkforce/types';
@@ -139,6 +140,15 @@ export function evaluateModelCompatibility(
             ]
           : []),
       ],
+      estimatedTokens: 0,
+      budgetTokens: null,
+    };
+  }
+  if (isAutoModeModelId(modelId)) {
+    return {
+      modelId: modelId ?? '',
+      modelName: null,
+      findings: [],
       estimatedTokens: 0,
       budgetTokens: null,
     };
