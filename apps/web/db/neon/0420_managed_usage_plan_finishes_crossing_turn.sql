@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0392: a turn runs on the plan while its window has allowance left
+-- Migration 0420: a turn runs on the plan while its window has allowance left
 --
 -- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
@@ -14,23 +14,29 @@
 --          later turns spent purchased credits untagged even with usage
 --          credits turned off.
 --
--- Shape  : both 0347 functions are replaced. A rolling window now refuses
---          the plan only once its usage has reached the cap; the request that
---          crosses it runs on the plan. The billing period keeps a hard edge:
---          the plan's remaining allowance for the open credit period is the
---          pooled balance less the bonus and purchased lots still held (plus
---          overage reserved in flight, which the pool already deducted but no
---          lot has paid yet), and a request whose estimate exceeds it is
---          admitted on headroom as overage or refused. That edge stays hard
---          because a plan overshoot there would be paid from purchased
---          credits. Headroom is still read under the per-user lock from
---          prepaid_credit_balances_microusd, so the 0378 spend limit and the
---          usage-credits switch keep applying, and is_overage keeps feeding
---          the 0298 draw trigger. Signatures are unchanged.
+-- Shape  : both functions are replaced from their 0396 bodies, which keep
+--          0347's headroom-under-lock behaviour and count a deduction toward
+--          a rolling ceiling only when it is newer than the account's latest
+--          reset row. That reset floor is unchanged. A rolling window now
+--          refuses the plan only once its usage has reached the cap; the
+--          request that crosses it runs on the plan. The billing period keeps
+--          a hard edge: the plan's remaining allowance for the open credit
+--          period is the pooled balance less the bonus and purchased lots
+--          still held (plus overage reserved in flight, which the pool
+--          already deducted but no lot has paid yet), and a request whose
+--          estimate exceeds it is admitted on headroom as overage or refused.
+--          That edge stays hard because a plan overshoot there would be paid
+--          from purchased credits. Headroom is still read under the per-user
+--          lock from prepaid_credit_balances_microusd, so the 0378 spend limit
+--          and the usage-credits switch keep applying, and is_overage keeps
+--          feeding the 0298 draw trigger. Signatures are unchanged.
 --
--- Depends: 0295 (bonus_credit_grants), 0298 (overage_in_flight_microusd,
---          top_up_allocated_microusd), 0347 (the functions replaced),
---          0378 (spend limit inside the headroom)
+-- Empty  : no rows are rewritten. Requests already admitted keep the plan or
+--          credit classification they were admitted with.
+--
+-- Depends: 0295 (bonus_credit_grants, overage_in_flight_microusd),
+--          0298 (top_up_allocated_microusd), 0378 (spend limit inside the
+--          headroom), 0396 (the functions replaced, with the reset floor)
 -- =============================================================================
 
 begin;
@@ -146,7 +152,16 @@ begin
   from public.credit_transactions transaction_row
   where transaction_row.user_id = p_user_id
     and transaction_row.transaction_type = 'deduction'
-    and transaction_row.created_at >= now() - interval '7 days';
+    and transaction_row.created_at >= now() - interval '7 days'
+    and transaction_row.created_at > coalesce(
+      (
+        select max(reset_row.created_at)
+        from public.credit_transactions reset_row
+        where reset_row.user_id = p_user_id
+          and reset_row.transaction_type = 'reset'
+      ),
+      '-infinity'::timestamptz
+    );
 
   if p_session_cap_microusd is not null
     and v_session_used >= p_session_cap_microusd then
@@ -268,7 +283,7 @@ grant execute on function public.reserve_managed_usage_request_with_limits_micro
 comment on function public.reserve_managed_usage_request_with_limits_microusd(
   text, text, text, text, text, bigint, text, integer, bigint, bigint, bigint, boolean, bigint
 ) is
-  'Admits a request on the plan while each rolling window it counts against has allowance left, letting that one request finish past the cap, and while the billing period''s plan allowance covers its estimate. Otherwise it is admitted on bonus or purchased headroom (read under the per-user lock; purchased only while usage credits are on) and marked is_overage, or refused. p_top_up_headroom_microusd is ignored.';
+  'Admits a request on the plan while each rolling window it counts against has allowance left, counting only deductions newer than the account''s latest usage reset and letting that one request finish past the cap, and while the billing period''s plan allowance covers its estimate. Otherwise it is admitted on bonus or purchased headroom (read under the per-user lock; purchased only while usage credits are on) and marked is_overage, or refused. p_top_up_headroom_microusd is ignored.';
 
 create or replace function public.extend_managed_usage_request_provider_step_microusd(
   p_user_id text,
@@ -481,7 +496,16 @@ begin
   from public.credit_transactions transaction_row
   where transaction_row.user_id = p_user_id
     and transaction_row.transaction_type = 'deduction'
-    and transaction_row.created_at >= now() - interval '7 days';
+    and transaction_row.created_at >= now() - interval '7 days'
+    and transaction_row.created_at > coalesce(
+      (
+        select max(reset_row.created_at)
+        from public.credit_transactions reset_row
+        where reset_row.user_id = p_user_id
+          and reset_row.transaction_type = 'reset'
+      ),
+      '-infinity'::timestamptz
+    );
 
   if p_session_cap_microusd is not null
     and v_session_used >= p_session_cap_microusd then
@@ -632,6 +656,6 @@ grant execute on function public.extend_managed_usage_request_provider_step_micr
 comment on function public.extend_managed_usage_request_provider_step_microusd(
   text, text, text, text, text, bigint, bigint, bigint, bigint, boolean, bigint
 ) is
-  'Idempotently reserves each provider operation in microUSD under the original tenant, request, lease, rolling caps, and billing-period balance, renewing the lease as 0178 requires. A step of a plan request runs on the plan while its rolling windows have allowance left and the period''s plan allowance covers the step; otherwise it is admitted from headroom read under the per-user lock and from then on the request is overage usage. p_top_up_headroom_microusd is ignored.';
+  'Idempotently reserves each provider operation in microUSD under the original tenant, request, lease, rolling caps, and billing-period balance, renewing the lease as 0178 requires. A step of a plan request runs on the plan while its rolling windows, counted from the account''s latest usage reset, have allowance left and the period''s plan allowance covers the step; otherwise it is admitted from headroom read under the per-user lock and from then on the request is overage usage. p_top_up_headroom_microusd is ignored.';
 
 commit;

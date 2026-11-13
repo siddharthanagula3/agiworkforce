@@ -1,10 +1,10 @@
--- Reversal of 0392 : the 0347 admission rule returns.
+-- Reversal of 0420: the 0396 admission rule returns.
 --
 -- WHAT THIS COSTS: a request is again refused the plan whenever its whole
 -- estimate does not fit under a rolling cap, and once the monthly plan
 -- allowance is spent, requests again draw purchased credits from the pooled
--- balance even while usage credits are off. The bodies below are 0347's,
--- verbatim.
+-- balance even while usage credits are off. The operator reset floor stays:
+-- the bodies below are 0396's, verbatim.
 
 begin;
 
@@ -100,7 +100,16 @@ begin
   from public.credit_transactions transaction_row
   where transaction_row.user_id = p_user_id
     and transaction_row.transaction_type = 'deduction'
-    and transaction_row.created_at >= now() - interval '7 days';
+    and transaction_row.created_at >= now() - interval '7 days'
+    and transaction_row.created_at > coalesce(
+      (
+        select max(reset_row.created_at)
+        from public.credit_transactions reset_row
+        where reset_row.user_id = p_user_id
+          and reset_row.transaction_type = 'reset'
+      ),
+      '-infinity'::timestamptz
+    );
 
   if p_session_cap_microusd is not null
     and v_session_used + p_estimated_cost_microusd > p_session_cap_microusd then
@@ -399,7 +408,16 @@ begin
   from public.credit_transactions transaction_row
   where transaction_row.user_id = p_user_id
     and transaction_row.transaction_type = 'deduction'
-    and transaction_row.created_at >= now() - interval '7 days';
+    and transaction_row.created_at >= now() - interval '7 days'
+    and transaction_row.created_at > coalesce(
+      (
+        select max(reset_row.created_at)
+        from public.credit_transactions reset_row
+        where reset_row.user_id = p_user_id
+          and reset_row.transaction_type = 'reset'
+      ),
+      '-infinity'::timestamptz
+    );
 
   if p_session_cap_microusd is not null
     and v_session_used + p_estimated_cost_microusd > p_session_cap_microusd then
@@ -550,6 +568,6 @@ comment on function public.extend_managed_usage_request_provider_step_microusd(
   'Idempotently reserves each provider operation in microUSD under the original tenant, request, lease, rolling caps, and billing-period balance, renewing the lease as 0178 requires. A step the plan windows cannot hold is admitted from purchased headroom, read under the per-user lock, and from then on the request is overage usage; p_top_up_headroom_microusd is ignored.';
 
 delete from public.schema_migrations
-where filename = '0392_managed_usage_plan_finishes_crossing_turn.sql';
+ where filename = '0420_managed_usage_plan_finishes_crossing_turn.sql';
 
 commit;

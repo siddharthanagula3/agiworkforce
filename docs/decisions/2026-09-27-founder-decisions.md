@@ -480,9 +480,9 @@ S85.04, S110.12, S66.10, S66.14.
   whose estimate exceeds the plan's remaining monthly allowance goes to credits
   or is refused, because an overshoot there would be paid from purchased
   credits. Purchased credits are never spent while usage credits are off.
-  Migration `0392_managed_usage_plan_finishes_crossing_turn.sql` replaces the
-  0347 admission rule; a turn is still plan or credit usage for its whole life,
-  as 0281 set.
+  Migration `0420_managed_usage_plan_finishes_crossing_turn.sql` replaces the
+  0347 admission rule as 0396 left it, keeping its usage-reset floor; a turn is
+  still plan or credit usage for its whole life, as 0281 set.
 - Why: estimates run well above actual cost, so under 0347 a sixth of a 5-hour
   window went unused while turns were billed to credits. Claude lets the
   message that crosses a limit finish. Decided 2026-10-25 under the owner's
