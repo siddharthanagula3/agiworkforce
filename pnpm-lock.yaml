@@ -1716,6 +1716,9 @@ importers:
 
   packages/ai/providers/anthropic:
     dependencies:
+      '@agiworkforce/agent-core':
+        specifier: workspace:*
+        version: link:../../agent-core
       '@agiworkforce/provider-protocol':
         specifier: workspace:*
         version: link:../../provider-protocol
