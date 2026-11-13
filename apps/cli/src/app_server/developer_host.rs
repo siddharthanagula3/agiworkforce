@@ -13004,7 +13004,16 @@ mod tests {
         let host =
             boundary_host(&workspace, store.path()).with_worktrees_root(trees.path().to_path_buf());
         host.prepare().await;
-        std::fs::rename(&workspace, parent.path().join("moved")).unwrap();
+        let first = host.workspace_identity().await.unwrap();
+        if let Err(error) = std::fs::rename(&workspace, parent.path().join("moved")) {
+            assert!(
+                held_directory_pins_its_name(&error),
+                "move original: {error}"
+            );
+            assert_eq!(host.workspace_identity().await.unwrap(), first);
+            assert!(std::fs::read_dir(trees.path()).unwrap().next().is_none());
+            return;
+        }
         std::fs::create_dir(&workspace).unwrap();
         git_repo(&workspace);
         assert!(host.workspace_identity().await.is_err());

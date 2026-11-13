@@ -360,6 +360,27 @@ mod tests {
         "a".repeat(64)
     }
 
+    #[cfg(not(unix))]
+    #[test]
+    fn recovery_storage_is_refused_where_private_permissions_are_unavailable() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = target();
+        let owner = account();
+        let error = transact(
+            directory.path(),
+            |state| state.add(&owner, &target, file("refused.txt")),
+            || true,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("unavailable on this platform"));
+        assert!(!directory
+            .path()
+            .join(agiworkforce_sandbox_policy::CLOUD_ATTACHMENT_RECOVERY_DIRECTORY)
+            .exists());
+        assert!(!super::super::supported());
+    }
+
+    #[cfg(unix)]
     #[test]
     fn selections_survive_reopening_without_file_bytes_paths_or_upload_tokens() {
         let directory = tempfile::tempdir().unwrap();
@@ -437,6 +458,7 @@ mod tests {
         .is_empty());
     }
 
+    #[cfg(unix)]
     #[test]
     fn stale_discard_and_restore_cannot_overwrite_another_windows_selection() {
         let directory = tempfile::tempdir().unwrap();
@@ -490,6 +512,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn interrupted_sends_require_review_and_consumption_preserves_later_uploads() {
         let directory = tempfile::tempdir().unwrap();
@@ -555,6 +578,7 @@ mod tests {
         assert!(current.pending_send.is_none());
     }
 
+    #[cfg(unix)]
     #[test]
     fn known_refusal_and_explicit_restore_retain_files_without_replaying_a_send() {
         let directory = tempfile::tempdir().unwrap();
@@ -631,6 +655,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn corrupt_unknown_and_busy_storage_never_get_replaced_with_empty_state() {
         let base = tempfile::tempdir().unwrap();

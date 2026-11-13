@@ -382,6 +382,7 @@ impl DownloadDestination {
             Ok(())
         })();
         let _ = confined::remove_file(&stage, leaf);
+        drop(stage);
         let _ = confined::remove_dir(&self.parent, &name);
         result
     }
@@ -548,7 +549,17 @@ mod tests {
         let folder = root.path().join("chosen");
         std::fs::create_dir(&folder).unwrap();
         let selected = destination(&folder, "saved.txt");
-        std::fs::rename(&folder, root.path().join("moved")).unwrap();
+        if let Err(error) = std::fs::rename(&folder, root.path().join("moved")) {
+            const ERROR_SHARING_VIOLATION: i32 = 32;
+            assert!(
+                cfg!(windows) && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION),
+                "move chosen folder: {error}"
+            );
+            assert!(folder.is_dir());
+            assert!(!root.path().join("moved").exists());
+            drop(selected);
+            return;
+        }
         std::fs::create_dir(&folder).unwrap();
         let failed = selected.save(b"not published").err().unwrap();
         assert!(!failed.uncertain);
