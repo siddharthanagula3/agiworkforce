@@ -39,8 +39,6 @@ const MERMAID_CONFIG: MermaidConfig = {
   suppressErrorRendering: true,
 };
 
-const EXPAND_LABEL = 'Open diagram full screen';
-
 const INLINE_TEXT_ANCHOR = /text-anchor:\s*([a-z]+)/i;
 
 function hasCenteredNodeLabels(doc: Document): boolean {
@@ -124,16 +122,6 @@ export function clearMermaidSvgCache(): void {
 }
 
 const SVG_VIEWBOX_HEIGHT = /viewBox="[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+([\d.]+)"/;
-const SVG_VIEWBOX_WIDTH = /viewBox="[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+[-\d.]+"/;
-
-export const MERMAID_MIN_SCALE = 0.75;
-
-function diagramMinWidth(svg: string): string | undefined {
-  const match = SVG_VIEWBOX_WIDTH.exec(svg);
-  const width = match ? Number(match[1]) : NaN;
-  if (!Number.isFinite(width) || width <= 0) return undefined;
-  return `${Math.ceil(width * MERMAID_MIN_SCALE)}px`;
-}
 
 function cachedDiagramHeight(source: string): number | null {
   const svg = svgCache.get(source);
@@ -366,38 +354,6 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
               </Dialog>
             </figcaption>
             {showSource ? sourceBlock : null}
-            <Dialog open={expanded} onOpenChange={setExpanded}>
-              <DialogContent
-                hideCloseButton
-                disableAnimation
-                aria-describedby={undefined}
-                className="inset-4 flex w-auto max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden bg-background p-0 backdrop-blur-none"
-              >
-                <div className="flex items-center justify-between gap-2 border-b border-border py-2 ps-4 pe-2">
-                  <DialogTitle className="text-sm font-semibold">Diagram</DialogTitle>
-                  <DialogClose asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Close full screen diagram"
-                      title="Close full screen diagram"
-                      className="h-8 w-8 p-0 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11"
-                    >
-                      <X className="h-4 w-4" aria-hidden="true" />
-                    </Button>
-                  </DialogClose>
-                </div>
-                <div
-                  className="mermaid-diagram mermaid-diagram-expanded min-h-0 flex-1 overflow-auto overscroll-contain p-4"
-                  role="region"
-                  aria-label="Diagram"
-                  tabIndex={0}
-                  // llm-guardrail-allow: mermaid output, passed through the package sanitizeSvg
-                  dangerouslySetInnerHTML={{ __html: state.svg }}
-                />
-              </DialogContent>
-            </Dialog>
           </>
         ) : null}
       </figure>

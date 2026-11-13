@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import userEvent from '@testing-library/user-event';
 
@@ -203,20 +203,5 @@ describe('MermaidDiagram', () => {
     await new Promise((r) => setTimeout(r, 20));
 
     expect(renderMock).toHaveBeenCalledOnce();
-  });
-
-  it('keeps a wide diagram at a readable minimum scale and opens it full screen on click', async () => {
-    renderMock.mockResolvedValue({
-      svg: '<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 800 1200"><g><text>Start</text></g></svg>',
-    });
-    const { container } = render(<MermaidDiagram source={FLOWCHART} />);
-
-    const diagram = await screen.findByRole('button', { name: 'Open diagram full screen' });
-    expect(diagram.style.getPropertyValue('--mermaid-min-width')).toBe('600px');
-    expect(container.querySelector('.mermaid-diagram svg')?.getAttribute('width')).toBe('800');
-
-    fireEvent.click(diagram);
-    const dialog = await screen.findByRole('dialog', { name: 'Diagram' });
-    expect(dialog.querySelector('.mermaid-diagram-expanded svg')).toBeTruthy();
   });
 });

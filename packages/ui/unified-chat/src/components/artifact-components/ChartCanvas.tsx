@@ -16,7 +16,12 @@ import {
   YAxis,
   type PieLabelRenderProps,
 } from 'recharts';
-import { chartHoverText, formatChartShare, type ChartChrome, type ChartSpec } from './chart-spec';
+import {
+  chartHoverText,
+  formatChartShare,
+  type ChartChrome,
+  type ChartRenderSpec,
+} from './chart-spec';
 
 const AXIS_FONT_SIZE_PX = 11;
 const LABELED_X_AXIS_HEIGHT_PX = 48;
@@ -202,6 +207,8 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
           name={spec.xLabel ?? xKey}
           tick={axisTick}
           stroke={chrome.grid}
+          label={xLabel}
+          height={xLabel ? LABELED_X_AXIS_HEIGHT_PX : undefined}
         />
         <YAxis
           type="number"
@@ -209,6 +216,7 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
           name={spec.yLabel}
           tick={axisTick}
           stroke={chrome.grid}
+          label={yLabel}
         />
         <Tooltip {...tooltipStyles} cursor={{ stroke: chrome.grid }} />
         {showLegend && <Legend wrapperStyle={legendStyle} />}

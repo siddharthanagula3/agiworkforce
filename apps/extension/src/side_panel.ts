@@ -5763,6 +5763,7 @@ function respondToInteractiveCard(
     document.getElementById('sp-input')?.focus();
     return;
   }
+  if (payload.kind !== 'answers') return;
   const answers = clarifyAnswersFromResponse(card.body, payload);
   const text = clarifyAnswerMessage(card.body, answers);
   if (!text || !canAdmitComposerMessage(text)) return;

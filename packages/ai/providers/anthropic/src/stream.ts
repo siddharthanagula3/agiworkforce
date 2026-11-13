@@ -70,52 +70,32 @@ export async function* translateAnthropicStream(
   let started = false;
   let streamedOutput = '';
 
-  for await (const event of stream) {
-    started = true;
-    switch (event.type) {
-      case 'message_start': {
-        if (event.message.container?.id) containerIds.add(event.message.container.id);
-        const usage = event.message.usage;
-        if (usage) {
-          inputTokens = usage.input_tokens;
-          cacheReadTokens = usage.cache_read_input_tokens ?? undefined;
-          cacheWriteTokens = usage.cache_creation_input_tokens ?? undefined;
-          cacheWrite1hTokens = usage.cache_creation?.ephemeral_1h_input_tokens ?? undefined;
-          speed = servedSpeed(usage) ?? speed;
-        }
-        break;
-      }
-      case 'content_block_start': {
-        const idx = event.index;
-        const block = event.content_block;
-        if (block.type === 'tool_use') {
-          blocksByIndex.set(idx, { type: 'tool_use', toolUseId: block.id });
-          yield {
-            type: 'tool-use-start',
-            toolUseId: block.id,
-            name: block.name,
-            vendorIndex: idx,
-          };
-        } else if (block.type === 'text') {
-          blocksByIndex.set(idx, { type: 'text' });
-        } else if (block.type === 'thinking') {
-          blocksByIndex.set(idx, { type: 'thinking' });
-        } else if (block.type === 'redacted_thinking') {
-          yield {
-            type: 'vendor-raw',
-            payload: event,
-            replay: { type: 'redacted_thinking', data: block.data },
-          };
-        } else if (block.type === 'server_tool_use') {
-          blocksByIndex.set(idx, { type: 'server_tool_use', toolUseId: block.id });
-          yield { type: 'server-tool-use', toolUseId: block.id, name: block.name };
-        } else if (
-          block.type === 'web_search_tool_result' ||
-          block.type === 'code_execution_tool_result' ||
-          block.type === 'web_fetch_tool_result'
-        ) {
-          if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
-            answeredWebSearches += 1;
+  const measuredSoFar = (): StreamChunk => {
+    const outputTokens = estimateTextTokens(streamedOutput);
+    return {
+      type: 'usage',
+      inputTokens: inputTokens as number,
+      ...(outputTokens > 0 ? { outputTokens } : {}),
+      ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
+      ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
+      ...(cacheWrite1hTokens !== undefined ? { cacheWrite1hTokens } : {}),
+      ...(speed ? { speed } : {}),
+    };
+  };
+
+  try {
+    for await (const event of stream) {
+      started = true;
+      switch (event.type) {
+        case 'message_start': {
+          if (event.message.container?.id) containerIds.add(event.message.container.id);
+          const usage = event.message.usage;
+          if (usage) {
+            inputTokens = usage.input_tokens;
+            cacheReadTokens = usage.cache_read_input_tokens ?? undefined;
+            cacheWriteTokens = usage.cache_creation_input_tokens ?? undefined;
+            cacheWrite1hTokens = usage.cache_creation?.ephemeral_1h_input_tokens ?? undefined;
+            speed = servedSpeed(usage) ?? speed;
           }
           break;
         }
@@ -134,6 +114,12 @@ export async function* translateAnthropicStream(
             blocksByIndex.set(idx, { type: 'text' });
           } else if (block.type === 'thinking') {
             blocksByIndex.set(idx, { type: 'thinking' });
+          } else if (block.type === 'redacted_thinking') {
+            yield {
+              type: 'vendor-raw',
+              payload: event,
+              replay: { type: 'redacted_thinking', data: block.data },
+            };
           } else if (block.type === 'server_tool_use') {
             blocksByIndex.set(idx, { type: 'server_tool_use', toolUseId: block.id });
             yield { type: 'server-tool-use', toolUseId: block.id, name: block.name };
