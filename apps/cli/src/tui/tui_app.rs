@@ -6793,7 +6793,7 @@ fn format_advisor_tool_output(raw: &str) -> String {
 
 fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
     match cmd {
-        "/privacy-mode" | "/trust-boundary"
+        "/privacy-mode" | "/trust-boundary" => {
             if crate::agent::PrivacyMode::from_arg(arg)
                 .is_some_and(|mode| mode == app.session.privacy_mode)
             {
