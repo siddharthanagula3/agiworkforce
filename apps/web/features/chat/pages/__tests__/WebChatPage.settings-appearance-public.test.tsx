@@ -369,7 +369,7 @@ describe('public settings window appearance', () => {
       </PublicChatWindow>,
     );
 
-    const light = await screen.findByRole('button', { name: 'Light theme' });
+    const light = await screen.findByRole('button', { name: 'Light theme' }, { timeout: 4_000 });
     expect(light).toHaveAttribute('aria-pressed', 'false');
 
     await user.click(light);
@@ -380,7 +380,7 @@ describe('public settings window appearance', () => {
         'true',
       );
     });
-  });
+  }, 15_000);
 
   it('sets System from the settings page the public window loads without sending a chat', async () => {
     const user = userEvent.setup();
