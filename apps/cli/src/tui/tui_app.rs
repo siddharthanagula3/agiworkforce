@@ -6793,23 +6793,22 @@ fn format_advisor_tool_output(raw: &str) -> String {
 
 fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
     match cmd {
-        "/privacy-mode" | "/trust-boundary" => {
+        "/privacy-mode" | "/trust-boundary"
             if crate::agent::PrivacyMode::from_arg(arg)
-                .is_some_and(|mode| mode == app.session.privacy_mode)
+                .is_some_and(|mode| mode == app.session.privacy_mode) =>
+        {
+            if let Err(error) = app
+                .config
+                .persist_privacy_mode_project(app.session.privacy_mode.label())
             {
-                if let Err(error) = app
-                    .config
-                    .persist_privacy_mode_project(app.session.privacy_mode.label())
-                {
-                    app.chat_messages.push(ChatMessage {
-                        role: ChatRole::System,
-                        text: format!(
-                            "Privacy mode set to {} for this session; it could not be saved for this project: {}",
-                            app.session.privacy_mode.label(),
-                            sanitize_terminal_text(&format!("{error:#}"))
-                        ),
-                    });
-                }
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::System,
+                    text: format!(
+                        "Privacy mode set to {} for this session; it could not be saved for this project: {}",
+                        app.session.privacy_mode.label(),
+                        sanitize_terminal_text(&format!("{error:#}"))
+                    ),
+                });
             }
         }
         _ => {}
