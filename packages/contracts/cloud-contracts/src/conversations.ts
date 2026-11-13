@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import conversationContract from './conversation-contract.json';
+import conversationContract from './conversation-contract.json' with { type: 'json' };
 import {
   getDefaultAutoRoutingProfile,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,

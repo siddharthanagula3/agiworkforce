@@ -1,7 +1,7 @@
 // The tenancy model every surface reads: Account is one person, Organization is
 // the billed tenant, Workspace is the container content lives in.
 
-import workspaceContract from './workspace-contract.json';
+import workspaceContract from './workspace-contract.json' with { type: 'json' };
 
 export const WORKSPACE_KINDS = ['personal', 'organization'] as const;
 

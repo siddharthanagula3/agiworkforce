@@ -1,4 +1,4 @@
-import projectContract from './project-contract.json';
+import projectContract from './project-contract.json' with { type: 'json' };
 import { z } from 'zod';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
 

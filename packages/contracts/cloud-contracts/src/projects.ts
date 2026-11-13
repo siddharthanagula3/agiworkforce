@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
-import projectContract from './project-contract.json';
+import projectContract from './project-contract.json' with { type: 'json' };
 
 export const MANAGED_CLOUD_PROJECTS_PATH = projectContract.path;
 export const MANAGED_CLOUD_PROJECT_DEFAULT_PAGE_SIZE = projectContract.listDefaultPageSize;
