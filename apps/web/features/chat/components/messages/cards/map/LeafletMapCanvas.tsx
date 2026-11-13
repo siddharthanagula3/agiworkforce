@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Maximize2, Minimize2, Minus, Plus } from '@agiworkforce/icons';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { mapTileStyle, type MapTileConfig } from './mapTileConfig';
 
@@ -88,9 +89,11 @@ export function LeafletMapCanvas({
   children,
   fullscreenable = false,
 }: LeafletMapCanvasProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fullscreenToggleRef = useRef<HTMLButtonElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const exitFullscreen = useCallback(() => setFullscreen(false), []);
   const mapRef = useRef<L.Map | null>(null);
   const [projections, setProjections] = useState<Record<string, MapProjection>>({});
   const [zoomBounds, setZoomBounds] = useState({ atMin: false, atMax: false });
@@ -216,15 +219,16 @@ export function LeafletMapCanvas({
     fullscreenToggleRef.current?.focus();
   }, [fullscreen, syncOverlay]);
 
+  useDialogKeyboard({ open: fullscreen, onClose: exitFullscreen, panelRef });
+
   useEffect(() => {
     if (!fullscreen) return undefined;
-    const exitOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      event.stopPropagation();
-      setFullscreen(false);
+    const body = (panelRef.current?.ownerDocument ?? document).body;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = previousOverflow;
     };
-    document.addEventListener('keydown', exitOnEscape, true);
-    return () => document.removeEventListener('keydown', exitOnEscape, true);
   }, [fullscreen]);
 
   const changeZoom = useCallback(
@@ -238,6 +242,7 @@ export function LeafletMapCanvas({
 
   return (
     <div
+      ref={panelRef}
       className={cn(
         'relative isolate overflow-hidden',
         fullscreen

@@ -265,12 +265,6 @@ export const HOST_MENU_SHORTCUTS: readonly HostMenuShortcut[] = [
   { id: 'host-close-window', description: 'Close window', accelerator: 'CommandOrControl+W' },
   { id: 'host-back', description: 'Back', accelerator: 'CommandOrControl+[' },
   { id: 'host-forward', description: 'Forward', accelerator: 'CommandOrControl+]' },
-  {
-    id: 'host-previous-chat',
-    description: 'Previous chat',
-    accelerator: 'CommandOrControl+Alt+Up',
-  },
-  { id: 'host-next-chat', description: 'Next chat', accelerator: 'CommandOrControl+Alt+Down' },
   { id: 'host-actual-size', description: 'Actual size', accelerator: 'CommandOrControl+0' },
   { id: 'host-zoom-in', description: 'Zoom in', accelerator: 'CommandOrControl+Plus' },
   { id: 'host-zoom-out', description: 'Zoom out', accelerator: 'CommandOrControl+-' },

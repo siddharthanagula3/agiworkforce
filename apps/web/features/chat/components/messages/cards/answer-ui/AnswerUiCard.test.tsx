@@ -333,8 +333,11 @@ describe('AnswerUiCard layout blocks', () => {
     ).toBeInTheDocument();
     const exit = screen.getByRole('button', { name: MAP_EXIT_FULLSCREEN_LABEL });
     expect(exit).toHaveFocus();
+    expect(document.body.style.overflow).toBe('hidden');
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.body.style.overflow).toBe('');
+    expect(screen.getByRole('button', { name: MAP_ENTER_FULLSCREEN_LABEL })).toHaveFocus();
     expect(screen.getByRole('link', { name: /Open Blue Bottle in Maps/ })).toHaveAttribute(
       'href',
       'https://www.google.com/maps/search/?api=1&query=Blue+Bottle',

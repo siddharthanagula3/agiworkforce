@@ -502,7 +502,10 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
     const organizationId = '11111111-1111-4111-8111-111111111111';
     mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
     mockNeonExecute.mockResolvedValue(1);
-    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]).mockResolvedValue([]);
+    mockNeonQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'proj-1' }])
+      .mockResolvedValue([]);
 
     const res = await DELETE(makeProjectRequest('proj-1', 'DELETE'), {
       params: Promise.resolve({ id: 'proj-1' }),
@@ -511,6 +514,11 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
     expect(res.status).toBe(200);
     expect(mockNeonQuery).toHaveBeenNthCalledWith(
       1,
+      expect.stringContaining('pg_advisory_xact_lock_shared'),
+      [`agi:legal-hold-placement:${organizationId}`],
+    );
+    expect(mockNeonQuery).toHaveBeenNthCalledWith(
+      2,
       expect.stringContaining('organization_id is not distinct from $3::uuid'),
       ['proj-1', 'user-abc', organizationId, 'project'],
     );

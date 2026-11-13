@@ -1290,8 +1290,12 @@ describe('public settings window appearance', () => {
     await user.click(within(desktopGroup as HTMLElement).getByRole('button', { name: 'General' }));
 
     expect(await screen.findByRole('heading', { name: 'General desktop settings' })).toBeVisible();
-    expect(screen.getByText('Storage')).toBeVisible();
-    await user.click(screen.getByRole('button', { name: 'Manage storage' }));
+    expect(
+      within(desktopGroup as HTMLElement).getByRole('button', { name: 'Storage' }),
+    ).toBeVisible();
+    const general = screen.getByRole('region', { name: 'General desktop settings' });
+    expect(within(general).getByText('Storage')).toBeVisible();
+    await user.click(within(general).getByRole('button', { name: 'Manage storage' }));
     expect(
       await screen.findByText('Chats stay on this computer. Nothing was removed.'),
     ).toBeVisible();

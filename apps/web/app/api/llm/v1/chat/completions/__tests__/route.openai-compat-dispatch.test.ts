@@ -74,6 +74,11 @@ vi.mock('@/lib/rate-limit', () => ({
   acquireManagedTurnSlot: vi.fn(async () => admitManagedTurnSlot()),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
+type SkillCatalogModule = typeof import('@/lib/services/skill-catalog-service');
+vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
+  ...(await importOriginal<SkillCatalogModule>()),
+  loadSelectableSkillCatalog: async () => [],
+}));
 vi.mock('@/lib/error-handler', async (importOriginal) => ({
   ...(await importOriginal<RetainedMockModule1>()),
   withErrorHandler: <T extends (...args: never[]) => unknown>(handler: T) => handler,
