@@ -1057,7 +1057,6 @@ export type ImplicitManagedSkillOfferContext = {
   prompt: string;
   surface: CloudChatSurface;
   toolsCapable: boolean;
-  ambientToolsAllowed: boolean;
   loadCatalog: () => Promise<readonly Skill[]>;
 };
 
@@ -1069,6 +1068,7 @@ export async function applyImplicitManagedSkillOffer(
   if (!context.toolsCapable) return [];
   if (SKILL_OFFER_EXCLUDED_SURFACES.has(context.surface)) return [];
   if (request.tool_choice !== undefined) return [];
+  if (!context.prompt.trim()) return [];
 
   let catalog: readonly Skill[];
   try {
@@ -1079,10 +1079,9 @@ export async function applyImplicitManagedSkillOffer(
   }
 
   const relevant = selectOfferedSkills(catalog, context.prompt);
-  if (catalog.length === 0 || (!context.ambientToolsAllowed && relevant.length === 0)) return [];
-  if (relevant.length > 0) {
-    request.messages.unshift({ role: 'system', content: formatSkillsForToolPrompt(relevant) });
-  }
+  if (relevant.length === 0) return [];
+
+  request.messages.unshift({ role: 'system', content: formatSkillsForToolPrompt(relevant) });
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== SKILL_TOOL_NAME),
     createSkillToolDefinition(),
@@ -1180,12 +1179,13 @@ export function applyScheduleToolCapability(
   },
 ): TurnToolOffer {
   if (!params.schedulesAllowed || !scheduleToolSurfaceEligible(request, params)) return null;
+  if (!asksForSchedule(params.userMessage)) return null;
   const definition = scheduleToolDefinition();
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
     definition,
   ];
-  return { name: definition.function.name, fitsTurn: asksForSchedule(params.userMessage) };
+  return { name: definition.function.name, fitsTurn: true };
 }
 
 export function pluginDraftToolSurfaceEligible(
@@ -1218,12 +1218,13 @@ export function applyPluginDraftToolCapability(
   },
 ): TurnToolOffer {
   if (!params.pluginDraftsAllowed || !pluginDraftToolSurfaceEligible(request, params)) return null;
+  if (!asksForPluginDraft(params.userMessage)) return null;
   const definition = pluginDraftToolDefinition();
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isPluginDraftTool(tool.function.name)),
     definition,
   ];
-  return { name: definition.function.name, fitsTurn: asksForPluginDraft(params.userMessage) };
+  return { name: definition.function.name, fitsTurn: true };
 }
 
 export function applyManagedOfficeFileCreation(
@@ -1251,7 +1252,13 @@ export function applyClarifyCardCapability(
     !params.toolsCapable ||
     !request.stream ||
     request.research === true ||
-    !request.x_interactive_cards?.supported.includes('clarify.v1')
+    !request.x_interactive_cards?.supported.includes('clarify.v1') ||
+    !turnWarrantsClarifyTool({
+      userMessage: params.userMessage,
+      hasAttachment: params.hasAttachment,
+      research: false,
+      agiWork: request.work_mode === 'agiwork',
+    })
   ) {
     return null;
   }
@@ -1259,15 +1266,7 @@ export function applyClarifyCardCapability(
     ...(request.tools ?? []).filter((tool) => tool.function.name !== CLARIFY_TOOL_NAME),
     createClarifyToolDefinition(),
   ];
-  return {
-    name: CLARIFY_TOOL_NAME,
-    fitsTurn: turnWarrantsClarifyTool({
-      userMessage: params.userMessage,
-      hasAttachment: params.hasAttachment,
-      research: false,
-      agiWork: request.work_mode === 'agiwork',
-    }),
-  };
+  return { name: CLARIFY_TOOL_NAME, fitsTurn: true };
 }
 
 export function applyAnswerUiCapability(
@@ -1308,7 +1307,9 @@ export function applyMapSearchCardCapability(
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
-    !request.x_interactive_cards?.supported.includes('map-search.v1')
+    !request.x_interactive_cards?.supported.includes('map-search.v1') ||
+    params.placesSearchOffered ||
+    !hasMapSearchIntent(params.userMessage)
   ) {
     return null;
   }
@@ -1316,14 +1317,13 @@ export function applyMapSearchCardCapability(
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MAP_SEARCH_TOOL_NAME),
     createMapSearchToolDefinition(),
   ];
-  const fitsTurn = !params.placesSearchOffered && hasMapSearchIntent(params.userMessage);
-  if (fitsTurn && request.tool_choice === undefined) {
+  if (request.tool_choice === undefined) {
     request.tool_choice = {
       type: 'function',
       function: { name: MAP_SEARCH_TOOL_NAME },
     };
   }
-  return { name: MAP_SEARCH_TOOL_NAME, fitsTurn };
+  return { name: MAP_SEARCH_TOOL_NAME, fitsTurn: true };
 }
 
 const CARD_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
@@ -1347,7 +1347,8 @@ export function applyItineraryToolCapability(
     !params.toolsCapable ||
     !request.stream ||
     !params.placesAvailable ||
-    !request.x_interactive_cards?.supported.includes(ITINERARY_CARD_KIND)
+    !request.x_interactive_cards?.supported.includes(ITINERARY_CARD_KIND) ||
+    !asksForItinerary(params.userMessage)
   ) {
     return null;
   }
@@ -1356,7 +1357,7 @@ export function applyItineraryToolCapability(
     ...(request.tools ?? []).filter((tool) => !isItineraryTool(tool.function.name)),
     definition,
   ];
-  return { name: definition.function.name, fitsTurn: asksForItinerary(params.userMessage) };
+  return { name: definition.function.name, fitsTurn: true };
 }
 
 export function placesToolOffer(params: {
@@ -1367,11 +1368,8 @@ export function placesToolOffer(params: {
   backendConfigured: boolean;
 }): TurnToolOffer {
   if (!params.toolsCapable || params.stream !== true || !params.backendConfigured) return null;
-  if (params.surface === 'api' && !params.requirement.offered) return null;
-  return {
-    name: placesSearchToolDef().function.name,
-    fitsTurn: params.requirement.offered,
-  };
+  if (!params.requirement.offered) return null;
+  return { name: placesSearchToolDef().function.name, fitsTurn: true };
 }
 
 export function productComparisonOffer(
@@ -1388,14 +1386,12 @@ export function productComparisonOffer(
     !params.toolsCapable ||
     request.stream !== true ||
     classifyAttachedSearchTool(params.tools) === null ||
-    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) !== true
+    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) !== true ||
+    !asksForProductComparison(params.userMessage)
   ) {
     return null;
   }
-  return {
-    name: productComparisonToolDefinition().function.name,
-    fitsTurn: asksForProductComparison(params.userMessage),
-  };
+  return { name: productComparisonToolDefinition().function.name, fitsTurn: true };
 }
 
 export function imageToolsForTurn(
@@ -5575,7 +5571,6 @@ async function processAdmittedRequest(
         prompt: lastUserText,
         surface: chatSurface,
         toolsCapable: resolvedModelCaps?.tools !== false,
-        ambientToolsAllowed,
         loadCatalog: () => loadSkillCatalog({ includeNetworkBackedDirectorySkills: false }),
       }),
     );

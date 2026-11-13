@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyToolLoopInputs } from './tool-loop-routing';
+import { classifyToolLoopInputs, withoutAnswerUiTool } from './tool-loop-routing';
 import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
 import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
@@ -67,14 +67,27 @@ describe('classifyToolLoopInputs', () => {
     expect(required.approvalMode).toBe('auto');
   });
 
-  it('runs the loop for the answer UI tool and lets it run without asking under the cloud default', () => {
+  it('does not start the loop for the answer UI tool alone, and lets it run unasked on a loop turn', () => {
     const result = classifyToolLoopInputs([], [answerUiToolDefinition()], 'autonomous');
     expect(result.hasAnswerUiTools).toBe(true);
-    expect(result.shouldRun).toBe(true);
+    expect(result.shouldRun).toBe(false);
     expect(result.approvalMode).toBe('auto');
+    expect(
+      classifyToolLoopInputs([], [answerUiToolDefinition(), webSearchToolDef()], 'autonomous')
+        .shouldRun,
+    ).toBe(true);
     expect(
       classifyToolLoopInputs([], [answerUiToolDefinition()], AUTO_APPROVE_READ_ONLY).approvalMode,
     ).toBe('auto');
+  });
+
+  it('drops the answer UI tool from a turn that stays off the loop and keeps every other tool', () => {
+    const search = webSearchToolDef();
+    expect(withoutAnswerUiTool([answerUiToolDefinition()])).toBeUndefined();
+    expect(withoutAnswerUiTool([answerUiToolDefinition(), search])).toEqual([search]);
+    const untouched = [search];
+    expect(withoutAnswerUiTool(untouched)).toBe(untouched);
+    expect(withoutAnswerUiTool(undefined)).toBeUndefined();
   });
 
   it('runs the loop for a device step, which only a suspended loop can carry out', () => {

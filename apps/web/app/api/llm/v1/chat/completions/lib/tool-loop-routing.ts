@@ -59,6 +59,13 @@ function anyToolNeedsApproval(names: readonly string[], policy: ToolApprovalPoli
   return names.some((name) => !policyAutoApprovesTool(policy, name));
 }
 
+export function withoutAnswerUiTool<T>(tools: T[] | undefined): T[] | undefined {
+  if (!tools) return tools;
+  const kept = tools.filter((tool) => !isAnswerUiTool(functionToolName(tool)));
+  if (kept.length === tools.length) return tools;
+  return kept.length > 0 ? kept : undefined;
+}
+
 export function classifyToolLoopInputs(
   mcpTools: WebMcpToolDef[],
   requestTools: unknown[] | undefined,
@@ -108,7 +115,6 @@ export function classifyToolLoopInputs(
       hasMapSearchTools ||
       hasPlaceTools ||
       hasProductComparisonTools ||
-      hasAnswerUiTools ||
       hasImageTools ||
       hasDeviceStepTools ||
       // A provider-run search is not a function tool, so nothing above sees it.

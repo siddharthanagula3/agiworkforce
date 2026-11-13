@@ -132,59 +132,44 @@ describe('map search card capability', () => {
       },
       { stream: false },
     ],
+    [
+      'ordinary chat without map intent',
+      {
+        surface: 'web' as const,
+        toolsCapable: true,
+        placesSearchOffered: false,
+        userMessage: 'Explain compound interest.',
+      },
+      {},
+    ],
+    [
+      'a bare data-structure mention of the word map',
+      {
+        surface: 'web' as const,
+        toolsCapable: true,
+        placesSearchOffered: false,
+        userMessage: 'Explain what a hash map is.',
+      },
+      {},
+    ],
   ])('does not offer the tool for %s', (_label, params, overrides) => {
     const parsed = request(overrides);
-    expect(applyMapSearchCardCapability(parsed, params)).toBeNull();
+    applyMapSearchCardCapability(parsed, params);
     expect(parsed.tools).toBeUndefined();
-  });
-
-  it.each([
-    ['ordinary chat without map intent', 'Explain compound interest.'],
-    ['a bare data-structure mention of the word map', 'Explain what a hash map is.'],
-  ])('keeps the tool on offer but withheld and unforced for %s', (_label, userMessage) => {
-    const parsed = request();
-
-    const offer = applyMapSearchCardCapability(parsed, {
-      surface: 'web',
-      toolsCapable: true,
-      placesSearchOffered: false,
-      userMessage,
-    });
-
-    expect(offer).toEqual({ name: 'search_maps', fitsTurn: false });
-    expect(parsed.tools?.map((tool) => tool.function.name)).toEqual(['search_maps']);
-    expect(parsed.tool_choice).toBeUndefined();
   });
 
   it('stands down when the places tool has taken the turn', () => {
     const parsed = request();
 
-    const offer = applyMapSearchCardCapability(parsed, {
+    applyMapSearchCardCapability(parsed, {
       surface: 'web',
       toolsCapable: true,
       placesSearchOffered: true,
       userMessage: 'best coffee near Union Square San Francisco open now',
     });
 
-    expect(offer).toEqual({ name: 'search_maps', fitsTurn: false });
+    expect(parsed.tools).toBeUndefined();
     expect(parsed.tool_choice).toBeUndefined();
-  });
-
-  it('serializes the same tool list for a map turn and a turn without map intent', () => {
-    const mapTurn = request();
-    const plainTurn = request();
-    const params = { surface: 'web' as const, toolsCapable: true, placesSearchOffered: false };
-
-    applyMapSearchCardCapability(mapTurn, {
-      ...params,
-      userMessage: 'Show coffee shops on a map.',
-    });
-    applyMapSearchCardCapability(plainTurn, {
-      ...params,
-      userMessage: 'Explain compound interest.',
-    });
-
-    expect(JSON.stringify(plainTurn.tools)).toBe(JSON.stringify(mapTurn.tools));
   });
 
   it('still offers the tool for a nearby-place search naming a proper noun', () => {

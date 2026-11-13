@@ -1,6 +1,13 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { listCanonicalModels, requireProviderDefaultModel } from '@agiworkforce/types';
+import {
+  ANSWER_UI_TOOL_NAME,
+  INTERACTIVE_CARD_REQUEST_KEY,
+  KNOWN_INTERACTIVE_CARD_KINDS,
+  listCanonicalModels,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
+import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import { resolveWebCloudModelRoute } from '../lib/request-processor';
 import { createError } from '@/lib/errors';
 import { CloudAgentCapabilityRefusedError } from '@/lib/workflows/cloud-agent-capability-refusal';
@@ -75,10 +82,22 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 type SkillCatalogModule = typeof import('@/lib/services/skill-catalog-service');
-vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
-  ...(await importOriginal<SkillCatalogModule>()),
-  loadSelectableSkillCatalog: async () => [],
-}));
+const skillCatalogMocks = vi.hoisted(() => ({ bundled: false, loaded: [] as number[] }));
+vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => {
+  const actual = await importOriginal<SkillCatalogModule>();
+  return {
+    ...actual,
+    loadSelectableSkillCatalog: async (
+      ...args: Parameters<typeof actual.loadSelectableSkillCatalog>
+    ) => {
+      const skills = skillCatalogMocks.bundled
+        ? await actual.loadSelectableSkillCatalog(...args)
+        : [];
+      skillCatalogMocks.loaded.push(skills.length);
+      return skills;
+    },
+  };
+});
 vi.mock('@/lib/error-handler', async (importOriginal) => ({
   ...(await importOriginal<RetainedMockModule1>()),
   withErrorHandler: <T extends (...args: never[]) => unknown>(handler: T) => handler,
@@ -132,6 +151,16 @@ vi.mock('@shared/utils/env', async (importOriginal) => ({
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
 }));
 
+const providerRequests = vi.hoisted(() => [] as unknown[]);
+
+function offeredToolNames(providerRequest: unknown): string[] {
+  const tools = (providerRequest as { tools?: unknown[] } | undefined)?.tools ?? [];
+  return tools.map((tool) => {
+    const candidate = tool as { name?: string; function?: { name?: string } };
+    return candidate.function?.name ?? candidate.name ?? '';
+  });
+}
+
 function compatAdapterMock(providerId: string, content: string) {
   return {
     [`create${providerId}Adapter`]: vi.fn(() => ({
@@ -142,7 +171,8 @@ function compatAdapterMock(providerId: string, content: string) {
       async catalog() {
         return [];
       },
-      async *stream() {
+      async *stream(providerRequest: unknown) {
+        providerRequests.push(providerRequest);
         yield { type: 'text-delta', delta: content };
         yield { type: 'usage', inputTokens: 10, outputTokens: 5 };
         yield { type: 'stop', reason: 'end_turn' };
@@ -371,7 +401,12 @@ type AgentTurnConfigModule = typeof import('@/lib/agents/agent-turn-config');
 
 type TypesModule = typeof import('@agiworkforce/types');
 
-function makeRequest(model: string, conversationId?: string, stream = false): NextRequest {
+function makeRequest(
+  model: string,
+  conversationId?: string,
+  stream = false,
+  extra: Record<string, unknown> = {},
+): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -385,6 +420,7 @@ function makeRequest(model: string, conversationId?: string, stream = false): Ne
       messages: [{ role: 'user', content: 'hi' }],
       stream,
       ...(conversationId ? { conversation_id: conversationId } : {}),
+      ...extra,
     }),
   });
 }
@@ -923,6 +959,38 @@ describe('Managed Web AGI Work dispatch', () => {
     expect(response.status).toBe(200);
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
     expect(workflowRouteMocks.createRun).not.toHaveBeenCalled();
+  });
+
+  it('keeps an ordinary turn inline with a non-empty skill catalog and every card kind the client knows', async () => {
+    arrangePaidAgenticTurn();
+    workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
+    skillCatalogMocks.bundled = true;
+    skillCatalogMocks.loaded.length = 0;
+    providerRequests.length = 0;
+    try {
+      const response = await POST(
+        makeRequest(ZHIPU_MODEL_ID, undefined, true, {
+          [INTERACTIVE_CARD_REQUEST_KEY]: {
+            supported: [...KNOWN_INTERACTIVE_CARD_KINDS],
+            canRespond: true,
+          },
+        }),
+      );
+      await response.text();
+
+      expect(skillCatalogMocks.loaded.length).toBeGreaterThan(0);
+      expect(Math.min(...skillCatalogMocks.loaded)).toBeGreaterThan(0);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('X-AGI-Tool-Loop')).toBeNull();
+      expect(workflowRouteMocks.start).not.toHaveBeenCalled();
+      expect(workflowRouteMocks.createRun).not.toHaveBeenCalled();
+      expect(providerRequests).toHaveLength(1);
+      const offered = offeredToolNames(providerRequests[0]);
+      expect(offered).not.toContain(SKILL_TOOL_NAME);
+      expect(offered).not.toContain(ANSWER_UI_TOOL_NAME);
+    } finally {
+      skillCatalogMocks.bundled = false;
+    }
   });
 });
 

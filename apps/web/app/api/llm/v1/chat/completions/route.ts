@@ -60,7 +60,7 @@ import { buildResearchRunOptions, scopeResearchConnectors } from './lib/research
 import type { PersistedResearchReport } from '@/lib/services/research-report-service';
 import { buildManagedAgentStream } from './lib/managed-agent-stream';
 import { buildApprovalCheckpointRequest } from './lib/approval-checkpoint-request';
-import { classifyToolLoopInputs } from './lib/tool-loop-routing';
+import { classifyToolLoopInputs, withoutAnswerUiTool } from './lib/tool-loop-routing';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import {
   firstTokenDeadlineMs,
@@ -905,6 +905,10 @@ async function dispatchChatCompletions(
           (processed.chatRequest.tools?.length ?? 0) > 0,
       },
     );
+
+    if (!loopInputs.shouldRun && !isAgiWorkTurn) {
+      processed.llmRequest.tools = withoutAnswerUiTool(processed.llmRequest.tools);
+    }
 
     if (loopInputs.shouldRun || isAgiWorkTurn) {
       const startedRun = await timePhase(CHAT_TURN_PHASE.agentRunStart, () =>

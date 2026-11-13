@@ -53,10 +53,11 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 
 import { CreditService } from '@/lib/services/credit-service';
 import { CLARIFY_TOOL_NAME } from '@/lib/services/clarify-tool-service';
+import { MAP_SEARCH_TOOL_NAME } from '@/lib/services/map-search-tool-service';
 import type { AuthGateSuccess } from './auth-gate';
 import { toCanonicalChatRequest } from './canonical-request';
 import { applyAnswerUiCapability, processRequest } from './request-processor';
-import { ANSWER_UI_TOOL_NAME } from '@agiworkforce/types';
+import { ANSWER_UI_TOOL_NAME, ITINERARY_TOOL_NAME } from '@agiworkforce/types';
 import { withheldToolsTurnNotice } from './turn-tool-offer';
 import { EMPTY_ASSISTANT_TURN_HISTORY_TEXT } from '@/features/chat/lib/assistant-history-turn';
 
@@ -149,12 +150,16 @@ beforeEach(() => {
   vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(true);
 });
 
+function toolNames(tools: readonly unknown[] | undefined): Array<string | undefined> {
+  return (tools ?? []).map((tool) => (tool as { function?: { name?: string } }).function?.name);
+}
+
 const SHORT_QUESTION = 'Help me pick a name.';
 const SUMMARY_REQUEST =
   'Summarize the following note: the team met on Tuesday and agreed to move the launch.';
 
 describe.each(['chrome', 'web', 'mobile'] as const)(
-  'the server tool list on the %s surface',
+  'the server tool list on the %s surface, held to the turn',
   (surface) => {
     async function turn(key: string, message: string | ChatTurnMessage[]) {
       const result = await processRequest(
@@ -167,18 +172,16 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
       return result;
     }
 
-    it('serializes the same tools for a short question and a summarize request', async () => {
+    it('offers a card tool only to the turn that calls for it', async () => {
       const question = await turn('stable-1', SHORT_QUESTION);
       const summary = await turn('stable-2', SUMMARY_REQUEST);
 
-      const names = (question.llmRequest.tools ?? []).map(
-        (tool) => (tool as { function?: { name?: string } }).function?.name,
-      );
-      expect(names).toContain(CLARIFY_TOOL_NAME);
-      expect(names).toContain(ANSWER_UI_TOOL_NAME);
-      expect(JSON.stringify(summary.llmRequest.tools)).toBe(
-        JSON.stringify(question.llmRequest.tools),
-      );
+      const questionNames = toolNames(question.llmRequest.tools);
+      const summaryNames = toolNames(summary.llmRequest.tools);
+      expect(questionNames).toContain(CLARIFY_TOOL_NAME);
+      expect(questionNames).toContain(ANSWER_UI_TOOL_NAME);
+      expect(summaryNames).not.toContain(CLARIFY_TOOL_NAME);
+      expect(summaryNames).toContain(ANSWER_UI_TOOL_NAME);
     });
 
     it('never sends a tool-only assistant turn as an empty message the next turn re-answers', async () => {
@@ -194,17 +197,19 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
       }
     });
 
-    it('tells the model, in the system role, to keep a withheld tool out of the answer', async () => {
-      const result = await turn('withheld-1', 'what is 17 times 23');
-      expect(result.turnWithheldTools ?? []).not.toHaveLength(0);
+    it('withholds nothing, because a tool the turn does not call for is never offered', async () => {
+      const result = await turn('withheld-1', SUMMARY_REQUEST);
+      expect(result.turnWithheldTools).toBeUndefined();
+      const names = toolNames(result.llmRequest.tools);
+      for (const name of [CLARIFY_TOOL_NAME, MAP_SEARCH_TOOL_NAME, ITINERARY_TOOL_NAME]) {
+        expect(names).not.toContain(name);
+      }
       const wire = toCanonicalChatRequest(result);
-      const notice = withheldToolsTurnNotice(result.turnWithheldTools ?? [])!;
-      expect(notice).toContain('do not mention');
-      expect(wire.system).toContain(notice);
-      expect(JSON.stringify(wire.messages)).not.toContain(notice);
+      const notice = withheldToolsTurnNotice([CLARIFY_TOOL_NAME])!;
+      expect(JSON.stringify(wire)).not.toContain(notice.slice(0, 32));
     });
 
-    it('keeps tools and history byte-identical and the per-turn notice out of user text', async () => {
+    it('keeps history byte-identical and the turn text where the user wrote it', async () => {
       const history: ChatTurnMessage[] = [
         { role: 'user', content: 'Which language is the repo in?' },
         { role: 'assistant', content: 'TypeScript and Rust.' },
@@ -218,23 +223,19 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
         { role: 'user', content: SUMMARY_REQUEST },
       ]);
 
-      expect(summary.turnWithheldTools).toContain(CLARIFY_TOOL_NAME);
-      expect(summary.turnWithheldTools ?? []).not.toContain(ANSWER_UI_TOOL_NAME);
-      expect(question.turnWithheldTools ?? []).not.toContain(ANSWER_UI_TOOL_NAME);
-      expect(question.turnWithheldTools ?? []).not.toContain(CLARIFY_TOOL_NAME);
+      expect(summary.turnWithheldTools).toBeUndefined();
+      expect(question.turnWithheldTools).toBeUndefined();
+      expect(toolNames(question.llmRequest.tools)).toContain(CLARIFY_TOOL_NAME);
+      expect(toolNames(summary.llmRequest.tools)).not.toContain(CLARIFY_TOOL_NAME);
 
       const questionWire = toCanonicalChatRequest(question);
       const summaryWire = toCanonicalChatRequest(summary);
       const prefix = (wire: typeof questionWire) =>
-        JSON.stringify({ tools: wire.tools, messages: wire.messages.slice(0, -1) });
+        JSON.stringify({ messages: wire.messages.slice(0, -1) });
       expect(prefix(summaryWire)).toBe(prefix(questionWire));
 
-      const notice = withheldToolsTurnNotice(summary.turnWithheldTools ?? [])!;
-      expect(prefix(summaryWire)).not.toContain(notice);
       const last = JSON.stringify(summaryWire.messages.at(-1));
       expect(last.indexOf(SUMMARY_REQUEST)).toBeGreaterThan(-1);
-      expect(last).not.toContain(notice);
-      expect(summaryWire.system).toContain(notice);
     });
   },
 );
