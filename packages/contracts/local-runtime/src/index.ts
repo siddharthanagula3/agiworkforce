@@ -153,7 +153,6 @@ export {
   LEGACY_DEVELOPER_REASONING_EFFORTS,
   THREAD_WRITER_CONFLICT_ERROR_CODE,
   MCP_APPROVAL_STALE_ERROR_CODE,
-  PRIVACY_BOUNDARY_ERROR_CODE,
 } from './developer-session';
 export type {
   DeveloperAgentMode,

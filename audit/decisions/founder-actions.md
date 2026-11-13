@@ -1234,6 +1234,11 @@ on main. Each line names the branch and commit that still holds it.
   per-turn platform notices placed inside the user message (a user or a document could imitate
   them, so they are back in the system role).
 - `feat/intelligent-ui` `0af2a22ebe`: the CLI file-removal guard and trash module.
+- `ext/vscode-working` `c05d97f648`: a typed refusal (its own error code, the pin and where it is
+  set) when a Code extension chat asks for a cloud model under a Local privacy pin, and the pin on
+  the local model list so the picker can hide those models. Main's CLI still refuses that start,
+  as an invalid request without the typed detail. The one piece the merge had carried, an error
+  code constant in the shared contract with nothing reading or sending it, is removed.
 - `test/extensions-integration` `ac7d0098e9`, connector tool schemas chosen regardless of the
   turn, and `852340984d`, cross-origin access for every origin the identity provider authorizes.
 - `test/extensions-integration`: the MCP Logs button (the CLI never advertises it; a dead
