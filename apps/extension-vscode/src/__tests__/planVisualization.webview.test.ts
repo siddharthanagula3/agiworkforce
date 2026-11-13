@@ -87,46 +87,6 @@ describe('VS Code sidebar plan visualization', () => {
     );
   });
 
-  it('approves a plan into auto-accepted edits or asked edits, like Claude Code', () => {
-    const postMessage = vi.fn();
-    boot(postMessage);
-    sendPlan({ plan: [{ step: 'Edit the store', status: 'pending' }] });
-
-    const actions = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('.plan-card .approval-card__action'),
-    ).map((button) => button.textContent);
-    expect(actions).toEqual([
-      'Approve and auto-accept edits',
-      'Approve and ask before edits',
-      'Revise',
-    ]);
-
-    document.querySelectorAll<HTMLButtonElement>('.plan-card .approval-card__action')[1]?.click();
-    expect(postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'planDecision',
-        payload: { decision: 'approve', then: 'ask' },
-      }),
-    );
-  });
-
-  it('shows Stop for the turn the host starts after a plan is approved', () => {
-    boot();
-    const stop = document.getElementById('stopBtn');
-    expect(stop?.classList.contains('visible')).toBe(false);
-
-    window.dispatchEvent(
-      new MessageEvent('message', {
-        data: {
-          type: 'addUserMessage',
-          payload: { text: 'Go ahead with the plan.', startsTurn: true },
-        },
-      }),
-    );
-
-    expect(stop?.classList.contains('visible')).toBe(true);
-  });
-
   it('opens the plan as a document from the plan card', () => {
     const postMessage = vi.fn();
     boot(postMessage);

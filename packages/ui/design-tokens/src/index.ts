@@ -1095,6 +1095,8 @@ export const agiVsCodeCssVars = {
   '--agi-vscode-diff-added-gutter': 'var(--vscode-diffEditor-insertedTextBorder, #4caf50)',
   '--agi-vscode-diff-removed-gutter': 'var(--vscode-diffEditor-removedTextBorder, #f44336)',
   '--agi-vscode-diff-modified-gutter': '#ff9800',
+  // A QR code scans only against a light quiet zone, whatever the editor theme.
+  '--agi-vscode-qr-quiet-zone': '#ffffff',
 } as const satisfies CssVariableMap;
 
 export function cssVarsToString(vars: CssVariableMap): string {

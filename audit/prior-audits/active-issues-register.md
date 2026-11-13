@@ -13370,7 +13370,7 @@ read retries, shared defaults, success invalidation or explicit subsequent user
 actions. A transient failure now surfaces immediately instead of being retried.
 The existing `ProjectsPanel` and `WebhooksPanel` use these hooks.
 
-`features/developers/__tests__/developer-mutation-retry.test.tsx` authors 24
+`features/developers/__tests__/DeveloperMutationRetry.test.tsx` authors 24
 unrun cases through the real mutation hooks and a real QueryClient with the old
 retry default enabled. For every operation, transport rejection and a successful
 HTTP response with failed JSON consumption must settle after one transport call;
@@ -13482,7 +13482,7 @@ introduced in `0073` and refined by `0272`; it is not an organization-wide total
 This read correction does not repair project-limit/archive cross-workspace
 coverage documented in `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01`.
 
-`developer-query-ownership.test.tsx` authors both-hook fixtures using real session
+`DeveloperQueryOwnership.test.tsx` authors both-hook fixtures using real session
 snapshots, admission, RequestAuthority and QueryClient, with controlled Clerk,
 network and unrelated mutation transport. Sources cover cache isolation across
 A/B/A and session replacement, deferred tokens/responses/success and error bodies,
@@ -13544,7 +13544,7 @@ server authorization are unchanged. Deployed RLS is unverified.
 
 The existing ownership fixture matrix now covers endpoints and deliveries with
 real session/admission/RequestAuthority/QueryClient paths and controlled Clerk/
-network boundaries. New `developer-webhook-read-ownership.test.tsx` sources cover
+network boundaries. New `DeveloperWebhookReadOwnership.test.tsx` sources cover
 disabled/blank IDs, enable/resource callback retirement, cached-error masking,
 shared in-flight disable and captured interval selection. Its transparent query
 wrapper records interval callbacks for direct evaluation: it does not establish

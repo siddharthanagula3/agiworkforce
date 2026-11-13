@@ -156,3 +156,5 @@ describe('PATCH /api/plugins/[id]/settings', () => {
     expect(response.status).toBe(404);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

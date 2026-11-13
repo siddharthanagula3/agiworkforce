@@ -26,21 +26,6 @@ function makeConnector(overrides: Partial<ConnectorConnection> = {}): ConnectorC
 }
 
 describe('connectors tree', () => {
-  it('shows one locked Coming soon row and asks the account nothing while connectors are unreleased', async () => {
-    const resolveClient = vi.fn();
-    const provider = new ConnectorsTreeProvider(resolveClient, 'coming_soon');
-    try {
-      const items = await provider.getChildren();
-
-      expect(items).toHaveLength(1);
-      expect(items[0]?.label).toBe('Connectors · Coming soon');
-      expect(items[0]?.command).toBeUndefined();
-      expect(resolveClient).not.toHaveBeenCalled();
-    } finally {
-      provider.dispose();
-    }
-  });
-
   it('maps the hosted connector list into items with their status', async () => {
     const client = {
       listConnectors: vi.fn().mockResolvedValue({
@@ -58,9 +43,8 @@ describe('connectors tree', () => {
         pending: ['linear'],
       }),
     };
-    const provider = new ConnectorsTreeProvider(
-      () => Promise.resolve({ status: 'ready' as const, client }),
-      'released',
+    const provider = new ConnectorsTreeProvider(() =>
+      Promise.resolve({ status: 'ready' as const, client }),
     );
     try {
       const items = await provider.getChildren();
@@ -81,10 +65,7 @@ describe('connectors tree', () => {
   });
 
   it('asks the user to sign in rather than showing an empty list', async () => {
-    const provider = new ConnectorsTreeProvider(
-      () => Promise.resolve({ status: 'signed-out' }),
-      'released',
-    );
+    const provider = new ConnectorsTreeProvider(() => Promise.resolve({ status: 'signed-out' }));
     try {
       const [notice] = await provider.getChildren();
 
@@ -97,9 +78,8 @@ describe('connectors tree', () => {
 
   it('names an expired session when the hosted route answers 401', async () => {
     const client = { listConnectors: vi.fn().mockRejectedValue({ status: 401 }) };
-    const provider = new ConnectorsTreeProvider(
-      () => Promise.resolve({ status: 'ready' as const, client }),
-      'released',
+    const provider = new ConnectorsTreeProvider(() =>
+      Promise.resolve({ status: 'ready' as const, client }),
     );
     try {
       const [notice] = await provider.getChildren();
@@ -116,9 +96,8 @@ describe('connectors tree', () => {
     const client = {
       listConnectors: vi.fn().mockResolvedValue({ connectors: [], available: [] }),
     };
-    const provider = new ConnectorsTreeProvider(
-      () => Promise.resolve({ status: 'ready' as const, client }),
-      'released',
+    const provider = new ConnectorsTreeProvider(() =>
+      Promise.resolve({ status: 'ready' as const, client }),
     );
     try {
       const [notice] = await provider.getChildren();

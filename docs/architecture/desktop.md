@@ -90,7 +90,8 @@ Desktop participates in two continuity domains without merging them:
   Electron dispatcher refuses every command in `LOCAL_INFERENCE_COMMANDS` with
   `unsupported-platform`. Desktop chat does not accept provider API keys or
   expose Local/BYOK chat; its device-registry profile reports
-  `localModels: false` and `localMcp: false`. Cloud conversations, projects,
+  `localModels: false`, and `localMcp: true` when the bundled CLI serves MCP
+  servers (managed on the Developer settings page). Cloud conversations, projects,
   memory, settings, connected apps, files/artifacts, and account state share
   the hosted contract with Web and later Mobile/eligible Chrome clients.
 - **Host Developer.** Desktop Code uses the host-owned developer runtime also

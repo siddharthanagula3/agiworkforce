@@ -98,7 +98,7 @@ describe('transcript notices share the message column', () => {
       ),
     );
 
-    const retry = screen.getByRole('button', { name: 'Regenerate this response' });
+    const retry = screen.getByRole('button', { name: 'Retry this response' });
     expect(retry.classList.contains('pointer-coarse:min-h-11')).toBe(true);
     expect(retry.classList.contains('pointer-coarse:min-w-11')).toBe(true);
     expect(retry.classList.contains('min-h-6')).toBe(true);

@@ -795,7 +795,6 @@ fn chat_request<'a>(
         thinking_budget,
         tool_choice: None,
         anthropic_thinking: None,
-        thinking_display: None,
         effort: None,
         top_p: None,
         top_k: None,

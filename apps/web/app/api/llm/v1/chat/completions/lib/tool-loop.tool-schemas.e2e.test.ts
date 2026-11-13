@@ -65,13 +65,13 @@ const NOTION_SELF_DEF = {
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
 };
 
-function connectorToolDefs() {
+function connectorToolDefs(descriptionPadding = '') {
   return [
     {
       qualifiedName: PULL_REQUEST_TOOL,
       serverId: 'github',
       toolName: 'get_pull_request_diff',
-      description: 'Read the diff of a pull request.',
+      description: `Read the diff of a pull request.${descriptionPadding}`,
       origin: 'connector' as const,
       inputSchema: {},
     },
@@ -79,7 +79,7 @@ function connectorToolDefs() {
       qualifiedName: SLACK_TOOL,
       serverId: 'slack',
       toolName: 'post_channel_message',
-      description: 'Post a message into a channel.',
+      description: `Post a message into a channel.${descriptionPadding}`,
       origin: 'connector' as const,
       inputSchema: {},
     },
@@ -87,12 +87,14 @@ function connectorToolDefs() {
       qualifiedName: JIRA_TOOL,
       serverId: 'jira',
       toolName: 'create_issue',
-      description: 'File a ticket on a board.',
+      description: `File a ticket on a board.${descriptionPadding}`,
       origin: 'connector' as const,
       inputSchema: {},
     },
   ];
 }
+
+const OVER_BUDGET_PADDING = ` ${'Detailed usage notes. '.repeat(Math.ceil(DEFAULT_TOOL_SCHEMA_BYTES / 3 / 22))}`;
 
 function sseStreamFrom(lines: string[]): ReadableStream {
   const encoder = new TextEncoder();
@@ -519,7 +521,26 @@ describe('connector tool schemas are loaded against a budget, not sent whole', (
     expect(names).not.toContain(TOOL_DIRECTORY_TOOL_NAME);
   });
 
-  it('defers the schemas the turn does not reach for, and names them rather than hiding them', async () => {
+  it('offers the same schemas whatever the turn is about', async () => {
+    for (const turnText of ['read the pull request diff for me', 'hello']) {
+      mockBuildToolLoopStream.mockResolvedValueOnce(
+        sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]),
+      );
+      await drain(
+        runToolLoop(makeProcessed(turnText), {
+          approvalMode: 'auto',
+          userId: 'user-1',
+          mcpTools: connectorToolDefs(OVER_BUDGET_PADDING),
+        }),
+      );
+    }
+
+    expect(JSON.stringify(mockBuildToolLoopStream.mock.calls[1]?.[2].tools)).toBe(
+      JSON.stringify(mockBuildToolLoopStream.mock.calls[0]?.[2].tools),
+    );
+  });
+
+  it('defers the schemas past the budget, and names them rather than hiding them', async () => {
     mockBuildToolLoopStream.mockResolvedValueOnce(
       sseStreamFrom([chunk({ content: 'Reading it now.' }), chunk({}, 'stop')]),
     );
@@ -528,29 +549,27 @@ describe('connector tool schemas are loaded against a budget, not sent whole', (
       runToolLoop(makeProcessed('read the pull request diff for me'), {
         approvalMode: 'auto',
         userId: 'user-1',
-        mcpTools: connectorToolDefs(),
+        mcpTools: connectorToolDefs(OVER_BUDGET_PADDING),
       }),
     );
 
     const names = offeredNames(0);
     expect(names).toContain(PULL_REQUEST_TOOL);
-    expect(names).not.toContain(SLACK_TOOL);
+    expect(names).toContain(SLACK_TOOL);
     expect(names).not.toContain(JIRA_TOOL);
     expect(names).toContain(TOOL_DIRECTORY_TOOL_NAME);
-
     const directory = (
       mockBuildToolLoopStream.mock.calls[0]?.[2] as {
         tools: Array<{ function: { name: string; description: string } }>;
       }
     ).tools.find((tool) => tool.function.name === TOOL_DIRECTORY_TOOL_NAME);
-    expect(directory?.function.description).toContain(SLACK_TOOL);
     expect(directory?.function.description).toContain(JIRA_TOOL);
   });
 
   it('carries a deferred schema on the next step once the model asks for it', async () => {
     mockBuildToolLoopStream
       .mockResolvedValueOnce(
-        toolCallStream('call_1', TOOL_DIRECTORY_TOOL_NAME, { names: [SLACK_TOOL] }),
+        toolCallStream('call_1', TOOL_DIRECTORY_TOOL_NAME, { names: [JIRA_TOOL] }),
       )
       .mockResolvedValueOnce(
         sseStreamFrom([chunk({ content: 'Posted the summary.' }), chunk({}, 'stop')]),
@@ -567,7 +586,7 @@ describe('connector tool schemas are loaded against a budget, not sent whole', (
         approvalMode: 'auto',
         userId: 'user-1',
         connectorExecutor,
-        mcpTools: connectorToolDefs(),
+        mcpTools: connectorToolDefs(OVER_BUDGET_PADDING),
       }),
     );
 
@@ -576,11 +595,9 @@ describe('connector tool schemas are loaded against a budget, not sent whole', (
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
 
     const second = offeredNames(1);
-    expect(second).toContain(SLACK_TOOL);
+    expect(second).toContain(JIRA_TOOL);
     expect(second).toContain(PULL_REQUEST_TOOL);
-    expect(second).not.toContain(JIRA_TOOL);
-    // Jira is still deferred, so the directory stays on offer.
-    expect(second).toContain(TOOL_DIRECTORY_TOOL_NAME);
+    expect(second).toContain(SLACK_TOOL);
     expect(output).toContain('Posted the summary.');
   });
 
@@ -595,7 +612,7 @@ describe('connector tool schemas are loaded against a budget, not sent whole', (
       runToolLoop(makeProcessed('read the pull request diff for me'), {
         approvalMode: 'auto',
         userId: 'user-1',
-        mcpTools: connectorToolDefs(),
+        mcpTools: connectorToolDefs(OVER_BUDGET_PADDING),
       }),
     );
 
@@ -604,6 +621,6 @@ describe('connector tool schemas are loaded against a budget, not sent whole', (
     };
     const result = second.messages.find((message) => message.role === 'tool');
     expect(result?.content).toContain('No connected tool matched those names');
-    expect(offeredNames(1)).not.toContain(SLACK_TOOL);
+    expect(offeredNames(1)).not.toContain(JIRA_TOOL);
   });
 });

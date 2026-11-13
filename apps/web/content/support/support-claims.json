@@ -1746,7 +1746,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "revokes the chat’s link from the result state"
+          "name": "revokes the chat\u2019s link from the result state"
         },
         {
           "kind": "copy",
@@ -1832,7 +1832,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "updates the chat’s link in place, keeping its address and expiry"
+          "name": "updates the chat\u2019s link in place, keeping its address and expiry"
         },
         {
           "kind": "test",
@@ -3441,7 +3441,7 @@
       "doc": "chat-basics",
       "section": "Branch a conversation",
       "kind": "prose",
-      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
+      "sentence": "While a branch is being created the control reads \"Creating branch\u2026\" and cannot be pressed a second time.",
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/features/chat/hooks/use-conversation-branches.ts"
@@ -4297,6 +4297,11 @@
           "kind": "copy",
           "file": "apps/web/app/api/settings/organization/policy/route.ts",
           "text": "if (next.requireMfa && !current.policy.requireMfa && !authenticatorEnrollmentAvailable())"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
+          "name": "keeps unavailable enrollment controls disabled for enabled=%s"
         }
       ]
     },
@@ -7476,7 +7481,7 @@
       "doc": "models-and-reasoning",
       "section": "What the badges mean",
       "kind": "prose",
-      "sentence": "**Auto (free) · community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
+      "sentence": "**Auto (free) \u00b7 community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
       "implementation": [
         "apps/web/features/chat/components/Composer/ComposerFooter.tsx#FREE_LANE_SLOT_TEXT"
       ],
@@ -7484,7 +7489,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';"
+          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) \u00b7 community models, capacity varies';"
         },
         {
           "kind": "test",

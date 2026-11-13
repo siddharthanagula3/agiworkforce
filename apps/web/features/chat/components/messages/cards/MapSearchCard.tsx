@@ -49,6 +49,7 @@ export function MapSearchCard({ body, ctx }: MapSearchCardProps) {
             label={`Map of ${places[0]?.label ?? body.query}`}
             focusKey={null}
             animate={false}
+            fullscreenable
             className="w-full"
             style={{ height: MAP_SEARCH_FRAME_HEIGHT_PX }}
             renderPoint={(point) => {

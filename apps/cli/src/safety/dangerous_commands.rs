@@ -125,25 +125,7 @@ pub(super) const RG_DANGEROUS_OPTIONS: &[&str] = &["--pre", "--hostname-bin", "-
 pub(super) const BASE64_DANGEROUS_OPTIONS: &[&str] = &["-o", "--output"];
 
 /// Read-only git subcommands.
-pub(super) const GIT_SAFE_SUBCOMMANDS: &[&str] = &[
-    "status",
-    "log",
-    "diff",
-    "show",
-    "ls-files",
-    "ls-tree",
-    "rev-parse",
-    "rev-list",
-    "blame",
-    "shortlog",
-    "describe",
-    "merge-base",
-    "name-rev",
-    "show-ref",
-    "for-each-ref",
-    "check-ignore",
-    "count-objects",
-];
+pub(super) const GIT_SAFE_SUBCOMMANDS: &[&str] = &["status", "log", "diff", "show"];
 
 /// Read-only git branch flags.
 pub(super) const GIT_BRANCH_READONLY_FLAGS: &[&str] = &[

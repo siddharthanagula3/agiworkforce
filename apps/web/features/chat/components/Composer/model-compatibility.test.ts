@@ -3,6 +3,7 @@ import {
   getDefaultAutoRoutingProfile,
   getProviderOfferings,
   getSelectableModels,
+  isAutoModeModelId,
   providerOfferingDisplayName,
 } from '@agiworkforce/types';
 import {
@@ -219,5 +220,13 @@ describe('evaluateModelCompatibility', () => {
 
   it('claims nothing when no model is selected yet', () => {
     expect(evaluateModelCompatibility(null, request()).findings).toEqual([]);
+  });
+});
+
+describe('evaluateModelCompatibility on Auto', () => {
+  it('raises no catalogue warning for an Auto mode, which routes to a catalogued model per turn', () => {
+    const autoId = getDefaultAutoRoutingProfile().id;
+    expect(isAutoModeModelId(autoId)).toBe(true);
+    expect(evaluateModelCompatibility(autoId, request({ needsTools: true })).findings).toEqual([]);
   });
 });

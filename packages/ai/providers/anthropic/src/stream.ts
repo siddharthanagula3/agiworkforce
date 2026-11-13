@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { estimateTextTokens } from '@agiworkforce/agent-core';
 import { EmptyStreamError } from '@agiworkforce/provider-runtime';
 import type { StreamChunk, StreamChunkStop } from '@agiworkforce/types';
 
@@ -67,6 +68,7 @@ export async function* translateAnthropicStream(
   const containerIds = new Set<string>();
   let stopEmitted = false;
   let started = false;
+  let streamedOutput = '';
 
   for await (const event of stream) {
     started = true;
@@ -115,84 +117,122 @@ export async function* translateAnthropicStream(
           if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
             answeredWebSearches += 1;
           }
-          yield { type: 'server-tool-result', toolUseId: block.tool_use_id, payload: block };
-        } else if (!KNOWN_BLOCK_START_TYPES.has(block.type)) {
-          yield { type: 'vendor-raw', payload: event };
+          break;
         }
-        break;
-      }
-      case 'content_block_delta': {
-        const idx = event.index;
-        const state = blocksByIndex.get(idx);
-        const delta = event.delta;
-        if (delta.type === 'text_delta') {
-          yield { type: 'text-delta', delta: delta.text };
-        } else if (delta.type === 'input_json_delta') {
-          if (state?.type === 'tool_use' && state.toolUseId) {
+        case 'content_block_start': {
+          const idx = event.index;
+          const block = event.content_block;
+          if (block.type === 'tool_use') {
+            blocksByIndex.set(idx, { type: 'tool_use', toolUseId: block.id });
             yield {
-              type: 'tool-use-delta',
-              toolUseId: state.toolUseId,
-              deltaJson: delta.partial_json,
+              type: 'tool-use-start',
+              toolUseId: block.id,
+              name: block.name,
+              vendorIndex: idx,
             };
+          } else if (block.type === 'text') {
+            blocksByIndex.set(idx, { type: 'text' });
+          } else if (block.type === 'thinking') {
+            blocksByIndex.set(idx, { type: 'thinking' });
+          } else if (block.type === 'server_tool_use') {
+            blocksByIndex.set(idx, { type: 'server_tool_use', toolUseId: block.id });
+            yield { type: 'server-tool-use', toolUseId: block.id, name: block.name };
+          } else if (
+            block.type === 'web_search_tool_result' ||
+            block.type === 'code_execution_tool_result' ||
+            block.type === 'web_fetch_tool_result'
+          ) {
+            if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
+              answeredWebSearches += 1;
+            }
+            yield { type: 'server-tool-result', toolUseId: block.tool_use_id, payload: block };
+          } else if (!KNOWN_BLOCK_START_TYPES.has(block.type)) {
+            yield { type: 'vendor-raw', payload: event };
           }
-          // else: input deltas on a server_tool_use block are dropped,
-          // not passed through -- matches stream-transform.ts's explicit
-          // `continue` for blockType === 'server_tool_use', which
-          // forwards nothing for these at all (not even raw).
-        } else if (delta.type === 'thinking_delta') {
-          yield { type: 'thinking-delta', delta: delta.thinking };
-        } else if (delta.type === 'signature_delta') {
-          yield { type: 'thinking-delta', delta: '', signature: delta.signature };
-        } else if (delta.type === 'citations_delta') {
-          yield { type: 'citation-delta', blockIndex: idx, payload: delta.citation };
-        } else {
-          yield { type: 'vendor-raw', payload: event };
+          break;
         }
-        break;
-      }
-      case 'content_block_stop': {
-        const idx = event.index;
-        const state = blocksByIndex.get(idx);
-        if (state?.type === 'tool_use' && state.toolUseId) {
-          yield { type: 'tool-use-end', toolUseId: state.toolUseId };
+        case 'content_block_delta': {
+          const idx = event.index;
+          const state = blocksByIndex.get(idx);
+          const delta = event.delta;
+          if (delta.type === 'text_delta') {
+            streamedOutput += delta.text;
+            yield { type: 'text-delta', delta: delta.text };
+          } else if (delta.type === 'input_json_delta') {
+            if (state?.type === 'tool_use' && state.toolUseId) {
+              streamedOutput += delta.partial_json;
+              yield {
+                type: 'tool-use-delta',
+                toolUseId: state.toolUseId,
+                deltaJson: delta.partial_json,
+              };
+            }
+            // else: input deltas on a server_tool_use block are dropped,
+            // not passed through -- matches stream-transform.ts's explicit
+            // `continue` for blockType === 'server_tool_use', which
+            // forwards nothing for these at all (not even raw).
+          } else if (delta.type === 'thinking_delta') {
+            streamedOutput += delta.thinking;
+            yield { type: 'thinking-delta', delta: delta.thinking };
+          } else if (delta.type === 'signature_delta') {
+            yield { type: 'thinking-delta', delta: '', signature: delta.signature };
+          } else if (delta.type === 'citations_delta') {
+            yield { type: 'citation-delta', blockIndex: idx, payload: delta.citation };
+          } else {
+            yield { type: 'vendor-raw', payload: event };
+          }
+          break;
         }
-        blocksByIndex.delete(idx);
-        break;
+        case 'content_block_stop': {
+          const idx = event.index;
+          const state = blocksByIndex.get(idx);
+          if (state?.type === 'tool_use' && state.toolUseId) {
+            yield { type: 'tool-use-end', toolUseId: state.toolUseId };
+          }
+          blocksByIndex.delete(idx);
+          break;
+        }
+        case 'message_delta': {
+          if (stopEmitted) break;
+          if (event.delta.container?.id) containerIds.add(event.delta.container.id);
+          const usage = event.usage;
+          const outputTokens = usage?.output_tokens;
+          speed = servedSpeed(usage) ?? speed;
+          const serverToolUse = usage?.server_tool_use;
+          const webSearchRequests = Math.min(
+            serverToolUse?.web_search_requests ?? 0,
+            answeredWebSearches,
+          );
+          const webFetchRequests = serverToolUse?.web_fetch_requests ?? 0;
+          const codeExecutionRequests = codeExecutionRequestCount(serverToolUse);
+          const usageChunk: StreamChunk = {
+            type: 'usage',
+            ...(inputTokens !== undefined ? { inputTokens } : {}),
+            ...(outputTokens !== undefined ? { outputTokens } : {}),
+            ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
+            ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
+            ...(cacheWrite1hTokens !== undefined ? { cacheWrite1hTokens } : {}),
+            ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
+            ...(webFetchRequests > 0 ? { webFetchRequests } : {}),
+            ...(codeExecutionRequests > 0 ? { codeExecutionRequests } : {}),
+            ...(containerIds.size > 0 ? { codeExecutionContainerIds: [...containerIds] } : {}),
+            ...(speed ? { speed } : {}),
+          };
+          yield usageChunk;
+          yield { type: 'stop', reason: mapStopReason(event.delta.stop_reason) };
+          stopEmitted = true;
+          break;
+        }
+        case 'message_stop':
+          break;
       }
-      case 'message_delta': {
-        if (stopEmitted) break;
-        if (event.delta.container?.id) containerIds.add(event.delta.container.id);
-        const usage = event.usage;
-        const outputTokens = usage?.output_tokens;
-        speed = servedSpeed(usage) ?? speed;
-        const serverToolUse = usage?.server_tool_use;
-        const webSearchRequests = Math.min(
-          serverToolUse?.web_search_requests ?? 0,
-          answeredWebSearches,
-        );
-        const webFetchRequests = serverToolUse?.web_fetch_requests ?? 0;
-        const codeExecutionRequests = codeExecutionRequestCount(serverToolUse);
-        const usageChunk: StreamChunk = {
-          type: 'usage',
-          ...(inputTokens !== undefined ? { inputTokens } : {}),
-          ...(outputTokens !== undefined ? { outputTokens } : {}),
-          ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
-          ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
-          ...(cacheWrite1hTokens !== undefined ? { cacheWrite1hTokens } : {}),
-          ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
-          ...(webFetchRequests > 0 ? { webFetchRequests } : {}),
-          ...(codeExecutionRequests > 0 ? { codeExecutionRequests } : {}),
-          ...(containerIds.size > 0 ? { codeExecutionContainerIds: [...containerIds] } : {}),
-          ...(speed ? { speed } : {}),
-        };
-        yield usageChunk;
-        yield { type: 'stop', reason: mapStopReason(event.delta.stop_reason) };
-        stopEmitted = true;
-        break;
-      }
-      case 'message_stop':
-        break;
     }
+  } catch (error) {
+    // A stopped or failed turn still consumed what the provider measured at
+    // message_start, and the output it streamed before the provider could
+    // count it; billing reads both from this chunk.
+    if (!stopEmitted && inputTokens !== undefined) yield measuredSoFar();
+    throw error;
   }
 
   // The SDK iterator drained with no `message_delta` to close the turn, so the
@@ -200,6 +240,7 @@ export async function* translateAnthropicStream(
   // made a dropped connection read as a complete answer. The caller's own catch
   // classifies and reports it.
   if (!stopEmitted) {
+    if (inputTokens !== undefined) yield measuredSoFar();
     throw new EmptyStreamError(started ? 'started_but_no_completion' : 'no_message_start');
   }
 }

@@ -309,3 +309,7 @@ describe('sole-owner protection on the member routes', () => {
     expect(mockExecute).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

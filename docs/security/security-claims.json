@@ -347,7 +347,7 @@
       "implementation": [
         "apps/web/lib/connectors/oauth-access.ts#disconnectConnectorOAuthGrant",
         "apps/web/lib/connectors/oauth-access.ts#revokeAllConnectorTokensAtProviders",
-        "apps/web/lib/connectors/oauth-store.ts#revokeConnectorOAuthGrant"
+        "apps/web/lib/connectors/oauth-store.ts#captureAndRevokeConnectorOAuthGrants"
       ],
       "proof": [
         {

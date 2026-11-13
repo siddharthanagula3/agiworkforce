@@ -275,3 +275,7 @@ describe('POST /api/support/handoff', () => {
     expect(response.headers.get('set-cookie')).toContain('__Host-anon-session-id=anon-new');
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

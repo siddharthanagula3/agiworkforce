@@ -65,7 +65,7 @@ export function useStreamAnnouncement(
       return;
     }
     wasStreamingRef.current = false;
-    const tail = latestRef.current.slice(consumedRef.current).trim();
+    const tail = speakableText(latestRef.current.slice(consumedRef.current)).trim();
     consumedRef.current = latestRef.current.length;
     if (tail) setAnnouncement(announcementPlainText(tail));
   }, [isStreaming]);

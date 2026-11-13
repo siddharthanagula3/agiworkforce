@@ -145,3 +145,5 @@ describe('/api/finance/overview', () => {
     expect(mocks.readFinanceOverview).toHaveBeenCalledWith('user-1', '30d');
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

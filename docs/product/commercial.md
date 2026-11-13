@@ -236,11 +236,31 @@ purchased portion inside it.
 | Transferable      | No                                     | No                                                                                     |
 | Consumption order | First                                  | Second, reachable only once the included allowance is exhausted                        |
 
-The consumption order is enforced by `reserve_managed_usage_request_with_limits`, which
-tags purchased-funded spend `is_overage` and excludes it from the plan window, and by
-`resolveOverageHeadroomCents`, which passes
-`least(credits_allocated_cents - credits_used_cents, top_up_allocated_cents)` as the
-remaining purchased budget. Non-transferability is enforced by migration
+The consumption order is enforced at admission by
+`reserve_managed_usage_request_with_limits_microusd` and
+`extend_managed_usage_request_provider_step_microusd` (0392), under the per-user lock:
+
+- A 5-hour, weekly or flagship weekly window funds a turn on the plan while its plan usage
+  is below the cap. The turn that crosses the cap finishes on the plan, as Claude lets the
+  last message finish; only a turn reserved once the window is already used up goes to
+  credits.
+- The billing period has a hard edge. The plan's remaining allowance is the pooled
+  balance less the bonus and purchased lots still held, and a turn whose estimate exceeds
+  it goes to credits, because an overshoot there would be paid from purchased credits.
+- A turn sent to credits is admitted only on headroom from
+  `prepaid_credit_balances_microusd`: bonus credits, plus purchased credits only while
+  usage credits are on, within the personal spend limit (0378). Otherwise it is refused
+  with the limit that stopped it. Purchased credits are never spent while usage credits
+  are off.
+- An admitted credit turn is tagged `is_overage` for its whole life. Every plan window
+  (`apps/web/lib/server/rolling-usage.ts`) and the billing-period meter
+  (`managed-usage-summary-service.ts`) leave tagged spend out, and the 0298 trigger draws
+  it from bonus, then purchased lots.
+
+Only an account billed by Stripe, Apple or Google buys credits and switches them on in
+Settings > Billing (`credits.purchased.self_serve` in the usage summary). Any other
+account is told that whoever manages its plan controls them, as business plans at both
+leaders leave extra usage to admins. Non-transferability is enforced by migration
 `0126_credit_balance_transferability.sql`: the owner of a credit account and of a ledger
 entry is immutable, so no write can detach a balance from the identity that paid for it
 and from its refund and dispute path.

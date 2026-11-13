@@ -55,6 +55,7 @@ vi.mock('../lib/request-processor', async (importOriginal) => ({
   toManagedSkillFromUserSkill: vi.fn(),
   resolveNativeSearchMaxUses: () => 3,
   extractTextContent: (content: unknown) => (typeof content === 'string' ? content : ''),
+  placeTurnSystemNotices: vi.fn(),
 }));
 
 const transportMocks = vi.hoisted(() => ({

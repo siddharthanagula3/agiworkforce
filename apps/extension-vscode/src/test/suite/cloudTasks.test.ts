@@ -2,7 +2,6 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
   CloudRunTreeItem,
-  CloudTasksGroupItem,
   CloudTasksTreeProvider,
 } from '../../features/cloud-tasks/cloudTasksTree';
 import {
@@ -76,10 +75,8 @@ suite('AGI Code cloud tasks', () => {
 
     const provider = new CloudTasksTreeProvider(() => Promise.resolve({ status: 'ready', client }));
     try {
-      const [group] = await provider.getChildren();
-      assert.ok(group instanceof CloudTasksGroupItem, 'the view must group runs by stage');
-      assert.strictEqual(group.label, 'Needs you');
-      const [item] = await provider.getChildren(group);
+      const children = await provider.getChildren();
+      const item = children[0];
       assert.ok(item instanceof CloudRunTreeItem, 'the view must render the run as a tree item');
       assert.strictEqual(item.label, 'Migrate the billing ledger');
       assert.strictEqual(item.description, 'Running · updated 2m ago · quiet 1m');
@@ -89,7 +86,7 @@ suite('AGI Code cloud tasks', () => {
       const actions = buildCloudRunDetailItems(RUN, []).map((entry) => entry.action);
       assert.deepStrictEqual(
         actions.filter((action) => action !== undefined),
-        ['approve', 'reject', 'steer', 'cancel', 'rename', 'open-web'],
+        ['approve', 'reject', 'cancel', 'open-web'],
       );
 
       const sent = await decideCloudRunApproval(client, RUN, 'approved');

@@ -27,6 +27,7 @@ vi.mock('workflow', () => ({
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
+  usageOfFailedProviderStep: vi.fn(() => null),
   applyToolResultSecretPolicy: vi.fn(
     async (_userId: string, _name: string, content: string) => content,
   ),

@@ -99,17 +99,13 @@ function citationTextNodes(root: HTMLElement): Text[] {
   return nodes;
 }
 
-function standsAsCitation(text: string, start: number): boolean {
-  return !/[\p{L}\p{N}_)\]]/u.test(text[start - 1] ?? '');
-}
-
 export function decorateCitations(root: HTMLElement, markers: readonly SidePanelSource[]): void {
+  if (markers.length === 0) return;
   for (const node of citationTextNodes(root)) {
     const matches = [...node.data.matchAll(CITATION_MARKER)];
     if (matches.length === 0) continue;
     const fragment = document.createDocumentFragment();
     let cursor = 0;
-    let changed = false;
     let index = 0;
     while (index < matches.length) {
       const start = matches[index]!.index;
@@ -126,18 +122,12 @@ export function decorateCitations(root: HTMLElement, markers: readonly SidePanel
         end = matches[index]!.index + matches[index]![0].length;
         index += 1;
       }
-      if (grouped.length > 0) {
-        fragment.appendChild(document.createTextNode(node.data.slice(cursor, start)));
-        fragment.appendChild(buildCitationChip(grouped));
-      } else if (standsAsCitation(node.data, start)) {
-        fragment.appendChild(document.createTextNode(node.data.slice(cursor, start).trimEnd()));
-      } else {
-        continue;
-      }
+      if (grouped.length === 0) continue;
+      fragment.appendChild(document.createTextNode(node.data.slice(cursor, start)));
+      fragment.appendChild(buildCitationChip(grouped));
       cursor = end;
-      changed = true;
     }
-    if (!changed) continue;
+    if (cursor === 0) continue;
     fragment.appendChild(document.createTextNode(node.data.slice(cursor)));
     node.replaceWith(fragment);
   }

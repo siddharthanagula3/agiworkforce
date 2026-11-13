@@ -35,7 +35,10 @@ import {
 } from '@agiworkforce/types';
 import { CLOUD_CODE_HARNESS_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
-import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
+import {
+  resolveEntitlementBundle,
+  usageAllowanceSubject,
+} from '@/lib/services/effective-subscription-service';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import {
   CODE_RUN_STOPPED_MESSAGE,
@@ -135,11 +138,11 @@ function resolveSandboxLimits(planTier: string | null | undefined): {
 async function resolveScopePlanTier(scope: E2BSessionScope): Promise<string | null> {
   if (scope.planTier) return scope.planTier;
   try {
-    const subscription = await resolveEffectiveSubscription(
+    const entitlement = await resolveEntitlementBundle(
       createClaimedUserScopedDb(getNeonDb(), { userId: scope.userId, organizationId: null }),
       scope.userId,
     );
-    return subscription?.plan_tier ?? 'free';
+    return usageAllowanceSubject(entitlement).tier;
   } catch (err) {
     logger.error(
       { err, userId: scope.userId },

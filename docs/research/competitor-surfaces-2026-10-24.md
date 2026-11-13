@@ -3,7 +3,7 @@
 Status: Dated research snapshot; superseded for OpenAI, Anthropic, Google and Perplexity by `assistant-comparison-2026-11-11.md`
 Owner: Product research
 Verified: 2026-10-24
-Coverage: public official pages read on 2026-10-24, with prior repository research re-checked
+Coverage: public official pages read on 2026-10-24, with prior repository research re-checked; the Claude and ChatGPT for Mac menus entry was observed on installed builds on 2026-10-26
 
 This is the dated, surface-by-surface comparison of the AI applications run by the large
 vendors we compete with: what each one ships on web, desktop, mobile, CLI, VS Code and Chrome,
@@ -22,7 +22,7 @@ this file.
   proof the surface is absent).
 - **Evidence:** _Vendor page_ means an official page said so on 2026-10-24. _Indirect
   evidence_ means store listings, search snippets of official pages, or press. _Unconfirmed_
-  means it could not be checked.
+  means it could not be checked. _Observed_ means seen in the installed app on the date given.
 - Some vendor sites refused automated reading (help.openai.com, chatgpt.com, openai.com, some
   x.ai, meta.ai and Google Play pages). Claims from those rest on official docs mirrors, store
   listings or press, and are marked as indirect.
@@ -1017,6 +1017,24 @@ Plans and limits: Each Teams full seat includes Devin Desktop.
 Notes: Detailed in the Devin Desktop entry.
 
 Sources: <https://devin.ai/desktop>, <https://devin.ai/blog/devin-cloud-in-your-terminal>, <https://devin.ai/pricing>
+
+#### Claude and ChatGPT for Mac: menus and settings as installed
+
+Evidence: Observed on 2026-10-26 on one Mac, with the Claude desktop app at version 3.6556.2 and the ChatGPT desktop app at version 26.1021.31345 (build 21828). Native menus were read through macOS Accessibility and settings pages captured as screenshots; no message was sent, no setting changed, and no private interface, session store or code was used. A command in a menu is compiled into the build; it does not prove the signed-in account can use it.
+
+| Menu   | Claude                                                                                                                                                                                                                    | ChatGPT                                                                                                                                                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App    | About, Settings…, Check for Updates…, Services, Hide, Hide Others, Show All, Quit                                                                                                                                         | The same plus Log Out                                                                                                                                                                                                       |
+| File   | New Chat, Open File…, Open Folder…, Close Window, Close All                                                                                                                                                               | New Window, New Chat, New Temporary Chat, New Project…, Open Folder…, Close                                                                                                                                                 |
+| Edit   | Standard items, Find (Find…, Find Next, Find Previous, Find in Files…)                                                                                                                                                    | Standard items, Substitutions, Speech                                                                                                                                                                                       |
+| View   | Command Palette…, Hide Sidebar, Show Terminal, Show Changes, Show Browser, Show Files, Show Side Chat, Show Session Rail, Close Pane, Split View, zoom, Reload                                                            | Toggle Sidebar, Toggle Bottom Panel, Toggle Pinned Summary, Open Terminal, Toggle navigation panel, Switch between Chat and tabs, Browser, Find, Back, Forward, Previous and Next Sidebar Item, Previous and Next Tab, zoom |
+| Go     | Back, Forward, Home, Code, Previous Chat, Next Chat, Search…                                                                                                                                                              | No Go menu                                                                                                                                                                                                                  |
+| Window | The macOS window list, Move & Resize, Full Screen Tile, Bring All to Front, Show Main Window                                                                                                                              | The macOS window list, Move & Resize, Full Screen Tile, Bring All to Front                                                                                                                                                  |
+| Help   | Claude Help, Keyboard Shortcuts, Troubleshooting (Show Logs in Finder, Generate Diagnostic Report, Record Net Log, Disable Hardware Acceleration, Clear Cache and Restart, Reset App Data…, Cowork VM items), Get Support | Documentation, Keyboard Shortcuts, What's New, Troubleshooting (no submenu), System Status, Send Feedback, Task Manager, Start Performance Trace                                                                            |
+
+Both Edit menus also carry the system's Writing Tools, AutoFill, Start Dictation… and Emoji & Symbols. Claude's desktop settings sit under System: run on startup, the quick access, voice and dictation shortcuts, menu bar, keep computer awake, and a Storage row with Manage. ChatGPT has a Storage page showing the space chats, subagents, archived chats and worktrees use on this device, with Clean up old chats and Manage worktrees; its keyboard shortcuts include Open side chat and Focus tab 1 to 5.
+
+Common to both: the window list and arrangement items, Find, Open Folder…, Close in File, stepping through the sidebar (Previous and Next Chat in Claude, Previous and Next Sidebar Item in ChatGPT), a terminal, a built-in browser, a side chat, Troubleshooting in Help, and a storage view in Settings. Only one app: Search… and Command Palette… (Claude), New Temporary Chat, New Project… and Log Out (ChatGPT). Only Claude shows two conversations in one window (Split View); ChatGPT's tabs are browser and terminal tabs beside the chat, which its browser page documents as split and full views of a tab next to the chat (<https://learn.chatgpt.com/docs/browser>, read 2026-10-27).
 
 ### Mobile
 

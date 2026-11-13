@@ -848,3 +848,7 @@ describe('captured workspace scope', () => {
     },
   );
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

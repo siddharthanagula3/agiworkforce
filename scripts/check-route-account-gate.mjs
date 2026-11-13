@@ -381,13 +381,12 @@ export function routeFiles(root = ROUTE_DIR) {
 export function classifyRoute(file) {
   const module = analyzeModule(file);
   const handlers = [...module.exportNames].filter((name) => HANDLERS.has(name));
-  const combined = { gate: false, kinds: new Set() };
+  const combined = { kinds: new Set() };
   for (const handler of handlers) {
     const from = reachFrom(file, handler, new Set());
-    if (from.gate) combined.gate = true;
+    if (from.gate) return 'gated';
     for (const kind of from.kinds) combined.kinds.add(kind);
   }
-  if (combined.gate) return 'gated';
   if (combined.kinds.has('user')) return 'ungated-user';
   if (combined.kinds.has('machine')) return 'machine';
   return 'public';

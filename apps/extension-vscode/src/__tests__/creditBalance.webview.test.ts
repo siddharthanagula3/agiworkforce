@@ -13,12 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
-import {
-  MICROUSD_PER_CREDIT,
-  WORK_USAGE_COPY,
-  creditsFromCents,
-  formatCredits,
-} from '@agiworkforce/types';
+import { MICROUSD_PER_CREDIT, creditsFromCents, formatCredits } from '@agiworkforce/types';
 import { fetchTierInfo, parseTierInfoResponse } from '../utils/api';
 import { resolveUsageMeter } from '../data/usageMeter';
 import { buildUsageMeterPayload } from '../features/sidebar-webview/ChatStateManager';
@@ -146,47 +141,6 @@ describe('credit balance in the VS Code meter', () => {
     });
   });
 
-  it('shows the purchased credits the server nets against turns in flight, not the cents figure', async () => {
-    const window = { allowance: 1000, used: 400, remaining: 600, reset_at: null };
-    const { payload } = await payloadFromServerSummary({
-      ...RAW_USAGE_SUMMARY,
-      credits: {
-        monthly: window,
-        weekly: window,
-        five_hour: window,
-        flagship_weekly: null,
-        purchased: { remaining: 2400.5, overage_enabled: true, self_serve: true },
-      },
-    });
-
-    expect(payload.credits?.balanceLabel).toBe(formatCredits(2400.5));
-    expect(payload.credits?.balanceLabel).not.toBe(PUBLISHED_BALANCE_LABEL);
-    expect(payload.credits?.topUpLabel).toBe('Add credits');
-  });
-
-  it('offers no credit purchase when someone else manages the plan', async () => {
-    const window = { allowance: 1000, used: 400, remaining: 600, reset_at: null };
-    const { payload } = await payloadFromServerSummary({
-      ...RAW_USAGE_SUMMARY,
-      overage_enabled: false,
-      credits: {
-        monthly: window,
-        weekly: window,
-        five_hour: window,
-        flagship_weekly: null,
-        purchased: { remaining: 50, overage_enabled: false, self_serve: false },
-      },
-    });
-
-    expect(payload.credits?.topUpLabel).toBeNull();
-    expect(payload.credits?.spendabilityLabel).toBe(WORK_USAGE_COPY.body.wait);
-
-    executeWebviewScript();
-    postUsageMeter(payload);
-    expect(creditRow()?.textContent).not.toContain('Add credits');
-    expect(creditRow()?.textContent).not.toContain('enable in billing');
-  });
-
   it('renders the balance beside the per-limit rows', async () => {
     const { payload } = await payloadFromServerSummary(RAW_USAGE_SUMMARY);
 
@@ -248,42 +202,6 @@ describe('credit balance in the VS Code meter', () => {
     topUp?.click();
 
     expect(postedMessages).toContainEqual({ origin: 'chat', epoch: 0, type: 'manageBilling' });
-  });
-
-  it('says the work now runs on usage credits once a limit binds and credits are on', async () => {
-    const { payload } = await payloadFromServerSummary({
-      ...RAW_USAGE_SUMMARY,
-      session_usage_percentage: 100,
-      has_usage_remaining: false,
-    });
-
-    executeWebviewScript();
-    postUsageMeter(payload);
-
-    const banner = document.getElementById('usageMeterBanner')?.textContent ?? '';
-    expect(banner).toContain('Now using usage credits');
-    expect(banner).not.toContain('quota exhausted');
-  });
-
-  it('still reports an exhausted quota when credits cannot carry the work', async () => {
-    for (const blocked of [
-      { overage_enabled: false },
-      { credit_balance_cents: 0, overage_enabled: true },
-    ]) {
-      const { payload } = await payloadFromServerSummary({
-        ...RAW_USAGE_SUMMARY,
-        ...blocked,
-        session_usage_percentage: 100,
-        has_usage_remaining: false,
-      });
-
-      executeWebviewScript();
-      postUsageMeter(payload);
-
-      const banner = document.getElementById('usageMeterBanner')?.textContent ?? '';
-      expect(banner).toContain('Managed Cloud quota exhausted');
-      expect(banner).not.toContain('Now using usage credits');
-    }
   });
 
   it('publishes neither a balance nor an allowance figure on Free', async () => {

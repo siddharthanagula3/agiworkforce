@@ -105,11 +105,8 @@ fn ansi_color(color: ratatui::style::Color, foreground: bool) -> Option<String> 
 }
 
 pub fn render_markdown_ansi(text: &str) -> String {
-    let width = crossterm::terminal::size()
-        .map(|(columns, _)| usize::from(columns))
-        .unwrap_or(UNKNOWN_TERMINAL_WIDTH);
     let mut output = String::new();
-    for line in render_markdown(text, width) {
+    for line in render_markdown(text) {
         for span in line.spans {
             let mut codes = Vec::new();
             if let Some(code) = span.style.fg.and_then(|color| ansi_color(color, true)) {
@@ -141,20 +138,15 @@ pub fn render_markdown_ansi(text: &str) -> String {
     output
 }
 
-const UNKNOWN_TERMINAL_WIDTH: usize = 100;
-const BLOCK_INDENT: &str = "    ";
-const DISPLAY_MATH_INDENT: &str = "      ";
-
-/// Render markdown text into styled ratatui Lines with syntax highlighting,
-/// fitting tables to `width` terminal columns.
-pub fn render_markdown(text: &str, width: usize) -> Vec<Line<'static>> {
+/// Render markdown text into styled ratatui Lines with syntax highlighting.
+pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut current_spans: Vec<Span<'static>> = Vec::new();
 
     let text = sanitize_terminal_text(text);
     let parser = Parser::new_ext(
         text.as_ref(),
-        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_MATH,
+        Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH,
     );
 
     let mut in_code_block = false;
@@ -201,11 +193,9 @@ pub fn render_markdown(text: &str, width: usize) -> Vec<Line<'static>> {
                 )));
             }
             Event::End(TagEnd::CodeBlock) => {
-                if is_diff_language(&code_lang) {
-                    lines.extend(diff_code_lines(&code_content));
-                } else {
-                    lines.extend(highlight_code(&code_content, &code_lang));
-                }
+                // Syntax highlight the code block
+                let highlighted = highlight_code(&code_content, &code_lang);
+                lines.extend(highlighted);
                 lines.push(Line::from(Span::styled(
                     "    └──────────",
                     Style::default().fg(ui_muted()),
@@ -219,18 +209,23 @@ pub fn render_markdown(text: &str, width: usize) -> Vec<Line<'static>> {
                 heading_level = level as u8;
             }
             Event::End(TagEnd::Heading(_)) => {
-                let style = if heading_level == 1 {
-                    Style::default().add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
-                } else {
-                    Style::default().add_modifier(Modifier::BOLD)
+                // Style the heading
+                let style = match heading_level {
+                    1 => Style::default()
+                        .fg(ui_accent())
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                    2 => Style::default()
+                        .fg(ui_accent())
+                        .add_modifier(Modifier::BOLD),
+                    _ => Style::default().add_modifier(Modifier::ITALIC),
                 };
+                let prefix = "#".repeat(heading_level as usize);
                 let heading_text: String = current_spans
                     .iter()
                     .map(|s| s.content.to_string())
                     .collect();
                 current_spans.clear();
-                current_spans.push(Span::raw(BLOCK_INDENT));
-                current_spans.push(Span::styled(heading_text, style));
+                current_spans.push(Span::styled(format!("    {prefix} {heading_text}"), style));
                 flush_line(&mut lines, &mut current_spans);
                 in_heading = false;
                 block_gap = true;
@@ -252,38 +247,6 @@ pub fn render_markdown(text: &str, width: usize) -> Vec<Line<'static>> {
             }
             Event::End(TagEnd::Strikethrough) => {
                 in_strike = false;
-            }
-            Event::InlineMath(math) => {
-                let text = super::math_text::latex_to_text(&math).replace('\n', " ");
-                if in_link {
-                    link_text.push_str(&text);
-                }
-                if in_table_cell {
-                    current_cell.push_str(&text);
-                } else {
-                    push_prefix(&mut current_spans, in_blockquote, in_heading, &lists);
-                    current_spans.push(Span::styled(
-                        text,
-                        Style::default().add_modifier(Modifier::ITALIC),
-                    ));
-                }
-            }
-            Event::DisplayMath(math) => {
-                let text = super::math_text::latex_to_text(&math);
-                if in_table_cell {
-                    current_cell.push_str(&text.replace('\n', " "));
-                } else {
-                    flush_line(&mut lines, &mut current_spans);
-                    for row in text.lines() {
-                        lines.push(Line::from(vec![
-                            Span::raw(DISPLAY_MATH_INDENT),
-                            Span::styled(
-                                row.to_string(),
-                                Style::default().add_modifier(Modifier::ITALIC),
-                            ),
-                        ]));
-                    }
-                }
             }
             Event::Code(code) => {
                 if in_link {
@@ -457,7 +420,7 @@ pub fn render_markdown(text: &str, width: usize) -> Vec<Line<'static>> {
                 current_row.push(current_cell.trim().to_string());
             }
             Event::End(TagEnd::Table) => {
-                lines.extend(render_table(&table_rows, table_header_rows, width));
+                lines.extend(render_table(&table_rows, table_header_rows));
                 block_gap = true;
             }
             _ => {}
@@ -468,15 +431,10 @@ pub fn render_markdown(text: &str, width: usize) -> Vec<Line<'static>> {
     lines
 }
 
-/// Columns narrower than this read as a column of broken words, so a table
-/// that cannot give every column this much is shown one record at a time.
-const MIN_TABLE_COLUMN: usize = 6;
-
-/// Render a parsed GFM table as bordered, column-aligned terminal lines that
-/// fit `width` columns. Columns shrink toward their share of the width and
-/// longer cells wrap inside their column; a table too wide even for that is
-/// shown as one record per row, each cell under its header.
-fn render_table(rows: &[Vec<String>], header_rows: usize, width: usize) -> Vec<Line<'static>> {
+/// Render a parsed GFM table as bordered, column-aligned terminal lines with a
+/// styled header row and a divider. Column widths are capped so a wide table
+/// fits the pane, and longer cells wrap onto extra lines within their column.
+fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> {
     if rows.is_empty() {
         return Vec::new();
     }
@@ -484,17 +442,19 @@ fn render_table(rows: &[Vec<String>], header_rows: usize, width: usize) -> Vec<L
     if ncols == 0 {
         return Vec::new();
     }
-    let mut natural = vec![1usize; ncols];
+    const MAX_COL: usize = 40;
+    const MIN_COL: usize = 8;
+    const TABLE_BUDGET: usize = 96;
+    let cap = (TABLE_BUDGET / ncols).clamp(MIN_COL, MAX_COL);
+    let mut widths = vec![0usize; ncols];
     for row in rows {
         for (i, cell) in row.iter().enumerate() {
-            natural[i] = natural[i].max(display_width(cell));
+            let w = display_width(cell).min(cap);
+            if w > widths[i] {
+                widths[i] = w;
+            }
         }
     }
-    let chrome = BLOCK_INDENT.len() + 3 * ncols + 1;
-    let available = width.saturating_sub(chrome);
-    let Some(widths) = fit_columns(&natural, available) else {
-        return render_table_records(rows, header_rows, width);
-    };
 
     let border = Style::default().fg(ui_muted());
     let cell_lines = |row: &[String], bold: bool| -> Vec<Line<'static>> {
@@ -512,7 +472,7 @@ fn render_table(rows: &[Vec<String>], header_rows: usize, width: usize) -> Vec<L
         (0..height)
             .map(|line_idx| {
                 let mut spans: Vec<Span<'static>> =
-                    vec![Span::styled(format!("{BLOCK_INDENT}│ "), border)];
+                    vec![Span::styled("    │ ".to_string(), border)];
                 for (i, w) in widths.iter().enumerate() {
                     let part = wrapped[i].get(line_idx).map(String::as_str).unwrap_or("");
                     spans.push(Span::styled(pad_to_cols(part, *w), style));
@@ -528,7 +488,7 @@ fn render_table(rows: &[Vec<String>], header_rows: usize, width: usize) -> Vec<L
             .collect()
     };
     let rule = |left: &str, mid: &str, right: &str| -> Line<'static> {
-        let mut s = format!("{BLOCK_INDENT}{left}");
+        let mut s = format!("    {left}");
         for (i, w) in widths.iter().enumerate() {
             s.push_str(&"─".repeat(w + 2));
             s.push_str(if i + 1 == widths.len() { right } else { mid });
@@ -544,75 +504,6 @@ fn render_table(rows: &[Vec<String>], header_rows: usize, width: usize) -> Vec<L
         }
     }
     out.push(rule("└", "┴", "┘"));
-    out
-}
-
-/// Column widths that sum to at most `available`: every column its natural
-/// width when they all fit, otherwise the narrow ones keep theirs and the
-/// rest split what is left. `None` when even the minimum does not fit.
-fn fit_columns(natural: &[usize], available: usize) -> Option<Vec<usize>> {
-    if natural.iter().sum::<usize>() <= available {
-        return Some(natural.to_vec());
-    }
-    let mut widths: Vec<usize> = natural
-        .iter()
-        .map(|width| (*width).min(MIN_TABLE_COLUMN))
-        .collect();
-    let floor: usize = widths.iter().sum();
-    if floor > available {
-        return None;
-    }
-    let mut spare = available - floor;
-    let mut order: Vec<usize> = (0..natural.len()).collect();
-    order.sort_by_key(|i| natural[*i] - widths[*i]);
-    for (taken, i) in order.iter().enumerate() {
-        let share = spare / (order.len() - taken);
-        let grant = (natural[*i] - widths[*i]).min(share);
-        widths[*i] += grant;
-        spare -= grant;
-    }
-    Some(widths)
-}
-
-/// A table too wide for the pane, as one block per row with every cell under
-/// its column's header, the layout a phone-width reader gets on the web.
-fn render_table_records(
-    rows: &[Vec<String>],
-    header_rows: usize,
-    width: usize,
-) -> Vec<Line<'static>> {
-    let headers: Vec<String> = rows
-        .get(..header_rows)
-        .and_then(|head| head.last())
-        .cloned()
-        .unwrap_or_default();
-    let label_style = Style::default().add_modifier(Modifier::BOLD);
-    let text_width = width.saturating_sub(BLOCK_INDENT.len() + 2).max(1);
-    let mut out = Vec::new();
-    for (index, row) in rows.iter().skip(header_rows).enumerate() {
-        if index > 0 {
-            out.push(Line::from(Span::styled(
-                format!("{BLOCK_INDENT}{}", "─".repeat(text_width.min(24))),
-                Style::default().fg(ui_muted()),
-            )));
-        }
-        for (column, cell) in row.iter().enumerate() {
-            let label = headers
-                .get(column)
-                .filter(|header| !header.is_empty())
-                .cloned()
-                .unwrap_or_else(|| format!("Column {}", column + 1));
-            for part in wrap_cols(&label, text_width) {
-                out.push(Line::from(vec![
-                    Span::raw(BLOCK_INDENT),
-                    Span::styled(part, label_style),
-                ]));
-            }
-            for part in wrap_cols(cell, text_width) {
-                out.push(Line::from(format!("{BLOCK_INDENT}  {part}")));
-            }
-        }
-    }
     out
 }
 
@@ -690,46 +581,6 @@ fn open_block(lines: &mut Vec<Line<'static>>, spans: &mut Vec<Span<'static>>, ga
     }
 }
 
-fn is_diff_language(lang: &str) -> bool {
-    matches!(
-        lang.trim().to_ascii_lowercase().as_str(),
-        "diff" | "patch" | "udiff"
-    )
-}
-
-/// A fenced diff in the change colours an edit uses: additions and removals
-/// on their green and red bands, hunk headers in the accent, file headers in
-/// bold. Under `NO_COLOR` the palette resolves to the terminal default, so
-/// the `+` and `-` gutter alone carries the change.
-fn diff_code_lines(code: &str) -> Vec<Line<'static>> {
-    let bands = crate::tui::widgets::diff_review::diff_bands();
-    let gutter = Style::default().fg(ui_muted());
-    code.lines()
-        .map(|text| {
-            let text = text.replace('\t', "    ");
-            let (style, band) = if text.starts_with("+++") || text.starts_with("---") {
-                (Style::default().add_modifier(Modifier::BOLD), None)
-            } else if text.starts_with("@@") {
-                (Style::default().fg(ui_accent()), None)
-            } else if text.starts_with('+') {
-                (bands.style_for(true), bands.added)
-            } else if text.starts_with('-') {
-                (bands.style_for(false), bands.removed)
-            } else {
-                (Style::default(), None)
-            };
-            let row = Line::from(vec![
-                Span::styled(format!("{BLOCK_INDENT}│ "), gutter),
-                Span::styled(text, style),
-            ]);
-            match band {
-                Some(bg) => row.style(Style::default().bg(bg)),
-                None => row,
-            }
-        })
-        .collect()
-}
-
 /// Syntax-highlight a code block and return styled lines.
 fn highlight_code(code: &str, lang: &str) -> Vec<Line<'static>> {
     let ss = syntax_set();
@@ -800,7 +651,7 @@ mod tests {
     #[test]
     fn strips_escape_sequences_from_rendered_spans() {
         let md = "before \u{1b}]52;c;cm0gLXJmIC8=\u{7}after \u{1b}[2J\u{1b}[31mred\u{1b}[0m";
-        let joined = lines_to_strings(&render_markdown(md, 100)).join("\n");
+        let joined = lines_to_strings(&render_markdown(md)).join("\n");
         assert!(!joined.contains('\u{1b}'), "escape survived: {joined:?}");
         assert!(
             !joined.contains("cm0gLXJmIC8="),
@@ -819,7 +670,7 @@ mod tests {
     #[test]
     fn strips_escape_sequences_inside_code_blocks() {
         let md = "```sh\necho \u{1b}]0;pwned\u{7}ok\n```";
-        let joined = lines_to_strings(&render_markdown(md, 100)).join("\n");
+        let joined = lines_to_strings(&render_markdown(md)).join("\n");
         assert!(!joined.contains('\u{1b}'), "escape survived: {joined:?}");
         assert!(!joined.contains("pwned"), "OSC title survived: {joined:?}");
         assert!(joined.contains("echo ok"), "code was mangled: {joined:?}");
@@ -828,7 +679,7 @@ mod tests {
     #[test]
     fn renders_gfm_table_with_borders() {
         let md = "| Fruit | Color |\n|-------|-------|\n| Apple | Red |\n| Lime | Green |";
-        let rendered = lines_to_strings(&render_markdown(md, 100));
+        let rendered = lines_to_strings(&render_markdown(md));
         for l in &rendered {
             eprintln!("{l}");
         }
@@ -853,7 +704,7 @@ mod tests {
     #[test]
     fn cjk_table_cells_keep_all_rows_column_aligned() {
         let md = "| 名称 | Status |\n|---|---|\n| 模型 | Ready |\n| 工具调用 | Active |";
-        let rendered = lines_to_strings(&render_markdown(md, 100));
+        let rendered = lines_to_strings(&render_markdown(md));
         let widths: Vec<usize> = rendered
             .iter()
             .filter(|line| line.contains('│') || line.contains('┌') || line.contains('└'))
@@ -863,109 +714,6 @@ mod tests {
         assert!(
             widths.iter().all(|width| *width == widths[0]),
             "table rows have inconsistent terminal widths: {widths:?}"
-        );
-    }
-
-    #[test]
-    fn headings_render_as_styled_text_without_their_markers() {
-        let rendered = render_markdown("# Title\n\n## Section\n\n### Lists\n\nbody", 80);
-        let text = lines_to_strings(&rendered);
-        assert!(
-            text.iter().all(|line| !line.contains('#')),
-            "heading markers leaked: {text:?}"
-        );
-        let styled = |needle: &str| {
-            rendered
-                .iter()
-                .flat_map(|line| line.spans.iter())
-                .find(|span| span.content == needle)
-                .map(|span| span.style.add_modifier)
-                .unwrap_or_else(|| panic!("no span {needle:?} in {text:?}"))
-        };
-        assert!(styled("Title").contains(Modifier::BOLD | Modifier::UNDERLINED));
-        assert!(styled("Section").contains(Modifier::BOLD));
-        assert!(styled("Lists").contains(Modifier::BOLD));
-    }
-
-    #[test]
-    fn math_reads_as_text_instead_of_raw_latex() {
-        let md = "Compounded:\n\n$$A = P\\left(1 + \\frac{r}{n}\\right)^{nt}$$\n\nwhere $A$ is the amount and $E = mc^2$.\n\n| Kind | Example |\n|---|---|\n| Math | $E = mc^2$ |";
-        let joined = lines_to_strings(&render_markdown(md, 80)).join("\n");
-        assert!(joined.contains("A = P(1 + r/n)ⁿᵗ"), "{joined}");
-        assert!(
-            joined.contains("where A is the amount and E = mc²."),
-            "{joined}"
-        );
-        assert!(joined.contains("│ E = mc²"), "{joined}");
-        assert!(
-            !joined.contains('$') && !joined.contains("\\frac"),
-            "{joined}"
-        );
-    }
-
-    #[test]
-    fn diff_blocks_colour_additions_and_removals() {
-        let md = "```diff\n function f() {\n-  return a;\n+  return b;\n }\n```";
-        let rendered = render_markdown(md, 80);
-        let row = |needle: &str| {
-            rendered
-                .iter()
-                .find(|line| line.spans.iter().any(|span| span.content == needle))
-                .and_then(|line| line.spans.iter().find(|span| span.content == needle))
-                .map(|span| span.style)
-                .unwrap_or_else(|| panic!("no diff row {needle:?}"))
-        };
-        assert_eq!(
-            row("+  return b;").fg,
-            Some(crate::tui::terminal_palette::ui_success())
-        );
-        assert_eq!(
-            row("-  return a;").fg,
-            Some(crate::tui::terminal_palette::ui_danger())
-        );
-        assert_eq!(row(" function f() {").fg, None);
-    }
-
-    fn laptops() -> &'static str {
-        "| Feature | Ultraportable | Everyday 14 inch | Creator 16 inch |\n|---|---|---|---|\n| Typical weight | About 1.2 kg | About 1.6 kg | About 2.2 kg |\n| Best for | Travel, writing, email | Office work, browsing | Video editing, 3D, gaming |"
-    }
-
-    #[test]
-    fn a_wide_table_fits_the_pane_and_keeps_its_borders() {
-        for width in [60usize, 72, 96] {
-            let rendered = lines_to_strings(&render_markdown(laptops(), width));
-            let widths: Vec<usize> = rendered.iter().map(|line| display_width(line)).collect();
-            assert!(
-                widths.iter().all(|w| *w <= width),
-                "a table row is wider than {width}: {rendered:#?}"
-            );
-            assert!(
-                widths.iter().all(|w| *w == widths[0]),
-                "rows lost their alignment at {width}: {rendered:#?}"
-            );
-            let joined = rendered.join("\n");
-            assert!(
-                joined.contains("gaming") && joined.contains("Creator"),
-                "{joined}"
-            );
-        }
-    }
-
-    #[test]
-    fn a_table_too_wide_for_any_columns_is_shown_one_record_at_a_time() {
-        let rendered = lines_to_strings(&render_markdown(laptops(), 30));
-        assert!(
-            rendered.iter().all(|line| display_width(line) <= 30),
-            "{rendered:#?}"
-        );
-        assert!(
-            !rendered.iter().any(|line| line.contains('┌')),
-            "{rendered:#?}"
-        );
-        let joined = rendered.join("\n");
-        assert!(
-            joined.contains("    Ultraportable\n      About 1.2 kg"),
-            "{joined}"
         );
     }
 }

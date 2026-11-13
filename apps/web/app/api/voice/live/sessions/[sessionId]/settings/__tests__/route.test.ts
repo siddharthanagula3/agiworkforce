@@ -140,3 +140,5 @@ describe('PATCH /api/voice/live/sessions/[sessionId]/settings', () => {
     expect(updateVoiceSessionSettingsMock).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

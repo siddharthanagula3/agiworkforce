@@ -28,6 +28,8 @@ import {
   Gift,
   MessagesSquare,
   MousePointerClick,
+  HardDrive,
+  Globe2,
 } from 'lucide-react';
 
 export type SettingsNavKey =
@@ -56,6 +58,9 @@ export type SettingsNavKey =
   // when it is running inside one.
   | 'desktop'
   | 'computer-use'
+  | 'browser-pane'
+  | 'local-mcp'
+  | 'storage'
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer, see apps/desktop settings-ia contract test).
   | 'personalization'
@@ -299,6 +304,34 @@ export const SETTINGS_NAV_GROUP_DESKTOP_APP: SettingsNavGroupResolved = {
       icon: MousePointerClick,
       keywords: ['computer use', 'control', 'apps', 'mouse', 'keyboard', 'screen', 'chrome'],
     },
+    {
+      key: 'browser-pane',
+      label: 'Browser',
+      icon: Globe2,
+      keywords: ['browser', 'sites', 'allowed sites', 'blocked sites', 'cookies', 'browsing data'],
+    },
+    {
+      key: 'local-mcp',
+      label: 'Developer',
+      icon: Terminal,
+      keywords: [
+        'developer',
+        'mcp',
+        'mcp servers',
+        'local mcp',
+        'config',
+        'logs',
+        'terminal',
+        'cursor',
+        'scrollback',
+      ],
+    },
+    {
+      key: 'storage',
+      label: 'Storage',
+      icon: HardDrive,
+      keywords: ['storage', 'disk', 'space', 'cache', 'logs', 'clean up', 'free up'],
+    },
   ],
 };
 
@@ -320,7 +353,12 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'security', label: 'Security', icon: Lock },
       { key: 'account', label: 'Account', icon: UserRound },
       { key: 'billing', label: 'Billing', icon: CreditCard },
-      { key: 'usage', label: 'Usage', icon: Gauge },
+      {
+        key: 'usage',
+        label: 'Usage',
+        icon: Gauge,
+        keywords: ['spend limit', 'spending limit', 'monthly limit', 'budget', 'credits'],
+      },
       {
         key: 'referrals',
         label: 'Referrals',

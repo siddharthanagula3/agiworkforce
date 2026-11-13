@@ -327,21 +327,23 @@ function describeEarlierResult(summary: StoredToolResultSummary): string {
   return `"${summary.reference}" (${tool}${summary.totalChars} characters)`;
 }
 
-export function toolResultReaderToolDef(
-  earlierResults: readonly StoredToolResultSummary[] = [],
-): WebMcpToolDef {
-  const earlier =
-    earlierResults.length > 0
-      ? ` Results kept from earlier turns of this conversation: ${earlierResults
-          .map(describeEarlierResult)
-          .join('; ')}.`
-      : '';
+export function earlierToolResultsNotice(
+  earlierResults: readonly StoredToolResultSummary[],
+): string | null {
+  if (earlierResults.length === 0) return null;
+  return `Tool results kept from earlier turns of this conversation, readable with ${TOOL_RESULT_READER_TOOL_NAME}: ${earlierResults
+    .map(describeEarlierResult)
+    .join('; ')}.`;
+}
+
+export function toolResultReaderToolDef(): WebMcpToolDef {
   return {
     qualifiedName: TOOL_RESULT_READER_TOOL_NAME,
     serverId: 'agiworkforce',
     toolName: TOOL_RESULT_READER_TOOL_NAME,
     origin: 'operator',
-    description: `Read a tool result that was too long to show in full or was removed from earlier in the conversation. Pass the reference from the notice that replaced it and the character offset to start from.${earlier}`,
+    description:
+      'Read a tool result that was too long to show in full or was removed from earlier in the conversation. Pass the reference from the notice that replaced it and the character offset to start from.',
     inputSchema: {
       type: 'object',
       properties: {

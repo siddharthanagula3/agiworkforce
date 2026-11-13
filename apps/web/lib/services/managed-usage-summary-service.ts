@@ -19,12 +19,13 @@ import {
   getPlanFlagshipWeeklyUsageCapMicrousd,
   getPlanSessionUsageBudgetMicrousd,
   getPlanSessionUsageCapMicrousd,
+  getPlanUsageBudgetMicrousd,
   getPlanWeeklyUsageCapMicrousd,
   getPlanWeeklyUsagePaidBudgetMicrousd,
   toPublicUsagePercentage,
 } from '@/lib/server/managed-usage-policy';
 import { readSummaryPromotions } from '@/lib/services/usage-limit-promotion-service';
-import { getRollingUsage } from '@/lib/server/rolling-usage';
+import { getAccountOverageMicrousd, getRollingUsage } from '@/lib/server/rolling-usage';
 import {
   ROLLING_SESSION_WINDOW_HOURS,
   ROLLING_WEEKLY_WINDOW_HOURS,
@@ -38,8 +39,10 @@ import {
 } from '@/lib/services/bonus-credit-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
-import { resolveEntitlementBundle } from '@/lib/services/effective-subscription-service';
-import { revenueContextOfSubscription } from '@/lib/billing/revenue-context';
+import {
+  resolveEntitlementBundle,
+  usageAllowanceSubject,
+} from '@/lib/services/effective-subscription-service';
 
 export interface AccountUsageCredits extends ManagedUsageCredits {
   bonus: ManagedUsageBonusCredits | null;
@@ -73,17 +76,20 @@ export async function getManagedUsageSummary(
     readPrepaidCredits(db, userId),
   ]);
   const subscription = entitlement.subscription;
+  const allowanceSubject = usageAllowanceSubject(entitlement);
 
-  const planTier = subscription?.plan_tier || 'free';
+  const planTier = allowanceSubject.tier;
+  const purchasedPlanTier = subscription?.plan_tier || 'free';
   const creditsAllocated = balance?.credits_allocated_microusd ?? 0;
-  const creditsUsed = balance?.credits_used_microusd ?? 0;
+  const overageUsed = balance?.account_id
+    ? await getAccountOverageMicrousd(db, userId, balance.account_id)
+    : 0;
+  const planUsed = Math.max(0, (balance?.credits_used_microusd ?? 0) - overageUsed);
   const periodStart = balance?.period_start ?? subscription?.current_period_start ?? null;
   const periodEnd = balance?.period_end ?? subscription?.current_period_end ?? null;
 
   const isFreePlan = isFreeBillingPlanTier(planTier.toLowerCase());
   const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(db, userId) : null;
-  const usagePercentage =
-    freeUsage?.usagePercentage ?? toPublicUsagePercentage(creditsUsed, creditsAllocated);
   const usageResetAt = freeUsage?.resetAt ?? toIsoTimestamp(periodEnd);
 
   const allowanceSubject = {
@@ -91,6 +97,9 @@ export async function getManagedUsageSummary(
     catalogVersion: subscription?.plan_catalog_version ?? null,
     revenueContext: revenueContextOfSubscription(subscription),
   };
+  const planBudget = getPlanUsageBudgetMicrousd(allowanceSubject);
+  const usagePercentage =
+    freeUsage?.usagePercentage ?? toPublicUsagePercentage(planUsed, planBudget);
   const promotions = isFreePlan
     ? null
     : await readSummaryPromotions({
@@ -162,7 +171,7 @@ export async function getManagedUsageSummary(
           ? { ...creditWindow(planAllowance.monthly, 0, usageResetAt), remaining: 0 }
           : creditWindow(
               planAllowance.monthly,
-              creditsFromMicrousd(freeUsage?.monthlyUsedMicrousd ?? creditsUsed),
+              creditsFromMicrousd(freeUsage?.monthlyUsedMicrousd ?? planUsed),
               usageResetAt,
             ),
         weekly: creditWindow(
@@ -190,6 +199,7 @@ export async function getManagedUsageSummary(
         purchased: {
           remaining: prepaid ? prepaid.purchasedCredits : null,
           overage_enabled: spendableCredits.overageEnabled,
+          self_serve: spendableCredits.selfServe,
         },
         bonus: prepaid
           ? { remaining: prepaid.bonusCredits, next_expiry_at: prepaid.nextBonusExpiry }
@@ -203,7 +213,7 @@ export async function getManagedUsageSummary(
       }
     : null;
 
-  const wirePlan = wirePlanOf(planTier);
+  const wirePlan = wirePlanOf(purchasedPlanTier);
   return {
     plan_tier: wirePlan.tier,
     effective_plan_tier: wirePlanOf(entitlement.plan).tier,

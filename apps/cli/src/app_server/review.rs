@@ -64,82 +64,10 @@ pub(super) fn worktrees_root(
     }
 }
 
-/// The file in the CLI config root listing every worktrees folder a host here
-/// has made worktrees under, so moving the folder never hides earlier ones.
-const WORKTREE_ROOTS_FILE: &str = "worktree-roots.json";
-
-/// Record `current` and the default root in `record`, and return every other
-/// root it holds: the folders whose worktrees this host still serves.
-pub(super) fn record_worktrees_roots(
-    record: &Path,
-    current: &Path,
-    default: &Path,
-) -> anyhow::Result<Vec<PathBuf>> {
-    let recorded = agiworkforce_worktree::managed::record_roots(record, &[default, current])?;
-    Ok(recorded
-        .into_iter()
-        .filter(|root| root != current)
-        .collect())
-}
-
-/// [`record_worktrees_roots`] against the CLI config root's record.
-pub(super) fn recorded_earlier_worktrees_roots(current: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    let config_dir = crate::config::CliConfig::config_dir()?;
-    record_worktrees_roots(
-        &config_dir.join(WORKTREE_ROOTS_FILE),
-        current,
-        &config_dir.join("worktrees"),
-    )
-}
-
-/// A folder named for managed worktrees, made when missing and checked before
-/// the host serves a request: a worktree that cannot be made later would fail
-/// the session that asked for it.
-pub(super) fn prepare_worktrees_root(root: &Path) -> Result<PathBuf, DeveloperSessionHostError> {
-    if !root.is_absolute() {
-        return Err(invalid(format!(
-            "The worktrees folder must be an absolute path, not {}",
-            root.display()
-        )));
-    }
-    match std::fs::metadata(root) {
-        Ok(metadata) if !metadata.is_dir() => {
-            return Err(invalid(format!(
-                "The worktrees folder {} is not a directory",
-                root.display()
-            )));
-        }
-        Ok(_) => {}
-        Err(_) => std::fs::create_dir_all(root).map_err(|error| {
-            invalid(format!(
-                "The worktrees folder {} could not be created: {error}",
-                root.display()
-            ))
-        })?,
-    }
-    let root = root.canonicalize().map_err(|error| {
-        invalid(format!(
-            "The worktrees folder {} could not be resolved: {error}",
-            root.display()
-        ))
-    })?;
-    tempfile::Builder::new()
-        .prefix(".agi-write-check-")
-        .tempfile_in(&root)
-        .map_err(|error| {
-            invalid(format!(
-                "The worktrees folder {} is not writable: {error}",
-                root.display()
-            ))
-        })?;
-    Ok(root)
-}
-
 /// The worktrees of `workspace`'s repository, with every git pinned to the
 /// repository resolved for it first, like checkpoints.
 pub(super) async fn manager(
     root: &Path,
-    earlier_roots: &[PathBuf],
     workspace: &Path,
 ) -> Result<WorktreeManager<'static>, DeveloperSessionHostError> {
     let pinned = pinned_workspace(workspace).await?.ok_or_else(|| {
@@ -149,8 +77,7 @@ pub(super) async fn manager(
         ))
     })?;
     let pinned = pinned.with_config_trusted(config_trusted(workspace));
-    Ok(WorktreeManager::open(&BookkeepingRunner, root, &pinned)
-        .with_earlier_roots(earlier_roots.iter().cloned()))
+    Ok(WorktreeManager::open(&BookkeepingRunner, root, &pinned))
 }
 
 pub(super) fn start_point(start: WorktreeStartPoint) -> StartPoint {
@@ -439,37 +366,6 @@ async fn checkpoints(
         .map_err(invalid)
 }
 
-/// The thread's directory inside its checkout, `""` at the top. Checkpoint
-/// paths are relative to the checkout top; clients resolve them against the
-/// thread's directory, so they cross this boundary in both directions.
-async fn workspace_scope(workspace: &Path) -> Result<String, DeveloperSessionHostError> {
-    Ok(pinned_workspace(workspace)
-        .await?
-        .map(|pinned| pinned.scope().trim_end_matches('/').to_string())
-        .unwrap_or_default())
-}
-
-fn relative_to_scope(scope: &str, path: String) -> String {
-    if scope.is_empty() {
-        return path;
-    }
-    match path
-        .strip_prefix(scope)
-        .and_then(|rest| rest.strip_prefix('/'))
-    {
-        Some(inside) => inside.to_string(),
-        None => path,
-    }
-}
-
-fn within_scope(scope: &str, path: String) -> String {
-    if scope.is_empty() {
-        path
-    } else {
-        format!("{scope}/{}", path.trim_start_matches("./"))
-    }
-}
-
 async fn require_checkpoints(
     workspace: &Path,
     thread_id: &str,
@@ -595,7 +491,6 @@ pub(super) async fn list_checkpoints(
             turns: Vec::new(),
         });
     };
-    let scope = workspace_scope(workspace).await?;
     let listed = store.list().await.map_err(invalid)?;
     let fingerprints = prefix_fingerprints(
         messages,
@@ -611,20 +506,13 @@ pub(super) async fn list_checkpoints(
                 .await
                 .map_err(invalid)?
                 .into_iter()
-                .map(|change| CheckpointFile {
-                    path: relative_to_scope(&scope, change.path.clone()),
-                    ..checkpoint_file(change)
-                })
+                .map(checkpoint_file)
                 .collect()
         } else {
             Vec::new()
         };
         turns.push(TurnCheckpointSummary {
-            skipped_files: turn
-                .skipped()
-                .into_iter()
-                .map(|path| relative_to_scope(&scope, path))
-                .collect(),
+            skipped_files: turn.skipped(),
             rewindable: turn
                 .conversation
                 .as_ref()
@@ -650,20 +538,13 @@ pub(super) async fn checkpoint_diff(
     turn_id: &str,
 ) -> Result<CheckpointDiffResponse, DeveloperSessionHostError> {
     let store = require_checkpoints(workspace, thread_id).await?;
-    let scope = workspace_scope(workspace).await?;
     let turn = store.turn(turn_id).await.map_err(invalid)?;
     let files = store
         .patches(&turn)
         .await
         .map_err(conflict)?
         .into_iter()
-        .map(|patch| {
-            let diff = file_diff(patch);
-            CheckpointFileDiff {
-                path: relative_to_scope(&scope, diff.path.clone()),
-                ..diff
-            }
-        })
+        .map(file_diff)
         .collect();
     Ok(CheckpointDiffResponse {
         thread_id: thread_id.to_string(),
@@ -682,12 +563,11 @@ pub(super) async fn apply_sections(
         return Err(invalid("Name at least one file to change."));
     }
     let store = require_checkpoints(workspace, &params.thread_id).await?;
-    let scope = workspace_scope(workspace).await?;
     let sections: Vec<Section> = params
         .sections
         .into_iter()
         .map(|section| Section {
-            path: within_scope(&scope, section.path),
+            path: section.path,
             hunks: section
                 .hunks
                 .into_iter()
@@ -706,18 +586,11 @@ pub(super) async fn apply_sections(
     }
     .map_err(invalid)?;
     Ok(CheckpointSectionsResponse {
-        applied: outcome
-            .applied
-            .into_iter()
-            .map(|path| relative_to_scope(&scope, path))
-            .collect(),
+        applied: outcome.applied,
         conflicted: outcome
             .conflicted
             .into_iter()
-            .map(|(path, reason)| CheckpointSectionConflict {
-                path: relative_to_scope(&scope, path),
-                reason,
-            })
+            .map(|(path, reason)| CheckpointSectionConflict { path, reason })
             .collect(),
         preview: params.preview,
     })
@@ -742,25 +615,11 @@ pub(super) async fn rewind_files(
     turn_id: &str,
     preview: bool,
 ) -> Result<RewindOutcome, DeveloperSessionHostError> {
-    let scope = workspace_scope(workspace).await?;
-    let outcome = require_checkpoints(workspace, thread_id)
+    require_checkpoints(workspace, thread_id)
         .await?
         .rewind(turn_id, preview)
         .await
-        .map_err(|error| DeveloperSessionHostError::internal(error.to_string()))?;
-    Ok(RewindOutcome {
-        files: outcome
-            .files
-            .into_iter()
-            .map(|path| relative_to_scope(&scope, path))
-            .collect(),
-        skipped: outcome
-            .skipped
-            .into_iter()
-            .map(|path| relative_to_scope(&scope, path))
-            .collect(),
-        ..outcome
-    })
+        .map_err(|error| DeveloperSessionHostError::internal(error.to_string()))
 }
 
 /// Where each rewindable turn begins in `messages`, oldest first: the message
@@ -976,86 +835,6 @@ fn emit_setup_line(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn checkpoint_paths_cross_the_thread_directory_both_ways() {
-        assert_eq!(
-            relative_to_scope("apps/web", "apps/web/src/a.ts".into()),
-            "src/a.ts"
-        );
-        assert_eq!(relative_to_scope("", "src/a.ts".into()), "src/a.ts");
-        assert_eq!(
-            within_scope("apps/web", "src/a.ts".into()),
-            "apps/web/src/a.ts"
-        );
-        assert_eq!(within_scope("", "src/a.ts".into()), "src/a.ts");
-    }
-
-    #[tokio::test]
-    async fn a_thread_in_a_subdirectory_lists_its_changes_relative_to_that_directory() {
-        let repo = tempfile::tempdir().expect("repo");
-        let git = |args: &[&str]| {
-            let status = std::process::Command::new("git")
-                .args(args)
-                .current_dir(repo.path())
-                .env("GIT_CONFIG_GLOBAL", "/dev/null")
-                .env("GIT_CONFIG_NOSYSTEM", "1")
-                .status()
-                .expect("git");
-            assert!(status.success(), "git {args:?}");
-        };
-        git(&["init", "-q"]);
-        let thread_dir = repo.path().join("apps").join("web");
-        std::fs::create_dir_all(&thread_dir).expect("thread dir");
-        std::fs::write(thread_dir.join("page.ts"), "one\n").expect("file");
-        git(&["add", "."]);
-        git(&[
-            "-c",
-            "user.email=fixture@example.invalid",
-            "-c",
-            "user.name=fixture",
-            "commit",
-            "-qm",
-            "fixture",
-        ]);
-        let thread_dir = thread_dir.canonicalize().expect("canonical thread dir");
-        let messages = vec![Message::text("user", "edit the page")];
-        let mark = conversation_mark(&messages);
-
-        assert!(
-            record_checkpoint(
-                &thread_dir,
-                "thread-scope",
-                "turn-1",
-                Phase::Before,
-                Some(mark)
-            )
-            .await
-        );
-        std::fs::write(thread_dir.join("page.ts"), "two\n").expect("edit");
-        assert!(record_checkpoint(&thread_dir, "thread-scope", "turn-1", Phase::After, None).await);
-
-        let listed = list_checkpoints(&thread_dir, "thread-scope", &messages)
-            .await
-            .expect("listed");
-        let paths: Vec<_> = listed
-            .turns
-            .iter()
-            .flat_map(|turn| turn.files.iter().map(|file| file.path.clone()))
-            .collect();
-        assert_eq!(paths, ["page.ts"]);
-
-        let diff = checkpoint_diff(&thread_dir, "thread-scope", "turn-1")
-            .await
-            .expect("diff");
-        assert_eq!(
-            diff.files
-                .iter()
-                .map(|file| file.path.as_str())
-                .collect::<Vec<_>>(),
-            ["page.ts"]
-        );
-    }
 
     #[test]
     fn a_message_belongs_to_the_latest_turn_that_began_at_or_before_it() {

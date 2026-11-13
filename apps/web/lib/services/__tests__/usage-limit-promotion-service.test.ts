@@ -12,19 +12,58 @@ vi.mock('@/lib/feature-flags/usage-promotions-gate', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/services/effective-subscription-service', () => ({
+vi.mock('@/lib/services/effective-subscription-service', async () => ({
   resolveEntitlementBundle: vi.fn(),
+  usageAllowanceSubject: (
+    await vi.importActual<typeof import('@/lib/services/entitlement-resolution')>(
+      '@/lib/services/entitlement-resolution',
+    )
+  ).usageAllowanceSubject,
 }));
 
+const { resolveEntitlementBundle } = await import('@/lib/services/effective-subscription-service');
+const { getPlanSessionUsageCapMicrousd, getPlanWeeklyUsageCapMicrousd } =
+  await import('@/lib/server/managed-usage-policy');
 const {
   UsageLimitPromotionInputSchema,
   applyUsageLimitReset,
   diffUsageLimitPromotion,
   promotablePlanTiers,
+  readAccountLimitCaps,
   readSummaryPromotions,
   resetEnabledPromotionCache,
   resolvePromotionalCaps,
 } = await import('../usage-limit-promotion-service');
+
+describe('readAccountLimitCaps', () => {
+  const freeSubject = { tier: 'free', catalogVersion: null, revenueContext: null };
+
+  it('holds a lapsed paid plan to the Free caps chat serves it under', async () => {
+    vi.mocked(resolveEntitlementBundle).mockResolvedValueOnce({
+      entitled: false,
+      subscription: { plan_tier: 'max_15x', status: 'past_due', plan_catalog_version: null },
+    } as never);
+
+    const { planTier, caps } = await readAccountLimitCaps({} as DatabaseAdapter, 'user-1');
+
+    expect(planTier).toBe('free');
+    expect(caps.session).toBe(getPlanSessionUsageCapMicrousd(freeSubject));
+    expect(caps.weekly).toBe(getPlanWeeklyUsageCapMicrousd(freeSubject));
+  });
+
+  it('holds an entitled plan to its own caps', async () => {
+    vi.mocked(resolveEntitlementBundle).mockResolvedValueOnce({
+      entitled: true,
+      subscription: { plan_tier: 'max_15x', status: 'active', plan_catalog_version: null },
+    } as never);
+
+    const { planTier, caps } = await readAccountLimitCaps({} as DatabaseAdapter, 'user-1');
+
+    expect(planTier).toBe('max_15x');
+    expect(caps.weekly).toBe(getPlanWeeklyUsageCapMicrousd({ ...freeSubject, tier: 'max_15x' }));
+    expect(caps.weekly).not.toEqual(getPlanWeeklyUsageCapMicrousd(freeSubject));
+  });
+});
 
 const NOW = Date.parse('2026-10-22T12:00:00.000Z');
 const CAPS = { session: 1_000_000, weekly: 10_000_000, flagshipWeekly: 3_000_000 };
@@ -145,7 +184,6 @@ describe('admission caps', () => {
     userId: 'user-1',
     planTier: 'pro',
     workload: 'code',
-    estimateMicrousd: 100_000,
     isFlagship: false,
     caps: CAPS,
   };
@@ -191,7 +229,7 @@ describe('admission caps', () => {
     });
   });
 
-  it('claims an uplift only when the request would pass the plan cap', async () => {
+  it('claims an uplift only once the plan window is used up', async () => {
     const under = scriptedDb({
       promotions: [
         promotionRow({ id: 'code-week', kind: 'limit_uplift', uplift_workloads: ['code'] }),
@@ -204,12 +242,21 @@ describe('admission caps', () => {
       under.calls.some((sql) => sql.includes('insert into public.usage_limit_promotion_grants')),
     ).toBe(false);
 
-    const over = scriptedDb({
+    const crossing = scriptedDb({
       promotions: [
         promotionRow({ id: 'code-week', kind: 'limit_uplift', uplift_workloads: ['code'] }),
       ],
       grants: [],
       usage: { ...NO_USAGE, weekly: 9_950_000 },
+    });
+    await expect(resolvePromotionalCaps(request, NOW, () => crossing.db)).resolves.toEqual(CAPS);
+
+    const over = scriptedDb({
+      promotions: [
+        promotionRow({ id: 'code-week', kind: 'limit_uplift', uplift_workloads: ['code'] }),
+      ],
+      grants: [],
+      usage: { ...NO_USAGE, weekly: 10_000_000 },
     });
     await expect(resolvePromotionalCaps(request, NOW, () => over.db)).resolves.toEqual({
       session: 1_000_000,
@@ -232,7 +279,7 @@ describe('admission caps', () => {
         }),
       ],
       grants: [],
-      usage: { ...NO_USAGE, weekly: 9_950_000 },
+      usage: { ...NO_USAGE, weekly: 10_000_000 },
     });
     await expect(resolvePromotionalCaps(request, NOW, () => db)).resolves.toEqual(CAPS);
     expect(
@@ -248,7 +295,7 @@ describe('admission caps', () => {
     const { db } = scriptedDb({
       promotions,
       grants: [],
-      usage: { ...NO_USAGE, weekly: 9_950_000 },
+      usage: { ...NO_USAGE, weekly: 10_000_000 },
     });
     await expect(resolvePromotionalCaps(request, NOW, () => db)).resolves.toEqual(CAPS);
   });
@@ -283,7 +330,6 @@ describe('uplift claims follow the promotion as it is edited', () => {
     userId: 'user-1',
     planTier: 'pro',
     workload: 'code',
-    estimateMicrousd: 100_000,
     isFlagship: false,
     caps: CAPS,
   };
@@ -469,7 +515,7 @@ describe('uplift claims follow the promotion as it is edited', () => {
           applied_at: '2026-10-22T01:00:00.000Z',
         }),
       ],
-      usage: { ...NO_USAGE, weekly: 9_950_000 },
+      usage: { ...NO_USAGE, weekly: 10_000_000 },
       existingClaim: { committed_microusd: EXPOSURE, lapsed: true, ends_short: true },
     });
     await expect(resolvePromotionalCaps(request, NOW, () => db)).resolves.toEqual(RAISED);
@@ -482,7 +528,6 @@ describe('load', () => {
     userId: 'user-1',
     planTier: 'pro',
     workload: 'code',
-    estimateMicrousd: 100_000,
     isFlagship: false,
     caps: CAPS,
   };
@@ -498,7 +543,7 @@ describe('load', () => {
         }),
       ],
       grants: [],
-      usage: { ...NO_USAGE, weekly: 9_950_000 },
+      usage: { ...NO_USAGE, weekly: 10_000_000 },
     });
     await expect(resolvePromotionalCaps(request, NOW, () => db)).resolves.toEqual(CAPS);
     expect(calls.some((sql) => sql.includes('for update'))).toBe(false);

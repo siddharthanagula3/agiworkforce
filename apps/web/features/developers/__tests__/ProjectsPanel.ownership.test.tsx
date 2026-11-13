@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import React, { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

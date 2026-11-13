@@ -74,26 +74,6 @@ describe('AGI Cloud account presentation', () => {
     });
   });
 
-  it('names an organization as billing owner only for an organization account', () => {
-    const personal = {
-      displayName: 'Ada Lovelace',
-      email: 'ada@example.com',
-      accountType: 'Personal account' as const,
-      planName: 'Max 20x',
-      tier: 'max_15x',
-      cancelAtPeriodEnd: false,
-      subscriptionSource: 'manual' as const,
-    };
-    expect(describeAccountPlan(personal)).toBe('Max 20x plan');
-    expect(
-      describeAccountPlan({
-        ...personal,
-        accountType: 'Organization account' as const,
-        planName: 'Team',
-      }),
-    ).toBe('Team plan · Organization-managed');
-  });
-
   it('does not show cloud identity rows while signed out', () => {
     expect(buildAccountIdentityItems(false, undefined)).toEqual([]);
   });

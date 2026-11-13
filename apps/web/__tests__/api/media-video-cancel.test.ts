@@ -236,3 +236,8 @@ describe('POST /api/media/video/cancel', () => {
     expect(mocks.reconcile).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/cors');
+type RetainedMockModule2 = typeof import('@/lib/logger');

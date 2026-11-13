@@ -2948,7 +2948,7 @@ describe('MessageBubble', () => {
       );
 
       await user.click(
-        screen.getByRole('button', { name: /send this turn again with a web search required/i }),
+        screen.getByRole('button', { name: /^search the web and answer this turn again$/i }),
       );
       expect(onRegenerate).toHaveBeenCalledTimes(1);
     });

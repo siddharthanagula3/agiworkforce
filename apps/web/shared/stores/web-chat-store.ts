@@ -366,6 +366,7 @@ export interface MessageMetadata {
    * widget, never the answer.
    */
   interactiveCards?: InteractiveCard[];
+  interactiveCardTextOffsets?: Record<string, number>;
   interactiveCardsResumed?: boolean;
   interactiveCardSubmissionErrors?: Record<string, string>;
   /**

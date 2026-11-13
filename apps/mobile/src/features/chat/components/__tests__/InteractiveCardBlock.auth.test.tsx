@@ -189,38 +189,3 @@ describe('InteractiveCardBlock authenticated map tiles', () => {
     );
   });
 });
-
-describe('answer UI cards before mobile has a renderer', () => {
-  it('shows the plain-text fallback with no controls', () => {
-    const answerUi = {
-      schemaVersion: 1,
-      cardId: 'answer-ui-toolu_1',
-      createdAt: '2026-10-25T10:00:00.000Z',
-      fallback: {
-        headline: 'Monthly budget',
-        text: 'Rent: $1,500 (from 0 to 4000)\nLeft over: $3,500',
-      },
-      producedBy: { toolCallId: 'toolu_1', toolName: 'render_answer_ui' },
-      recognized: true,
-      kind: 'answer-ui.v1',
-      body: {
-        blocks: [
-          { type: 'slider', id: 'rent', label: 'Rent', min: 0, max: 4000, step: 100, value: 1500 },
-        ],
-      },
-    } as InteractiveCard;
-
-    const screen = render(
-      <InteractiveCardBlock
-        cards={[answerUi]}
-        tileBaseUrl={TILE_ORIGIN}
-        canLoadManagedCloudTiles
-      />,
-    );
-
-    expect(screen.getByText('Monthly budget')).toBeTruthy();
-    expect(screen.getByText('Rent: $1,500 (from 0 to 4000)\nLeft over: $3,500')).toBeTruthy();
-    expect(screen.queryByRole('button')).toBeNull();
-    expect(screen.queryByRole('adjustable')).toBeNull();
-  });
-});

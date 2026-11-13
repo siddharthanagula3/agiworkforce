@@ -281,3 +281,7 @@ describe('GET /api/support/actions/available', () => {
     });
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');

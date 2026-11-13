@@ -536,15 +536,21 @@ export { ChartArtifact } from './components/artifact-components/ChartArtifact';
 export type { ChartArtifactProps } from './components/artifact-components/ChartArtifact';
 export {
   CHART_KINDS,
+  CHART_RENDER_KINDS,
   CHART_ROW_CAP,
   CHART_SERIES_CAP,
   chartSeriesPalette,
   parseChartArtifact,
+  summarizeChart,
   toChartNumber,
 } from './components/artifact-components/chart-spec';
+export { ChartSpecView } from './components/artifact-components/ChartSpecView';
+export type { ChartSpecViewProps } from './components/artifact-components/ChartSpecView';
 export type {
   ChartKind,
   ChartParseResult,
+  ChartRenderKind,
+  ChartRenderSpec,
   ChartRow,
   ChartSeriesSpec,
   ChartSpec,

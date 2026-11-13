@@ -46,16 +46,6 @@ export async function resolvePathReferenceUri(
   return resolved.uri;
 }
 
-export async function resolvePathReferenceExistence(
-  paths: readonly string[],
-): Promise<Record<string, boolean>> {
-  const unique = [...new Set(paths)];
-  const found = await Promise.all(
-    unique.map(async (path) => (await resolvePathReferenceUri({ path })) !== undefined),
-  );
-  return Object.fromEntries(unique.map((path, index) => [path, found[index] === true]));
-}
-
 export function pathReferenceCommandUri(target: PathReferenceTarget): vscode.Uri {
   const args = encodeURIComponent(JSON.stringify([target]));
   return vscode.Uri.parse(`command:${OPEN_PATH_REFERENCE_COMMAND}?${args}`);

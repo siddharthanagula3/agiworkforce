@@ -36,7 +36,8 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readDeveloperSession,
   onDeveloperSessionEvent: () => () => undefined,
-  useDeveloperCapabilities: () => new Set(DEVELOPER_RUNTIME_CAPABILITIES),
+  useDeveloperCapabilities: () =>
+    new Set(DEVELOPER_RUNTIME_CAPABILITIES.filter((capability) => capability !== 'terminals')),
   listWorkspaceFiles: vi.fn(async () => [
     { name: 'README.md', path: 'README.md', kind: 'file', sizeBytes: 1, modifiedAtMs: 1 },
   ]),

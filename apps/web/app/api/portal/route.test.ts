@@ -508,3 +508,7 @@ describe('cancel deep-link', () => {
     expect(response.status).not.toBe(409);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

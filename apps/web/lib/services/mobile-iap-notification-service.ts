@@ -12,6 +12,7 @@ import { createError, isAppError } from '@/lib/errors';
 import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-purchase-gate';
 import { logger } from '@/lib/logger';
 import { logSecurityEvent } from '@/lib/security-audit';
+import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { grantsAccess, type MobileIapEntitlementState } from '@/lib/server/mobile-iap-lifecycle';
 import {
   hashMobileIapPurchaseToken,
@@ -35,6 +36,7 @@ import {
   recordMobileIapStoreCommission,
   recordVerifiedMobileIapPurchase,
   storePeriodStart,
+  storeTopUpGrantDescription,
 } from './mobile-iap-ledger-service';
 import { SubscriptionService } from './subscription-service';
 
@@ -71,6 +73,54 @@ interface ReceiptAnchor {
   refunded_amount_cents: number;
   refund_state_signed_at: string | Date | null;
   environment: string | null;
+}
+
+function ledgerTotal(row: { total: string | number | null } | undefined): number {
+  const total = Number(row?.total ?? 0);
+  return Number.isSafeInteger(total) ? total : 0;
+}
+
+async function purchasedMicrousd(
+  tx: DatabaseAdapter,
+  userId: string,
+  description: string,
+): Promise<number> {
+  const [row] = await tx.query<{ total: string | number | null }>(
+    `select coalesce(sum(amount_microusd), 0) as total
+       from public.credit_transactions
+      where user_id = $1 and transaction_type = 'purchase' and description = $2`,
+    [userId, description],
+  );
+  return ledgerTotal(row);
+}
+
+// A refund takes from the balance only what is left of it, so a reversal gives
+// back what each refund actually took rather than what it asked for.
+async function revokedFromBalanceMicrousd(
+  tx: DatabaseAdapter,
+  userId: string,
+  description: string,
+): Promise<number> {
+  const [row] = await tx.query<{ total: string | number | null }>(
+    `select coalesce(sum(coalesce(
+              (metadata->>'balance_revoked_microusd')::bigint,
+              (metadata->>'balance_revoked_cents')::bigint * $3,
+              -amount_microusd
+            )), 0) as total
+       from public.credit_transactions
+      where user_id = $1 and transaction_type = 'refund' and description = $2`,
+    [userId, description, MICROUSD_PER_LEDGER_CENT],
+  );
+  return ledgerTotal(row);
+}
+
+function shareOfGrantMicrousd(
+  grantedMicrousd: number,
+  refundedCents: number,
+  intendedCents: number,
+): number {
+  if (intendedCents <= 0) return 0;
+  return Math.floor((grantedMicrousd * Math.min(refundedCents, intendedCents)) / intendedCents);
 }
 
 type SubscriptionOwnerRow = Pick<

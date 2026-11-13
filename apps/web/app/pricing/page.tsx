@@ -132,6 +132,7 @@ import { formatBillingDate } from '@features/billing/lib/billing-format';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import {
+  billingOwnerPlanActionHref,
   billingOwnerPlanActionLabel,
   billingOwnerPlanChangeMessage,
 } from '@features/billing/lib/subscription-owner-presentation';
@@ -516,8 +517,11 @@ export default function PricingPage() {
     if (relationship === 'lower') {
       if (billingPolicyReady && accountSubscription?.subscription_source !== 'stripe') {
         return (
-          <Link href="/settings/billing" className="agi-tier-cta agi-tier-cta--ghost">
-            {billingOwnerPlanActionLabel(accountSubscription?.subscription_source)}
+          <Link
+            href={billingOwnerPlanActionHref(accountSubscription)}
+            className="agi-tier-cta agi-tier-cta--ghost"
+          >
+            {billingOwnerPlanActionLabel(accountSubscription)}
           </Link>
         );
       }
@@ -554,8 +558,11 @@ export default function PricingPage() {
       accountSubscription?.subscription_source !== 'stripe'
     ) {
       return (
-        <Link href="/settings/billing" className="agi-tier-cta agi-tier-cta--ghost">
-          {billingOwnerPlanActionLabel(accountSubscription?.subscription_source)}
+        <Link
+          href={billingOwnerPlanActionHref(accountSubscription)}
+          className="agi-tier-cta agi-tier-cta--ghost"
+        >
+          {billingOwnerPlanActionLabel(accountSubscription)}
         </Link>
       );
     }
@@ -633,7 +640,7 @@ export default function PricingPage() {
         return;
       }
       if (accountSubscription?.subscription_source !== 'stripe') {
-        toast.error(billingOwnerPlanChangeMessage(accountSubscription?.subscription_source));
+        toast.error(billingOwnerPlanChangeMessage(accountSubscription));
         return;
       }
       // Team stays on the dialog: its price depends on a seat count and interval

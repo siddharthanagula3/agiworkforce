@@ -13,6 +13,8 @@ import {
   CLIPBOARD_COMMANDS,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   DEVELOPER_SESSION_COMMANDS,
+  STORAGE_COMMANDS,
+  BROWSER_PANE_COMMANDS,
   DEVICE_HOST_COMMANDS,
   DEVICE_REGISTRY_PROFILE_COMMAND,
   DEVICE_STEP_TOOLS,
@@ -383,6 +385,8 @@ const deleteDeveloperThread = vi.fn(async () => ({
   releasedWorktrees: [],
 }));
 const forkDeveloperThread = vi.fn(async () => ({ id: 'thread-branch' }));
+const addDeveloperMcpServer = vi.fn(async () => ({ name: 'files' }));
+const setDeveloperMcpServerEnabled = vi.fn(async () => ({ name: 'files', enabled: true }));
 const compactDeveloperThread = vi.fn(async () => ({ threadId: 't-1', compacted: true }));
 const setDeveloperSkillConsent = vi.fn(async () => true);
 vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
@@ -402,6 +406,10 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   deleteDeveloperThread,
   forkDeveloperThread,
   compactDeveloperThread,
+  addDeveloperMcpServer,
+  setDeveloperMcpServerEnabled,
+  openDeveloperTerminal,
+  writeDeveloperTerminal,
   readPendingApproval,
   readWorktreeSetupScript,
   runDeveloperWorktreeSetup,
@@ -3349,6 +3357,8 @@ describe('the commands the contract lists', () => {
     ...WINDOW_LAYOUT_COMMANDS,
     ...DEVICE_HOST_COMMANDS,
     ...DEVELOPER_SESSION_COMMANDS,
+    ...STORAGE_COMMANDS,
+    ...BROWSER_PANE_COMMANDS,
     ...DEVICE_STEP_TOOLS.map(deviceStepCommand),
     DEVICE_REGISTRY_PROFILE_COMMAND,
   ]);
@@ -3617,4 +3627,122 @@ it('does not turn an SSH start requested on a local root into a local session', 
   });
   expect(result).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
   expect(startDeveloperSession).not.toHaveBeenCalled();
+});
+
+describe('local MCP servers', () => {
+  beforeEach(() => {
+    getPermissionState.mockImplementation((() => 'granted') as () => PermissionState);
+  });
+
+  it('adds a program only after a native confirmation that names it', async () => {
+    showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+    const response = await dispatch(window, 'developer_mcp_add', {
+      rootId: root.id,
+      name: 'files',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem'],
+    });
+    expect(response).toMatchObject({ ok: true });
+    const options = showMessageBox.mock.calls.at(-1)?.at(-1) as { detail: string };
+    expect(options.detail).toContain('Program: npx');
+    expect(addDeveloperMcpServer).toHaveBeenCalledWith(root.id, {
+      name: 'files',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem'],
+    });
+  });
+
+  it('adds nothing when the confirmation is cancelled', async () => {
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    const response = await dispatch(window, 'developer_mcp_add', {
+      rootId: root.id,
+      name: 'files',
+      command: 'npx',
+    });
+    expect(response.ok).toBe(false);
+    expect(addDeveloperMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('refuses a malformed server before asking', async () => {
+    for (const args of [
+      { name: '../x', command: 'npx' },
+      { name: 'both', command: 'npx', url: 'https://example.com/mcp' },
+      { name: 'neither' },
+      { name: 'plain', url: 'http://example.com/mcp' },
+      { name: 'env', command: 'npx', env: { 'BAD KEY': 'x' } },
+    ]) {
+      const response = await dispatch(window, 'developer_mcp_add', { rootId: root.id, ...args });
+      expect(response, JSON.stringify(args)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid-arguments' },
+      });
+    }
+    expect(showMessageBox).not.toHaveBeenCalled();
+    expect(addDeveloperMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('asks before turning a server on, but not before turning it off', async () => {
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    const refused = await dispatch(window, 'developer_mcp_set_enabled', {
+      rootId: root.id,
+      name: 'files',
+      enabled: true,
+    });
+    expect(refused.ok).toBe(false);
+    expect(setDeveloperMcpServerEnabled).not.toHaveBeenCalled();
+
+    const off = await dispatch(window, 'developer_mcp_set_enabled', {
+      rootId: root.id,
+      name: 'files',
+      enabled: false,
+    });
+    expect(off).toMatchObject({ ok: true });
+    expect(setDeveloperMcpServerEnabled).toHaveBeenCalledWith(root.id, 'files', false);
+  });
+});
+
+describe('the terminal the user types into', () => {
+  const TERMINAL_COMMANDS = DEVELOPER_SESSION_COMMANDS.filter((command) =>
+    command.startsWith('developer_terminal_'),
+  );
+
+  it('is out of reach of every step an agent can ask the desktop to take', () => {
+    expect(TERMINAL_COMMANDS).toHaveLength(4);
+    const agentCommands = new Set(DEVICE_STEP_TOOLS.map(deviceStepCommand));
+    for (const command of TERMINAL_COMMANDS) expect(agentCommands.has(command)).toBe(false);
+  });
+
+  it('needs the folder approved for commands', async () => {
+    getPermissionState.mockReturnValue('denied');
+    const response = await dispatch(window, 'developer_terminal_open', {
+      rootId: root.id,
+      cols: 120,
+      rows: 30,
+    });
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'permission-denied', capability: 'shell.execute' },
+    });
+    expect(openDeveloperTerminal).not.toHaveBeenCalled();
+  });
+
+  it('opens a shell in the folder and passes typing through unchanged', async () => {
+    getPermissionState.mockImplementation((() => 'granted') as () => PermissionState);
+    const opened = await dispatch(window, 'developer_terminal_open', {
+      rootId: root.id,
+      cols: 120,
+      rows: 30,
+    });
+    expect(opened).toEqual({ ok: true, value: { terminalId: 'term-1' } });
+    expect(openDeveloperTerminal).toHaveBeenCalledWith(root.id, 120, 30);
+
+    const typed = await dispatch(window, 'developer_terminal_write', {
+      rootId: root.id,
+      terminalId: 'term-1',
+      data: 'ls -la\r',
+    });
+    expect(typed).toEqual({ ok: true, value: true });
+    expect(writeDeveloperTerminal).toHaveBeenCalledWith(root.id, 'term-1', 'ls -la\r');
+    expect(showMessageBox).not.toHaveBeenCalled();
+  });
 });

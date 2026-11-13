@@ -54,7 +54,12 @@ import { CreditService } from '@/lib/services/credit-service';
 import { CLARIFY_TOOL_NAME } from '@/lib/services/clarify-tool-service';
 import type { AuthGateSuccess } from './auth-gate';
 import { toCanonicalChatRequest } from './canonical-request';
-import { processRequest, TURN_INSTRUCTIONS_HEADING } from './request-processor';
+import {
+  applyAnswerUiCapability,
+  processRequest,
+  TURN_INSTRUCTIONS_HEADING,
+} from './request-processor';
+import { ANSWER_UI_TOOL_NAME } from '@agiworkforce/types';
 import { withheldToolsTurnNotice } from './turn-tool-offer';
 import { EMPTY_ASSISTANT_TURN_HISTORY_TEXT } from '@/features/chat/lib/assistant-history-turn';
 
@@ -75,7 +80,13 @@ const proSubscription = {
   stripe_price_id: 'stripe-price-pro',
 };
 
-const CARD_KINDS = ['clarify.v1', 'map-search.v1', 'itinerary.v1', 'product-comparison.v1'];
+const CARD_KINDS = [
+  'answer-ui.v1',
+  'clarify.v1',
+  'map-search.v1',
+  'itinerary.v1',
+  'product-comparison.v1',
+];
 
 type ChatTurnMessage = { role: 'user' | 'assistant'; content: string };
 
@@ -167,6 +178,7 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
         (tool) => (tool as { function?: { name?: string } }).function?.name,
       );
       expect(names).toContain(CLARIFY_TOOL_NAME);
+      expect(names).toContain(ANSWER_UI_TOOL_NAME);
       expect(JSON.stringify(summary.llmRequest.tools)).toBe(
         JSON.stringify(question.llmRequest.tools),
       );
@@ -208,6 +220,8 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
       ]);
 
       expect(summary.turnWithheldTools).toContain(CLARIFY_TOOL_NAME);
+      expect(summary.turnWithheldTools ?? []).not.toContain(ANSWER_UI_TOOL_NAME);
+      expect(question.turnWithheldTools ?? []).not.toContain(ANSWER_UI_TOOL_NAME);
       expect(question.turnWithheldTools ?? []).not.toContain(CLARIFY_TOOL_NAME);
 
       const questionWire = toCanonicalChatRequest(question);
@@ -225,3 +239,38 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
     });
   },
 );
+
+describe('the answer UI tool offer', () => {
+  function request(supported: string[] | undefined, stream = true) {
+    return {
+      model: PRO_CHAT_MODEL,
+      messages: [{ role: 'user' as const, content: 'What is 17 times 23?' }],
+      stream,
+      ...(supported ? { x_interactive_cards: { supported, canRespond: true } } : {}),
+    };
+  }
+
+  it('is offered only to a client that declares it can render answer UI', () => {
+    const declared = request(['answer-ui.v1']);
+    expect(applyAnswerUiCapability(declared as never, { toolsCapable: true })).toBe(true);
+    expect(
+      (declared as { tools?: Array<{ function: { name: string } }> }).tools?.map(
+        (tool) => tool.function.name,
+      ),
+    ).toEqual([ANSWER_UI_TOOL_NAME]);
+
+    for (const undeclared of [request(undefined), request(['clarify.v1', 'map-search.v1'])]) {
+      expect(applyAnswerUiCapability(undeclared as never, { toolsCapable: true })).toBe(false);
+      expect((undeclared as { tools?: unknown[] }).tools).toBeUndefined();
+    }
+  });
+
+  it('is not offered to a model without tools or a request that does not stream', () => {
+    expect(
+      applyAnswerUiCapability(request(['answer-ui.v1']) as never, { toolsCapable: false }),
+    ).toBe(false);
+    expect(
+      applyAnswerUiCapability(request(['answer-ui.v1'], false) as never, { toolsCapable: true }),
+    ).toBe(false);
+  });
+});

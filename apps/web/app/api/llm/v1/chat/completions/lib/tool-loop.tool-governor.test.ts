@@ -49,7 +49,11 @@ vi.mock('@/lib/server/code-execution-policy', () => ({
 import { runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import { webSearchToolDef, WEB_SEARCH_TOOL } from '@/lib/web-search/web-search-tool';
-import { e2bExecutionToolDefs, EXECUTE_CODE_TOOL } from '@/lib/e2b/execution-tools';
+import {
+  e2bExecutionToolDefs,
+  EXECUTE_CODE_TOOL,
+  WRITE_FILE_TOOL,
+} from '@/lib/e2b/execution-tools';
 import { functionToolName } from './tool-loop-routing';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
 import { resolveNativeSearchMaxUses } from './request-processor';
@@ -195,7 +199,7 @@ beforeEach(() => {
 });
 
 describe('tool loop · repeated query breaker', () => {
-  it('runs a query once, refuses the repeat, and stops offering search', async () => {
+  it('runs a query once and refuses the repeat while the tool list stays the same', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(toolCallStream(WEB_SEARCH_TOOL, { query: REPEATED_QUERY }, 'call_1'))
       .mockResolvedValueOnce(
@@ -215,8 +219,8 @@ describe('tool loop · repeated query breaker', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(output).toContain('already ran this turn');
       expect(offeredToolNames(0)).toContain(WEB_SEARCH_TOOL);
-      expect(offeredToolNames(1)).toContain(WEB_SEARCH_TOOL);
-      expect(offeredToolNames(2)).not.toContain(WEB_SEARCH_TOOL);
+      expect(offeredToolNames(1)).toEqual(offeredToolNames(0));
+      expect(offeredToolNames(2)).toEqual(offeredToolNames(0));
       expect(output).toContain('Here is the comparison.');
     } finally {
       vi.unstubAllGlobals();
@@ -226,7 +230,7 @@ describe('tool loop · repeated query breaker', () => {
 });
 
 describe('tool loop · unavailable tool withdrawal', () => {
-  it('names the cause once and stops offering the execution tool', async () => {
+  it('names the cause once and keeps the tool list for the cached prefix', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(
         toolCallStream(EXECUTE_CODE_TOOL, { language: 'python', code: 'print(1)' }, 'call_x1'),
@@ -241,7 +245,7 @@ describe('tool loop · unavailable tool withdrawal', () => {
       'this account already has as many sandboxes running as its plan allows',
     );
     expect(offeredToolNames(0)).toContain(EXECUTE_CODE_TOOL);
-    expect(offeredToolNames(1)).not.toContain(EXECUTE_CODE_TOOL);
+    expect(offeredToolNames(1)).toEqual(offeredToolNames(0));
     expect(output).toContain('Answered without running code.');
   });
 
@@ -260,21 +264,25 @@ describe('tool loop · unavailable tool withdrawal', () => {
     expect(output).toContain('code execution is not configured on this deployment');
   });
 
-  it('withdraws every execution tool, not only the one that was called', async () => {
+  it('refuses every execution tool once one proves unavailable', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(
         toolCallStream(EXECUTE_CODE_TOOL, { language: 'python', code: 'print(1)' }, 'call_x4'),
       )
       .mockResolvedValueOnce(finalAnswerStream('Answered without running code.'));
 
-    await collect(runToolLoop(makeProcessed(e2bExecutionToolDefs()), { approvalMode: 'auto' }));
+    const output = await collect(
+      runToolLoop(makeProcessed(e2bExecutionToolDefs()), { approvalMode: 'auto' }),
+    );
 
     const offeredFirst = offeredToolNames(0);
     expect(offeredFirst.length).toBeGreaterThan(1);
-    expect(offeredToolNames(1)).toHaveLength(0);
+    expect(offeredToolNames(1)).toEqual(offeredFirst);
+    expect(offeredToolNames(2)).toEqual(offeredFirst);
+    expect(output).toContain('is closed for this turn and was not run');
   });
 
-  it('sends no tool choice on a step that offers no tools', async () => {
+  it('keeps a forced tool choice off later steps without dropping the tools', async () => {
     factoryMocks.streamRequest
       .mockResolvedValueOnce(
         toolCallStream(EXECUTE_CODE_TOOL, { language: 'python', code: 'print(1)' }, 'call_x3'),
@@ -335,5 +343,29 @@ describe('tool loop · native search cap', () => {
     await collect(runToolLoop(makeProcessed([NATIVE_SEARCH_TOOL]), { approvalMode: 'auto' }));
 
     expect(offeredToolNames(0)).toContain('anthropic-server');
+  });
+});
+
+describe('tool loop · a tool the turn did not offer', () => {
+  it('refuses it without asking for approval, as a CLI turn in plan mode needs', async () => {
+    factoryMocks.streamRequest
+      .mockResolvedValueOnce(
+        toolCallStream(
+          'edit_file',
+          { path: 'README.md', old_string: 'a', new_string: 'b' },
+          'call_unoffered',
+        ),
+      )
+      .mockResolvedValueOnce(finalAnswerStream('Here is the plan instead.'));
+
+    const processed = makeProcessed([webSearchToolDef()]);
+    processed.chatSurface = 'cli';
+
+    const output = await collect(runToolLoop(processed, { approvalMode: 'manual' }));
+
+    expect(output).not.toContain('x_tool_approval_request');
+    expect(output).not.toContain('approval-requested');
+    expect(output).toContain('is not available on this turn and was not run');
+    expect(output).toContain('Here is the plan instead.');
   });
 });

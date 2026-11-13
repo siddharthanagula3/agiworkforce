@@ -10,10 +10,7 @@ import {
 } from '@agiworkforce/types';
 import type { BillingPlanTier, CapabilityDecision, PlatformCapability } from '@agiworkforce/types';
 import { parseMeResponse } from '@agiworkforce/cloud-contracts';
-import type {
-  EffectiveCapabilityDocumentWire,
-  MeBillingOwner,
-} from '@agiworkforce/cloud-contracts';
+import type { EffectiveCapabilityDocumentWire } from '@agiworkforce/cloud-contracts';
 import type { MobileBillingSource } from './subscriptionSource';
 import {
   captureCloudAccountEpoch,
@@ -25,7 +22,6 @@ interface TierState {
   billingTier: BillingPlanTier;
   billingStatus: string;
   billingSource: MobileBillingSource;
-  billingOwner: MeBillingOwner | null;
   billingPeriodEnd: number | null;
   billingCancelsAtPeriodEnd: boolean;
   isRefreshing: boolean;
@@ -51,7 +47,6 @@ export const useTierStore = create<TierState>()(
       billingTier: 'free',
       billingStatus: 'none',
       billingSource: 'unknown',
-      billingOwner: null,
       billingPeriodEnd: null,
       billingCancelsAtPeriodEnd: false,
       isRefreshing: false,
@@ -85,7 +80,6 @@ export const useTierStore = create<TierState>()(
             billingTier,
             billingStatus: data.plan.status,
             billingSource: data.plan.subscription_source ?? 'unknown',
-            billingOwner: data.plan.billing_owner ?? null,
             billingPeriodEnd: data.plan.current_period_end,
             billingCancelsAtPeriodEnd: data.plan.cancel_at_period_end ?? false,
             lastRefreshedAt: new Date().toISOString(),
@@ -118,7 +112,6 @@ export const useTierStore = create<TierState>()(
           billingTier: 'free',
           billingStatus: 'none',
           billingSource: 'unknown',
-          billingOwner: null,
           billingPeriodEnd: null,
           billingCancelsAtPeriodEnd: false,
           isRefreshing: false,
@@ -146,7 +139,6 @@ export const useTierStore = create<TierState>()(
         billingTier: state.billingTier,
         billingStatus: state.billingStatus,
         billingSource: state.billingSource,
-        billingOwner: state.billingOwner,
         billingPeriodEnd: state.billingPeriodEnd,
         billingCancelsAtPeriodEnd: state.billingCancelsAtPeriodEnd,
         lastRefreshedAt: state.lastRefreshedAt,

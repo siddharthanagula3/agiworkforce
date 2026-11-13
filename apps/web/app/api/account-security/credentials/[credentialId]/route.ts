@@ -15,7 +15,7 @@ import {
 
 async function handleRemove(
   request: NextRequest,
-  context: { params: Promise<{ credentialId: string }> },
+  context: { params: Promise<{ credentialId: AccountSecurityCredential['id'] }> },
 ) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;

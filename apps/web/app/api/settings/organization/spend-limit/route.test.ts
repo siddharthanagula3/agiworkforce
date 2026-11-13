@@ -354,3 +354,9 @@ describe('spend-limit forwards the first resolved workspace', () => {
     expect(mocks.audit).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+type CompleteMockModule1 = typeof import('@/lib/security-audit');
+
+type RetainedMockModule0 = typeof import('@/lib/error-handler');
+type RetainedMockModule2 = typeof import('@/lib/cors');

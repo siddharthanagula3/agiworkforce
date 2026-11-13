@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import {
+  localSqlConstantExpansion,
+  scopingInterpolations,
+  sqlPredicateCode,
+} from './lib/sql-constant-expansion.mjs';
 import { stripComments } from './lib/module-graph.mjs';
 import { USER_OWNED_TABLES } from './lib/db-isolation-tables.mjs';
 import { expandProjectReadScope } from './lib/project-scope-sql.mjs';
@@ -1424,22 +1429,16 @@ function resolvesToScope(rawSource, name, depth) {
   return false;
 }
 
-function scopingInterpolations(sql, lower) {
-  const names = [];
-  const start = lower.search(/\b(?:where|on\s+conflict)\b/);
-  if (start >= 0) {
-    const tail = lower.slice(start).search(/\b(?:returning|order\s+by|group\s+by|limit)\b/);
-    const end = tail < 0 ? lower.length : start + tail;
-    for (const m of sql.matchAll(/\$\{\s*([A-Za-z_$][\w$]*)/g)) {
-      if (m.index >= start && m.index < end) names.push(m[1]);
-    }
-  }
-  for (const m of sql.matchAll(
-    /insert\s+into\s+(?:public\.)?[a-z_]+\s*\(\s*\$\{\s*([A-Za-z_$][\w$]*)/gi,
-  )) {
-    names.push(m[1]);
-  }
-  return names;
+function containsExpandedWorkspacePredicate(sql) {
+  const code = sqlPredicateCode(sql);
+  if (code === null) return false;
+  const where = code.search(/\bwhere\b/);
+  return (
+    where >= 0 &&
+    /\b(?:organization_id|org_id)\s*(?:=|is\s+not\s+distinct\s+from|in\s*\()/.test(
+      code.slice(where),
+    )
+  );
 }
 
 const MIGRATIONS_DIR = 'apps/web/db/neon';
@@ -1467,6 +1466,7 @@ for (const file of files) {
   const exemptions = ALLOWLIST.filter((a) => a.match.test(rel));
   if (exemptions.some((a) => !a.tables)) continue;
   const decls = declarationIndex(maskLiterals(source));
+  let expandConstants;
 
   for (const { sql: sourceSql, index } of extractStatements(source)) {
     const sql = expandProjectReadScope(sourceSql, source, rel, root);
@@ -1489,13 +1489,16 @@ for (const file of files) {
       !carriesWorkspacePredicateHelper(sql, source, rel) &&
       !workspaceScopeExempt(rel)
     ) {
-      workspaceScoped += 1;
-      workspaceCounts.set(rel, (workspaceCounts.get(rel) ?? 0) + 1);
-      workspaceErrors.push(
-        `${rel}: statement over workspace-scoped table(s) [${workspaceTables.join(', ')}] carries ` +
-          `no organization_id predicate, so it reads Personal and every organization at once.\n    ` +
-          sql.replace(/\s+/g, ' ').trim().slice(0, 160),
-      );
+      expandConstants ??= localSqlConstantExpansion(file);
+      if (!containsExpandedWorkspacePredicate(expandConstants(sql, index))) {
+        workspaceScoped += 1;
+        workspaceCounts.set(rel, (workspaceCounts.get(rel) ?? 0) + 1);
+        workspaceErrors.push(
+          `${rel}: statement over workspace-scoped table(s) [${workspaceTables.join(', ')}] carries ` +
+            `no organization_id predicate, so it reads Personal and every organization at once.\n    ` +
+            sql.replace(/\s+/g, ' ').trim().slice(0, 160),
+        );
+      }
     }
 
     if (mentionsScopeToken(lower)) continue;

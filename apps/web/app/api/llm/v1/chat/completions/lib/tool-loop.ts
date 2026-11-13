@@ -280,6 +280,7 @@ import {
   withdrawnToolMessage,
 } from './tool-turn-governor';
 import { prohibitedToolResultMessage, turnProhibitsTool } from './turn-tool-prohibition';
+import { turnWithholdsTool, withheldToolResultMessage } from './turn-tool-offer';
 import { displaySourceSnippet } from '@/lib/sources/display-snippet';
 import { resolveNativeSearchMaxUses } from './request-processor';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
@@ -359,6 +360,7 @@ import {
   addToolSpend,
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
+  hasObservedProviderUsage,
   mergeObservedProviderUsage,
   observedTurnCost,
   type ObservedProviderUsage,
@@ -453,6 +455,7 @@ import { isForcedToolChoiceFor } from '@/lib/required-tool-call';
 import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
 import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
+import { executeAnswerUiTool, isAnswerUiTool } from '@/lib/services/answer-ui-tool-service';
 import {
   executeProductComparisonTool,
   isProductComparisonTool,
@@ -906,6 +909,7 @@ export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySaf
     isItineraryTool(toolName) ||
     isProductComparisonTool(toolName) ||
     isClarifyTool(toolName) ||
+    isAnswerUiTool(toolName) ||
     toolName === SKILL_TOOL_NAME
     ? 'safe'
     : 'unsafe';
@@ -973,6 +977,7 @@ function canonicalToolCategory(
   if (isItineraryTool(toolName)) return 'other';
   if (isProductComparisonTool(toolName)) return 'other';
   if (isClarifyTool(toolName)) return 'other';
+  if (isAnswerUiTool(toolName)) return 'other';
   if (isMemoryTool(toolName)) return 'memory';
   if (isFileSearchTool(toolName)) return 'filesystem';
   if (isScheduleTool(toolName)) return 'other';
@@ -1882,6 +1887,41 @@ export interface CollectedProviderLine {
 }
 
 /** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
+/** Bounds how long a failed step waits for its stream to record what it measured. */
+const FAILED_STEP_USAGE_SETTLE_MS = 2_000;
+
+const failedProviderStepUsage = new WeakMap<object, ObservedProviderUsage>();
+
+/**
+ * What a provider step that threw had already consumed: a stop or a dropped
+ * stream after message_start is still charged by the provider, so it is
+ * settled at its measured usage rather than released.
+ */
+export function usageOfFailedProviderStep(error: unknown): ObservedProviderUsage | null {
+  return typeof error === 'object' && error !== null
+    ? (failedProviderStepUsage.get(error) ?? null)
+    : null;
+}
+
+async function recordFailedProviderStepUsage(
+  error: unknown,
+  sink: ToolLoopStepSink,
+  usage: ObservedProviderUsage,
+): Promise<void> {
+  if (typeof error !== 'object' || error === null) return;
+  if (sink.settled) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      sink.settled,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, FAILED_STEP_USAGE_SETTLE_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+  }
+  if (hasObservedProviderUsage(usage)) failedProviderStepUsage.set(error, usage);
+}
+
 export async function collectProviderStream(
   stream: ReadableStream,
   onLine?: (entry: CollectedProviderLine) => void,
@@ -2635,6 +2675,16 @@ async function runMcpTool(
       : { content: outcome.content, isError: true };
   }
 
+  if (isAnswerUiTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = executeAnswerUiTool(toolCall.args, { toolCallId: toolCall.id });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : { content: outcome.content, isError: true };
+  }
+
   if (isUrlFetchTool(toolCall.qualifiedName)) {
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
@@ -3059,7 +3109,8 @@ export function isToolOffered(
     isPlacesSearchTool(qualifiedName) ||
     isItineraryTool(qualifiedName) ||
     isProductComparisonTool(qualifiedName) ||
-    isClarifyTool(qualifiedName)
+    isClarifyTool(qualifiedName) ||
+    isAnswerUiTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
   }
@@ -3760,6 +3811,7 @@ export async function* runToolLoop(
 
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const turnToolProhibition = processed.turnToolProhibition;
+  const turnWithheldTools = new Set(processed.turnWithheldTools ?? []);
   const mcpTools = turnToolProhibition?.allTools ? [] : (options.mcpTools ?? []);
   const connectorPermissions = processed.toolLockdown
     ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
@@ -3805,7 +3857,7 @@ export async function* runToolLoop(
     return [
       ...loaded,
       ...(directory ? [directory] : []),
-      ...(storedResults ? [toolResultReaderToolDef(earlierStoredResults)] : []),
+      ...(storedResults ? [toolResultReaderToolDef()] : []),
     ];
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
@@ -3902,6 +3954,8 @@ export async function* runToolLoop(
   const observedUsage = options.usage ?? createObservedProviderUsage();
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
+  const storedResultsNotice = earlierToolResultsNotice(earlierStoredResults);
+  if (storedResultsNotice) placeTurnSystemNotices(messages, [storedResultsNotice]);
 
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
@@ -3980,6 +4034,26 @@ export async function* runToolLoop(
       `Tool "${qualifiedName}" was refused: untrusted external content is in this conversation and ` +
       'this run is unattended, so it cannot ask a human to approve an action that could send data ' +
       'off the system. Do not retry it; report this to the user instead of continuing.'
+    );
+  }
+
+  function isForcedToolChoice(choice: unknown): boolean {
+    return choice === 'required' || (typeof choice === 'object' && choice !== null);
+  }
+
+  function notOfferedToolResultMessage(qualifiedName: string): string {
+    return (
+      `Tool "${qualifiedName}" is not available on this turn and was not run. ` +
+      'Use only the tools offered now.'
+    );
+  }
+
+  function toolOfferedThisTurn(qualifiedName: string): boolean {
+    return (
+      qualifiedName === TOOL_DIRECTORY_TOOL_NAME ||
+      qualifiedName === TOOL_RESULT_READER_TOOL_NAME ||
+      availableTools.has(qualifiedName) ||
+      isToolOffered(qualifiedName, mcpTools, availableTools)
     );
   }
 
@@ -4304,6 +4378,8 @@ export async function* runToolLoop(
           }) ?? servedRouteId;
         return result;
       } catch (err) {
+        const spentBeforeFailure = options.providerExecutor ? null : usageOfFailedProviderStep(err);
+        if (spentBeforeFailure) mergeObservedProviderUsage(observedUsage, spentBeforeFailure);
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof SharedProviderStreamDeadlineError) throw err;
         if (releasedLinesToClient) throw err;
@@ -5141,6 +5217,12 @@ export async function* runToolLoop(
           unavailable: true,
         });
       }
+      if (turnWithholdsTool(turnWithheldTools, tc.qualifiedName)) {
+        return Promise.resolve({
+          content: withheldToolResultMessage(tc.qualifiedName),
+          isError: true,
+        });
+      }
       const resumeInput = suspendContext.resumeInput?.get(tc.id);
       const budget = toolGovernor.countCall();
       if (!budget.withinCap) {
@@ -5150,7 +5232,10 @@ export async function* runToolLoop(
           isError: false,
         });
       }
-      if (toolGovernor.isWithdrawn(tc.qualifiedName)) {
+      if (
+        toolGovernor.isWithdrawn(tc.qualifiedName) ||
+        (mapSearchBatchCompleted && isMapSearchTool(tc.qualifiedName))
+      ) {
         return Promise.resolve({
           content: withdrawnToolMessage(tc.qualifiedName),
           isError: false,
@@ -6435,8 +6520,15 @@ export async function* runToolLoop(
         isForcedSkillToolChoice(llmRequest.tool_choice)
           ? { tool_choice: 'auto' as const }
           : {}),
+        // A forced choice would make the model call a tool the governor has
+        // closed, so once one is closed the step may answer instead.
+        ...(step > 1 &&
+        processed.chatRequest?.tool_choice === undefined &&
+        isForcedToolChoice(llmRequest.tool_choice) &&
+        toolGovernor.anyClosed()
+          ? { tool_choice: 'auto' as const }
+          : {}),
         // A tool choice with no tools on offer is a request providers refuse.
-        // The governor can empty the set mid-turn, so the choice goes with it.
         ...(stepTools && stepTools.length > 0 ? {} : { tool_choice: undefined }),
       };
       if (processed.freeTrial?.promotion) {
@@ -7094,29 +7186,44 @@ export async function* runToolLoop(
           : allowedCalls),
       ];
 
-      const refusedCalls = [...prohibitedCalls.map((tc) => ({ tc, gate: null })), ...blockedCalls];
-      for (const { tc, gate } of refusedCalls) {
+      const refusedCalls = [
+        ...prohibitedCalls.map((tc) => ({ tc, gate: null, offered: true })),
+        ...unofferedCalls.map((tc) => ({ tc, gate: null, offered: false })),
+        ...blockedCalls.map((entry) => ({ ...entry, offered: true })),
+      ];
+      for (const { tc, gate, offered } of refusedCalls) {
         const escalationDenied = gate?.reason === 'lethal_trifecta';
+        const withheld = gate === null && turnWithholdsTool(turnWithheldTools, tc.qualifiedName);
         logger.warn(
           {
             tool: tc.qualifiedName,
             requestId: processed.requestId,
-            reason: gate?.reason ?? 'turn_prohibition',
+            reason:
+              gate?.reason ??
+              (!offered ? 'not_offered' : withheld ? 'turn_withheld' : 'turn_prohibition'),
           },
-          gate === null
-            ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
-            : escalationDenied
-              ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
-              : '[tool-loop] tool call blocked by the user permission store',
+          !offered
+            ? '[tool-loop] tool call refused: the tool was not offered on this turn'
+            : withheld
+              ? '[tool-loop] tool call refused: the request does not call for this tool'
+              : gate === null
+                ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
+                : escalationDenied
+                  ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
+                  : '[tool-loop] tool call blocked by the user permission store',
         );
         const content = await applyToolResultSecretPolicy(
           options.userId,
           tc.qualifiedName,
-          gate === null
-            ? prohibitedToolResultMessage(tc.qualifiedName)
-            : escalationDenied
-              ? refusedToolResultMessage(tc.qualifiedName)
-              : blockedToolResultMessage(tc.qualifiedName),
+          !offered
+            ? notOfferedToolResultMessage(tc.qualifiedName)
+            : withheld
+              ? withheldToolResultMessage(tc.qualifiedName)
+              : gate === null
+                ? prohibitedToolResultMessage(tc.qualifiedName)
+                : escalationDenied
+                  ? refusedToolResultMessage(tc.qualifiedName)
+                  : blockedToolResultMessage(tc.qualifiedName),
         );
         await auditToolCall(tc.qualifiedName, 'blocked');
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);

@@ -25,18 +25,11 @@ async function recentProjects(
   return projects.map((project) => ({ id: project.id, name: projectTitle(project) }));
 }
 
-/**
- * The skills this workspace supplies itself. A skill carries no category or
- * audience the empty state could rank by, so account and user skills such as
- * ad campaigns or AI SEO were offered first in a code workspace. The
- * workspace's own skills are the ones known to belong to it; the rest stay a
- * search away in the skills list.
- */
 async function enabledSkills(adapter: CliCapabilityAdapter): Promise<StartSuggestions['skills']> {
   const result = await adapter.call<SkillListResponse>('skills');
   if (result.status !== 'ok') return [];
   return result.value.skills
-    .filter((skill) => skill.enabled && skill.consented && skill.scope === 'project')
+    .filter((skill) => skill.enabled && skill.consented)
     .slice(0, START_SUGGESTION_LIMIT)
     .map((skill) => ({ name: skill.name, description: skill.description }));
 }

@@ -1,3 +1,4 @@
+import { localModelId } from '@agiworkforce/local-runtime-contract';
 import { describe, expect, it } from 'vitest';
 import { LOCAL_MODEL_SERVERS, localModelId } from '@agiworkforce/local-runtime-contract';
 import {

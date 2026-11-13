@@ -86,7 +86,7 @@ function harness(
 ) {
   const execute = vi.fn(async (_sql: string, _params?: readonly unknown[]) => undefined);
   const query = vi.fn(
-    async (sql: string, _params?: readonly unknown[]): Promise<Record<string, unknown>[]> => {
+    async (sql: string, params?: readonly unknown[]): Promise<Record<string, unknown>[]> => {
       if (sql.includes('insert into public.mobile_iap_notification_receipts')) {
         return options.duplicate ? [] : [{ notification_id: 'notice-1' }];
       }
@@ -104,6 +104,12 @@ function harness(
           },
         ];
       }
+      if (sql.includes('from public.credit_transactions')) {
+        const description = String(params?.[1]);
+        const rows = sql.includes("transaction_type = 'refund'") ? revokedFromBalance : grants;
+        return [{ total: String(rows[description] ?? 0) }];
+      }
+      if (sql.includes('get_credit_balance_microusd')) return [{ account_id: 'account-1' }];
       if (sql.includes('update public.mobile_iap_accounts')) {
         return options.renewalStateClaimed === false ? [] : [{ user_id: 'user-1' }];
       }
@@ -157,12 +163,18 @@ describe('mobile IAP lifecycle ledger', () => {
     expect(h.execute).not.toHaveBeenCalled();
   });
 
-  it('revokes the purchased top-up allocation exactly once on refund', async () => {
+  function refundCalls(h: ReturnType<typeof harness>) {
+    return h.execute.mock.calls.filter((call: unknown[]) =>
+      String(call[0]).includes('handle_top_up_refund'),
+    );
+  }
+
+  it('takes back the credit a refunded top-up granted, not its price in ledger cents', async () => {
     const h = harness();
     await expect(
       processMobileIapLifecycleEvent({
         db: h.db,
-        event: event({ entitlementStatus: 'refunded', refundFraction: 0.5 }),
+        event: event({ entitlementStatus: 'refunded' }),
       }),
     ).resolves.toBe('processed');
     expect(h.execute).toHaveBeenCalledWith(

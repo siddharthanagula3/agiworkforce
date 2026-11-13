@@ -53,34 +53,20 @@ export function usageWarningFromSnapshot(snapshot: UsageSnapshot): ManagedUsageW
   });
 }
 
-export interface UsageNotice {
-  message: string;
-  actionLabel: string;
-  onAction: () => void;
-  onDismiss: () => void;
-}
-
 export function UsageLimitBanner({
   warning,
   actionLabel,
   onAction,
   onDismiss,
-  notice = null,
 }: {
   warning: ManagedUsageWarning | null;
   actionLabel: string | null;
   onAction: () => void;
   onDismiss: () => void;
-  notice?: UsageNotice | null;
 }) {
   const colors = useThemeColors();
-  if (!warning && !notice) return null;
-  const critical = warning?.severity === 'critical';
-  const headline = warning ? warning.headline : (notice?.message ?? '');
-  const resetLabel = warning ? warning.resetLabel : null;
-  const shownActionLabel = warning ? actionLabel : (notice?.actionLabel ?? null);
-  const handleAction = warning ? onAction : (notice?.onAction ?? onAction);
-  const handleDismiss = warning ? onDismiss : (notice?.onDismiss ?? onDismiss);
+  if (!warning) return null;
+  const critical = warning.severity === 'critical';
 
   return (
     <View
@@ -105,31 +91,31 @@ export function UsageLimitBanner({
           numberOfLines={2}
           style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '500' }}
         >
-          {headline}
+          {warning.headline}
         </Text>
-        {resetLabel ? (
+        {warning.resetLabel ? (
           <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
-            {resetLabel}
+            {warning.resetLabel}
           </Text>
         ) : null}
       </View>
-      {shownActionLabel ? (
+      {actionLabel ? (
         <PressableBox
           testID="chat.usage-limit.action"
-          onPress={handleAction}
+          onPress={onAction}
           accessibilityRole="button"
-          accessibilityLabel={shownActionLabel}
+          accessibilityLabel={actionLabel}
           style={{ minHeight: 44, justifyContent: 'center' }}
         >
           <Text
             style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
           >
-            {shownActionLabel}
+            {actionLabel}
           </Text>
         </PressableBox>
       ) : null}
       <PressableBox
-        onPress={handleDismiss}
+        onPress={onDismiss}
         accessibilityRole="button"
         accessibilityLabel="Dismiss usage warning"
         style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}

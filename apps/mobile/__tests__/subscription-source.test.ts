@@ -1,4 +1,3 @@
-import { COMPANY_SITE_NAME } from '@agiworkforce/types';
 import {
   billingManagementTarget,
   getSubscriptionOwnerGuard,
@@ -17,18 +16,6 @@ describe('subscription owner guard', () => {
     });
     expect(getSubscriptionOwnerGuard('google', 'trialing', false).blocked).toBe(true);
     expect(getSubscriptionOwnerGuard('unknown', 'active', false).blocked).toBe(true);
-  });
-
-  it('names who manages a plan granted by hand by its billing owner', () => {
-    expect(getSubscriptionOwnerGuard('manual', 'active', true, 'personal').sourceLabel).toBe(
-      COMPANY_SITE_NAME,
-    );
-    expect(getSubscriptionOwnerGuard('manual', 'active', true, 'organization').sourceLabel).toBe(
-      'your organization',
-    );
-    expect(getSubscriptionOwnerGuard('manual', 'active', true).sourceLabel).toBe(
-      'your organization',
-    );
   });
 
   it('names no web destination where the store forbids linking to web billing', () => {

@@ -1,13 +1,6 @@
 import * as vscode from 'vscode';
 import type { ConnectorConnection, ListConnectorsResponse } from '@agiworkforce/cloud-contracts';
 import {
-  CONNECTORS_COMING_SOON_DETAIL,
-  CONNECTORS_COMING_SOON_LABEL,
-  CONNECTOR_RELEASE_STATE,
-  connectorsReleased,
-  type ConnectorReleaseState,
-} from '@agiworkforce/types';
-import {
   connectorContextValue,
   connectorDescription,
   connectorIcon,
@@ -72,10 +65,7 @@ export class ConnectorsTreeProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private timer: ReturnType<typeof setInterval> | undefined;
 
-  constructor(
-    private readonly resolveClient: () => Promise<ConnectorListClientResolution>,
-    private readonly releaseState: ConnectorReleaseState = CONNECTOR_RELEASE_STATE,
-  ) {}
+  constructor(private readonly resolveClient: () => Promise<ConnectorListClientResolution>) {}
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
@@ -97,15 +87,6 @@ export class ConnectorsTreeProvider
 
   async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
     if (element !== undefined) return [];
-    if (!connectorsReleased(this.releaseState)) {
-      return [
-        new ConnectorNoticeItem(
-          `Connectors · ${CONNECTORS_COMING_SOON_LABEL}`,
-          CONNECTORS_COMING_SOON_DETAIL,
-          'lock',
-        ),
-      ];
-    }
     const resolution = await this.resolveClient();
     if (resolution.status === 'signed-out') {
       return [

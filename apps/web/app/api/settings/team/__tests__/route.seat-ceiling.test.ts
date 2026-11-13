@@ -245,3 +245,7 @@ describe('POST /api/settings/team seat ceiling', () => {
     expect(expiryCall?.[1]).toEqual([ORG_A]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

@@ -364,3 +364,7 @@ describe('turnOffFromEmailLink with a durable cleanup record', () => {
     },
   );
 });
+
+type CompleteMockModule0 = typeof import('../store');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');

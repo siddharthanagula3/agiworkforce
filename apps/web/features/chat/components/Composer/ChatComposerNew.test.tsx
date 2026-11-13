@@ -3700,5 +3700,6 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
     ...(await importOriginal<ReadonlyIdentityModule>()),
     useSessionSnapshot: () => () => null,
     useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
   };
 });

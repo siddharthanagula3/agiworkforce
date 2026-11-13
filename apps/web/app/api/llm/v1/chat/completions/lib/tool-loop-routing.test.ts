@@ -5,6 +5,7 @@ import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
 import { createMapSearchToolDefinition } from '@/lib/services/map-search-tool-service';
+import { answerUiToolDefinition } from '@/lib/services/answer-ui-tool-service';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
 
 const ASK_EVERY_TIME: ToolApprovalPolicy = 'ask_every_time';
@@ -43,6 +44,7 @@ describe('classifyToolLoopInputs', () => {
       hasMapSearchTools: false,
       hasPlaceTools: false,
       hasProductComparisonTools: false,
+      hasAnswerUiTools: false,
       hasDeviceStepTools: false,
       shouldRun: true,
       approvalMode: 'manual',
@@ -63,6 +65,16 @@ describe('classifyToolLoopInputs', () => {
     expect(required.shouldRun).toBe(true);
     expect(required.hasWebSearchTools).toBe(false);
     expect(required.approvalMode).toBe('auto');
+  });
+
+  it('runs the loop for the answer UI tool and lets it run without asking under the cloud default', () => {
+    const result = classifyToolLoopInputs([], [answerUiToolDefinition()], 'autonomous');
+    expect(result.hasAnswerUiTools).toBe(true);
+    expect(result.shouldRun).toBe(true);
+    expect(result.approvalMode).toBe('auto');
+    expect(
+      classifyToolLoopInputs([], [answerUiToolDefinition()], AUTO_APPROVE_READ_ONLY).approvalMode,
+    ).toBe('auto');
   });
 
   it('runs the loop for a device step, which only a suspended loop can carry out', () => {

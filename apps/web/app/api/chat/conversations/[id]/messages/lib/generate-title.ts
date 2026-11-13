@@ -353,7 +353,7 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     // title a human actually chose -- a real rename, or a duplicate
     // scheduling that already won.
     const clientCandidate = clientTruncatedTitleCandidate(input.content);
-    await input.db.execute(
+    const updated = await input.db.execute(
       `update web_conversations
           set title = $1, updated_at = now()
         where id = $2
@@ -370,6 +370,12 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
         clientCandidate,
       ],
     );
+    if (updated === 0) {
+      logger.info(
+        { conversationId: input.conversationId },
+        '[conversation-title] the title changed before the generated one arrived; left as it is',
+      );
+    }
   } catch (error) {
     logger.warn(
       { error, conversationId: input.conversationId },

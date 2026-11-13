@@ -289,6 +289,7 @@
 
 .mermaid-diagram svg {
   max-width: 100%;
+  min-width: var(--mermaid-min-width, 0);
   height: auto;
 }
 
@@ -370,6 +371,8 @@
 }
 
 .mermaid-caption {
+  display: flex;
+  gap: 0.75rem;
   margin-top: 0.375rem;
   font-size: 12px;
 }

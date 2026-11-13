@@ -1,5 +1,6 @@
 import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import type { ReactNode } from 'react';
+import type { PreferenceOwner } from '@/app/settings/_lib/preferences-client';
 import type { ImageRevisionRequest } from '../../components/ImageGenerationCard';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

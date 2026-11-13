@@ -67,17 +67,6 @@ describe('the developer-runtime banner has a way out', () => {
 
     expect(restartAll).toHaveBeenCalledOnce();
   });
-  it('shows a mode chosen outside the chat in the open chat views', async () => {
-    const pushAgentControls = vi
-      .spyOn(SidebarProvider.prototype, 'pushAgentControls')
-      .mockImplementation(() => undefined);
-    const listeners = listenersOf(vscode.workspace.onDidChangeConfiguration);
-    for (const listener of listeners) {
-      listener({ affectsConfiguration: (key: string) => key === 'agiWorkforce.agent.mode' });
-    }
-    await vi.waitFor(() => expect(pushAgentControls).toHaveBeenCalled());
-  });
-
   it.each([undefined, 'Restart Local Runtime'])(
     'requires an explicit restart after permissions change (%s)',
     async (choice) => {

@@ -283,3 +283,7 @@ describe('read-only admin cannot mutate through the API', () => {
     expect(mockExecute).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

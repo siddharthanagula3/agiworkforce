@@ -71,6 +71,7 @@ import { useSoftKeyboardInset } from '../Composer/soft-keyboard-inset';
 import { TranscriptNotice } from './TranscriptNotice';
 import { ArrowRight, ChevronDown, RefreshCw, ShieldAlert, Square } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
+import { onAppCommand } from '@shared/lib/app-commands';
 import { useTTS } from '@/lib/hooks/useTTS';
 import { currentReadAloudMessage, messageReadAloudUnavailable } from '@/lib/read-aloud-policy';
 import {
@@ -154,9 +155,8 @@ function streamErrorReason(message: ChatMessage): string {
 const TURN_NOTICE_LINK_CLASS =
   'flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11 pointer-coarse:min-w-11';
 const SWITCH_MODEL_ACTION_LABEL = 'Switch model';
-const SWITCH_MODEL_ACTION_ARIA = 'Open the model picker';
 const RETRY_ACTION_LABEL = 'Retry';
-const RETRY_ACTION_ARIA = 'Regenerate this response';
+const RETRY_ACTION_ARIA = 'Retry this response';
 
 const MODEL_SWITCH_WORTHY_STREAM_ERROR_CODES = new Set([
   'provider_quota_exhausted',
@@ -1550,6 +1550,9 @@ const ChatMessageListComponent = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [closeSearch, searchOpen]);
 
+  // The desktop menu's Edit > Find opens the same find the shortcut does.
+  useEffect(() => onAppCommand('open-find', () => setSearchOpen(true)), []);
+
   const scrollFrameRef = useRef<number | null>(null);
   const pendingScrollBehaviorRef = useRef<ScrollBehavior>('smooth');
   const anchoringRef = useRef(false);
@@ -1833,7 +1836,6 @@ const ChatMessageListComponent = ({
               type="button"
               onClick={() => openModelPicker()}
               className={TURN_NOTICE_LINK_CLASS}
-              aria-label={SWITCH_MODEL_ACTION_ARIA}
             >
               {SWITCH_MODEL_ACTION_LABEL}
             </button>
@@ -1959,7 +1961,6 @@ const ChatMessageListComponent = ({
               message="Response stopped."
               action={{
                 label: 'Try again',
-                ariaLabel: 'Regenerate this response',
                 icon: RefreshCw,
                 onClick: () => onRegenerate?.(lastMessage.id),
               }}
@@ -1989,7 +1990,7 @@ const ChatMessageListComponent = ({
                 onRegenerate
                   ? {
                       label: 'Retry',
-                      ariaLabel: 'Regenerate this response',
+                      ariaLabel: RETRY_ACTION_ARIA,
                       icon: RefreshCw,
                       onClick: () => onRegenerate(lastMessage.id),
                     }

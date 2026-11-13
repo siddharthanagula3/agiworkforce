@@ -202,3 +202,95 @@ test('the checked-in implementations name the same non-empty protocol', () => {
   assert.deepEqual(events, readHandledEvents(mobile));
   assert.deepEqual(readDelegationTerminalEvents(web), readDelegationTerminalEvents(mobile));
 });
+
+const DIRECT_CLOSE = `  async close(): Promise<void> {
+    this.closing = true;
+    this.dispose();
+  }`;
+
+function withMobileClose(close, extra = '') {
+  const root = makeRoot();
+  const file = path.join(root, MOBILE_SESSION_PATH);
+  const source = readFileSync(file, 'utf8');
+  assert.ok(source.includes(DIRECT_CLOSE));
+  writeFileSync(file, source.replace(DIRECT_CLOSE, close) + extra);
+  return root;
+}
+
+test('an idempotent close wrapper reaches disposal through its private implementation', () => {
+  const root = withMobileClose(`
+  close(): Promise<void> {
+    this.closePromise ??= this.closeOnce();
+    return this.closePromise;
+  }
+  private async closeOnce(): Promise<void> {
+    this.dispose();
+  }`);
+  assert.deepEqual(checkVoiceSessionParity(root), []);
+});
+
+test('disposal can pass through multiple owned private methods', () => {
+  const root = withMobileClose(`
+  close() { return this.closeOnce(); }
+  private closeOnce() { return this.finishClose(); }
+  private finishClose() { this.dispose(); }`);
+  assert.deepEqual(checkVoiceSessionParity(root), []);
+});
+
+for (const [name, close, extra = ''] of [
+  ['an empty delegate', 'close() { return this.closeOnce(); } private closeOnce() {}'],
+  [
+    'an unused disposing helper',
+    'close() { return Promise.resolve(); } private closeOnce() { this.dispose(); }',
+  ],
+  [
+    'a cycle without disposal',
+    'close() { return this.first(); } private first() { return this.second(); } private second() { return this.first(); }',
+  ],
+  [
+    'a disposing string and comment',
+    "close() { const note = 'this.dispose()'; /* this.dispose() */ }",
+  ],
+  [
+    'an uncalled callback',
+    'close() { const cleanup = () => this.dispose(); return Promise.resolve(); }',
+  ],
+  [
+    'an unproven public delegate',
+    'close() { return this.closeOnce(); } closeOnce() { this.dispose(); }',
+  ],
+  [
+    'a delegate with an argument-dependent path',
+    'close() { return this.closeOnce(false); } private closeOnce(cleanup) { if (cleanup) this.dispose(); }',
+  ],
+  [
+    'a different class with the same helper name',
+    'close() { return this.closeOnce(); }',
+    'class Other { private closeOnce() { this.dispose(); } }',
+  ],
+]) {
+  test(`close still fails with ${name}`, () => {
+    const failures = checkVoiceSessionParity(withMobileClose(close, extra));
+    assert.ok(
+      failures.includes('mobile: close ends the session without disposing it'),
+      failures.join('; '),
+    );
+  });
+}
+
+test('a later event cannot lend disposal to session.closed', () => {
+  const root = makeRoot();
+  const file = path.join(root, MOBILE_SESSION_PATH);
+  const source = readFileSync(file, 'utf8')
+    .replace(
+      "case 'session.closed': {\n        this.dispose();\n        return;\n      }",
+      "case 'session.closed': {\n        return;\n      }",
+    )
+    .replace('default:\n        return;', 'default:\n        this.dispose();\n        return;');
+  writeFileSync(file, source);
+  const failures = checkVoiceSessionParity(root);
+  assert.ok(
+    failures.includes('mobile: session.closed ends the session without disposing it'),
+    failures.join('; '),
+  );
+});

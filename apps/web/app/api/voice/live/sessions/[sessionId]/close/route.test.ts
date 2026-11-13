@@ -250,3 +250,8 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
     expect(mocks.finalize).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/cors');
+type RetainedMockModule2 = typeof import('@/lib/logger');

@@ -144,3 +144,9 @@ describe('B4: audio MIME + magic-bytes validation', () => {
     expect(providerCalls()).toEqual([]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule0 = typeof import('@/lib/cors');
+type RetainedMockModule1 = typeof import('@/lib/error-handler');
+type RetainedMockModule2 = typeof import('@/lib/logger');

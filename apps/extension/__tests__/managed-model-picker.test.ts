@@ -74,12 +74,7 @@ describe('managed model picker', () => {
     expect(menu.recommended.map((option) => option.value)).toEqual(
       expected.recommended.map((row) => row.id),
     );
-    expect(menu.all.map((option) => option.value).sort()).toEqual(
-      options
-        .map((option) => option.value)
-        .filter((id) => id !== profile.id)
-        .sort(),
-    );
+    expect(menu.remainingCount).toBe(modelIds.length - expected.recommended.length);
     const selected = menu.all.find(
       (option) => !menu.recommended.some((row) => row.value === option.value),
     );
@@ -87,7 +82,7 @@ describe('managed model picker', () => {
     const pinned = buildManagedModelPickerMenu(access, selected!.value);
     expect(pinned.current?.value).toBe(selected!.value);
     expect(pinned.recommended).toEqual(menu.recommended);
-    expect(pinned.all).toHaveLength(menu.all.length);
+    expect(pinned.remainingCount).toBe(menu.remainingCount - 1);
   });
 
   it('searches actual model and provider names and filters their catalog capabilities', () => {

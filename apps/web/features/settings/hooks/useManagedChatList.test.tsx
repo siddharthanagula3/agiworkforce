@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import React, { StrictMode } from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';

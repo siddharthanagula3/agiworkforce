@@ -47,7 +47,6 @@ const ManagedUsageCreditsSchema: z.ZodType<ManagedUsageCredits> = z.object({
   purchased: z.object({
     remaining: creditAmount.nullable(),
     overage_enabled: z.boolean(),
-    self_serve: z.boolean().optional(),
   }),
 });
 

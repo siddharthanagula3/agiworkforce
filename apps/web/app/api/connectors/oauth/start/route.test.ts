@@ -395,3 +395,7 @@ describe('GET /api/connectors/oauth/start while connectors are coming soon', () 
     expect(mocks.createPending).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');

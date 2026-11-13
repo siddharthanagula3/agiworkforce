@@ -292,3 +292,8 @@ describe('POST /api/media/image/retry', () => {
     expect(body['error']).toBe('the provider was busy again');
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');
+type RetainedMockModule2 = typeof import('@/lib/cors');

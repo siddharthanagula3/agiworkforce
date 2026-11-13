@@ -1,10 +1,9 @@
-import {
-  finishAgentActivityLocally,
-  type AgentActivityEntry,
-  type AgentActivityProgressEntry,
-  type AgentActivityRunStatus,
-  type AgentActivityState,
-  type AgentActivityStepStatus,
+import type {
+  AgentActivityEntry,
+  AgentActivityProgressEntry,
+  AgentActivityRunStatus,
+  AgentActivityState,
+  AgentActivityStepStatus,
 } from '@agiworkforce/client-runtime';
 import type {
   AgentEventApprovalDecision,
@@ -214,17 +213,4 @@ export function readAgentActivityState(value: unknown): AgentActivityState | und
     return undefined;
   }
   return value as unknown as AgentActivityState;
-}
-
-export function settleAgentActivityAtStreamEnd(
-  activity: AgentActivityState | undefined,
-  failure: { message: string } | undefined,
-  completedAtMs = Date.now(),
-): AgentActivityState | undefined {
-  if (activity?.status !== 'running') return activity;
-  return finishAgentActivityLocally(activity, {
-    status: failure ? 'failed' : 'completed',
-    completedAtMs: Math.max(activity.updatedAtMs, completedAtMs),
-    ...(failure ? { error: failure.message } : {}),
-  });
 }

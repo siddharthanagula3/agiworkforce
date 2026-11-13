@@ -1,6 +1,9 @@
 import 'server-only';
 
+import { estimateTextTokens } from '@agiworkforce/agent-core';
 import {
+  getModelMetadataById,
+  getProviderReasoningTokenBillingClass,
   normalizeModelId,
   type ChatRequest,
   type StreamChunk,
@@ -8,7 +11,13 @@ import {
   type ReasoningReplayBlock,
   type UpstreamFrameShape,
 } from '@agiworkforce/types';
-import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
+import {
+  OpenAIWireAssembler,
+  planAnthropicCacheBreakpoints,
+  resolveAnthropicPayloadPolicy,
+  type AnthropicEphemeralCacheControl,
+} from '@agiworkforce/provider-protocol';
+import { logger } from '@/lib/logger';
 import {
   accumulateObservedProviderUsage,
   type ObservedProviderUsage,
@@ -18,6 +27,7 @@ import { normalizeProviderId } from '@/lib/services/llm-cost-calculator';
 import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pricing';
 import { startProviderStream } from './adapter-factory';
 import { ADAPTER_PROVIDERS } from './adapter-providers';
+import { computeAnthropicCacheConfig } from './canonical-request';
 import type { ProcessedRequest } from './request-processor';
 import { sseDataFrames } from './sse-frames';
 
@@ -53,6 +63,8 @@ export interface ToolLoopStepSink {
   providerErrorClassification?: StreamChunkErrorClassification;
   usage?: ObservedProviderUsage;
   providerTrace?: ProviderStreamShape;
+  /** Settles once the provider stream has ended and its usage is recorded. */
+  settled?: Promise<void>;
 }
 
 export interface ProviderStreamShape {
@@ -67,6 +79,64 @@ export interface ProviderStreamShape {
   upstreamModel?: string;
   upstreamProvider?: string;
   upstreamFrameShape?: UpstreamFrameShape;
+}
+
+export type PromptCacheBreakpointTtl = '1h' | '5m' | 'none';
+
+export interface PromptCacheBreakpointTtls {
+  system: PromptCacheBreakpointTtl;
+  conversation: PromptCacheBreakpointTtl;
+}
+
+function breakpointTtl(
+  cacheControl: AnthropicEphemeralCacheControl | undefined,
+): PromptCacheBreakpointTtl {
+  if (!cacheControl) return 'none';
+  return cacheControl.ttl ?? '5m';
+}
+
+/** The breakpoints the Anthropic payload policy places on this request. */
+export function anthropicPromptCacheTtls(
+  processed: ProcessedRequest,
+  chatRequest: ChatRequest,
+): PromptCacheBreakpointTtls {
+  const plan = planAnthropicCacheBreakpoints(
+    resolveAnthropicPayloadPolicy({
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      ...computeAnthropicCacheConfig(processed),
+    }),
+    {
+      hasTools: (chatRequest.tools?.length ?? 0) + (chatRequest.rawVendorTools?.length ?? 0) > 0,
+      hasAssistantTurn: chatRequest.messages.some((message) => message.role === 'assistant'),
+    },
+  );
+  return { system: breakpointTtl(plan.system), conversation: breakpointTtl(plan.conversation) };
+}
+
+/**
+ * Anthropic bills thinking inside output tokens and reports no separate count,
+ * so a count estimated from the streamed reasoning is recorded for visibility.
+ * Only where reasoning is not priced on top of output, or it would be billed twice.
+ */
+function estimatedReasoningTokens(
+  thinkingText: string,
+  outputTokens: number,
+  pricing: ProviderUsagePricingContext | undefined,
+): number {
+  if (!thinkingText || !pricing) return 0;
+  const billedProviders = [pricing.provider, getModelMetadataById(pricing.model)?.provider];
+  if (
+    billedProviders.some(
+      (provider) =>
+        provider !== undefined &&
+        getProviderReasoningTokenBillingClass(provider) === 'additional_to_output',
+    )
+  ) {
+    return 0;
+  }
+  const estimate = estimateTextTokens(thinkingText);
+  return outputTokens > 0 ? Math.min(estimate, outputTokens) : estimate;
 }
 
 function traceRouteLabel(value: string): string | undefined {
@@ -90,6 +160,8 @@ export async function buildToolLoopStream(
   const chatRequest = adapterProvider.buildChatRequest(stepProcessed);
   const routeId = buildServingRouteId(provider, stepRequest.model);
   applyWarmRouteProviderPinning(chatRequest, provider, routeId, processed.routeAffinity);
+  const promptCacheTtls =
+    adapter.id === 'anthropic' ? anthropicPromptCacheTtls(stepProcessed, chatRequest) : undefined;
   const chunks = await startProviderStream(
     adapter,
     chatRequest,
@@ -101,6 +173,7 @@ export async function buildToolLoopStream(
     model: stepRequest.model,
     routeId,
     dynamicFilteringWebTool: offersDynamicFilteringWebTool(stepRequest.tools),
+    ...(promptCacheTtls ? { promptCacheTtls } : {}),
   });
 }
 
@@ -121,7 +194,10 @@ export function chunksToOpenAiSse(
   model: string,
   wireMode: 'legacy-web' | 'openai-passthrough',
   sink?: ToolLoopStepSink,
-  pricing?: ProviderUsagePricingContext & { dynamicFilteringWebTool?: boolean },
+  pricing?: ProviderUsagePricingContext & {
+    dynamicFilteringWebTool?: boolean;
+    promptCacheTtls?: PromptCacheBreakpointTtls;
+  },
 ): ReadableStream<Uint8Array> {
   const assembler = new OpenAIWireAssembler({ model, wireMode });
   const encoder = new TextEncoder();
@@ -152,11 +228,38 @@ export function chunksToOpenAiSse(
     codeExecutionRequests: 0,
   };
   const codeExecutionContainerIds = new Set<string>();
+  const thinkingDeltas: string[] = [];
   let startedAt = Date.now();
 
   const commitUsage = () => {
-    if (usageCommitted || !sawUsage || !sink?.usage) return;
+    if (usageCommitted || !sawUsage) return;
     usageCommitted = true;
+    const reasoningTokensEstimated =
+      streamUsage.reasoningTokens === 0
+        ? estimatedReasoningTokens(thinkingDeltas.join(''), streamUsage.outputTokens, pricing)
+        : 0;
+    if (reasoningTokensEstimated > 0) streamUsage.reasoningTokens = reasoningTokensEstimated;
+    logger.info(
+      {
+        provider: pricing?.provider,
+        model: pricing?.model ?? model,
+        routeId: pricing?.routeId,
+        inputTokens: streamUsage.inputTokens,
+        outputTokens: streamUsage.outputTokens,
+        cacheReadTokens: streamUsage.cacheReadTokens,
+        cacheWrite5mTokens: Math.max(
+          0,
+          streamUsage.cacheWriteTokens - streamUsage.cacheWrite1hTokens,
+        ),
+        cacheWrite1hTokens: streamUsage.cacheWrite1hTokens,
+        reasoningTokens: streamUsage.reasoningTokens,
+        reasoningTokensEstimated: reasoningTokensEstimated > 0,
+        systemBreakpointTtl: pricing?.promptCacheTtls?.system,
+        conversationBreakpointTtl: pricing?.promptCacheTtls?.conversation,
+      },
+      'Provider call prompt cache usage',
+    );
+    if (!sink?.usage) return;
     accumulateObservedProviderUsage(
       sink.usage,
       {
@@ -173,6 +276,13 @@ export function chunksToOpenAiSse(
     );
   };
 
+  let markSettled: () => void = () => undefined;
+  if (sink) {
+    sink.settled = new Promise<void>((resolve) => {
+      markSettled = resolve;
+    });
+  }
+
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       startedAt = Date.now();
@@ -185,6 +295,7 @@ export function chunksToOpenAiSse(
           } else if (chunk.type === 'thinking-delta') {
             providerTrace.thinkingChunks += 1;
             providerTrace.thinkingChars += chunk.delta.length;
+            thinkingDeltas.push(chunk.delta);
           } else if (chunk.type === 'tool-use-start') {
             providerTrace.toolStarts += 1;
           } else if (chunk.type === 'stop') {
@@ -263,6 +374,8 @@ export function chunksToOpenAiSse(
         }
         commitUsage();
         controller.error(err);
+      } finally {
+        markSettled();
       }
     },
   });

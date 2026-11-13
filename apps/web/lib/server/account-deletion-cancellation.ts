@@ -18,7 +18,12 @@ import {
   type AccountDeletionPlanRenewal,
 } from '@/lib/server/account-deletion-plan-renewal';
 
-type CancellationMode = { kind: 'legacy' } | { kind: 'required-pair' };
+type CancellationMode =
+  | { kind: 'legacy' }
+  | {
+      kind: 'required-pair';
+      requestSchema: typeof AccountDeletionScheduleCancellationRequestSchema;
+    };
 
 const LockedRowsSchema = z.array(z.object({ id: z.string() })).max(1);
 const ScheduleStateSchema = z
@@ -73,9 +78,7 @@ export async function handleAccountDeletionCancellation(
 
   let expectedSchedule: { scheduledFor: string; requestedAt: string | null } | undefined;
   if (mode.kind === 'required-pair') {
-    const parsed = AccountDeletionScheduleCancellationRequestSchema.safeParse(
-      await request.json().catch(() => undefined),
-    );
+    const parsed = mode.requestSchema.safeParse(await request.json().catch(() => undefined));
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'A valid expected deletion schedule is required.' },

@@ -20,6 +20,7 @@ import type {
   ArgumentMatcher,
   ChatTurnMemory,
   ChatTurnPlan,
+  ChatTurnProject,
   Check,
   CorpusPriority,
   DatasetProvenance,
@@ -58,6 +59,7 @@ export const SUITE_NAMES: readonly SuiteName[] = [
 ];
 const CHAT_TURN_MEMORY: readonly ChatTurnMemory[] = ['on', 'off'];
 const CHAT_TURN_PLANS: readonly ChatTurnPlan[] = ['free', 'pro'];
+const CHAT_TURN_PROJECTS: readonly ChatTurnProject[] = ['with_files'];
 const RISKS: readonly RiskLabel[] = ['low', 'high'];
 const BEHAVIOURS: readonly ExpectedBehaviour[] = ['answer', 'refusal', 'safe-completion'];
 const CHECK_KINDS = [
@@ -546,6 +548,16 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
   ) {
     fail(where, `plan must be one of ${CHAT_TURN_PLANS.join(', ')}`);
   }
+  const project = raw['project'];
+  if (
+    project !== undefined &&
+    (typeof project !== 'string' || !(CHAT_TURN_PROJECTS as readonly string[]).includes(project))
+  ) {
+    fail(where, `project must be one of ${CHAT_TURN_PROJECTS.join(', ')}`);
+  }
+  if (project !== undefined && memory === undefined) {
+    fail(where, 'project describes the chat setup, which a case declares through memory');
+  }
 
   return {
     id,
@@ -572,6 +584,7 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
       : { requires: readStringArray(raw['requires'], `${where}.requires`) }),
     ...(memory === undefined ? {} : { memory: memory as ChatTurnMemory }),
     ...(plan === undefined ? {} : { plan: plan as ChatTurnPlan }),
+    ...(project === undefined ? {} : { project: project as ChatTurnProject }),
   };
 }
 

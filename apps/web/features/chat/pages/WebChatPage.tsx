@@ -5,6 +5,7 @@ import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-spac
 import { StudyModeIndicator } from '@/features/study/components/StudyModeIndicator';
 import { useConversationStudySession } from '@/features/study/hooks/use-conversation-study-session';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { useWindowEdgeOffset } from '@/features/chat/hooks/use-window-edge-offset';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { isKeepableChatMessage } from '@/lib/chat-kept-messages';
 import { clientProvisionalTitle } from '@/lib/chat-title';
@@ -197,6 +198,7 @@ import {
   TooltipTrigger,
   TooltipContent,
   TooltipProvider,
+  adjacentSidebarSessionId,
   translateUiPlural,
 } from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
@@ -355,6 +357,7 @@ import {
   type ResearchRunActionHandler,
   type ResearchRunControls,
 } from '../components/research/research-run-controls';
+import { AnswerUiFollowUpProvider } from '../components/messages/cards/answer-ui/answer-ui-follow-up';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
@@ -1098,6 +1101,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   useEffect(() => {
     const authorities = prestreamAuthoritiesRef.current;
     const generation = {};
+    const authorities = prestreamAuthoritiesRef.current;
     sendPageGenerationRef.current = generation;
     return () => {
       sendPageGenerationRef.current = {};
@@ -1125,6 +1129,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const settingsSectionParam = searchParams?.get(SETTINGS_DEEP_LINK_QUERY_KEY) ?? null;
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
+  const appHeaderRef = useRef<HTMLElement>(null);
+  useWindowEdgeOffset(appHeaderRef);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const shellLayout = useShellLayout();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -4769,8 +4775,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [storeProjects, activeProjectId, setActiveProject, handleComposerCreateProject],
   );
 
+  const firstAnswerStreaming = displayedMessages[1]?.isStreaming === true;
   useEffect(() => {
     if (!displayedConversationId || displayedMessages.length !== 2) return;
+    if (firstAnswerStreaming) return;
     const conversationId = displayedConversationId;
     if (autoTitledConversationsRef.current.has(conversationId)) return;
     const convo = conversations.find((c) => c.id === conversationId);
@@ -4822,6 +4830,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     displayedMessages.length,
+    firstAnswerStreaming,
     displayedConversationId,
     conversations,
     localModelSelection,
@@ -6702,6 +6711,30 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  // The desktop menu's Previous Chat, Next Chat and New Temporary Chat. The
+  // moves follow the rail's own order and open a chat the way a rail row does.
+  useEffect(() => {
+    const step = (direction: 'previous' | 'next') => {
+      const target = adjacentSidebarSessionId(
+        sidebarSessions,
+        displayedConversationId ?? null,
+        direction,
+      );
+      if (target) handleSelectSession(target);
+    };
+    const stopPrevious = onAppCommand('go-to-previous-chat', () => step('previous'));
+    const stopNext = onAppCommand('go-to-next-chat', () => step('next'));
+    const stopTemporary = onAppCommand('new-temporary-chat', () => {
+      handleNewChat();
+      useChatStore.getState().setPendingTemporaryChat(true);
+    });
+    return () => {
+      stopPrevious();
+      stopNext();
+      stopTemporary();
+    };
+  }, [displayedConversationId, handleNewChat, handleSelectSession, sidebarSessions]);
+
   // Top-level destinations stay visible in the production sidebar. The rail body
   // still owns chat recents; the Chat item is the stable mode destination paired
   // with Code, not a second recents list. Skills, Plugins, and Connectors live in
@@ -7019,7 +7052,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ) : null
           ) : (
             <header
+              ref={appHeaderRef}
               data-app-header=""
+              data-window-edge="offset"
               className={cn(
                 '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4',
                 isEmptyChat

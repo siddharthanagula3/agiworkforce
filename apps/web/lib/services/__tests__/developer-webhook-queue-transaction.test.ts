@@ -239,6 +239,7 @@ function fixture(
     withOrg: forbidden,
     dispose: forbidden,
   };
+  const transactionSpy = vi.spyOn(db, 'transaction');
   mocks.after.mockImplementation((callback: unknown) => {
     expect(typeof callback).toBe('function');
     expect(timeline.at(-1)).toBe('commit');
@@ -507,3 +508,8 @@ describe('developer webhook enqueue transaction with the canonical job service',
     expect(mocks.error).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/crypto/cmek');
+type CompleteMockModule1 = typeof import('@/lib/crypto/envelope');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');

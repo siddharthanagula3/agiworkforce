@@ -94,32 +94,6 @@ pub fn gather_system_context_in(dir: &Path) -> SystemContext {
     }
 }
 
-/// The repository's branch and working-tree state in `dir`, read now. It
-/// changes with every edit, so it travels with each user turn rather than in
-/// the system prompt, where it would invalidate the cached prefix.
-pub fn git_state_line(dir: &Path) -> Option<String> {
-    let layout = crate::repo::detect_repository_layout(dir);
-    let branch = layout
-        .as_ref()
-        .map(|layout| layout.head.to_string())
-        .or_else(|| detect_git_branch(dir));
-    let status = if layout.as_ref().is_some_and(|layout| layout.bare) {
-        Some("bare repository".to_string())
-    } else {
-        detect_git_status_summary(dir)
-    };
-    describe_git_state(branch.as_deref(), status.as_deref())
-}
-
-fn describe_git_state(branch: Option<&str>, status: Option<&str>) -> Option<String> {
-    match (branch, status) {
-        (Some(branch), Some(status)) => Some(format!("Git: {branch} ({status})")),
-        (Some(branch), None) => Some(format!("Git branch: {branch}")),
-        (None, Some(status)) => Some(format!("Git status: {status}")),
-        (None, None) => None,
-    }
-}
-
 /// Run `git rev-parse --abbrev-ref HEAD` in `dir` to get the branch name.
 fn detect_git_branch(dir: &Path) -> Option<String> {
     let mut command = agiworkforce_worktree::host_git();
@@ -1049,6 +1023,20 @@ impl fmt::Display for SystemContext {
         writeln!(f, "<environment>")?;
         writeln!(f, "Working directory: {}", self.cwd)?;
 
+        // Git info on one line when both present.
+        match (&self.git_branch, &self.git_status_summary) {
+            (Some(branch), Some(status)) => {
+                writeln!(f, "Git: {} ({})", branch, status)?;
+            }
+            (Some(branch), None) => {
+                writeln!(f, "Git branch: {}", branch)?;
+            }
+            (None, Some(status)) => {
+                writeln!(f, "Git status: {}", status)?;
+            }
+            (None, None) => {}
+        }
+
         if let Some(ref url) = self.git_remote_url {
             writeln!(f, "Git remote: {}", url)?;
         }
@@ -1684,8 +1672,8 @@ mod tests {
         let output = ctx.to_string();
         assert!(output.contains("<environment>"));
         assert!(output.contains("Working directory: /tmp/test"));
-        assert!(!output.contains("2 modified"), "{output}");
-        assert!(!output.contains("Git: main"), "{output}");
+        // Branch + status combined.
+        assert!(output.contains("Git: main (2 modified)"));
         assert!(output.contains("Git remote: git@github.com:user/repo.git"));
         assert!(output.contains("Project: rust (Rust)"));
         assert!(output.contains("Monorepo: pnpm workspaces"));
@@ -1727,20 +1715,7 @@ mod tests {
     }
 
     #[test]
-    fn git_state_is_described_for_the_turn_not_the_environment() {
-        assert_eq!(
-            describe_git_state(Some("main"), Some("2 modified")).as_deref(),
-            Some("Git: main (2 modified)")
-        );
-        assert_eq!(
-            describe_git_state(Some("feature-x"), None).as_deref(),
-            Some("Git branch: feature-x")
-        );
-        assert_eq!(describe_git_state(None, None), None);
-    }
-
-    #[test]
-    fn the_environment_block_is_unchanged_by_an_edit() {
+    fn test_display_branch_only() {
         let ctx = SystemContext {
             cwd: "/tmp".to_string(),
             git_branch: Some("feature-x".to_string()),
@@ -1756,13 +1731,8 @@ mod tests {
             os: "linux".to_string(),
             shell: "/bin/sh".to_string(),
         };
-        let before = ctx.to_string();
-        let edited = SystemContext {
-            git_status_summary: Some("1 modified".to_string()),
-            ..ctx
-        };
-        assert_eq!(edited.to_string(), before);
-        assert!(!before.contains("feature-x"), "{before}");
+        let output = ctx.to_string();
+        assert!(output.contains("Git branch: feature-x"));
     }
 
     #[test]

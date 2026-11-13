@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -99,6 +100,62 @@ function reachesDispose(source, body, seen = new Set()) {
 }
 
 export function readDisposingEndings(source) {
+  const ts = createRequire(import.meta.url)('typescript');
+  const parsed = ts.createSourceFile('voice-session.ts', source, ts.ScriptTarget.Latest, true);
+  if (parsed.parseDiagnostics.length) return [];
+  const nameOf = (node) =>
+    node.name && (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))
+      ? node.name.text
+      : null;
+  const owners = parsed.statements.filter(
+    (node) =>
+      ts.isClassDeclaration(node) &&
+      node.members.some(
+        (member) => ts.isMethodDeclaration(member) && nameOf(member) === 'handleMessage',
+      ),
+  );
+  if (owners.length !== 1) return [];
+  const methods = new Map();
+  for (const member of owners[0].members) {
+    if (!ts.isMethodDeclaration(member)) continue;
+    const name = nameOf(member);
+    if (!name || methods.has(name)) return [];
+    methods.set(name, member);
+  }
+  const disposes = (body, visited = new Set()) => {
+    if (!body) return false;
+    let found = false;
+    const visit = (node) => {
+      if (found) return;
+      if (
+        node !== body &&
+        (ts.isFunctionLike(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node))
+      )
+        return;
+      if (
+        ts.isCallExpression(node) &&
+        node.arguments.length === 0 &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        !node.expression.questionDotToken &&
+        node.expression.expression.kind === ts.SyntaxKind.ThisKeyword
+      ) {
+        const name = node.expression.name.text;
+        if (name === 'dispose' && methods.get(name)?.body) found = true;
+        else if (!visited.has(name)) {
+          const target = methods.get(name);
+          if (
+            target?.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword)
+          ) {
+            visited.add(name);
+            found = disposes(target.body, visited);
+          }
+        }
+      }
+      if (!found) ts.forEachChild(node, visit);
+    };
+    visit(body);
+    return found;
+  };
   const disposing = [];
   for (const name of ENDING_METHODS) {
     const body = methodBody(source, name);
@@ -109,6 +166,21 @@ export function readDisposingEndings(source) {
     const closed = handler.slice(handler.indexOf("case 'session.closed'"));
     if (/this\.dispose\(\)/.test(closed)) disposing.push('session.closed');
   }
+  const closed = [];
+  const readClosed = (node) => {
+    if (ts.isFunctionLike(node) || ts.isClassDeclaration(node) || ts.isClassExpression(node))
+      return;
+    if (
+      ts.isCaseClause(node) &&
+      ts.isStringLiteral(node.expression) &&
+      node.expression.text === 'session.closed'
+    )
+      closed.push(node);
+    ts.forEachChild(node, readClosed);
+  };
+  const handler = methods.get('handleMessage')?.body;
+  if (handler) readClosed(handler);
+  if (closed.length === 1 && disposes(closed[0])) disposing.push('session.closed');
   return disposing.sort();
 }
 

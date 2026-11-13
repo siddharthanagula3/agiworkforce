@@ -24,19 +24,6 @@ export async function refreshAuthSession(): Promise<boolean> {
   }
 }
 
-/**
- * Whether Clerk still holds a live session on this device. A refresh that failed
- * while this is true failed for the network, not because the account signed out.
- */
-export function hasActiveAuthSession(): boolean {
-  try {
-    const status = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY }).session?.status;
-    return status === 'active' || status === 'pending';
-  } catch {
-    return false;
-  }
-}
-
 export async function clearAuthSession(): Promise<void> {
   try {
     await getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY }).signOut();

@@ -12,11 +12,11 @@ import { toggleDesktopPerformanceTrace } from '../lib/performance-trace';
 /**
  * Carries out the menu items the shell cannot do itself.
  *
- * The sidebar and the shortcut sheet belong to the page, so the native menu
- * sends a command and this is what honours it. Both actions are routed through
- * what the page already owns, the layout store and the app command the
- * shortcut sheet already listens for, rather than a second way to do the same
- * thing.
+ * The sidebar and the overlays belong to the page, so the native menu sends a
+ * command and this is what honours it, through what the page already owns: the
+ * layout store and the app commands its surfaces listen for, rather than a
+ * second way to do the same thing. A shell newer than this page can send a
+ * command it does not know; that one is ignored, not mistaken for another.
  */
 export function useHostCommands(host: HostBridge | null): void {
   useEffect(() => {

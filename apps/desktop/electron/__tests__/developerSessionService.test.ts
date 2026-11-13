@@ -2,10 +2,14 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MINIMUM_SUPPORTED_RUNTIME_VERSION, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
+  TERMINAL_MAX_COLUMNS,
+  TERMINAL_MIN_SIZE,
+  TERMINAL_WRITE_LIMIT,
   type DeveloperSessionEvent,
   type DeveloperSessionList,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
+import type { DeveloperTerminalEvent } from '../runtime/developerSessionService';
 
 const root: WorkspaceRoot = {
   id: 'root-1',
@@ -61,7 +65,8 @@ vi.mock('../runtime/workspaceStore', () => ({
   forgetWorktreeRoot,
   WorktreeRootRefused,
 }));
-vi.mock('../runtime/gitService', () => ({ readWorkspaceGit }));
+const readGitState = vi.fn(async () => null);
+vi.mock('../runtime/gitService', () => ({ readGitState, readWorkspaceGit }));
 vi.mock('../config', () => ({ CLOUD_APP_ORIGIN: 'http://localhost:3100' }));
 const shellSignedCliIn = vi.fn(() => false);
 const rememberShellSignedCliIn = vi.fn();
@@ -233,10 +238,12 @@ async function loadService(
   answersUserInput?: () => boolean,
   preferredBinary = 'agi',
   consentAtMs?: number,
+  worktreesRoot?: () => string,
 ) {
   vi.resetModules();
   const children: FakeChild[] = [];
   const events: Array<{ rootId: string; event: DeveloperSessionEvent }> = [];
+  const terminalEvents: DeveloperTerminalEvent[] = [];
   const spawn = vi.fn((_command: string, args: readonly string[]) => {
     const child = new FakeChild(responder);
     children.push(child);
@@ -257,11 +264,13 @@ async function loadService(
     mayRunIn: (candidate) => agentAllowed(candidate),
     workspaceConsentAtMs: () => consentAtMs ?? null,
     spawn: spawn as never,
+    onTerminalEvent: (event) => terminalEvents.push(event),
     ...(accountBridge ? { accountBridge } : {}),
     ...(answersUserInput ? { answersUserInput } : {}),
+    ...(worktreesRoot ? { worktreesRoot } : {}),
   });
 
-  return { service, children, events, spawn };
+  return { service, children, events, spawn, terminalEvents };
 }
 
 beforeEach(() => {
@@ -353,6 +362,99 @@ describe('developer session runtime', () => {
       if (descriptor) Object.defineProperty(process, 'resourcesPath', descriptor);
       else Reflect.deleteProperty(process, 'resourcesPath');
     }
+  });
+
+  it('passes the worktree folder the user chose, and nothing for the default or a relative path', async () => {
+    const service = await import('../runtime/developerSessionService');
+    expect(service.worktreesRootArgs('/Users/me/worktrees')).toEqual([
+      '--worktrees-root',
+      '/Users/me/worktrees',
+    ]);
+    expect(service.worktreesRootArgs('')).toEqual([]);
+    expect(service.worktreesRootArgs('relative/worktrees')).toEqual([]);
+  });
+
+  describe('a changed worktree location', () => {
+    let descriptor: PropertyDescriptor | undefined;
+    let location = '/Volumes/first/worktrees';
+
+    beforeEach(() => {
+      descriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+      Object.defineProperty(process, 'resourcesPath', {
+        configurable: true,
+        value: '/owned/e10/resources',
+      });
+      packagedHost = true;
+      location = '/Volumes/first/worktrees';
+      statSync.mockImplementation(() => ({ isDirectory: () => true, isFile: () => true }));
+    });
+
+    afterEach(() => {
+      packagedHost = false;
+      if (descriptor) Object.defineProperty(process, 'resourcesPath', descriptor);
+      else Reflect.deleteProperty(process, 'resourcesPath');
+    });
+
+    const bundledService = () =>
+      loadService(defaultResponder, undefined, undefined, '', 1_700_000_000_123, () => location);
+
+    const appServerRoots = (spawn: ReturnType<typeof vi.fn>) =>
+      spawn.mock.calls
+        .map((call) => call[1] as readonly string[])
+        .filter((args) => args[0] === 'app-server')
+        .map((args) => args[args.indexOf('--worktrees-root') + 1]);
+
+    it('restarts an idle app-server so new worktrees go to the new folder', async () => {
+      const { service, spawn, children, events } = await bundledService();
+      await service.listDeveloperSessions();
+      const first = children.find((child) => child.written.length > 0)!;
+
+      location = '/Volumes/second/worktrees';
+      service.applyWorktreesRootChange();
+
+      expect(first.ended).toBe(true);
+      expect(events.some(({ event }) => event.type === 'runtime-stopped')).toBe(false);
+      await service.listDeveloperSessions();
+      expect(appServerRoots(spawn)).toEqual([
+        '/Volumes/first/worktrees',
+        '/Volumes/second/worktrees',
+      ]);
+    });
+
+    it('waits for a running or approval-waiting session to settle before restarting', async () => {
+      const { service, spawn, children, events } = await bundledService();
+      await service.listDeveloperSessions();
+      const first = children.find((child) => child.written.length > 0)!;
+      first.notify('turn/started', { threadId: thread.id, turnId: 'turn-1' });
+      first.notify('approval/requested', {
+        threadId: thread.id,
+        turnId: 'turn-1',
+        requestId: 'approval-1',
+        kind: 'Exec { command: "pnpm test" }',
+        summary: 'Run pnpm test',
+        detail: 'pnpm test',
+      });
+      expect(events.map(({ event }) => event.type)).toContain('approval-requested');
+
+      location = '/Volumes/second/worktrees';
+      service.applyWorktreesRootChange();
+      await service.listDeveloperSessions();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(first.ended).toBe(false);
+      expect(appServerRoots(spawn)).toEqual(['/Volumes/first/worktrees']);
+
+      first.notify('turn/completed', { threadId: thread.id, turnId: 'turn-1', response: 'done' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(first.ended).toBe(true);
+      expect(events.some(({ event }) => event.type === 'runtime-stopped')).toBe(false);
+      await service.listDeveloperSessions();
+      expect(appServerRoots(spawn)).toEqual([
+        '/Volumes/first/worktrees',
+        '/Volumes/second/worktrees',
+      ]);
+    });
   });
 
   it('points the app-server at the origin the shell itself is signed in to', async () => {
@@ -717,6 +819,112 @@ describe('developer session runtime', () => {
     await expect(service.archiveDeveloperThread(root.id, thread.id)).rejects.toThrow(
       /did not say it archived/,
     );
+  });
+
+  it('renames, restores and pins a session on a CLI that serves them', async () => {
+    const { service, children } = await loadService((method) => {
+      if (method === 'initialize') {
+        return {
+          ...HANDSHAKE,
+          capabilities: {
+            ...HANDSHAKE.capabilities,
+            threadRename: true,
+            threadUnarchive: true,
+            threadPin: true,
+          },
+        };
+      }
+      if (method === 'thread/rename') return { thread: { ...thread, title: 'Readme quotes' } };
+      if (method === 'thread/unarchive') return { acknowledged: true };
+      if (method === 'thread/pin') return { threadId: thread.id, pinned: true };
+      return defaultResponder(method);
+    });
+    const sentParams = (method: string) =>
+      children.flatMap((child) => child.written).find((entry) => entry.method === method)?.params;
+
+    await expect(
+      service.renameDeveloperThread(root.id, thread.id, '  Readme quotes '),
+    ).resolves.toMatchObject({
+      title: 'Readme quotes',
+    });
+    expect(sentParams('thread/rename')).toEqual({ threadId: thread.id, title: 'Readme quotes' });
+    await expect(service.unarchiveDeveloperThread(root.id, thread.id)).resolves.toBe(true);
+    await expect(service.pinDeveloperThread(root.id, thread.id, true)).resolves.toBe(true);
+    expect(sentParams('thread/pin')).toEqual({ threadId: thread.id, pinned: true });
+    await expect(service.renameDeveloperThread(root.id, thread.id, '   ')).rejects.toThrow(
+      'A session needs a name.',
+    );
+  });
+
+  it('opens a shell the user types into and passes only its own output back', async () => {
+    const { service, children, terminalEvents } = await loadService((method) => {
+      if (method === 'initialize') {
+        return { ...HANDSHAKE, capabilities: { ...HANDSHAKE.capabilities, terminals: true } };
+      }
+      if (method === 'terminal/open') return { terminalId: 'term-1' };
+      if (method === 'terminal/write' || method === 'terminal/resize') return {};
+      return defaultResponder(method);
+    });
+    const sent = (method: string) =>
+      children.flatMap((child) => child.written).filter((entry) => entry.method === method);
+
+    await expect(service.openDeveloperTerminal(root.id, 5000, 0)).resolves.toEqual({
+      terminalId: 'term-1',
+    });
+    expect(sent('terminal/open')[0]?.params).toEqual({
+      cwd: root.path,
+      cols: TERMINAL_MAX_COLUMNS,
+      rows: TERMINAL_MIN_SIZE,
+    });
+    await service.writeDeveloperTerminal(root.id, 'term-1', 'echo hi\r');
+    expect(sent('terminal/write')[0]?.params).toEqual({ terminalId: 'term-1', data: 'echo hi\r' });
+    await expect(
+      service.writeDeveloperTerminal(root.id, 'term-1', 'x'.repeat(TERMINAL_WRITE_LIMIT + 1)),
+    ).rejects.toThrow('too much');
+
+    const server = children.find((child) =>
+      child.written.some((entry) => entry.method === 'terminal/open'),
+    );
+    server?.notify('terminal/output', { terminalId: 'term-1', data: 'hi\r\n' });
+    server?.notify('terminal/output', { terminalId: 'term-other', data: 'not yours' });
+    server?.notify('terminal/exited', { terminalId: 'term-1', code: 0 });
+    await vi.waitFor(() => expect(terminalEvents).toHaveLength(2));
+    expect(terminalEvents).toEqual([
+      { rootId: root.id, terminalId: 'term-1', data: 'hi\r\n' },
+      { rootId: root.id, terminalId: 'term-1', exitCode: 0 },
+    ]);
+    await expect(service.writeDeveloperTerminal(root.id, 'term-1', 'ls\r')).rejects.toThrow(
+      'That terminal has closed.',
+    );
+  });
+
+  it('asks for a CLI update before opening a terminal on one without them', async () => {
+    const { service, children } = await loadService();
+    await expect(service.openDeveloperTerminal(root.id, 80, 24)).rejects.toThrow(/Update/);
+    expect(
+      children.flatMap((child) => child.written).some((entry) => entry.method === 'terminal/open'),
+    ).toBe(false);
+  });
+
+  it('asks for a CLI update before pinning on one that cannot pin', async () => {
+    const { service, children } = await loadService();
+    await expect(service.pinDeveloperThread(root.id, thread.id, true)).rejects.toThrow(/Update/);
+    expect(
+      children.flatMap((child) => child.written).some((entry) => entry.method === 'thread/pin'),
+    ).toBe(false);
+  });
+
+  it('reads the pin and the archive time of each listed session', async () => {
+    const { service } = await loadService((method) =>
+      method === 'thread/list'
+        ? { threads: [{ ...thread, pinned: true, archivedAt: 1_700_000_000_000 }] }
+        : defaultResponder(method),
+    );
+    const list = await service.listDeveloperSessions(undefined, { includeArchived: true });
+    expect(list.groups[0]?.sessions[0]).toMatchObject({
+      pinned: true,
+      archivedAt: 1_700_000_000_000,
+    });
   });
 
   it('names the program writing a session when the CLI refuses a turn for it', async () => {

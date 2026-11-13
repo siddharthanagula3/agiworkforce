@@ -50,6 +50,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 
 import { runToolLoop } from './tool-loop';
 import {
+  anthropicPromptCacheTtls,
   buildServingRouteId,
   chunksToOpenAiSse,
   type ToolLoopStepSink,

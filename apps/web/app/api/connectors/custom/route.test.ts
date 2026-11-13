@@ -369,3 +369,7 @@ describe('POST /api/connectors/custom while connectors are coming soon', () => {
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

@@ -1,6 +1,6 @@
 import { type AgiThemeMode } from '@agiworkforce/design-tokens';
 import { BarChart3, Download } from 'lucide-react';
-import React, { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useId, useMemo, useRef, useState } from 'react';
 import { translateUiPlural } from '@agiworkforce/ui';
 import { toUserMessage } from '../../lib/network-error';
 import { cn } from '../../lib/utils';
@@ -12,6 +12,8 @@ import {
   parseChartArtifact,
   summarizeChart,
 } from './chart-spec';
+import { useDocumentTheme, useReducedMotion } from './chartTheme';
+import { ChartErrorBoundary } from './ChartSpecView';
 
 /** recharts is heavier than every other artifact renderer in this package and a
  *  chart is rare, so the drawing surface is a separate chunk. */
@@ -19,73 +21,11 @@ const ChartCanvas = lazy(() => import('./ChartCanvas'));
 
 const CHART_HEIGHT_PX = 320;
 const EXPORT_SCALE = 2;
-const DARK_CLASS = 'dark';
-const LIGHT_CLASS = 'light';
-const THEME_ATTR = 'data-theme';
-const DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)';
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
 export interface ChartArtifactProps {
   artifact: Artifact;
   className?: string;
   isDark?: boolean;
-}
-
-function matchMediaSafe(query: string): MediaQueryList | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return window.matchMedia?.(query);
-}
-
-function readDocumentTheme(): AgiThemeMode {
-  if (typeof document === 'undefined') return 'light';
-  const root = document.documentElement;
-  if (root.classList.contains(DARK_CLASS) || root.getAttribute(THEME_ATTR) === DARK_CLASS) {
-    return 'dark';
-  }
-  if (root.classList.contains(LIGHT_CLASS) || root.getAttribute(THEME_ATTR) === LIGHT_CLASS) {
-    return 'light';
-  }
-  return matchMediaSafe(DARK_MEDIA_QUERY)?.matches ? 'dark' : 'light';
-}
-
-function useDocumentTheme(): AgiThemeMode {
-  const [mode, setMode] = useState<AgiThemeMode>(readDocumentTheme);
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const sync = () => setMode(readDocumentTheme());
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', THEME_ATTR],
-    });
-    const media = matchMediaSafe(DARK_MEDIA_QUERY);
-    media?.addEventListener('change', sync);
-    return () => {
-      observer.disconnect();
-      media?.removeEventListener('change', sync);
-    };
-  }, []);
-
-  return mode;
-}
-
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(
-    () => matchMediaSafe(REDUCED_MOTION_QUERY)?.matches ?? false,
-  );
-
-  useEffect(() => {
-    const media = matchMediaSafe(REDUCED_MOTION_QUERY);
-    if (!media) return;
-    const sync = () => setReduced(media.matches);
-    sync();
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
-  }, []);
-
-  return reduced;
 }
 
 function chartFileName(name: string): string {
@@ -161,36 +101,6 @@ function ChartFallback({
       </pre>
     </div>
   );
-}
-
-interface ChartBoundaryProps {
-  fallback: React.ReactNode;
-  resetKey: string;
-  children: React.ReactNode;
-}
-
-/** Recharts throws during render for shapes validation cannot fully anticipate;
- *  a model-authored artifact must never take the surrounding chat down with it.
- *  Content streams in, so a throw on a half-written spec has to clear itself. */
-class ChartErrorBoundary extends React.Component<ChartBoundaryProps, { failed: boolean }> {
-  constructor(props: ChartBoundaryProps) {
-    super(props);
-    this.state = { failed: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  override componentDidUpdate(previous: ChartBoundaryProps) {
-    if (this.state.failed && previous.resetKey !== this.props.resetKey) {
-      this.setState({ failed: false });
-    }
-  }
-
-  override render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
 }
 
 export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProps) {

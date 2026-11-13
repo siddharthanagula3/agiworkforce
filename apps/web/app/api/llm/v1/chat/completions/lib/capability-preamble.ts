@@ -24,9 +24,16 @@ import {
 } from '@/lib/prompts/chat-system-prompt';
 import {
   assembleChatSystemPrompt,
+  chatSetupBlock,
   CODE_EXECUTION_TOOL_NAMES,
   renderChatToolInventory,
   type ChatTurnMemory,
+  type ChatTurnState,
+  type ModelChoice,
+  type SectionReader,
+  type ServingModel,
+  type SettingsGuidance,
+  type TextOnlyChatSetup,
 } from '@/lib/prompts/chat-system-prompt-assembly';
 import { resolvePrompt, type ResolvePromptOptions } from '@/lib/prompts/prompt-registry';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
@@ -89,8 +96,6 @@ export function extractToolNames(tools: unknown[] | undefined): string[] {
 
 export type PreambleSurface = Exclude<CloudChatSurface, 'api'> | 'slack' | 'scheduled';
 
-export type SettingsGuidance = 'web' | 'mobile' | 'account';
-
 const SETTINGS_GUIDANCE: Readonly<Record<PreambleSurface, SettingsGuidance>> = {
   web: 'web',
   desktop: 'web',
@@ -145,6 +150,12 @@ export interface CapabilityPreambleInput {
   artifactConnectors?: boolean;
   /** Capability ids from the handshake for this plan and surface. */
   productCapabilities?: readonly string[];
+  /** The client links the saved memories, past chats and project files the turn supplies. */
+  sourceLinks?: boolean;
+  /** The client renders a fenced email or writing block as a card. */
+  writingCards?: boolean;
+  /** The client publishes artifacts as hosted pages, where the artifact app runtime runs. */
+  artifactApps?: boolean;
   /** Selects the prompt version; absent, the manifest pin serves. */
   promptSelection?: ResolvePromptOptions;
   servingModel?: ServingModel | null;
@@ -159,51 +170,6 @@ export type ModelSelection =
       readonly workspaceDefaultModelId?: string;
     }
   | { readonly kind: 'assigned' };
-
-type ModelChoice =
-  | { readonly kind: 'selected' }
-  | { readonly kind: 'auto'; readonly label: string }
-  | { readonly kind: 'workspace_default'; readonly label: string }
-  | { readonly kind: 'substituted' }
-  | { readonly kind: 'assigned' };
-
-export type ServingModel =
-  | {
-      readonly kind: 'model';
-      readonly name: string;
-      readonly developer: string;
-      readonly knowledgeCutoff: string | null;
-      readonly choice: ModelChoice;
-    }
-  | { readonly kind: 'router'; readonly name: string; readonly developer: string }
-  | { readonly kind: 'unattributed'; readonly name: string };
-
-export interface ChatSetup {
-  readonly savedChat: boolean;
-  readonly temporaryChat: boolean;
-  readonly memory: 'on' | 'off' | 'off_for_chat' | 'off_by_workspace' | 'unavailable';
-  readonly pastChats: boolean;
-  readonly project: 'none' | 'with_files' | 'without_files';
-  readonly projectChats: boolean;
-  readonly personalization: 'applied' | 'none' | 'off' | 'unavailable';
-  readonly toolsSupported: boolean;
-  readonly connectors: 'on' | 'off' | 'unavailable' | 'locked_down';
-  readonly skills: 'on' | 'off' | 'none';
-}
-
-const KNOWLEDGE_CUTOFF = /^(\d{4})-(\d{2})(?:-\d{2})?$/u;
-
-function formatKnowledgeCutoff(value: string | undefined): string | null {
-  const match = value ? KNOWLEDGE_CUTOFF.exec(value) : null;
-  if (!match) return null;
-  const month = Number(match[2]);
-  if (month < 1 || month > 12) return null;
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(Number(match[1]), month - 1, 1)));
-}
 
 function automaticSelectionLabel(
   modelId: string,
@@ -302,18 +268,26 @@ export function resolveChatSystemPrompt(options: ResolvePromptOptions = {}): {
   };
 }
 
+/**
+ * Versions 8 to 10 were written on version 4 and render through the setup
+ * composer below. A version that also holds the sections version 5 added
+ * renders through the published assembler, which renders its setup block too.
+ */
+export function rendersThroughSetupComposer(sections: ChatSystemPromptSections): boolean {
+  return sections['setup_heading'] !== undefined && sections['capability_honesty'] === undefined;
+}
+
 export function chatSystemPromptDescribesSetup(options: ResolvePromptOptions = {}): boolean {
   return resolveChatSystemPrompt(options).sections['setup_heading'] !== undefined;
 }
 
-/** Only a version without the setup block renders the product overview, and only if it has one. */
+/** Only the published assembler renders the product overview, and only for a version that has one. */
 export function chatSystemPromptDescribesProductCapabilities(
   options: ResolvePromptOptions = {},
 ): boolean {
   const { sections } = resolveChatSystemPrompt(options);
   return (
-    sections['setup_heading'] === undefined &&
-    sections['product_capabilities_heading'] !== undefined
+    !rendersThroughSetupComposer(sections) && sections['product_capabilities_heading'] !== undefined
   );
 }
 
@@ -321,7 +295,12 @@ export function capabilityPreambleStamp(options: ResolvePromptOptions = {}): str
   return resolvePrompt(CHAT_SYSTEM_PROMPT_ID, options).stamp;
 }
 
-function buildPublishedCapabilityPreamble(input: CapabilityPreambleInput): string | null {
+type CarriedTurnState = Pick<ChatTurnState, 'servingModel' | 'setup' | 'settingsGuidance'>;
+
+function buildPublishedCapabilityPreamble(
+  input: CapabilityPreambleInput,
+  carried: CarriedTurnState,
+): string | null {
   const { sections } = resolveChatSystemPrompt(input.promptSelection ?? {});
   const now = roundDownToGranularity(input.now ?? new Date(), TIME_CONTEXT_GRANULARITY_MS);
   const { body, time } = assembleChatSystemPrompt(
@@ -348,6 +327,10 @@ function buildPublishedCapabilityPreamble(input: CapabilityPreambleInput): strin
       ...(input.artifactRuntime === false ? { artifactRuntime: false } : {}),
       ...(input.artifactConnectors ? { artifactConnectors: true } : {}),
       ...(input.productCapabilities ? { productCapabilities: input.productCapabilities } : {}),
+      ...(input.sourceLinks ? { sourceLinks: true } : {}),
+      ...(input.writingCards ? { writingCards: true } : {}),
+      ...(input.artifactApps ? { artifactApps: true } : {}),
+      ...carried,
     },
     {
       utc: now.toISOString(),
@@ -414,66 +397,11 @@ export function retargetServingModel<T extends { role: string; content: unknown 
   );
 }
 
-function chatSetupLines(
-  section: SectionReader,
-  setup: ChatSetup,
-  toolNames: readonly string[],
-): string[] {
-  const lines: string[] = [];
-  const outsideProject = (key: string): string =>
-    (setup.projectChats ? section(`${key}_in_project`) : '') || section(key);
-  if (setup.temporaryChat) {
-    lines.push(
-      section('chat_temporary', {
-        temporaryChatRetentionDays: String(TEMPORARY_CHAT_RETENTION_DAYS),
-      }),
-    );
-  } else {
-    if (setup.savedChat) lines.push(section('chat_saved'));
-    if (setup.memory !== 'on' && setup.memory !== 'off') {
-      lines.push(outsideProject(`memory_${setup.memory}`));
-    } else {
-      lines.push(section(setup.memory === 'on' ? 'memory_on' : 'memory_off'));
-      if (setup.memory === 'on' && toolNames.some(isMemoryTool)) {
-        lines.push(section('memory_tools'));
-      }
-      lines.push(setup.pastChats ? section('past_chats_on') : outsideProject('past_chats_off'));
-    }
-  }
-
-  if (setup.project === 'with_files') {
-    lines.push(section('project_with_files'));
-    if (toolNames.some(isFileSearchTool)) lines.push(section('project_file_tools'));
-  } else {
-    lines.push(section(setup.project === 'none' ? 'no_project' : 'project_without_files'));
-  }
-  if (setup.projectChats) lines.push(section('project_chats'));
-
-  lines.push(section(`personalization_${setup.personalization}`));
-
-  if (!setup.toolsSupported) {
-    lines.push(section('tools_unsupported'));
-  } else {
-    lines.push(section(`connectors_${setup.connectors}`) || section('connectors_off'));
-    if (setup.connectors === 'on' && setup.temporaryChat) {
-      lines.push(section('connectors_temporary'));
-    }
-    if (setup.skills !== 'none') {
-      lines.push(section(setup.skills === 'on' ? 'skills_on' : 'skills_off'));
-    }
-  }
-  return lines;
-}
-
-function chatSetupBlock(
-  section: SectionReader,
-  setup: ChatSetup | undefined,
-  toolNames: readonly string[],
-): string {
-  const heading = section('setup_heading');
-  if (!setup || heading.length === 0) return '';
-  const lines = chatSetupLines(section, setup, toolNames).filter((line) => line.length > 0);
-  return lines.length > 0 ? [heading, ...lines].join('\n') : '';
+function chatSetupTools(toolNames: readonly string[]) {
+  return {
+    memoryTools: toolNames.some(isMemoryTool),
+    fileSearchTools: toolNames.some(isFileSearchTool),
+  };
 }
 
 function sectionReaderFor(selection: ResolvePromptOptions | undefined): {
@@ -518,9 +446,23 @@ function joinBlocks(blocks: readonly string[], timeContext: string): string {
 
 export function buildCapabilityPreamble(input: CapabilityPreambleInput): string | null {
   const { sections, section } = sectionReaderFor(input.promptSelection);
-  if (!sections['setup_heading']) return buildPublishedCapabilityPreamble(input);
-
   const toolNames = extractToolNames(input.tools);
+  if (!rendersThroughSetupComposer(sections)) {
+    return buildPublishedCapabilityPreamble(input, {
+      servingModel: input.servingModel ?? null,
+      ...(input.chatSetup
+        ? {
+            setup: {
+              chat: input.chatSetup,
+              tools: chatSetupTools(toolNames),
+              temporaryChatRetentionDays: TEMPORARY_CHAT_RETENTION_DAYS,
+            },
+          }
+        : {}),
+      settingsGuidance: settingsGuidanceFor(input.surface ?? 'unknown'),
+    });
+  }
+
   const hasSearch = toolNames.includes('web_search');
   const hasFetch = toolNames.includes('web_fetch') || toolNames.includes('url_fetch');
   const hasFileCreation = toolNames.some((name) =>
@@ -565,7 +507,12 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
 
   const guidance = settingsGuidanceFor(input.surface ?? 'unknown');
   blocks.push(
-    chatSetupBlock(section, input.chatSetup, toolNames),
+    chatSetupBlock(
+      section,
+      input.chatSetup,
+      chatSetupTools(toolNames),
+      TEMPORARY_CHAT_RETENTION_DAYS,
+    ),
     section(`settings_help_${guidance}`),
     section(`account_help_${guidance}`),
     section('disclosure'),
@@ -579,80 +526,50 @@ export function buildCapabilityPreamble(input: CapabilityPreambleInput): string 
   return joinBlocks(blocks, timeContextFor(section, input.now ?? new Date(), input.timeZone));
 }
 
-export type TextOnlyChatSetup = (
-  | { readonly temporaryChat: boolean; readonly personalContext: 'not_used' }
-  | {
-      readonly temporaryChat: boolean;
-      readonly personalContext: 'read_only' | 'memory_off_for_chat' | 'off_for_chat';
-      readonly inProject: boolean;
-    }
-) & { readonly projectContext?: 'with_files' | 'without_files' };
-
 export interface TextOnlyPreambleInput {
   servingModel?: ServingModel | null;
   artifacts?: boolean;
+  writingCards?: boolean;
   promptSelection?: ResolvePromptOptions;
   timeZone?: string;
   now?: Date;
   setup?: TextOnlyChatSetup;
 }
 
-function textOnlySetupLines(section: SectionReader, setup: TextOnlyChatSetup): string[] {
-  const lines: string[] = [];
-  if (setup.temporaryChat) {
-    lines.push(
-      section('chat_temporary', {
-        temporaryChatRetentionDays: String(TEMPORARY_CHAT_RETENTION_DAYS),
-      }),
-    );
-  }
-  if (setup.personalContext === 'not_used') {
-    if (setup.projectContext) {
-      lines.push(section('memory_off'), section('past_chats_off'), section('personalization_off'));
-    } else {
-      lines.push(section('personal_context_not_used'));
-    }
-  } else {
-    if (setup.personalContext === 'off_for_chat') lines.push(section('personalization_off'));
-    if (!setup.temporaryChat) {
-      lines.push(
-        section(setup.personalContext === 'read_only' ? 'memory_read_only' : 'memory_off_for_chat'),
-      );
-    }
-    if (setup.inProject && !setup.projectContext) lines.push(section('project_not_used'));
-  }
-  if (setup.projectContext) lines.push(section(`project_${setup.projectContext}`));
-  lines.push(section('apps_not_used'));
-  return lines;
-}
-
-function textOnlySetupBlock(section: SectionReader, setup: TextOnlyChatSetup | undefined): string {
-  const heading = section('setup_heading');
-  if (!setup || heading.length === 0) return '';
-  const lines = textOnlySetupLines(section, setup).filter((line) => line.length > 0);
-  return lines.length > 0 ? [heading, ...lines].join('\n') : '';
-}
-
 export function buildTextOnlyPreamble(input: TextOnlyPreambleInput): string {
   const { sections, section } = sectionReaderFor(input.promptSelection);
-  if (!sections['setup_heading']) {
+  if (!rendersThroughSetupComposer(sections)) {
     return (
-      buildPublishedCapabilityPreamble({
-        tools: [],
-        ...(input.promptSelection ? { promptSelection: input.promptSelection } : {}),
-        ...(input.timeZone ? { timeZone: input.timeZone } : {}),
-        ...(input.now ? { now: input.now } : {}),
-        ...(input.artifacts ? { artifacts: true } : {}),
-        artifactRuntime: false,
-        memory: input.setup?.personalContext === 'read_only' ? 'on' : 'off',
-      }) ?? ''
+      buildPublishedCapabilityPreamble(
+        {
+          tools: [],
+          ...(input.promptSelection ? { promptSelection: input.promptSelection } : {}),
+          ...(input.timeZone ? { timeZone: input.timeZone } : {}),
+          ...(input.now ? { now: input.now } : {}),
+          ...(input.artifacts ? { artifacts: true } : {}),
+          ...(input.writingCards ? { writingCards: true } : {}),
+          artifactRuntime: false,
+          memory: input.setup?.personalContext === 'read_only' ? 'on' : 'off',
+        },
+        {
+          servingModel: input.servingModel ?? null,
+          ...(input.setup
+            ? {
+                setup: {
+                  textOnly: input.setup,
+                  temporaryChatRetentionDays: TEMPORARY_CHAT_RETENTION_DAYS,
+                },
+              }
+            : {}),
+        },
+      ) ?? ''
     );
   }
   return joinBlocks(
     [
       ...identityBlocks(section, input.servingModel ?? null),
       section('no_tools'),
-      textOnlySetupBlock(section, input.setup),
+      textOnlySetupBlock(section, input.setup, TEMPORARY_CHAT_RETENTION_DAYS),
       section('disclosure'),
       section('response_language'),
     ],

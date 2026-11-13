@@ -450,3 +450,7 @@ describe('resumable upload for every upload kind', () => {
     expect(await store.current?.listPendingMultipartUploads(PRIVATE_BUCKET)).toEqual([]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/server/project-knowledge-object-storage');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

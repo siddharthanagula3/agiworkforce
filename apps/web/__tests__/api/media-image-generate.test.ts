@@ -2137,3 +2137,8 @@ describe('POST /api/media/image/generate', () => {
     });
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');
+type RetainedMockModule2 = typeof import('@/lib/cors');

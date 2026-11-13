@@ -53,10 +53,6 @@ function isNonProductionPath(relativePath) {
   );
 }
 
-function stripComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1 ');
-}
-
 export function loadContract(repoRoot = REPO_ROOT) {
   return JSON.parse(readFileSync(path.join(repoRoot, CONTRACT_PATH), 'utf8'));
 }
@@ -508,8 +504,12 @@ function splitStatements(sql) {
  * resolved. A fragment consumed by another literal in the same file is judged
  * in the statement that uses it, never on its own.
  */
-export function sqlStatements(source) {
+export function sqlStatements(source, { repoRoot = null, file = null } = {}) {
   const code = stripComments(source);
+  const expand =
+    file && source.includes('${')
+      ? localSqlConstantExpansion(file, { repoRoot, importConstants: true })
+      : () => null;
   const literals = scanLiterals(code);
   const { bindings, exported } = literalBindings(code, literals);
   const context = { bindings, fragments: fragmentSources(code, literals) };
@@ -522,7 +522,13 @@ export function sqlStatements(source) {
   const statements = [];
   for (const literal of literals) {
     if (spliced.has(literal)) continue;
-    const rendered = renderLiteral(literal, context, new Set()).replace(/(^|\s)--[^\n]*/g, '$1 ');
+    const imported = sqlPredicateCode(
+      expand(code.slice(literal.start + 1, literal.end - 1), literal.start),
+    );
+    const rendered = (imported ?? renderLiteral(literal, context, new Set())).replace(
+      /(^|\s)--[^\n]*/g,
+      '$1 ',
+    );
     for (const statement of splitStatements(rendered)) {
       const trimmed = statement.trim();
       if (trimmed.length > 0 && SQL_VERB.test(trimmed)) statements.push(trimmed);

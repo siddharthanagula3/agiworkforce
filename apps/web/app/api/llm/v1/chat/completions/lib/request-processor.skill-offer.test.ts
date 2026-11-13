@@ -208,7 +208,7 @@ describe('progressive-disclosure skill offer', () => {
     expect(result.chatRequest.tool_choice).toBeUndefined();
   });
 
-  it('leaves an unrelated prompt untouched', async () => {
+  it('keeps the skill tool on an unrelated prompt but lists no skill for it', async () => {
     const result = await processRequest(
       chatRequestFor('skill-offer-2', 'What time does the museum close tomorrow?'),
       auth(),
@@ -216,8 +216,26 @@ describe('progressive-disclosure skill offer', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.chatRequest.tools?.map((tool) => tool.function.name) ?? []).not.toContain(
+    expect(result.chatRequest.tools?.map((tool) => tool.function.name) ?? []).toContain(
       SKILL_TOOL_NAME,
+    );
+    expect(JSON.stringify(result.chatRequest.messages)).not.toContain('<available_skills>');
+  });
+
+  it('serializes the same tool list for a matching and an unrelated prompt', async () => {
+    const matching = await processRequest(
+      chatRequestFor('skill-offer-stable-1', 'Review the interface polish for this release.'),
+      auth(),
+    );
+    const unrelated = await processRequest(
+      chatRequestFor('skill-offer-stable-2', 'What time does the museum close tomorrow?'),
+      auth(),
+    );
+
+    expect(matching.ok && unrelated.ok).toBe(true);
+    if (!matching.ok || !unrelated.ok) return;
+    expect(JSON.stringify(unrelated.llmRequest.tools)).toBe(
+      JSON.stringify(matching.llmRequest.tools),
     );
   });
 
@@ -314,9 +332,6 @@ describe('per-user skill install overrides', () => {
       .map((message) => String(message.content));
     expect(systemMessages.some((content) => content.includes('<name>design-review</name>'))).toBe(
       false,
-    );
-    expect(result.chatRequest.tools?.map((tool) => tool.function.name) ?? []).not.toContain(
-      SKILL_TOOL_NAME,
     );
   });
 

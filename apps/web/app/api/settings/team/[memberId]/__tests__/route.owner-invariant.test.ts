@@ -146,3 +146,7 @@ describe('PATCH /api/settings/team/[memberId] owner invariant', () => {
     ]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

@@ -191,3 +191,7 @@ describe('ProjectsPanel read states', () => {
     expect(screen.queryByText(/Key count unavailable/)).not.toBeInTheDocument();
   });
 });
+
+type CompleteMockModule0 = typeof import('../hooks/use-developer-projects');
+type CompleteMockModule1 = typeof import('@/features/workspaces/hooks/use-workspaces');
+type CompleteMockModule2 = typeof import('@/features/workspaces/lib/workspace-admission');

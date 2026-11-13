@@ -913,7 +913,7 @@ export interface SessionPermissions {
 
 const MODE_DETAILS: Record<ExtensionAgentMode, string> = {
   ask: 'Every edit and command asks you first',
-  auto: "Reads and edits files without asking. Asks before commands it can't confirm are read-only.",
+  auto: 'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
   plan: 'Reads only; nothing changes until you approve the plan',
   bypass: 'Nothing asks first, including commands',
 };

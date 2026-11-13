@@ -1,12 +1,10 @@
 import type { SlashCommandSummary } from '@agiworkforce/types/protocol';
-import { CONNECTORS_COMING_SOON_LABEL } from '@agiworkforce/types';
 
 export interface SurfaceMenuItem {
   id: string;
   label: string;
   icon: string;
   command: string;
-  badge?: string;
 }
 
 export const SURFACE_MENU_ITEMS: readonly SurfaceMenuItem[] = [
@@ -29,13 +27,7 @@ export const SURFACE_MENU_ITEMS: readonly SurfaceMenuItem[] = [
     command: 'agi-workforce.showArtifacts',
   },
   { id: 'work', label: 'Work', icon: 'cloud', command: 'agi-workforce.showWork' },
-  {
-    id: 'connectors',
-    label: 'Connectors',
-    icon: 'plug',
-    command: 'agi-workforce.showConnectors',
-    badge: CONNECTORS_COMING_SOON_LABEL,
-  },
+  { id: 'connectors', label: 'Connectors', icon: 'plug', command: 'agi-workforce.showConnectors' },
   { id: 'memory', label: 'Memory', icon: 'book', command: 'agi-workforce.memory' },
   {
     id: 'personalization',

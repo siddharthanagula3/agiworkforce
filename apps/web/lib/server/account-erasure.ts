@@ -749,7 +749,7 @@ async function deleteObjectKeys(
       deleted++;
     } catch (error) {
       failed++;
-      logger.warn({ kind, key, error }, 'Failed to delete stored object');
+      logger.warn({ kind, objectKey: key, error }, 'Failed to delete stored object');
     }
   }
   return { deleted, failed };

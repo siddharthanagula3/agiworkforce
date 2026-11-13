@@ -9,6 +9,7 @@ import {
   app,
   clipboard,
   desktopCapturer,
+  dialog,
   ipcMain,
   nativeTheme,
   net,
@@ -63,6 +64,10 @@ import {
   type HostPreferences,
   type HostPreferencesState,
   type HostRestartOutcome,
+  MAX_WORKTREE_BRANCH_PREFIX_LENGTH,
+  isAutoArchiveIdleDays,
+  normalizeTerminalPreferences,
+  isWorktreeBranchPrefix,
 } from '@agiworkforce/local-runtime-contract';
 import {
   BrowserBridgeError,
@@ -79,6 +84,7 @@ import {
 import { activeShellRunCount, cancelAllShellRuns } from './runtime/shellService';
 import {
   answerDeveloperApproval,
+  applyWorktreesRootChange,
   configureDeveloperSessions,
   interruptDeveloperTurn,
   killAllDeveloperRuntimes,
@@ -94,6 +100,8 @@ import {
   stopRemoteControl,
 } from './remote/remoteControlService';
 import { getRoot, listRoots } from './runtime/workspaceStore';
+import { configurePreviousVersions } from './runtime/filesystemService';
+import { configureBrowserPane } from './browserPane';
 import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { openOpenSourceNotices, openSourceNoticesPath } from './openSourceNoticesFile';
 import { NOT_THIS_APP, shownValue, visibleInDialog } from './runtime/dialogText';
@@ -173,7 +181,7 @@ import { guardFirstLoad } from './firstLoadGuard';
 import { showLoadingOverlay } from './loadingOverlay';
 import { createScreenRetry } from './screenRetry';
 import { hideWindow, shouldHideOnClose } from './windowLifecycle';
-import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
+import { isLaunchAtLoginEnabled, setLaunchAtLogin, syncLaunchAtLogin } from './launchAtLogin';
 import { CLOUD_APP_ORIGIN, DEEP_LINK_SCHEME, REMOTE_SESSION_PARTITION } from './config';
 import {
   MIN_WINDOW_HEIGHT,
@@ -392,6 +400,7 @@ const UPDATE_RESTART_TIMEOUT_MS = 60_000;
 const HELP_PATH = '/help';
 const WHATS_NEW_PATH = '/changelog';
 const SUPPORT_PATH = '/support';
+const HELP_CENTER_PATH = '/help';
 
 /**
  * Which document may call the bridge.
@@ -1361,9 +1370,20 @@ function focusedConversationRoute(): string | null {
   return focusedConversationEntry()?.route ?? null;
 }
 
-function openNewChat(): void {
+/**
+ * The window a menu command acts on: the shell window in front, or the main
+ * window brought forward when the command came from the tray, the Dock or a
+ * shortcut pressed in another app.
+ */
+function commandWindow(): BrowserWindow | null {
+  const front = frontShellWindow();
+  if (front) return front;
   showMainWindow();
-  void mainWindow?.loadURL(windowUrlFor(null));
+  return mainWindow;
+}
+
+function openNewChat(): void {
+  void commandWindow()?.loadURL(windowUrlFor(null));
 }
 
 const NEW_CHAT_COMPOSER_WAIT_MS = 5000;
@@ -1575,8 +1595,7 @@ function removeFrontWindowFromSet(): void {
 }
 
 function openSettings(): void {
-  showMainWindow();
-  void mainWindow?.loadURL(`${CLOUD_APP_ORIGIN}/settings`);
+  void commandWindow()?.loadURL(`${CLOUD_APP_ORIGIN}/settings`);
 }
 
 function openLogsFolder(): void {
@@ -1902,6 +1921,7 @@ const garnishHandlers = {
   onRevokeComputerUse: () => void confirmRevokeComputerUse(),
   onOpenSession: openLocalSession,
   onCheckForUpdates: () => void checkForCloudUpdate(),
+  onChangeShortcut: changeShortcutFromTray,
   activity: trayActivity,
 };
 
@@ -1933,7 +1953,7 @@ function hostPreferencesState(): HostPreferencesState {
 
   return {
     preferences: {
-      launchAtLogin: preferences.launchAtLogin,
+      launchAtLogin: isLaunchAtLoginEnabled(),
       showInMenuBar: preferences.showInMenuBar,
       cliPath: preferences.cliPath,
       sessionCompletionAlerts: preferences.sessionCompletionAlerts,
@@ -1949,6 +1969,10 @@ function hostPreferencesState(): HostPreferencesState {
         ? { dictateIntoFocusedApp: preferences.dictateIntoFocusedApp }
         : {}),
       preventSleepWhileRunning: preferences.preventSleepWhileRunning,
+      worktreeBranchPrefix: preferences.worktreeBranchPrefix,
+      worktreeLocation: preferences.worktreeLocation,
+      autoArchiveIdleDays: preferences.autoArchiveIdleDays,
+      terminal: preferences.terminal,
     },
     shortcutStatus: Object.fromEntries(
       SHORTCUT_KEYS.map((key) => [
@@ -2080,6 +2104,28 @@ async function confirmCliPath(
   return (await confirmPreference(window, `cli-path ${resolved}`, options)) ? resolved : null;
 }
 
+async function chooseWorktreeLocation(
+  window: BrowserWindow | null,
+  current: string,
+): Promise<string | null> {
+  const options = {
+    title: 'Choose where new worktrees go',
+    buttonLabel: 'Use This Folder',
+    properties: ['openDirectory' as const, 'createDirectory' as const],
+    ...(current === '' ? {} : { defaultPath: current }),
+  };
+  const result = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+  const selected = result.filePaths[0];
+  if (result.canceled || !selected) return null;
+  try {
+    return realpathSync(selected);
+  } catch {
+    return selected;
+  }
+}
+
 const STOP_SHORTCUT_REQUIRED =
   'Stop Agents keeps a shortcut: it is how you stop an agent that is controlling the screen, from whatever app is in front. Choose one of the listed shortcuts instead.';
 
@@ -2116,7 +2162,7 @@ async function writeHostPreferences(
 
   if (
     typeof patch.launchAtLogin === 'boolean' &&
-    patch.launchAtLogin !== before.launchAtLogin &&
+    patch.launchAtLogin !== isLaunchAtLoginEnabled() &&
     (!patch.launchAtLogin || (await confirmLaunchAtLogin(window)))
   ) {
     setLaunchAtLogin(patch.launchAtLogin);
@@ -2144,6 +2190,33 @@ async function writeHostPreferences(
 
   if (typeof patch.sessionApprovalAlerts === 'boolean') {
     saveSettingsDurably({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
+  }
+
+  if (typeof patch.worktreeBranchPrefix === 'string') {
+    const prefix = patch.worktreeBranchPrefix.trim();
+    if (!isWorktreeBranchPrefix(prefix)) {
+      throw new Error(
+        `Use letters, numbers, dots, dashes and slashes, up to ${MAX_WORKTREE_BRANCH_PREFIX_LENGTH} characters, starting with a letter or number.`,
+      );
+    }
+    saveSettings({ worktreeBranchPrefix: prefix });
+  }
+
+  if (typeof patch.worktreeLocation === 'string') {
+    if (patch.worktreeLocation === '') saveSettings({ worktreeLocation: '' });
+    else {
+      const chosen = await chooseWorktreeLocation(window, before.worktreeLocation);
+      if (chosen !== null) saveSettings({ worktreeLocation: chosen });
+    }
+    if (getPreferences().worktreeLocation !== before.worktreeLocation) applyWorktreesRootChange();
+  }
+
+  if (isAutoArchiveIdleDays(patch.autoArchiveIdleDays)) {
+    saveSettings({ autoArchiveIdleDays: patch.autoArchiveIdleDays });
+  }
+
+  if (typeof patch.terminal === 'object' && patch.terminal !== null) {
+    saveSettings({ terminal: normalizeTerminalPreferences(patch.terminal, before.terminal) });
   }
 
   if (typeof patch.preventSleepWhileRunning === 'boolean') {
@@ -2174,6 +2247,81 @@ function openWhatsNew(): void {
 
 function openSupport(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
+}
+
+/**
+ * File > Open Folder…: the folder picker and grant the Code page's Add a
+ * folder runs, through the same dispatcher checks, then the Code page, which
+ * lists the folder from then on. A cancelled picker changes nothing.
+ */
+async function openFolder(): Promise<void> {
+  const window = commandWindow();
+  const response = await dispatchDesktopRuntime(window, 'workspace_pick_root', {});
+  if (response.ok) {
+    openRoute(CLOUD_CODE_PAGE_ROUTE);
+    return;
+  }
+  if (response.error.code === 'cancelled') return;
+  await showNativeMessage(window, {
+    type: 'warning',
+    buttons: ['OK'],
+    title: 'Folder not opened',
+    message: response.error.message,
+    noLink: true,
+  }).catch(() => undefined);
+}
+
+function openHelpCenter(): void {
+  openExternally(`${CLOUD_APP_ORIGIN}${HELP_CENTER_PATH}`);
+}
+
+/**
+ * Help > Troubleshooting > Clear Cache and Restart. It drops what the app
+ * downloaded and keeps what the person owns: cookies (the sign-in), local
+ * storage, IndexedDB and service workers (which hold the push subscription)
+ * are left alone, as are settings and folder permissions, which live outside
+ * the session.
+ */
+async function clearCacheAndRestart(): Promise<void> {
+  const choice = await showNativeMessage(frontShellWindow() ?? mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Clear and Restart'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Clear the cache and restart?',
+    message: `${PRODUCT_NAMES.desktop} deletes the files it downloaded, then restarts.`,
+    detail:
+      'You stay signed in, and your chats, settings and folder permissions are kept. The first load after the restart is slower while the app downloads its files again.',
+    noLink: true,
+  });
+  if (choice.response !== 1) return;
+  const prompt = quitPrompt(liveWork());
+  if (prompt && !(await askGuardPrompt(prompt))) return;
+
+  const cloudSession = session.fromPartition(REMOTE_SESSION_PARTITION);
+  try {
+    await Promise.all([
+      cloudSession.clearCache(),
+      cloudSession.clearCodeCaches({}),
+      cloudSession.clearStorageData({ storages: ['shadercache', 'cachestorage'] }),
+    ]);
+  } catch (error) {
+    console.warn('[troubleshooting] clearing the cache failed:', error);
+    await showNativeMessage(frontShellWindow() ?? mainWindow, {
+      type: 'warning',
+      buttons: ['OK'],
+      title: 'Cache not cleared',
+      message: `${PRODUCT_NAMES.desktop} could not clear its cache, so it did not restart.`,
+      noLink: true,
+    }).catch(() => undefined);
+    return;
+  }
+  quitConfirmed = true;
+  setTimeout(() => {
+    quitConfirmed = false;
+  }, UPDATE_RESTART_TIMEOUT_MS).unref?.();
+  app.relaunch();
+  app.quit();
 }
 
 async function showOpenSourceNotices(): Promise<void> {
@@ -2359,6 +2507,7 @@ function installMenu(): void {
   installAppMenu(
     {
       newChat: garnishHandlers.onNewChat,
+      openFolder: () => void openFolder(),
       newWindow: openNewWindow,
       openCurrentChatInNewWindow,
       copyConversationUrl: copyCurrentConversationUrl,
@@ -2478,7 +2627,7 @@ if (!hasSingleInstanceLock) {
     // is rebuilt when the front window changes rather than once at launch.
     app.on('browser-window-focus', installMenu);
     app.on('browser-window-blur', installMenu);
-    applyLaunchAtLogin();
+    syncLaunchAtLogin();
     applyGarnishShortcuts();
 
     configureRemoteControl(
@@ -2517,6 +2666,8 @@ if (!hasSingleInstanceLock) {
       mayReportRoot: (rootId) => agentAllowedIn(rootId),
       report: reportCodeSessionActivity,
     });
+    configurePreviousVersions((copy) => shell.trashItem(copy));
+    configureBrowserPane({ emit: (state) => sendRuntimeEvent({ kind: 'browser-pane', state }) });
     configureDeveloperSessions({
       emit: (rootId, event) => {
         noteBackgroundSessionEvent(rootId, event);
@@ -2534,6 +2685,8 @@ if (!hasSingleInstanceLock) {
       accountBridge: { readShellIdentity, approveDeviceCode },
       spawn: spawnTrackedDeveloperRuntime,
       answersUserInput: windowAnswersUserInput,
+      worktreesRoot: () => getPreferences().worktreeLocation,
+      onTerminalEvent: (event) => sendRuntimeEvent({ kind: 'developer-terminal', ...event }),
     });
 
     void startLocalRoutines((rootId, event) => agentNotifier.handle(rootId, event)).catch(

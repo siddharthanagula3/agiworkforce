@@ -482,6 +482,7 @@ mod tests {
         let catalog = tool_catalog::all_builtin_tool_definitions();
         let deferred = [
             "apply_patch",
+            "update_plan",
             "glob",
             "batch",
             "multiedit",

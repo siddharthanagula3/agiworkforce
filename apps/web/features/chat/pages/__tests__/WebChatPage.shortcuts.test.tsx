@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
 
 const CONVERSATION_ID = '00000000-0000-4000-8000-000000000911';
 
+const navigation = vi.hoisted(() => ({ push: vi.fn() }));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: mocks.routerPush, back: vi.fn() }),
   useParams: () => ({ sessionId: CONVERSATION_ID }),
@@ -265,6 +267,7 @@ import WebChatPage from '../WebChatPage';
 
 const workspaceFixture = createWebChatWorkspaceFixture();
 import { useChatStore } from '@shared/stores/web-chat-store';
+import { emitAppCommand } from '@shared/lib/app-commands';
 import { KEYBOARD_SHORTCUT_DOCS } from '../../hooks/use-keyboard-shortcuts';
 import { useVoiceSessionStore } from '../../stores/voice-session-store';
 import { VOICE_SESSION_EVENT } from '@agiworkforce/unified-chat';
@@ -546,5 +549,75 @@ describe('WebChatPage keyboard shortcut wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(mocks.deleteConversation).not.toHaveBeenCalled();
+  });
+});
+
+describe('WebChatPage and the desktop menu', () => {
+  const NEWER_ID = '00000000-0000-4000-8000-000000000912';
+  const OLDER_ID = '00000000-0000-4000-8000-000000000910';
+
+  function openBetweenTwoChats(): void {
+    openConversation();
+    useChatStore.getState().setConversations([
+      {
+        id: NEWER_ID,
+        title: 'Newer chat',
+        createdAt: '2026-08-16T00:00:00.000Z',
+        updatedAt: '2026-08-16T00:00:00.000Z',
+      },
+      {
+        id: CONVERSATION_ID,
+        title: 'Shortcut chat',
+        createdAt: '2026-08-15T00:00:00.000Z',
+        updatedAt: '2026-08-15T00:00:00.000Z',
+      },
+      {
+        id: OLDER_ID,
+        title: 'Older chat',
+        createdAt: '2026-08-14T00:00:00.000Z',
+        updatedAt: '2026-08-14T00:00:00.000Z',
+      },
+    ]);
+  }
+
+  beforeEach(() => {
+    navigation.push.mockClear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 200 })),
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens the chat below and above the open one, in the rail order', async () => {
+    openBetweenTwoChats();
+    render(<WebChatPage />);
+    await screen.findByTestId('message-list');
+
+    act(() => {
+      emitAppCommand('go-to-next-chat');
+    });
+    expect(navigation.push).toHaveBeenLastCalledWith(expect.stringContaining(OLDER_ID));
+
+    act(() => {
+      emitAppCommand('go-to-previous-chat');
+    });
+    expect(navigation.push).toHaveBeenLastCalledWith(expect.stringContaining(NEWER_ID));
+  });
+
+  it('starts a new chat armed as temporary', async () => {
+    openConversation();
+    render(<WebChatPage />);
+    await screen.findByTestId('message-list');
+
+    act(() => {
+      emitAppCommand('new-temporary-chat');
+    });
+
+    expect(useChatStore.getState().pendingTemporaryChat).toBe(true);
+    expect(navigation.push).toHaveBeenCalled();
   });
 });

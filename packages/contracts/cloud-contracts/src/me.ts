@@ -98,3 +98,16 @@ export type MeResponse = z.infer<typeof MeResponseSchema>;
 export function parseMeResponse(data: unknown): MeResponse {
   return MeResponseSchema.parse(data);
 }
+
+/**
+ * How long a client may act on a plan it read from `/api/me` before reading it
+ * again. The server enforces every request regardless; this bounds how long a
+ * client shows or routes on a plan that changed on another device.
+ */
+export const ME_PLAN_MAX_AGE_MS = 5 * 60_000;
+
+export function isMePlanStale(readAtIso: string | null, nowMs: number = Date.now()): boolean {
+  if (readAtIso === null) return true;
+  const readAtMs = Date.parse(readAtIso);
+  return !Number.isFinite(readAtMs) || nowMs - readAtMs >= ME_PLAN_MAX_AGE_MS;
+}

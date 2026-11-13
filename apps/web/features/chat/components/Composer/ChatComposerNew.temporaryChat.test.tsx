@@ -434,5 +434,13 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
     ...(await importOriginal<ReadonlyIdentityModule>()),
     useSessionSnapshot: () => () => null,
     useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
   };
 });
+
+type WorkspacePolicyModule = typeof import('@shared/hooks/use-workspace-policy');
+vi.mock('@shared/hooks/use-workspace-policy', async (importOriginal) => ({
+  ...(await importOriginal<WorkspacePolicyModule>()),
+  useWorkspacePolicy: () => ({ policy: null, source: 'none', stale: false, checkedAt: null }),
+  useDisabledWorkspaceFeatures: () => [],
+}));

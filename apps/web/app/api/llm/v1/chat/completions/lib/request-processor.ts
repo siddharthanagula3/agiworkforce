@@ -141,6 +141,11 @@ import {
   itineraryToolDefinition,
 } from '@/lib/places/itinerary-tool';
 import {
+  ANSWER_UI_CARD_KIND,
+  answerUiToolDefinition,
+  isAnswerUiTool,
+} from '@/lib/services/answer-ui-tool-service';
+import {
   PRODUCT_COMPARISON_CARD_KIND,
   asksForProductComparison,
   productComparisonToolDefinition,
@@ -237,7 +242,7 @@ import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/li
 import {
   CLARIFY_TOOL_NAME,
   createClarifyToolDefinition,
-  shouldOfferClarifyTool,
+  turnWarrantsClarifyTool,
 } from '@/lib/services/clarify-tool-service';
 import {
   ANTHROPIC_THINKING_BUDGET,
@@ -335,6 +340,7 @@ import {
 import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { persistConversationMessage } from '@/app/api/chat/conversations/[id]/messages/lib/persist-message';
+import { fillEmptyAssistantTurns } from '@/features/chat/lib/assistant-history-turn';
 import {
   productArtifactConnectors,
   productCapabilityFacts,
@@ -455,6 +461,10 @@ import {
   resolveInteractiveTurnContext,
   type InteractiveTurnContext,
 } from '@/lib/services/turn-context-service';
+import {
+  surfacePublishesArtifactApps,
+  surfaceRendersWritingCards,
+} from '@/lib/chat-surface-rendering';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import {
   createSkillToolDefinition,
@@ -486,7 +496,6 @@ import {
   extractToolNames,
   resolveChatSystemPrompt,
   servingModelFor,
-  type ChatSetup,
   type ModelSelection,
 } from './capability-preamble';
 import { createManagedOfficeFileToolDefinition } from '@/lib/services/managed-office-file-service';
@@ -500,7 +509,9 @@ import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
   buildComputerUseSoftCapWarningHeader,
   buildQuotaWarningHeader,
+  getPlanUsageBudgetCents,
 } from '@/lib/server/managed-usage-policy';
+import { getAccountOverageMicrousd } from '@/lib/server/rolling-usage';
 import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
   enforceManagedContentSafetyPreference,
@@ -534,6 +545,7 @@ import {
   resolveTurnToolProhibition,
   type TurnToolProhibition,
 } from './turn-tool-prohibition';
+import { type TurnToolOffer, withheldToolNames, withheldToolsTurnNotice } from './turn-tool-offer';
 
 const ResearchDomainRulesSchema = z
   .array(
@@ -885,7 +897,13 @@ export type ImplicitManagedToolIntentContext = {
   prompt: string;
   taskType: RoutingTaskType;
   planTier: string | null | undefined;
+  surface?: CloudChatSurface;
 };
+
+// These clients run their own file and shell tools on the developer's machine.
+// A cloud sandbox offered on top of them repeats tool names such as read_file,
+// which the provider rejects, and moves a local task to Managed Cloud.
+const IMPLICIT_SANDBOX_EXCLUDED_SURFACES = new Set<CloudChatSurface>(['vscode', 'cli']);
 
 export type TurnWebDomainPolicy =
   | { ok: true; policy: ResearchDomainPolicy | null }
@@ -965,7 +983,11 @@ export function applyImplicitManagedToolIntent(
       (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&
         RE_DATA_EXECUTION_SUBJECT.test(context.prompt)));
 
-  if (request.code_execution === undefined && hasExplicitCodeExecutionIntent) {
+  if (
+    request.code_execution === undefined &&
+    hasExplicitCodeExecutionIntent &&
+    (context.surface === undefined || !IMPLICIT_SANDBOX_EXCLUDED_SURFACES.has(context.surface))
+  ) {
     request.code_execution = true;
   }
 }
@@ -1034,6 +1056,7 @@ export type ImplicitManagedSkillOfferContext = {
   prompt: string;
   surface: CloudChatSurface;
   toolsCapable: boolean;
+  ambientToolsAllowed: boolean;
   loadCatalog: () => Promise<readonly Skill[]>;
 };
 
@@ -1045,7 +1068,6 @@ export async function applyImplicitManagedSkillOffer(
   if (!context.toolsCapable) return [];
   if (SKILL_OFFER_EXCLUDED_SURFACES.has(context.surface)) return [];
   if (request.tool_choice !== undefined) return [];
-  if (!context.prompt.trim()) return [];
 
   let catalog: readonly Skill[];
   try {
@@ -1056,9 +1078,10 @@ export async function applyImplicitManagedSkillOffer(
   }
 
   const relevant = selectOfferedSkills(catalog, context.prompt);
-  if (relevant.length === 0) return [];
-
-  request.messages.unshift({ role: 'system', content: formatSkillsForToolPrompt(relevant) });
+  if (catalog.length === 0 || (!context.ambientToolsAllowed && relevant.length === 0)) return [];
+  if (relevant.length > 0) {
+    request.messages.unshift({ role: 'system', content: formatSkillsForToolPrompt(relevant) });
+  }
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== SKILL_TOOL_NAME),
     createSkillToolDefinition(),
@@ -1126,6 +1149,24 @@ export function applyFileSearchToolCapability(
   ];
 }
 
+export function scheduleToolSurfaceEligible(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+  },
+): boolean {
+  return (
+    params.toolsCapable &&
+    params.ambientToolsAllowed &&
+    request.stream === true &&
+    !params.isTemporary &&
+    AMBIENT_TOOL_SURFACES.has(params.surface)
+  );
+}
+
 export function applyScheduleToolCapability(
   request: ChatCompletionRequest,
   params: {
@@ -1134,22 +1175,34 @@ export function applyScheduleToolCapability(
     isTemporary: boolean;
     ambientToolsAllowed: boolean;
     schedulesAllowed: boolean;
+    userMessage: string;
   },
-): void {
-  if (
-    !params.toolsCapable ||
-    !params.ambientToolsAllowed ||
-    !params.schedulesAllowed ||
-    !request.stream ||
-    params.isTemporary ||
-    !AMBIENT_TOOL_SURFACES.has(params.surface)
-  ) {
-    return;
-  }
+): TurnToolOffer {
+  if (!params.schedulesAllowed || !scheduleToolSurfaceEligible(request, params)) return null;
+  const definition = scheduleToolDefinition();
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
-    scheduleToolDefinition(),
+    definition,
   ];
+  return { name: definition.function.name, fitsTurn: asksForSchedule(params.userMessage) };
+}
+
+export function pluginDraftToolSurfaceEligible(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+  },
+): boolean {
+  return (
+    params.toolsCapable &&
+    params.ambientToolsAllowed &&
+    request.stream === true &&
+    !params.isTemporary &&
+    PLUGIN_DRAFT_CARD_SURFACES.has(params.surface)
+  );
 }
 
 export function applyPluginDraftToolCapability(
@@ -1160,22 +1213,16 @@ export function applyPluginDraftToolCapability(
     isTemporary: boolean;
     ambientToolsAllowed: boolean;
     pluginDraftsAllowed: boolean;
+    userMessage: string;
   },
-): void {
-  if (
-    !params.toolsCapable ||
-    !params.ambientToolsAllowed ||
-    !params.pluginDraftsAllowed ||
-    !request.stream ||
-    params.isTemporary ||
-    !PLUGIN_DRAFT_CARD_SURFACES.has(params.surface)
-  ) {
-    return;
-  }
+): TurnToolOffer {
+  if (!params.pluginDraftsAllowed || !pluginDraftToolSurfaceEligible(request, params)) return null;
+  const definition = pluginDraftToolDefinition();
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isPluginDraftTool(tool.function.name)),
-    pluginDraftToolDefinition(),
+    definition,
   ];
+  return { name: definition.function.name, fitsTurn: asksForPluginDraft(params.userMessage) };
 }
 
 export function applyManagedOfficeFileCreation(
@@ -1189,19 +1236,6 @@ export function applyManagedOfficeFileCreation(
   ];
 }
 
-/**
- * Offer the model a way to ask a real question, so an ambiguous request gets
- * the clarify card instead of prose asking the reader to describe their choice
- * in words. Offered, never forced: unlike the map tool this sets no
- * tool_choice, because most turns should just be answered.
- *
- * The tool's own description could not reliably keep a fast model from
- * calling it on a fully specified turn, so explicit intent is filtered
- * deterministically here: the tool is not even offered when the turn already
- * carries search/research, a long message, a URL, an attachment, a code
- * fence, or an opening verb naming the action to take. See
- * `shouldOfferClarifyTool`.
- */
 export function applyClarifyCardCapability(
   request: ChatCompletionRequest,
   params: {
@@ -1210,25 +1244,47 @@ export function applyClarifyCardCapability(
     userMessage: string;
     hasAttachment: boolean;
   },
-): void {
+): TurnToolOffer {
   if (
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
-    !request.x_interactive_cards?.supported.includes('clarify.v1') ||
-    !shouldOfferClarifyTool({
-      userMessage: params.userMessage,
-      hasAttachment: params.hasAttachment,
-      research: request.research === true,
-      agiWork: request.work_mode === 'agiwork',
-    })
+    request.research === true ||
+    !request.x_interactive_cards?.supported.includes('clarify.v1')
   ) {
-    return;
+    return null;
   }
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== CLARIFY_TOOL_NAME),
     createClarifyToolDefinition(),
   ];
+  return {
+    name: CLARIFY_TOOL_NAME,
+    fitsTurn: turnWarrantsClarifyTool({
+      userMessage: params.userMessage,
+      hasAttachment: params.hasAttachment,
+      research: false,
+      agiWork: request.work_mode === 'agiwork',
+    }),
+  };
+}
+
+export function applyAnswerUiCapability(
+  request: ChatCompletionRequest,
+  params: { toolsCapable: boolean },
+): boolean {
+  if (
+    !params.toolsCapable ||
+    request.stream !== true ||
+    request.x_interactive_cards?.supported.includes(ANSWER_UI_CARD_KIND) !== true
+  ) {
+    return false;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isAnswerUiTool(tool.function.name)),
+    answerUiToolDefinition(),
+  ];
+  return true;
 }
 
 export function applyMapSearchCardCapability(
@@ -1246,27 +1302,27 @@ export function applyMapSearchCardCapability(
      */
     placesSearchOffered: boolean;
   },
-): void {
+): TurnToolOffer {
   if (
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
-    params.placesSearchOffered ||
-    !hasMapSearchIntent(params.userMessage) ||
     !request.x_interactive_cards?.supported.includes('map-search.v1')
   ) {
-    return;
+    return null;
   }
   request.tools = [
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MAP_SEARCH_TOOL_NAME),
     createMapSearchToolDefinition(),
   ];
-  if (request.tool_choice === undefined) {
+  const fitsTurn = !params.placesSearchOffered && hasMapSearchIntent(params.userMessage);
+  if (fitsTurn && request.tool_choice === undefined) {
     request.tool_choice = {
       type: 'function',
       function: { name: MAP_SEARCH_TOOL_NAME },
     };
   }
+  return { name: MAP_SEARCH_TOOL_NAME, fitsTurn };
 }
 
 const CARD_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSurface>([
@@ -1284,25 +1340,40 @@ export function applyItineraryToolCapability(
     userMessage: string;
     placesAvailable: boolean;
   },
-): boolean {
+): TurnToolOffer {
   if (
     !CARD_TOOL_SURFACES.has(params.surface) ||
     !params.toolsCapable ||
     !request.stream ||
     !params.placesAvailable ||
-    !asksForItinerary(params.userMessage) ||
     !request.x_interactive_cards?.supported.includes(ITINERARY_CARD_KIND)
   ) {
-    return false;
+    return null;
   }
+  const definition = itineraryToolDefinition();
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isItineraryTool(tool.function.name)),
-    itineraryToolDefinition(),
+    definition,
   ];
-  return true;
+  return { name: definition.function.name, fitsTurn: asksForItinerary(params.userMessage) };
 }
 
-export function shouldOfferProductComparison(
+export function placesToolOffer(params: {
+  surface: CloudChatSurface;
+  requirement: PlacesRequirement;
+  toolsCapable: boolean;
+  stream: boolean | undefined;
+  backendConfigured: boolean;
+}): TurnToolOffer {
+  if (!params.toolsCapable || params.stream !== true || !params.backendConfigured) return null;
+  if (params.surface === 'api' && !params.requirement.offered) return null;
+  return {
+    name: placesSearchToolDef().function.name,
+    fitsTurn: params.requirement.offered,
+  };
+}
+
+export function productComparisonOffer(
   request: ChatCompletionRequest,
   params: {
     surface: CloudChatSurface;
@@ -1310,15 +1381,20 @@ export function shouldOfferProductComparison(
     userMessage: string;
     tools: readonly unknown[] | undefined;
   },
-): boolean {
-  return (
-    CARD_TOOL_SURFACES.has(params.surface) &&
-    params.toolsCapable &&
-    request.stream === true &&
-    classifyAttachedSearchTool(params.tools) !== null &&
-    asksForProductComparison(params.userMessage) &&
-    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) === true
-  );
+): TurnToolOffer {
+  if (
+    !CARD_TOOL_SURFACES.has(params.surface) ||
+    !params.toolsCapable ||
+    request.stream !== true ||
+    classifyAttachedSearchTool(params.tools) === null ||
+    request.x_interactive_cards?.supported.includes(PRODUCT_COMPARISON_CARD_KIND) !== true
+  ) {
+    return null;
+  }
+  return {
+    name: productComparisonToolDefinition().function.name,
+    fitsTurn: asksForProductComparison(params.userMessage),
+  };
 }
 
 export function imageToolsForTurn(
@@ -1567,6 +1643,7 @@ export type ProcessedRequest = {
   executionRequirement?: CodeExecutionRequirement;
   executionEnforcement?: RequiredExecutionEnforcement;
   turnToolProhibition?: TurnToolProhibition;
+  turnWithheldTools?: readonly string[];
   /**
    * The files attached to the turn being sent, with their bytes. Carried so the
    * tool loop can put them in the execution sandbox the moment it acquires one,
@@ -1649,6 +1726,12 @@ export type ProcessedRequest = {
      * key at the one place that knows both facts.
      */
     promptCacheScope?: PromptCacheScope;
+    /**
+     * Facts true only for this turn (the current time), placed after the first
+     * `afterMessages` messages so the system prompt and history stay
+     * byte-identical from one turn to the next.
+     */
+    turnContext?: { text: string; afterMessages: number };
   };
 };
 
@@ -1855,18 +1938,83 @@ export function collectManagedPromptMaterials(request: {
 }
 
 /**
+ * Takes the current time out of the capability preamble. It changes every
+ * minute, so it travels as turn context after the conversation; left in the
+ * system prompt it would make every provider re-read the whole history.
+ */
+export function separateTurnTime(timedCapabilityPreamble: string | null): {
+  capabilityPreamble: string | null;
+  turnTime: string;
+} {
+  const split = timedCapabilityPreamble
+    ? splitSystemPromptCacheBoundary(timedCapabilityPreamble)
+    : undefined;
+  if (!split) return { capabilityPreamble: timedCapabilityPreamble, turnTime: '' };
+  return {
+    capabilityPreamble: `${split.stablePrefix}${SYSTEM_PROMPT_CACHE_BOUNDARY}`,
+    turnTime: split.dynamicSuffix,
+  };
+}
+
+/**
  * Assembles the leading system message so the cacheable prefix (static
  * capability preamble + custom instructions) stays byte-identical across
  * turns of one conversation, with everything that varies per turn
- * (timestamp, matched skills, recalled memories) folded in after
+ * (matched skills, recalled memories) folded in after
  * `SYSTEM_PROMPT_CACHE_BOUNDARY`. `capabilityPreamble` already carries that
- * boundary ahead of its own dynamic time context; `dynamicSystemAddition`
+ * boundary ahead of any dynamic context of its own; `dynamicSystemAddition`
  * (skill/memory content) is inserted right after it, and
  * `customInstructionsPreamble` (static, per-user config) joins the stable
  * side. `projectInstruction` joins it too: the workspace sets it once, so it
  * is stable for the conversation, and it outranks the account's own
  * preference, so it is ordered by layer rather than by arrival.
  */
+/**
+ * Instructions that hold for this turn only go behind every leading system
+ * message and after the cache boundary, so the cached system prefix is the same
+ * bytes on the turns that carry them and on the turns that do not. Each stays a
+ * message of its own: context fitting may shorten a message that starts at the
+ * boundary, and a policy notice must reach the model whole.
+ */
+export function placeTurnSystemNotices(
+  messages: ProcessedRequest['llmRequest']['messages'],
+  notices: readonly string[],
+): void {
+  if (notices.length === 0) return;
+  const firstNonSystemIndex = messages.findIndex((message) => message.role !== 'system');
+  const insertIndex = firstNonSystemIndex === -1 ? messages.length : firstNonSystemIndex;
+  const boundaryPlaced = messages
+    .slice(0, insertIndex)
+    .some((message) => message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY));
+  const texts = boundaryPlaced ? notices : [SYSTEM_PROMPT_CACHE_BOUNDARY, ...notices];
+  messages.splice(
+    insertIndex,
+    0,
+    ...texts.map((content) => ({
+      role: 'system' as const,
+      content,
+      multimodal_content: undefined,
+      tool_calls: undefined,
+      tool_call_id: undefined,
+    })),
+  );
+}
+
+export const TURN_INSTRUCTIONS_HEADING =
+  'Platform instructions for this turn. They come from the system, not the user, and take ' +
+  'precedence over the defaults above. Follow them without quoting or describing them to the ' +
+  'user unless one tells you to:';
+
+/**
+ * Per-turn instructions ride in the turn context after the conversation, so a
+ * notice that differs from one turn to the next leaves the system prompt, the
+ * tools and the history byte-identical and cached.
+ */
+export function turnInstructionsText(notices: readonly string[]): string {
+  if (notices.length === 0) return '';
+  return [TURN_INSTRUCTIONS_HEADING, ...notices.map((notice) => `- ${notice}`)].join('\n');
+}
+
 export function composeManagedSystemPreamble(input: {
   capabilityPreamble: string | null;
   customInstructionsPreamble: string | null | undefined;
@@ -2720,7 +2868,11 @@ export function buildWebCloudAutoRoutingRequest(
 /**
  * Whether this turn may be prompt-cached, and under whose name.
  *
- * The client asks with `use_prompt_cache`; the privacy class decides. A
+ * A first-party surface is cached unless it sends `use_prompt_cache: false`:
+ * those clients resend the whole conversation on every call, and a client
+ * that never learned the flag would otherwise pay full input price for every
+ * repeated prefix. A developer API key still opts in, since a cache write is
+ * billed above the plain input price. The privacy class decides last. A
  * Temporary Chat promises nothing outlives the turn and a zero-retention
  * workspace promises the provider keeps nothing, so neither may leave a cached
  * prefix behind however the caller set the flag. The scope travels with the
@@ -2728,6 +2880,7 @@ export function buildWebCloudAutoRoutingRequest(
  */
 export function resolveTurnPromptCache(input: {
   requested: boolean | undefined;
+  surface: CloudChatSurface;
   temporaryChat: boolean;
   zeroDataRetentionOnly: boolean;
   organizationId: string | null;
@@ -2737,8 +2890,9 @@ export function resolveTurnPromptCache(input: {
     temporaryChat: input.temporaryChat,
     zeroDataRetentionOnly: input.zeroDataRetentionOnly,
   });
+  const requested = input.requested ?? input.surface !== 'api';
   return {
-    usePromptCache: input.requested === true && privacyClass === 'standard',
+    usePromptCache: requested && privacyClass === 'standard',
     promptCacheScope: {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -4535,6 +4689,7 @@ async function processAdmittedRequest(
     prompt: lastUserText,
     taskType: resolvedTaskType,
     planTier: subscription.plan_tier,
+    surface: chatSurface,
   });
   const turnToolProhibition = mergeTurnToolProhibitions(
     resolveTurnToolProhibition(lastUserText, {
@@ -5366,6 +5521,11 @@ async function processAdmittedRequest(
         ...options,
       })
     ).filter((skill) => agentAllowsSkill(ownership.agentTurn?.config ?? null, skill.name));
+  const webSearchToolOfferPolicy = webSearchToolOfferPolicyFor({
+    model: chatRequest.model,
+    planTier: subscription.plan_tier,
+  });
+  const ambientToolsAllowed = webSearchToolOfferPolicy !== 'required_only';
   if (chatRequest.skill_name) {
     const requestedSkillName = chatRequest.skill_name;
     let managedSkillCatalog: Skill[];
@@ -5429,6 +5589,7 @@ async function processAdmittedRequest(
         prompt: lastUserText,
         surface: chatSurface,
         toolsCapable: resolvedModelCaps?.tools !== false,
+        ambientToolsAllowed,
         loadCatalog: () => loadSkillCatalog({ includeNetworkBackedDirectorySkills: false }),
       }),
     );
@@ -5511,25 +5672,21 @@ async function processAdmittedRequest(
     backendConfigured: placesAvailable,
   });
 
-  const itineraryOffered = applyItineraryToolCapability(chatRequest, {
+  const itineraryOffer = applyItineraryToolCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
     placesAvailable,
   });
+  const itineraryOffered = itineraryOffer?.fitsTurn === true;
 
-  applyMapSearchCardCapability(chatRequest, {
+  const mapSearchOffer = applyMapSearchCardCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
     placesSearchOffered: placesRequirement.offered || itineraryOffered,
   });
 
-  const webSearchToolOfferPolicy = webSearchToolOfferPolicyFor({
-    model: chatRequest.model,
-    planTier: subscription.plan_tier,
-  });
-  const ambientToolsAllowed = webSearchToolOfferPolicy !== 'required_only';
   applyMemoryToolCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
@@ -5546,36 +5703,40 @@ async function processAdmittedRequest(
     ambientToolsAllowed,
   });
 
-  applyScheduleToolCapability(chatRequest, {
+  const ambientToolSurface = {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     isTemporary: conversationIsTemporary,
     ambientToolsAllowed,
+  };
+  const scheduleOffer = applyScheduleToolCapability(chatRequest, {
+    ...ambientToolSurface,
+    userMessage: lastUserText,
     schedulesAllowed:
-      asksForSchedule(lastUserText) &&
+      scheduleToolSurfaceEligible(chatRequest, ambientToolSurface) &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'schedules', chatSurface)) === null,
   });
 
-  applyPluginDraftToolCapability(chatRequest, {
-    surface: chatSurface,
-    toolsCapable: resolvedModelCaps?.tools ?? true,
-    isTemporary: conversationIsTemporary,
-    ambientToolsAllowed,
+  const pluginDraftOffer = applyPluginDraftToolCapability(chatRequest, {
+    ...ambientToolSurface,
+    userMessage: lastUserText,
     pluginDraftsAllowed:
       userSkillAuthoringEnabled() &&
-      asksForPluginDraft(lastUserText) &&
+      pluginDraftToolSurfaceEligible(chatRequest, ambientToolSurface) &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'plugins', chatSurface)) === null &&
       (await buildWorkspaceFeatureGateResponse(userId, request, 'skills', chatSurface)) === null,
   });
 
   const lastUserContent = lastUserMsg?.content;
-  applyClarifyCardCapability(chatRequest, {
+  const clarifyOffer = applyClarifyCardCapability(chatRequest, {
     surface: chatSurface,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     userMessage: lastUserText,
     hasAttachment:
       Array.isArray(lastUserContent) && lastUserContent.some((part) => part.type !== 'text'),
   });
+
+  applyAnswerUiCapability(chatRequest, { toolsCapable: resolvedModelCaps?.tools ?? true });
 
   const originalModel = chatRequest.model;
   let usedFallback = false;
@@ -6194,8 +6355,20 @@ async function processAdmittedRequest(
       })) ??
       buildQuotaWarningHeader({
         planTier: subscription.plan_tier,
-        creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
-        creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
+        creditsUsedCents: ledgerCentsFromMicrousd(
+          Math.max(
+            0,
+            (existingBalance?.credits_used_microusd ?? 0) -
+              (existingBalance?.account_id
+                ? await getAccountOverageMicrousd(
+                    (await scopedDbPromise).db,
+                    userId,
+                    existingBalance.account_id,
+                  )
+                : 0),
+          ),
+        ),
+        creditsAllocatedCents: getPlanUsageBudgetCents(subscription.plan_tier),
         estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
       }) ??
       computerUseSoftCapWarning;
@@ -6281,20 +6454,35 @@ async function processAdmittedRequest(
     }
   }
 
-  if (placesRequirement.offered) {
+  const placesOffer = placesToolOffer({
+    surface: chatSurface,
+    requirement: placesRequirement,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    stream: chatRequest.stream,
+    backendConfigured: placesAvailable,
+  });
+  if (placesOffer) {
     resolvedTools = [...(resolvedTools ?? []), placesSearchToolDef()];
   }
 
-  if (
-    shouldOfferProductComparison(chatRequest, {
-      surface: chatSurface,
-      toolsCapable: resolvedModelCaps?.tools ?? true,
-      userMessage: lastUserText,
-      tools: resolvedTools,
-    })
-  ) {
+  const productComparison = productComparisonOffer(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    userMessage: lastUserText,
+    tools: resolvedTools,
+  });
+  if (productComparison) {
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
+  const turnWithheldTools = withheldToolNames([
+    itineraryOffer,
+    mapSearchOffer,
+    scheduleOffer,
+    pluginDraftOffer,
+    clarifyOffer,
+    placesOffer,
+    productComparison,
+  ]);
 
   const imageIntent = classifyImageToolIntent(lastUserText);
   const imageSourceAvailable =
@@ -6339,16 +6527,13 @@ async function processAdmittedRequest(
     model: chatRequest.model,
     tools: resolvedTools,
   });
+  const turnSystemNotices: string[] = [];
   if (placesEnforcement.mode === 'nudge' || placesRequirement.unavailable) {
-    internalMessages.unshift({
-      role: 'system',
-      content: placesRequirement.unavailable
+    turnSystemNotices.push(
+      placesRequirement.unavailable
         ? PLACES_UNAVAILABLE_SYSTEM_NOTICE
         : REQUIRED_PLACES_SYSTEM_NUDGE,
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+    );
   }
 
   const searchEnforcement = resolveRequiredSearchEnforcement({
@@ -6359,13 +6544,7 @@ async function processAdmittedRequest(
     tools: resolvedTools,
   });
   if (searchEnforcement.mode === 'nudge') {
-    internalMessages.unshift({
-      role: 'system',
-      content: REQUIRED_SEARCH_SYSTEM_NUDGE,
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+    turnSystemNotices.push(REQUIRED_SEARCH_SYSTEM_NUDGE);
   }
 
   if (
@@ -6510,6 +6689,8 @@ async function processAdmittedRequest(
       }),
     });
 
+    const { capabilityPreamble, turnTime } = separateTurnTime(timedCapabilityPreamble);
+    turnTimeContext = turnTime;
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,
       customInstructionsPreamble,
@@ -6555,13 +6736,7 @@ async function processAdmittedRequest(
     );
   } else {
     if (dynamicTurnInstruction) {
-      internalMessages.unshift({
-        role: 'system',
-        content: dynamicTurnInstruction,
-        multimodal_content: undefined,
-        tool_calls: undefined,
-        tool_call_id: undefined,
-      });
+      turnSystemNotices.push(dynamicTurnInstruction);
     }
     if (ownership.conversationInstruction) {
       internalMessages.unshift({
@@ -6597,16 +6772,11 @@ async function processAdmittedRequest(
     planTier: subscription.plan_tier,
   });
   if (executionEnforcement.mode === 'nudge' || executionEnforcement.mode === 'plan-gated') {
-    internalMessages.unshift({
-      role: 'system',
-      content:
-        executionEnforcement.mode === 'plan-gated'
-          ? EXECUTION_PLAN_GATED_SYSTEM_NOTICE
-          : REQUIRED_EXECUTION_SYSTEM_NUDGE,
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+    turnSystemNotices.push(
+      executionEnforcement.mode === 'plan-gated'
+        ? EXECUTION_PLAN_GATED_SYSTEM_NOTICE
+        : REQUIRED_EXECUTION_SYSTEM_NUDGE,
+    );
   }
   const officeOutputFormat = chatRequest.office_creation ? chatRequest.office_format : undefined;
   const officeOutputToolChoice =
@@ -6617,16 +6787,14 @@ async function processAdmittedRequest(
       ? forcedFunctionToolChoice(MANAGED_OFFICE_FILE_TOOL_NAME)
       : undefined;
   if (officeOutputFormat) {
-    internalMessages.unshift({
-      role: 'system',
-      content: chatOutputFormatInstruction(officeOutputFormat),
-      multimodal_content: undefined,
-      tool_calls: undefined,
-      tool_call_id: undefined,
-    });
+    turnSystemNotices.push(chatOutputFormatInstruction(officeOutputFormat));
   }
+  const withheldToolsNotice = resolvedTools ? withheldToolsTurnNotice(turnWithheldTools) : null;
+  if (withheldToolsNotice) turnSystemNotices.push(withheldToolsNotice);
+  const turnInstructions = chatSurface === 'api' ? '' : turnInstructionsText(turnSystemNotices);
+  if (chatSurface === 'api') placeTurnSystemNotices(internalMessages, turnSystemNotices);
   const responseFormat = requestedResponseFormat(chatRequest.response_format);
-  const llmRequest = {
+  const llmRequest: ProcessedRequest['llmRequest'] = {
     model: chatRequest.model,
     messages: internalMessages,
     temperature: chatRequest.temperature,
@@ -6648,6 +6816,7 @@ async function processAdmittedRequest(
     ...(Object.keys(requestParameters).length > 0 ? { requestParameters } : {}),
     ...resolveTurnPromptCache({
       requested: chatRequest.use_prompt_cache,
+      surface: chatSurface,
       temporaryChat: conversationIsTemporary,
       zeroDataRetentionOnly,
       organizationId: scopedForPolicy.organizationId,
@@ -6658,7 +6827,9 @@ async function processAdmittedRequest(
   const scopedForCompaction = await scopedDbPromise;
   const referenceMessage = internalMessages.find(
     (message) =>
-      message.role === 'system' && message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY),
+      message.role === 'system' &&
+      message.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY) &&
+      message.content.length > SYSTEM_PROMPT_CACHE_BOUNDARY.length,
   );
   const referenceBeforeFit = referenceMessage?.content;
   const contextTrim = await timePhase(CHAT_TURN_PHASE.contextCompaction, () =>
@@ -6710,6 +6881,12 @@ async function processAdmittedRequest(
       });
     }
     return messageTooLongResponse();
+  }
+  const turnContextText = [turnTimeContext, turnInstructions]
+    .filter((text) => text.length > 0)
+    .join('\n\n');
+  if (turnContextText) {
+    llmRequest.turnContext = { text: turnContextText, afterMessages: llmRequest.messages.length };
   }
 
   const sentCitations =
@@ -6898,6 +7075,7 @@ async function processAdmittedRequest(
     executionRequirement,
     executionEnforcement,
     ...(turnToolProhibition ? { turnToolProhibition } : {}),
+    ...(resolvedTools && turnWithheldTools.length > 0 ? { turnWithheldTools } : {}),
     turnAttachments,
     truncatedAttachments,
     placesRequirement,

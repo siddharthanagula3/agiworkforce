@@ -3,7 +3,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
-import { parseBoundWebviewMessage } from '../protocol/webviewMessages';
 
 function boot(origin: string, epoch: number): ReturnType<typeof vi.fn> {
   const html = getWebviewContent(
@@ -77,25 +76,5 @@ describe('what the chat webview says about itself', () => {
     for (const [message] of postMessage.mock.calls) {
       expect(message).toMatchObject({ origin: 'agi-workforce-sidebar', epoch: 4 });
     }
-  });
-
-  it('is still heard after a reload restores the conversation it was first rendered with', () => {
-    const current = { origin: 'agi-workforce-sidebar', epoch: 3 };
-
-    expect(
-      parseBoundWebviewMessage(
-        { type: 'ready', origin: 'agi-workforce-sidebar', epoch: 0 },
-        current,
-      ),
-    ).toEqual({ type: 'ready' });
-    expect(
-      parseBoundWebviewMessage(
-        { type: 'newChat', origin: 'agi-workforce-sidebar', epoch: 0 },
-        current,
-      ),
-    ).toBeUndefined();
-    expect(
-      parseBoundWebviewMessage({ type: 'ready', origin: 'chatPanel-2', epoch: 3 }, current),
-    ).toBeUndefined();
   });
 });

@@ -721,3 +721,5 @@ describe('POST /api/artifacts/runtime/[token]/complete while connectors are comi
     expect(mocks.completeArtifactPrompt).toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

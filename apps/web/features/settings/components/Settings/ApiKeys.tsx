@@ -766,7 +766,7 @@ function OwnedApiKeysManager({
         </Button>
       ) : null}
       <IntentFormPanel
-        key={intent?.id ?? 'idle'}
+        key={`api-key-intent:${intent?.id ?? 'idle'}`}
         apiKeys={apiKeys}
         projects={projects.filter((project) => project.archivedAt === null)}
         usageByKey={

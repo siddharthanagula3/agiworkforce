@@ -51,12 +51,4 @@ export type ThreadSummary = {
    * for a cloud Code session listed beside the local ones.
    */
   location?: ThreadLocation;
-  /**
-   * Set by `thread/pin`; a host without `threadPin` reports false.
-   */
-  pinned: boolean;
-  /**
-   * When the thread was archived, in milliseconds since the Unix epoch.
-   */
-  archivedAt?: number;
 };

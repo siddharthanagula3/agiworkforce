@@ -66,13 +66,13 @@ vi.mock('../compute-metering', async (importOriginal) => ({
   releaseSandboxComputeReservation: (input: unknown) => releaseSandboxComputeReservation(input),
 }));
 
-const resolveEffectiveSubscription = vi.fn(
-  async (_db: unknown, _userId: string) => ({ plan_tier: 'pro' }) as unknown,
-);
+function entitledTo(planTier: string, entitled = true) {
+  return { entitled, subscription: { plan_tier: planTier } } as unknown;
+}
+const resolveEntitlementBundle = vi.fn(async (_db: unknown, _userId: string) => entitledTo('pro'));
 vi.mock('@/lib/services/effective-subscription-service', async (importOriginal) => ({
   ...(await importOriginal<EffectiveSubscriptionServiceModule>()),
-  resolveEffectiveSubscription: (db: unknown, userId: string) =>
-    resolveEffectiveSubscription(db, userId),
+  resolveEntitlementBundle: (db: unknown, userId: string) => resolveEntitlementBundle(db, userId),
 }));
 
 const buildServerProviderAdapter = vi.fn((providerId: string): { config: { apiKey?: string } } => {
@@ -1162,8 +1162,27 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     expect(await getE2BExecutor(scope('conv-m', 'user-max15', 'max_15x'))).not.toBeNull();
   });
 
+  it('holds a lapsed paid plan to the Free sandbox ceiling and lifetime', async () => {
+    resolveEntitlementBundle.mockResolvedValue(entitledTo('max_15x', false));
+    const lapsedScope = {
+      tenantId: 'managed-cloud',
+      userId: 'user-lapsed',
+      conversationId: 'conv-lapsed',
+    };
+    const { getE2BExecutor } = await import('../runtime');
+
+    listedSandboxes = liveSandboxesFor('user-lapsed', getPlanMaxSandboxes('free') - 1);
+    expect(await getE2BExecutor(lapsedScope)).not.toBeNull();
+    const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
+    expect(opts.timeoutMs).toBe(getPlanSandboxTtlMs('free'));
+
+    listedSandboxes = liveSandboxesFor('user-lapsed', getPlanMaxSandboxes('free'));
+    expect(await getE2BExecutor({ ...lapsedScope, conversationId: 'conv-lapsed-2' })).toBeNull();
+    resolveEntitlementBundle.mockResolvedValue(entitledTo('pro'));
+  });
+
   it('gives an organization seat member the team plan ceiling and lifetime, not the free plan', async () => {
-    resolveEffectiveSubscription.mockResolvedValue({ plan_tier: 'team' });
+    resolveEntitlementBundle.mockResolvedValue(entitledTo('team'));
     const seatScope = {
       tenantId: 'managed-cloud',
       userId: 'user-seat',
@@ -1180,7 +1199,7 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     listedSandboxes = liveSandboxesFor('user-seat', getPlanMaxSandboxes('team'));
     expect(await getE2BExecutor({ ...seatScope, conversationId: 'conv-seat-2' })).toBeNull();
     expect(create).toHaveBeenCalledTimes(1);
-    resolveEffectiveSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    resolveEntitlementBundle.mockResolvedValue(entitledTo('pro'));
   });
 
   it('admits bounded Free sandboxes but refuses non-managed trust boundaries and unknown tiers', async () => {

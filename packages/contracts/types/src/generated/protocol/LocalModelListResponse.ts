@@ -2,7 +2,6 @@
 import type { HostModelSummary } from './HostModelSummary';
 import type { LocalModelSummary } from './LocalModelSummary';
 import type { LocalServerStatus } from './LocalServerStatus';
-import type { PrivacyPin } from './PrivacyPin';
 
 export type LocalModelListResponse = {
   models: Array<LocalModelSummary>;
@@ -11,8 +10,4 @@ export type LocalModelListResponse = {
    */
   hostModels?: Array<HostModelSummary>;
   localServers?: Array<LocalServerStatus>;
-  /**
-   * Present when the configuration holds every session to one boundary.
-   */
-  privacyPin?: PrivacyPin;
 };

@@ -22,7 +22,11 @@ import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-pu
 import { logger } from '@/lib/logger';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
-import { PLAN_CHANGE_REFUSED_DURING_DELETION } from './billing-plan-change-gate';
+import {
+  PLAN_CHANGE_REFUSED_DURING_DELETION,
+  PLAN_CHANGE_REFUSED_DURING_DISPUTE,
+  readAccountBillingHold,
+} from './billing-plan-change-gate';
 import { recordCogsAdjustment } from './cogs-ledger-service';
 import { SubscriptionService } from './subscription-service';
 import {
@@ -186,6 +190,13 @@ function intendedAmountCents(product: MobileIapCatalogProduct): number {
   return Math.round(
     (product.kind === 'top_up' ? product.amountUsd : product.intendedPriceUsd) * CENTS_PER_USD,
   );
+}
+
+export function storeTopUpGrantDescription(
+  platform: MobileIapPlatform,
+  storeTransactionId: string,
+): string {
+  return `Mobile ${platform} top-up ${storeTransactionId}`;
 }
 
 async function hasYearOfPaidService(

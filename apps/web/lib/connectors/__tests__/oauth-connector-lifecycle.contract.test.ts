@@ -626,3 +626,8 @@ describe('CRIT-001, an available connector completes the whole lifecycle', () =>
     expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');
+type RetainedMockModule2 = typeof import('@/lib/cors');

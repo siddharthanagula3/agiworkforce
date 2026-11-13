@@ -720,52 +720,45 @@ test('a hard-delete exclusion needs a reason and goes when erasure reaches the t
   );
 });
 
-function retirementFixture(overrides = {}, files = {}) {
-  const declared = contract();
-  Object.assign(declared.resources.web_conversations.softDeleted, {
-    restoredBy: null,
-    purgedBy: 'apps/web/lib/physical-cleanup.ts',
-    retirement: {
-      retiredBy: 'apps/web/lib/retire.ts',
-      reason:
-        'Retirement is an explicitly confirmed irreversible deletion; queued physical cleanup cannot safely restore references while the object is being removed.',
+function importedPredicateReads({
+  declaration = "export const predicate = 'c.deleted_at is null'",
+  imported = 'predicate as scope',
+  signature = '',
+} = {}) {
+  const root = fixture(
+    {},
+    {
+      'apps/web/lib/predicate.ts': declaration,
+      'apps/web/lib/read.ts': `
+      // This comment must not move the template's source offsets.
+      import { ${imported} } from '@/lib/predicate';
+      export async function read(db: DatabaseAdapter ${signature}) {
+        return db.query(\`select c.id from web_conversations c where \${scope}\`);
+      }
+    `,
     },
-    ...overrides,
-  });
-  return fixture(declared, {
-    'apps/web/lib/retire.ts':
-      'export const sql = `update web_conversations set deleted_at = now() where id = $1`;',
-    'apps/web/lib/physical-cleanup.ts':
-      'export async function cleanup(input) { await input.remove(); }',
-    ...files,
+  );
+  return findUnfilteredReads({
+    repoRoot: root,
+    files: ['apps/web/lib/read.ts'],
+    contract: contract(),
+    marked: new Map([['web_conversations', { softDeleted: 'deleted_at' }]]),
   });
 }
 
-test('irreversible retirement names both the marker writer and physical cleanup', () => {
-  const result = checkLifecycleSemantics(retirementFixture());
-  assert.deepEqual(result.errors, []);
-  assert.deepEqual(result.unrecorded, []);
+test('an imported literal withdrawal predicate preserves its owner and source offsets', () => {
+  assert.deepEqual(importedPredicateReads(), []);
 });
-
-for (const [name, overrides, files] of [
-  ['a restore claim', { restoredBy: 'apps/web/lib/restore.ts' }, {}],
-  ['a missing retirement writer', {}, { 'apps/web/lib/retire.ts': 'export const nothing = true;' }],
-  [
-    'a missing physical remover',
-    {},
-    { 'apps/web/lib/physical-cleanup.ts': 'export const nothing = true;' },
-  ],
-  [
-    'an unexplained exception',
-    { retirement: { retiredBy: 'apps/web/lib/retire.ts', reason: '' } },
-    {},
-  ],
+for (const [label, options] of [
+  ['mutable', { declaration: "export let predicate = 'c.deleted_at is null'" }],
+  ['private', { declaration: "const predicate = 'c.deleted_at is null'" }],
+  ['type-only', { imported: 'type predicate as scope' }],
+  ['shadowed', { signature: ', scope: string' }],
+  ['opaque', { declaration: 'export const predicate = buildPredicate()' }],
+  ['function', { declaration: "export function predicate() { return 'c.deleted_at is null' }" }],
+  ['quoted marker', { declaration: `export const predicate = "'c.deleted_at is null'"` }],
 ]) {
-  test(`retirement rejects ${name}`, () => {
-    assert.ok(
-      checkLifecycleSemantics(retirementFixture(overrides, files)).errors.some((error) =>
-        error.includes('retirement needs'),
-      ),
-    );
+  test(`an imported ${label} withdrawal predicate cannot hide a read`, () => {
+    assert.equal(importedPredicateReads(options).length, 1);
   });
 }

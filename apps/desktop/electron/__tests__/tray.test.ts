@@ -100,6 +100,7 @@ function makeHandlers() {
     onRevokeComputerUse: vi.fn(),
     onOpenSession: vi.fn(),
     onCheckForUpdates: vi.fn(),
+    onChangeShortcut: vi.fn(),
     activity: () => activity,
   };
 }
@@ -135,7 +136,7 @@ describe('tray shortcut customization', () => {
     destroyTray();
   });
 
-  it('persists the chosen accelerator, re-registers it, and rebuilds the tray menu', () => {
+  it('hands the chosen accelerator to the shell, which saves it with the settings rollback', () => {
     const handlers = makeHandlers();
     createTray(handlers);
 
@@ -167,7 +168,6 @@ describe('tray shortcut customization', () => {
     );
     expect(shownNotifications).toEqual([]);
 
-    expect(contextMenus).toHaveLength(2);
     const rebuilt = latestMenu();
     expect(itemLabelled(rebuilt, 'Quick Ask').accelerator).toBe(target);
     expect(
@@ -215,8 +215,8 @@ describe('tray shortcut customization', () => {
       {} as Electron.KeyboardEvent,
     );
 
-    expect(saveSettings).toHaveBeenCalledWith({ screenshotShortcut: target });
-    expect(stored.quickAskShortcut).toBe(DEFAULT_SHORTCUTS.quickAskShortcut);
+    expect(handlers.onChangeShortcut).toHaveBeenCalledTimes(1);
+    expect(handlers.onChangeShortcut).toHaveBeenCalledWith('screenshotShortcut', target);
   });
 
   it('offers a hand-edited accelerator alongside the presets so the menu shows the truth', () => {
@@ -241,7 +241,7 @@ describe('tray dictation shortcut', () => {
     destroyTray();
   });
 
-  it('offers the dictation chord and re-registers when it changes', () => {
+  it('offers the dictation chord and hands a new one to the shell', () => {
     const handlers = makeHandlers();
     createTray(handlers);
 
@@ -255,8 +255,7 @@ describe('tray dictation shortcut', () => {
       {} as Electron.KeyboardEvent,
     );
 
-    expect(saveSettings).toHaveBeenCalledWith({ voiceShortcut: target });
-    expect(itemLabelled(latestMenu(), 'Dictation').accelerator).toBe(target);
+    expect(handlers.onChangeShortcut).toHaveBeenCalledWith('voiceShortcut', target);
   });
 
   it('names the reason a chord could not be claimed in its heading', () => {

@@ -133,18 +133,4 @@ export type AppServerCapabilities = {
    * servers it loads, so a client shows no switch.
    */
   mcpSetEnabled?: boolean;
-  /**
-   * `thread/pin` keeps a thread at the top of a client's list, and
-   * `thread/list` reports `pinned` for each.
-   */
-  threadPin?: boolean;
-  /**
-   * `mcp/logs` returns the stderr a server has written.
-   */
-  mcpLogs?: boolean;
-  /**
-   * `terminal/*` runs a shell on a pseudo-terminal in the workspace for a
-   * person typing into it. Absent where the host has no pseudo-terminals.
-   */
-  terminals?: boolean;
 };

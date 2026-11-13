@@ -402,3 +402,7 @@ describe('service principal route request scope', () => {
     },
   );
 });
+
+type CompleteMockModule0 = typeof import('@/lib/server/key-value');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

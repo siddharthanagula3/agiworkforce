@@ -20,6 +20,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   runToolLoop: vi.fn(),
+  usageOfFailedProviderStep: vi.fn(),
   executeOperation: vi.fn(),
   settle: vi.fn(),
   appendEvent: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
   toolStatusEvent: vi.fn(() => ''),
   trimToolResultHistory: vi.fn(),
   runToolLoop: mocks.runToolLoop,
+  usageOfFailedProviderStep: mocks.usageOfFailedProviderStep,
   mapWithConcurrency: vi.fn(),
 }));
 vi.mock('./cloud-agent-operation-executor', () => ({

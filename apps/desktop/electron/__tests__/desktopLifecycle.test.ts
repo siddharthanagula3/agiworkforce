@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DeveloperSessionEvent } from '@agiworkforce/local-runtime-contract';
 import { DESKTOP_RUNTIME_CHANNEL, localSessionPath } from '@agiworkforce/local-runtime-contract';
+import { CLOUD_CODE_PAGE_ROUTE } from '@agiworkforce/types';
 import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
 import { defineShellInkGlobals } from './shellTokenGlobals';
 
@@ -36,8 +37,9 @@ vi.mock('electron', () => {
   class BrowserWindow {
     static fromWebContents = vi.fn(() => null);
     static getAllWindows = vi.fn(() => []);
-    static getFocusedWindow = vi.fn(() => null);
-    id = 1;
+    static getFocusedWindow = vi.fn((): BrowserWindow | null => null);
+    static nextId = 1;
+    id = BrowserWindow.nextId++;
     webContents = {
       send: (channel: string, payload: unknown) => sent.push([channel, payload]),
       on: vi.fn((event: string, listener: Listener) => {
@@ -82,6 +84,9 @@ vi.mock('electron', () => {
     setPermissionRequestHandler: vi.fn(),
     setPermissionCheckHandler: vi.fn(),
     setDisplayMediaRequestHandler: vi.fn(),
+    clearCache: vi.fn(async () => undefined),
+    clearCodeCaches: vi.fn(async () => undefined),
+    clearStorageData: vi.fn(async () => undefined),
   };
   return {
     net: { isOnline: vi.fn(() => true), fetch: vi.fn(async () => ({ status: 200 })) },
@@ -105,6 +110,7 @@ vi.mock('electron', () => {
       setAsDefaultProtocolClient: vi.fn(),
       setLoginItemSettings: vi.fn(),
       setBadgeCount: vi.fn(),
+      relaunch: vi.fn(),
       on: vi.fn((event: string, listener: Listener) => appHandlers.set(event, listener)),
       whenReady: () => Promise.resolve(),
       isReady: () => true,
@@ -306,7 +312,8 @@ vi.mock('../appMenu', async (importOriginal) => ({
 }));
 vi.mock('../launchAtLogin', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  applyLaunchAtLogin: vi.fn(),
+  isLaunchAtLoginEnabled: vi.fn(() => false),
+  syncLaunchAtLogin: vi.fn(),
   setLaunchAtLogin: vi.fn(),
 }));
 
@@ -319,6 +326,7 @@ const startupMessageBoxCalls = [...vi.mocked(electron.dialog.showMessageBox).moc
 const startupMoveCalls = [...vi.mocked(electron.app.moveToApplicationsFolder).mock.calls];
 const showMessageBox = vi.mocked(electron.dialog.showMessageBox);
 const quit = vi.mocked(electron.app.quit);
+const { installAppMenu } = await import('../appMenu');
 
 function emit(event: DeveloperSessionEvent, rootId = 'root-1'): void {
   if (!emitSessionEvent) throw new Error('developer sessions were never configured');
@@ -1100,5 +1108,160 @@ describe('the update buttons', () => {
       downloadedVersion = null;
       shellRuns = 0;
     }
+  });
+});
+
+describe('menu commands with a second window open', () => {
+  function menuActions(): import('../appMenu').AppMenuActions {
+    appHandlers.get('browser-window-focus')?.();
+    const actions = vi.mocked(installAppMenu).mock.calls.at(-1)?.[0];
+    if (!actions) throw new Error('the menu was never installed');
+    return actions;
+  }
+
+  it('opens New Chat and Settings in the window in front, not the first one', () => {
+    menuActions().newWindow();
+    const [first, second] = createdWindows as unknown as Array<{
+      loadURL: ReturnType<typeof vi.fn>;
+    }>;
+    if (!first || !second) throw new Error('the second window was never made');
+    vi.mocked(electron.BrowserWindow.getFocusedWindow).mockReturnValue(second as never);
+    first.loadURL.mockClear();
+    second.loadURL.mockClear();
+
+    menuActions().newChat();
+    menuActions().openSettings();
+
+    expect(second.loadURL.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
+      '/chat',
+      '/settings',
+    ]);
+    expect(first.loadURL).not.toHaveBeenCalled();
+    vi.mocked(electron.BrowserWindow.getFocusedWindow).mockReturnValue(null);
+  });
+
+  it('uses the main window when the command comes from outside the app', () => {
+    const [first] = createdWindows as unknown as Array<{ loadURL: ReturnType<typeof vi.fn> }>;
+    if (!first) throw new Error('no main window');
+    first.loadURL.mockClear();
+
+    menuActions().newChat();
+
+    expect(first.loadURL.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
+      '/chat',
+    ]);
+  });
+});
+
+describe('Help > Troubleshooting > Clear Cache and Restart', () => {
+  function menuActions(): import('../appMenu').AppMenuActions {
+    appHandlers.get('browser-window-focus')?.();
+    const actions = vi.mocked(installAppMenu).mock.calls.at(-1)?.[0];
+    if (!actions) throw new Error('the menu was never installed');
+    return actions;
+  }
+
+  function cloudSession() {
+    return electron.session.fromPartition('persist:agi-cloud') as unknown as Record<
+      'clearCache' | 'clearCodeCaches' | 'clearStorageData',
+      ReturnType<typeof vi.fn>
+    >;
+  }
+
+  it('clears nothing and keeps running when the person cancels', async () => {
+    showMessageBox.mockReset();
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    vi.mocked(electron.app.relaunch).mockClear();
+
+    menuActions().clearCacheAndRestart();
+    await settle();
+
+    expect(cloudSession().clearCache).not.toHaveBeenCalled();
+    expect(electron.app.relaunch).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+  });
+
+  it('clears only the downloaded caches, never the sign-in or stored data, then restarts', async () => {
+    showMessageBox.mockReset();
+    showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+    vi.mocked(electron.app.relaunch).mockClear();
+    quit.mockClear();
+
+    menuActions().clearCacheAndRestart();
+    await settle();
+    await settle();
+
+    const options = (showMessageBox.mock.calls[0] as unknown[]).at(-1) as {
+      buttons: string[];
+      defaultId: number;
+      detail: string;
+    };
+    expect(options.buttons).toEqual(['Cancel', 'Clear and Restart']);
+    expect(options.defaultId).toBe(0);
+    expect(options.detail).toMatch(/stay signed in/);
+    expect(cloudSession().clearCache).toHaveBeenCalledTimes(1);
+    expect(cloudSession().clearCodeCaches).toHaveBeenCalledTimes(1);
+    expect(cloudSession().clearStorageData).toHaveBeenCalledWith({
+      storages: ['shadercache', 'cachestorage'],
+    });
+    expect(electron.app.relaunch).toHaveBeenCalledTimes(1);
+    expect(quit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('File > Open Folder…', () => {
+  function menuActions(): import('../appMenu').AppMenuActions {
+    appHandlers.get('browser-window-focus')?.();
+    const actions = vi.mocked(installAppMenu).mock.calls.at(-1)?.[0];
+    if (!actions) throw new Error('the menu was never installed');
+    return actions;
+  }
+
+  function codeLoads(): string[] {
+    return loadedUrls.filter((url) => new URL(url).pathname === CLOUD_CODE_PAGE_ROUTE);
+  }
+
+  it('grants the folder through the dispatcher, then opens the Code page that lists it', async () => {
+    dispatchRuntime.mockClear();
+    loadedUrls.length = 0;
+
+    menuActions().openFolder();
+    await settle();
+
+    expect(dispatchRuntime).toHaveBeenCalledWith(expect.anything(), 'workspace_pick_root');
+    expect(codeLoads()).toHaveLength(1);
+  });
+
+  it('does nothing more when the person cancels the folder picker', async () => {
+    dispatchRuntime.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'cancelled', message: 'No folder was chosen.' },
+    } as never);
+    showMessageBox.mockReset();
+    loadedUrls.length = 0;
+
+    menuActions().openFolder();
+    await settle();
+
+    expect(codeLoads()).toEqual([]);
+    expect(showMessageBox).not.toHaveBeenCalled();
+  });
+
+  it('says why when the folder could not be granted', async () => {
+    dispatchRuntime.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'invalid-arguments', message: 'That folder cannot be used.' },
+    } as never);
+    showMessageBox.mockReset();
+    showMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false });
+    loadedUrls.length = 0;
+
+    menuActions().openFolder();
+    await settle();
+    await settle();
+
+    expect(codeLoads()).toEqual([]);
+    const options = (showMessageBox.mock.calls[0] as unknown[]).at(-1) as { message: string };
+    expect(options.message).toBe('That folder cannot be used.');
   });
 });

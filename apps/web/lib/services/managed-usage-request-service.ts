@@ -514,6 +514,7 @@ async function readPlanLimitResetAt(
 }
 
 const ROLLING_LIMIT_NAMES: ReadonlyMap<string, string> = new Map([
+  ['declined', 'Your monthly usage limit'],
   ['session_limit', 'Your 5-hour usage limit'],
   ['weekly_limit', 'Your weekly usage limit'],
   ['flagship_weekly_limit', 'Your weekly limit for the most capable models'],
@@ -522,7 +523,9 @@ const ROLLING_LIMIT_NAMES: ReadonlyMap<string, string> = new Map([
 /**
  * Purchased credits change what a rolling-limit refusal can honestly offer: an
  * account that has them switched on has spent them, and one that holds them
- * switched off can keep going by turning them on.
+ * switched off can keep going by turning them on. Only an account billed by
+ * Stripe or an app store can buy or switch them itself; Settings > Billing hides
+ * both from any other, so its refusal names whoever manages the plan instead.
  */
 async function withUsageCreditsState(
   error: ManagedUsageRequestError,
@@ -531,13 +534,22 @@ async function withUsageCreditsState(
   userId: string,
 ): Promise<ManagedUsageRequestError> {
   const limitName = ROLLING_LIMIT_NAMES.get(decision);
-  if (!limitName) return error;
+  if (!limitName && decision !== 'extra_usage_required') return error;
   const credits = await getSpendableCredits(db, userId);
   let message: string | null = null;
-  if (credits.overageEnabled) {
-    message = `${limitName} is reached and your usage credits do not cover this message. Buy more credits to keep going, or wait for the limit to reset.`;
+  if (!limitName) {
+    if (credits.availableMicrousd !== null && !credits.selfServe) {
+      message =
+        'Fast mode is billed to usage credits, and they do not cover this message. Turn fast mode off, or ask whoever manages your plan to add usage credits.';
+    }
+  } else if (credits.overageEnabled) {
+    message = credits.selfServe
+      ? `${limitName} is reached and your usage credits do not cover this message. Buy more credits to keep going, or wait for the limit to reset.`
+      : `${limitName} is reached and your usage credits do not cover this message. Wait for the limit to reset, or ask whoever manages your plan to add credits.`;
   } else if ((credits.availableMicrousd ?? 0) > 0) {
-    message = `${limitName} is reached. Turn on usage credits in Settings > Billing to keep going with the credits you bought, or wait for the limit to reset.`;
+    message = credits.selfServe
+      ? `${limitName} is reached. Turn on usage credits in Settings > Billing to keep going with the credits you bought, or wait for the limit to reset.`
+      : `${limitName} is reached. Whoever manages your plan can turn on your usage credits; until then, wait for the limit to reset.`;
   }
   if (message === null) return error;
   const refined = new ManagedUsageRequestError(message, error.status, error.code);
@@ -778,7 +790,6 @@ export async function reserveManagedUsageRequest(
           userId: input.userId,
           planTier: input.planTier,
           workload: input.attribution?.workload ?? null,
-          estimateMicrousd: resolveEstimatedMicrousd(input),
           isFlagship: input.isFlagship,
           caps: {
             session: getPlanSessionUsageCapMicrousd(allowance),
@@ -958,7 +969,6 @@ export async function reserveManagedUsageProviderStep(
     userId: reservation.userId,
     planTier: input.planTier,
     workload: reservation.attribution?.workload ?? null,
-    estimateMicrousd: stepMicrousd,
     isFlagship: input.isFlagship,
     caps: {
       session: getPlanSessionUsageCapMicrousd(allowance),

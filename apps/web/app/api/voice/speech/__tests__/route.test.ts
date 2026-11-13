@@ -374,3 +374,5 @@ describe('POST /api/voice/speech', () => {
     expect(mocks.clientDelivered).toHaveBeenCalledWith(reservation);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

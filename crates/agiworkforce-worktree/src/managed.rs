@@ -7,10 +7,6 @@
 //! <root>/<repository key>/<id>/checkout/       the detached git worktree itself
 //! ```
 //!
-//! A host whose root moved still serves the worktrees it made under earlier
-//! roots: [`WorktreeManager::with_earlier_roots`] names them, and every lookup
-//! reads them after the current root. Only the current root receives new ones.
-//!
 //! The marker sits beside the checkout rather than in it, so it never shows up
 //! as a change the session made. A host serving a checkout locks it with
 //! `git worktree lock` when it starts, which is what "active" means to
@@ -177,7 +173,6 @@ pub struct WorktreeManager<'a> {
     repo: PinnedRunner<'a>,
     common_dir: PathBuf,
     root: PathBuf,
-    earlier_roots: Vec<PathBuf>,
     repository: PathBuf,
 }
 
@@ -193,28 +188,8 @@ impl<'a> WorktreeManager<'a> {
             repo: workspace.runner(runner),
             common_dir: common_dir(workspace.git_dir()),
             root: root.into(),
-            earlier_roots: Vec::new(),
             repository: workspace.top().to_path_buf(),
         }
-    }
-
-    /// Also serve the worktrees this host made under `roots` before its root
-    /// moved. They are listed and found by id; new worktrees still go under
-    /// the current root.
-    pub fn with_earlier_roots(mut self, roots: impl IntoIterator<Item = PathBuf>) -> Self {
-        for root in roots {
-            let known = std::iter::once(&self.root)
-                .chain(&self.earlier_roots)
-                .any(|seen| canonical(seen) == canonical(&root));
-            if !known {
-                self.earlier_roots.push(root);
-            }
-        }
-        self
-    }
-
-    fn roots(&self) -> impl Iterator<Item = &PathBuf> {
-        std::iter::once(&self.root).chain(&self.earlier_roots)
     }
 
     /// A runner pinned to the managed checkout at `checkout`.
@@ -242,10 +217,6 @@ impl<'a> WorktreeManager<'a> {
     }
 
     fn repository_dir(&self) -> PathBuf {
-        self.repository_dir_in(&self.root)
-    }
-
-    fn repository_dir_in(&self, root: &Path) -> PathBuf {
         let name: String = self
             .repository
             .file_name()
@@ -263,25 +234,14 @@ impl<'a> WorktreeManager<'a> {
         let digest = Sha256::digest(self.repository.to_string_lossy().as_bytes());
         let digest = hex(&digest);
         let key = &digest[..REPOSITORY_KEY_HASH_LENGTH];
-        root.join(format!("{name}-{key}"))
+        self.root.join(format!("{name}-{key}"))
     }
 
-    /// The directory holding worktree `id`: the first root whose copy has a
-    /// marker, current root first, or the current root's when none does.
     fn reserved_dir(&self, id: &str) -> Result<PathBuf> {
         if id.len() != ID_HEX_LENGTH || !id.chars().all(|c| c.is_ascii_hexdigit()) {
             anyhow::bail!("{id:?} is not a worktree id");
         }
-        Ok(self
-            .roots()
-            .map(|root| self.repository_dir_in(root).join(id))
-            .find(|reserved| reserved.join(MARKER_FILE).is_file())
-            .unwrap_or_else(|| self.repository_dir().join(id)))
-    }
-
-    fn id_in_use(&self, id: &str) -> bool {
-        self.roots()
-            .any(|root| self.repository_dir_in(root).join(id).exists())
+        Ok(self.repository_dir().join(id))
     }
 
     pub async fn create(&self, start: StartPoint, label: Option<String>) -> Result<CreateOutcome> {
@@ -320,7 +280,7 @@ impl<'a> WorktreeManager<'a> {
             }
         };
 
-        let worktree = self.describe(marker, &reserved, &HashSet::new()).await;
+        let worktree = self.describe(marker, &HashSet::new()).await;
         let cleanup = self.clean_up(Some(&id)).await;
         Ok(CreateOutcome {
             setup,
@@ -336,9 +296,6 @@ impl<'a> WorktreeManager<'a> {
         std::fs::create_dir_all(&parent).with_context(|| format!("create {}", parent.display()))?;
         for _ in 0..ID_ATTEMPTS {
             let id = uuid::Uuid::new_v4().simple().to_string()[..ID_HEX_LENGTH].to_string();
-            if self.id_in_use(&id) {
-                continue;
-            }
             let reserved = parent.join(&id);
             match std::fs::create_dir(&reserved) {
                 Ok(()) => return Ok((id, reserved)),
@@ -499,13 +456,17 @@ impl<'a> WorktreeManager<'a> {
             .unwrap_or_default()
     }
 
-    async fn describe(
+    async fn describe(&self, marker: WorktreeMarker, locked: &HashSet<PathBuf>) -> ManagedWorktree {
+        let checkout = self.repository_dir().join(&marker.id).join(CHECKOUT_DIR);
+        self.describe_checkout(marker, checkout, locked).await
+    }
+
+    async fn describe_checkout(
         &self,
         marker: WorktreeMarker,
-        reserved: &Path,
+        checkout: PathBuf,
         locked: &HashSet<PathBuf>,
     ) -> ManagedWorktree {
-        let checkout = reserved.join(CHECKOUT_DIR);
         let missing = !checkout.is_dir();
         let head = if missing {
             None
@@ -524,30 +485,33 @@ impl<'a> WorktreeManager<'a> {
         }
     }
 
-    /// Every worktree this host made for the repository under any of its
-    /// roots, newest first. An id found under two roots is the current root's.
-    pub async fn list(&self) -> Result<Vec<ManagedWorktree>> {
-        let mut found = Vec::new();
-        for root in self.roots() {
-            let dir = self.repository_dir_in(root);
-            let entries = match std::fs::read_dir(&dir) {
-                Ok(entries) => entries,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(error) => return Err(error).with_context(|| format!("read {}", dir.display())),
-            };
-            found.extend(entries.flatten().map(|entry| entry.path()));
-        }
+    pub async fn current_checkout(&self) -> Option<ManagedWorktree> {
+        let marker = marker_for_checkout(&self.repository)?;
         let locked = self.locked_checkouts().await;
-        let mut seen = HashSet::new();
+        Some(
+            self.describe_checkout(marker, self.repository.clone(), &locked)
+                .await,
+        )
+    }
+
+    /// Every worktree this host made for the repository, newest first.
+    pub async fn list(&self) -> Result<Vec<ManagedWorktree>> {
+        let dir = self.repository_dir();
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(error).with_context(|| format!("read {}", dir.display())),
+        };
+        let locked = self.locked_checkouts().await;
         let mut worktrees = Vec::new();
-        for reserved in found {
-            let Ok(marker) = read_marker(&reserved) else {
+        for entry in entries.flatten() {
+            let Ok(marker) = read_marker(&entry.path()) else {
                 continue;
             };
-            if marker.repository_root != self.repository || !seen.insert(marker.id.clone()) {
+            if marker.repository_root != self.repository {
                 continue;
             }
-            worktrees.push(self.describe(marker, &reserved, &locked).await);
+            worktrees.push(self.describe(marker, &locked).await);
         }
         worktrees.sort_by_key(|worktree| std::cmp::Reverse(worktree.marker.created_at));
         Ok(worktrees)
@@ -558,7 +522,7 @@ impl<'a> WorktreeManager<'a> {
         let marker =
             read_marker(&reserved).map_err(|_| anyhow!("no worktree {id} in this repository"))?;
         let locked = self.locked_checkouts().await;
-        Ok(self.describe(marker, &reserved, &locked).await)
+        Ok(self.describe(marker, &locked).await)
     }
 
     pub async fn set_pinned(&self, id: &str, pinned: bool) -> Result<ManagedWorktree> {
@@ -902,43 +866,6 @@ pub fn write_keep(root: &Path, keep: usize) -> Result<usize> {
         .with_context(|| format!("write {}", staging.display()))?;
     std::fs::rename(&staging, &path).with_context(|| format!("write {}", path.display()))?;
     Ok(keep)
-}
-
-/// Every worktree root kept in the record file `record`, in the order they
-/// were first used. No record yet is an empty list; one that cannot be read
-/// is an error, so it is never overwritten with less than it held.
-pub fn recorded_roots(record: &Path) -> Result<Vec<PathBuf>> {
-    match std::fs::read(record) {
-        Ok(raw) => serde_json::from_slice(&raw)
-            .with_context(|| format!("{} is not a list of folders", record.display())),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(error) => Err(error).with_context(|| format!("read {}", record.display())),
-    }
-}
-
-/// Add each of `roots` the record file `record` does not hold yet, and return
-/// everything it holds afterwards. The file is rewritten only when it grows.
-pub fn record_roots(record: &Path, roots: &[&Path]) -> Result<Vec<PathBuf>> {
-    let mut recorded = recorded_roots(record)?;
-    let before = recorded.len();
-    for root in roots {
-        if !recorded.iter().any(|known| known == root) {
-            recorded.push(root.to_path_buf());
-        }
-    }
-    if recorded.len() == before {
-        return Ok(recorded);
-    }
-    if let Some(parent) = record.parent() {
-        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
-    }
-    let mut staging = record.as_os_str().to_owned();
-    staging.push(".tmp");
-    let staging = PathBuf::from(staging);
-    std::fs::write(&staging, serde_json::to_vec_pretty(&recorded)?)
-        .with_context(|| format!("write {}", staging.display()))?;
-    std::fs::rename(&staging, record).with_context(|| format!("write {}", record.display()))?;
-    Ok(recorded)
 }
 
 /// The marker of the managed worktree whose checkout is `checkout`, if it is
@@ -1839,115 +1766,5 @@ mod tests {
 
         assert_eq!(outcome.conflicted, vec!["conf/app.toml"]);
         assert!(!outside.path().join("app.toml").exists());
-    }
-
-    #[tokio::test]
-    async fn worktrees_made_under_an_earlier_root_are_still_listed_found_and_archived() {
-        let repo = tempfile::tempdir().unwrap();
-        init_repo(repo.path());
-        let earlier = tempfile::tempdir().unwrap();
-        let current = tempfile::tempdir().unwrap();
-        let head = StartPoint::Ref {
-            name: "HEAD".into(),
-        };
-        let old = manager(earlier.path(), repo.path())
-            .await
-            .create(head.clone(), Some("old".into()))
-            .await
-            .unwrap()
-            .worktree;
-        let moved = manager(current.path(), repo.path())
-            .await
-            .with_earlier_roots([earlier.path().to_path_buf(), current.path().to_path_buf()]);
-        let new = moved.create(head.clone(), None).await.unwrap().worktree;
-
-        assert!(new.checkout.starts_with(current.path()));
-        let listed: Vec<_> = moved
-            .list()
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|worktree| worktree.marker.id)
-            .collect();
-        assert_eq!(listed, vec![new.marker.id.clone(), old.marker.id.clone()]);
-
-        let found = moved.get(&old.marker.id).await.unwrap();
-        assert_eq!(found.checkout, old.checkout);
-        assert!(!found.missing);
-        assert!(
-            moved
-                .set_pinned(&old.marker.id, true)
-                .await
-                .unwrap()
-                .marker
-                .pinned
-        );
-        assert!(moved.set_pinned(&old.marker.id, false).await.is_ok());
-
-        moved.archive(&old.marker.id).await.unwrap();
-        assert!(!old.checkout.exists());
-        let listed: Vec<_> = moved
-            .list()
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|worktree| worktree.marker.id)
-            .collect();
-        assert_eq!(listed, vec![new.marker.id]);
-    }
-
-    #[tokio::test]
-    async fn cleanup_counts_worktrees_under_every_root() {
-        let repo = tempfile::tempdir().unwrap();
-        init_repo(repo.path());
-        let earlier = tempfile::tempdir().unwrap();
-        let current = tempfile::tempdir().unwrap();
-        std::fs::write(current.path().join(SETTINGS_FILE), r#"{"keep":1}"#).unwrap();
-        let head = StartPoint::Ref {
-            name: "HEAD".into(),
-        };
-        let old = manager(earlier.path(), repo.path())
-            .await
-            .create(head.clone(), None)
-            .await
-            .unwrap()
-            .worktree;
-        let moved = manager(current.path(), repo.path())
-            .await
-            .with_earlier_roots([earlier.path().to_path_buf()]);
-
-        let created = moved.create(head, None).await.unwrap();
-
-        let removed: Vec<_> = created
-            .cleaned
-            .into_iter()
-            .map(|outcome| outcome.id)
-            .collect();
-        assert_eq!(removed, vec![old.marker.id]);
-        assert!(!old.checkout.exists());
-    }
-
-    #[test]
-    fn the_root_record_keeps_every_root_once_in_first_use_order() {
-        let dir = tempfile::tempdir().unwrap();
-        let record = dir.path().join("nested").join("worktree-roots.json");
-        let first = Path::new("/first/worktrees");
-        let second = Path::new("/second/worktrees");
-
-        assert!(recorded_roots(&record).unwrap().is_empty());
-        assert_eq!(record_roots(&record, &[first]).unwrap(), vec![first]);
-        assert_eq!(
-            record_roots(&record, &[second, first]).unwrap(),
-            vec![first, second]
-        );
-        assert_eq!(recorded_roots(&record).unwrap(), vec![first, second]);
-        assert_eq!(
-            record_roots(&record, &[first]).unwrap(),
-            vec![first, second]
-        );
-
-        std::fs::write(&record, "not json").unwrap();
-        assert!(record_roots(&record, &[first]).is_err());
-        assert_eq!(std::fs::read_to_string(&record).unwrap(), "not json");
     }
 }

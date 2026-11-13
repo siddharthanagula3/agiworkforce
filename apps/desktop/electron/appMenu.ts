@@ -36,6 +36,7 @@ function changeLaunchAtLogin(item: MenuItem): void {
 
 export interface AppMenuActions {
   newChat: () => void;
+  openFolder: () => void;
   newWindow: () => void;
   openCurrentChatInNewWindow: () => void;
   copyConversationUrl: () => void;
@@ -99,6 +100,10 @@ export interface AppMenuAccelerators {
  */
 const PAGE_TOGGLE_SIDEBAR_ACCELERATOR = 'CommandOrControl+B';
 const PAGE_KEYBOARD_SHORTCUTS_ACCELERATOR = 'CommandOrControl+/';
+/** `apps/web/features/chat/components/messages/ChatMessageList.tsx` binds find in a conversation. */
+const PAGE_FIND_ACCELERATOR = 'CommandOrControl+F';
+/** `OPEN_SEARCH_SHORTCUT` in `packages/ui/ui/src/sidebar/searchShortcut.ts`. */
+const PAGE_SEARCH_ACCELERATOR = 'CommandOrControl+Shift+F';
 
 /**
  * The chords this menu claims come from the contract, which is also what the
@@ -276,6 +281,18 @@ function editMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   if (isMac) {
     items.splice(6, 0, { role: 'pasteAndMatchStyle' }, { role: 'delete' });
   }
+  // Find searches the conversation on screen, so it is unavailable, not hidden,
+  // anywhere else.
+  items.push(
+    { type: 'separator' },
+    {
+      label: 'Find…',
+      accelerator: PAGE_FIND_ACCELERATOR,
+      registerAccelerator: false,
+      enabled: actions.hasFocusedConversation(),
+      click: () => actions.sendHostCommand('find'),
+    },
+  );
   return { label: 'Edit', submenu: items };
 }
 
@@ -413,9 +430,12 @@ function viewMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return { label: 'View', submenu: items };
 }
 
-function historyMenu(actions: AppMenuActions): MenuItemConstructorOptions {
+function goMenu(actions: AppMenuActions): MenuItemConstructorOptions {
+  // Previous and Next Chat move through the chats in the order the sidebar
+  // lists them, from the one on screen, so they wait for a conversation.
+  const onConversation = actions.hasFocusedConversation();
   return {
-    label: 'History',
+    label: 'Go',
     submenu: [
       { label: 'Back', accelerator: hostAccelerator('host-back'), click: actions.goBack },
       { label: 'Forward', accelerator: hostAccelerator('host-forward'), click: actions.goForward },
@@ -538,7 +558,9 @@ function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
       }
     }
   }
-  return { label: 'Window', submenu: items };
+  // The window role is what makes macOS add its window list, Move & Resize,
+  // Full Screen Tile and Bring All to Front to this menu.
+  return { label: 'Window', role: 'window', submenu: items };
 }
 
 function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
@@ -583,7 +605,7 @@ export function appMenuTemplate(
     fileMenu(actions, accelerators, computerUse),
     editMenu(actions),
     viewMenu(actions),
-    historyMenu(actions),
+    goMenu(actions),
     windowMenu(actions),
     helpMenu(actions),
   ];
