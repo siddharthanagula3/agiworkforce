@@ -171,7 +171,38 @@ Derived from sections 3 to 6; each line is I.
   "Simple", Claude "Inline visualizations").
 - Persistence differs by tier: ephemeral inline visual, then save as artifact for durable, shareable, stateful output.
 
-## 9. Open questions
+## 9. Owner screenshot, items 9 to 30
+
+The same owner chat, captured 2026-10-25 between 21:03 and 21:07 on ChatGPT desktop, continued with a reply headed
+"More UI/UX rendering examples". Every row is O (Observed) from that screenshot and records what rendered, not how often
+the model chooses it.
+
+| Item | Rendering                                                                                                                      |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 9    | Email draft block: subject, Recipients field, editable body with a "Start writing" prompt, Copy, open-in-mail, "Connect email" |
+| 10   | Editable chat message block labelled "Writing", with undo, copy and expand                                                     |
+| 11   | Editable document or report block with headings and lists the user can type into; undo, copy, expand                           |
+| 12   | Editable social post block                                                                                                     |
+| 13   | Editable code block with a language label, copy and expand                                                                     |
+| 14   | HTML or React code with a live preview, download and view source                                                               |
+| 15   | Copy-ready prompt block: title, "Copy-ready" badge, monospace panel, full-width "Copy full prompt" button                      |
+| 16   | Terminal commands card: "Shell" label, bash block, "Copy commands", a note that the commands were not executed                 |
+| 17   | JSON with syntax colours                                                                                                       |
+| 18   | Diff with red and green minus and plus lines                                                                                   |
+| 19   | Console output and error output panels, each with an "Example" badge                                                           |
+| 20   | SQL block                                                                                                                      |
+| 21   | Markdown inside a card with a "Completed" status badge, a list, a blockquote and inline code                                   |
+| 22   | Math: a display equation and a fraction                                                                                        |
+| 23   | Source citation card: title, "OpenAI Help Center · Documentation", summary, "Read documentation" link                          |
+| 24   | Status label list: Passed in green, Failed in red, Pending in amber, Not tested in neutral                                     |
+| 25   | Inline action panel: title, note, a primary "Copy review note" and a secondary "Inspect confirmation UI" button                |
+| 26   | Follow-up suggestion links ("Show more code block types" and others) that send their text as the next message                  |
+| 27   | File and attachment cards: a PDF item with icon, type and description; config.json with a "JSON" badge                         |
+| 28   | Audio transcript with timestamps and speakers                                                                                  |
+| 29   | Timeline of numbered steps with descriptions and Complete, In progress and Not started badges                                  |
+| 30   | Display-mode cards (inline, picture-in-picture, fullscreen) and a "Complete rendering inventory" table                         |
+
+## 10. Open questions
 
 - Intelligent UI official text (O1 to O4) was not read directly; reopen when `help.openai.com` is reachable from an
   authorized browser and confirm the D-x rows.
