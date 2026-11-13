@@ -23,6 +23,10 @@ use tokio::process::{Child, Command};
 use tokio::sync::{oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::{sleep_until, Instant};
+#[cfg(unix)]
+mod terminal_session;
+#[cfg(unix)]
+pub(crate) use terminal_session::{terminate_session_now, wait_session_stopped};
 
 const REAP_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -60,6 +64,7 @@ pub(crate) fn current_owner() -> Option<ProcessTreeOwner> {
 struct ActiveProcessTree {
     owner: Option<ProcessTreeOwner>,
     process_id: Option<u32>,
+    terminal_session: bool,
 }
 
 struct ActiveProcessTrees {
@@ -89,14 +94,26 @@ impl ActiveProcessTreeGuard {
     }
 
     fn register_for(owner: Option<ProcessTreeOwner>, process_id: Option<u32>) -> Self {
+        Self::register_kind(owner, process_id, false)
+    }
+    fn register_kind(
+        owner: Option<ProcessTreeOwner>,
+        process_id: Option<u32>,
+        terminal_session: bool,
+    ) -> Self {
         let mut registry = active_process_trees()
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let id = registry.next_id;
         registry.next_id = registry.next_id.wrapping_add(1).max(1);
-        registry
-            .entries
-            .insert(id, ActiveProcessTree { owner, process_id });
+        registry.entries.insert(
+            id,
+            ActiveProcessTree {
+                owner,
+                process_id,
+                terminal_session,
+            },
+        );
         let count = registry.entries.len();
         registry.active_count.send_replace(count);
         Self { id: Some(id) }
@@ -132,6 +149,15 @@ pub(crate) fn kill_all_process_trees() {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     for entry in registry.entries.values() {
+        if entry.terminal_session {
+            #[cfg(unix)]
+            {
+                if let Some(id) = entry.process_id {
+                    let _ = terminate_session_now(id);
+                }
+                continue;
+            }
+        }
         kill_process_group_now(entry.process_id);
     }
 }
@@ -356,6 +382,7 @@ impl Drop for ProcessTreeChild {
 pub(crate) struct DetachedProcessTree {
     process_id: Option<u32>,
     _registration: ActiveProcessTreeGuard,
+    terminal_session: bool,
 }
 
 impl DetachedProcessTree {
@@ -363,11 +390,44 @@ impl DetachedProcessTree {
         Self {
             process_id,
             _registration: ActiveProcessTreeGuard::register_for(None, process_id),
+            terminal_session: false,
         }
     }
 
     pub(crate) fn kill(&self) {
+        #[cfg(unix)]
+        if self.terminal_session {
+            if let Some(id) = self.process_id {
+                let _ = terminate_session_now(id);
+            }
+            return;
+        }
         signal_process_tree_on_drop(self.process_id);
+    }
+    #[cfg(unix)]
+    pub(crate) fn track_terminal(process_id: u32) -> Self {
+        Self {
+            process_id: Some(process_id),
+            _registration: ActiveProcessTreeGuard::register_kind(None, Some(process_id), true),
+            terminal_session: true,
+        }
+    }
+    #[cfg(unix)]
+    pub(crate) fn finish_terminal(mut self, timeout: Duration) -> io::Result<()> {
+        let id = self
+            .process_id
+            .ok_or_else(|| io::Error::other("The terminal process identity is missing"))?;
+        self.kill();
+        self.terminal_session = false;
+        terminal_session::wait_session_stopped_blocking(id, timeout)
+    }
+}
+
+impl Drop for DetachedProcessTree {
+    fn drop(&mut self) {
+        if self.terminal_session {
+            self.kill();
+        }
     }
 }
 
@@ -690,7 +750,7 @@ async fn supervise(
 
 /// What one pipe of a child keeps. Past this the pipe is still drained, so a
 /// chatty child never stalls on a full pipe, but nothing more is held.
-const MAX_CAPTURED_PIPE_BYTES: u64 = 64 * 1024 * 1024;
+pub(crate) const MAX_CAPTURED_PIPE_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Default)]
 struct PipeCapture(Arc<StdMutex<Vec<u8>>>);

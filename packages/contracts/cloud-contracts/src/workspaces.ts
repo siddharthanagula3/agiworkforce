@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import conversationContract from './conversation-contract.json';
 import { WORKSPACE_KINDS, type WorkspaceSummary } from '@agiworkforce/types';
 
-export const MANAGED_CLOUD_WORKSPACES_PATH = '/api/settings/workspaces';
+export const MANAGED_CLOUD_WORKSPACES_PATH = conversationContract.workspacesPath;
 
 export const ManagedCloudWorkspaceSummarySchema: z.ZodType<WorkspaceSummary> = z.object({
   id: z.string().min(1),

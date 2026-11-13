@@ -3,11 +3,13 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import process from 'node:process';
 import { after, test } from 'node:test';
 import {
   EQUAL_CONSTANTS,
   JSON_BODY_PAIRS,
   LIMIT_PAIRS,
+  PROJECT_LIMIT_SOURCES,
   REPO_ROOT,
   STRUCT_PAIRS,
   auditRepository,
@@ -31,6 +33,7 @@ function sandboxCopy() {
   );
   files.add('packages/contracts/types/src/memory-wire.ts');
   files.add('packages/contracts/cloud-contracts/src/projects.ts');
+  for (const file of PROJECT_LIMIT_SOURCES) files.add(file);
   for (const file of files) {
     cpSync(path.join(REPO_ROOT, file), path.join(root, file), { recursive: true });
   }
@@ -194,7 +197,7 @@ test('the CLI in this repository matches the shared contracts', () => {
   assert.match(run.stdout, /match the shared contracts/);
 });
 
-test('catches a renamed field, a raised limit and a moved protocol version', () => {
+test('catches a renamed field, a detached project limit and a moved protocol version', () => {
   const root = sandboxCopy();
   rewrite(
     root,
@@ -205,8 +208,8 @@ test('catches a renamed field, a raised limit and a moved protocol version', () 
   rewrite(
     root,
     'apps/cli/src/cloud/projects.rs',
-    'const NAME_MAX_CHARS: usize = 200;',
-    'const NAME_MAX_CHARS: usize = 500;',
+    'truncate(name.trim(), api::contract().name_max_length)',
+    'truncate(name.trim(), 500)',
   );
   rewrite(
     root,
@@ -221,8 +224,72 @@ test('catches a renamed field, a raised limit and a moved protocol version', () 
   assert.ok(
     problems.some((problem) => /requires "baseVersion", which the CLI never sends/.test(problem)),
   );
-  assert.ok(problems.some((problem) => /NAME_MAX_CHARS is 500, above the 200/.test(problem)));
+  assert.ok(problems.some((problem) => /name_max_length .*has no readable limit/.test(problem)));
   assert.ok(problems.some((problem) => /SYNC_PROTOCOL_VERSION is 3, but/.test(problem)));
+});
+
+test('reads shared project limits and detects a smaller server limit', () => {
+  const root = sandboxCopy();
+  const contractPath = path.join(root, PROJECT_LIMIT_SOURCES[1]);
+  const contract = JSON.parse(readFileSync(contractPath, 'utf8'));
+  contract.nameMaxLength = 37;
+  writeFileSync(contractPath, JSON.stringify(contract));
+  assert.deepEqual(auditRepository(root).problems, []);
+  rewrite(
+    root,
+    'packages/contracts/cloud-contracts/src/projects.ts',
+    'export const PROJECT_NAME_MAX_LENGTH = projectContract.nameMaxLength;',
+    'export const PROJECT_NAME_MAX_LENGTH = 36;',
+  );
+  assert.ok(
+    auditRepository(root).problems.some((problem) =>
+      /name_max_length is 37, above the 36/.test(problem),
+    ),
+  );
+});
+
+test('refuses unknown project owners, bindings and nonnumeric shared limits', () => {
+  const cases = [
+    [
+      'apps/cli/src/cloud/projects/api.rs',
+      'src/project-contract.json',
+      'src/another-contract.json',
+    ],
+    ['apps/cli/src/cloud/projects/api.rs', '&CONTRACT\n}', '&OTHER_CONTRACT\n}'],
+    [
+      'apps/cli/src/cloud/projects/api.rs',
+      '#[serde(rename_all = "camelCase")]',
+      '#[serde(rename_all = "snake_case")]',
+    ],
+    [
+      'apps/cli/src/cloud/projects.rs',
+      'truncate(name.trim(), api::contract().name_max_length)',
+      'truncate(name.trim(), 500) /* truncate(name.trim(), api::contract().name_max_length) */',
+    ],
+    [
+      'apps/cli/src/cloud/projects.rs',
+      'api::contract().description_max_length)',
+      'api::contract().description_max_length + 1)',
+    ],
+    [
+      'packages/contracts/cloud-contracts/src/projects.ts',
+      "from './project-contract.json'",
+      "from './another-contract.json'",
+    ],
+    [
+      'packages/contracts/cloud-contracts/src/project-contract.json',
+      '"nameMaxLength": 200',
+      '"nameMaxLength": "200"',
+    ],
+  ];
+  for (const [file, before, after] of cases) {
+    const root = sandboxCopy();
+    rewrite(root, file, before, after);
+    assert.ok(
+      auditRepository(root).problems.some((problem) => /has no readable limit/.test(problem)),
+      file,
+    );
+  }
 });
 
 test('catches a contract that starts sending null to a field the CLI requires', () => {

@@ -353,6 +353,8 @@ export const FINANCIAL_ERASURE_DISPOSITION: Readonly<Record<string, string>> = {
 };
 
 export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
+  project_knowledge_objects:
+    'Retired-object cleanup ledger: provenance stays while physical removal is unconfirmed. Migration 0419 requires deleted rows to clear object_key, user_id and organization_id; the receipt function clears those fields only after every target confirms removal. Fingerprint-only tombstones prevent resurrection. Erasure integration remains tracked by WEB-PROJECT-OBJECT-LIFECYCLE-01.',
   media_assets: 'Erased by eraseUserMedia(): bytes first, then rows.',
   cloud_agent_events: 'Cascades from cloud_agent_runs.',
   cloud_agent_approval_checkpoints: 'Cascades from cloud_agent_runs.',

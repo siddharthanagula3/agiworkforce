@@ -1,4 +1,25 @@
+use agiworkforce_protocol::account_cloud::{
+    CloudConversationCreateParams, CloudConversationCreateResponse, CloudConversationUpdateParams,
+    CloudConversationUpdateResponse, CloudDraftSaveParams, CloudDraftSaveResponse,
+    CloudModelListParams, CloudModelListResponse, CloudRunAttachParams, CloudRunAttachResponse,
+    CloudRunListParams, CloudRunListResponse, CloudTurnIdParams, CloudTurnResumeParams,
+    CloudTurnSnapshot, CloudTurnStartParams, CloudWorkPlanReview, CloudWorkPlanUpdateParams,
+};
+use agiworkforce_protocol::account_cloud::{
+    CloudHistoryListParams, CloudHistoryListResponse, CloudHistoryReadParams,
+    CloudHistoryReadResponse,
+};
+use agiworkforce_protocol::account_cloud::{
+    CloudProjectCreateParams, CloudProjectListParams, CloudProjectListResponse,
+    CloudProjectResponse, CloudProjectTarget, CloudProjectUpdateParams,
+};
+use agiworkforce_protocol::account_cloud::{
+    CloudWorkspaceSelectParams, CloudWorkspaceSelectResponse, CloudWorkspacesListParams,
+    CloudWorkspacesListResponse,
+};
 use agiworkforce_protocol::agent_events::AGENT_EVENT_SCHEMA_VERSION;
+use agiworkforce_protocol::attachment_recovery::*;
+use agiworkforce_protocol::cloud_uploads::*;
 use agiworkforce_protocol::developer_session::{
     method, AccountLoginResponse, AccountLoginWaitParams, AccountLoginWaitResponse,
     AccountStatusParams, AccountStatusResponse, AccountTokenResponse, AcknowledgedResponse,
@@ -36,6 +57,11 @@ use agiworkforce_protocol::developer_session::{
     MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
     SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
+use agiworkforce_protocol::instruction_settings::*;
+use agiworkforce_protocol::project_files::*;
+use agiworkforce_protocol::workspace_files::*;
+use agiworkforce_protocol::workspace_terminal::*;
+use agiworkforce_protocol::worktree_apply::*;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::FutureExt;
@@ -61,6 +87,357 @@ const SERVER_TITLE: &str = "AGI CLI App Server";
 /// interrupts and approval responses.
 #[async_trait]
 pub trait DeveloperSessionHost: Send + Sync {
+    async fn plan_worktree_apply(
+        &self,
+        _params: WorktreeApplyPlanParams,
+    ) -> Result<WorktreeApplyPlan, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_APPLY_PLAN))
+    }
+    async fn commit_worktree_apply(
+        &self,
+        _params: WorktreeApplyCommitParams,
+    ) -> Result<WorktreeApplyResultPage, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_APPLY_COMMIT))
+    }
+    async fn read_worktree_apply_result(
+        &self,
+        _params: WorktreeApplyResultParams,
+    ) -> Result<WorktreeApplyResultPage, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKTREE_APPLY_RESULT))
+    }
+    async fn terminal_plan(
+        &self,
+        _: TerminalPlanParams,
+    ) -> Result<TerminalPlan, DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_PLAN))
+    }
+    async fn terminal_start(
+        &self,
+        _: TerminalIdParams,
+    ) -> Result<TerminalSummary, DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_START))
+    }
+    async fn terminal_list(
+        &self,
+        _: TerminalListParams,
+    ) -> Result<TerminalListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_LIST))
+    }
+    async fn terminal_read(
+        &self,
+        _: TerminalReadParams,
+    ) -> Result<TerminalReadResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_READ))
+    }
+    async fn terminal_write(
+        &self,
+        _: TerminalWriteParams,
+    ) -> Result<TerminalSummary, DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_WRITE))
+    }
+    async fn terminal_resize(
+        &self,
+        _: TerminalResizeParams,
+    ) -> Result<TerminalSummary, DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_RESIZE))
+    }
+    async fn terminal_close(
+        &self,
+        _: TerminalIdParams,
+    ) -> Result<TerminalSummary, DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_CLOSE))
+    }
+    async fn workspace_files_list(
+        &self,
+        _: WorkspaceDirectoryParams,
+    ) -> Result<WorkspaceDirectoryResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILES_LIST))
+    }
+    async fn workspace_file_read(
+        &self,
+        _: WorkspaceFileParams,
+    ) -> Result<WorkspaceFileResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_READ))
+    }
+    async fn workspace_file_write(
+        &self,
+        _: WorkspaceFileWriteParams,
+    ) -> Result<WorkspaceFileWriteResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_WRITE))
+    }
+    async fn workspace_file_recovery_read(
+        &self,
+        _: WorkspaceFileParams,
+    ) -> Result<WorkspaceFileRecoverySnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_RECOVERY_READ))
+    }
+    async fn workspace_file_recovery_write(
+        &self,
+        _: WorkspaceFileRecoveryWriteParams,
+    ) -> Result<WorkspaceFileRecoveryWriteResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_RECOVERY_WRITE))
+    }
+    async fn workspace_file_recovery_list(
+        &self,
+        _: WorkspaceFileRecoveryListParams,
+    ) -> Result<WorkspaceFileRecoveryListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_RECOVERY_LIST))
+    }
+    async fn workspace_file_recovery_restore(
+        &self,
+        _: WorkspaceFileRecoveryRestoreParams,
+    ) -> Result<WorkspaceFileRecoveryRestoreResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::WORKSPACE_FILE_RECOVERY_RESTORE))
+    }
+    async fn cloud_work_plan_update(
+        &self,
+        _: CloudWorkPlanUpdateParams,
+    ) -> Result<CloudWorkPlanReview, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_WORK_PLAN_UPDATE))
+    }
+    async fn cloud_run_list(
+        &self,
+        _: CloudRunListParams,
+    ) -> Result<CloudRunListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_RUN_LIST))
+    }
+    async fn cloud_run_attach(
+        &self,
+        _: CloudRunAttachParams,
+        _: Option<&AppServerClientInfo>,
+    ) -> Result<CloudRunAttachResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_RUN_ATTACH))
+    }
+    async fn cloud_turn_detach(
+        &self,
+        _: CloudTurnIdParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_TURN_DETACH))
+    }
+    async fn cloud_project_download_prepare(
+        &self,
+        _: CloudProjectDownloadPrepareParams,
+    ) -> Result<CloudProjectDownloadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_DOWNLOAD_PREPARE))
+    }
+    async fn cloud_project_download_start(
+        &self,
+        _: CloudProjectDownloadId,
+    ) -> Result<CloudProjectDownloadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_DOWNLOAD_START))
+    }
+    async fn cloud_project_download_read(
+        &self,
+        _: CloudProjectDownloadId,
+    ) -> Result<CloudProjectDownloadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_DOWNLOAD_READ))
+    }
+    async fn cloud_project_download_cancel(
+        &self,
+        _: CloudProjectDownloadId,
+    ) -> Result<CloudProjectDownloadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_DOWNLOAD_CANCEL))
+    }
+    async fn cloud_project_download_release(
+        &self,
+        _: CloudProjectDownloadId,
+    ) -> Result<AcknowledgedResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_DOWNLOAD_RELEASE))
+    }
+    async fn cloud_attachment_recovery_read(
+        &self,
+        _: CloudChatTarget,
+    ) -> Result<AttachmentRecoveryReadResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_ATTACHMENT_RECOVERY_READ))
+    }
+    async fn cloud_attachment_recovery_list(
+        &self,
+        _: AttachmentRecoveryListParams,
+    ) -> Result<AttachmentRecoveryListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_ATTACHMENT_RECOVERY_LIST))
+    }
+    async fn cloud_attachment_recovery_change(
+        &self,
+        _: AttachmentRecoveryChangeParams,
+    ) -> Result<AttachmentRecoveryChangeResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_ATTACHMENT_RECOVERY_CHANGE))
+    }
+    async fn cloud_upload_prepare(
+        &self,
+        _: CloudUploadPrepareParams,
+        _: Option<&AppServerClientInfo>,
+    ) -> Result<CloudUploadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_UPLOAD_PREPARE))
+    }
+    async fn cloud_upload_start(
+        &self,
+        _: CloudUploadId,
+    ) -> Result<CloudUploadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_UPLOAD_START))
+    }
+    async fn cloud_upload_read(
+        &self,
+        _: CloudUploadId,
+    ) -> Result<CloudUploadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_UPLOAD_READ))
+    }
+    async fn cloud_upload_cancel(
+        &self,
+        _: CloudUploadId,
+    ) -> Result<CloudUploadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_UPLOAD_CANCEL))
+    }
+    async fn cloud_upload_release(
+        &self,
+        _: CloudUploadId,
+    ) -> Result<AcknowledgedResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_UPLOAD_RELEASE))
+    }
+    async fn cloud_project_upload_prepare(
+        &self,
+        _: CloudProjectUploadPrepareParams,
+    ) -> Result<CloudProjectUploadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_UPLOAD_PREPARE))
+    }
+    async fn cloud_project_upload_start(
+        &self,
+        _: CloudProjectUploadId,
+    ) -> Result<CloudProjectUploadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_UPLOAD_START))
+    }
+    async fn cloud_project_upload_read(
+        &self,
+        _: CloudProjectUploadId,
+    ) -> Result<CloudProjectUploadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_UPLOAD_READ))
+    }
+    async fn cloud_project_upload_cancel(
+        &self,
+        _: CloudProjectUploadId,
+    ) -> Result<CloudProjectUploadSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_UPLOAD_CANCEL))
+    }
+    async fn cloud_project_upload_release(
+        &self,
+        _: CloudProjectUploadId,
+    ) -> Result<AcknowledgedResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_UPLOAD_RELEASE))
+    }
+    async fn cloud_project_file_reindex(
+        &self,
+        _: CloudProjectFileVersion,
+    ) -> Result<CloudProjectFileReindexResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_FILE_REINDEX))
+    }
+    async fn cloud_project_files_list(
+        &self,
+        _: CloudProjectTarget,
+    ) -> Result<CloudProjectFilesResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_FILES_LIST))
+    }
+    async fn cloud_project_file_preview(
+        &self,
+        _: CloudProjectFileTarget,
+    ) -> Result<CloudProjectFilePreview, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_FILE_PREVIEW))
+    }
+    async fn cloud_project_list(
+        &self,
+        _: CloudProjectListParams,
+    ) -> Result<CloudProjectListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_LIST))
+    }
+    async fn cloud_project_read(
+        &self,
+        _: CloudProjectTarget,
+    ) -> Result<CloudProjectResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_READ))
+    }
+    async fn cloud_project_create(
+        &self,
+        _: CloudProjectCreateParams,
+    ) -> Result<CloudProjectResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_CREATE))
+    }
+    async fn cloud_project_update(
+        &self,
+        _: CloudProjectUpdateParams,
+    ) -> Result<CloudProjectResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_PROJECT_UPDATE))
+    }
+    async fn cloud_draft_save(
+        &self,
+        _: CloudDraftSaveParams,
+    ) -> Result<CloudDraftSaveResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_DRAFT_SAVE))
+    }
+    async fn cloud_conversation_update(
+        &self,
+        _: CloudConversationUpdateParams,
+    ) -> Result<CloudConversationUpdateResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_CONVERSATION_UPDATE))
+    }
+    async fn cloud_workspaces_list(
+        &self,
+        _: CloudWorkspacesListParams,
+    ) -> Result<CloudWorkspacesListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_WORKSPACES_LIST))
+    }
+    async fn cloud_workspace_select(
+        &self,
+        _: CloudWorkspaceSelectParams,
+    ) -> Result<CloudWorkspaceSelectResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_WORKSPACE_SELECT))
+    }
+    async fn cloud_model_list(
+        &self,
+        _: CloudModelListParams,
+    ) -> Result<CloudModelListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_MODEL_LIST))
+    }
+    async fn cloud_history_list(
+        &self,
+        _: CloudHistoryListParams,
+    ) -> Result<CloudHistoryListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_HISTORY_LIST))
+    }
+    async fn cloud_history_read(
+        &self,
+        _: CloudHistoryReadParams,
+    ) -> Result<CloudHistoryReadResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_HISTORY_READ))
+    }
+    async fn cloud_conversation_create(
+        &self,
+        _: CloudConversationCreateParams,
+    ) -> Result<CloudConversationCreateResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_CONVERSATION_CREATE))
+    }
+    async fn cloud_turn_start(
+        &self,
+        _: CloudTurnStartParams,
+        _: Option<&AppServerClientInfo>,
+    ) -> Result<CloudTurnSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_TURN_START))
+    }
+    async fn cloud_turn_read(
+        &self,
+        _: CloudTurnIdParams,
+    ) -> Result<CloudTurnSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_TURN_READ))
+    }
+    async fn cloud_turn_stop(
+        &self,
+        _: CloudTurnIdParams,
+    ) -> Result<CloudTurnSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_TURN_STOP))
+    }
+    async fn cloud_turn_resume(
+        &self,
+        _: CloudTurnResumeParams,
+    ) -> Result<CloudTurnSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::CLOUD_TURN_RESUME))
+    }
     /// Version of the executable that owns this host. The transport crate has
     /// its own package version, but clients need the shipped runtime version
     /// when deciding whether the installed CLI is compatible.
@@ -308,6 +685,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported("account/logout"))
     }
 
+    async fn account_login_cancel(
+        &self,
+        _params: AccountLoginWaitParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::ACCOUNT_LOGIN_CANCEL))
+    }
+
     /// Mint a bearer token for the hosted API from the runtime's credential.
     ///
     /// The transport refuses this on a connection that did not prove it holds
@@ -485,6 +869,18 @@ pub trait DeveloperSessionHost: Send + Sync {
 
     async fn list_commands(&self) -> Result<SlashCommandListResponse, DeveloperSessionHostError> {
         Err(unsupported("commands/list"))
+    }
+    async fn read_instruction_settings(
+        &self,
+        _: InstructionSettingsReadParams,
+    ) -> Result<InstructionSettingsSnapshot, DeveloperSessionHostError> {
+        Err(unsupported(method::SETTINGS_INSTRUCTIONS_READ))
+    }
+    async fn write_instruction_settings(
+        &self,
+        _: InstructionSettingsWriteParams,
+    ) -> Result<InstructionSettingsWriteResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::SETTINGS_INSTRUCTIONS_WRITE))
     }
 
     async fn run_command(
@@ -771,6 +1167,32 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::THREAD_ARCHIVE, MethodEffect::ChangesState),
     (method::THREAD_DELETE, MethodEffect::ChangesState),
     (method::WORKSPACE_IDENTITY, MethodEffect::ReadsForOwner),
+    (method::WORKSPACE_FILES_LIST, MethodEffect::ReadsForOwner),
+    (method::WORKSPACE_FILE_READ, MethodEffect::ReadsForOwner),
+    (method::WORKSPACE_FILE_WRITE, MethodEffect::ChangesState),
+    (
+        method::WORKSPACE_FILE_RECOVERY_READ,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::WORKSPACE_FILE_RECOVERY_WRITE,
+        MethodEffect::ChangesState,
+    ),
+    (
+        method::WORKSPACE_FILE_RECOVERY_LIST,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::WORKSPACE_FILE_RECOVERY_RESTORE,
+        MethodEffect::ChangesState,
+    ),
+    (method::TERMINAL_PLAN, MethodEffect::ChangesState),
+    (method::TERMINAL_START, MethodEffect::ChangesState),
+    (method::TERMINAL_LIST, MethodEffect::ReadsForOwner),
+    (method::TERMINAL_READ, MethodEffect::ReadsForOwner),
+    (method::TERMINAL_WRITE, MethodEffect::ChangesState),
+    (method::TERMINAL_RESIZE, MethodEffect::ChangesState),
+    (method::TERMINAL_CLOSE, MethodEffect::ChangesState),
     (method::THREAD_RECONNECT, MethodEffect::ReadOnly),
     (method::THREAD_WRITER_RELEASE, MethodEffect::ChangesState),
     (method::THREAD_WRITER_TAKEOVER, MethodEffect::ChangesState),
@@ -778,15 +1200,119 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::TURN_START, MethodEffect::ChangesState),
     (method::TURN_STEER, MethodEffect::ChangesState),
     (method::TURN_INTERRUPT, MethodEffect::ChangesState),
+    (method::TURN_STARTED, MethodEffect::Notification),
+    (method::TURN_OUTPUT_DELTA, MethodEffect::Notification),
+    (method::TURN_MODEL, MethodEffect::Notification),
+    (method::TURN_COMPLETED, MethodEffect::Notification),
+    (method::TURN_FAILED, MethodEffect::Notification),
+    (method::TURN_INTERRUPTED, MethodEffect::Notification),
     (method::TURN_AGENT_EVENT, MethodEffect::Notification),
+    (method::APPROVAL_REQUESTED, MethodEffect::Notification),
+    (method::SERVER_WARNING, MethodEffect::Notification),
     (method::APPROVAL_RESPOND, MethodEffect::GrantsTrust),
     (method::USER_INPUT_REQUESTED, MethodEffect::Notification),
     (method::USER_INPUT_RESPOND, MethodEffect::ChangesState),
     (method::TASK_STATE_CHANGED, MethodEffect::Notification),
     (method::SHUTDOWN, MethodEffect::ChangesState),
     (method::ACCOUNT_STATUS, MethodEffect::ReadOnly),
+    (
+        method::CLOUD_CONVERSATION_UPDATE,
+        MethodEffect::ChangesState,
+    ),
+    (
+        method::CLOUD_PROJECT_FILES_LIST,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::CLOUD_PROJECT_FILE_PREVIEW,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::CLOUD_ATTACHMENT_RECOVERY_READ,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::CLOUD_ATTACHMENT_RECOVERY_LIST,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::CLOUD_ATTACHMENT_RECOVERY_CHANGE,
+        MethodEffect::ChangesState,
+    ),
+    (method::CLOUD_UPLOAD_PREPARE, MethodEffect::GrantsTrust),
+    (method::CLOUD_UPLOAD_START, MethodEffect::ChangesState),
+    (method::CLOUD_UPLOAD_READ, MethodEffect::ReadsForOwner),
+    (method::CLOUD_UPLOAD_CANCEL, MethodEffect::ChangesState),
+    (method::CLOUD_UPLOAD_RELEASE, MethodEffect::ChangesState),
+    (
+        method::CLOUD_PROJECT_UPLOAD_PREPARE,
+        MethodEffect::GrantsTrust,
+    ),
+    (
+        method::CLOUD_PROJECT_UPLOAD_START,
+        MethodEffect::ChangesState,
+    ),
+    (
+        method::CLOUD_PROJECT_UPLOAD_READ,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::CLOUD_PROJECT_UPLOAD_CANCEL,
+        MethodEffect::ChangesState,
+    ),
+    (
+        method::CLOUD_PROJECT_UPLOAD_RELEASE,
+        MethodEffect::ChangesState,
+    ),
+    (
+        method::CLOUD_PROJECT_DOWNLOAD_PREPARE,
+        MethodEffect::GrantsTrust,
+    ),
+    (
+        method::CLOUD_PROJECT_DOWNLOAD_START,
+        MethodEffect::ChangesState,
+    ),
+    (
+        method::CLOUD_PROJECT_DOWNLOAD_READ,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::CLOUD_PROJECT_DOWNLOAD_CANCEL,
+        MethodEffect::ChangesState,
+    ),
+    (
+        method::CLOUD_PROJECT_DOWNLOAD_RELEASE,
+        MethodEffect::ChangesState,
+    ),
+    (
+        method::CLOUD_PROJECT_FILE_REINDEX,
+        MethodEffect::ChangesState,
+    ),
+    (method::CLOUD_PROJECT_LIST, MethodEffect::ReadsForOwner),
+    (method::CLOUD_PROJECT_READ, MethodEffect::ReadsForOwner),
+    (method::CLOUD_PROJECT_CREATE, MethodEffect::ChangesState),
+    (method::CLOUD_PROJECT_UPDATE, MethodEffect::ChangesState),
+    (method::CLOUD_DRAFT_SAVE, MethodEffect::ChangesState),
+    (method::CLOUD_WORKSPACES_LIST, MethodEffect::ReadsForOwner),
+    (method::CLOUD_WORKSPACE_SELECT, MethodEffect::ChangesState),
+    (method::CLOUD_MODEL_LIST, MethodEffect::ReadsForOwner),
+    (method::CLOUD_HISTORY_LIST, MethodEffect::ReadsForOwner),
+    (method::CLOUD_HISTORY_READ, MethodEffect::ReadsForOwner),
+    (
+        method::CLOUD_CONVERSATION_CREATE,
+        MethodEffect::ChangesState,
+    ),
+    (method::CLOUD_TURN_START, MethodEffect::ChangesState),
+    (method::CLOUD_TURN_READ, MethodEffect::ReadsForOwner),
+    (method::CLOUD_TURN_STOP, MethodEffect::ChangesState),
+    (method::CLOUD_TURN_RESUME, MethodEffect::ChangesState),
+    (method::CLOUD_WORK_PLAN_UPDATE, MethodEffect::ChangesState),
+    (method::CLOUD_RUN_LIST, MethodEffect::ReadsForOwner),
+    (method::CLOUD_RUN_ATTACH, MethodEffect::ChangesState),
+    (method::CLOUD_TURN_DETACH, MethodEffect::ChangesState),
     (method::ACCOUNT_LOGIN, MethodEffect::ChangesState),
     (method::ACCOUNT_LOGIN_WAIT, MethodEffect::ChangesState),
+    (method::ACCOUNT_LOGIN_CANCEL, MethodEffect::ChangesState),
     (method::ACCOUNT_LOGOUT, MethodEffect::ChangesState),
     (method::ACCOUNT_TOKEN, MethodEffect::GrantsTrust),
     (method::CONTEXT_INSTRUCTIONS, MethodEffect::ReadOnly),
@@ -802,6 +1328,14 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::HOOKS_LIST, MethodEffect::ReadOnly),
     (method::SETTINGS_READ, MethodEffect::ReadOnly),
     (method::SETTINGS_WRITE, MethodEffect::GrantsTrust),
+    (
+        method::SETTINGS_INSTRUCTIONS_READ,
+        MethodEffect::ReadsForOwner,
+    ),
+    (
+        method::SETTINGS_INSTRUCTIONS_WRITE,
+        MethodEffect::GrantsTrust,
+    ),
     (method::COMMANDS_LIST, MethodEffect::ReadOnly),
     (method::COMMANDS_RUN, MethodEffect::ChangesState),
     (method::MANAGED_WORKTREE_CREATE, MethodEffect::ChangesState),
@@ -810,6 +1344,9 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::WORKTREE_PIN, MethodEffect::ChangesState),
     (method::WORKTREE_KEEP, MethodEffect::ChangesState),
     (method::WORKTREE_APPLY_TO_LOCAL, MethodEffect::ChangesState),
+    (method::WORKTREE_APPLY_PLAN, MethodEffect::ReadsForOwner),
+    (method::WORKTREE_APPLY_COMMIT, MethodEffect::ChangesState),
+    (method::WORKTREE_APPLY_RESULT, MethodEffect::ReadsForOwner),
     (method::WORKTREE_SETUP_RUN, MethodEffect::GrantsTrust),
     (method::WORKTREE_SETUP_LOG, MethodEffect::Notification),
     (method::WORKTREE_SETUP_FINISHED, MethodEffect::Notification),
@@ -881,6 +1418,15 @@ pub struct DeveloperSessionHostError {
 }
 
 impl DeveloperSessionHostError {
+    pub fn worktree_apply_failure(
+        message: impl Into<String>,
+        data: WorktreeApplyCommitFailure,
+    ) -> Self {
+        Self {
+            data: serde_json::to_value(data).ok(),
+            ..Self::conflict(message)
+        }
+    }
     pub fn invalid_request(message: impl Into<String>) -> Self {
         Self::new(-32602, message)
     }
@@ -891,6 +1437,15 @@ impl DeveloperSessionHostError {
 
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(-32009, message)
+    }
+    pub fn recovery_copy_failure(
+        message: impl Into<String>,
+        data: WorkspaceFileRecoveryRestoreFailure,
+    ) -> Self {
+        Self {
+            data: serde_json::to_value(data).ok(),
+            ..Self::conflict(message)
+        }
     }
 
     pub fn unavailable(message: impl Into<String>) -> Self {
@@ -967,6 +1522,62 @@ pub fn runs_detached(method: &str) -> bool {
     matches!(
         method,
         method::ACCOUNT_LOGIN_WAIT
+            | method::CLOUD_WORKSPACES_LIST
+            | method::CLOUD_WORKSPACE_SELECT
+            | method::CLOUD_MODEL_LIST
+            | method::CLOUD_HISTORY_LIST
+            | method::CLOUD_HISTORY_READ
+            | method::WORKSPACE_FILES_LIST
+            | method::TERMINAL_PLAN
+            | method::TERMINAL_START
+            | method::TERMINAL_LIST
+            | method::TERMINAL_READ
+            | method::TERMINAL_WRITE
+            | method::TERMINAL_RESIZE
+            | method::TERMINAL_CLOSE
+            | method::WORKSPACE_FILE_READ
+            | method::WORKSPACE_FILE_WRITE
+            | method::WORKSPACE_FILE_RECOVERY_READ
+            | method::WORKSPACE_FILE_RECOVERY_WRITE
+            | method::WORKSPACE_FILE_RECOVERY_LIST
+            | method::WORKSPACE_FILE_RECOVERY_RESTORE
+            | method::SETTINGS_INSTRUCTIONS_READ
+            | method::SETTINGS_INSTRUCTIONS_WRITE
+            | method::CLOUD_PROJECT_DOWNLOAD_PREPARE
+            | method::CLOUD_PROJECT_DOWNLOAD_START
+            | method::CLOUD_PROJECT_DOWNLOAD_READ
+            | method::CLOUD_PROJECT_DOWNLOAD_CANCEL
+            | method::CLOUD_PROJECT_DOWNLOAD_RELEASE
+            | method::CLOUD_ATTACHMENT_RECOVERY_READ
+            | method::CLOUD_ATTACHMENT_RECOVERY_LIST
+            | method::CLOUD_ATTACHMENT_RECOVERY_CHANGE
+            | method::CLOUD_UPLOAD_PREPARE
+            | method::CLOUD_UPLOAD_START
+            | method::CLOUD_UPLOAD_READ
+            | method::CLOUD_UPLOAD_CANCEL
+            | method::CLOUD_UPLOAD_RELEASE
+            | method::CLOUD_PROJECT_UPLOAD_PREPARE
+            | method::CLOUD_PROJECT_UPLOAD_START
+            | method::CLOUD_PROJECT_UPLOAD_READ
+            | method::CLOUD_PROJECT_UPLOAD_CANCEL
+            | method::CLOUD_PROJECT_UPLOAD_RELEASE
+            | method::CLOUD_PROJECT_FILE_REINDEX
+            | method::CLOUD_PROJECT_FILES_LIST
+            | method::CLOUD_PROJECT_FILE_PREVIEW
+            | method::CLOUD_PROJECT_LIST
+            | method::CLOUD_PROJECT_READ
+            | method::CLOUD_PROJECT_CREATE
+            | method::CLOUD_PROJECT_UPDATE
+            | method::CLOUD_DRAFT_SAVE
+            | method::CLOUD_CONVERSATION_UPDATE
+            | method::CLOUD_CONVERSATION_CREATE
+            | method::CLOUD_TURN_READ
+            | method::CLOUD_TURN_STOP
+            | method::CLOUD_TURN_RESUME
+            | method::CLOUD_WORK_PLAN_UPDATE
+            | method::CLOUD_RUN_LIST
+            | method::CLOUD_RUN_ATTACH
+            | method::CLOUD_TURN_DETACH
             | method::MCP_LOGIN
             | method::MCP_TEST
             | method::MCP_TOOLS
@@ -978,6 +1589,9 @@ pub fn runs_detached(method: &str) -> bool {
             | method::MANAGED_WORKTREE_CREATE
             | method::WORKTREE_DELETE
             | method::WORKTREE_APPLY_TO_LOCAL
+            | method::WORKTREE_APPLY_PLAN
+            | method::WORKTREE_APPLY_COMMIT
+            | method::WORKTREE_APPLY_RESULT
             | method::CHECKPOINT_LIST
             | method::CHECKPOINT_DIFF
             | method::CHECKPOINT_REVERT
@@ -1193,6 +1807,41 @@ impl DeveloperSessionProcessor {
         }
 
         let id = request.id.clone();
+        if !self.capabilities.cloud_attachment_recovery
+            && matches!(
+                request.method.as_str(),
+                method::CLOUD_ATTACHMENT_RECOVERY_READ
+                    | method::CLOUD_ATTACHMENT_RECOVERY_LIST
+                    | method::CLOUD_ATTACHMENT_RECOVERY_CHANGE
+            )
+        {
+            let error = unsupported(&request.method);
+            return AppServerResponse::failure(request.id, error.code(), error.message());
+        }
+        if !self.capabilities.cloud_uploads
+            && matches!(
+                request.method.as_str(),
+                method::CLOUD_UPLOAD_PREPARE
+                    | method::CLOUD_UPLOAD_START
+                    | method::CLOUD_UPLOAD_READ
+                    | method::CLOUD_UPLOAD_CANCEL
+                    | method::CLOUD_UPLOAD_RELEASE
+            )
+        {
+            let error = unsupported(&request.method);
+            return AppServerResponse::failure(request.id, error.code(), error.message());
+        }
+        if !self.capabilities.worktree_apply_review
+            && matches!(
+                request.method.as_str(),
+                method::WORKTREE_APPLY_PLAN
+                    | method::WORKTREE_APPLY_COMMIT
+                    | method::WORKTREE_APPLY_RESULT
+            )
+        {
+            let error = unsupported(&request.method);
+            return AppServerResponse::failure(request.id, error.code(), error.message());
+        }
         let result = match request.method.as_str() {
             method::THREAD_START => {
                 let params = match parse_params::<ThreadStartParams>(&request) {
@@ -1388,6 +2037,146 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(serde_json::to_value)
             }
+            method::TERMINAL_PLAN => {
+                let params = match parse_params::<TerminalPlanParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .terminal_plan(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TERMINAL_START => {
+                let params = match parse_params::<TerminalIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .terminal_start(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TERMINAL_LIST => {
+                let params = match parse_params::<TerminalListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .terminal_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TERMINAL_READ => {
+                let params = match parse_params::<TerminalReadParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .terminal_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TERMINAL_WRITE => {
+                let params = match parse_params::<TerminalWriteParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .terminal_write(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TERMINAL_RESIZE => {
+                let params = match parse_params::<TerminalResizeParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .terminal_resize(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::TERMINAL_CLOSE => {
+                let params = match parse_params::<TerminalIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .terminal_close(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILES_LIST => {
+                let params = match parse_params::<WorkspaceDirectoryParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_files_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_READ => {
+                let params = match parse_params::<WorkspaceFileParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_WRITE => {
+                let params = match parse_params::<WorkspaceFileWriteParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_write(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_RECOVERY_READ => {
+                let params = match parse_params::<WorkspaceFileParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_recovery_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_RECOVERY_WRITE => {
+                let params = match parse_params::<WorkspaceFileRecoveryWriteParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_recovery_write(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_RECOVERY_LIST => {
+                let params = match parse_params::<WorkspaceFileRecoveryListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_recovery_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKSPACE_FILE_RECOVERY_RESTORE => {
+                let params = match parse_params::<WorkspaceFileRecoveryRestoreParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .workspace_file_recovery_restore(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
             method::WORKSPACE_IDENTITY => self
                 .host
                 .workspace_identity()
@@ -1487,6 +2276,416 @@ impl DeveloperSessionProcessor {
                     .await
                     .map(serde_json::to_value)
             }
+            method::CLOUD_PROJECT_DOWNLOAD_PREPARE => {
+                let params = match parse_params::<CloudProjectDownloadPrepareParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_download_prepare(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_DOWNLOAD_START => {
+                let params = match parse_params::<CloudProjectDownloadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_download_start(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_DOWNLOAD_READ => {
+                let params = match parse_params::<CloudProjectDownloadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_download_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_DOWNLOAD_CANCEL => {
+                let params = match parse_params::<CloudProjectDownloadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_download_cancel(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_DOWNLOAD_RELEASE => {
+                let params = match parse_params::<CloudProjectDownloadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_download_release(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_ATTACHMENT_RECOVERY_READ => {
+                let params = match parse_params::<CloudChatTarget>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_attachment_recovery_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_ATTACHMENT_RECOVERY_LIST => {
+                let params = match parse_params::<AttachmentRecoveryListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_attachment_recovery_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_ATTACHMENT_RECOVERY_CHANGE => {
+                let params = match parse_params::<AttachmentRecoveryChangeParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_attachment_recovery_change(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_UPLOAD_PREPARE => {
+                let params = match parse_params::<CloudUploadPrepareParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_upload_prepare(params, self.client.as_ref())
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_UPLOAD_START => {
+                let params = match parse_params::<CloudUploadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_upload_start(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_UPLOAD_READ => {
+                let params = match parse_params::<CloudUploadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_upload_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_UPLOAD_CANCEL => {
+                let params = match parse_params::<CloudUploadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_upload_cancel(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_UPLOAD_RELEASE => {
+                let params = match parse_params::<CloudUploadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_upload_release(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_UPLOAD_PREPARE => {
+                let params = match parse_params::<CloudProjectUploadPrepareParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_upload_prepare(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_UPLOAD_START => {
+                let params = match parse_params::<CloudProjectUploadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_upload_start(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_UPLOAD_READ => {
+                let params = match parse_params::<CloudProjectUploadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_upload_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_UPLOAD_CANCEL => {
+                let params = match parse_params::<CloudProjectUploadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_upload_cancel(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_UPLOAD_RELEASE => {
+                let params = match parse_params::<CloudProjectUploadId>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_upload_release(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_FILE_REINDEX => {
+                let params = match parse_params::<CloudProjectFileVersion>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_file_reindex(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_FILES_LIST => {
+                let params = match parse_params::<CloudProjectTarget>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_files_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_FILE_PREVIEW => {
+                let params = match parse_params::<CloudProjectFileTarget>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_file_preview(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_LIST => {
+                let params = match parse_params::<CloudProjectListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_READ => {
+                let params = match parse_params::<CloudProjectTarget>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_CREATE => {
+                let params = match parse_params::<CloudProjectCreateParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_create(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_PROJECT_UPDATE => {
+                let params = match parse_params::<CloudProjectUpdateParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_project_update(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_DRAFT_SAVE => {
+                let params = match parse_params::<CloudDraftSaveParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_draft_save(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_CONVERSATION_UPDATE => {
+                let params = match parse_params::<CloudConversationUpdateParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_conversation_update(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_WORKSPACES_LIST => {
+                let params = match parse_params::<CloudWorkspacesListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_workspaces_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_WORKSPACE_SELECT => {
+                let params = match parse_params::<CloudWorkspaceSelectParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_workspace_select(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_MODEL_LIST => {
+                let params = match parse_params::<CloudModelListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_model_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_HISTORY_LIST => {
+                let params = match parse_params::<CloudHistoryListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_history_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_HISTORY_READ => {
+                let params = match parse_params::<CloudHistoryReadParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_history_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_CONVERSATION_CREATE => {
+                let params = match parse_params::<CloudConversationCreateParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_conversation_create(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_TURN_START => {
+                let params = match parse_params::<CloudTurnStartParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_turn_start(params, self.client.as_ref())
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_TURN_READ => {
+                let params = match parse_params::<CloudTurnIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_turn_read(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_TURN_STOP => {
+                let params = match parse_params::<CloudTurnIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_turn_stop(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_TURN_RESUME => {
+                let params = match parse_params::<CloudTurnResumeParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_turn_resume(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_RUN_LIST => {
+                let params = match parse_params::<CloudRunListParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_run_list(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_WORK_PLAN_UPDATE => {
+                let params = match parse_params::<CloudWorkPlanUpdateParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_work_plan_update(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_RUN_ATTACH => {
+                let params = match parse_params::<CloudRunAttachParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_run_attach(params, self.client.as_ref())
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::CLOUD_TURN_DETACH => {
+                let params = match parse_params::<CloudTurnIdParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .cloud_turn_detach(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
             method::ACCOUNT_LOGIN => {
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {
                     return *response;
@@ -1505,6 +2704,16 @@ impl DeveloperSessionProcessor {
                     .account_login_wait(params)
                     .await
                     .map(serde_json::to_value)
+            }
+            method::ACCOUNT_LOGIN_CANCEL => {
+                let params = match parse_params::<AccountLoginWaitParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .account_login_cancel(params)
+                    .await
+                    .map(|()| serde_json::to_value(AcknowledgedResponse { acknowledged: true }))
             }
             method::ACCOUNT_LOGOUT => {
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {
@@ -1734,6 +2943,26 @@ impl DeveloperSessionProcessor {
                     return *response;
                 }
                 self.host.list_hooks().await.map(serde_json::to_value)
+            }
+            method::SETTINGS_INSTRUCTIONS_READ => {
+                let params = match parse_params::<InstructionSettingsReadParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .read_instruction_settings(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::SETTINGS_INSTRUCTIONS_WRITE => {
+                let params = match parse_params::<InstructionSettingsWriteParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .write_instruction_settings(params)
+                    .await
+                    .map(serde_json::to_value)
             }
             method::SETTINGS_READ => {
                 if let Err(response) = parse_optional_params::<NoParams>(&request) {
@@ -1979,6 +3208,36 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .apply_worktree_to_local(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_APPLY_PLAN => {
+                let params = match parse_params::<WorktreeApplyPlanParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .plan_worktree_apply(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_APPLY_COMMIT => {
+                let params = match parse_params::<WorktreeApplyCommitParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .commit_worktree_apply(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::WORKTREE_APPLY_RESULT => {
+                let params = match parse_params::<WorktreeApplyResultParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .read_worktree_apply_result(params)
                     .await
                     .map(serde_json::to_value)
             }

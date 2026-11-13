@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
+import projectContract from './project-contract.json';
 
-export const MANAGED_CLOUD_PROJECTS_PATH = '/api/projects';
+export const MANAGED_CLOUD_PROJECTS_PATH = projectContract.path;
+export const MANAGED_CLOUD_PROJECT_DEFAULT_PAGE_SIZE = projectContract.listDefaultPageSize;
+export const MANAGED_CLOUD_PROJECT_MAX_PAGE_SIZE = projectContract.listMaxPageSize;
+export const MANAGED_CLOUD_PROJECT_MAX_OFFSET = projectContract.listMaxOffset;
 export const MANAGED_CLOUD_PROJECTS_SYNC_PATH = '/api/projects/sync';
 
 const ProjectAccentColorSchema = z.enum(['emerald', 'sky', 'amber', 'rose', 'violet', 'zinc']);
@@ -63,17 +67,21 @@ export const ManagedCloudProjectSchema = z.object({
 export type ManagedCloudProject = z.infer<typeof ManagedCloudProjectSchema>;
 
 export const ManagedCloudProjectListQuerySchema = z.object({
-  limit: z.number().int().min(1).max(100).optional(),
-  offset: z.number().int().min(0).max(10_000).optional(),
+  cursor: z.string().min(1).optional(),
+  limit: z.number().int().min(1).max(projectContract.listMaxPageSize).optional(),
+  offset: z.number().int().min(0).max(projectContract.listMaxOffset).optional(),
 });
 export type ManagedCloudProjectListQuery = z.infer<typeof ManagedCloudProjectListQuerySchema>;
 
 export const ManagedCloudProjectListResponseSchema = z.object({
   projects: z.array(ManagedCloudProjectSchema),
+  hasMore: z.boolean().optional(),
+  nextCursor: z.string().nullable().optional(),
 });
 
-export const PROJECT_DESCRIPTION_MAX_LENGTH = 2_000;
-export const PROJECT_INSTRUCTIONS_MAX_LENGTH = 10_000;
+export const PROJECT_NAME_MAX_LENGTH = projectContract.nameMaxLength;
+export const PROJECT_DESCRIPTION_MAX_LENGTH = projectContract.descriptionMaxLength;
+export const PROJECT_INSTRUCTIONS_MAX_LENGTH = projectContract.instructionsMaxLength;
 
 const ManagedCloudProjectWriteFields = {
   description: z.string().max(PROJECT_DESCRIPTION_MAX_LENGTH).nullable().optional(),
@@ -91,7 +99,7 @@ const ManagedCloudProjectWriteFields = {
 };
 
 export const ManagedCloudProjectCreateRequestSchema = z.object({
-  name: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1).max(PROJECT_NAME_MAX_LENGTH),
   ...ManagedCloudProjectWriteFields,
 });
 export type ManagedCloudProjectCreateRequest = z.infer<
@@ -99,7 +107,7 @@ export type ManagedCloudProjectCreateRequest = z.infer<
 >;
 
 export const ManagedCloudProjectUpdateRequestSchema = z.object({
-  name: z.string().trim().min(1).max(200).optional(),
+  name: z.string().trim().min(1).max(PROJECT_NAME_MAX_LENGTH).optional(),
   isArchived: z.boolean().optional(),
   starred: z.boolean().optional(),
   /** False confines this project's chats to its own memories. */

@@ -39,6 +39,9 @@ use crate::snapshot::{
     update_ref, worktree_blobs, write_paths_from_tree, ChangeStatus,
 };
 
+mod apply;
+pub use apply::{LocalApplyChange, LocalApplySnapshot};
+
 pub use crate::include::IncludeOutcome;
 
 pub const DEFAULT_KEEP: usize = 15;
@@ -308,7 +311,11 @@ impl<'a> WorktreeManager<'a> {
         let (marker, included) = match created {
             Ok(created) => created,
             Err(error) => {
-                self.discard(&checkout, &reserved).await;
+                if let Err(cleanup) = self.discard(&checkout, &reserved).await {
+                    return Err(
+                        error.context(format!("Worktree cleanup could not finish: {cleanup:#}"))
+                    );
+                }
                 return Err(error);
             }
         };
@@ -431,7 +438,7 @@ impl<'a> WorktreeManager<'a> {
     /// out a live lock, so any lock left is stale: it goes first, since git
     /// neither removes nor prunes a locked worktree, and its entry would
     /// otherwise outlive the checkout for good.
-    async fn discard(&self, checkout: &Path, reserved: &Path) {
+    async fn discard(&self, checkout: &Path, reserved: &Path) -> Result<()> {
         let git = Git::at(&self.repo, &self.repository);
         let _ = git
             .run(
@@ -444,22 +451,28 @@ impl<'a> WorktreeManager<'a> {
                 None,
             )
             .await;
-        if checkout.exists() {
-            let _ = git
-                .run(
-                    [
-                        OsStr::new("worktree"),
-                        OsStr::new("remove"),
-                        OsStr::new("--force"),
-                        OsStr::new("--"),
-                        checkout.as_os_str(),
-                    ],
-                    None,
-                )
-                .await;
+        if checkout.try_exists()? {
+            git.ok([
+                OsStr::new("worktree"),
+                OsStr::new("remove"),
+                OsStr::new("--force"),
+                OsStr::new("--"),
+                checkout.as_os_str(),
+            ])
+            .await
+            .context("The archived checkout could not be removed; its host record was retained")?;
         }
-        let _ = std::fs::remove_dir_all(reserved);
-        let _ = git.run(["worktree", "prune"], None).await;
+        match std::fs::remove_dir_all(reserved) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).context("The worktree's host record could not be removed")
+            }
+        }
+        git.ok(["worktree", "prune"])
+            .await
+            .context("The removed worktree's Git metadata could not be pruned")?;
+        Ok(())
     }
 
     /// Checkouts locked by a live process. A lock this crate wrote names the
@@ -536,7 +549,7 @@ impl<'a> WorktreeManager<'a> {
             }
             worktrees.push(self.describe(marker, &reserved, &locked).await);
         }
-        worktrees.sort_by(|a, b| b.marker.created_at.cmp(&a.marker.created_at));
+        worktrees.sort_by_key(|worktree| std::cmp::Reverse(worktree.marker.created_at));
         Ok(worktrees)
     }
 
@@ -577,6 +590,7 @@ impl<'a> WorktreeManager<'a> {
         let snapshot_commit = if worktree.missing {
             worktree.marker.base_commit.clone()
         } else {
+            self.require_archivable_checkout(&worktree.checkout).await?;
             let tree = snapshot_tree(
                 &self.checkout_runner(&worktree.checkout)?,
                 &worktree.checkout,
@@ -602,12 +616,48 @@ impl<'a> WorktreeManager<'a> {
             replaced.as_deref(),
         )
         .await?;
-        self.discard(&worktree.checkout, &reserved).await;
+        if !worktree.missing {
+            self.require_archivable_checkout(&worktree.checkout).await?;
+        }
+        self.discard(&worktree.checkout, &reserved).await?;
         Ok(ArchiveOutcome {
             id: id.to_string(),
             snapshot_ref,
             snapshot_commit,
         })
+    }
+
+    async fn require_archivable_checkout(&self, checkout: &Path) -> Result<()> {
+        let runner = self.checkout_runner(checkout)?;
+        let git = Git::at(&runner, checkout);
+        let ignored = git
+            .ok([
+                "ls-files",
+                "--others",
+                "--ignored",
+                "--exclude-standard",
+                "-z",
+            ])
+            .await?;
+        anyhow::ensure!(
+            ignored.is_empty(),
+            "This worktree contains ignored files that its Git archive would not retain. The checkout was kept. Move files you need to keep or remove disposable files before archiving."
+        );
+        let untracked = git
+            .ok(["ls-files", "--others", "--exclude-standard", "-z"])
+            .await?;
+        anyhow::ensure!(
+            !untracked
+                .split(|byte| *byte == 0)
+                .any(|path| path.ends_with(b"/")),
+            "This worktree contains a nested repository that its Git archive would not retain. The checkout was kept. Move that repository before archiving."
+        );
+        let tracked = git.ok(["ls-files", "--stage", "-z"]).await?;
+        anyhow::ensure!(
+            !tracked.split(|byte| *byte == 0).any(|entry| entry.starts_with(b"160000 ")),
+            "This worktree contains a submodule whose local files its Git archive would not retain. The checkout was kept. Preserve the submodule separately before archiving."
+        );
+        Ok(())
     }
 
     /// Archive the oldest worktrees beyond the keep count. Pinned and active
@@ -1220,6 +1270,197 @@ mod tests {
             "keep me"
         );
         assert!(manager.list().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn archiving_keeps_ignored_files_out_of_git_and_retains_the_checkout() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        std::fs::write(repo.path().join(".gitignore"), ".private\n").unwrap();
+        git(repo.path(), &["add", ".gitignore"]);
+        git(repo.path(), &["commit", "-m", "ignore private files"]);
+        let root = tempfile::tempdir().unwrap();
+        let manager = manager(root.path(), repo.path()).await;
+        let created = manager
+            .create(
+                StartPoint::Ref {
+                    name: "HEAD".into(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+        let checkout = &created.worktree.checkout;
+        std::fs::write(checkout.join(".private"), "synthetic private fixture\n").unwrap();
+        std::fs::write(checkout.join("unsaved.txt"), "unsaved\n").unwrap();
+        assert!(manager
+            .archive(&created.worktree.marker.id)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("ignored files"));
+        assert_eq!(
+            std::fs::read(checkout.join(".private")).unwrap(),
+            b"synthetic private fixture\n"
+        );
+        assert_eq!(
+            std::fs::read(checkout.join("unsaved.txt")).unwrap(),
+            b"unsaved\n"
+        );
+        assert_eq!(manager.list().await.unwrap().len(), 1);
+        assert_eq!(git(repo.path(), &["for-each-ref", ARCHIVE_REF_PREFIX]), "");
+        std::fs::remove_file(checkout.join(".private")).unwrap();
+        assert!(manager.archive(&created.worktree.marker.id).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn archiving_refuses_untracked_nested_repository_contents() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        let root = tempfile::tempdir().unwrap();
+        let manager = manager(root.path(), repo.path()).await;
+        let created = manager
+            .create(
+                StartPoint::Ref {
+                    name: "HEAD".into(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+        let nested = created.worktree.checkout.join("nested");
+        std::fs::create_dir(&nested).unwrap();
+        init_repo(&nested);
+        std::fs::write(nested.join("unsaved.txt"), "nested edits\n").unwrap();
+        assert!(manager
+            .archive(&created.worktree.marker.id)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("nested repository"));
+        assert_eq!(
+            std::fs::read(nested.join("unsaved.txt")).unwrap(),
+            b"nested edits\n"
+        );
+        assert_eq!(manager.list().await.unwrap().len(), 1);
+        assert_eq!(git(repo.path(), &["for-each-ref", ARCHIVE_REF_PREFIX]), "");
+        git(&created.worktree.checkout, &["add", "nested"]);
+        assert!(manager
+            .archive(&created.worktree.marker.id)
+            .await
+            .unwrap_err()
+            .to_string()
+            .contains("submodule"));
+        assert_eq!(
+            std::fs::read(nested.join("unsaved.txt")).unwrap(),
+            b"nested edits\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn creation_reports_cleanup_refusal_and_keeps_ignored_files() {
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        std::fs::write(repo.path().join(".gitignore"), ".private\n").unwrap();
+        git(repo.path(), &["add", ".gitignore"]);
+        git(repo.path(), &["commit", "-m", "ignore private files"]);
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join(SETTINGS_FILE), r#"{"keep":1}"#).unwrap();
+        let manager = manager(root.path(), repo.path()).await;
+        let first = manager
+            .create(
+                StartPoint::Ref {
+                    name: "HEAD".into(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+        std::fs::write(
+            first.worktree.checkout.join(".private"),
+            "private fixture\n",
+        )
+        .unwrap();
+        let next = manager
+            .create(
+                StartPoint::Ref {
+                    name: "HEAD".into(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(next.worktree.checkout.is_dir());
+        assert_eq!(next.cleanup_failures.len(), 1);
+        assert_eq!(next.cleanup_failures[0].0, first.worktree.marker.id);
+        assert!(next.cleanup_failures[0].1.contains("ignored files"));
+        assert!(next.cleaned.is_empty());
+        assert_eq!(
+            std::fs::read(first.worktree.checkout.join(".private")).unwrap(),
+            b"private fixture\n"
+        );
+        assert_eq!(manager.list().await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_failed_git_removal_never_falls_back_to_deleting_the_checkout() {
+        struct RejectRemoval(std::sync::atomic::AtomicBool);
+        #[async_trait::async_trait]
+        impl CommandRunner for RejectRemoval {
+            async fn output(
+                &self,
+                command: Command,
+                stdin: Option<Vec<u8>>,
+                timeout: Option<std::time::Duration>,
+            ) -> std::io::Result<std::process::Output> {
+                let args = command.as_std().get_args().collect::<Vec<_>>();
+                if args
+                    .windows(2)
+                    .any(|pair| pair == [OsStr::new("worktree"), OsStr::new("remove")])
+                {
+                    self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+                    return Err(std::io::Error::other("injected Git removal failure"));
+                }
+                TokioCommandRunner.output(command, stdin, timeout).await
+            }
+        }
+        let repo = tempfile::tempdir().unwrap();
+        init_repo(repo.path());
+        let root = tempfile::tempdir().unwrap();
+        let workspace = Workspace::discover(&TokioCommandRunner, repo.path())
+            .await
+            .unwrap()
+            .unwrap();
+        let runner = RejectRemoval(std::sync::atomic::AtomicBool::new(false));
+        let manager = WorktreeManager::open(&runner, root.path(), &workspace);
+        let created = manager
+            .create(
+                StartPoint::Ref {
+                    name: "HEAD".into(),
+                },
+                None,
+            )
+            .await
+            .unwrap();
+        std::fs::write(created.worktree.checkout.join("unsaved.txt"), "retained\n").unwrap();
+        let error = manager
+            .archive(&created.worktree.marker.id)
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("could not be removed"));
+        assert!(runner.0.load(std::sync::atomic::Ordering::SeqCst));
+        assert_eq!(
+            std::fs::read(created.worktree.checkout.join("unsaved.txt")).unwrap(),
+            b"retained\n"
+        );
+        assert_eq!(manager.list().await.unwrap().len(), 1);
+        assert!(created
+            .worktree
+            .checkout
+            .parent()
+            .unwrap()
+            .join(MARKER_FILE)
+            .exists());
     }
 
     #[tokio::test]

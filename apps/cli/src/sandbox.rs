@@ -1545,6 +1545,20 @@ pub(crate) fn background_command(
     })
 }
 
+#[cfg(unix)]
+pub(crate) fn operator_background_command(
+    manager: &SandboxManager,
+    invocation: Invocation<'_>,
+    cwd: &Path,
+    terminal: Option<&Path>,
+) -> Result<crate::terminals::PreparedCommand> {
+    let mut prepared = background_command(Some(manager), invocation, cwd, terminal)?;
+    prepared
+        .command
+        .env_remove(crate::interactive::AGENT_SPAWNED_ENV);
+    Ok(prepared)
+}
+
 /// A sandboxed command's process group ends when the command exits, so
 /// nothing it left in the background keeps running beside host git.
 async fn execute_sandboxed_in_environment(

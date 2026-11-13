@@ -4,7 +4,13 @@
 //! JSONL stdio or authenticated WebSocket: threads, turns, streaming,
 //! interruption, MCP status, and approval round-trips share one contract.
 
+mod client;
 mod developer_sessions;
+
+pub use client::{
+    BackgroundDeveloperSessionClient, DeveloperSessionClient, DeveloperSessionClientError,
+    DeveloperSessionClientEvent, DeveloperSessionClientLimits,
+};
 
 pub use developer_sessions::{
     method_effect, run_developer_session_stdio, runs_detached, serve_developer_session_io,

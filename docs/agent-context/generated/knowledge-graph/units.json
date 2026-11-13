@@ -2411,15 +2411,15 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1791,
+      "files": 1931,
       "roles": {
         "asset": 59,
-        "config": 20,
+        "config": 22,
         "doc": 1,
-        "other": 22,
-        "source": 1087,
+        "other": 23,
+        "source": 1176,
         "style": 2,
-        "test": 600
+        "test": 648
       }
     },
     {
@@ -2621,7 +2621,7 @@
         "config": 83,
         "doc": 51,
         "generated": 2,
-        "migration": 740,
+        "migration": 742,
         "other": 37,
         "source": 3521,
         "style": 35,
@@ -2642,11 +2642,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 355,
+      "files": 356,
       "roles": {
         "asset": 20,
         "config": 37,
-        "doc": 283,
+        "doc": 284,
         "other": 6,
         "source": 6,
         "test": 3
@@ -2671,13 +2671,13 @@
       "lanes": [
         "rust-runtime-protocol"
       ],
-      "files": 662,
+      "files": 817,
       "roles": {
         "config": 13,
         "generated": 4,
         "other": 1,
-        "source": 610,
-        "test": 34
+        "source": 762,
+        "test": 37
       }
     },
     {
@@ -4006,11 +4006,11 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 169,
+      "files": 176,
       "roles": {
-        "config": 7,
+        "config": 13,
         "source": 102,
-        "test": 60
+        "test": 61
       }
     },
     {
@@ -4109,7 +4109,7 @@
       "path": "packages/contracts/local-runtime",
       "name": "@agiworkforce/local-runtime-contract",
       "kind": "package",
-      "purpose": "Typed contract for the privileged Electron local runtime. Pure types and validation; performs no I/O.",
+      "purpose": "Typed contract for privileged desktop runtimes. Pure types and validation; performs no I/O.",
       "owner": "Privileged local runtime contract",
       "trustBoundary": "the request and response shapes the Electron shell's privileged local runtime accepts, with the path-safety and capability predicates that decide what a workspace grant reaches; pure types and validation, performs no I/O",
       "status": "active-canonical-owner",
@@ -4130,9 +4130,9 @@
         "packages/platform/utils"
       ],
       "lanes": [],
-      "files": 44,
+      "files": 45,
       "roles": {
-        "config": 3,
+        "config": 4,
         "source": 26,
         "test": 15
       }
@@ -4266,10 +4266,10 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 818,
+      "files": 961,
       "roles": {
-        "config": 27,
-        "generated": 488,
+        "config": 29,
+        "generated": 629,
         "source": 173,
         "test": 130
       }
@@ -4419,7 +4419,8 @@
       "entry": [
         ".",
         "./search",
-        "./src/index.ts"
+        "./src/index.ts",
+        "./testing"
       ],
       "agentsDoc": "AGENTS.md",
       "checks": [
@@ -4432,10 +4433,10 @@
       "lanes": [
         "database-compliance"
       ],
-      "files": 30,
+      "files": 31,
       "roles": {
         "config": 3,
-        "source": 14,
+        "source": 15,
         "test": 13
       }
     },
@@ -5006,11 +5007,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 18,
+      "files": 24,
       "roles": {
-        "config": 1,
-        "other": 16,
-        "source": 1
+        "config": 2,
+        "other": 19,
+        "source": 3
       }
     },
     {

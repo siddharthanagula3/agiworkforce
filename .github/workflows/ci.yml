@@ -188,6 +188,16 @@ jobs:
             echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA"
           } >> "$GITHUB_ENV"
 
+      - name: Verify isolated project object lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          knowledge_pg_package="$(dpkg-query -W -f '${binary:Package}\n' 'postgresql-[0-9]*' | grep -E '^postgresql-[0-9]+$' | sort -V | tail -n 1)"
+          knowledge_pg_initdb="$(dpkg -L "$knowledge_pg_package" | grep '/bin/initdb$')"
+          export PATH="$(dirname "$knowledge_pg_initdb"):$PATH"
+          postgres --version
+          pnpm --filter @agiworkforce/web test:knowledge-lifecycle
+
       - name: Apply and verify canonical Postgres migrations
         run: |
           pnpm test:db-migrate
@@ -564,7 +574,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: '1.94.0'
+          toolchain: '1.99.1'
 
       # The registry crate depends only on serde, serde_json and thiserror, so
       # it needs no system libraries and costs a fraction of the native lane.
@@ -589,7 +599,7 @@ jobs:
       - name: Install system dependencies (Linux)
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential curl wget file pkg-config libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev libleptonica-dev libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libwebp-dev tesseract-ocr libtesseract-dev libasound2-dev xvfb libclang-dev apparmor-profiles bubblewrap
+          sudo apt-get install -y build-essential curl wget file pkg-config libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev libleptonica-dev libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libwebp-dev tesseract-ocr libtesseract-dev libasound2-dev xvfb libclang-dev libfontconfig-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libvulkan1 libzstd-dev cmake clang apparmor-profiles bubblewrap
 
       - name: Prepare unprivileged Linux sandbox
         run: /usr/bin/python3 -I -S scripts/prepare-linux-sandbox.py
@@ -607,7 +617,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: '1.94.0'
+          toolchain: '1.99.1'
           components: clippy, rustfmt
 
       - name: Cache Rust dependencies
@@ -618,7 +628,7 @@ jobs:
           cache-directories: ~/.cargo/bin
 
       - name: Ensure clippy is available
-        run: rustup component add clippy --toolchain 1.94.0
+        run: rustup component add clippy --toolchain 1.99.1
 
       # H41: Verify exact Rust toolchain version before running clippy/tests
 
@@ -919,7 +929,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: '1.94.0'
+          toolchain: '1.99.1'
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -1395,15 +1405,19 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+
       - name: Install system dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential curl wget file pkg-config libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev libleptonica-dev libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libwebp-dev tesseract-ocr libtesseract-dev libasound2-dev xvfb libclang-dev
+          sudo apt-get install -y build-essential curl wget file pkg-config libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev libleptonica-dev libpng-dev libjpeg-dev libtiff-dev zlib1g-dev libwebp-dev tesseract-ocr libtesseract-dev libasound2-dev xvfb libclang-dev libfontconfig-dev libwayland-dev libx11-xcb-dev libxkbcommon-x11-dev libvulkan1 libzstd-dev cmake clang
 
       - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: '1.94.0'
+          toolchain: '1.99.1'
           components: clippy, rustfmt
 
       - name: Cache Rust dependencies
@@ -1415,7 +1429,7 @@ jobs:
           key: all-features
 
       - name: Ensure clippy is available
-        run: rustup component add clippy --toolchain 1.94.0
+        run: rustup component add clippy --toolchain 1.99.1
 
       - name: Prepare native messaging sidecar placeholder
         run: |
@@ -1481,9 +1495,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+
       - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: '1.94.0'
+          toolchain: '1.99.1'
           components: clippy
 
       - name: Cache Rust dependencies
@@ -1499,6 +1517,13 @@ jobs:
           mkdir -p apps/desktop/src-tauri/binaries
           printf '#!/usr/bin/env sh\nexit 1\n' > "apps/desktop/src-tauri/binaries/native_messaging_host-${triple}"
           chmod +x "apps/desktop/src-tauri/binaries/native_messaging_host-${triple}"
+
+      - name: Ensure the Metal compiler is available
+        run: |
+          if ! xcrun --find metal >/dev/null 2>&1; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+          xcrun --find metal
 
       - name: cargo check (default features, macOS)
         working-directory: apps/desktop/src-tauri
@@ -1528,9 +1553,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+
       - uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
-          toolchain: '1.94.0'
+          toolchain: '1.99.1'
           components: clippy
           cache: false
 

@@ -76,6 +76,29 @@ Resolve each platform selector before producing an outcome. Report file interact
 
 After correction,114 cases in7 suites pass, including all26 real-content-handler cases. Four older escalation fixtures required real matching DOM elements instead of nonexistent fields/empty selectors; their positive assertions remain. Required-file integration fixtures now actually require a file and explicitly assert the file trigger, so another missing answer cannot satisfy the test by accident. Current Chrome typecheck passes; final lint/build and native form checks are tracked in docs/launch/QA_LEDGER.md. Keep this row and the entire supplied outer continuation folder until native acceptance and every other finding in that folder are resolved and verified.
 
+## DESKTOP-GPUI-ACCESSIBILITY-01
+
+Current candidate: GPUI 0.3.11 includes AccessKit. Local macOS checks expose Account, Work, Cloud history, folder consent, file-browser controls, editor text and complete terminal output rows. Unicode paste and Cmd+S persist exact bytes. A native terminal launch exposed repeated glyph nodes sharing one source-location ID; stable row identities now prevent that crash and expose coherent row labels. The same missing scopes were corrected on repeated messages, plans, approvals and list rows. Two real terminal tabs accept input, retain output and stop through the window-close confirmation.
+
+Native Cloud checks now cover multi-message history, model choice, Unicode sending, cold reopening, two-action approval cancellation/allow/deny and paused resume. Custom picker rows expose their names and guidance. Assistant documents expose the toolkit parser's committed rendered text and retain source selection/code-copy behavior. Complete screen-reader reading/navigation, semantic table/link interaction, focus announcements and physical IME remain unverified. The Mac locked before the remaining native plan/Stop/metadata/workspace journeys. The former disappearing-text finding was an inline-image observation error; raw pixels pass. See [current Cloud evidence](../plan/desktop-gpui-migration.md#native-cloud-interface-verification). This row remains open for the unverified accessibility journeys.
+
+The 2026-11-10 isolated file-recovery check exposed original and recovered editor
+text as separately named native fields. Folder regrant, retained-text review,
+scrolling, the restore confirmation and restoration into the editor were observed
+across a native restart, with independent file reads confirming unchanged disk
+bytes. This does not qualify VoiceOver, complete keyboard navigation, readonly
+semantics, physical IME or narrow layouts. See the
+[file-recovery evidence](../plan/desktop-gpui-migration.md#host-owned-code-file-recovery).
+
+The same day's recovery-browser check exposed retained text after a synthetic
+file rename, with separately named path input and create/discard actions.
+Native cancellation, Enter-triggered confirmation, exclusive creation, occupied
+destination refusal and confirmed discard were observed with independent file
+and store checks. The still-open editor preserved its text and stopped claiming
+a retained copy after discard. This is bounded wide/dark native evidence;
+complete keyboard traversal, VoiceOver and narrow/light qualification remain
+open. See the [browser evidence](../plan/desktop-gpui-migration.md#discovering-and-copying-retained-code-edits).
+
 ## MOBILE-IOS-APP-STORE-2026-09-26
 
 The earlier iOS 1.2.0 Release configuration built and launched in Simulator. A clean
@@ -9273,9 +9296,10 @@ universal settings or memory lifecycle closure is established.
 ## WEB-PROJECT-OBJECT-LIFECYCLE-01
 
 - **Severity/status:** Medium, OPEN; source-derived object availability and recovery
-  design dependency, reviewed 2026-11-04. No observed loss, cross-owner disclosure,
-  storage operation or runtime reproduction is claimed. No production fix is approved.
-- **Concurrent reference creation:** `apps/web/app/api/projects/[id]/duplicate/route.ts`
+  design dependency, reviewed 2026-11-04. No observed production loss, cross-owner
+  disclosure or live storage operation is claimed. No production fix is approved.
+- **Initial source evidence, before the candidate correction below:**
+  `apps/web/app/api/projects/[id]/duplicate/route.ts`
   reads the owner/org-scoped live source project before its transaction, then copies
   knowledge rows with `INSERT ... SELECT`, retaining `storage_uri`, without source
   lifecycle locks. Single-file DELETE in `knowledge-files/[fileId]/route.ts` marks
@@ -9288,8 +9312,8 @@ universal settings or memory lifecycle closure is established.
   deployment behavior or proof that every concurrent duplicate loses its object.
 - **Partial removal is not rollback:** `deleteProjectKnowledgeObject` in
   `lib/server/project-knowledge-object-storage.ts` deletes private storage before an
-  optional legacy-public object; local development removes bytes and metadata with
-  parallel unlinks. One removal can succeed before another rejects. Single-file DELETE
+  optional legacy-public object; local development removes bytes and metadata as
+  separate operations. One removal can succeed before another rejects. Single-file DELETE
   restores `deleted_at = null` on any object-removal error without a per-object receipt
   proving surviving bytes; even that restoration can fail. Whole-project object cleanup
   instead logs errors after metadata deletion. Neither behavior establishes atomic
@@ -9307,7 +9331,77 @@ universal settings or memory lifecycle closure is established.
   must cover duplicate, file removal and whole-project release together and define
   how callers recover uncertain results. A metadata-only restoration or an ad-hoc
   database lock held across remote storage calls is not an established solution.
-  No new retry/deletion policy, tests, checks, database or network actions were performed.
+  The initial 2026-11-04 review performed no tests, checks, database or network actions.
+
+- **2026-11-09 implementation progress, still OPEN:** append-only migration 0419
+  and the server lifecycle reconciliation driver now have isolated real-PostgreSQL
+  evidence for reference fencing, both duplicate/delete orderings, repeatable-read
+  serialization, strict scope privileges, target receipts and stale-lease/lost-ack
+  recovery. Initial storage tests use injected maps. The current storage owner now
+  exposes immutable cleanup targets and captures the actual client, bucket and
+  region before work begins. Loopback HTTP tests observe signed S3 DELETE requests;
+  real temporary-file tests paired with the private PostgreSQL harness verify that
+  byte deletion followed by metadata failure stays pending, preserves receipts and
+  refuses a changed local namespace on retry. No real bucket, live database or
+  production fix is claimed. Destructive lifecycle callers, durable dispatch, legacy URL normalization and
+  erasure/retention wiring remain prerequisites. Native removal stays disabled.
+  Current implementation/evidence owner: `audit/plan/desktop-gpui-migration.md`,
+  shared object lifecycle prerequisite section.
+
+- **Legacy normalization progress, still OPEN:** a review-first operational tool
+  now resolves bounded inventories through the configured URI owner, refuses
+  unknown mappings and mixed live owning scopes, and applies only the unchanged
+  reviewed mapping under bounded table locks. The private PostgreSQL harness
+  checks rollback, RLS-filtered inventory refusal, waiting writers and lost commit
+  acknowledgement. This is not evidence of deployed-data normalization. Durable
+  cleanup dispatch, legacy storage namespace/region adoption and destructive
+  lifecycle/erasure callers remain unconnected; native removal remains disabled.
+
+- **Registration provenance progress, still OPEN:** new sealed writes return an
+  immutable destination receipt, inserted with the source row and atomically
+  pinned by the reference trigger. Duplicates inherit it; conflicting metadata
+  is rejected. Cleanup cannot adopt an unknown namespace or delete additional
+  available targets. Restricted-role PostgreSQL, actual registration/duplication
+  SQL, real local sealing/cleanup and loopback SDK checks exercise this candidate.
+  Legacy adoption, original job-region ownership, durable dispatch, deletion and
+  erasure callers, migration rollout and native acceptance remain open.
+
+- **2026-11-10 durable dispatch progress, still OPEN:** the existing cron/queue
+  now has an atomic retired-object job handoff, stable pointer, worker/lease and
+  declared-region checks, persisted target receipts and canonical hold checks.
+  Private PostgreSQL and file fixtures cover commit uncertainty, concurrency,
+  owner cascades, worker recovery, partial failure, cancellation and holds.
+  Producer conversion, legacy adoption, erasure/retention inventory, backup and
+  version handling, hold/deletion linearization, operator repair after pruning,
+  live regional/CI qualification and native acceptance remain prerequisites.
+  No production fix, migration apply or real cloud deletion is claimed.
+
+- **2026-11-10 producer conversion, still OPEN:** file/project DELETE and sync
+  tombstones now retire metadata and references transactionally, without inline
+  object deletion or metadata restoration after storage failure. Scoped project
+  release and conversation detachment finish before acknowledgement. A compiled,
+  scope-checked boolean hold function preserves administrative-record privacy for
+  ordinary application owners. Parent admission/retirement locking and a
+  READ-COMMITTED-only parent soft-delete transition fence overlapping reference
+  creation; other isolation levels fail with 40001. Private PostgreSQL fixtures
+  exercise ordinary-role admission, held refusals, copied-reference retention,
+  actual queued file cleanup and both observed parent-lock orderings. This is an
+  unapplied candidate, not a production repair. Account/retention/staging callers,
+  legacy provenance, backup/version handling, client uncertain-result recovery,
+  hold/deletion linearization, operator repair, production isolation/region/CI
+  qualification and native acceptance remain open.
+
+- **2026-11-10 project retention conversion, still OPEN:** the project-domain
+  sweep now locks a bounded workspace batch, retires sources through the shared
+  project owner and removes records in one transaction. It performs no inline
+  byte removal. Project-file holds cover tombstoned source metadata as well as
+  active sources, without holding empty projects solely for that resource type.
+  Private PostgreSQL tests cover copied real-file retention, cleanup jobs after
+  parent deletion, two-project rollback, lost commit acknowledgement, late holds,
+  overlapping sweeps and blocked late reference admission. Account-erasure and
+  unregistered/staging producers, backups/versions, legacy provenance, uncertain
+  client outcomes, hold/deletion linearization, deployment and native acceptance
+  remain open. No production repair or migration apply is claimed.
 
 Update 2026-11-10: `f84d38a885` stops the project retention sweep listing a `storage_uri` that another live knowledge file in a recent or held project still references, and treats a `project_file`-only hold as holding the project (`lib/services/domain-retention-service.ts:78-102`, `domain-retention-service.test.ts:166,181`); checked by SQL-text tests only, not against Postgres. Duplicate-route races and object-removal recovery remain open.
 

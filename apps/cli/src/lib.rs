@@ -858,6 +858,8 @@ enum Command {
     Licenses,
     /// Run app server for IDE integration.
     AppServer {
+        #[arg(long, help = "Serve account operations without opening a coding workspace", conflicts_with_all = ["workspace_consent", "workspace_consent_at_ms"])]
+        account_only: bool,
         /// Canonical folder explicitly approved by a native host for this stdio process.
         /// Does not save trust or change tool approval and sandbox policies.
         #[arg(long, value_name = "DIRECTORY", requires = "workspace_consent_at_ms")]
@@ -1822,7 +1824,15 @@ fn runs_without_a_valid_config(cli: &Cli) -> bool {
 }
 
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
-    if cli.dump_system_prompt {
+    if cli.dump_system_prompt
+        || matches!(
+            cli.command,
+            Some(Command::AppServer {
+                account_only: true,
+                ..
+            })
+        )
+    {
         return false;
     }
 
@@ -5443,7 +5453,7 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             } else {
                 runtime::session_control::list_active_managed_sessions().unwrap_or_default()
             };
-            summaries.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+            summaries.sort_by_key(|summary| std::cmp::Reverse(summary.created_at));
             summaries.truncate(limit);
             if summaries.is_empty() {
                 println!(
@@ -5724,6 +5734,26 @@ fn enter_repo_directory(repo: &str) -> Result<std::path::PathBuf> {
 /// Main async entry point, called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
+
+    if let Some(Command::AppServer {
+        account_only: true,
+        listen,
+        ..
+    }) = &cli.command
+    {
+        anyhow::ensure!(
+            listen == "stdio",
+            "An account-only connection supports only stdio"
+        );
+        anyhow::ensure!(
+            cli.repo.is_none() && cli.worktree.is_none(),
+            "An account-only connection cannot open a repository or worktree"
+        );
+        let _ = init_tracing(cli.verbose, cli.debug.as_ref());
+        let host = std::sync::Arc::new(app_server::CliAccountHost::new());
+        let capabilities = host.capabilities();
+        return app_server::run_developer_session_stdio(host, capabilities).await;
+    }
 
     // Plain mode has to be in force before anything prints, including the
     // banner and any spinner a subcommand starts, so it is published here
@@ -6456,6 +6486,7 @@ async fn run_cli(mut cli: Cli) -> Result<()> {
                 remote_control::run(host, &workspace_root, app_config.account_privacy_mode()).await
             }
             Command::AppServer {
+                account_only: _,
                 workspace_consent: _,
                 workspace_consent_at_ms: _,
                 listen,

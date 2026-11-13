@@ -21,6 +21,11 @@ open engineering follow-ups are rows in `registers/known-flaws.md`.
 
 ## Open work, by kind
 
+[`plan/desktop-gpui-migration.md`](plan/desktop-gpui-migration.md) is owned by
+Desktop maintainers and Rust platform. It tracks the native desktop replacement;
+close it after native acceptance, release cutover, and deliberate retirement of
+the displaced implementations.
+
 [`live-check/seo-ai-visibility.md`](live-check/seo-ai-visibility.md) is owned by Web and product content / growth. It records the November 7 search baseline, locally verified discovery changes, finished initial content and the remaining publication, source-review and first-party measurement work. Close it after those actions are verified or explicitly declined; its dated observations live in `baselines/seo-ai-visibility-2026-11-07.json`.
 
 Counts in the tables below were taken on 2026-11-11.

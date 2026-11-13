@@ -4,6 +4,15 @@ This file documents source code in this proprietary repository that was
 ported from third-party open-source projects, along with the upstream license
 that travels with that code.
 
+## SQLCipher
+
+- **Upstream**: [sqlcipher/sqlcipher, v4.20.0](https://github.com/sqlcipher/sqlcipher/releases/tag/v4.20.0), SQLite baseline 3.54.1
+- **License**: BSD-3-Clause (Zetetic's complete notice is retained at `patches/sqlcipher-src/LICENSE`; the underlying SQLite source retains its public-domain dedication)
+- **Imported into**: `patches/sqlcipher-src/sqlcipher/`
+- **Source**: the unmodified `sqlcipher.c`, `sqlite3.h` and SQLCipher license from crates.io `sqlcipher-src@420.0.0+sqlcipher-4.20.0-sqlite-3.54.1-libtomcrypt-1.18.2`. Archive SHA-256: `fd6b5280ed2593d07b2816ec531821c15c306903bcca224716f1fbcc2bbfedfe`. No libtomcrypt files or upstream Rust wrapper are included; the existing OpenSSL provider remains in use.
+- **Local integration**: an original minimal source-directory carrier satisfies `libsqlite3-sys` 0.39.1's exact `419.0.6` build dependency. Its local version `419.0.6+agi.420` denotes that constraint, not the engine version. Its build script verifies the imported files' hashes. Remove this patch when the upstream binding selects a SQLCipher source with SQLite >=3.54.0. Retained Tauri encryption tests verify the actual linked SQLite/SQLCipher versions and an encrypted database generated with the previous engine.
+- **Distribution**: the Cargo notice collector includes this native source dependency and its complete license, including when the source is a local Cargo patch.
+
 ## OpenClaw
 
 - **Upstream**: [openclaw/openclaw](https://github.com/openclaw/openclaw)

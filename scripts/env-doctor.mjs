@@ -448,6 +448,7 @@ function checkExampleContracts() {
     maxBuffer: GIT_MAX_BUFFER,
     cwd: REPO_ROOT,
     encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
   })
     .split(/\r?\n/)
     .filter(Boolean);

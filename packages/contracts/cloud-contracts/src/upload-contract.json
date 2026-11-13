@@ -1,0 +1,6 @@
+{
+  "resumablePath": "/api/files/uploads",
+  "partBytes": 5242880,
+  "transferTimeoutMs": 300000,
+  "abortTimeoutMs": 5000
+}

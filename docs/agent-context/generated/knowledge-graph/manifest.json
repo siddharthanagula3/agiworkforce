@@ -23,6 +23,7 @@
     "agiworkforce-cli",
     "agiworkforce-command-registry",
     "agiworkforce-desktop",
+    "agiworkforce-desktop-gpui",
     "agiworkforce-execpolicy",
     "agiworkforce-llm",
     "agiworkforce-mcp",

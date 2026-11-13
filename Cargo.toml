@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "apps/desktop/src-tauri",
+  "apps/desktop/gpui",
   "apps/cli",
   "crates/*",
 ]
@@ -11,7 +12,7 @@ members = [
 # app-server, command-registry and utils-image. What remains unconverged is the
 # desktop's two chat engines (core/agi/core.rs and
 # sys/commands/chat/send_message_execution.rs).
-exclude = []
+exclude = ["patches/sqlcipher-src"]
 resolver = "2"
 
 # Workspace-wide clippy lints (codex-rs `Cargo.toml#[workspace.lints.clippy]`
@@ -80,6 +81,9 @@ debug = 0
 opt-level = 0
 
 [patch.crates-io]
+# libsqlite3-sys 0.39.1 pins the older SQLCipher source carrier. Preserve its
+# build API while compiling the fixed SQLCipher 4.20.0 / SQLite 3.54.1 source.
+sqlcipher-src = { path = "patches/sqlcipher-src" }
 # ZIP 9 removes the archive extraction issues in RUSTSEC-2026-0367/0368/0369.
 # Pin reviewed migrations until matching releases are published: docx-rs 0.4.22
 # and tauri-plugin-updater 2.14.0 still require zip 8 or 4 on crates.io.

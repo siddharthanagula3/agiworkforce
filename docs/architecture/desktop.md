@@ -9,6 +9,79 @@ The public AGI Desktop product is the Electron application under
 `apps/desktop/src-tauri` is retained for internal value and compatibility; it
 does not define a second public Desktop product.
 
+The founder authorized starting a GPUI migration on 2026-11-08. The opt-in
+development host at `apps/desktop/gpui` uses the existing CLI developer-session
+protocol through separate account-only and consented workspace connections. Its
+Code path supports folder sessions, model discovery, composer submission,
+streamed output, interruption and approvals. Its separate Consumer Cloud path
+supports saved history and attachment-reference continuity, versioned conversation metadata/model selection,
+workspace-bound project metadata/conversations and recoverable Work runs through the hosted contracts. Cloud model preferences stay
+on their conversation record, with no native private copy. Saved user-file references
+are displayed as filename/type/size metadata and passed by asset ID to the existing
+authorized gateway hydrator; native history never opens metadata URLs. Invalid
+references, workspace mismatches and oversized serialized context stop the send
+before gateway dispatch. Reviewed native chat uploads use the shared account
+upload engine, with explicit file selection/review and message-bound attachment
+references. Completed unsent references have scoped private device recovery;
+uncertain sends require review, and Temporary Chats suppress retention. In-flight
+upload recovery and full native acceptance remain open. Inline file/image previews and downloads from these transcript labels
+remain unimplemented. Cloud draft writes use
+the shared independent draft revision; native pending text remains bound to its
+captured account and workspace until saved or explicitly resolved. Native end-to-end
+conversation acceptance is pending; it is not yet a replacement release. Cloud continuity and Host Developer remain separate
+boundaries throughout migration. The remaining migration and release gates live
+in `audit/plan/desktop-gpui-migration.md`.
+
+Code file recovery is owned by the CLI host, under its private configuration
+root. Its bounded recovery document is keyed by the granted folder identity and
+relative file path. Retaining or reading edits does not change workspace files
+or enter account Cloud storage. The recovery browser lists metadata for the
+current recorded folder identity, including missing files. A reviewed copy can
+create an unused relative path in an existing folder through the host's anchored
+save authority; it never replaces an existing destination or consumes recovery.
+Explicit discard remains separate and updates any open editor's recovery state.
+Reopening an existing file can also show retained edits for review and restoration
+into the editor. Saving the workspace file still uses
+its checked file revision. Concurrent recovery writes use versioned receipts;
+discard invalidates older writes so a late request cannot recreate discarded
+text. Corrupt or unsupported recovery data is retained and reported, never
+silently replaced with an empty store. This implementation advertises recovery
+on Unix hosts. Windows private storage, recovery after complete folder removal,
+directory-identifier lifetime/reuse, and full native interaction/accessibility
+qualification remain open. Code message drafts still lack durable host persistence.
+
+The opt-in Code settings panel edits additional instruction files through the
+CLI owner, with explicit profile/folder scope and a per-file revision. Native
+saves change one file, retain conflicting editor text and require confirmation.
+Empty native saves leave an empty instruction file; the older settings method
+retains its explicit empty-string deletion contract through the same anchored
+writer. The native panel reports configured defaults read-only and can request
+the context engine's discovered source list. Other instruction sources and the
+host's context budget continue to apply. These are Host Developer settings;
+account Cloud preferences remain a separate owner.
+
+Native Code worktree controls use the CLI's managed-worktree owner for creation,
+listing, pinning and archival. Opening a checkout, or returning to its original
+repository, requires a fresh folder grant. A runtime inside a checkout lists only
+that checkout; sibling management stays in the original repository's scope.
+Archives retain a Git ref/commit receipt. The owner refuses removal when ignored
+files or nested repositories/submodules would be omitted, and retains the host
+record if Git cannot remove the checkout.
+
+Native apply-to-original uses separate host-owned review and commit methods on
+Unix. A plan captures the original folder's identity, source Git snapshot,
+admitted source bytes and destination versions. Read-only text/binary previews
+are bounded by global CLI policy. A confirmed commit checks the source and all
+applicable destinations before writing through the existing file authority;
+conflicts and protected paths remain unchanged. Per-file outcomes distinguish
+known refusal from unconfirmed writes and retain available original copies when
+publication fails. The worker holds lifecycle admission until I/O finishes even
+if its caller is cancelled. Receipts are read in bounded pages, and the same
+commit returns the recorded result without rewriting later edits. Plans and the
+last receipt are runtime-bound; no apply is replayed after restart. Whole-folder
+transactions, durable receipt/recovery discovery and incremental apply baselines
+remain open, alongside setup-script review/run and other migration gates.
+
 ## Public contract
 
 Desktop participates in two continuity domains without merging them:

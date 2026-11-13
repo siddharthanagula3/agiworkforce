@@ -1336,7 +1336,7 @@ pub fn plugin_content_sha256(root: &Path) -> std::io::Result<String> {
             std::fs::read(&path)?
         };
         hasher.update(git_mode(&metadata));
-        hasher.update([b' ']);
+        hasher.update(b" ");
         hasher.update(&name);
         hasher.update([0u8]);
         hasher.update(bytes.len().to_string().as_bytes());

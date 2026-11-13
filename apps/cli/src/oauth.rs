@@ -95,7 +95,7 @@ pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<De
         .context("Failed to parse device code response")?;
 
     Ok(DeviceCodeStart {
-        verification_url: verification_url(&device),
+        verification_url: verification_url(&device)?,
         device_code: device.device_code,
         user_code: device.user_code,
         interval_secs: device.interval.max(3),
@@ -103,12 +103,21 @@ pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<De
     })
 }
 
-fn verification_url(device: &DeviceCodeResponse) -> String {
-    device
+fn verification_url(device: &DeviceCodeResponse) -> Result<String> {
+    let raw = device
         .verification_uri_complete
         .clone()
         .or_else(|| device.verification_uri.clone())
-        .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string())
+        .unwrap_or_else(|| "https://agiworkforce.com/auth/device".to_string());
+    let url = reqwest::Url::parse(&raw).context("Invalid device authorization URL")?;
+    anyhow::ensure!(
+        url.username().is_empty()
+            && url.password().is_none()
+            && url.fragment().is_none()
+            && crate::tier_cache::resolve_agi_api_base(url.as_str()).is_some(),
+        "The device authorization URL is outside the trusted account service"
+    );
+    Ok(url.to_string())
 }
 
 /// Poll the device-token endpoint once.
@@ -271,7 +280,7 @@ mod verification_url_tests {
             "verification_uri_complete": "https://agiworkforce.com/auth/device?user_code=ZED3-E49H&surface=cli",
         }));
         assert_eq!(
-            verification_url(&started),
+            verification_url(&started).expect("trusted authorization link"),
             "https://agiworkforce.com/auth/device?user_code=ZED3-E49H&surface=cli"
         );
     }
@@ -284,9 +293,27 @@ mod verification_url_tests {
             "verification_uri": "http://localhost:3000/auth/device",
         }));
         assert_eq!(
-            verification_url(&started),
+            verification_url(&started).expect("trusted local authorization link"),
             "http://localhost:3000/auth/device"
         );
+    }
+
+    #[test]
+    fn device_authorization_refuses_untrusted_or_credentialed_browser_targets() {
+        for target in [
+            "https://untrusted.example/auth/device",
+            "http://agiworkforce.com/auth/device",
+            "https://user:password@agiworkforce.com/auth/device",
+            "file:///tmp/test",
+            "javascript:alert(1)",
+            "https://agiworkforce.com.evil.example/auth/device",
+            "https://agiworkforce.com/auth/device#fragment",
+        ] {
+            let started = device(
+                serde_json::json!({ "device_code": "d", "user_code": "TEST-CODE", "verification_uri_complete": target }),
+            );
+            assert!(verification_url(&started).is_err(), "{target}");
+        }
     }
 }
 

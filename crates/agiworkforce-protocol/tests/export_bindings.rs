@@ -19,6 +19,168 @@ fn export_typescript_bindings() {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::env::temp_dir().join("agiworkforce-protocol-bindings"));
     let dir = dir.as_path();
+    agiworkforce_protocol::worktree_apply::WorktreeApplyResultParams::export_all_to(dir)
+        .expect("worktree apply result params");
+    agiworkforce_protocol::worktree_apply::WorktreeApplyResultPage::export_all_to(dir)
+        .expect("worktree apply result page");
+    agiworkforce_protocol::worktree_apply::WorktreeApplyPlanParams::export_all_to(dir)
+        .expect("worktree apply plan params");
+    agiworkforce_protocol::worktree_apply::WorktreeApplyPlan::export_all_to(dir)
+        .expect("worktree apply plan");
+    agiworkforce_protocol::worktree_apply::WorktreeApplyCommitParams::export_all_to(dir)
+        .expect("worktree apply commit params");
+    agiworkforce_protocol::worktree_apply::WorktreeApplyResult::export_all_to(dir)
+        .expect("worktree apply result");
+    agiworkforce_protocol::worktree_apply::WorktreeApplyCommitFailure::export_all_to(dir)
+        .expect("worktree apply failure");
+    agiworkforce_protocol::project_files::CloudProjectFileReindexResponse::export_all_to(dir)
+        .expect("project file reindex");
+    agiworkforce_protocol::project_files::CloudProjectDownloadPrepareParams::export_all_to(dir)
+        .expect("project downloads");
+    agiworkforce_protocol::project_files::CloudProjectDownloadId::export_all_to(dir)
+        .expect("project downloads");
+    agiworkforce_protocol::project_files::CloudProjectDownloadSnapshot::export_all_to(dir)
+        .expect("project downloads");
+
+    agiworkforce_protocol::project_files::CloudProjectUploadPrepareParams::export_all_to(dir)
+        .expect("project upload");
+    agiworkforce_protocol::project_files::CloudProjectUploadId::export_all_to(dir)
+        .expect("project upload");
+    agiworkforce_protocol::project_files::CloudProjectUploadSnapshot::export_all_to(dir)
+        .expect("project upload");
+
+    agiworkforce_protocol::project_files::CloudProjectFilesResponse::export_all_to(dir)
+        .expect("project files");
+    agiworkforce_protocol::project_files::CloudProjectFileTarget::export_all_to(dir)
+        .expect("project file target");
+    agiworkforce_protocol::project_files::CloudProjectFilePreview::export_all_to(dir)
+        .expect("project file preview");
+    agiworkforce_protocol::workspace_terminal::TerminalPlanParams::export_all_to(dir)
+        .expect("TerminalPlanParams");
+    agiworkforce_protocol::workspace_terminal::TerminalPlan::export_all_to(dir)
+        .expect("TerminalPlan");
+    agiworkforce_protocol::workspace_terminal::TerminalIdParams::export_all_to(dir)
+        .expect("TerminalIdParams");
+    agiworkforce_protocol::workspace_terminal::TerminalListParams::export_all_to(dir)
+        .expect("TerminalListParams");
+    agiworkforce_protocol::workspace_terminal::TerminalListResponse::export_all_to(dir)
+        .expect("TerminalListResponse");
+    agiworkforce_protocol::workspace_terminal::TerminalReadParams::export_all_to(dir)
+        .expect("TerminalReadParams");
+    agiworkforce_protocol::workspace_terminal::TerminalReadResponse::export_all_to(dir)
+        .expect("TerminalReadResponse");
+    agiworkforce_protocol::workspace_terminal::TerminalWriteParams::export_all_to(dir)
+        .expect("TerminalWriteParams");
+    agiworkforce_protocol::workspace_terminal::TerminalResizeParams::export_all_to(dir)
+        .expect("TerminalResizeParams");
+    agiworkforce_protocol::workspace_files::WorkspaceDirectoryParams::export_all_to(dir)
+        .expect("directory params");
+    agiworkforce_protocol::workspace_files::WorkspaceDirectoryResponse::export_all_to(dir)
+        .expect("directory response");
+    agiworkforce_protocol::workspace_files::WorkspaceFileParams::export_all_to(dir)
+        .expect("file params");
+    agiworkforce_protocol::workspace_files::WorkspaceFileResponse::export_all_to(dir)
+        .expect("file response");
+    agiworkforce_protocol::workspace_files::WorkspaceFileWriteParams::export_all_to(dir)
+        .expect("file write params");
+    agiworkforce_protocol::workspace_files::WorkspaceFileWriteResponse::export_all_to(dir)
+        .expect("file write response");
+    agiworkforce_protocol::workspace_files::WorkspaceFileRecoveryWriteParams::export_all_to(dir)
+        .expect("file recovery write params");
+    agiworkforce_protocol::workspace_files::WorkspaceFileRecoveryWriteResponse::export_all_to(dir)
+        .expect("file recovery write response");
+    agiworkforce_protocol::workspace_files::WorkspaceFileRecoveryListParams::export_all_to(dir)
+        .expect("file recovery list params");
+    agiworkforce_protocol::workspace_files::WorkspaceFileRecoveryListResponse::export_all_to(dir)
+        .expect("file recovery list response");
+    agiworkforce_protocol::workspace_files::WorkspaceFileRecoveryRestoreParams::export_all_to(dir)
+        .expect("file recovery restore params");
+    agiworkforce_protocol::workspace_files::WorkspaceFileRecoveryRestoreResponse::export_all_to(
+        dir,
+    )
+    .expect("file recovery restore response");
+    agiworkforce_protocol::workspace_files::WorkspaceFileRecoveryRestoreFailure::export_all_to(dir)
+        .expect("file recovery restore failure");
+    agiworkforce_protocol::account_cloud::CloudWorkRequest::export_all_to(dir)
+        .expect("work request");
+    agiworkforce_protocol::account_cloud::CloudWorkPlanUpdateParams::export_all_to(dir)
+        .expect("work plan decline");
+    agiworkforce_protocol::account_cloud::CloudRunListParams::export_all_to(dir)
+        .expect("cloud run list params");
+    agiworkforce_protocol::account_cloud::CloudRunListResponse::export_all_to(dir)
+        .expect("cloud run list response");
+    agiworkforce_protocol::account_cloud::CloudRunAttachParams::export_all_to(dir)
+        .expect("cloud run attach params");
+    agiworkforce_protocol::account_cloud::CloudRunAttachResponse::export_all_to(dir)
+        .expect("cloud run attach response");
+    agiworkforce_protocol::account_cloud::CloudProjectListParams::export_all_to(dir)
+        .expect("cloud projects");
+    agiworkforce_protocol::account_cloud::CloudProjectListResponse::export_all_to(dir)
+        .expect("cloud projects");
+    agiworkforce_protocol::account_cloud::CloudProjectTarget::export_all_to(dir)
+        .expect("cloud projects");
+    agiworkforce_protocol::account_cloud::CloudProjectResponse::export_all_to(dir)
+        .expect("cloud projects");
+    agiworkforce_protocol::account_cloud::CloudProjectCreateParams::export_all_to(dir)
+        .expect("cloud projects");
+    agiworkforce_protocol::account_cloud::CloudProjectUpdateParams::export_all_to(dir)
+        .expect("cloud projects");
+    agiworkforce_protocol::account_cloud::CloudDraftSaveParams::export_all_to(dir)
+        .expect("draft save params");
+    agiworkforce_protocol::account_cloud::CloudDraftSaveResponse::export_all_to(dir)
+        .expect("draft save response");
+    agiworkforce_protocol::account_cloud::CloudConversationUpdateParams::export_all_to(dir)
+        .expect("conversation update params");
+    agiworkforce_protocol::account_cloud::CloudConversationUpdateResponse::export_all_to(dir)
+        .expect("conversation update response");
+    agiworkforce_protocol::account_cloud::CloudConversationCreateParams::export_all_to(dir)
+        .expect("cloud create params");
+    agiworkforce_protocol::account_cloud::CloudConversationCreateResponse::export_all_to(dir)
+        .expect("cloud create response");
+    agiworkforce_protocol::account_cloud::CloudTurnStartParams::export_all_to(dir)
+        .expect("cloud turn start");
+    agiworkforce_protocol::account_cloud::CloudTurnIdParams::export_all_to(dir)
+        .expect("cloud turn id");
+    agiworkforce_protocol::account_cloud::CloudTurnSnapshot::export_all_to(dir)
+        .expect("cloud turn snapshot");
+    agiworkforce_protocol::account_cloud::CloudTurnResumeParams::export_all_to(dir)
+        .expect("cloud turn resume");
+    agiworkforce_protocol::account_cloud::CloudHistoryListParams::export_all_to(dir)
+        .expect("cloud history list request");
+    agiworkforce_protocol::account_cloud::CloudHistoryReadParams::export_all_to(dir)
+        .expect("cloud history read request");
+    agiworkforce_protocol::account_cloud::CloudWorkspacesListParams::export_all_to(dir)
+        .expect("workspaces list");
+    agiworkforce_protocol::account_cloud::CloudWorkspacesListResponse::export_all_to(dir)
+        .expect("workspaces response");
+    agiworkforce_protocol::account_cloud::CloudWorkspaceSelectParams::export_all_to(dir)
+        .expect("workspace selection");
+    agiworkforce_protocol::account_cloud::CloudWorkspaceSelectResponse::export_all_to(dir)
+        .expect("workspace selection response");
+    agiworkforce_protocol::account_cloud::CloudModelListParams::export_all_to(dir)
+        .expect("cloud model params");
+    agiworkforce_protocol::account_cloud::CloudModelListResponse::export_all_to(dir)
+        .expect("cloud model response");
+    agiworkforce_protocol::account_cloud::CloudHistoryListResponse::export_all_to(dir)
+        .expect("cloud history list response");
+    agiworkforce_protocol::attachment_recovery::AttachmentRecoveryReadResponse::export_all_to(dir)
+        .expect("attachment recovery");
+    agiworkforce_protocol::attachment_recovery::AttachmentRecoveryChangeParams::export_all_to(dir)
+        .expect("attachment recovery");
+    agiworkforce_protocol::attachment_recovery::AttachmentRecoveryChangeResponse::export_all_to(
+        dir,
+    )
+    .expect("attachment recovery");
+    agiworkforce_protocol::attachment_recovery::AttachmentRecoveryListParams::export_all_to(dir)
+        .expect("attachment recovery");
+    agiworkforce_protocol::attachment_recovery::AttachmentRecoveryListResponse::export_all_to(dir)
+        .expect("attachment recovery");
+    agiworkforce_protocol::cloud_uploads::CloudUploadPrepareParams::export_all_to(dir)
+        .expect("upload prepare");
+    agiworkforce_protocol::cloud_uploads::CloudUploadSnapshot::export_all_to(dir)
+        .expect("upload snapshot");
+    agiworkforce_protocol::account_cloud::CloudHistoryReadResponse::export_all_to(dir)
+        .expect("cloud history read response");
     agiworkforce_protocol::developer_session::DeveloperWorkspaceIdentity::export_all_to(dir)
         .expect("workspace identity bindings");
 
@@ -79,6 +241,12 @@ fn export_typescript_bindings() {
         .expect("export developer-session steer graph");
     agiworkforce_protocol::developer_session::TurnStartResponse::export_all_to(dir)
         .expect("export developer-session turn response graph");
+    agiworkforce_protocol::developer_session::TurnStartedNotification::export_all_to(dir)
+        .expect("export developer-session turn started notification");
+    agiworkforce_protocol::developer_session::TurnOutputDeltaNotification::export_all_to(dir)
+        .expect("export developer-session output delta notification");
+    agiworkforce_protocol::developer_session::ApprovalRequestedNotification::export_all_to(dir)
+        .expect("export developer-session approval notification");
     agiworkforce_protocol::developer_session::TurnInterruptParams::export_all_to(dir)
         .expect("export developer-session interrupt graph");
     // `turn/completed` and `turn/failed` params, and with them the typed
@@ -156,6 +324,14 @@ fn export_typescript_bindings() {
         .expect("export developer-session settings graph");
     agiworkforce_protocol::developer_session::SettingsWriteParams::export_all_to(dir)
         .expect("export developer-session settings write graph");
+    agiworkforce_protocol::instruction_settings::InstructionSettingsReadParams::export_all_to(dir)
+        .expect("instruction settings read");
+    agiworkforce_protocol::instruction_settings::InstructionSettingsWriteParams::export_all_to(dir)
+        .expect("instruction settings write");
+    agiworkforce_protocol::instruction_settings::InstructionSettingsWriteResponse::export_all_to(
+        dir,
+    )
+    .expect("instruction settings response");
     agiworkforce_protocol::developer_session::SlashCommandListResponse::export_all_to(dir)
         .expect("export developer-session command graph");
     agiworkforce_protocol::developer_session::SlashCommandRunParams::export_all_to(dir)
