@@ -3,7 +3,6 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { API_VERSION_REQUEST_HEADER, CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
 import { logger } from './logger';
-import { getIdentityAuthorizedParties } from './server/identity';
 
 function getAllowedOrigins(): string[] {
   const envOrigins = process.env['ALLOWED_ORIGINS'];
@@ -56,7 +55,7 @@ export function isOriginAllowed(origin: string | null, requireOrigin = false): b
 
   const allowedOrigins = getAllowedOrigins();
 
-  if (allowedOrigins.includes(origin) || getIdentityAuthorizedParties().includes(origin)) {
+  if (allowedOrigins.includes(origin)) {
     return true;
   }
 
