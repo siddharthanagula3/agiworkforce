@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Provider/platform owner
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 Kind: provider-package
 Criticality: high
 
@@ -102,7 +102,7 @@ Provider behavior affects trust. Release notes should call out provider-mode, re
 
 ## Known Caveats
 
-- OpenAI Responses support should become the preferred native OpenAI path only after adapter tests prove privacy defaults.
+- The OpenAI adapter defaults to the Responses API for catalog-known, streamable text and chat models on the native OpenAI route, with server-side `store` off unless `responsesStore` is enabled. OpenAI-compatible proxies, unknown models and non-chat media models stay on Chat Completions.
 
 ## CODEOWNERS
 

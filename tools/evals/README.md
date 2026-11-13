@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Tooling/security lead
-Last updated: 2026-10-10
+Last updated: 2026-11-11
 Purpose: Grade what the product's models actually say and do, per capability
 (chat, coding, reasoning, research, search, tools, structured output, long
 context, files, browser, computer use, multilingual, safety), with cost and
@@ -55,6 +55,11 @@ site.
 | `computer-use`      | next action on a recorded screen description     | action plan: click inside the target frame, type, key chord               |
 | `multilingual`      | reply or translate in another language           | deterministic language ID plus reference facts                            |
 | `chat-prompt`       | behaviour the chat system prompt asks for        | text and tool-call checks, run only under `--chat-prompt-version`         |
+
+Five retrieval and assembly corpora sit in `context-suites/` (`memory-quality`,
+`past-chat-retrieval`, `project-retrieval`, `research-grounding`, `work-plan`).
+`src/context-eval.ts` grades them against the context engine the product runs,
+with fixtures standing in for the loaders; nothing reaches a model or a network.
 
 Cost and latency are not suites of their own. They are axes every suite reports:
 per case, the provider layer's metered usage, cost (provider-reported, else

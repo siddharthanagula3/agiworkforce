@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-11
 
 ## Thesis
 
@@ -17,8 +17,9 @@ AGI does not try to be the next frontier-model lab. It tries to be the applicati
 - Multi-provider routing: AGI-owned provider adapters, not one model family.
 - Privacy-controlled managed compute: Free public alpha is enabled for signed-in
   users (founder decision 2026-06-27). Paid upgrades on Web remain
-  waitlist/access-code gated; Mobile store in-app purchase has no waitlist or
-  access code (owner decision 2026-10-19). Billing, fraud, refund, chargeback, quota, and
+  waitlist/access-code gated. Mobile v1 sells nothing in the app
+  (`nativePurchases: false`); when store purchase is turned on it has no
+  waitlist or access code (owner decision 2026-10-19). Billing, fraud, refund, chargeback, quota, and
   provider-term controls keep pace with Free usage and gate self-serve paid
   acquisition.
 - Six-surface continuity: Web, Desktop, Mobile, CLI, VS Code, and Chrome share contracts while keeping the right sync boundary.

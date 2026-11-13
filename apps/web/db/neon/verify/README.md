@@ -106,7 +106,9 @@ hold, retention sweep, and audit streaming services against the real schema. It
 is kept as `.txt` deliberately: it needs a live database on port 55433 and would
 fail in CI, where no such database exists.
 
-To use either, seed a workspace, copy it to
+`retention-sweep-against-real-rows.ts.txt` is a Vitest file in the same form (live database on port 55433, an existing organization owner row) that exercises the retention sweep against real rows.
+
+To use any of them, seed a workspace, copy it to
 `apps/web/lib/services/__tests__/`, run it FROM `apps/web` (the `@/` alias
 resolves against that package's Vitest config, not the root one), and delete it
 again. The delivery harness resets its own state, so it can be re-run.

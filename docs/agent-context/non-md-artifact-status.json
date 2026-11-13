@@ -61,7 +61,7 @@
       "path": "audit/prior-audits/website-launch/**",
       "status": "live-evidence",
       "owner": "Website launch preparation",
-      "reason": "The website launch QA ledger (qa-coverage.json) and its evidence JSON, read by the .codex/hooks/launch.py continuation hook; delete with the rest of the website-launch prior audit once its open cases are split into audit/live-check/ and audit/blockers/."
+      "reason": "The website launch QA ledger (qa-coverage.json) and its evidence JSON; delete with the rest of the website-launch prior audit once its open cases are split into audit/live-check/ and audit/blockers/."
     },
     {
       "path": "docs/security/security-claims.json",

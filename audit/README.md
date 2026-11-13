@@ -23,7 +23,7 @@ open engineering follow-ups are rows in `registers/known-flaws.md`.
 
 [`live-check/seo-ai-visibility.md`](live-check/seo-ai-visibility.md) is owned by Web and product content / growth. It records the November 7 search baseline, locally verified discovery changes, finished initial content and the remaining publication, source-review and first-party measurement work. Close it after those actions are verified or explicitly declined; its dated observations live in `baselines/seo-ai-visibility-2026-11-07.json`.
 
-Counts were taken on 2026-10-23.
+Counts in the tables below were taken on 2026-11-11.
 
 [`live-check/architecture-edge-case-conformance.md`](live-check/architecture-edge-case-conformance.md)
 is the cross-surface execution queue added on 2026-11-02. Platform and application
@@ -127,7 +127,7 @@ files as local-only; a few `known-flaws.md` evidence cells cite
 
 `pnpm check:audit-worklist` (part of `pnpm check:llm-operability`) fails when a
 generated file is stale or an emptied file was left behind.
-`node scripts/check-audit-progress.mjs`, step 9 of
+`node scripts/check-audit-progress.mjs`, step 7 of
 `scripts/launch-readiness-check.sh`, fails a release while any row remains in
 `registers/known-flaws.md` or any file remains in `blockers/`.
 

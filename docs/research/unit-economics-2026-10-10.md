@@ -1,12 +1,19 @@
 # Unit economics per plan, region and channel
 
-Status: Current calculation snapshot
+Status: Dated calculation snapshot
 Owner: Billing
-Last updated: 2026-10-10
+Last updated: 2026-11-11
 
 The calculations below describe the October 10 catalogs, prices and
 assumptions. Run the script again against the current executable catalogs
 before using a number for pricing, cost, launch or capacity decisions.
+
+**Since this snapshot (checked 2026-11-11).** The plans were renamed on
+2026-11-08: Pro is now Premium, Max 5x is Max and Max 20x is Ultra (internal ids
+`pro`, `max` and `max_15x` are unchanged). The catalog's India prices now differ
+from the list below: Ultra is INR 19,999 and Team is INR 2,499 a seat (INR
+23,988 a year). `packages/contracts/types/src/billing-catalog.ts` owns every
+price; the figures on this page are the October 10 inputs.
 
 This reruns `docs/research/unit-economics-2026-09-27.md` and extends it to
 regions, payment channels, voice and the owner's decisions of 2026-10-10: one

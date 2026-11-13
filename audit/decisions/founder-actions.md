@@ -315,7 +315,7 @@ Dashboard.
 
 1. Decide go-live timing.
 2. On the CLI's live restricted key enable Products:Write and Features:Write.
-3. Create the live Team, Basic and Max 15x products and prices to match
+3. Create the live Team, Basic and Ultra products and prices to match
    `packages/contracts/types/src/billing-catalog.ts`; archive the five active
    live prices that contradict it; revoke the temporary write permission.
 4. Repoint every Vercel `STRIPE_PRICE_*` variable in the same change as the
@@ -379,11 +379,11 @@ is needed for the free version 1; its steps are in
 **Why founder assistance is required**
 Pricing under the RBI ceiling is a commercial call; Razorpay's support for
 recurring payments from a foreign entity is a sales conversation.
-**Exact action** Pick how Max 15x and Team are sold in India (under the ceiling, annual or invoice only, seat cap, or not yet); decide the INR top-up rate; ask Razorpay sales whether recurring subscriptions are available to a foreign entity; get an accountant's view on OIDAR GST.
+**Exact action** Pick how Ultra and Team are sold in India (under the ceiling, annual or invoice only, seat cap, or not yet); decide the INR top-up rate; ask Razorpay sales whether recurring subscriptions are available to a foreign entity; get an accountant's view on OIDAR GST.
 **Where** Pricing decision, Razorpay sales, accountant.
 **Needed input** One pricing decision and one external conversation.
 **How to verify completion** The decision is recorded in `docs/decisions/`; if Razorpay proceeds, its answer picks the integration shape.
-**What remains after founder action** Decided 2026-09-15 (D-2026-09-15-18): until Razorpay, the accountant and counsel resolve the questions above, Max 15x and Team are invoice or assisted-sales only in India and there is no INR top-up conversion; engineering enforces that in checkout now.
+**What remains after founder action** Decided 2026-09-15 (D-2026-09-15-18): until Razorpay, the accountant and counsel resolve the questions above, Ultra and Team are invoice or assisted-sales only in India and there is no INR top-up conversion; engineering enforces that in checkout now.
 **Impact** FEATURE-BLOCKING (India only)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -674,8 +674,8 @@ that 400 for every Anthropic model while OpenAI, Google, DeepSeek, Qwen, Moonsho
 answered normally.
 **What remains after founder action** Nothing in code. Since 2026-09-15 the plan parks the unfunded route and serves the same models through the proxy route, so they answer, but the first token arrives after about 4.1 seconds on the cheapest Claude model (dev log 15:37 UTC: the provider span took 4109 ms of a 4306 ms turn, the gateway's own work under 200 ms) where the direct route answered in about a second; beside ChatGPT or Claude that reads as a slow product. Until it is done every
 Anthropic model is served slowly for everyone, not only for event visitors:
-every Anthropic model in the catalogue sits on this one account, so a paying Pro
-or Max subscriber who selects any of them gets a provider error, and they are
+every Anthropic model in the catalogue sits on this one account, so a paying Premium,
+Max or Ultra subscriber who selects any of them gets a provider error, and they are
 held out of the event allowlist for the same reason.
 
 The outage is now handled rather than merely classified: an unfunded provider

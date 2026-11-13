@@ -1113,7 +1113,7 @@
       "doc": "workspace-policy",
       "section": "What policy controls",
       "kind": "prose",
-      "sentence": "All are on by default.",
+      "sentence": "All are on by default except Fast mode, which stays off until an administrator turns it on.",
       "implementation": [
         "packages/contracts/types/src/enterprise/workspace-controls.ts#DEFAULT_WORKSPACE_FEATURE_ACCESS"
       ],
@@ -1122,6 +1122,11 @@
           "kind": "test",
           "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
           "name": "returns the workspace defaults when nothing overrides them"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "holds fast mode off until the workspace turns it on"
         }
       ]
     },
@@ -3661,6 +3666,29 @@
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
           "name": "states the same contract on the Desktop, Local, and BYOK pages"
+        }
+      ]
+    },
+    {
+      "id": "glossary-desktop-windows-linux-not-published",
+      "doc": "glossary",
+      "section": "Platform and surface names",
+      "kind": "prose",
+      "sentence": "Windows and Linux installers have not been published.",
+      "implementation": [
+        "apps/web/lib/surface-status.ts#SURFACE_PLATFORMS",
+        "apps/web/app/download/DesktopDownloadAvailability.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/download/__tests__/DesktopDownloadSurface.test.tsx",
+          "name": "names Windows and Linux as unavailable rather than leaving them out"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/surface-status.test.ts",
+          "name": "adds a platform only when a surface that runs on it is released"
         }
       ]
     },

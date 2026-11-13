@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 Applies to: `com.agiworkforce.app`, version 0.0.1 (`app.config.js` → `version`,
 `android.package`)
 
@@ -165,17 +165,18 @@ Merged into the manifest by library config plugins rather than listed above:
   document/text scanning with on-device OCR (`native/android/withAGIVisionOCR.cjs`).
 - `USE_BIOMETRIC` from `expo-local-authentication`, for the optional App Lock,
   opt-in from Settings → Safety & Security. Off by default.
-- `READ_EXTERNAL_STORAGE` (`android:maxSdkVersion="32"`) from `expo-image-picker`
-  and `expo-file-system`, for choosing an existing image or document to attach on
-  Android 12 and earlier. Android 13+ uses the photo picker and the document
-  picker, which need no storage permission.
-
 - `POST_NOTIFICATIONS` and `RECEIVE_BOOT_COMPLETED` from `expo-notifications`,
   which is only added to production and preview builds (`conditionalPlugins` in
-  `app.config.js`). Used for background-task and cloud-job completion alerts.
-- `READ_CALENDAR` / `WRITE_CALENDAR` from `expo-calendar`, for the optional
-  device-calendar context connector. Off by default; the permission strings say
-  "only after you enable device calendar context".
+  `app.config.js`). Used for model-download, reminder and cloud-job completion
+  alerts, and for agent actions waiting on the user's approval.
+- `READ_CALENDAR` / `WRITE_CALENDAR` from `expo-calendar`, optional: the calendar
+  is read when the user asks about their schedule, and an event is added only
+  after the user confirms it in a chat
+  (`src/features/settings/permissions/registry.ts` → `calendar`).
+- `READ_EXTERNAL_STORAGE`, `READ_MEDIA_VISUAL_USER_SELECTED`,
+  `ACCESS_MEDIA_LOCATION` and `SYSTEM_ALERT_WINDOW`, which libraries would add,
+  are removed through `android.blockedPermissions` in `app.config.js`. Images and
+  documents are chosen through the system photo picker and document picker.
 - `com.android.vending.BILLING`, which `expo-iap` would add, is removed from the
   manifest: `app.config.js` lists it in `android.blockedPermissions` while
   `src/features/billing/storePurchases.json` sets `"nativePurchases": false`. See **Billing**
@@ -193,8 +194,8 @@ rest of the app usable.
 **One exception, stated plainly: notifications.** `POST_NOTIFICATIONS` is the only
 permission the app can prompt for without a permission-specific tap. Once the user
 has signed in to AGI Cloud and the app is in Cloud mode, a root-layout effect
-(`app/_layout.tsx:275-297`) calls `registerForPushNotifications`, which requests
-the permission if it is not already granted (`services/notifications.ts:154-159`).
+in `app/_layout.tsx` calls `registerForPushNotifications`, which requests the
+permission if it is not already granted (`services/notifications.ts`).
 On Android 13+ that is the system POST_NOTIFICATIONS dialog, and on a review device
 it appears shortly after the first Cloud sign-in completes, not on a tap of a
 notifications control. It never fires in Local Mode, never before sign-in, and
@@ -219,51 +220,50 @@ not by AGI's servers: `voiceInput.ts` starts `ExpoSpeechRecognitionModule` with
 
 Two files in the repo describe this declaration:
 `store-listing/android/data-safety.json` holds the per-type records, and
-`LISTING-METADATA-ANDROID.json` → `data_safety` holds the listing copy. **They now
-declare the same seven types with the same sharing answer**; an earlier revision
-of this file described two disagreements between them, and both have been closed
-in the files rather than only in this prose.
+`LISTING-METADATA-ANDROID.json` → `data_safety` holds the listing copy. They
+declare the same nine types with the same sharing answers, and
+`__tests__/ios-store-submission-config.test.ts` fails if they drift apart.
 
-| Declared type         | Backed by                                                                                                                                                                                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Email address, Name   | Clerk sign-in only (`app/(auth)/login.tsx`). Never collected in Local Mode.                                                                                                                                   |
-| User IDs              | The account identifier carried by authenticated cloud requests (`services/api.ts`).                                                                                                                           |
-| Other in-app messages | Cloud-mode chat content, uploaded to AGI Cloud and processed by the model provider serving the request.                                                                                                       |
-| Photos                | Image attachments the user picks for a Cloud message (`src/features/media/photo-picker.ts`), and the Cloud profile photo, which is uploaded to Clerk (`src/features/settings/index.tsx` → `handleEditPhoto`). |
-| Files and docs        | A document attached to a Cloud message through `expo-document-picker` (`app/(app)/chat/[id].tsx:703`, `app/(app)/(tabs)/chat.tsx:596`).                                                                       |
-| Device or other IDs   | An app-generated UUID from `lib/deviceId.ts`, registered with the push token by `services/notifications.ts` → `POST /api/mobile/push-token`. Created only when push is enabled; it is not an advertising ID.  |
+| Declared type             | Shared | Backed by                                                                                                                                                                                                     |
+| ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email address, Name       | No     | Clerk sign-in only (`app/(auth)/login.tsx`). Never collected in Local Mode.                                                                                                                                   |
+| User IDs                  | No     | The account identifier carried by authenticated cloud requests (`services/api.ts`).                                                                                                                           |
+| Other in-app messages     | Yes    | Cloud-mode chat content, uploaded to AGI Cloud and forwarded to the model provider serving the request.                                                                                                       |
+| Photos                    | Yes    | Image attachments the user picks for a Cloud message (`src/features/media/photo-picker.ts`), and the Cloud profile photo, which is uploaded to Clerk (`src/features/settings/index.tsx` → `handleEditPhoto`). |
+| Files and docs            | Yes    | A document attached to a Cloud message through `expo-document-picker` (`app/(app)/chat/[id].tsx`, `app/(app)/(tabs)/chat.tsx`).                                                                               |
+| Voice or sound recordings | Yes    | Live voice mode in an AGI Cloud chat streams the microphone to AGI Cloud for the session (`src/features/voice/services/liveVoiceSession.ts`). Dictation transcribes on the device and uploads no audio.       |
+| Device or other IDs       | No     | An app-generated UUID from `lib/deviceId.ts`, registered with the push token by `services/notifications.ts` → `POST /api/mobile/push-token`. Created only when push is enabled; it is not an advertising ID.  |
+| App interactions          | No     | Product analytics events in AGI Cloud, only after the user allows them in Settings → Privacy → Product analytics (`src/features/settings/cloud-privacy/ProductAnalyticsConsentGroup.tsx`).                    |
 
 Every type is marked optional in both files, because every one of them is
 collected only after a Cloud sign-in the user does not have to perform: a
 signed-out user who has completed onboarding lands in Local Mode and is never
 redirected to a sign-in wall (`app/_layout.tsx`).
 
-**Sharing: declared "no", and here is exactly what that rests on.** The ground
-fact, which we state plainly because it is what you would find by inspecting
-traffic: in Cloud mode the user's messages and attachments leave the device,
-reach AGI Cloud, and are forwarded server-side to the model provider serving the
-request. Both files answer Play's sharing question **no** on the service-provider
-basis, the model, storage, auth and push subprocessors listed at
-https://agiworkforce.com/subprocessors process that data on AGI's behalf, not for
-their own purposes.
+**Sharing: declared "yes" for messages, photos, files and voice.** In Cloud
+mode the user's messages and attachments leave the device, reach AGI Cloud, and
+are forwarded server-side to the model provider serving the request. On the
+Free plan some of those providers' terms allow training on what they receive,
+which is use for their own purposes, so those four types are declared shared
+(`sharingBasis` in `store-listing/android/data-safety.json`). Identity data goes
+only to Clerk and push delivery only to the push service, both acting on AGI's
+behalf, so those types are declared not shared. The subprocessors are listed at
+https://agiworkforce.com/subprocessors.
 
 What the source tree can prove about this, and does:
 
 - Every outbound request from the device goes to an AGI-controlled host.
   `agiworkforce.com`, `api.agiworkforce.com`, `signaling.agiworkforce.com`
-  (`lib/constants.ts:2-16`), plus Clerk for sign-in and the push service. No
-  third party receives data directly from the device.
+  (`lib/constants.ts` → `API_URL`, `GATEWAY_URL`, `WS_URL`), plus Clerk for
+  sign-in and the push service. No third party receives data directly from the
+  device.
 - **The app contains no analytics SDK, no crash-reporting SDK and no ad SDK.**
   `apps/mobile/package.json` has no Sentry, Firebase, Crashlytics, Amplitude,
-  PostHog, Mixpanel, Segment, Bugsnag or Datadog dependency, so no telemetry
-  stream leaves for a third party's own purposes.
+  PostHog, Mixpanel, Segment, Bugsnag or Datadog dependency; product analytics
+  events go only to AGI Cloud.
 - No advertising identifier is collected: no `AD_ID` permission, no
   `AdvertisingIdClient` call, and `usesAdvertisingId: false` in
   `store-listing/android/data-safety.json`.
-
-Whether Play's service-provider exception covers each subprocessor is a
-contractual question the repo cannot settle, so we do not assert it from code.
-it rests on the data-processing terms behind the subprocessor list above.
 
 Security practices, each verifiable:
 
@@ -346,11 +346,14 @@ This section identifies website, legal and support destinations in the
 current mobile source. `openExternalUrl` (`lib/safeOpenURL.ts`) accepts only
 reviewed HTTPS hosts; other link handlers are described separately below.
 
-**A. Account destination.** One account link renders in this version:
+**A. Account destinations.** These account links render in this version:
 
-| #   | Control                                       | Opens                               | Call site                                       | Who sees it                                                                                                      |
-| --- | --------------------------------------------- | ----------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| A1  | **Continue** on the "Change your email" alert | `agiworkforce.com/settings/account` | `src/features/settings/cloud-account/index.tsx` | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
+| #   | Control                                                                                 | Opens                                                     | Call site                                                       | Who sees it                                                                                                      |
+| --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| A1  | **Continue** on the "Change your email" alert                                           | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx`                 | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
+| A2  | **Advanced Account Security**, **Add or remove a sign-in method**, **Open Web account** | `agiworkforce.com/settings/security`, `/settings/account` | `src/features/settings/account-security/index.tsx`              | Any signed-in Cloud account. Opens in an in-app Custom Tab.                                                      |
+| A3  | **Turn on** in the two-factor banner                                                    | `agiworkforce.com/settings/security`                      | `src/features/settings/account-security/WorkspaceMfaBanner.tsx` | A member of a workspace that requires two-factor authentication. In-app Custom Tab.                              |
+| A4  | A security recommendation on the workspace administration screen                        | an `agiworkforce.com/workspace/*` admin page              | `src/features/team/WorkspaceAdministration.tsx`                 | A workspace administrator. In-app Custom Tab.                                                                    |
 
 No link in the app opens a page about pricing, billing, invoices, sales or
 upgrades.
@@ -359,40 +362,60 @@ upgrades.
 Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
 account Terms confirmation also links to Terms and Privacy
 (`app/(auth)/login.tsx`, `src/features/auth/components/MobileSignUp.tsx`).
-Settings → Privacy links to Terms and Privacy
+Settings → Privacy links to Privacy, Data rights requests and Terms
 (`src/features/settings/cloud-privacy/index.tsx`). Settings → Personalization links its
 custom-instructions helper to the acceptable-use page
 (`src/features/settings/personalization/index.tsx`). Password recovery opens
-`agiworkforce.com/login`, whose password step offers Forgot password
-(`app/(auth)/reset-password.tsx`), and
-the desktop-pairing safety disclosure opens `agiworkforce.com/security`
-(`src/features/companion/components/PairingRiskDisclosure.tsx`).
+`agiworkforce.com/login`, whose password step offers Forgot password, and
+account recovery opens `agiworkforce.com/recover`
+(`app/(auth)/reset-password.tsx`). The desktop-pairing safety disclosure opens
+`agiworkforce.com/security`
+(`src/features/companion/components/PairingRiskDisclosure.tsx`). When the
+server refuses a locked or suspended account, the alert's **Open on the web**
+opens the reset-password or appeal page (`services/api.ts`), and the updated
+Terms notice opens `/terms` (`services/termsNotice.ts`).
 
-**C. Opened in an in-app Custom Tab, not the browser.** Settings → About opens
-`agiworkforce.com`, `/privacy` and `/terms` through `openInAppBrowser`
-(`app/(app)/about.tsx:224`, `:230`, `:236`). Assistant output that contains a link
-opens the same way and is never auto-followed
-(`src/features/chat/components/MessageContentRenderer.tsx:19-32`); a non-`http(s)`
-scheme requires a confirmation alert first.
+**C. Opened in an in-app Custom Tab, not the browser.** These go through
+`openInAppBrowser` (`lib/safeOpenURL.ts`), which opens an in-app Custom Tab
+rather than leaving the app: Settings →
+About opens `agiworkforce.com`, `/privacy`, `/terms`, `/acceptable-use`, `/help`
+and `/status` (`app/(app)/about.tsx`); Settings opens the Help Center
+(`src/features/settings/index.tsx`); Settings → Permissions opens a help article
+(`src/features/settings/permissions/index.tsx`); the first-run disclosure opens
+`/privacy` and the India notice at `/privacy/india`
+(`src/features/onboarding/components/FirstRunDisclosureModal.tsx`); the cloud
+provider consent opens `/privacy` and the provider list at `/subprocessors`
+(`src/features/settings/cloud-privacy/NamedProviderConsentModal.tsx`,
+`services/providerConsent.ts`); and a notification whose target has no screen in
+the app opens its web page (`services/notifications.ts`). A link in assistant
+output, and a map place or route card, also opens in a Custom Tab and is never
+auto-followed; a non-`http(s)` scheme requires a confirmation alert first
+(`src/features/chat/components/MarkdownInline.tsx`,
+`src/features/chat/components/InteractiveCardBlock.tsx`).
 
-**D. Not `agiworkforce.com`.** Settings → Connectors → GitHub opens the GitHub App
-install flow at `${API_URL}/api/github/install/start`
-(`src/features/settings/cloud-connectors/index.tsx:690`, URL from
-`services/connectors.ts:7-9`), an OAuth start on our own host. The Connect GitHub
-button in the new cloud code session sheet runs the same install from the app
-(`src/features/cloud-code/githubInstall.ts`). It first opens
+**D. Not `agiworkforce.com`, or not a web page.** Settings → Connectors
+authorizes a connector in an in-app authentication session
+(`services/connectors.ts`, `authorizeConnectorInApp`). The Connect GitHub
+button in the new cloud code session sheet runs the GitHub App install from the
+app (`src/features/cloud-code/githubInstall.ts`). It first opens
 `agiworkforce.com/github/connect`, which names the requesting AGI account before
 GitHub, and always returns through the verified link
 `https://agiworkforce.com/github/installed`: inside an authentication session on
 iOS 17.4 and later, as a universal link in Safari on older iOS, and as a verified
 App Link from a browser tab on Android. The app then names the GitHub account and
 asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
-`app/legal/article-50.tsx:34` opens the EU AI Act text at
-`artificialintelligenceact.eu`. A map result card opens the maps app
-(`src/features/chat/components/InteractiveCardBlock.tsx:292`). `mailto:` to
-`support@agiworkforce.com`, and the Android settings intents in
-`src/features/edge-cases/components/StorageFullModal.tsx`, are the only other
-`Linking.openURL` targets in the app.
+`app/legal/article-50.tsx` opens the EU AI Act text at
+`artificialintelligenceact.eu`. A cloud task that asks the user to open a link
+shows an **Open link** button for it
+(`src/features/tasks/components/CloudRunInputForm.tsx`). The remaining
+`Linking.openURL` targets are not web pages: `mailto:` to
+`support@agiworkforce.com` (`app/(app)/about.tsx`, `services/contentReport.ts`)
+and to the account's own address for the desktop link
+(`src/features/companion/components/DesktopSetupChecklistView.tsx`), an
+`otpauth:` link to an authenticator app
+(`src/features/settings/account-security/TwoFactorSection.tsx`), and the
+device-settings intents (`app/(app)/settings/integrations.tsx`,
+`src/features/integrations/components/DeviceIntegrationStatus.tsx`).
 
 **E. Present in source but not rendered in this version.** These controls
 exist in the source for a build that sells through the store. None of them
@@ -452,39 +475,40 @@ settings and installed model details, which runs entirely on the device
 device-only chats are wiped from Settings → Storage.
 
 The web-facing deletion URL declared for Data safety is
-`https://agiworkforce.com/settings/account`
-(`store-listing/android/data-safety.json`).
+`https://agiworkforce.com/help/delete-your-account`
+(`store-listing/android/data-safety.json` → `dataDeletionRequestUrl`).
 
 ## AI disclosure
 
-First run shows a blocking disclosure before the device-tier screen
-(`app/(public)/onboarding.tsx` → `composeFirstRunDisclosure`, accepted via
-`recordDisclosureAcceptance`). Its summary states, verbatim:
+First run shows a blocking disclosure, "Before you start", before the
+device-tier screen (`app/(public)/onboarding.tsx` →
+`composeShortFirstRunDisclosure`, drawn by
+`src/features/onboarding/components/FirstRunDisclosureModal.tsx`, accepted via
+`recordDisclosureAcceptance`). It states, verbatim, "You are chatting with an
+AI, and it can make mistakes.", says what Local Mode and AGI Cloud collect, and
+links to the Privacy Policy and the India DPDP notice. **Why we show this**
+expands the EU AI Act Article 50(1) text verbatim
+(`packages/contracts/compliance/src/article50-disclosure.ts`). Acceptance is
+recorded with a hash of the copy.
 
-- "You are interacting with an AI system."
-- "Responses can be inaccurate. Review important output before using it."
-- "AI-generated text, audio, image, or video is marked when you export or share it."
-
-It also carries the EU AI Act Article 50(1) and 50(2) text verbatim and the
-penalty notice (`packages/contracts/compliance/src/article50-disclosure.ts`).
-Acceptance is recorded with a hash of the exact copy shown.
-
-**What that third line covers in this binary, stated so it is not read wider than
-the code.** The marking is implemented on the Data Controls export: Settings →
+**How AI-generated output is marked when exported, stated so it is not read
+wider than the code.** The marking is implemented on the Data Controls export: Settings →
 Data Controls → Export Local Data wraps each conversation transcript in a
 machine-readable Article 50(2) provenance marker naming the provider and model
-(`services/dsarExport.ts:49-72`, via `wrapTextExportWithMarker` in
-`packages/contracts/compliance/src/article50-marker.ts:56-78`). The ordinary
+(`buildMarkedTranscript` in `services/dsarExport.ts`, via
+`wrapTextExportWithMarker` in
+`packages/contracts/compliance/src/article50-marker.ts`). The ordinary
 conversation export and share from the chat screen, PDF, plain text, Markdown,
 copy-to-clipboard (`services/fileCreation.ts`), carries role labels only and
-does not add that marker. The disclosure sentence is a product commitment that
-one export path meets today and the other does not yet.
+does not add that marker.
 
-In the chat UI itself, every completed assistant turn carries a provenance footer
-naming its source, "AGI Cloud", or "Local Mode · <model name>" for on-device
-inference (`src/features/chat/components/ProvenanceFooter.tsx:10-14`, rendered
-from `src/features/chat/components/MessageBubble.tsx:894-895`). The footer names
-the system rather than printing the literal words "AI-generated".
+In the chat UI itself, every completed assistant turn that records its model
+carries a provenance footer naming its source: "AGI Cloud · <model name>" (or
+"AGI Cloud" alone when the model is not known), or "Local Mode · <model name>"
+for on-device inference (`src/features/chat/components/ProvenanceFooter.tsx`,
+rendered from `getProvenance` in
+`src/features/chat/components/MessageBubble.tsx`). The footer names the system
+rather than printing the literal words "AI-generated".
 
 Before any model is downloaded, the device-tier screen names the recommended
 model and its download size, and offers "Pick a different model", the user is
@@ -492,11 +516,10 @@ never given a model without being told which one it is.
 
 We do not claim full compliance with India's DPDP Act 2023. The itemised notice
 is published at https://agiworkforce.com/privacy/india; consent withdrawal and
-the export/delete controls above are implemented; the obligations we have not met
-
-- verifiable parental consent under s.9, notice in Eighth Schedule languages
-  under s.6(4), and India data residency, are listed at
-  https://agiworkforce.com/trust.
+the export/delete controls above are implemented; the obligations we have not
+met, verifiable parental consent under s.9, notice in Eighth Schedule languages
+under s.6(4), and India data residency, are listed at
+https://agiworkforce.com/trust.
 
 ## Contact
 

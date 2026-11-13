@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Tooling/security owner
-Last updated: 2026-09-05
+Last updated: 2026-11-11
 Kind: ts-package
 Criticality: high
 
@@ -68,7 +68,10 @@ package at all. Neither has ever depended on it.
 
 ## Key Files
 
-- `src/index.ts` - public export surface.
+- `src/index.ts` - public export surface and action runner.
+- `src/profile.ts` - named browser profile launch.
+- `src/snapshot.ts` - page snapshots with element refs.
+- `src/types.ts` - action, snapshot and profile types.
 
 ## Commands
 

@@ -17,7 +17,7 @@ happens: your account and its Cloud data are scheduled for permanent deletion,
 and erasure starts after a cancellation deadline 24 hours later. It also says
 that anything the law or an active legal hold requires us to keep is kept.
 
-In the AGI Mobile app for iPhone and Android, Settings, Cloud Account carries
+In the AGI Mobile app for iPhone and Android, Settings, Account carries
 **Delete Account**.
 
 After you confirm, the dialog shows the date and time the 24 hours are up, and

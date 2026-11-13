@@ -2,7 +2,7 @@
 
 Status: Current target; implementation incomplete
 Owner: Product + frontend platform
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 
 This is the canonical frontend architecture and experience contract for AGI across Web, Desktop, Mobile, CLI, VS Code, and Chrome. It converts the current Claude/ChatGPT product evidence into AGI-owned behavior, component boundaries, screen ownership, and completion rules.
 
@@ -580,9 +580,10 @@ Cross-scope search respects data boundaries. A global UI must not imply a global
 
 ### 12.2 Desktop
 
-- One Tauri application with Local and Cloud modes.
+- Electron (`apps/desktop/electron`) is the one public Desktop application; the
+  retained Tauri application is internal code, not a second public shell.
 - Shared DOM components may be used for cloud chat and suitable local chat rendering.
-- Tauri owns privileged filesystem, keychain, updater, global shortcuts, microphone, accessibility insertion, native notifications, browser/computer-use bridge, and local host.
+- The Electron host owns the privileged native boundary: updater, global shortcuts, tray, notifications, dictation, computer use and the local developer host (`apps/desktop/electron/runtime/`).
 - System-wide dictation is a separate native subsystem, not a composer-only microphone.
 - Code workspace is a distinct composition over the developer-session protocol.
 
@@ -723,7 +724,7 @@ work superseded; mirrors the same corrections in
 ### 15.2 Surface delivery
 
 - Web: continuous deploy with preview, migration compatibility, canary/feature rollout, and rollback.
-- Desktop: signed/notarized Tauri bundle, staged updater manifest, schema compatibility, rollback/previous-version support.
+- Desktop: signed/notarized Electron installers on `v-cloud-desktop-*` tags (`release-desktop-cloud.yml`), staged updater manifest, schema compatibility, rollback/previous-version support.
 - Mobile: store release plus Expo update only for changes permitted by platform policy; native-module changes require store builds.
 - CLI: signed binaries/package releases with protocol compatibility and self-update policy.
 - VS Code: marketplace prerelease/stable channels and minimum CLI/app-server protocol version.

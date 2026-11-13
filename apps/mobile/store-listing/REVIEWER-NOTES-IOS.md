@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 Applies to: `com.agiworkforce.app`, version 0.0.1
 
 Paste the body of this file into the **App Review Information → Notes** field in
@@ -71,10 +71,11 @@ a Settings → Permissions screen that shows current status for each.
 | Microphone (`NSMicrophoneUsageDescription`)                | Voice input in the chat composer, and live voice mode in an AGI Cloud chat, which streams the microphone to AGI Cloud over WebRTC for the session (`src/features/voice/services/liveVoiceSession.ts`) and saves the transcript to that chat. Declared as Audio Data in the privacy manifest. |
 | Speech Recognition (`NSSpeechRecognitionUsageDescription`) | Transcribing that voice input. Uses the on-device iOS Speech framework via `expo-speech-recognition` (`src/features/voice/services/voiceInput.ts`).                                                                                                                                          |
 | Photo Library (`NSPhotoLibraryUsageDescription`)           | Choosing an existing image to attach to a chat.                                                                                                                                                                                                                                              |
+| Photo Library Add (`NSPhotoLibraryAddUsageDescription`)    | Saving an image the user chooses to save into the photo library (`services/fileCreation.ts`).                                                                                                                                                                                                |
 | Face ID (`NSFaceIDUsageDescription`)                       | Optional app lock, opt-in from Settings → Safety & Security (`src/features/auth/hooks/useBiometricGate.ts`). Off by default.                                                                                                                                                                 |
-| Calendar / Reminders                                       | Same optional device-context connector, for "what's on my calendar" style questions. Off by default.                                                                                                                                                                                         |
+| Calendar / Reminders                                       | Optional. Calendar is read when the user asks about their schedule, and an event is added only after the user confirms it in a chat. Reminders are only written, when the user creates or confirms one (`src/features/reminders/service.ts`); they are never read.                           |
 | Translation (no permission prompt)                         | On-device translation through Apple's Translation framework (`native/ios/AGITranslate.swift`). No text is sent to a server.                                                                                                                                                                  |
-| Notifications                                              | Optional; used for background task and cloud job completion alerts.                                                                                                                                                                                                                          |
+| Notifications                                              | Optional; used for model-download, reminder and cloud job completion alerts, and for agent actions waiting on the user's approval.                                                                                                                                                           |
 
 The app does **not** link `expo-location` and requests no location permission.
 The app contains no HealthKit code and requests no Health permission, the Apple
@@ -146,11 +147,14 @@ This section identifies website, legal and support destinations in the
 current mobile source. `openExternalUrl` (`lib/safeOpenURL.ts`) accepts only
 reviewed HTTPS hosts; other link handlers are described separately below.
 
-**A. Account destination.** One account link renders in this version:
+**A. Account destinations.** These account links render in this version:
 
-| #   | Control                                       | Opens                               | Call site                                       | Who sees it                                                                                                      |
-| --- | --------------------------------------------- | ----------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| A1  | **Continue** on the "Change your email" alert | `agiworkforce.com/settings/account` | `src/features/settings/cloud-account/index.tsx` | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
+| #   | Control                                                                                 | Opens                                                     | Call site                                                       | Who sees it                                                                                                      |
+| --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| A1  | **Continue** on the "Change your email" alert                                           | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx`                 | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
+| A2  | **Advanced Account Security**, **Add or remove a sign-in method**, **Open Web account** | `agiworkforce.com/settings/security`, `/settings/account` | `src/features/settings/account-security/index.tsx`              | Any signed-in Cloud account. Opens in an in-app Safari sheet.                                                    |
+| A3  | **Turn on** in the two-factor banner                                                    | `agiworkforce.com/settings/security`                      | `src/features/settings/account-security/WorkspaceMfaBanner.tsx` | A member of a workspace that requires two-factor authentication. In-app Safari sheet.                            |
+| A4  | A security recommendation on the workspace administration screen                        | an `agiworkforce.com/workspace/*` admin page              | `src/features/team/WorkspaceAdministration.tsx`                 | A workspace administrator. In-app Safari sheet.                                                                  |
 
 No link in the app opens a page about pricing, billing, invoices, sales or
 upgrades.
@@ -159,40 +163,59 @@ upgrades.
 Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
 account Terms confirmation also links to Terms and Privacy
 (`app/(auth)/login.tsx`, `src/features/auth/components/MobileSignUp.tsx`).
-Settings → Privacy links to Terms and Privacy
+Settings → Privacy links to Privacy, Data rights requests and Terms
 (`src/features/settings/cloud-privacy/index.tsx`). Settings → Personalization links its
 custom-instructions helper to the acceptable-use page
 (`src/features/settings/personalization/index.tsx`). Password recovery opens
-`agiworkforce.com/login`, whose password step offers Forgot password
-(`app/(auth)/reset-password.tsx`), and
-the desktop-pairing safety disclosure opens `agiworkforce.com/security`
-(`src/features/companion/components/PairingRiskDisclosure.tsx`).
+`agiworkforce.com/login`, whose password step offers Forgot password, and
+account recovery opens `agiworkforce.com/recover`
+(`app/(auth)/reset-password.tsx`). The desktop-pairing safety disclosure opens
+`agiworkforce.com/security`
+(`src/features/companion/components/PairingRiskDisclosure.tsx`). When the
+server refuses a locked or suspended account, the alert's **Open on the web**
+opens the reset-password or appeal page (`services/api.ts`), and the updated
+Terms notice opens `/terms` (`services/termsNotice.ts`).
 
-**C. Opened in an in-app Safari sheet, not the browser.** Settings → About opens
-`agiworkforce.com`, `/privacy` and `/terms` through `openInAppBrowser`
-(`app/(app)/about.tsx:224`, `:230`, `:236`), which presents
-`SFSafariViewController` as a page sheet rather than leaving the app. Assistant
-output that contains a link opens the same way and is never auto-followed
-(`src/features/chat/components/MessageContentRenderer.tsx:19-32`); a
-non-`http(s)` scheme requires a confirmation alert first.
+**C. Opened in an in-app Safari sheet, not the browser.** These go through
+`openInAppBrowser` (`lib/safeOpenURL.ts`), which presents
+`SFSafariViewController` as a page sheet rather than leaving the app: Settings →
+About opens `agiworkforce.com`, `/privacy`, `/terms`, `/acceptable-use`, `/help`
+and `/status` (`app/(app)/about.tsx`); Settings opens the Help Center
+(`src/features/settings/index.tsx`); Settings → Permissions opens a help article
+(`src/features/settings/permissions/index.tsx`); the first-run disclosure opens
+`/privacy` and the India notice at `/privacy/india`
+(`src/features/onboarding/components/FirstRunDisclosureModal.tsx`); the cloud
+provider consent opens `/privacy` and the provider list at `/subprocessors`
+(`src/features/settings/cloud-privacy/NamedProviderConsentModal.tsx`,
+`services/providerConsent.ts`); and a notification whose target has no screen in
+the app opens its web page (`services/notifications.ts`). A link in assistant
+output, and a map place or route card, also opens in the sheet and is never
+auto-followed; a non-`http(s)` scheme requires a confirmation alert first
+(`src/features/chat/components/MarkdownInline.tsx`,
+`src/features/chat/components/InteractiveCardBlock.tsx`).
 
-**D. Not `agiworkforce.com`.** Settings → Connectors → GitHub opens the GitHub
-App install flow at `${API_URL}/api/github/install/start`
-(`src/features/settings/cloud-connectors/index.tsx:690`, URL from
-`services/connectors.ts:7-9`), an OAuth start on our own host. The Connect GitHub
-button in the new cloud code session sheet runs the same install from the app
-(`src/features/cloud-code/githubInstall.ts`). It first opens
+**D. Not `agiworkforce.com`, or not a web page.** Settings → Connectors
+authorizes a connector in an in-app authentication session
+(`services/connectors.ts`, `authorizeConnectorInApp`). The Connect GitHub
+button in the new cloud code session sheet runs the GitHub App install from the
+app (`src/features/cloud-code/githubInstall.ts`). It first opens
 `agiworkforce.com/github/connect`, which names the requesting AGI account before
 GitHub, and always returns through the verified link
 `https://agiworkforce.com/github/installed`: inside an authentication session on
 iOS 17.4 and later, as a universal link in Safari on older iOS, and as a verified
 App Link from a browser tab on Android. The app then names the GitHub account and
 asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
-`app/legal/article-50.tsx:34` opens the EU AI Act text at
-`artificialintelligenceact.eu`. A map result card opens Maps
-(`src/features/chat/components/InteractiveCardBlock.tsx:292`). `mailto:` to
-`support@agiworkforce.com`, and the iOS/Android device-settings intents, are the
-only other `Linking.openURL` targets in the app.
+`app/legal/article-50.tsx` opens the EU AI Act text at
+`artificialintelligenceact.eu`. A cloud task that asks the user to open a link
+shows an **Open link** button for it
+(`src/features/tasks/components/CloudRunInputForm.tsx`). The remaining
+`Linking.openURL` targets are not web pages: `mailto:` to
+`support@agiworkforce.com` (`app/(app)/about.tsx`, `services/contentReport.ts`)
+and to the account's own address for the desktop link
+(`src/features/companion/components/DesktopSetupChecklistView.tsx`), an
+`otpauth:` link to an authenticator app
+(`src/features/settings/account-security/TwoFactorSection.tsx`), and the
+iOS/Android device-settings intents.
 
 **E. Present in source but not rendered in this version.** These controls
 exist in the source for a build that sells through the App Store. None of them
@@ -277,8 +300,13 @@ reason:
 ## Privacy and data collection
 
 - Local Mode collects no personal data.
-- Signing in to AGI Cloud collects the account email address, and the name if
-  the sign-in method provides one. Both are used for app functionality only.
+- Signing in to AGI Cloud collects, linked to the account and never for
+  tracking, the types the privacy manifest declares: email address, name (if
+  the sign-in method provides one), user ID, device ID, and the content of
+  Cloud chats (text, live-voice audio, attached photos), all for app
+  functionality; and product interaction, for analytics, governed by the
+  **Product analytics** switch in Settings → Privacy
+  (`src/features/settings/cloud-privacy/ProductAnalyticsConsentGroup.tsx`).
 - `NSPrivacyTracking` is `false`. The app contains no IDFA/AdSupport code, no
   ad SDK, and no cross-app tracking.
 - The privacy manifest is generated from `ios.privacyManifests` in
@@ -289,24 +317,29 @@ reason:
 
 Three separate mechanisms, described exactly so you can check each one:
 
-- **First run** shows a blocking disclosure before the app is usable, stating
-  "You are interacting with an AI system." and naming the on-device model and any
-  third-party cloud provider. It carries the EU AI Act Article 50(1) and 50(2)
-  text verbatim (`packages/contracts/compliance/src/article50-disclosure.ts`) and
-  acceptance is recorded against a hash of the exact copy shown.
-- **Every completed assistant turn** carries a provenance footer naming its
-  source, "AGI Cloud", or "Local Mode · <model name>" for on-device inference.
-  and the turn's role label is the model name or "AGI", never a person's name
-  (`src/features/chat/components/ProvenanceFooter.tsx:10-14`, rendered from
-  `src/features/chat/components/MessageBubble.tsx:894-895`). The footer names the
-  system rather than printing the literal words "AI-generated".
+- **First run** shows a blocking disclosure, "Before you start", before the
+  app is usable. It states "You are chatting with an AI, and it can make
+  mistakes.", says what Local Mode and AGI Cloud collect, and links to the
+  Privacy Policy and the India DPDP notice. **Why we show this** expands the EU
+  AI Act Article 50(1) text verbatim
+  (`src/features/onboarding/components/FirstRunDisclosureModal.tsx`, copy from
+  `composeShortFirstRunDisclosure` in
+  `packages/contracts/compliance/src/article50-disclosure.ts`). Acceptance is
+  recorded against a hash of the copy (`recordDisclosureAcceptance`).
+- **Every completed assistant turn that records its model** carries a
+  provenance footer naming its source: "AGI Cloud · <model name>" (or "AGI
+  Cloud" alone when the model is not known), or "Local Mode · <model name>" for
+  on-device inference. The turn's role label is the model name or "AGI", never a
+  person's name (`src/features/chat/components/ProvenanceFooter.tsx`, rendered
+  from `getProvenance` in `src/features/chat/components/MessageBubble.tsx`). The
+  footer names the system rather than printing the literal words "AI-generated".
 - **The Data Controls export** (Settings → Data Controls → Export Local Data)
   wraps each conversation transcript in a machine-readable Article 50(2)
   provenance marker naming the provider and model
-  (`services/dsarExport.ts:49-72`). The ordinary conversation export and share
+  (`buildMarkedTranscript` in `services/dsarExport.ts`). The ordinary conversation export and share
   in the chat screen, PDF, plain text, Markdown, copy-to-clipboard
   (`services/fileCreation.ts`), carries role labels only and does **not** add
-  that marker. We state the difference here rather than let the first-run copy be
+  that marker. We state the difference here rather than let the export marking be
   read wider than the code supports.
 
 We do not claim full compliance with India's DPDP Act 2023. The itemised notice

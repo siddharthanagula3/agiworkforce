@@ -12,7 +12,7 @@ applied migration belong here instead.
 
 Its header says the Enterprise audit trail had a read endpoint at
 `services/api-gateway/src/routes/enterprise.ts`. That service was removed in the
-2026-07 restructure; `services/` now holds only `signaling-server`.
+2026-07 restructure; `services/` then held only `signaling-server`; `upload-scanner` was added later.
 
 Writes land through `recordAuditEvent` (`apps/web/lib/security-audit.ts`)
 whenever an event carries an organizationId. The read and export path shipped on

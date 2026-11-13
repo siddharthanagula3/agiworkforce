@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastUpdated": "2026-09-22",
+  "lastUpdated": "2026-11-11",
   "currentSourcesOfTruth": [
     "AGENTS.md",
     "CLAUDE.md",
@@ -46,7 +46,17 @@
     {
       "path": "docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md",
       "status": "dated-external-research",
-      "rule": "Current through 2026-09-21 for competitor-sensitive decisions; implementation and launch status still come from code and current repository owners."
+      "rule": "Dated through 2026-09-21; vendor facts after that date come from docs/research/assistant-comparison-2026-11-11.md. Implementation and launch status still come from code and current repository owners."
+    },
+    {
+      "path": "docs/research/assistant-comparison-2026-11-11.md",
+      "status": "dated-external-research",
+      "rule": "Latest ChatGPT, Claude, Gemini and Perplexity comparison, read 2026-11-11. Reopen the cited vendor page before acting on a claim; the AGI column does not override code, the billing catalog or the release state."
+    },
+    {
+      "path": "docs/research/competitor-surfaces-2026-10-24.md",
+      "status": "dated-external-research",
+      "rule": "Superseded for OpenAI, Anthropic, Google and Perplexity by docs/research/assistant-comparison-2026-11-11.md; still the 2026-10-24 record for the other vendors."
     },
     {
       "path": "docs/research/cross-surface-continuity-2026-09-21.md",
@@ -59,12 +69,12 @@
       "rule": "Use as a bounded adoption hypothesis only; it does not authorize Jev for permissions, billing, trust, or consequential actions."
     },
     {
-      "path": "/Users/siddhartha/Desktop/claude_reference",
+      "path": "/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference",
       "status": "external-reference-evidence",
       "rule": "Use screenshots and notes for product parity research only. Do not copy proprietary code or assets."
     },
     {
-      "path": "/Users/siddhartha/Desktop/chatgpt_reference",
+      "path": "/Users/siddhartha/Desktop/AGI/reference-screenshots/chatgpt_reference",
       "status": "external-reference-evidence",
       "rule": "Use screenshots and notes for product parity research only. Do not copy proprietary code or assets."
     }

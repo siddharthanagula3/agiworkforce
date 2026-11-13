@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-11-02
+Last updated: 2026-11-11
 
 A compact map of the repository. Depth lives in `docs/architecture/`; rules for
 changing any of it live in `AGENTS.md`.
@@ -17,13 +17,13 @@ Two workspaces in one repository:
 
 | Root              | Holds                                                             |
 | ----------------- | ----------------------------------------------------------------- |
-| `apps/`           | The six shipping client surfaces                                  |
+| `apps/`           | The six client surfaces                                           |
 | `packages/`       | Shared TypeScript, grouped by role                                |
 | `crates/`         | Shared Rust used by both the desktop and the CLI                  |
 | `services/`       | Deployable backend services: `signaling-server`, `upload-scanner` |
 | `infrastructure/` | Deploy targets that are not products (`sandbox`)                  |
 | `scripts/`        | Repository guards, generators, release and database tooling       |
-| `tools/`          | Internal tooling: evals, skill vetting                            |
+| `tools/`          | Internal tooling: evals, load tests, skill vetting                |
 | `docs/`           | Durable knowledge (see `AGENTS.md` §11 for the taxonomy)          |
 
 ## Surfaces

@@ -76,7 +76,7 @@ description of what runs today, not a shipped-feature claim.
 | Mobile            | 0.0.1   | On-device Local chat exists in the codebase, but no build has reached TestFlight, Play Internal Testing, or a store listing. In-app purchase is fail-closed.                                            |
 | Web               | 0.0.1   | The deepest surface: product site, chat, and billing run in production.                                                                                                                                 |
 | Desktop           | 0.0.1   | Electron is the only public Desktop product: a managed-cloud shell with approved folders and computer use. No current public installer has been published; retained Tauri code is not a public product. |
-| CLI               | 0.0.1   | Interactive TUI and one-shot mode. `release-cli.yml` only cuts a release from a git tag matching `Cargo.toml`; GitHub release artifacts were removed.                                                   |
+| CLI               | 0.0.1   | Interactive TUI and one-shot mode. `release-cli.yml` publishes a signed release from a `v-cli-<semver>` tag equal to the `Cargo.toml` version; it has not completed a run yet.                          |
 | Chrome Extension  | 0.0.1   | Manifest V3 with browser automation and a side panel. Not yet published to the Chrome Web Store.                                                                                                        |
 | VS Code Extension | 0.0.1   | IDE-native surface. Not yet published to the VS Code Marketplace; depends on a CLI release that has not shipped.                                                                                        |
 
@@ -169,12 +169,12 @@ plus a per-request explain view.
 
 - **Frontend**: React 19 + TypeScript 5.9 (desktop, web), React Native 0.86 /
   Expo 57 (mobile), Tailwind CSS 4, Radix UI, Framer Motion, Zustand 5,
-  React Router 7 (desktop), Expo Router (mobile), Next.js App Router (web),
+  Expo Router (mobile), Next.js App Router (web),
   Monaco Editor, xterm.js, Mermaid/KaTeX/react-markdown, i18next.
 - **Desktop**: the public macOS application is an Electron 44 shell over the
-  shared React client. The repository also retains the Rust/Tauri 2.11 shell
+  shared React client. The repository also retains the Rust/Tauri 2 shell
   for internal value; it is not a second public Desktop product.
-- **Native and local runtime**: Rust (edition 2021, toolchain 1.94.0),
+- **Native and local runtime**: Rust (editions 2021 and 2024, toolchain 1.94.0),
   enigo/rdev/xcap, portable-pty, git2, cpal, keyring (OS credential store),
   reqwest, and tokio support the retained native shell and released CLI.
 - **Services**: Express 5 (signaling server), Clerk (web auth), Stripe
@@ -182,7 +182,7 @@ plus a per-request explain view.
   (`apps/web/db/neon`), Upstash Redis (rate limiting/cache), Vercel (web
   deployment), Pino (logging).
 - **CLI**: Rust with clap 4, ratatui, rustyline, syntect, crossterm.
-- **Build and CI**: pnpm 10, Vite 7, GitHub Actions, Playwright, Vitest,
+- **Build and CI**: pnpm 10, Vite 8, GitHub Actions, Playwright, Vitest,
   ESLint 9 + Prettier, Husky + lint-staged + commitlint.
 
 `apps/web/db/neon` is an immutable, contiguous migration chain checked
@@ -253,7 +253,6 @@ commit `.env`, `.env.local`, signing credentials, or provider secrets.
 ```bash
 # Reads process.env only and prints key names, never values.
 pnpm env:doctor -- --scope web --mode production
-pnpm env:doctor -- --scope gateway --mode production
 pnpm env:doctor -- --scope signaling --mode production
 pnpm env:doctor -- --scope scanner --mode production
 
@@ -306,8 +305,8 @@ run checks that production is serving the current `main` commit.
   `release-desktop.yml` and `build-windows-release.yml` paths are retained
   internal workflows and do not define the public Desktop product.
 - **CLI**: `release-cli.yml` publishes a GitHub Release whose checksum
-  manifest is signed with the pinned release key, from a git tag matching
-  `apps/cli/Cargo.toml`; not every commit to `apps/cli` has one.
+  manifest is signed with the pinned release key, from a `v-cli-<semver>`
+  tag equal to the `apps/cli/Cargo.toml` version.
   `curl -fsSL https://agiworkforce.com/install.sh | bash` installs it once the
   first signed release is published, and refuses anything it cannot verify.
 - **Mobile**: built with EAS. Release scripts for App Store and Play
@@ -333,8 +332,8 @@ vulnerability privately through GitHub's advisory flow: [`SECURITY.md`](SECURITY
 - **Sandbox policies**: `crates/agiworkforce-sandbox-policy` enforces
   execution policy; the CLI runs agent commands under Seatbelt on macOS and
   bubblewrap on Linux.
-- **Input validation**: Zod schemas on API boundaries; Helmet and rate
-  limiting on Express services.
+- **Input validation**: Zod schemas on API boundaries; rate limiting
+  (`express-rate-limit`) on the signaling server.
 - **Secure automation**: the computer-use loop enforces a
   `ComputerUseSafetyLayer` with shared dangerous-pattern guards and an
   allowlist for destructive operations.

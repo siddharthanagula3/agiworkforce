@@ -512,7 +512,7 @@ EDGE_API_KEY=… EDGE_CLIENT_ID=… EDGE_PRODUCT_ID=… \
 
 The script uploads the package to the draft submission, waits for the upload
 operation, submits the draft for certification with the notes in
-`EDGE_CERTIFICATION_NOTES` (default: the version), and waits for the publish
+`EDGE_CERTIFICATION_NOTES` (default: `AGI Extension <version>`), and waits for the publish
 operation (v1.1 Update REST API, learn.microsoft.com/microsoft-edge/extensions/update/api/using-addons-api,
 read 2026-10-19). A refusal such as `InProgressSubmission` stops the run with
 the store's reason. The Edge extension ID differs from the Chrome one, so add

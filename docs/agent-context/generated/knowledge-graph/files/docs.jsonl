@@ -78,7 +78,6 @@
 {"path":"docs/compliance/global-distribution.md","unit":"docs","role":"doc","lanes":["enterprise-admin-surface"],"unparsed":"notCode"}
 {"path":"docs/compliance/guardian-third-party-licensing.md","unit":"docs","role":"doc","lanes":["enterprise-admin-surface"],"unparsed":"notCode"}
 {"path":"docs/compliance/legal-hold-and-ediscovery.md","unit":"docs","role":"doc","lanes":["enterprise-admin-surface"],"unparsed":"notCode"}
-{"path":"docs/compliance/mobile-store-feature-justification.md","unit":"docs","role":"doc","lanes":["enterprise-admin-surface"],"unparsed":"notCode"}
 {"path":"docs/compliance/policy-versions.json","unit":"docs","role":"config","lanes":["enterprise-admin-surface"],"unparsed":"notCode"}
 {"path":"docs/compliance/README.md","unit":"docs","role":"doc","lanes":["enterprise-admin-surface"],"unparsed":"notCode"}
 {"path":"docs/compliance/siem-event-schema.md","unit":"docs","role":"doc","lanes":["enterprise-admin-surface"],"unparsed":"notCode"}
@@ -124,6 +123,7 @@
 {"path":"docs/research/agiworkforce-business-assessment-2026-10-11.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/agiworkforce-pre-advertising-2026-10-12.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/ai-plan-storage-and-usage-2026-11-07.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/research/assistant-comparison-2026-11-11.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/assistant-identity-disclosure-2026-10-02.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/autonomous-company-roadmap.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/chat-system-prompt-references-2026-10-10.md","unit":"docs","role":"doc","unparsed":"notCode"}
@@ -206,9 +206,6 @@
 {"path":"docs/specs/semantic-decisions/system-design.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/web-ui-parity/spec.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/web-ui-parity/tasks.md","unit":"docs","role":"doc","unparsed":"notCode"}
-{"path":"docs/specs/website-launch/AGENT_GOAL.md","unit":"docs","role":"doc","unparsed":"notCode"}
-{"path":"docs/specs/website-launch/CONTINUE_GOAL.md","unit":"docs","role":"doc","unparsed":"notCode"}
-{"path":"docs/specs/website-launch/HOOK_USAGE.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/website-launch/REFERENCE_INDEX.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/website-launch/reference-inventory.json","unit":"docs","role":"config","unparsed":"notCode"}
 {"path":"docs/specs/website-launch/source-baseline.json","unit":"docs","role":"config","unparsed":"notCode"}

@@ -2,10 +2,11 @@
 
 Status: Current
 Owner: Desktop surface maintainers
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 
 Two desktop applications build from this directory, and they show different
-renderers. The repository-wide map is in `ARCHITECTURE.md`; the rules that govern changing any
+renderers. Electron is the public Desktop; Tauri is retained internal code, not
+a second public product. The repository-wide map is in `ARCHITECTURE.md`; the rules that govern changing any
 of it are in `AGENTS.md`.
 
 ## The two shells
@@ -72,7 +73,7 @@ session never starts, check the grant store before suspecting the code.
 
 ## Release
 
-`docs/qa/screenshots` holds QA captures. `docs/runbooks/desktop-electron-macos-release.md`
+`docs/runbooks/desktop-electron-macos-release.md`
 is the signing and notarisation procedure for the public Electron app, including a
 release built on a Mac, and `docs/runbooks/desktop-macos-release.md` is the one for
 the retained Tauri app. The release workflows themselves are

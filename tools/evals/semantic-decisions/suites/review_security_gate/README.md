@@ -7,7 +7,7 @@ chunk already gets?
 
 ## Production call site
 
-`reviewPullRequestDiff` in `apps/web/lib/code-review/pipeline.ts:103`. It parses the
+`reviewPullRequestDiff` in `apps/web/lib/code-review/pipeline.ts`. It parses the
 diff, chunks it at 40 KB with a cap of 8 chunks, and then runs **every** pass in
 `REVIEW_PASSES` over **every** chunk:
 

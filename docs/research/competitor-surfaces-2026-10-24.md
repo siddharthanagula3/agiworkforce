@@ -1,6 +1,6 @@
 # Competitor applications by surface
 
-Status: Current research snapshot
+Status: Dated research snapshot; superseded for OpenAI, Anthropic, Google and Perplexity by `assistant-comparison-2026-11-11.md`
 Owner: Product research
 Verified: 2026-10-24
 Coverage: public official pages read on 2026-10-24, with prior repository research re-checked
