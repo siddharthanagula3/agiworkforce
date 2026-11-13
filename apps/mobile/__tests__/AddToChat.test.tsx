@@ -165,6 +165,11 @@ const RESEARCH_CAPABLE_MODEL_ID = requireMobileCloudModel((model) => {
   return capabilities?.research === true && capabilities.search === true;
 }, 'research-and-search-capable Mobile Cloud model').id;
 
+const CODE_CAPABLE_MODEL_ID = requireMobileCloudModel(
+  (model) => getModelMetadataById(model.id)?.capabilities.codeExecution === true,
+  'code-execution-capable Mobile Cloud model',
+).id;
+
 function resetStores() {
   useChatStore.setState({
     conversations: [],
@@ -176,7 +181,7 @@ function resetStores() {
       webSearch: true,
       imageGen: true,
       health: false,
-      codeExecution: false,
+      codeExecution: true,
       research: false,
     },
   });
@@ -633,17 +638,32 @@ describe('AddToChatSheet', () => {
       }
     });
 
-    it('never offers Run code in the + sheet, even fully entitled in Cloud', () => {
+    it('offers Run code per chat only while the Settings permission allows code execution', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
+      useModelStore.setState({ selectedModel: CODE_CAPABLE_MODEL_ID });
       useTierStore.setState({
         tier: 'max',
-        grantedCapabilities: ['canUseImages', 'canUseCloudExecution', 'canUseDeepResearch'],
+        grantedCapabilities: ['canUseCloudExecution'],
         codeExecutionAvailable: true,
       } as never);
+      useChatViewStore.setState({ styleConversationId: 'chat-42', runCodeByConversation: {} });
 
+      const permitted = renderSheet();
+      expect(permitted.getByText('Run code')).toBeTruthy();
+      fireEvent(permitted.getByLabelText('Run code off'), 'valueChange', true);
+      expect(useChatViewStore.getState().runCodeByConversation).toEqual({ 'chat-42': true });
+      permitted.unmount();
+
+      useChatStore.setState({
+        features: {
+          webSearch: true,
+          imageGen: true,
+          health: false,
+          codeExecution: false,
+          research: false,
+        },
+      });
       const { queryByText } = renderSheet();
-
       expect(queryByText('Run code')).toBeNull();
     });
 

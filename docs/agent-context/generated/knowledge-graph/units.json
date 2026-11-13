@@ -2458,7 +2458,7 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 608,
+      "files": 609,
       "roles": {
         "asset": 12,
         "config": 6,
@@ -2466,7 +2466,7 @@
         "other": 31,
         "source": 243,
         "style": 3,
-        "test": 310
+        "test": 311
       }
     },
     {
@@ -2616,7 +2616,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8311,
+      "files": 8312,
       "roles": {
         "asset": 57,
         "config": 83,
@@ -2624,7 +2624,7 @@
         "generated": 2,
         "migration": 740,
         "other": 37,
-        "source": 3520,
+        "source": 3521,
         "style": 35,
         "test": 3786
       }

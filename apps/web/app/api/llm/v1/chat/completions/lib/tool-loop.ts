@@ -487,6 +487,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import {
   CHAT_TOOL_LOOP_BUDGET_MS,
+  FUNCTION_TEARDOWN_RESERVE_MS,
   PROVIDER_STREAM_DEADLINE_MS,
   TOOL_CALL_DEADLINE_MS,
   nestedDeadlineMs,
@@ -854,7 +855,7 @@ export interface ToolLoopFailoverPlan {
 
 export interface ToolLoopPolicy {
   maxSteps: number;
-  maxDurationMs: number | undefined;
+  maxDurationMs: number;
 }
 
 export function resolveToolLoopPolicy(
@@ -3548,7 +3549,10 @@ export async function executeOfferedToolCall(
     ? AbortSignal.any([input.signal, callAbort.signal])
     : callAbort.signal;
   const sessionScope = conversationId
-    ? managedCloudE2BSessionScope(userId, conversationId)
+    ? {
+        ...managedCloudE2BSessionScope(userId, conversationId),
+        releaseByMs: Date.now() + TOOL_CALL_DEADLINE_MS + FUNCTION_TEARDOWN_RESERVE_MS,
+      }
     : undefined;
   const sandbox: { executor: E2BExecutor | null; baseline: SandboxSnapshot | null } = {
     executor: null,
@@ -4552,6 +4556,7 @@ export async function* runToolLoop(
     conversationId && options.userId
       ? {
           ...managedCloudE2BSessionScope(options.userId, conversationId),
+          releaseByMs: Date.now() + maxDurationMs + FUNCTION_TEARDOWN_RESERVE_MS,
           ...(processed.freeTrial && freeTrialSpend
             ? { freeTurnHold: { reservation: processed.freeTrial, spend: freeTrialSpend } }
             : {}),
@@ -6348,7 +6353,7 @@ export async function* runToolLoop(
       if (options.takeSteerMessages) {
         yield* applySteerMessages(await options.takeSteerMessages());
       }
-      if (maxDurationMs !== undefined && now() - startedAt >= maxDurationMs) {
+      if (now() - startedAt >= maxDurationMs) {
         logger.warn(
           { maxDurationMs, maxSteps, completedSteps: step, provider: processed.provider },
           '[tool-loop] invocation time budget reached without terminal stop',

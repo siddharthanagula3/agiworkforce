@@ -64,6 +64,11 @@ interface ViewState {
   styleConversationId: string | null;
   chatStyleByConversation: Record<string, ChatStyle>;
   disabledConnectorIdsByConversation: Record<string, string[]>;
+  /**
+   * The composer's Run code switch, per conversation. `features.codeExecution`
+   * only permits execution; this asks the server to run code on every turn.
+   */
+  runCodeByConversation: Record<string, true>;
   features: ChatFeatures;
   /** Output kind the composer is aimed at. See {@link MediaMode}. */
   mediaMode: MediaMode;
@@ -81,6 +86,7 @@ interface ViewState {
   bindStyleConversation: (conversationId: string) => void;
   adoptStyleSelection: (fromKey: string, toKey: string) => void;
   toggleChatConnector: (key: string, connectorId: string) => void;
+  setRunCode: (key: string, enabled: boolean) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
   setMediaMode: (mode: MediaMode) => void;
   setMediaModel: (kind: 'image' | 'video', modelId: string) => void;
@@ -312,6 +318,7 @@ export const useChatViewStore = create<ViewState>()(
       styleConversationId: null,
       chatStyleByConversation: {},
       disabledConnectorIdsByConversation: {},
+      runCodeByConversation: {},
       features: {
         webSearch: true,
         imageGen: true,
@@ -389,10 +396,12 @@ export const useChatViewStore = create<ViewState>()(
           if (fromKey === toKey) return state;
           const pending = state.chatStyleByConversation[fromKey];
           const pendingSources = state.disabledConnectorIdsByConversation[fromKey];
-          if (!pending && !pendingSources) return state;
+          const pendingRunCode = state.runCodeByConversation[fromKey];
+          if (!pending && !pendingSources && !pendingRunCode) return state;
           const { [fromKey]: _pending, ...rest } = state.chatStyleByConversation;
           const { [fromKey]: _pendingSources, ...restSources } =
             state.disabledConnectorIdsByConversation;
+          const { [fromKey]: _pendingRunCode, ...restRunCode } = state.runCodeByConversation;
           return {
             chatStyleByConversation: pending
               ? { ...rest, [toKey]: rest[toKey] ?? pending }
@@ -400,6 +409,9 @@ export const useChatViewStore = create<ViewState>()(
             disabledConnectorIdsByConversation: pendingSources
               ? { ...restSources, [toKey]: restSources[toKey] ?? pendingSources }
               : state.disabledConnectorIdsByConversation,
+            runCodeByConversation: pendingRunCode
+              ? { ...restRunCode, [toKey]: pendingRunCode }
+              : state.runCodeByConversation,
             ...(state.styleConversationId === fromKey ? { styleConversationId: toKey } : {}),
           };
         }),
@@ -413,6 +425,11 @@ export const useChatViewStore = create<ViewState>()(
           return {
             disabledConnectorIdsByConversation: next.length > 0 ? { ...rest, [key]: next } : rest,
           };
+        }),
+      setRunCode: (key, enabled) =>
+        set((state) => {
+          const { [key]: _previous, ...rest } = state.runCodeByConversation;
+          return { runCodeByConversation: enabled ? { ...rest, [key]: true } : rest };
         }),
       setFeature: (feature, enabled) =>
         set((state) => ({ features: { ...state.features, [feature]: enabled } })),

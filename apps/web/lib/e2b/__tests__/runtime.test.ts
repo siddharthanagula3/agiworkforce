@@ -92,6 +92,7 @@ interface TestScope {
   planTier?: string;
   templateId?: string | null;
   explicitCredential?: { envVar: string; value: string } | null;
+  releaseByMs?: number;
 }
 
 function scope(conversationId: string, userId = 'user-1', planTier = 'pro'): TestScope {
@@ -1200,6 +1201,24 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     expect(opts.timeoutMs).toBe(getPlanSandboxTtlMs('max'));
   });
 
+  it('holds and times out a chat turn sandbox only until the turn releases it', async () => {
+    const turnLeftMs = 5 * 60_000;
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor({
+      ...scope('conv-turn', 'user-turn', 'team'),
+      releaseByMs: Date.now() + turnLeftMs,
+    });
+
+    const held = (reserveSandboxComputeInterval.mock.calls[0] as unknown[])[0] as {
+      ttlMs: number;
+    };
+    expect(held.ttlMs).toBeLessThanOrEqual(turnLeftMs);
+    expect(held.ttlMs).toBeGreaterThan(turnLeftMs - 5_000);
+    expect(held.ttlMs).toBeLessThan(getPlanSandboxTtlMs('team'));
+    const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
+    expect(opts.timeoutMs).toBe(held.ttlMs);
+  });
+
   it('gives a Free sandbox only the lifetime its window funded, and says so on the first run', async () => {
     const funded = 3 * 60_000;
     reserveSandboxComputeInterval.mockResolvedValueOnce({
@@ -1256,6 +1275,145 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
       expect.objectContaining({ sandboxId: 'sbx-resume-spent', reason: 'pause' }),
     );
     expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles an interval a shorter caller left open and holds the sandbox until this caller releases it', async () => {
+    const conversation = scope('conv-rerun-then-turn', 'user-rerun-then-turn', 'team');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    sessions.set(scopeKey(conversation), {
+      sandboxId: 'sbx-rerun-then-turn',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    });
+    const turnLeftMs = 6 * 60_000;
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor({ ...conversation, releaseByMs: Date.now() + turnLeftMs });
+
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-rerun-then-turn', reason: 'pause' }),
+    );
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(reserveSandboxComputeInterval.mock.invocationCallOrder[0]!).toBeLessThan(
+      meterSandboxComputeInterval.mock.invocationCallOrder[0]!,
+    );
+    const held = (reserveSandboxComputeInterval.mock.calls[0] as unknown[])[0] as {
+      ttlMs: number;
+    };
+    expect(held.ttlMs).toBeLessThanOrEqual(turnLeftMs);
+    expect(held.ttlMs).toBeGreaterThan(turnLeftMs - 5_000);
+    const opts = (connect.mock.calls[0] as unknown[])[1] as { timeoutMs: number };
+    expect(opts.timeoutMs).toBe(held.ttlMs);
+  });
+
+  it('leaves an open interval on the hold that funds it when its replacement is refused', async () => {
+    const conversation = scope('conv-rerun-then-refused', 'user-rerun-then-refused', 'team');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    const openInterval = {
+      sandboxId: 'sbx-rerun-then-refused',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    };
+    sessions.set(scopeKey(conversation), openInterval);
+    reserveSandboxComputeInterval.mockResolvedValueOnce({
+      outcome: 'refused',
+      error: { status: 429, code: 'rolling_five_hour_limit_reached' },
+    } as never);
+    const causes: string[] = [];
+    const { getE2BExecutor } = await import('../runtime');
+
+    await expect(
+      getE2BExecutor({ ...conversation, releaseByMs: Date.now() + 6 * 60_000 }, (cause) =>
+        causes.push(cause),
+      ),
+    ).resolves.toBeNull();
+
+    expect(causes).toEqual(['over-quota']);
+    expect(meterSandboxComputeInterval).not.toHaveBeenCalled();
+    expect(sessions.get(scopeKey(conversation))).toEqual(openInterval);
+    expect(connect).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('continues an open interval a later caller reuses, so its earlier seconds are billed', async () => {
+    const conversation = scope('conv-continued', 'user-continued', 'team');
+    const admittedRate = getSandboxComputeMicrousdPerSecond() * 2;
+    const admittedAtMs = Date.now() - 60_000;
+    sessions.set(scopeKey(conversation), {
+      sandboxId: 'sbx-continued',
+      contexts: {},
+      activeSinceMs: admittedAtMs,
+      computeMicrousdPerSecond: admittedRate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: admittedRate * 300 },
+    });
+    const { getE2BExecutor } = await import('../runtime');
+
+    const executor = await getE2BExecutor(conversation);
+    expect(sessions.get(scopeKey(conversation))).toMatchObject({
+      activeSinceMs: admittedAtMs,
+      computeMicrousdPerSecond: admittedRate,
+    });
+    await executor!.pause!();
+
+    expect(reserveSandboxComputeInterval).not.toHaveBeenCalled();
+    expect(meterSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sandboxId: 'sbx-continued',
+        startedAtMs: admittedAtMs,
+        snapshotMicrousdPerSecond: admittedRate,
+        reason: 'pause',
+      }),
+    );
+  });
+
+  it('measures what a reused hold still funds from when it was admitted, however often it is reused', async () => {
+    const conversation = scope('conv-reused-twice', 'user-reused-twice');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    sessions.set(scopeKey(conversation), {
+      sandboxId: 'sbx-reused-twice',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    });
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor(conversation);
+    await getE2BExecutor(conversation);
+
+    expect(connect).toHaveBeenCalledTimes(2);
+    for (const call of connect.mock.calls) {
+      const { timeoutMs } = (call as unknown[])[1] as { timeoutMs: number };
+      expect(timeoutMs).toBeLessThanOrEqual(240_000);
+      expect(timeoutMs).toBeGreaterThan(230_000);
+    }
+    expect(reserveSandboxComputeInterval).not.toHaveBeenCalled();
+  });
+
+  it('never shortens an open interval for a caller that releases before it ends', async () => {
+    const conversation = scope('conv-turn-then-rerun', 'user-turn-then-rerun', 'team');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    sessions.set(scopeKey(conversation), {
+      sandboxId: 'sbx-turn-then-rerun',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    });
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor({ ...conversation, releaseByMs: Date.now() + 2 * 60_000 });
+
+    expect(reserveSandboxComputeInterval).not.toHaveBeenCalled();
+    expect(meterSandboxComputeInterval).not.toHaveBeenCalled();
+    const opts = (connect.mock.calls[0] as unknown[])[1] as { timeoutMs: number };
+    expect(opts.timeoutMs).toBeLessThanOrEqual(240_000);
+    expect(opts.timeoutMs).toBeGreaterThan(230_000);
   });
 
   it('does not run the quota check for ephemeral (no-scope) callers', async () => {

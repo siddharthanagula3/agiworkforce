@@ -37,21 +37,30 @@ import {
   markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
+import { PAUSED_SANDBOX_MAX_AGE_MS, RECLAIM_SWEEP_INTERVAL_MS } from './reclaim-schedule';
 
 const E2B_COMPUTE_PROVIDER_ID = 'e2b';
 
 export const SANDBOX_COMPUTE_QUOTA_FEATURE = 'sandbox_compute';
 
-/**
- * The sandbox pauses at its plan TTL, but the interval is only closed when the
- * pause is observed, which the reclaim sweep may do well after the fact. The
- * lease outlives that gap so an ordinary teardown settles its own reservation
- * rather than the recovery sweep refunding it first.
- */
 const RESERVATION_LEASE_SLACK_SECONDS = 900;
 
 const MILLISECONDS_PER_SECOND = 1000;
 const MILLISECONDS_PER_MINUTE = 60 * MILLISECONDS_PER_SECOND;
+
+/**
+ * An interval its caller leaves open, as a code rerun does, closes only when
+ * the reclaim sweep finds its sandbox old enough to reclaim: the plan TTL if it
+ * still runs, the paused age cap once E2B pauses it at its shorter timeout. The
+ * lease outlives that sweep, so recovery never refunds a reservation whose
+ * compute the sweep is still to bill.
+ */
+function reservationLeaseSeconds(ttlSeconds: number): number {
+  const reclaimedWithinMs =
+    Math.max(ttlSeconds * MILLISECONDS_PER_SECOND, PAUSED_SANDBOX_MAX_AGE_MS) +
+    RECLAIM_SWEEP_INTERVAL_MS;
+  return Math.ceil(reclaimedWithinMs / MILLISECONDS_PER_SECOND) + RESERVATION_LEASE_SLACK_SECONDS;
+}
 
 const MAX_BILLABLE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
@@ -79,6 +88,21 @@ function resolveRate(shape?: SandboxComputeShape): ConfiguredRate {
 
 export function sandboxComputeIsPriceable(): boolean {
   return resolveRate().ok;
+}
+
+/**
+ * The lifetime one sandbox interval is admitted for. Every second of it is
+ * held against the plan windows until the interval settles, so an interval
+ * whose caller releases it sooner is held only until then, never under the
+ * minimum funded run and never past the plan's own lifetime.
+ */
+export function admittedSandboxLifetimeMs(
+  planLifetimeMs: number,
+  releaseByMs: number | undefined,
+  nowMs: number = Date.now(),
+): number {
+  if (releaseByMs === undefined || !Number.isFinite(releaseByMs)) return planLifetimeMs;
+  return Math.min(planLifetimeMs, Math.max(SANDBOX_MINIMUM_FUNDED_RUN_MS, releaseByMs - nowMs));
 }
 
 /**
@@ -265,7 +289,7 @@ export async function reserveSandboxComputeInterval(
         minimumMicrousd: chargeMicrousdForProviderCost(
           Math.ceil(minimumSeconds * microusdPerSecond),
         ),
-        leaseSeconds: ttlSeconds + RESERVATION_LEASE_SLACK_SECONDS,
+        leaseSeconds: reservationLeaseSeconds(ttlSeconds),
         model,
         conversationId: input.conversationId,
         freeTurnHold: input.freeTurnHold,
@@ -316,7 +340,7 @@ export async function reserveSandboxComputeInterval(
       provider: E2B_COMPUTE_PROVIDER_ID,
       model,
       estimatedCostMicrousd,
-      leaseSeconds: ttlSeconds + RESERVATION_LEASE_SLACK_SECONDS,
+      leaseSeconds: reservationLeaseSeconds(ttlSeconds),
       planTier: normalizeBillingPlanTier(input.planTier),
       isFlagship: false,
       quotaFeature: SANDBOX_COMPUTE_QUOTA_FEATURE,
