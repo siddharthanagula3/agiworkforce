@@ -3,7 +3,7 @@ Command-line tool open-source notices
 
 The agi command-line tool includes the open-source Rust crates below. Each keeps its own copyright and license.
 
-Packages (695)
+Packages (717)
 --------------
 
 adler2 2.0.1 (0BSD OR MIT OR Apache-2.0)
@@ -473,7 +473,7 @@ const-random-macro 0.1.16 (MIT OR Apache-2.0)
 
 constant_time_eq 0.6.1 (CC0-1.0 OR MIT-0 OR Apache-2.0)
   https://codeberg.org/cesarb/constant_time_eq
-  License text: 5, 25, 64
+  License text: 5, 21, 64
 
 convert_case 0.10.0 (MIT)
   https://github.com/rutrum/convert-case
@@ -1594,12 +1594,12 @@ mac_address 1.2.1 (MIT OR Apache-2.0)
   https://github.com/repnop/mac_address
   Copyright 2018 Wesley Norris
   Copyright © 2018 Wesley Norris
-  License text: 6, 27
+  License text: 6, 29
 
 mach2 0.4.3 (BSD-2-Clause OR MIT OR Apache-2.0)
   https://github.com/JohnTitor/mach2
   Copyright (c) 2019 Nick Fitzgerald, 2021 Yuki Okushi
-  License text: 1, 5, 41
+  License text: 1, 5, 42
 
 maplit 1.0.2 (MIT/Apache-2.0)
   https://github.com/bluss/maplit
@@ -1677,7 +1677,7 @@ miniz_oxide 0.8.9 (MIT OR Zlib OR Apache-2.0)
   Copyright (c) 2017 Frommi
   Copyright (c) 2017-2024 oyvindln
   Copyright (c) 2020 Frommi
-  License text: 4, 5, 15
+  License text: 4, 5, 13
 
 miniz_oxide 0.9.1 (MIT OR Zlib OR Apache-2.0)
   https://github.com/Frommi/miniz_oxide
@@ -1686,7 +1686,7 @@ miniz_oxide 0.9.1 (MIT OR Zlib OR Apache-2.0)
   Copyright (c) 2017 Frommi
   Copyright (c) 2017-2024 oyvindln
   Copyright (c) 2020 Frommi
-  License text: 4, 5, 15
+  License text: 4, 5, 13
 
 mio 1.2.4 (MIT)
   https://github.com/tokio-rs/mio
@@ -1697,7 +1697,7 @@ moxcms 0.8.1 (BSD-3-Clause OR Apache-2.0)
   https://github.com/awxkee/moxcms
   Copyright 2024 Radzivon Bartoshyk
   Copyright (c) Radzivon Bartoshyk. All rights reserved.
-  License text: 6, 14
+  License text: 6, 15
 
 multimap 0.10.1 (MIT OR Apache-2.0)
   https://github.com/havarnov/multimap
@@ -2125,7 +2125,7 @@ pxfm 0.1.30 (BSD-3-Clause OR Apache-2.0)
   https://github.com/awxkee/pxfm
   Copyright 2024 Radzivon Bartoshyk
   Copyright (c) Radzivon Bartoshyk. All rights reserved.
-  License text: 6, 14
+  License text: 6, 15
 
 qoi 0.4.1 (MIT/Apache-2.0)
   https://github.com/aldanor/qoi-rust
@@ -2519,6 +2519,10 @@ serde_derive_internals 0.29.1 (MIT OR Apache-2.0)
   https://serde.rs
   License text: 1, 5
 
+serde_derive_internals 0.30.0 (MIT OR Apache-2.0)
+  https://serde.rs
+  License text: 1, 5
+
 serde_json 1.0.154 (MIT OR Apache-2.0)
   https://github.com/serde-rs/json
   License text: 1, 5
@@ -2845,6 +2849,10 @@ time-macros 0.2.32 (MIT OR Apache-2.0)
   https://github.com/time-rs/time
   Copyright (c) Jacob Pratt et al.
   License text: 1, 5
+
+tiny-keccak 2.0.2 (CC0-1.0)
+  https://github.com/debris/tiny-keccak
+  License text: 21
 
 tinystr 0.8.5 (Unicode-3.0)
   https://github.com/unicode-org/icu4x
@@ -3419,13 +3427,13 @@ zerocopy 0.8.63 (BSD-2-Clause OR Apache-2.0 OR MIT)
   https://github.com/google/zerocopy
   Copyright 2023 The Fuchsia Authors
   Copyright 2019 The Fuchsia Authors.
-  License text: 1, 6, 36
+  License text: 1, 6, 37
 
 zerocopy-derive 0.8.63 (BSD-2-Clause OR Apache-2.0 OR MIT)
   https://github.com/google/zerocopy
   Copyright 2023 The Fuchsia Authors
   Copyright 2019 The Fuchsia Authors.
-  License text: 1, 6, 36
+  License text: 1, 6, 37
 
 zerofrom 0.1.8 (Unicode-3.0)
   https://github.com/unicode-org/icu4x
