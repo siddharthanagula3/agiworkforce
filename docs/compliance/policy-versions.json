@@ -49,6 +49,12 @@
       "served": "a8e278c62ec39ae410c070a190a63ac60507c10d",
       "main": "42f2f1e3017a08cb108642b70f8a212a1d8ccfd9",
       "note": "Production check for the 2026-11-13 release: before it, production served application commit a8e278c62ec39ae410c070a190a63ac60507c10d, whose policy pages print the dates POLICY_LAST_UPDATED gives at that commit, among them /terms 2026-10-08, /privacy 2026-10-18, /dpa 2026-10-08, /subprocessors 2026-10-15, /security 2026-10-08, /trust 2026-10-18, /privacy/india 2026-10-15, /privacy/requests 2026-10-08, /data-use 2026-10-15 and /agent-permissions 2026-11-01, as the release lead verified for this release. a8e278c62ec39ae410c070a190a63ac60507c10d is on this branch's history, so it is recorded as served directly. 42f2f1e3017a08cb108642b70f8a212a1d8ccfd9 moves those ten dates to 2026-11-13, the ship day, so the 2026-11-10 and 2026-11-11 versions of those pages were replaced before this site published them."
+    },
+    {
+      "checkedOn": "2026-11-13",
+      "served": "e822c4fda6c7fdf27dafda5e2c44a83788c23099",
+      "main": "e822c4fda6c7fdf27dafda5e2c44a83788c23099",
+      "note": "Production read after the 2026-11-13 release: /api/version returned application commit e822c4fda6c7fdf27dafda5e2c44a83788c23099, deployment dpl_AbDfsdvu6mBivXgCytkrp5Mxrfwh and migration sequence 421, and /terms, /privacy, /dpa, /subprocessors, /security, /trust, /privacy/india, /privacy/requests, /data-use and /agent-permissions each printed Last updated 2026-11-13, the dates POLICY_LAST_UPDATED gives at that commit. That commit was main's head when it was promoted, so the 2026-11-13 versions of those ten pages are the ones this site publishes. No email notice is asserted."
     }
   ],
   "documents": {

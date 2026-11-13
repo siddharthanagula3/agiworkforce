@@ -348,15 +348,16 @@ Found while bringing the documentation up to date on 2026-11-11. Each entry need
 - **Code shows:** `apps/web/app/api/cron/purge-soft-deleted-resources/route.ts:15` runs the purge only when `SOFT_DELETED_RESOURCE_PURGE_ENABLED` is `true`. It is unset by default, and `docs/compliance/soc2-controls.json` already records that production does not set it.
 - **Verdict:** Contradicted. This is a privacy commitment.
 - **Owner decision 2026-11-11:** turn the purge on, not change the text.
-- **Verified 2026-11-11 on a throwaway local database migrated to 0418:** main's purge (`apps/web/lib/resources/purge-soft-deleted.ts`) removed a personal conversation 31 days after deletion with its messages and artifact, a message deleted 31 days ago, and an organization member's deleted conversation; it kept a conversation deleted 5 days ago, live rows, and the deleted conversation of a member under a message-scoped legal hold, then removed that one once the hold was released. Production's code (`a8e278c62e`) on the same data deleted the held conversation and its held message on the first run: it lacks the cascade-hold fix of `6b138b7f50` (WEB-CONVERSATION-CASCADE-HOLD-PRESERVATION-01).
-- **Doc to update:** none; the privacy text stays. Set `SOFT_DELETED_RESOURCE_PURGE_ENABLED=true` in the Vercel production environment only with the first production release from main, after migrations 0392 to 0418 (draft 0416 `legal_hold_preserves` included, which main's purge calls) are applied. The cron then runs daily at 04:10 UTC (`vercel.json`). Remove this entry when production runs it.
+- **Verified 2026-11-11 on a throwaway local database migrated to 0418:** main's purge (`apps/web/lib/resources/purge-soft-deleted.ts`) removed a personal conversation 31 days after deletion with its messages and artifact, a message deleted 31 days ago, and an organization member's deleted conversation; it kept a conversation deleted 5 days ago, live rows, and the deleted conversation of a member under a message-scoped legal hold, then removed that one once the hold was released. The older code `a8e278c62e` on the same data deleted the held conversation and its held message on the first run, because it lacks the cascade-hold fix of `6b138b7f50` (WEB-CONVERSATION-CASCADE-HOLD-PRESERVATION-01).
+- **Production now:** since 2026-11-13 production serves main (`e822c4fda6`, which contains `6b138b7f50`) with migrations applied through 0421, including `0416_legal_hold_preserves.sql`, which main's purge calls. `SOFT_DELETED_RESOURCE_PURGE_ENABLED` was not changed by that release, so the purge still does not run.
+- **Doc to update:** none; the privacy text stays. Setting `SOFT_DELETED_RESOURCE_PURGE_ENABLED=true` in the Vercel production environment is the owner's step, and it reaches production only with a deploy made after it is set; the 2026-10-22 decision in `audit/decisions/founder-actions.md` ("Email sender and purge switch") asks for a recovery check first, because every item deleted more than 30 days earlier is then gone for good. The cron then runs daily at 04:10 UTC (`vercel.json`). Remove this entry when production runs it.
 
 #### CR-050 · Production shows the old plan names
 
-- **Source:** `apps/web` in production, deployed manually from commit `a8e278c62e`.
-- **Code shows:** the tree names the plans Premium, Max and Ultra (`packages/contracts/types/src/billing-catalog.ts`, rename of 2026-11-08), and the docs now follow the tree. Production still shows Pro, Max 5x and Max 20x.
-- **Verdict:** Contradicted. This resolves at the next production deploy.
-- **Doc to update:** none. The deploy is the owner's.
+- **Source:** `apps/web` in production, which serves main commit `e822c4fda6` since 2026-11-13.
+- **Code shows:** that commit names the plans Premium, Max and Ultra (`packages/contracts/types/src/billing-catalog.ts`, rename of 2026-11-08), and the docs follow the tree. The previous production build (`a8e278c62e`) showed Pro, Max 5x and Max 20x.
+- **Verdict:** Expected resolved by the 2026-11-13 release; not yet confirmed on the live pricing and plan pages.
+- **Doc to update:** none. Remove this entry once a read of the live pricing page shows Premium, Max and Ultra.
 
 #### CR-051 · Account security says sessions last up to 30 days
 

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-11
+Last updated: 2026-11-13
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -23,25 +23,6 @@ of the UI gap campaign. Each `DEF-` or `REF-` id below is a campaign row still
 waiting on the founder; it closes when the action named beside it is done.
 Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 
-## [Deploy] Apply migrations 0392 to 0418, then deploy main (decision 2)
-
-- `scripts/config/production-migrations-applied.json` records production through 0391; `apps/web/db/neon`
-  holds 0392 to 0418, none recorded as applied, and `deploy-production.yml` runs `pnpm db:migrate -- verify`,
-  which refuses to deploy over a pending migration.
-- Action: apply them to staging, check, then to production with
-  `pnpm db:migrate -- apply --target production --confirm-production`, then deploy main through
-  `deploy-production.yml`. A production apply cannot be undone, so it runs only at a time you choose.
-  Procedure: `docs/development/ci-and-deploys.md` ("Schema prerequisites", "Staging tier").
-- Until then the Chrome extension built from main does not fully work against production: browser tools
-  fail in any chat saved to the account (the older server drops the caller-tool fields; the checkpoint
-  they write needs `0397_caller_tool_checkpoints.sql`), and **Add a link** always fails
-  (`/api/page-context/read` does not exist there). A store reviewer would hit both, so this deploy comes
-  before the Chrome submission (`docs/runbooks/chrome-web-store-publish.md`, "First submission" step 12).
-- Done when `pnpm db:migrate -- status --target production` lists 0418, the JSON record is updated, and
-  `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://agiworkforce.com/api/page-context/read`
-  prints anything but `404`.
-  Impact: RELEASE-BLOCKING.
-
 ## [Models] One paid probe before video comes back (decision 1)
 
 - You chose `gemini-omni-1.1-flash` for video; its adapter is merged (`0ed375f365`). The `google/veo`
@@ -54,7 +35,7 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 
 - Built in `5daa5cb754` and its review fixes: banked limit resets and time-boxed limit uplifts as runtime
   promotions with a cost ceiling and a fail-closed switch. No amount is in code.
-- Action: after 0390 is applied, create the promotions with live values in the admin route, then turn on
+- Action: 0390 is applied in production; create the promotions with live values in the admin route, then turn on
   the `billing_usage_promotions` flag. Rows: DEF-0029, DEF-0510, DEF-0512, DEF-1687, DEF-1802,
   DEF-2062, DEF-2314, DEF-3162, DEF-3272, DEF-3343.
 
@@ -62,15 +43,15 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 
 - DEF-0333: the redesign is merged (`7f4a4b93be`, `180b298342`, `81a310f8d5`) and passed independent
   review; it stays off behind `AGI_ARTIFACT_AI_ENABLED`.
-- Action: confirm the per-app call counts in `maxArtifactAiCallsPerApp` (`billing-catalog.ts`), apply
-  0391 after 0380, then set `AGI_ARTIFACT_AI_ENABLED=1`. Counsel approves the consent line saying the
+- Action: confirm the per-app call counts in `maxArtifactAiCallsPerApp` (`billing-catalog.ts`), then set
+  `AGI_ARTIFACT_AI_ENABLED=1` (0380 and 0391 are applied in production). Counsel approves the consent line saying the
   app may save output where its publisher can read it.
 
 ## [Connectors] Release switch (decision 16)
 
 - You decided on 2026-10-22 to keep every connector Coming soon for now. To release one: register its
   OAuth app (the three connector entries below), write the Gmail data rule (`founder-decisions.md`
-  item 42), apply 0381, then approve flipping `CONNECTOR_RELEASE_STATE`.
+  item 42), then approve flipping `CONNECTOR_RELEASE_STATE`.
 - Rows waiting on it: DEF-0723, DEF-0743, DEF-0767, DEF-1240, DEF-1920, DEF-2027, DEF-2054, DEF-2074,
   DEF-2083, DEF-2137, DEF-2141, DEF-2166, DEF-3236, DEF-3240, DEF-3262, DEF-3342.
 
@@ -89,10 +70,9 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
   reviewer notes and `apps/mobile/__tests__/ios-store-submission-config.test.ts` describe that build
   and the test is green again. Every remaining console, credential, device and decision step is in
   `docs/runbooks/mobile-store-first-release.md`, in order.
-- Phone sign-in to Cloud has worked in production since 2026-11-10 through a hotfix (`a8e278c62e`,
-  local branch `hotfix/mobile-native-session`, not pushed). `main` carries the same change
-  (`568584454a`), so the next production release from `main` keeps phone sign-in working and
-  replaces the hotfix.
+- Phone sign-in to Cloud works in production from `main` (`568584454a`, part of the release
+  `e822c4fda6` live since 2026-11-13). The local branch `hotfix/mobile-native-session`
+  (`a8e278c62e`) is no longer served.
 - No store build can start before 2026-11-12: the Expo patch update the release check requires is
   held by the seven-day package-age rule until then (`MOBILE-EXPO-PATCH-LAG-2026-11-10`, runbook
   step 7 item 1).
@@ -517,8 +497,9 @@ development and the production instance: create a template named `agi-mobile`
 with the claims `{"surface": "mobile"}` and the default lifetime. Then set
 `CLERK_AUTHORIZED_PARTIES` on the production web deployment to the web origin
 and the extension's `chrome-extension://<item id>` origin, for example
-`https://agiworkforce.com,chrome-extension://<item id>`, before the deploy that
-precedes the Chrome submission. Without the extension origin, extension sign-in
+`https://agiworkforce.com,chrome-extension://<item id>`, and redeploy production
+so the value takes effect before the Chrome submission; the release of
+2026-11-13 left the variable unchanged. Without the extension origin, extension sign-in
 appears to succeed and then every API call answers 401. Steps and check:
 `docs/runbooks/chrome-web-store-publish.md`, "First submission" step 8.
 **Where** The claim and template name are `SURFACE_TOKEN_CLAIM` and
@@ -1163,37 +1144,38 @@ fixed now; each is a product or disclosure call the founder reserves.
    **Impact** NON-BLOCKING
    **Status** FOUNDER ACTION REQUIRED
 
-## [Remote Control] Deploy the web app, set the relay's standing address, then deploy the relay
+## [Remote Control] Set the relay's standing address, then deploy the relay
 
 **Why founder assistance is required**
 The 2026-11-12 relay fixes make the relay ask the web app whether each live pairing may continue
 (account, sign-in, plan, workspace policy). In production the relay refuses every registration until
-it has that address, so the order matters, and deploys and Fly settings are the owner's.
+it has that address, so the order matters, and deploys and Fly settings are the owner's. The web
+app in production (`e822c4fda6`, live since 2026-11-13) already serves `/api/pair/standing`; the
+relay on Fly is not yet deployed from the same code, and no Fly secret has been set for it.
 **Exact action**
 
-1. Deploy the web app first, so `/api/pair/standing` exists.
-2. Set `SIGNALING_STANDING_URL=https://<canonical web host>/api/pair/standing` on the relay's Fly
+1. Set `SIGNALING_STANDING_URL=https://<canonical web host>/api/pair/standing` on the relay's Fly
    app, and confirm `SIGNALING_INTERNAL_SECRET` is identical on the relay and the web app.
-3. Unset any `WS_MESSAGE_LIMIT`, `TRUSTED_PROXY_HOPS` or `TRUST_PROXY` value set on Fly, so the
+2. Unset any `WS_MESSAGE_LIMIT`, `TRUSTED_PROXY_HOPS` or `TRUST_PROXY` value set on Fly, so the
    reviewed values in `services/signaling-server/fly.toml` apply.
-4. Deploy the relay, then check `/admin/config-backup` shows nothing missing.
-5. Confirm the relay's database and the web app's database are the same one: account erasure now
+3. Deploy the relay, then check `/admin/config-backup` shows nothing missing.
+4. Confirm the relay's database and the web app's database are the same one: account erasure now
    deletes Remote Control pairing rows through the web app.
-6. Confirm nothing else (a CDN or second proxy) sits in front of Fly for the relay's hostname.
-7. Nothing to set for `SIGNALING_PAIRING_MAX_LIFETIME_MS`: the relay now ignores a value above
+5. Confirm nothing else (a CDN or second proxy) sits in front of Fly for the relay's hostname.
+6. Nothing to set for `SIGNALING_PAIRING_MAX_LIFETIME_MS`: the relay now ignores a value above
    seven days and logs that once at start, so the 2026-11-11 privacy text (a pairing record is
    kept at most seven days plus about an hour) holds whatever Fly sets.
-8. The privacy text that describes the seven-day cap and the expiry sweep shipped with the web
-   release of 2026-11-13, ahead of this relay deploy. The owner decided that day that nothing is
-   deployed or changed on Fly until he says so, and accepted that Remote Control may show an error
-   meanwhile. Until the relay is deployed the cap and the sweep the page describes are not
-   enforced, so deploy the relay before Remote Control is offered to customers.
-   **Where** Vercel for the web app; the Fly app for the relay; `services/signaling-server/README.md`.
-   **Needed input** None beyond the deploys.
+7. The privacy text that describes the seven-day cap and the expiry sweep is live in production
+   ahead of this relay deploy. The owner decided on 2026-11-13 that nothing is deployed or changed
+   on Fly until he says so, and accepted that Remote Control may show an error meanwhile. Until the
+   relay is deployed the cap and the sweep the page describes are not enforced, so deploy the
+   relay before Remote Control is offered to customers.
+   **Where** The Fly app for the relay; `services/signaling-server/README.md`.
+   **Needed input** The owner's go-ahead for Fly, then the deploy.
    **How to verify completion** A phone pairs with `agi rc`, a long reply streams without being
    cut, and turning Remote Control off for the workspace ends the pairing within about a minute.
    **What remains after founder action** Nothing in engineering.
-   **Impact** BLOCKING for the relay deploy only: deploying the relay without step 2 stops Remote
+   **Impact** BLOCKING for the relay deploy only: deploying the relay without step 1 stops Remote
    Control for everyone until it is set.
    **Status** FOUNDER ACTION REQUIRED
 
@@ -1228,8 +1210,8 @@ policy and its audit trail, which is a security decision.
 ## [Release 2026-11-13] What the branch merges did not carry over, and the calls they left open
 
 **Why founder assistance is required**
-On 2026-11-13 the owner had every web-related branch merged into main for a production web release.
-Several forked in October, about 1,300 commits before main's tip. In the web app and the shared
+On 2026-11-13 the owner had every web-related branch merged into main, and that main
+(`e822c4fda6`) is the web app in production since the same day. Several branches forked in October, about 1,300 commits before main's tip. In the web app and the shared
 packages a branch's lines were kept unless main had changed the same lines, where main's lines won.
 Git now lists those branches as merged, so the work below is on no open branch list, yet it is not
 on main. Each line names the branch and commit that still holds it.
@@ -1261,7 +1243,7 @@ on main. Each line names the branch and commit that still holds it.
 - `codex/fix-main-ci-security-final-20261108` `f9058e35e8`: its rewrites of four security guards
   and the looser database-isolation rule. Main's guards stand.
 
-**Exact action** Decide each of these; none blocks the web release.
+**Exact action** Decide each of these; none blocks the web app in production.
 
 1. Store purchases during a payment dispute: re-apply `f57bc4dfb3` before in-app purchases launch,
    or accept that only the web checkout refuses.
@@ -1285,5 +1267,5 @@ on main. Each line names the branch and commit that still holds it.
 **How to verify completion** Each numbered item has a recorded decision, and each not-carried item
 is either redone on main or closed here.
 **What remains after founder action** Engineering redoes the chosen items against current main.
-**Impact** NOT BLOCKING for the web release.
+**Impact** NOT BLOCKING.
 **Status** FOUNDER DECISION REQUIRED

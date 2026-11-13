@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-11
+Last updated: 2026-11-13
 
 Version 1 of AGI Mobile ships to the App Store and Google Play as a free app
 with no in-app purchases. The code side of that is done and checked in; this
@@ -20,30 +20,24 @@ needed for version 1.
 console step.
 
 1. **No store build can start before 2026-11-12** (step 7, item 1).
-2. **Production accepts phone sessions, and `main` carries the same fix.**
-   Until 2026-11-10 production refused every phone session: sign-in
-   succeeded, then the app's first call to `agiworkforce.com` was refused and
-   the app showed "Session Expired". The server checked the phone's token
-   against the list of allowed web origins, and a token minted by a native
-   app names no origin. Production has accepted phone sessions since that
-   day: an email-and-code sign-in in the iPhone simulator reached the Cloud
-   chat screen. What production runs is a hotfix, commit `a8e278c62e` on the
-   local branch `hotfix/mobile-native-session`, which is the previous
-   production commit plus only that change. `main` carries the same change
-   as commit `568584454a`, so a production release from `main` keeps phone
-   sign-in working. App Review and Play review both sign in.
-   `https://agiworkforce.com/api/version` names the commit production runs.
+2. **Production accepts phone sessions.** Until 2026-11-10 production refused
+   every phone session: sign-in succeeded, then the app's first call to
+   `agiworkforce.com` was refused and the app showed "Session Expired". The
+   server checked the phone's token against the list of allowed web origins,
+   and a token minted by a native app names no origin. The fix is on `main`
+   as commit `568584454a`, and production serves `main` (commit `e822c4fda6`,
+   released 2026-11-13), so phone sign-in works there. App Review and Play
+   review both sign in. `https://agiworkforce.com/api/version` names the
+   commit production runs.
 
 - **Phone sign-in to Cloud.** Production refused every phone session: sign-in
   succeeded, then the app's first call to `agiworkforce.com` was refused and
   the app showed "Session Expired". The server checked the phone's token
   against the list of allowed web origins, and a token minted by a native app
-  names no origin. Production has accepted phone sessions since a hotfix that
-  day (commit `a8e278c62e`, the previous production commit plus only that
-  change): an email-and-code sign-in in the iPhone simulator reached the
-  Cloud chat screen. `main` carries the same change, so a release from `main`
-  keeps it. `https://agiworkforce.com/api/version` names the commit
-  production runs.
+  names no origin. The fix is on `main` (`568584454a`), which production
+  serves; an email-and-code sign-in in the iPhone simulator reached the Cloud
+  chat screen against the earlier hotfix carrying the same change.
+  `https://agiworkforce.com/api/version` names the commit production runs.
 - **"Session Expired" after restarting the app in Cloud mode.** This one was
   in the app: its first requests left before sign-in had loaded, were
   refused, and the app signed itself out. The fix is in the app's code, so it

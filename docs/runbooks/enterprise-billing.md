@@ -16,7 +16,10 @@ enforcement (`apps/web/lib/services/organization-policy-evaluator.ts`,
 cron (`apps/web/lib/services/enterprise-usage-metering.ts`,
 `apps/web/app/api/cron/report-enterprise-usage`). Those files exist, and the
 migration behind them, `apps/web/db/neon/0163_enterprise_billing_contracts.sql`,
-is applied (production is at migration 0391). Before following any step below
+is applied, as are the later ones the collection sweep and the overage reporter
+below rely on: `0400_billing_collection_owner_notice_and_review_cursor.sql`,
+`0401_overage_pending_destination.sql` and `0402_overage_contract_closeout.sql`
+(production is at migration 0421). Before following any step below
 against a real customer, read the referenced files as described and run their
 own tests. **Do not repeat any claim from this runbook to a customer or
 on a public page until the test-mode lifecycle checklist in the last section

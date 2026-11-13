@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-12
+Last updated: 2026-11-13
 
 Canonical procedure for creating the store item once and releasing every
 version after it.
@@ -205,30 +205,30 @@ or a decision that is his; **Lead** steps can be run from this repository with
 12. **Owner. Deploy the production web app first, then the lead pushes the
     tag.** The extension built from `main` calls web routes and request fields
     that only the current web app has, so production must serve the commit
-    from step 11, or a later one, before a reviewer can open the item. If it
-    does not, a store reviewer finds browser tools failing in any chat saved
-    to the account (the older server drops the caller-tool fields, and the
-    turn ends with a caller-action checkpoint error) and **Add a link** always
-    failing (`/api/page-context/read` does not exist there). That deploy
-    needs the pending migrations applied first: production is recorded
-    through 0391 (`scripts/config/production-migrations-applied.json`), and
-    `apps/web/db/neon` holds 0392 to 0418, including
-    `0397_caller_tool_checkpoints.sql`, which the browser-tool checkpoint
-    writes need. The production workflow runs `pnpm db:migrate -- verify` and
-    refuses to deploy over a pending migration. In order, at a time the owner
-    chooses, because a production apply cannot be undone:
+    from step 11, or a later one, before a reviewer can open the item. This
+    is also the deploy that carries `CLERK_AUTHORIZED_PARTIES` from step 8.
+    Production serves `e822c4fda6` (released 2026-11-13) with migrations
+    applied through 0421 (`scripts/config/production-migrations-applied.json`),
+    so it already has `/api/page-context/read` for **Add a link** and the
+    caller-tool checkpoints of `0397_caller_tool_checkpoints.sql` that browser
+    tools write in a chat saved to the account. Still owed before submission:
+    `CLERK_AUTHORIZED_PARTIES` with the extension origin (step 8, which needs
+    the store item id; production still runs without it) and
+    `CWS_EXTENSION_ID` for the renderer (step 9). The production workflow runs
+    `pnpm db:migrate -- verify` and refuses to deploy over a pending
+    migration. In order, at a time the owner chooses, because a production
+    apply cannot be undone:
     1. `pnpm db:migrate -- status --target production` lists what is
-       pending.
+       pending after 0421. When nothing is, skip to item 3.
     2. Apply to staging and check it, then to production with
        `pnpm db:migrate -- apply --target production --confirm-production`
        (`docs/development/ci-and-deploys.md`, "Schema prerequisites" and
        "Staging tier"; `docs/runbooks/release-rollback.md` for recovery).
     3. Deploy web production through `.github/workflows/deploy-production.yml`
        from a green `main` commit at or after the step 11 commit.
-    4. Check: `pnpm db:migrate -- status --target production` lists 0418 as
-       applied, and
-       `curl -s -o /dev/null -w '%{http_code}\n' -X POST https://agiworkforce.com/api/page-context/read`
-       prints anything but `404`.
+    4. Check: `pnpm db:migrate -- status --target production` lists nothing
+       pending, `https://agiworkforce.com/api/version` names the deployed
+       commit, and the step 8 check passes.
 
     Before the tag is pushed, the owner runs "Manual checks in Chrome" below on
     the release candidate against this deploy, and the tag waits until every
