@@ -194,7 +194,7 @@ function ChoiceControl({ block, scope }: { block: AnswerUiChoiceBlock; scope: Bl
                       : [option.id],
                   )
                 }
-                className="mt-0.5 size-4 shrink-0 accent-[var(--chat-accent-primary)] focus-visible:outline-none"
+                className="mt-0.5 size-4 shrink-0 accent-[var(--chat-accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
               />
               <span className="min-w-0">
                 <span className="block break-words text-sm font-medium text-[color:var(--chat-text-primary)]">
@@ -319,7 +319,7 @@ function Checklist({ block, scope }: { block: AnswerUiChecklistBlock; scope: Blo
         className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--chat-surface-hover)]"
       >
         <div
-          className="h-full rounded-full bg-[var(--chat-accent-primary)] transition-[width] duration-200 motion-reduce:transition-none"
+          className="h-full rounded-full bg-[var(--chat-accent-primary)] transition-[width] duration-moved motion-reduce:transition-none"
           style={{ width: `${percent}%` }}
         />
       </div>
@@ -343,7 +343,7 @@ function Checklist({ block, scope }: { block: AnswerUiChecklistBlock; scope: Blo
                       isChecked ? checked.filter((id) => id !== item.id) : [...checked, item.id],
                     )
                   }
-                  className="mt-0.5 size-4 shrink-0 accent-[var(--chat-accent-primary)] focus-visible:outline-none"
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--chat-accent-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
                 />
                 <span
                   className={cn(
