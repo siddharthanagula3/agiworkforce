@@ -185,7 +185,6 @@ export function useSlackSettingsView(active: boolean): SlackSettingsView {
   const capture = useSessionSnapshot();
   const owner = observeWorkspaceOwner(capture());
   const epoch = owner?.epoch;
-  const phase = owner?.phase;
   const scope = workspace.data;
   const scopeKey = scope
     ? JSON.stringify([scope.scope, scope.activeWorkspaceId, scope.activeOrganizationId])

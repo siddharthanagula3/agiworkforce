@@ -239,7 +239,6 @@ function fixture(
     withOrg: forbidden,
     dispose: forbidden,
   };
-  const transactionSpy = vi.spyOn(db, 'transaction');
   mocks.after.mockImplementation((callback: unknown) => {
     expect(typeof callback).toBe('function');
     expect(timeline.at(-1)).toBe('commit');

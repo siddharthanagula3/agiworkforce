@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { COMPANY_SITE_NAME, getBillingPlanPricing } from '@agiworkforce/types';
 
 const billingMocks = vi.hoisted(() => ({
   openBillingPortal: vi.fn(),

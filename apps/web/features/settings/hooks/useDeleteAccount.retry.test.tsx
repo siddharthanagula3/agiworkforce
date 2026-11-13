@@ -76,7 +76,7 @@ vi.mock('@/features/auth/StepUpDialog', async (importOriginal) => ({
 const DELETE_PATH = '/api/user/delete-account';
 const GRANT_PATH = '/api/auth/step-up';
 const CANCEL_PATH = '/api/user/delete-account/cancel-schedule';
-const fetchMock = vi.fn<WebFetch>();
+const fetchMock = vi.fn<typeof fetch>();
 let client: QueryClient;
 let deletion: ReturnType<typeof useDeleteAccount>;
 let cancellation: ReturnType<typeof useCancelAccountDeletion>;

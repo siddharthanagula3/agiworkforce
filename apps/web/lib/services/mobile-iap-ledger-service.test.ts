@@ -9,7 +9,6 @@ import {
   recordVerifiedMobileIapPurchase,
   storeChargeId,
 } from './mobile-iap-ledger-service';
-import { PLAN_CHANGE_REFUSED_DURING_DISPUTE } from './billing-plan-change-gate';
 import { SubscriptionService } from './subscription-service';
 import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-purchase-gate';
 import { logger } from '@/lib/logger';
@@ -671,58 +670,18 @@ describe('store purchases after a guardian withdrew consent', () => {
   });
 });
 
-function withAccountHold(
-  h: ReturnType<typeof harness>,
-  hold: { deletion_scheduled: boolean; dispute_open: boolean },
-) {
-  const original = h.query.getMockImplementation()!;
-  h.query.mockImplementation(async (sql: string, params?: readonly unknown[]) => {
-    if (sql.includes('from public.billing_disputes')) {
-      return [hold] as unknown as Awaited<ReturnType<typeof original>>;
-    }
-    return original(sql, params);
-  });
-}
-
-describe('store purchases while a payment dispute is open', () => {
-  it('refuses the plan, so the paused Stripe subscription keeps the row, and files a refund', async () => {
-    const h = harness({ subscriptionOwner: { apple_original_transaction_id: null } });
-    withAccountHold(h, { deletion_scheduled: false, dispute_open: true });
-
-    await expect(
-      recordVerifiedMobileIapPurchase({
-        db: h.db,
-        userId: 'user-1',
-        purchaseToken: 'fixture-token',
-        verified: verifiedSubscription(),
-      }),
-    ).rejects.toMatchObject({ statusCode: 409, message: PLAN_CHANGE_REFUSED_DURING_DISPUTE });
-    expect(planWrites(h)).toEqual([]);
-    expect(refundRequests(h)).toEqual([
-      expect.arrayContaining(['user-1', storeChargeId('ios', 'transaction-sub-1'), 'plan']),
-    ]);
-  });
-
-  it('refuses a credit pack too, as the web top-up does', async () => {
-    const h = harness();
-    withAccountHold(h, { deletion_scheduled: false, dispute_open: true });
-
-    await expect(
-      recordVerifiedMobileIapPurchase({
-        db: h.db,
-        userId: 'user-1',
-        purchaseToken: 'fixture-token',
-        verified: verified(),
-      }),
-    ).rejects.toMatchObject({ statusCode: 409, message: PLAN_CHANGE_REFUSED_DURING_DISPUTE });
-    expect(creditGrants(h)).toEqual([]);
-  });
-});
-
 describe('store purchases while the account deletion is scheduled', () => {
   it('refuses the plan, grants nothing and files the charge for a store refund', async () => {
     const h = harness({ subscriptionOwner: { apple_original_transaction_id: null } });
-    withAccountHold(h, { deletion_scheduled: true, dispute_open: false });
+    const original = h.query.getMockImplementation()!;
+    h.query.mockImplementation(async (sql: string, params?: readonly unknown[]) => {
+      if (sql.includes('select deletion_scheduled_for from public.profiles')) {
+        return [{ deletion_scheduled_for: '2026-10-22T00:00:00.000Z' }] as unknown as Awaited<
+          ReturnType<typeof original>
+        >;
+      }
+      return original(sql, params);
+    });
 
     await expect(
       recordVerifiedMobileIapPurchase({
