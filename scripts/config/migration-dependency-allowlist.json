@@ -197,6 +197,11 @@
       "reason": "Coordinated object-lifecycle rollout: the migration procedure applies pending migrations before release. deploy-production.yml unconditionally runs pnpm db:migrate -- verify before the Vercel build; verification rejects pending migrations, including 0419. Production remains recorded through 391. This permits reviewed source publication, not deployment or schema mutation; native removal remains disabled pending lifecycle acceptance."
     },
     {
+      "file": "apps/web/lib/server/retention/deleted-project-files.ts",
+      "migration": 419,
+      "reason": "The deleted-project-files purge leaves an object the 0419 project_knowledge_objects ledger owns to that lifecycle instead of deleting it. This code ships with 0419_project_knowledge_object_lifecycle.sql: a manual production deploy applies pending migrations before the new code is promoted (docs/runbooks/release-rollback.md, \"Deploying by hand: migrations first\"), and deploy-production.yml runs pnpm db:migrate -- verify before the Vercel build."
+    },
+    {
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 419,
       "reason": "The undeleted-table inventory documents the cleanup ledger and its enforced anonymized tombstone, without executing new-schema SQL. Source publication is allowed; deploy-production.yml still unconditionally verifies the complete production migration ledger before deployment, and production remains recorded through 391."

@@ -92,11 +92,6 @@ export async function getManagedUsageSummary(
   const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(db, userId) : null;
   const usageResetAt = freeUsage?.resetAt ?? toIsoTimestamp(periodEnd);
 
-  const allowanceSubject = {
-    tier: planTier,
-    catalogVersion: subscription?.plan_catalog_version ?? null,
-    revenueContext: revenueContextOfSubscription(subscription),
-  };
   const planBudget = getPlanUsageBudgetMicrousd(allowanceSubject);
   const usagePercentage =
     freeUsage?.usagePercentage ?? toPublicUsagePercentage(planUsed, planBudget);

@@ -6649,7 +6649,7 @@ async function processAdmittedRequest(
       new Set(extractToolNames(callerToolFields.tools)),
     );
     managedToolInventoryVersion = toolInventory.__managedToolInventoryVersion;
-    const capabilityPreamble = buildCapabilityPreamble({
+    const timedCapabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
       includeToolInventory: false,
       surface: chatSurface,

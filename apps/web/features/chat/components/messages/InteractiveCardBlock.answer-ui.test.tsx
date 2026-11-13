@@ -3,12 +3,27 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { InteractiveCard } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import { useChatStore, type Message } from '@shared/stores/web-chat-store';
+import { ChatStreamRuntimeProvider } from '../ChatStreamRuntimeProvider';
 import { AnswerUiFollowUpProvider } from './cards/answer-ui/answer-ui-follow-up';
 import {
   ANSWER_UI_SEND_NEEDS_SAVED_CHAT,
   ANSWER_UI_SEND_WAITS_FOR_REPLY,
   InteractiveCardBlock,
 } from './InteractiveCardBlock';
+
+const authMocks = vi.hoisted(() => ({ getToken: vi.fn() }));
+
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  return createClerkSessionFixture(() => ({
+    getToken: authMocks.getToken,
+    userId: 'user-1',
+    isSignedIn: true,
+    isLoaded: true,
+    sessionId: 'session-1',
+  }));
+});
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -90,6 +105,7 @@ function seed(card: InteractiveCard, options: { isTemporary?: boolean } = {}): v
 describe('InteractiveCardBlock with an answer UI card', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
+    authMocks.getToken.mockResolvedValue('session-token');
     vi.stubGlobal('fetch', vi.fn());
   });
 
@@ -106,9 +122,11 @@ describe('InteractiveCardBlock with an answer UI card', () => {
     );
 
     render(
-      <AnswerUiFollowUpProvider value={sendFollowUp}>
-        <InteractiveCardBlock cards={[card]} />
-      </AnswerUiFollowUpProvider>,
+      <ChatStreamRuntimeProvider>
+        <AnswerUiFollowUpProvider value={sendFollowUp}>
+          <InteractiveCardBlock cards={[card]} />
+        </AnswerUiFollowUpProvider>
+      </ChatStreamRuntimeProvider>,
     );
     fireEvent.change(screen.getByRole('slider', { name: 'Rent' }), { target: { value: '2000' } });
     await act(async () => {
@@ -117,6 +135,7 @@ describe('InteractiveCardBlock with an answer UI card', () => {
 
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/interactive-cards/respond');
+    expect(new Headers(init.headers).get('Authorization')).toBe('Bearer session-token');
     expect(JSON.parse(String(init.body))).toEqual({
       conversation_id: CONVERSATION_ID,
       message_id: MESSAGE_ID,
@@ -133,9 +152,11 @@ describe('InteractiveCardBlock with an answer UI card', () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response('{}', { status: 400 }));
 
     render(
-      <AnswerUiFollowUpProvider value={sendFollowUp}>
-        <InteractiveCardBlock cards={[card]} />
-      </AnswerUiFollowUpProvider>,
+      <ChatStreamRuntimeProvider>
+        <AnswerUiFollowUpProvider value={sendFollowUp}>
+          <InteractiveCardBlock cards={[card]} />
+        </AnswerUiFollowUpProvider>
+      </ChatStreamRuntimeProvider>,
     );
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
@@ -151,9 +172,11 @@ describe('InteractiveCardBlock with an answer UI card', () => {
     });
 
     render(
-      <AnswerUiFollowUpProvider value={vi.fn()}>
-        <InteractiveCardBlock cards={[card]} />
-      </AnswerUiFollowUpProvider>,
+      <ChatStreamRuntimeProvider>
+        <AnswerUiFollowUpProvider value={vi.fn()}>
+          <InteractiveCardBlock cards={[card]} />
+        </AnswerUiFollowUpProvider>
+      </ChatStreamRuntimeProvider>,
     );
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
     expect(screen.getByText(ANSWER_UI_SEND_WAITS_FOR_REPLY)).toBeInTheDocument();
@@ -164,9 +187,11 @@ describe('InteractiveCardBlock with an answer UI card', () => {
     const card = decode(envelope);
     seed(card, { isTemporary: true });
     render(
-      <AnswerUiFollowUpProvider value={vi.fn()}>
-        <InteractiveCardBlock cards={[card]} />
-      </AnswerUiFollowUpProvider>,
+      <ChatStreamRuntimeProvider>
+        <AnswerUiFollowUpProvider value={vi.fn()}>
+          <InteractiveCardBlock cards={[card]} />
+        </AnswerUiFollowUpProvider>
+      </ChatStreamRuntimeProvider>,
     );
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
     expect(screen.getByText(ANSWER_UI_SEND_NEEDS_SAVED_CHAT)).toBeInTheDocument();

@@ -3,6 +3,7 @@ import {
   MANAGED_USAGE_LIMITS,
   MICROUSD_PER_CREDIT,
   getEffectivePlanCreditAllowance,
+  isEntitledSubscriptionStatus,
   parseManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/bonus-credit-service');
@@ -44,12 +45,22 @@ vi.mock('@/lib/services/usage-limit-promotion-service', async (importOriginal) =
   readSummaryPromotions: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/services/effective-subscription-service', () => ({
-  resolveEntitlementBundle: async (...args: unknown[]) => {
-    const subscription = await mockResolveEffectiveSubscription(...args);
-    return { subscription, plan: mockEntitledPlan() ?? subscription?.plan_tier ?? 'free' };
-  },
-}));
+vi.mock('@/lib/services/effective-subscription-service', async () => {
+  const { usageAllowanceSubject } = await vi.importActual<EntitlementResolutionModule>(
+    '@/lib/services/entitlement-resolution',
+  );
+  return {
+    resolveEntitlementBundle: async (...args: unknown[]) => {
+      const subscription = await mockResolveEffectiveSubscription(...args);
+      return {
+        subscription,
+        plan: mockEntitledPlan() ?? subscription?.plan_tier ?? 'free',
+        entitled: Boolean(subscription) && isEntitledSubscriptionStatus(subscription.status),
+      };
+    },
+    usageAllowanceSubject,
+  };
+});
 
 vi.mock('@/lib/server/spendable-credits', () => ({
   getSpendableCredits: mockGetSpendableCredits,

@@ -3,7 +3,6 @@ import {
   getModelMetadataById,
   isAutoModeModelId,
   getProviderOffering,
-  isAutoModeModelId,
   providerOfferingDisplayName,
 } from '@agiworkforce/types';
 import { freeQuotaChatOffering } from '../../lib/free-model-handoff';
@@ -99,15 +98,6 @@ export function evaluateModelCompatibility(
   modelId: string | null | undefined,
   request: ModelCompatibilityRequest,
 ): ModelCompatibilityResult {
-  if (isAutoModeModelId(modelId)) {
-    return {
-      modelId: modelId!,
-      modelName: null,
-      findings: [],
-      estimatedTokens: 0,
-      budgetTokens: null,
-    };
-  }
   const offering = modelId ? getProviderOffering(modelId) : undefined;
   if (offering?.quotaProbeProtocol) {
     const handsOver = freeQuotaChatOffering(modelId) !== null;

@@ -23,6 +23,8 @@ import {
 import { selectIsActiveConversationStreaming, useChatStore } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
 import { useOptionalChatStreamRuntime } from '../ChatStreamRuntimeProvider';
+import { AnswerUiCard, type AnswerUiCardContext } from './cards/answer-ui/AnswerUiCard';
+import { useAnswerUiFollowUp } from './cards/answer-ui/answer-ui-follow-up';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
 import { ImageToolCard } from './cards/ImageToolCard';
 import { ItineraryCardLazy, MapSearchCardLazy, PlacesMapCardLazy } from './cards/LazyMapCards';
@@ -178,18 +180,19 @@ const SingleCard = memo(function SingleCard({
     };
 
     const canSendMessage =
+      runtime !== null &&
       channel !== null &&
       sendFollowUp !== null &&
       isUuid(channel.conversationId) &&
       isUuid(channel.messageId);
     const onSendMessage = async (actionId: string, values: Record<string, AnswerUiValue>) => {
-      if (!channel || !sendFollowUp) return;
-      const text = await requestAnswerUiMessage(
+      if (!runtime || !channel || !sendFollowUp) return;
+      const text = await runtime.requestAnswerUiMessage(
         { ...channel, cardId: card.cardId },
         actionId,
         values,
       );
-      sendFollowUp(text);
+      if (text !== null) sendFollowUp(text);
     };
 
     return (

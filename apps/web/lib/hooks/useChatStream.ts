@@ -378,6 +378,11 @@ export interface UseChatStreamReturn {
     payload: InteractiveCardResponsePayload,
   ) => Promise<void>;
   isInteractiveCardResponsePending: (binding: InteractiveCardResponseBinding) => boolean;
+  requestAnswerUiMessage: (
+    binding: InteractiveCardResponseBinding,
+    actionId: string,
+    values: Record<string, AnswerUiValue>,
+  ) => Promise<string | null>;
   resolveToolApproval: (
     assistantMessageId: string,
     toolCallId: string,
@@ -5184,6 +5189,49 @@ export function useChatStream(
     [captureSessionSnapshot],
   );
 
+  const requestAnswerUiMessage = useCallback(
+    async (
+      binding: InteractiveCardResponseBinding,
+      actionId: string,
+      values: Record<string, AnswerUiValue>,
+    ): Promise<string | null> => {
+      if (!cardResponseRuntimeActiveRef.current) return null;
+      const snapshot = captureSessionSnapshot();
+      if (!snapshot) return null;
+      const authority = createRequestAuthority(
+        snapshot,
+        () => cardResponseRuntimeActiveRef.current,
+      );
+      ownedAuthoritiesRef.current.add(authority);
+      try {
+        const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+        const response = await authority.fetch(INTERACTIVE_CARD_RESPONSE_PATH, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            conversation_id: binding.conversationId,
+            message_id: binding.messageId,
+            card_id: binding.cardId,
+            response: { kind: 'message', action_id: actionId, values },
+          } satisfies InteractiveCardResponseRequest),
+        });
+        if (!response.ok) {
+          throw new Error(`Answer UI message rejected with ${response.status}`);
+        }
+        const decoded: unknown = await response.json();
+        authority.assertCurrent();
+        return AnswerUiMessageResponseSchema.parse(decoded).message;
+      } catch (error) {
+        if (!authority.isCurrent()) return null;
+        throw error;
+      } finally {
+        ownedAuthoritiesRef.current.delete(authority);
+        authority.retire();
+      }
+    },
+    [captureSessionSnapshot],
+  );
+
   const resumeInteractiveCardTurn = useCallback(
     async (assistantMessageId: string, options: { force?: boolean } = {}): Promise<void> => {
       const store = useChatStore.getState();
@@ -5352,6 +5400,7 @@ export function useChatStream(
     resumeInteractiveCardTurn,
     respondToInteractiveCard,
     isInteractiveCardResponsePending,
+    requestAnswerUiMessage,
     resolveToolApproval,
     resolveToolInput,
     steerActiveTurn,

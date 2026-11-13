@@ -91,6 +91,10 @@ export function projectScopedTables(repoRoot = REPO_ROOT) {
   return tables;
 }
 
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1 ');
+}
+
 export function extractStatements(source) {
   const statements = [];
   const patterns = [
@@ -293,17 +297,16 @@ export function findUnscopedProjectReads(repoRoot = REPO_ROOT, files = productio
       }));
     }
     let authorisedAt = Number.POSITIVE_INFINITY;
-    let expandConstants;
     for (const statement of statements) {
       statement.sql = expandProjectReadScope(statement.sql, source, relative, repoRoot);
       const tables = tablesRead(statement.sql, scoped);
       if (tables.length === 0) continue;
-      if (authorisesProject(sql, tables)) {
+      if (authorisesProject(statement.sql, tables)) {
         authorisedAt = Math.min(authorisedAt, statement.index);
         continue;
       }
-      if (!narrowsByProject(sql, tables)) continue;
-      if (OWNER_PREDICATE.test(sql)) continue;
+      if (!narrowsByProject(statement.sql, tables)) continue;
+      if (OWNER_PREDICATE.test(statement.sql)) continue;
       if (statement.index > authorisedAt) continue;
       findings.push({
         file: relative,

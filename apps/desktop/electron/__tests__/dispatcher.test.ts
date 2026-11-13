@@ -258,6 +258,7 @@ vi.mock('../runtime/filesystemService', () => ({
   writeTextFile,
 }));
 vi.mock('../runtime/gitService', () => ({
+  branchSlug: vi.fn(),
   discardWorkingTreeChanges: vi.fn(),
   findRepositoryRoot: vi.fn(),
   hostGitInvocation: vi.fn(),
@@ -388,6 +389,8 @@ const forkDeveloperThread = vi.fn(async () => ({ id: 'thread-branch' }));
 const addDeveloperMcpServer = vi.fn(async () => ({ name: 'files' }));
 const setDeveloperMcpServerEnabled = vi.fn(async () => ({ name: 'files', enabled: true }));
 const compactDeveloperThread = vi.fn(async () => ({ threadId: 't-1', compacted: true }));
+const openDeveloperTerminal = vi.fn(async () => ({ terminalId: 'term-1' }));
+const writeDeveloperTerminal = vi.fn(async () => true);
 const setDeveloperSkillConsent = vi.fn(async () => true);
 vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
