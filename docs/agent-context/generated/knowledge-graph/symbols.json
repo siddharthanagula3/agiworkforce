@@ -49028,7 +49028,8 @@
       "apps/web/lib/connectors/oauth-scope-allowlist.ts"
     ],
     "file": [
-      "apps/cli/src/diff_model.rs"
+      "apps/cli/src/diff_model.rs",
+      "apps/cli/src/path_security/file_authority/instructions.rs"
     ],
     "File": [
       "packages/ui/icons/src/glyphs/Files.tsx"
@@ -59856,9 +59857,6 @@
     "Header": [
       "apps/web/shared/components/layout/Header.tsx"
     ],
-    "HEADER_FILE": [
-      "patches/sqlcipher-src/src/lib.rs"
-    ],
     "HEADER_METHOD": [
       "crates/agiworkforce-mcp/src/protocol.rs"
     ],
@@ -60022,6 +60020,9 @@
     ],
     "heldDeletionRefusal": [
       "apps/web/lib/services/legal-hold-gate.ts"
+    ],
+    "HeldFileLock": [
+      "apps/cli/src/path_security/file_authority/instructions.rs"
     ],
     "heldPermissions": [
       "apps/web/app/api/settings/organization/__tests__/workspace-admin-api-world.ts"
@@ -85592,6 +85593,7 @@
       "apps/cli/src/mentions.rs",
       "apps/cli/src/native_process_test_fixture.rs",
       "apps/cli/src/path_security/file_authority.rs",
+      "apps/cli/src/path_security/file_authority/instructions.rs",
       "apps/cli/src/permissions.rs",
       "apps/cli/src/platform/runtime/session_control.rs",
       "apps/cli/src/platform/runtime/session.rs",
@@ -128921,9 +128923,6 @@
     "SOURCE_DELIVERIES": [
       "packages/contracts/types/src/search-provider.ts"
     ],
-    "source_dir": [
-      "patches/sqlcipher-src/src/lib.rs"
-    ],
     "source_editor": [
       "apps/desktop/gpui/src/editor.rs"
     ],
@@ -128938,9 +128937,6 @@
     ],
     "SOURCE_FACET_PARTNER": [
       "apps/web/features/plugins/server/directory/constants.ts"
-    ],
-    "SOURCE_FILE": [
-      "patches/sqlcipher-src/src/lib.rs"
     ],
     "SOURCE_FRESH_MAX_AGE_DAYS": [
       "packages/contracts/types/src/search-provider.ts"
@@ -129512,12 +129508,6 @@
     ],
     "SQL_CHILD_DISPOSITIONS": [
       "scripts/check-resource-metadata.mjs"
-    ],
-    "SQLCIPHER_VERSION": [
-      "patches/sqlcipher-src/src/lib.rs"
-    ],
-    "SQLITE_VERSION": [
-      "patches/sqlcipher-src/src/lib.rs"
     ],
     "SQLiteDatabase": [
       "apps/mobile/types/expo-sqlite.d.ts"

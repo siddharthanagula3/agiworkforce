@@ -511,6 +511,7 @@
 {"path":"apps/desktop/src-tauri/Info.plist","unit":"apps/desktop","role":"other","lanes":["desktop-native"],"unparsed":"notCode"}
 {"path":"apps/desktop/src-tauri/isolation/index.html","unit":"apps/desktop","role":"other","lanes":["desktop-native"],"unparsed":"notCode"}
 {"path":"apps/desktop/src-tauri/isolation/isolation-hook.js","unit":"apps/desktop","role":"source","lanes":["desktop-native"]}
+{"path":"apps/desktop/src-tauri/licenses/sqlcipher-LICENSE.txt","unit":"apps/desktop","role":"other","lanes":["desktop-native"],"unparsed":"notCode"}
 {"path":"apps/desktop/src-tauri/mcp-allowlist.json","unit":"apps/desktop","role":"config","lanes":["desktop-native"],"unparsed":"notCode"}
 {"path":"apps/desktop/src-tauri/mcp-registry.json","unit":"apps/desktop","role":"config","lanes":["desktop-native"],"unparsed":"notCode"}
 {"path":"apps/desktop/src-tauri/mcp/default_servers.json","unit":"apps/desktop","role":"config","lanes":["desktop-native"],"unparsed":"notCode"}
