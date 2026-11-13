@@ -85,7 +85,11 @@ describe('ThinkingTagSplitter', () => {
     const splitter = new ThinkingTagSplitter();
     splitter.push('<thinking>private</think');
     expect(splitter.discardPendingPublic()).toBe(0);
-    expect(textOf(splitter.flush(true), 'thinking')).toBe('</think');
+    expect(splitter.retainedCharacters).toBe('</think'.length);
+    expect(splitter.push('ing>after')).toEqual([
+      { type: 'thinking-end' },
+      { type: 'text', text: 'after' },
+    ]);
   });
 
   it('does not retain reasoning bodies and cannot leak a private suffix after closing', () => {
