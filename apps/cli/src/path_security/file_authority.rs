@@ -399,6 +399,7 @@ impl DirectoryAuthority {
         let mut staged = match confined::open(&stage_parent, stage_leaf, &options) {
             Ok(file) => file,
             Err(error) => {
+                drop(stage_parent);
                 let _ = confined::remove_dir(&parent, &temporary);
                 return Err(error.into());
             }
