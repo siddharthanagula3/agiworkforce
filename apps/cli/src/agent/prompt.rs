@@ -401,7 +401,9 @@ pub fn assemble_system_prompt(
             .ok()
             .and_then(|cwd| compaction::load_instructions(&cwd)),
         memory_cwd: std::env::current_dir().ok(),
-        skills_content: skills::format_skill_catalog_for_prompt(&skills::discover_skills()),
+        skills_content: skills::format_skill_catalog_for_prompt(
+            &skills::discover_skills_for_prompt(),
+        ),
         rules_context: memory::always_on_rules_context(
             &std::env::current_dir()
                 .ok()
@@ -568,6 +570,15 @@ fn project_instructions_block(instructions: &str) -> String {
 
 fn carries_project_instructions(text: &str) -> bool {
     text.contains(&format!("\"source\": \"{PROJECT_INSTRUCTIONS_SOURCE}\""))
+}
+
+/// Whether the conversation may be told about its workspace. A reviewed
+/// continuation withheld the source workspace's metadata on purpose.
+pub(super) fn carries_workspace_context(messages: &[Message]) -> bool {
+    messages
+        .first()
+        .filter(|message| message.role == "system")
+        .is_none_or(|message| !message.text_content().contains(WITHHELD_FROM_LOCAL_SOURCE))
 }
 
 /// The system message that brings the conversation up to date when the

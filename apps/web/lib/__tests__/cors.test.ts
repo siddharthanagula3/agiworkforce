@@ -6,6 +6,10 @@ vi.mock('server-only', () => ({}));
 vi.mock('../logger', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
+const authorizedParties = vi.hoisted(() => ({ value: [] as string[] }));
+vi.mock('../server/identity', () => ({
+  getIdentityAuthorizedParties: () => authorizedParties.value,
+}));
 
 describe('isOriginAllowed', () => {
   beforeEach(() => {
@@ -22,6 +26,14 @@ describe('isOriginAllowed', () => {
   it('rejects missing Origin when requireOrigin is true', async () => {
     const { isOriginAllowed } = await import('../cors');
     expect(isOriginAllowed(null, true)).toBe(false);
+  });
+
+  it('allows a client origin the identity provider authorizes, such as the Chrome extension', async () => {
+    authorizedParties.value = ['chrome-extension://eklnfbegeeidfblbmkcblolipefganpj'];
+    const { isOriginAllowed } = await import('../cors');
+    expect(isOriginAllowed('chrome-extension://eklnfbegeeidfblbmkcblolipefganpj')).toBe(true);
+    expect(isOriginAllowed('chrome-extension://abcdefghijklmnopabcdefghijklmnop')).toBe(false);
+    authorizedParties.value = [];
   });
 
   it('allows Tauri origin tauri://localhost', async () => {

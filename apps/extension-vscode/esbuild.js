@@ -38,6 +38,41 @@ const webviewOptions = {
   logLevel: 'info',
 };
 
+/** @type {import('esbuild').BuildOptions} */
+const webviewEnhanceOptions = {
+  entryPoints: { enhance: path.join(__dirname, 'src', 'webview', 'enhance.ts') },
+  bundle: true,
+  outdir: path.join(__dirname, 'out', 'webview', 'enhance'),
+  chunkNames: 'chunk-[hash]',
+  splitting: true,
+  platform: 'browser',
+  target: 'es2020',
+  format: 'esm',
+  sourcemap: !isProduction,
+  minify: isProduction,
+  treeShaking: true,
+  logLevel: 'warning',
+};
+
+const KATEX_FALLBACK_FONT_SOURCES =
+  /,url\(fonts\/[^)]+\.(?:woff|ttf)\) format\("(?:woff|truetype)"\)/g;
+
+function copyKatexAssets() {
+  const katexDist = path.join(path.dirname(require.resolve('katex/package.json')), 'dist');
+  const katexDst = path.join(__dirname, 'out', 'webview', 'katex');
+  fs.mkdirSync(path.join(katexDst, 'fonts'), { recursive: true });
+  const css = fs.readFileSync(path.join(katexDist, 'katex.min.css'), 'utf8');
+  fs.writeFileSync(
+    path.join(katexDst, 'katex.min.css'),
+    css.replace(KATEX_FALLBACK_FONT_SOURCES, ''),
+  );
+  for (const font of fs.readdirSync(path.join(katexDist, 'fonts'))) {
+    if (font.endsWith('.woff2')) {
+      fs.copyFileSync(path.join(katexDist, 'fonts', font), path.join(katexDst, 'fonts', font));
+    }
+  }
+}
+
 const CODICON_ASSETS = ['codicon.css', 'codicon.ttf'];
 
 function copyCodiconAssets() {
@@ -80,20 +115,24 @@ async function build() {
     } else if (isWatch) {
       const ctx = await esbuild.context(buildOptions);
       const webviewCtx = await esbuild.context(webviewOptions);
-      await Promise.all([ctx.watch(), webviewCtx.watch()]);
+      const enhanceCtx = await esbuild.context(webviewEnhanceOptions);
+      copyKatexAssets();
+      await Promise.all([ctx.watch(), webviewCtx.watch(), enhanceCtx.watch()]);
       console.log('[esbuild] Watching for changes…');
     } else {
-      const [extResult, webviewResult] = await Promise.all([
+      const results = await Promise.all([
         esbuild.build(buildOptions),
         esbuild.build(webviewOptions),
+        esbuild.build(webviewEnhanceOptions),
       ]);
-      const errors = [...extResult.errors, ...webviewResult.errors];
+      const errors = results.flatMap((result) => result.errors);
       if (errors.length > 0) {
         console.error('[esbuild] Build failed with errors:');
         errors.forEach((e) => console.error(e));
         process.exit(1);
       }
       copyCodiconAssets();
+      copyKatexAssets();
       const mode = isProduction ? 'production' : 'development';
       console.log(`[esbuild] Build complete (${mode}), extension + webview render`);
     }

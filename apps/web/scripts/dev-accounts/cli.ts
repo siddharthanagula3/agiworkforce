@@ -1,3 +1,4 @@
+import { registerHooks } from 'node:module';
 import { resolve } from 'node:path';
 import { loadLocalEnvFile } from '../../e2e/lib/env-file';
 import {
@@ -65,7 +66,37 @@ export async function runDevAccounts(
   return 0;
 }
 
+/**
+ * tsx runs the CLI as CommonJS, while Next compiles the same server graph with
+ * its bundler. Two gaps follow. Next aliases `next/navigation` to its server
+ * build under the react-server condition, and without that alias a server
+ * import such as `@clerk/nextjs/server` loads the client module, which needs
+ * React APIs the react-server build lacks. And a package that publishes only
+ * an `import` export (the MCP task extension) has no entry `require` can match,
+ * so it is resolved through that export and loaded with Node's require(esm).
+ */
+function resolveServerGraphLikeNext(): void {
+  registerHooks({
+    resolve: (specifier, context, nextResolve) => {
+      const target =
+        specifier === 'next/navigation'
+          ? 'next/dist/client/components/navigation.react-server'
+          : specifier;
+      try {
+        return nextResolve(target, context);
+      } catch (error) {
+        if ((error as { code?: unknown }).code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') throw error;
+        return nextResolve(target, {
+          ...context,
+          conditions: [...context.conditions, 'import'],
+        });
+      }
+    },
+  });
+}
+
 async function main(): Promise<void> {
+  resolveServerGraphLikeNext();
   loadLocalEnvFile(resolve(__dirname, '..', '..', LOCAL_ENV_FILE));
   process.env['LOG_LEVEL'] ??= QUIET_LOG_LEVEL;
   try {

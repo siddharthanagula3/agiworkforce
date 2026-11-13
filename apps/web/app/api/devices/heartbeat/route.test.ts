@@ -27,6 +27,7 @@ vi.mock('@/lib/server/developer-token', () => ({
     mocks.verifyDeveloperTokenSignature(...args),
 }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(() => []),
   verifyIdentitySessionToken: (...args: unknown[]) => mocks.verifyIdentitySessionToken(...args),
   getRequestIdentity: (...args: unknown[]) => mocks.getRequestIdentity(...args),
 }));

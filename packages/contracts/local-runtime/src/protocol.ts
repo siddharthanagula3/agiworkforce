@@ -4,6 +4,7 @@ import type {
   DispatchTaskStepReply,
 } from '@agiworkforce/types';
 import type { BrowserPairingState } from './browser-bridge';
+import type { BrowserPaneState } from './browser-pane';
 import type { ComputerUseStatus } from './computer-use';
 import type { DeveloperSessionEvent } from './developer-sessions';
 import type { RemoteControlState } from './remote-control';
@@ -124,4 +125,12 @@ export type DesktopRuntimeEvent =
   | { kind: 'dispatch-task-reply'; requestId: string; replies: DispatchTaskStepReply[] }
   | { kind: 'device-prompt-changed'; open: boolean }
   | { kind: 'computer-use-handed-back' }
-  | { kind: 'browser-sign-in-expired' };
+  | { kind: 'browser-sign-in-expired' }
+  | { kind: 'browser-pane'; state: BrowserPaneState }
+  | {
+      kind: 'developer-terminal';
+      rootId: string;
+      terminalId: string;
+      data?: string;
+      exitCode?: number | null;
+    };

@@ -283,3 +283,96 @@ describe('a project MCP server that waits for approval', () => {
     expect(screen.queryByRole('button', { name: /^Review /u })).toBeNull();
   });
 });
+
+describe('managing a local session from the rail', () => {
+  const ALL = { rename: true, unarchive: true, pin: true };
+
+  it('lists pinned sessions first and marks them', () => {
+    renderSection({
+      groups: [
+        {
+          ...group,
+          sessions: [
+            { ...session, id: 'a', title: 'Older work' },
+            { ...session, id: 'b', title: 'Pinned work', pinned: true },
+          ],
+        },
+      ],
+    });
+    const labels = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent ?? '')
+      .filter((text) => text.includes('work'));
+    expect(labels[0]).toContain('Pinned work');
+    expect(labels[0]).toContain('Pinned');
+  });
+
+  it('pins through the row menu', async () => {
+    const user = userEvent.setup();
+    const onSetPinned = vi.fn();
+    renderSection({ sessionActions: ALL, onSetPinned });
+    await user.click(screen.getByRole('button', { name: 'More actions for Quote the readme' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Pin' }));
+    expect(onSetPinned).toHaveBeenCalledWith(session, true);
+  });
+
+  it('archives through the row menu', async () => {
+    const user = userEvent.setup();
+    const onSetArchived = vi.fn();
+    renderSection({ sessionActions: ALL, onSetArchived });
+    await user.click(screen.getByRole('button', { name: 'More actions for Quote the readme' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Archive session' }));
+    expect(onSetArchived).toHaveBeenCalledWith(session, true);
+  });
+
+  it('renames in place through the row menu', async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn(async () => true);
+    renderSection({ sessionActions: ALL, onRename });
+    await user.click(screen.getByRole('button', { name: 'More actions for Quote the readme' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+    const field = screen.getByLabelText('Session name');
+    await user.clear(field);
+    await user.type(field, 'Readme quotes{Enter}');
+    expect(onRename).toHaveBeenCalledWith(session, 'Readme quotes');
+  });
+
+  it('cancels a rename on Escape', async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn(async () => true);
+    renderSection({ sessionActions: ALL, onRename });
+    await user.click(screen.getByRole('button', { name: 'More actions for Quote the readme' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+    await user.type(screen.getByLabelText('Session name'), 'x{Escape}');
+    expect(onRename).not.toHaveBeenCalled();
+    expect(screen.getByText('Quote the readme')).toBeInTheDocument();
+  });
+
+  it('restores an archived session and toggles the archived list', async () => {
+    const user = userEvent.setup();
+    const onSetArchived = vi.fn();
+    const onToggleArchived = vi.fn();
+    const archived = { ...session, archivedAt: 1_700_000_000_000 };
+    renderSection({
+      groups: [{ ...group, sessions: [archived] }],
+      sessionActions: ALL,
+      showArchived: true,
+      onToggleArchived,
+      onSetArchived,
+    });
+    expect(screen.getByText(/Archived/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Hide archived' }));
+    expect(onToggleArchived).toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'More actions for Quote the readme' }));
+    expect(screen.queryByRole('menuitem', { name: 'Pin' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('menuitem', { name: 'Restore' }));
+    expect(onSetArchived).toHaveBeenCalledWith(archived, false);
+  });
+
+  it('offers nothing the CLI here cannot do', () => {
+    renderSection({ onSetPinned: vi.fn(), onRename: vi.fn(async () => true) });
+    expect(
+      screen.queryByRole('button', { name: 'More actions for Quote the readme' }),
+    ).not.toBeInTheDocument();
+  });
+});

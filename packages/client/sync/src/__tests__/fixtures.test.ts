@@ -38,7 +38,7 @@ describe('fixtures: cursor-compare.json', () => {
 
 const PushConversationSchemaMirror = z.object({
   id: z.string(),
-  title: z.string().max(500),
+  title: z.string().max(500).optional(),
   model: z.string().max(200).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),
   pinned: z.boolean().optional(),
@@ -80,6 +80,7 @@ interface FixtureConversationRecord {
   updatedAt: string;
   messageCount?: number;
   pinned?: boolean;
+  userTitlePending?: boolean;
 }
 
 interface FixtureMessageRecord {
@@ -128,6 +129,7 @@ describe('fixtures: pull-apply.json (TS apply outcome)', () => {
         updatedAt: r.updatedAt,
         messageCount: r.messageCount ?? 0,
         pinned: r.pinned ?? false,
+        ...(r.userTitlePending ? { userTitlePending: true } : {}),
       })),
     );
     const msgPort = createInMemoryMessagePort(

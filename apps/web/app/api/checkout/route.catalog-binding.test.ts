@@ -27,6 +27,7 @@ vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn(() => 'configured'),
 }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(() => []),
   getIdentityUser: vi.fn(async () => ({ primaryEmail: 'buyer@example.com' })),
   getRequestIdentity: vi.fn(async () => ({ userId: AUTHENTICATED_USER })),
 }));

@@ -74,6 +74,8 @@ function harness() {
     modelSelectorWrap: wrap,
     modelSelectorBtn: trigger,
     modelDropdownEl: dropdown,
+    modelMenuListEl: dropdown,
+    modelMenuSettingsEl: dropdown,
     managedModelAccess: access,
     buildManagedModelPickerMenu,
     buildManagedModelPickerView,
@@ -166,6 +168,18 @@ describe('mounted model picker rebuild events', () => {
     expect(test.dropdown.querySelector<HTMLInputElement>('#sp-model-search')?.value).toBe(
       'Anthropic',
     );
+  });
+
+  it('counts every model the All models list shows, as the web catalogue does', () => {
+    const test = harness();
+    const label = test.all().textContent ?? '';
+    test.all().click();
+    const listed = test.dropdown.querySelectorAll('.sp-model-option[data-model]').length;
+    const autoRows = test.dropdown.querySelectorAll(
+      `.sp-model-option[data-model="${getDefaultAutoRoutingProfile().id}"]`,
+    ).length;
+
+    expect(label).toBe(`All models (${listed - autoRows})`);
   });
 
   it('still closes the picker when a click starts outside the original menu path', () => {

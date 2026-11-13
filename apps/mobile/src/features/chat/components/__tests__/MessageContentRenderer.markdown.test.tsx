@@ -139,3 +139,15 @@ describe('renderMarkdownContent table cells', () => {
     expect(ancestorStyleNumber(getByText('short'), 'width')).toBeGreaterThanOrEqual(120);
   });
 });
+
+describe('renderMarkdownContent citation markers', () => {
+  it('drops markers that have no backing source', () => {
+    const { toJSON } = render(<>{renderMarkdownContent('Paris is the capital [1].')}</>);
+    expect(JSON.stringify(toJSON())).not.toContain('[1]');
+  });
+
+  it('keeps index access such as rows[1]', () => {
+    const { getByText } = renderMarkdown('Read rows[1] and cells[2] first.');
+    expect(getByText(/rows\[1\] and cells\[2\]/)).toBeTruthy();
+  });
+});

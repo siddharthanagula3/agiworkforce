@@ -109,6 +109,50 @@ describe('buildReachabilityQuickPickItems', () => {
     expect(built.find((entry) => entry.modelId === blocked)?.description).toBe('Upgrade your plan');
   });
 
+  it('sets every model the configured privacy pin refuses apart, naming where it is set', () => {
+    const cloud = String(FIRST!.id);
+    const local = 'local-fixture-model';
+    const pin = { trustMode: 'local' as const, configPath: '/home/me/.agiworkforce/config.toml' };
+    const built = buildReachabilityQuickPickItems({
+      items: [item(cloud), item(local)],
+      hostModels: [
+        { id: cloud, provider: String(FIRST!.provider), reachable: true, trustMode: 'managed' },
+        { id: local, provider: 'ollama', reachable: true, trustMode: 'local' },
+      ],
+      privacyPin: pin,
+    });
+
+    expect(built.map((entry) => entry.modelId)).toEqual([local, undefined, cloud]);
+    expect(built[1]?.label).toBe(
+      'Off while privacy_mode = "local" is set in /home/me/.agiworkforce/config.toml',
+    );
+    expect(built[2]?.pinnedOut).toEqual(pin);
+    expect(built[0]?.pinnedOut).toBeUndefined();
+  });
+
+  it('sets Auto apart under a Local pin, since Auto never routes to this device', () => {
+    const built = buildReachabilityQuickPickItems({
+      items: [item('auto')],
+      privacyPin: { trustMode: 'local', configPath: '/home/me/.agiworkforce/config.toml' },
+    });
+    expect(built.map((entry) => entry.modelId)).toEqual([undefined, 'auto']);
+    expect(built[1]?.pinnedOut?.trustMode).toBe('local');
+  });
+
+  it("names an organization's managed policy when no file sets the pin", () => {
+    const cloud = String(FIRST!.id);
+    const built = buildReachabilityQuickPickItems({
+      items: [item(cloud)],
+      hostModels: [
+        { id: cloud, provider: String(FIRST!.provider), reachable: true, trustMode: 'managed' },
+      ],
+      privacyPin: { trustMode: 'local' },
+    });
+    expect(built[0]?.label).toBe(
+      'Off while privacy_mode = "local" is set in your organization\'s managed policy',
+    );
+  });
+
   it('marks a reachable model the session boundary refuses', () => {
     const id = String(FIRST!.id);
     const built = buildReachabilityQuickPickItems({

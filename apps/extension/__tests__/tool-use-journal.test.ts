@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   CHAT_READ_PAGE_TOOL,
-  chatBrowserToolDefinitions,
+  CHAT_BROWSER_TOOL_DEFINITIONS,
 } from '../src/features/computer-use/chatBrowserTools';
 import { createToolUseJournal } from '../src/features/computer-use/toolHandoff';
 
-const tools = chatBrowserToolDefinitions('act');
+const tools = CHAT_BROWSER_TOOL_DEFINITIONS;
 
 function replay(events: Array<Record<string, unknown> & { type: string }>) {
   const journal = createToolUseJournal(tools);

@@ -94,6 +94,31 @@ describe('AgentActivityTimeline', () => {
     expect(view.getByText('example.com')).toBeTruthy();
   });
 
+  it('draws no row for a finished or stopped run that did no work, as web does', () => {
+    const placeholderOnly = activity({
+      entries: [
+        {
+          kind: 'progress',
+          id: 'progress:preparing',
+          progressId: 'preparing',
+          summary: 'Preparing',
+          status: 'completed',
+        },
+      ] as AgentActivityState['entries'],
+    });
+    for (const status of ['completed', 'cancelled'] as const) {
+      const { queryByLabelText, unmount } = render(
+        <AgentActivityTimeline activity={{ ...placeholderOnly, status }} />,
+      );
+      expect(queryByLabelText('Agent activity')).toBeNull();
+      unmount();
+    }
+    const { getByLabelText } = render(
+      <AgentActivityTimeline activity={activity({ status: 'cancelled' })} />,
+    );
+    expect(getByLabelText('Agent activity')).toBeTruthy();
+  });
+
   it('keeps active summaries semantic and shows a fixed duration after completion', () => {
     expect(buildAgentActivitySummary(activity(), 60_000)).toBe('Searching official sources');
     expect(

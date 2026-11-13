@@ -49,6 +49,7 @@ const SVG_ALLOWED_ATTRS = new Set([
   'stroke-linejoin',
   'stroke-dasharray',
   'd',
+  'points',
   'x',
   'y',
   'dx',
@@ -107,6 +108,15 @@ const SVG_ALLOWED_ATTRS = new Set([
 // markerWidth/markerHeight left arrowhead markers with only spec defaults
 // (3x3, no offset), which drew a mermaid edge's arrowhead as a distorted loop
 // instead of a triangle.
+const SVG_POINT_NUMBER = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/;
+
+function isNumericPointList(value: string): boolean {
+  return value
+    .split(/[\s,]+/)
+    .filter((token) => token.length > 0)
+    .every((token) => SVG_POINT_NUMBER.test(token));
+}
+
 const SVG_ALLOWED_ATTR_KEYS = new Set([...SVG_ALLOWED_ATTRS].map((attr) => attr.toLowerCase()));
 
 /**
@@ -136,6 +146,8 @@ export function sanitizeSvg(raw: string): string {
       for (const attr of attrs) {
         const name = attr.name.toLowerCase();
         if (!SVG_ALLOWED_ATTR_KEYS.has(name)) {
+          node.removeAttribute(attr.name);
+        } else if (name === 'points' && !isNumericPointList(attr.value)) {
           node.removeAttribute(attr.name);
         }
         if (name === 'href' || name === 'xlink:href') {

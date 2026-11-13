@@ -170,6 +170,22 @@ describe('per-limit usage breakdown in the VS Code meter', () => {
     expect(rows[3]?.classList.contains('binding')).toBe(false);
   });
 
+  it('keeps each limit name readable in a narrow sidebar instead of squeezing it to nothing', async () => {
+    const { payload } = await payloadFromServerSummary(RAW_USAGE_SUMMARY);
+
+    executeWebviewScript();
+    postUsageMeter(payload);
+
+    // jsdom has no layout engine, so this pins the two rules that decide it in a
+    // real webview: at the default ~300px sidebar the remaining count and reset
+    // time fill the row, and a label whose flex basis is 0 is left with 0px.
+    const row = bucketRows()[1];
+    const label = row?.querySelector<HTMLElement>('.usage-bucket-label');
+    expect(label?.textContent).toBe(managedUsageBucketLabel('weekly'));
+    expect(getComputedStyle(row as HTMLElement).flexWrap).toBe('wrap');
+    expect(getComputedStyle(label as HTMLElement).flexBasis).toBe('auto');
+  });
+
   it('shows an explicit empty state when the summary cannot be read', () => {
     const payload = buildUsageMeterPayload(
       { remaining: null, resetsAt: null, source: 'managed-plan' },

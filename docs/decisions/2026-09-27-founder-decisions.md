@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder, recorded by the billing program
-Last updated: 2026-09-27
+Last updated: 2026-10-25
 
 The founder's billing decisions of 2026-09-27, in the shape of
 `2026-09-15-founder-decisions.md`.
@@ -471,3 +471,28 @@ S12.05, S12.09, S17.09, S17.13, S19.12, S26.14, S26.27, S26.29, S28.01, S28.03,
 S28.08, S28.10, S28.11, S29.27, S32.33, S33.04, S42.01, S42.25, S52.05, S52.39,
 S53.09, S53.27, S54.27, S58.26, S62.15, S63.17, S64.05, S64.25, S67.31, S82.22,
 S85.04, S110.12, S66.10, S66.14.
+
+## D-2026-10-25-01 The turn that crosses a usage limit finishes on the plan
+
+- Decision: a 5-hour, weekly or flagship weekly window funds a turn on the plan
+  while any of its allowance is left; only a turn reserved once the window is
+  used up goes to usage credits. The billing period keeps a hard edge: a turn
+  whose estimate exceeds the plan's remaining monthly allowance goes to credits
+  or is refused, because an overshoot there would be paid from purchased
+  credits. Purchased credits are never spent while usage credits are off.
+  Migration `0392_managed_usage_plan_finishes_crossing_turn.sql` replaces the
+  0347 admission rule; a turn is still plan or credit usage for its whole life,
+  as 0281 set.
+- Why: estimates run well above actual cost, so under 0347 a sixth of a 5-hour
+  window went unused while turns were billed to credits. Claude lets the
+  message that crosses a limit finish. Decided 2026-10-25 under the owner's
+  delegation of reversible billing calls; the owner can reverse it.
+
+## D-2026-10-25-02 Usage credits on hand-billed plans are managed by whoever manages the plan
+
+- Decision: only an account billed by Stripe, Apple or Google sees the usage
+  credits switch and top-ups in Settings > Billing. Every limit message and
+  recovery card on any other account points at whoever manages the plan or at
+  the reset, never at Billing.
+- Why: business plans at both leaders leave extra usage to admins. Decided
+  2026-10-25 under the owner's delegation of reversible billing calls.

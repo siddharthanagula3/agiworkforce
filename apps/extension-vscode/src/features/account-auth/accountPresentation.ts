@@ -22,8 +22,8 @@ function formatDate(iso: string | undefined): string | undefined {
   });
 }
 
-function billingOwnerLabel(source: AccountIdentity['subscriptionSource']): string | undefined {
-  switch (source) {
+function billingOwnerLabel(identity: AccountIdentity): string | undefined {
+  switch (identity.subscriptionSource) {
     case 'stripe':
       return 'Web billing';
     case 'apple':
@@ -31,7 +31,7 @@ function billingOwnerLabel(source: AccountIdentity['subscriptionSource']): strin
     case 'google':
       return 'Google Play';
     case 'manual':
-      return 'Organization-managed';
+      return identity.accountType === 'Organization account' ? 'Organization-managed' : undefined;
     case 'none':
     case undefined:
       return undefined;
@@ -43,7 +43,7 @@ export function describeAccountPlan(identity: AccountIdentity): string {
   if (endsOn !== undefined) {
     return `${identity.planName} plan · ends ${endsOn}`;
   }
-  const owner = billingOwnerLabel(identity.subscriptionSource);
+  const owner = billingOwnerLabel(identity);
   return owner === undefined ? `${identity.planName} plan` : `${identity.planName} plan · ${owner}`;
 }
 

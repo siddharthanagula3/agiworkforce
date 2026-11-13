@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import {
   applyAnthropicPayloadPolicyToParams,
+  openAIWireRequestToChatRequest,
   resolveAnthropicPayloadPolicy,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
 } from '@agiworkforce/provider-protocol';
@@ -97,5 +98,86 @@ describe('web path Anthropic cache breakpoint (fix 9)', () => {
     expect(system).toHaveLength(1);
     expect(system[0]?.['text']).toBe('no boundary here');
     expect(system[0]?.['cache_control']).toEqual({ type: 'ephemeral' });
+  });
+});
+
+describe('a system message sent after the conversation starts', () => {
+  const policy = resolveAnthropicPayloadPolicy({
+    api: 'anthropic-messages',
+    provider: 'anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    enableCacheControl: true,
+    cacheRetention: 'long',
+  });
+  const opening = 'You are a coding agent.\n\n<environment>\ncwd\n</environment>\n';
+  const history: ChatRequest['messages'] = [
+    { role: 'system', content: opening },
+    { role: 'user', content: 'Explain this codebase' },
+    { role: 'assistant', content: 'It is a task CLI.' },
+  ];
+  const attached = '<attached_files>\nconst run = () => 1;\n</attached_files>';
+
+  function serializedSystem(req: ChatRequest): Array<Record<string, unknown>> {
+    const payload = translateChatRequest(req) as unknown as Record<string, unknown>;
+    applyAnthropicPayloadPolicyToParams(payload, policy);
+    return payload['system'] as Array<Record<string, unknown>>;
+  }
+
+  it('leaves the cached system block byte-identical to a request without it', () => {
+    const without = serializedSystem(
+      baseReq({ messages: [...history, { role: 'user', content: 'Fix line 4' }] }),
+    );
+    const withLater = serializedSystem(
+      baseReq({
+        messages: [
+          ...history,
+          { role: 'system', content: attached },
+          { role: 'user', content: 'Fix line 4' },
+        ],
+      }),
+    );
+
+    expect(without).toHaveLength(1);
+    expect(JSON.stringify(withLater[0])).toBe(JSON.stringify(without[0]));
+    expect(withLater[0]?.['cache_control']).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(withLater[1]).toEqual({ type: 'text', text: attached });
+  });
+
+  it('keeps the cached block identical on the managed wire path too', () => {
+    const wire = (extra: Array<{ role: 'system'; content: string }>) =>
+      openAIWireRequestToChatRequest({
+        model: ANTHROPIC_PREMIUM_MODEL_ID,
+        messages: [
+          { role: 'system', content: opening },
+          { role: 'user', content: 'Explain this codebase' },
+          { role: 'assistant', content: 'It is a task CLI.' },
+          ...extra,
+          { role: 'user', content: 'Fix line 4' },
+        ],
+      });
+
+    const without = serializedSystem(wire([]));
+    const withLater = serializedSystem(wire([{ role: 'system', content: attached }]));
+
+    expect(JSON.stringify(withLater[0])).toBe(JSON.stringify(without[0]));
+    expect(withLater[1]?.['text']).toBe(attached);
+    expect(withLater[1]?.['cache_control']).toBeUndefined();
+  });
+
+  it('follows a dynamic tail the server already placed behind the boundary', () => {
+    const boundaryMarked = `stable preamble${SYSTEM_PROMPT_CACHE_BOUNDARY}current time`;
+    const system = serializedSystem(
+      baseReq({
+        messages: [
+          { role: 'system', content: boundaryMarked },
+          { role: 'user', content: 'hi' },
+          { role: 'system', content: attached },
+          { role: 'user', content: 'again' },
+        ],
+      }),
+    );
+
+    expect(system[0]?.['text']).toBe('stable preamble');
+    expect(system[1]?.['text']).toBe(`current time\n\n${attached}`);
   });
 });

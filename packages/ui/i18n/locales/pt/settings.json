@@ -98,6 +98,9 @@
     "voice": "Voz",
     "desktop": "Geral",
     "computer-use": "Uso do computador",
+    "browser-pane": "Navegador",
+    "local-mcp": "Desenvolvedor",
+    "storage": "Armazenamento",
     "groupSettings": "Configurações",
     "groupCustomize": "Personalizar",
     "groupDesktop": "App para desktop"

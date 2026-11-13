@@ -175,3 +175,9 @@ export const THREAD_WRITER_CONFLICT_ERROR_CODE = -32011;
  * for the launch as it is now.
  */
 export const MCP_APPROVAL_STALE_ERROR_CODE = -32012;
+/**
+ * JSON-RPC code of a `thread/start` refused because its model would run
+ * outside the privacy boundary the configuration pins. Its `data` names the
+ * model, the boundary it needs, and the pin with where it is set.
+ */
+export const PRIVACY_BOUNDARY_ERROR_CODE = -32013;

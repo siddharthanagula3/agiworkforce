@@ -11,6 +11,7 @@ import {
   type ManagedUsageCredits,
   type UsageMeter,
   type UIPlanTier,
+  WORK_USAGE_COPY,
 } from '@agiworkforce/types';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
 import { Config } from '../platform/config';
@@ -180,16 +181,42 @@ export function formatBucketCreditsLeft(reading: ManagedUsageBucketReading): str
 
 export const CREDIT_BALANCE_LABEL = 'Credits';
 
-export function formatCreditBalance(cents: number): string {
-  return formatCredits(creditsFromCents(cents));
+export interface CreditBalanceSource {
+  creditBalanceCents?: number;
+  credits?: ManagedUsageCredits;
 }
 
-export function formatCreditSpendability(cents: number, overageEnabled: boolean): string {
-  if (cents <= 0) return 'Buy credits to work past a limit';
+/** `/api/usage` nets purchased credits against turns in flight; the cents figure predates it. */
+export function creditBalanceCredits(source: CreditBalanceSource): number | undefined {
+  const purchased = source.credits?.purchased.remaining;
+  if (typeof purchased === 'number') return purchased;
+  return source.creditBalanceCents === undefined
+    ? undefined
+    : creditsFromCents(source.creditBalanceCents);
+}
+
+/** False when someone else manages the account's plan, so its user cannot buy or turn on credits. */
+export function creditsSelfServe(source: CreditBalanceSource): boolean {
+  return source.credits?.purchased.self_serve !== false;
+}
+
+export function formatCreditBalance(credits: number): string {
+  return formatCredits(credits);
+}
+
+export function formatCreditSpendability(
+  credits: number,
+  overageEnabled: boolean,
+  selfServe = true,
+): string {
+  if (!selfServe && (!overageEnabled || credits <= 0)) return WORK_USAGE_COPY.body.wait;
+  if (credits <= 0) return 'Buy credits to work past a limit';
   return overageEnabled ? 'Spent when a limit stops you' : 'Off - enable in billing to spend';
 }
 
 export const CREDIT_TOP_UP_LABEL = 'Add credits';
+
+export const USAGE_CREDITS_IN_USE_LABEL = 'Now using usage credits';
 
 export function formatUsageMeterFallbackLabel(source: UsageMeter['source']): string {
   switch (source) {

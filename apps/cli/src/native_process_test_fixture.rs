@@ -622,6 +622,22 @@ mod tests {
     }
 
     #[test]
+    fn a_grant_still_names_this_machine_after_the_device_id_is_minted() {
+        let fixture = NativeProcessFixture::new();
+        std::fs::remove_file(&fixture.inputs.device_file).unwrap();
+        let granted_on = fixture.sync_scope(crate::trust::identity::machine_for_grant);
+        let checked_on = fixture.sync_scope(|| {
+            crate::device_registry::install_id_at(&fixture.inputs.device_file);
+            crate::trust::identity::current_machine()
+        });
+        assert!(fixture.inputs.device_file.exists());
+        assert!(
+            granted_on == checked_on,
+            "a grant made before the device id existed must still match once it does"
+        );
+    }
+
+    #[test]
     fn a_different_path_is_refused_before_the_reader_runs() {
         let fixture = NativeProcessFixture::new();
         let other = fixture.inputs.directory.path().join("other.json");

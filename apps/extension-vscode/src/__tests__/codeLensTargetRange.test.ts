@@ -84,7 +84,7 @@ describe('lens → command wiring', () => {
   });
 
   it('warns instead of sending anything when there is no range at all', () => {
-    expect(inline).toContain('if (explicitRange === undefined)');
+    expect(inline).toContain('if (askedRange === undefined)');
     expect(inline).toContain('Select some code first');
   });
 });

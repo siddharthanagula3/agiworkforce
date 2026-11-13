@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CONNECTORS_COMING_SOON_LABEL } from '@agiworkforce/types';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 import { vscodeApiStub } from './vscodeApiStub';
 
@@ -73,6 +74,18 @@ describe('the sidebar overflow menu', () => {
       payload: { surfaceId: 'projects' },
     });
     expect(document.getElementById('actionsMenu')?.classList.contains('open')).toBe(false);
+  });
+
+  it('marks Connectors as coming soon in the menu, as the tree and settings do', () => {
+    boot();
+
+    const item = document.querySelector<HTMLElement>('[data-surface="connectors"]');
+
+    expect(item?.textContent).toContain(CONNECTORS_COMING_SOON_LABEL);
+    expect(item?.getAttribute('aria-label')).toBe(`Connectors, ${CONNECTORS_COMING_SOON_LABEL}`);
+    expect(document.querySelector('[data-surface="skills"]')?.hasAttribute('aria-label')).toBe(
+      false,
+    );
   });
 
   it('orders the header history, settings, new chat, more', () => {
@@ -161,6 +174,19 @@ describe('the sessions sheet', () => {
   afterEach(() => {
     Reflect.deleteProperty(globalThis, 'acquireVsCodeApi');
     vi.restoreAllMocks();
+  });
+
+  it('closes on Escape wherever focus is while it is open', () => {
+    boot();
+    click('#sessionsBtn');
+    const sheet = document.getElementById('sessionsSheet') as HTMLElement;
+    expect(sheet.hidden).toBe(false);
+
+    const composer = document.getElementById('userInput') as HTMLTextAreaElement;
+    composer.focus();
+    composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(sheet.hidden).toBe(true);
   });
 
   it('renders each row with its age and source label', () => {
