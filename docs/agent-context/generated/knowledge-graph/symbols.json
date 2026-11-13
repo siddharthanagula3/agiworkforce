@@ -27194,6 +27194,7 @@
       "apps/desktop/src-tauri/src/sys/commands/chat/state.rs"
     ],
     "Connection": [
+      "apps/cli/src/app_server/account_cloud.rs",
       "apps/cli/src/sessions.rs"
     ],
     "CONNECTION_FAILED_MESSAGE": [
@@ -98805,10 +98806,6 @@
     ],
     "privacy": [
       "apps/desktop/src-tauri/src/sys/commands/mod.rs"
-    ],
-    "PRIVACY_BOUNDARY_ERROR_CODE": [
-      "packages/contracts/local-runtime/src/developer-session.ts",
-      "packages/contracts/local-runtime/src/index.ts"
     ],
     "privacy_delete_account": [
       "apps/desktop/src-tauri/src/sys/commands/privacy.rs"
