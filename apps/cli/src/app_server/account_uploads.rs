@@ -294,6 +294,7 @@ impl Entry {
         if !self.context.is_current() {
             return Err(CloudError::Decode("The upload's account or deployment changed. Its reviewed bytes were not moved to another account.".into()));
         }
+        CloudClient::admit(crate::account_privacy_mode())?;
         CloudClient::from_managed_context(&self.context)?
             .with_source_surface(self.surface)
             .with_workspace(Some(self.review.upload.target.workspace()))

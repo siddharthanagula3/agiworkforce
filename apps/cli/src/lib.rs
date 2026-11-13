@@ -5750,6 +5750,7 @@ pub async fn run_main() -> Result<()> {
             "An account-only connection cannot open a repository or worktree"
         );
         let _ = init_tracing(cli.verbose, cli.debug.as_ref());
+        config::CliConfig::load_without_project()?;
         let host = std::sync::Arc::new(app_server::CliAccountHost::new());
         let capabilities = host.capabilities();
         return app_server::run_developer_session_stdio(host, capabilities).await;
@@ -5854,6 +5855,16 @@ async fn settle_session_worktree(worktree: &runtime::worktree::SessionWorktree) 
 }
 
 async fn run_cli(mut cli: Cli) -> Result<()> {
+    anyhow::ensure!(
+        !matches!(
+            cli.command,
+            Some(Command::AppServer {
+                account_only: true,
+                ..
+            })
+        ),
+        "An account-only connection cannot enter workspace initialization"
+    );
     // Install the single logging owner before anything else runs so `-v/--verbose`
     // and `--debug[=categories]` actually change what `tracing` emits. Without
     // this, every `tracing::{debug,info,warn}` call in the crate went nowhere and
@@ -10057,6 +10068,24 @@ mod tests {
         let system_prompt = Cli::try_parse_from(["agi", "--dump-system-prompt"])
             .expect("read-only system prompt flag should parse");
         assert!(!invocation_requires_project_trust(&system_prompt));
+    }
+
+    #[test]
+    fn an_account_only_server_has_no_workspace_consent_or_project_trust() {
+        let cli = Cli::try_parse_from(["agi", "app-server", "--account-only"]).unwrap();
+        assert!(!invocation_requires_project_trust(&cli));
+        assert!(Cli::try_parse_from([
+            "agi",
+            "app-server",
+            "--account-only",
+            "--workspace-consent",
+            "/tmp",
+            "--workspace-consent-at-ms",
+            "1"
+        ])
+        .is_err());
+        let normal = Cli::try_parse_from(["agi", "app-server"]).unwrap();
+        assert!(invocation_requires_project_trust(&normal));
     }
 
     #[test]

@@ -251,12 +251,15 @@ impl DownloadDestination {
         );
         self.validate_original()?;
         let name = PathBuf::from(format!("{STAGING_PREFIX}{}", uuid::Uuid::new_v4()));
-        let mut directory_options = DirOptions::new();
         #[cfg(unix)]
-        {
+        let directory_options = {
             use confined::DirBuilderExt;
-            directory_options.mode(0o700);
-        }
+            let mut options = DirOptions::new();
+            options.mode(0o700);
+            options
+        };
+        #[cfg(not(unix))]
+        let directory_options = DirOptions::new();
         confined::create_dir(&self.parent, &name, &directory_options)?;
         let stage = match confined::open_dir_nofollow(&self.parent, &name) {
             Ok(stage) => stage,

@@ -14,6 +14,8 @@ impl DirectoryAuthority {
 
     pub(crate) fn private_child(&self, name: &Path) -> Result<Self> {
         #[cfg(not(unix))]
+        let _ = name;
+        #[cfg(not(unix))]
         anyhow::bail!("Private recovery storage is unavailable on this platform");
         #[cfg(unix)]
         {

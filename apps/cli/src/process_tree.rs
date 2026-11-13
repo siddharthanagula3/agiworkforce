@@ -150,15 +150,40 @@ pub(crate) fn kill_all_process_trees() {
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     for entry in registry.entries.values() {
         if entry.terminal_session {
-            #[cfg(unix)]
-            {
-                if let Some(id) = entry.process_id {
-                    let _ = terminate_session_now(id);
-                }
-                continue;
-            }
+            stop_terminal_session(entry.process_id);
+        } else {
+            kill_process_group_now(entry.process_id);
         }
-        kill_process_group_now(entry.process_id);
+    }
+}
+
+#[cfg(unix)]
+fn stop_terminal_session(process_id: Option<u32>) {
+    if let Some(id) = process_id {
+        stop_session_or_group(id, terminate_session_now, |id| {
+            kill_process_group_now(Some(id))
+        });
+    }
+}
+
+#[cfg(not(unix))]
+fn stop_terminal_session(process_id: Option<u32>) {
+    signal_process_tree_on_drop(process_id);
+}
+
+#[cfg(unix)]
+fn stop_session_or_group(
+    id: u32,
+    terminate_session: impl FnOnce(u32) -> io::Result<()>,
+    kill_group: impl FnOnce(u32),
+) {
+    if let Err(error) = terminate_session(id) {
+        tracing::warn!(
+            process_id = id,
+            %error,
+            "terminal session cleanup failed; signalling its process group"
+        );
+        kill_group(id);
     }
 }
 
@@ -395,14 +420,11 @@ impl DetachedProcessTree {
     }
 
     pub(crate) fn kill(&self) {
-        #[cfg(unix)]
         if self.terminal_session {
-            if let Some(id) = self.process_id {
-                let _ = terminate_session_now(id);
-            }
-            return;
+            stop_terminal_session(self.process_id);
+        } else {
+            signal_process_tree_on_drop(self.process_id);
         }
-        signal_process_tree_on_drop(self.process_id);
     }
     #[cfg(unix)]
     pub(crate) fn track_terminal(process_id: u32) -> Self {
@@ -1014,6 +1036,21 @@ mod tests {
     use nix::sys::signal::kill;
     use nix::unistd::Pid;
     use std::path::Path;
+
+    #[test]
+    fn a_terminal_session_that_cannot_be_listed_still_has_its_process_group_killed() {
+        let signalled = std::cell::Cell::new(None);
+        stop_session_or_group(
+            4242,
+            |_| Err(io::Error::other("process listing failed")),
+            |id| signalled.set(Some(id)),
+        );
+        assert_eq!(signalled.get(), Some(4242));
+
+        let signalled = std::cell::Cell::new(None);
+        stop_session_or_group(4242, |_| Ok(()), |id| signalled.set(Some(id)));
+        assert_eq!(signalled.get(), None);
+    }
 
     #[test]
     fn host_shell_commands_name_the_shell_by_absolute_path() {

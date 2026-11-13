@@ -63,6 +63,7 @@ use agiworkforce_protocol::user_input::UserInput;
 use agiworkforce_protocol::workspace_files::*;
 #[cfg(unix)]
 use agiworkforce_protocol::workspace_terminal::*;
+#[cfg(unix)]
 use agiworkforce_protocol::worktree_apply::*;
 use agiworkforce_worktree::checkpoint::Phase;
 use async_trait::async_trait;
