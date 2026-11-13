@@ -7,7 +7,7 @@ import {
 } from '@agiworkforce/types';
 
 import {
-  getPlanSessionUsageBudgetCents,
+  getPlanSessionUsageCapCents,
   getPlanUsageBudgetCents,
   getPlanWeeklyUsageBudgetCents,
   isPlanUsageUncapped,
@@ -128,7 +128,7 @@ describe('what a plan is told it has agrees with what it may do', () => {
       uncapped ? null : getPlanUsageBudgetCents(plan),
     );
     expect(published('managed_usage_rolling_five_hour_cents')).toBe(
-      uncapped ? null : getPlanSessionUsageBudgetCents(plan),
+      getPlanSessionUsageCapCents(plan),
     );
     expect(published('managed_usage_rolling_weekly_cents')).toBe(
       uncapped ? null : getPlanWeeklyUsageBudgetCents(plan),
