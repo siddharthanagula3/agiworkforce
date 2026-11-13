@@ -204,7 +204,22 @@
     {
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 419,
-      "reason": "The undeleted-table inventory documents the cleanup ledger and its enforced anonymized tombstone, without executing new-schema SQL. Source publication is allowed; deploy-production.yml still unconditionally verifies the complete production migration ledger before deployment, and production remains recorded through 391."
+      "reason": "Account erasure deletes the bytes of the subject's project_knowledge_objects rows that carry no recorded storage targets and settles those rows once the subject's projects are gone. This code ships with 0419_project_knowledge_object_lifecycle.sql and 0421_projects_follow_workspace_deletion.sql: a manual production deploy applies pending migrations before the new code is promoted (docs/runbooks/release-rollback.md, \"Deploying by hand: migrations first\"), and deploy-production.yml runs pnpm db:migrate -- verify before the Vercel build."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 419,
+      "reason": "Organization erasure detaches project_knowledge_objects.organization_id from the deleted workspace, and the final organizations delete relies on 0421 to let the cascade demote member projects to Personal. This code ships with 0419_project_knowledge_object_lifecycle.sql and 0421_projects_follow_workspace_deletion.sql: a manual production deploy applies pending migrations before the new code is promoted (docs/runbooks/release-rollback.md, \"Deploying by hand: migrations first\"), and deploy-production.yml runs pnpm db:migrate -- verify before the Vercel build."
+    },
+    {
+      "file": "apps/web/lib/server/workspace-scope/switch-surfaces.ts",
+      "migration": 419,
+      "reason": "The workspace-switch registry names project_knowledge_objects on the projects surface; it is a declaration and executes no SQL. This code ships with 0419_project_knowledge_object_lifecycle.sql and 0421_projects_follow_workspace_deletion.sql: a manual production deploy applies pending migrations before the new code is promoted (docs/runbooks/release-rollback.md, \"Deploying by hand: migrations first\"), and deploy-production.yml runs pnpm db:migrate -- verify before the Vercel build."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 419,
+      "reason": "The retention matrix classifies project_knowledge_objects as an operational record; it is a declaration and executes no SQL. This code ships with 0419_project_knowledge_object_lifecycle.sql and 0421_projects_follow_workspace_deletion.sql: a manual production deploy applies pending migrations before the new code is promoted (docs/runbooks/release-rollback.md, \"Deploying by hand: migrations first\"), and deploy-production.yml runs pnpm db:migrate -- verify before the Vercel build."
     }
   ]
 }

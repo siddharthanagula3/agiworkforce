@@ -180,6 +180,8 @@ function userScopedSchemaTables(): Map<string, Set<string>> {
 interface ErasureFixture {
   mediaRows?: Array<{ id: string; storage_pathname: string | null }>;
   knowledgeRows?: Array<{ storage_uri: string | null }>;
+  untrackedLedgerKeys?: string[];
+  unsettledLedgerRows?: number;
   avatarUrl?: string | null;
   feedbackScreenshotKeys?: Array<string | null>;
   failStatementMatching?: string;
@@ -222,6 +224,10 @@ function primeDb(fixture: ErasureFixture = {}): void {
       ];
     }
     if (sql.includes('media_assets')) return fixture.mediaRows ?? [];
+    if (sql.includes('from public.project_knowledge_objects ledger')) {
+      return (fixture.untrackedLedgerKeys ?? []).map((object_key) => ({ object_key }));
+    }
+    if (sql.includes('as unsettled')) return [{ unsettled: fixture.unsettledLedgerRows ?? 0 }];
     if (sql.includes('project_knowledge_files')) return fixture.knowledgeRows ?? [];
     if (sql.includes('avatar_url')) return [{ avatar_url: fixture.avatarUrl ?? null }];
     if (sql.includes("metadata->>'screenshot_key'")) {
@@ -999,6 +1005,70 @@ describe('eraseUserAccountData', () => {
     expect(report.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
     expect(
       executedStatements().some((sql) => sql.includes('delete from public.user_projects')),
+    ).toBe(false);
+  });
+
+  it('deletes the bytes of untracked ledger rows and settles them once the projects are gone', async () => {
+    const backfilled = 'knowledge-files/projects/p1/1_backfilled.txt';
+    primeDb({
+      knowledgeRows: [{ storage_uri: 'knowledge-files/projects/p1/2_live.txt' }],
+      untrackedLedgerKeys: [backfilled, 'knowledge-files/projects/p1/2_live.txt'],
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(mocks.deleteObject).toHaveBeenCalledWith(backfilled);
+    expect(mocks.deleteObject).toHaveBeenCalledTimes(2);
+    expect(report.anonymized['project_knowledge_objects']).toEqual({ updated: true });
+    expect(report.complete).toBe(true);
+    const statements = executedStatements();
+    const projects = statements.findIndex((sql) =>
+      sql.includes('delete from public.user_projects where user_id = $1'),
+    );
+    const settle = statements.findIndex((sql) =>
+      sql.includes("update public.project_knowledge_objects set state = 'deleted'"),
+    );
+    expect(projects).toBeGreaterThan(-1);
+    expect(settle).toBeGreaterThan(projects);
+    expect(statements[settle]).toContain(
+      'object_key = null, user_id = null, organization_id = null',
+    );
+    expect(statements[settle]).toContain('and not origin_known');
+    const settleCall = mocks.execute.mock.calls.find((call) =>
+      String(call[0]).includes("set state = 'deleted'"),
+    );
+    expect(settleCall?.[1]).toEqual([
+      'user-1',
+      ['knowledge-files/projects/p1/2_live.txt', backfilled],
+    ]);
+  });
+
+  it('keeps the profile while an untracked ledger row is left unsettled', async () => {
+    primeDb({
+      untrackedLedgerKeys: ['knowledge-files/projects/p1/1_a.txt'],
+      unsettledLedgerRows: 1,
+    });
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.anonymized['project_knowledge_objects']).toMatchObject({ updated: false });
+    expect(report.complete).toBe(false);
+    expect(report.profileRetained).toBe(true);
+    expect(executedStatements().some((sql) => sql.includes('delete from public.profiles'))).toBe(
+      false,
+    );
+  });
+
+  it('settles no ledger row while the projects are kept for a failed byte deletion', async () => {
+    primeDb({ untrackedLedgerKeys: ['knowledge-files/projects/p1/1_a.txt'] });
+    mocks.deleteObject.mockRejectedValue(new Error('R2 unavailable'));
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.tables['user_projects']).toEqual({ deleted: false, retainedForRetry: true });
+    expect(report.anonymized['project_knowledge_objects']).toBeUndefined();
+    expect(
+      executedStatements().some((sql) => sql.includes('update public.project_knowledge_objects')),
     ).toBe(false);
   });
 
