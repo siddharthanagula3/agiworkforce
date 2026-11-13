@@ -297,7 +297,12 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       /pub fn save_device_grant[\s\S]*AuthStore::transaction_with_commit/u,
     );
     expect(repoText('apps', 'desktop', 'electron', 'runtime', 'runtimeEnvironment.ts')).toContain(
-      "'AGIWORKFORCE_NO_KEYRING'",
+      "import { GUARD_LIFTING_ENVIRONMENT } from '@agiworkforce/local-runtime-contract';",
+    );
+    expect(
+      repoText('packages', 'contracts', 'local-runtime', 'src', 'developer-sessions.ts'),
+    ).toMatch(
+      /export const GUARD_LIFTING_ENVIRONMENT: readonly string\[\] = \[[^\]]*'AGIWORKFORCE_NO_KEYRING'/u,
     );
     expect(repoText('apps', 'cli', 'src', 'secure_store.rs')).toContain(
       '!cfg!(test) && !cfg!(target_os = "linux") && !keyring_disabled()',

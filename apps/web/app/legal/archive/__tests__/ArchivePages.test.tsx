@@ -66,6 +66,7 @@ describe('/legal/archive', () => {
         .getAllByRole('link', { name: 'Read this version' })
         .map((link) => link.getAttribute('href')),
     ).toEqual([
+      '/legal/archive/terms/2026-11-11',
       '/legal/archive/terms/2026-10-08',
       '/legal/archive/terms/2026-09-23',
       '/legal/archive/terms/2026-08-11',

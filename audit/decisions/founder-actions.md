@@ -158,7 +158,7 @@ Each line is one approval; engineering edits the page and its claim test after i
 - Chrome extension history search is built opt-in (`apps/extension/src/features/computer-use/historySearch.ts`)
   and both policy pages now describe it: `/privacy` since commit `6ade64b7b9` (with the console and
   network lines the extension reads during browser control), and `/agent-permissions` in a Browsing
-  history row of "Computer use in Chrome" dated 2026-11-11. Approve that wording or send it to counsel;
+  history row of "Computer use in Chrome" dated 2026-11-13. Approve that wording or send it to counsel;
   whether the feature stays is in `open-questions.md`.
 
 ## [Release] GitHub environments and variables the release workflows read (F3, F4, F6 to F10)
@@ -1183,8 +1183,11 @@ it has that address, so the order matters, and deploys and Fly settings are the 
 7. Nothing to set for `SIGNALING_PAIRING_MAX_LIFETIME_MS`: the relay now ignores a value above
    seven days and logs that once at start, so the 2026-11-11 privacy text (a pairing record is
    kept at most seven days plus about an hour) holds whatever Fly sets.
-8. Publish the 2026-11-11 privacy text with this relay deploy or after it, never before: the
-   seven-day cap and the expiry sweep it describes exist only in the new relay.
+8. The privacy text that describes the seven-day cap and the expiry sweep shipped with the web
+   release of 2026-11-13, ahead of this relay deploy. The owner decided that day that nothing is
+   deployed or changed on Fly until he says so, and accepted that Remote Control may show an error
+   meanwhile. Until the relay is deployed the cap and the sweep the page describes are not
+   enforced, so deploy the relay before Remote Control is offered to customers.
    **Where** Vercel for the web app; the Fly app for the relay; `services/signaling-server/README.md`.
    **Needed input** None beyond the deploys.
    **How to verify completion** A phone pairs with `agi rc`, a long reply streams without being
