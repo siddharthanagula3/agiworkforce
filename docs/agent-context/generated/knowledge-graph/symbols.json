@@ -525,6 +525,9 @@
     "_write_skill": [
       "tools/skill-vetting/tests/test_pattern_backtracking.py"
     ],
+    "A": [
+      "tools/evals/src/chat-prompt.ts"
+    ],
     "a2a": [
       "apps/cli/src/features/mod.rs",
       "apps/cli/src/lib.rs"
@@ -1354,6 +1357,12 @@
     ],
     "AccountNotificationPage": [
       "apps/mobile/src/features/notifications/accountFeed.ts"
+    ],
+    "AccountOperation": [
+      "apps/desktop/gpui/src/account.rs"
+    ],
+    "AccountPanel": [
+      "apps/desktop/gpui/src/account.rs"
     ],
     "AccountPersonalizationScope": [
       "apps/web/lib/server/user-identity.ts"
@@ -2292,6 +2301,11 @@
     "addDaysToContractDate": [
       "packages/contracts/types/src/enterprise/contract-lifecycle.ts"
     ],
+    "addDeveloperMcpServer": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "addDeveloperMemory": [
       "apps/desktop/electron/runtime/developerSessionService.ts",
       "apps/web/features/desktop-host/index.ts",
@@ -2426,6 +2440,11 @@
     ],
     "adjacentChatId": [
       "apps/web/features/desktop-host/lib/adjacent-chat.ts"
+    ],
+    "adjacentSidebarSessionId": [
+      "packages/ui/ui/src/index.ts",
+      "packages/ui/ui/src/sidebar/index.ts",
+      "packages/ui/ui/src/sidebar/order.ts"
     ],
     "adjacentTabId": [
       "apps/web/features/desktop-host/lib/open-chat-tabs.ts"
@@ -2585,6 +2604,8 @@
       "scripts/lib/managed-safety-floor.mjs"
     ],
     "admit": [
+      "apps/cli/src/app_server/attachment_recovery/mod.rs",
+      "apps/cli/src/app_server/attachment_recovery/store.rs",
       "apps/cli/src/cloud/client.rs",
       "apps/cli/src/cloud/code_push.rs"
     ],
@@ -5094,6 +5115,95 @@
     "ANSWER_SURFACE_LANGUAGES": [
       "packages/ui/unified-chat/src/components/markdown/answerSurfaces.ts"
     ],
+    "ANSWER_UI_ACTION_KINDS": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_BLOCK_TYPES": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_CALLOUT_TONES": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_CARD_KIND": [
+      "apps/web/lib/services/answer-ui-tool-service.ts",
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_CHART_DATA_LABEL": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiChart.tsx"
+    ],
+    "ANSWER_UI_CHART_HEIGHT_PX": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiChart.tsx"
+    ],
+    "ANSWER_UI_CHART_TYPES": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_CHECKLIST_COPY_LABEL": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "ANSWER_UI_CHECKLIST_RESET_LABEL": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "ANSWER_UI_CHOICE_STYLES": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_COLUMNS_MAX": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_COLUMNS_MIN": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_CONTAINER_TYPES": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_COPIED_MESSAGE": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "ANSWER_UI_COPY_FAILED_MESSAGE": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "ANSWER_UI_COPY_READY_LABEL": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "ANSWER_UI_FILE_EXAMPLE_LABEL": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "ANSWER_UI_ID_PATTERN": [
+      "packages/contracts/cloud-contracts/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_INPUT_TYPES": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_LIMITS": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_MAP_HEIGHT_PX": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiMap.tsx"
+    ],
+    "ANSWER_UI_MAP_NOTE": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiMap.tsx"
+    ],
+    "ANSWER_UI_NUMBER_LOCALE": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_SEND_FAILED_MESSAGE": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "ANSWER_UI_SEND_NEEDS_SAVED_CHAT": [
+      "apps/web/features/chat/components/messages/InteractiveCardBlock.tsx"
+    ],
+    "ANSWER_UI_SEND_WAITS_FOR_REPLY": [
+      "apps/web/features/chat/components/messages/InteractiveCardBlock.tsx"
+    ],
+    "ANSWER_UI_STATUS_TONES": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_TOOL_NAME": [
+      "apps/web/lib/services/answer-ui-tool-service.ts",
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "ANSWER_UI_UNSET_VALUE": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
     "answerableEntries": [
       "apps/web/features/models/lib/compare-answers.ts"
     ],
@@ -5208,6 +5318,246 @@
     "AnswerSurfaceActions": [
       "apps/extension-vscode/src/webview/render.ts"
     ],
+    "AnswerUiActionButton": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiActionButtons": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiActionKind": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiActionsBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiBlockType": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiCalloutBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiCalloutTone": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiCard": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "AnswerUiCardBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiCardBody": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiCardBodySchema": [
+      "packages/contracts/cloud-contracts/src/answer-ui.ts"
+    ],
+    "AnswerUiCardContext": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "AnswerUiCardProps": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiCard.tsx"
+    ],
+    "AnswerUiChart": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiChart.tsx"
+    ],
+    "AnswerUiChartBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiChartPoint": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiChartSeries": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiChartSpec": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiChart.tsx"
+    ],
+    "AnswerUiChartType": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiChecklistBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiChecklistItem": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiChecklistText": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiChoiceBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiChoiceOption": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiChoiceStyle": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiColumnsBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiComposeResult": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiContainerBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiControlBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiControls": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiCopyBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiDisclosureBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiDisplayValue": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiExpression": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiExpressionRefs": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiFallbackText": [
+      "apps/web/lib/services/answer-ui-tool-service.ts"
+    ],
+    "AnswerUiFileItem": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiFilesBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiFollowUpProvider": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/answer-ui-follow-up.ts"
+    ],
+    "AnswerUiFollowUpSender": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/answer-ui-follow-up.ts"
+    ],
+    "AnswerUiGalleryBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiGalleryImage": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiHeadingBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiInitialValue": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiInitialValues": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiInputBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiInputType": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiKeyValueBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiMap": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiMap.tsx"
+    ],
+    "AnswerUiMapBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiMapPin": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiMapProps": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiMap.tsx"
+    ],
+    "AnswerUiMessageResponseSchema": [
+      "apps/web/app/api/interactive-cards/response-contract.ts"
+    ],
+    "AnswerUiNumberOrFormula": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiNumericValue": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiPinUrl": [
+      "apps/web/lib/services/answer-ui-tool-service.ts"
+    ],
+    "AnswerUiReadoutBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiSendTargetIds": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiSliderBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiStatusBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiStatusItem": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiStatusTone": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiStep": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiStepsBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiSuggestion": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiSuggestions": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiSuggestionsBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiTableBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiTemplateIsValid": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiTemplatePart": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiTemplateRefs": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiTextBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "answerUiToolDefinition": [
+      "apps/web/lib/services/answer-ui-tool-service.ts"
+    ],
+    "AnswerUiToolOutcome": [
+      "apps/web/lib/services/answer-ui-tool-service.ts"
+    ],
+    "AnswerUiTranscriptBlock": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiTranscriptLine": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiValue": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiValues": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "AnswerUiValuesResult": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
     "anthropic": [
       "crates/agiworkforce-llm/src/stop.rs"
     ],
@@ -5260,6 +5610,10 @@
     "AnthropicAdapterConfig": [
       "packages/ai/providers/anthropic/src/index.ts"
     ],
+    "AnthropicCacheBreakpointPlan": [
+      "packages/ai/provider-protocol/src/anthropic-payload-policy.ts",
+      "packages/ai/provider-protocol/src/index.ts"
+    ],
     "AnthropicCacheConfig": [
       "apps/web/app/api/llm/v1/chat/completions/lib/canonical-request.ts"
     ],
@@ -5274,6 +5628,9 @@
     "AnthropicPayloadPolicyInput": [
       "packages/ai/provider-protocol/src/anthropic-payload-policy.ts",
       "packages/ai/provider-protocol/src/index.ts"
+    ],
+    "anthropicPromptCacheTtls": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic.ts"
     ],
     "AnthropicProvider": [
       "tools/skill-vetting/src/skillspector/providers/anthropic/provider.py"
@@ -5937,6 +6294,9 @@
     "apply_remote_gate": [
       "apps/desktop/src-tauri/src/features/speech/wake.rs"
     ],
+    "apply_review_params": [
+      "apps/desktop/gpui/src/code_worktree_apply.rs"
+    ],
     "apply_saved_effort": [
       "apps/cli/src/lib.rs"
     ],
@@ -6103,9 +6463,6 @@
     ],
     "applyInputTokenPricingTiers": [
       "packages/contracts/types/src/model-catalog.ts"
-    ],
-    "applyLaunchAtLogin": [
-      "apps/desktop/electron/launchAtLogin.ts"
     ],
     "applyLayoutDirection": [
       "apps/mobile/src/i18n/index.ts"
@@ -6290,6 +6647,9 @@
     ],
     "applyWorkspaceDefaultModel": [
       "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts"
+    ],
+    "applyWorktreesRootChange": [
+      "apps/desktop/electron/runtime/developerSessionService.ts"
     ],
     "applyZhipuThinkingMode": [
       "packages/ai/providers/zhipu/src/index.ts"
@@ -6940,6 +7300,9 @@
     ],
     "archiveFlagDefinition": [
       "apps/web/lib/feature-flags/flag-store.ts"
+    ],
+    "archiveIdleSessions": [
+      "apps/desktop/electron/runtime/sessionAutoArchive.ts"
     ],
     "ArchiveOutcome": [
       "crates/agiworkforce-worktree/src/managed.rs"
@@ -10098,6 +10461,10 @@
     "auto_approves_edits": [
       "apps/cli/src/cli_options.rs"
     ],
+    "AUTO_ARCHIVE_IDLE_DAYS": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "auto_compact_token_limit": [
       "crates/agiworkforce-protocol/src/openai_models.rs"
     ],
@@ -10141,6 +10508,13 @@
     ],
     "AutoApproveScreen": [
       "apps/mobile/app/(app)/settings/auto-approve.tsx"
+    ],
+    "AutoArchiveIdleDays": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "AutoArchiveOptions": [
+      "apps/desktop/electron/runtime/sessionAutoArchive.ts"
     ],
     "AutoCapabilityEnvelope": [
       "packages/ai/routing/src/auto-capability-envelope.ts",
@@ -11455,6 +11829,9 @@
     "BillingNoticeResult": [
       "apps/web/lib/services/billing-notice-service.ts"
     ],
+    "billingOwnerPlanActionHref": [
+      "apps/web/features/billing/lib/subscription-owner-presentation.ts"
+    ],
     "billingOwnerPlanActionLabel": [
       "apps/web/features/billing/lib/subscription-owner-presentation.ts"
     ],
@@ -11677,6 +12054,11 @@
     ],
     "blockBody": [
       "scripts/lib/ui-systems.mjs"
+    ],
+    "blockBrowserSite": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "blockCloudPersistence": [
       "apps/extension/src/features/background/conversation-history.ts"
@@ -12011,6 +12393,9 @@
     "BranchRef": [
       "apps/cli/src/platform/runtime/git.rs"
     ],
+    "branchSlug": [
+      "apps/desktop/electron/runtime/gitService.ts"
+    ],
     "brand": [
       "apps/cli/src/terminal_style.rs"
     ],
@@ -12286,6 +12671,10 @@
     ],
     "BROWSER_PAIRING_COMMANDS": [
       "packages/contracts/local-runtime/src/browser-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "BROWSER_PANE_COMMANDS": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
       "packages/contracts/local-runtime/src/index.ts"
     ],
     "BROWSER_PROFILE_REFUSALS": [
@@ -12602,6 +12991,43 @@
       "packages/contracts/local-runtime/src/browser-bridge.ts",
       "packages/contracts/local-runtime/src/index.ts"
     ],
+    "browserPaneAddress": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "BrowserPaneBounds": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "BrowserPaneCommand": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "browserPaneDecision": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "BrowserPaneDecision": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "BrowserPaneRefused": [
+      "apps/desktop/electron/browserPane.ts"
+    ],
+    "BrowserPaneSettings": [
+      "apps/web/features/desktop-host/components/BrowserPaneSettings.tsx"
+    ],
+    "browserPaneState": [
+      "apps/desktop/electron/browserPane.ts"
+    ],
+    "BrowserPaneState": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "browserPaneSupported": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "BrowserPermissionMode": [
       "apps/extension/src/features/computer-use/askBeforeActing.ts"
     ],
@@ -12729,6 +13155,14 @@
     "browserSiteAccessRank": [
       "packages/contracts/types/src/browser-selection.ts",
       "packages/contracts/types/src/index.ts"
+    ],
+    "browserSiteHost": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "BrowserSites": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "BrowserSiteToolBinding": [
       "apps/extension/src/features/tools/browserAgentSiteTools.ts"
@@ -15276,7 +15710,6 @@
     ],
     "capabilities": [
       "apps/cli/src/app_server/account_host.rs",
-      "apps/cli/src/app_server/developer_host.rs",
       "apps/cli/src/platform/runtime/git.rs",
       "apps/desktop/gpui/src/runtime.rs",
       "apps/desktop/src-tauri/src/sys/commands/mod.rs",
@@ -15910,6 +16343,15 @@
     "cardHtml": [
       "apps/web/features/plugins/server/directory/__tests__/fixtures.ts"
     ],
+    "cardLeadsProse": [
+      "apps/web/features/chat/lib/interactive-card-placement.ts"
+    ],
+    "cardOnlyAssistantHistoryText": [
+      "apps/web/features/chat/lib/assistant-history-turn.ts"
+    ],
+    "cardOnlyAssistantTurnContent": [
+      "apps/web/features/chat/lib/assistant-history-turn.ts"
+    ],
     "cardRadius": [
       "apps/mobile/src/ui/theme/tokens.ts"
     ],
@@ -16438,6 +16880,11 @@
       "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
       "packages/ui/unified-chat/src/index.ts"
     ],
+    "CHART_RENDER_KINDS": [
+      "packages/contracts/types/src/chart-spec.ts",
+      "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
+      "packages/ui/unified-chat/src/index.ts"
+    ],
     "CHART_ROW_CAP": [
       "packages/contracts/types/src/chart-spec.ts",
       "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
@@ -16481,6 +16928,9 @@
     "ChartDisplay": [
       "apps/web/features/chat/components/artifacts/presentation/chart-block.ts"
     ],
+    "ChartErrorBoundary": [
+      "packages/ui/unified-chat/src/components/artifact-components/ChartSpecView.tsx"
+    ],
     "chartFence": [
       "apps/web/features/chat/components/artifacts/presentation/chart-block.ts"
     ],
@@ -16505,6 +16955,16 @@
       "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
       "packages/ui/unified-chat/src/index.ts"
     ],
+    "ChartRenderKind": [
+      "packages/contracts/types/src/chart-spec.ts",
+      "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
+      "packages/ui/unified-chat/src/index.ts"
+    ],
+    "ChartRenderSpec": [
+      "packages/contracts/types/src/chart-spec.ts",
+      "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
+      "packages/ui/unified-chat/src/index.ts"
+    ],
     "ChartRow": [
       "packages/contracts/types/src/chart-spec.ts",
       "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
@@ -16525,6 +16985,14 @@
     "ChartSpec": [
       "packages/contracts/types/src/chart-spec.ts",
       "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
+      "packages/ui/unified-chat/src/index.ts"
+    ],
+    "ChartSpecView": [
+      "packages/ui/unified-chat/src/components/artifact-components/ChartSpecView.tsx",
+      "packages/ui/unified-chat/src/index.ts"
+    ],
+    "ChartSpecViewProps": [
+      "packages/ui/unified-chat/src/components/artifact-components/ChartSpecView.tsx",
       "packages/ui/unified-chat/src/index.ts"
     ],
     "chat": [
@@ -17209,7 +17677,13 @@
       "apps/web/shared/types/index.ts"
     ],
     "ChatSetup": [
-      "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
+    ],
+    "chatSetupBlock": [
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
+    ],
+    "ChatSetupTools": [
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
     ],
     "ChatSlashAction": [
       "apps/web/features/chat/lib/chat-slash-commands.ts"
@@ -17357,6 +17831,12 @@
     ],
     "ChatTurnPlan": [
       "tools/evals/src/types.ts"
+    ],
+    "ChatTurnProject": [
+      "tools/evals/src/types.ts"
+    ],
+    "ChatTurnSetup": [
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
     ],
     "ChatTurnState": [
       "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
@@ -18664,6 +19144,9 @@
     "CITATION_ANCHOR_PREFIX": [
       "apps/web/features/chat/lib/citation-links.ts"
     ],
+    "CitationAnchor": [
+      "apps/web/features/chat/lib/citation-anchors.ts"
+    ],
     "citationAnchorId": [
       "apps/web/features/chat/lib/citation-links.ts"
     ],
@@ -18710,6 +19193,9 @@
     ],
     "CitationSpan": [
       "packages/ui/unified-chat/src/index.ts"
+    ],
+    "citationSpansFromAnchors": [
+      "apps/web/features/chat/lib/citation-anchors.ts"
     ],
     "citationsSentAfterFit": [
       "apps/web/app/api/llm/v1/chat/completions/lib/reference-citations.ts"
@@ -19357,6 +19843,10 @@
       "packages/ai/provider-protocol/src/index.ts",
       "packages/ai/provider-protocol/src/lib/clean-for-gemini.ts"
     ],
+    "cleanStorage": [
+      "apps/desktop/electron/runtime/storageService.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "cleanup": [
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs",
       "apps/desktop/src-tauri/src/core/agi/sandbox.rs"
@@ -19564,6 +20054,11 @@
     ],
     "clearBiometricFlag": [
       "apps/mobile/lib/biometricFlagStore.ts"
+    ],
+    "clearBrowserPaneData": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "clearChat": [
       "apps/desktop/e2e/fixtures/test-helpers.ts"
@@ -20039,8 +20534,7 @@
       "apps/desktop/electron/browser/localClient.ts"
     ],
     "CliDeveloperSessionHost": [
-      "apps/cli/src/app_server.rs",
-      "apps/cli/src/app_server/developer_host.rs"
+      "apps/cli/src/app_server.rs"
     ],
     "client": [
       "apps/cli/src/cloud/mod.rs",
@@ -20434,6 +20928,7 @@
       "packages/contracts/types/src/time-focus.ts"
     ],
     "close": [
+      "apps/cli/src/app_server/workspace_terminal.rs",
       "apps/cli/src/tui/remote_host.rs",
       "apps/cli/src/tui/widgets/agent_picker.rs",
       "apps/cli/src/tui/widgets/approval_overlay.rs",
@@ -20485,6 +20980,9 @@
     "closeAnySettingsDialog": [
       "apps/desktop/wdio/support/close-settings.ts"
     ],
+    "closeBrowserPane": [
+      "apps/desktop/electron/browserPane.ts"
+    ],
     "closeCancelledImageGenerationJob": [
       "apps/web/lib/server/image-generation-jobs.ts"
     ],
@@ -20506,6 +21004,10 @@
     "closed": [
       "apps/desktop/src-tauri/src/features/speech/wake.rs"
     ],
+    "CLOSED_BROWSER_PANE": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "CLOSED_NOW_LABEL": [
       "apps/web/features/chat/components/messages/cards/map/placeFacts.ts"
     ],
@@ -20523,6 +21025,11 @@
     ],
     "closeDb": [
       "apps/mobile/storage/db.ts"
+    ],
+    "closeDeveloperTerminal": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "closeErasureTombstone": [
       "apps/web/lib/server/account-erasure.ts"
@@ -25324,6 +25831,9 @@
     "COMPOSE_FILES": [
       "apps/cli/src/context.rs"
     ],
+    "composeAnswerUiMessage": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
     "composeFirstRunDisclosure": [
       "packages/contracts/compliance/src/article50-disclosure.ts",
       "packages/contracts/compliance/src/index.ts"
@@ -26308,6 +26818,9 @@
       "packages/ui/unified-chat/src/index.ts",
       "packages/ui/unified-chat/src/lib/artifact-sandbox.ts"
     ],
+    "configureBrowserPane": [
+      "apps/desktop/electron/browserPane.ts"
+    ],
     "configureChromeManifest": [
       "apps/extension/scripts/manifest-config.mjs"
     ],
@@ -26389,6 +26902,9 @@
     "configureMonacoTypescript": [
       "apps/desktop/src/lib/monaco-config.ts"
     ],
+    "configurePreviousVersions": [
+      "apps/desktop/electron/runtime/filesystemService.ts"
+    ],
     "configureQuickAskBridge": [
       "apps/desktop/electron/quickAsk.ts"
     ],
@@ -26425,6 +26941,9 @@
     ],
     "confirm_target_in_front": [
       "apps/desktop/src-tauri/src/sys/commands/computer_use.rs"
+    ],
+    "confirm_terminal_paste": [
+      "apps/desktop/gpui/src/ui/terminal.rs"
     ],
     "confirmAccountTokenRejected": [
       "apps/extension-vscode/src/utils/api.ts"
@@ -28733,6 +29252,9 @@
     ],
     "contains_word": [
       "apps/desktop/src-tauri/src/core/llm/llm_router.rs"
+    ],
+    "containsAnswerUiHtml": [
+      "packages/contracts/cloud-contracts/src/answer-ui.ts"
     ],
     "containsManagedAgentReportedFailure": [
       "apps/web/app/api/llm/v1/chat/completions/lib/managed-agent-stream.ts"
@@ -34834,6 +35356,7 @@
       "apps/web/features/admin/pages/RefundOperationsPage.tsx",
       "apps/web/features/admin/pages/ReleaseDashboardPage.tsx",
       "apps/web/features/admin/pages/WorkspaceDeletionPage.tsx",
+      "apps/web/features/chat/components/messages/cards/answer-ui/AnswerUiMap.tsx",
       "apps/web/features/chat/pages/WebChatPage.tsx",
       "apps/web/features/schedules/components/ScheduleCard.tsx",
       "apps/web/features/schedules/components/ScheduleForm.tsx",
@@ -35478,6 +36001,10 @@
     "DEFAULT_TERMINAL_COLUMNS": [
       "crates/agiworkforce-protocol/src/workspace_terminal.rs"
     ],
+    "DEFAULT_TERMINAL_PREFERENCES": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "DEFAULT_TERMINAL_ROWS": [
       "crates/agiworkforce-protocol/src/workspace_terminal.rs"
     ],
@@ -35549,6 +36076,10 @@
     "DEFAULT_WORKSPACE_FEATURE_ACCESS": [
       "packages/contracts/types/src/enterprise/workspace-controls.ts"
     ],
+    "DEFAULT_WORKTREE_BRANCH_PREFIX": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "DEFAULT_WS_PATH": [
       "services/signaling-server/src/constants.ts"
     ],
@@ -35612,6 +36143,9 @@
     ],
     "defaultSeverityForAction": [
       "packages/contracts/types/src/audit.ts"
+    ],
+    "defaultTempParents": [
+      "apps/desktop/electron/runtime/storageService.ts"
     ],
     "defaultTerminalSandboxPreferences": [
       "apps/desktop/src/stores/settingsStore.ts"
@@ -38429,6 +38963,18 @@
       "packages/contracts/local-runtime/src/developer-sessions.ts",
       "packages/contracts/local-runtime/src/index.ts"
     ],
+    "DeveloperMcpServerInput": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
+    "developerMcpServerLogs": [
+      "apps/desktop/electron/runtime/developerSessionService.ts"
+    ],
+    "developerMcpServerTools": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "DeveloperMessage": [
       "crates/agiworkforce-protocol/bindings/DeveloperMessage.ts",
       "crates/agiworkforce-protocol/src/developer_session.rs",
@@ -38778,6 +39324,13 @@
     ],
     "DeveloperTab": [
       "apps/desktop/src/features/settings/tabs/Developer/index.tsx"
+    ],
+    "DeveloperTerminalEvent": [
+      "apps/desktop/electron/runtime/developerSessionService.ts"
+    ],
+    "DeveloperTerminalOutput": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "DeveloperThreadCompactRequest": [
       "packages/contracts/local-runtime/src/developer-sessions.ts",
@@ -40651,6 +41204,12 @@
     ],
     "discard_recording": [
       "apps/desktop/src-tauri/src/automation/recorder.rs"
+    ],
+    "discard_recovery": [
+      "apps/desktop/gpui/src/ui/file_recovery.rs"
+    ],
+    "discard_recovery_copy": [
+      "apps/desktop/gpui/src/ui/recovery_browser.rs"
     ],
     "discardAllRecordingSessions": [
       "apps/extension/src/features/background/recordingSessions.ts"
@@ -42723,6 +43282,9 @@
     "E2E_STUB_MODEL_VENDOR": [
       "apps/extension-vscode/src/test/vsixInstallation.ts"
     ],
+    "earlierToolResultsNotice": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts"
+    ],
     "earliestCloudSyncRetryAt": [
       "apps/extension/src/features/background/conversation-history.ts"
     ],
@@ -43661,6 +44223,9 @@
     "EMPTY_ASSISTANT_CONTENT_PLACEHOLDER": [
       "apps/desktop/src/runtime/persistedCloudMessage.ts"
     ],
+    "EMPTY_ASSISTANT_TURN_HISTORY_TEXT": [
+      "apps/web/features/chat/lib/assistant-history-turn.ts"
+    ],
     "EMPTY_BRIEF": [
       "apps/web/features/chat/components/artifacts/design/design-brief.ts"
     ],
@@ -44417,6 +44982,9 @@
     "ENTITLED_SUBSCRIPTION_STATUSES": [
       "packages/contracts/types/src/subscription-entitlement.ts"
     ],
+    "entitledPlanTierOfUsageSummary": [
+      "packages/contracts/types/src/managed-usage-balance.ts"
+    ],
     "entitledSeatType": [
       "apps/web/lib/services/team-seat-entitlement.ts"
     ],
@@ -45162,6 +45730,9 @@
     ],
     "evaluateAnomalies": [
       "apps/web/lib/server/slo/anomaly.ts"
+    ],
+    "evaluateAnswerUiExpression": [
+      "packages/contracts/types/src/answer-ui.ts"
     ],
     "evaluateAuthorization": [
       "packages/contracts/types/src/enterprise/authorization.ts"
@@ -46106,6 +46677,9 @@
     ],
     "execute_write_file": [
       "apps/cli/src/features/exec/tools/file_ops/mod.rs"
+    ],
+    "executeAnswerUiTool": [
+      "apps/web/lib/services/answer-ui-tool-service.ts"
     ],
     "executeBankAccountsTool": [
       "apps/web/lib/connectors/bank-accounts.ts"
@@ -48623,6 +49197,9 @@
       "crates/agiworkforce-protocol/src/developer_session.rs",
       "packages/contracts/types/src/generated/protocol/FileChangeSubject.ts"
     ],
+    "FileCleanup": [
+      "apps/desktop/electron/runtime/storageService.ts"
+    ],
     "FileCode": [
       "packages/ui/icons/src/glyphs/Files.tsx"
     ],
@@ -48990,6 +49567,9 @@
     ],
     "FillApplicationContactMessage": [
       "apps/extension/src/types.ts"
+    ],
+    "fillEmptyAssistantTurns": [
+      "apps/web/features/chat/lib/assistant-history-turn.ts"
     ],
     "FillFieldRequest": [
       "apps/extension/src/features/content/pageElements.ts"
@@ -50830,6 +51410,12 @@
     "formatAnchor": [
       "apps/web/lib/server/project-knowledge-anchors.ts"
     ],
+    "formatAnswerUiNumber": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "formatAnswerUiSliderValue": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
     "formatArtifactVersionTime": [
       "packages/ui/unified-chat/src/index.ts",
       "packages/ui/unified-chat/src/lib/artifactVersionSummary.ts"
@@ -51024,6 +51610,9 @@
     ],
     "formatKeyId": [
       "apps/desktop/scripts/verify-updater-key.mjs"
+    ],
+    "formatKnowledgeCutoff": [
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
     ],
     "formatLastSeen": [
       "apps/mobile/src/features/companion/components/StatusBanners.tsx"
@@ -51314,6 +51903,10 @@
       "apps/web/lib/observability/trace-context.ts",
       "services/signaling-server/src/trace-context.ts"
     ],
+    "formatTurnContext": [
+      "packages/ai/provider-protocol/src/index.ts",
+      "packages/ai/provider-protocol/src/turn-context.ts"
+    ],
     "formatUnitPrice": [
       "apps/web/features/admin/lib/operator-format.ts"
     ],
@@ -51595,6 +52188,9 @@
       "apps/web/features/chat/lib/free-model-promotion-copy.ts",
       "packages/contracts/compliance/src/free-model-promotion-copy.ts",
       "packages/contracts/compliance/src/index.ts"
+    ],
+    "FREE_MODELS_SECTION_LABEL": [
+      "apps/web/features/models/lib/free-quota-types.ts"
     ],
     "FREE_PLAN_MONTHLY_SEARCH_CALLS": [
       "apps/web/lib/web-search/search-budget.ts"
@@ -54613,6 +55209,9 @@
     ],
     "getAccountMemoryStore": [
       "apps/extension-vscode/src/memory/accountMemoryStore.ts"
+    ],
+    "getAccountOverageMicrousd": [
+      "apps/web/lib/server/rolling-usage.ts"
     ],
     "getAccountRefreshToken": [
       "apps/extension-vscode/src/utils/api.ts"
@@ -57871,6 +58470,7 @@
     ],
     "GUARD_LIFTING_ENVIRONMENT": [
       "apps/desktop/electron/runtime/runtimeEnvironment.ts",
+      "apps/web/__tests__/surface-page-claims.test.ts",
       "packages/contracts/local-runtime/src/developer-sessions.ts",
       "packages/contracts/local-runtime/src/index.ts"
     ],
@@ -58837,6 +59437,12 @@
     "has_server": [
       "apps/cli/src/mcp/mod.rs"
     ],
+    "has_unconfirmed_turn": [
+      "apps/desktop/gpui/src/cloud_history.rs"
+    ],
+    "has_unsaved_cloud_draft": [
+      "apps/desktop/gpui/src/ui/drafts.rs"
+    ],
     "has_visible_text": [
       "apps/cli/src/tui/turn_transcript.rs"
     ],
@@ -59218,6 +59824,9 @@
       "packages/ui/unified-chat/src/index.ts",
       "packages/ui/unified-chat/src/lib/continue-generation.ts"
     ],
+    "hasVisibleHistoryText": [
+      "apps/web/features/chat/lib/assistant-history-turn.ts"
+    ],
     "hasWebSearchSources": [
       "apps/web/features/chat/types/message-metadata.ts"
     ],
@@ -59566,6 +60175,11 @@
     ],
     "HideableWindow": [
       "apps/desktop/electron/windowLifecycle.ts"
+    ],
+    "hideBrowserPane": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "HideDecision": [
       "apps/desktop/electron/windowLifecycle.ts"
@@ -60457,6 +61071,10 @@
       "packages/contracts/local-runtime/src/desktop-sign-in.ts",
       "packages/contracts/local-runtime/src/index.ts"
     ],
+    "HostTerminalPreferences": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "hostToken": [
       "apps/desktop/electron/browser/pairingStore.ts"
     ],
@@ -60928,6 +61546,7 @@
       "packages/platform/identity/src/types.ts"
     ],
     "IdentitySessionSnapshot": [
+      "apps/web/lib/identity/client.ts",
       "apps/web/lib/identity/useSessionSnapshot.ts"
     ],
     "IdentitySessionState": [
@@ -60962,6 +61581,9 @@
     "IDLE_REMOTE_CONTROL_STATE": [
       "packages/contracts/local-runtime/src/index.ts",
       "packages/contracts/local-runtime/src/remote-control.ts"
+    ],
+    "idleSessionsToArchive": [
+      "apps/desktop/electron/runtime/sessionAutoArchive.ts"
     ],
     "idleVisualSessionStatus": [
       "packages/contracts/types/src/visual-session.ts"
@@ -64488,7 +65110,8 @@
       "packages/contracts/cloud-contracts/src/interactive-cards.ts"
     ],
     "isAllowedMapSearchProviderUrl": [
-      "packages/contracts/cloud-contracts/src/interactive-cards.ts"
+      "packages/contracts/cloud-contracts/src/interactive-cards.ts",
+      "packages/contracts/cloud-contracts/src/map-urls.ts"
     ],
     "isAllowedPreviewNavigation": [
       "apps/mobile/src/features/chat/components/previewNavigationPolicy.ts"
@@ -64512,6 +65135,18 @@
     ],
     "isAnswerSurfaceLanguage": [
       "packages/ui/unified-chat/src/components/markdown/answerSurfaces.ts"
+    ],
+    "isAnswerUiContainer": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "isAnswerUiControl": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "isAnswerUiHttpsUrl": [
+      "packages/contracts/cloud-contracts/src/answer-ui.ts"
+    ],
+    "isAnswerUiTool": [
+      "apps/web/lib/services/answer-ui-tool-service.ts"
     ],
     "isApiHostRewriteSource": [
       "apps/web/lib/api-host-route-contract.ts"
@@ -64613,6 +65248,10 @@
     ],
     "isAuthProbeCandidate": [
       "apps/web/lib/connectors/directory/auth-probe.ts"
+    ],
+    "isAutoArchiveIdleDays": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "isAutocompleteField": [
       "apps/extension/src/features/content/pageElements.ts"
@@ -66024,6 +66663,9 @@
       "packages/ui/ui/src/sidebar/index.ts",
       "packages/ui/ui/src/sidebar/Menu.tsx"
     ],
+    "isMePlanStale": [
+      "packages/contracts/cloud-contracts/src/me.ts"
+    ],
     "isMessageContinuable": [
       "apps/web/features/chat/lib/continue-generation.ts",
       "packages/ui/unified-chat/src/index.ts",
@@ -66307,6 +66949,9 @@
     "isPersistedAgreementStatus": [
       "apps/web/lib/services/enterprise-contracts/index.ts",
       "apps/web/lib/services/enterprise-contracts/types.ts"
+    ],
+    "isPersonalGrantPlan": [
+      "apps/web/features/billing/lib/subscription-owner-presentation.ts"
     ],
     "isPhoneCapability": [
       "packages/contracts/types/src/phone-steps.ts"
@@ -67034,6 +67679,10 @@
     "isStoppedTurn": [
       "apps/web/features/chat/lib/turn-error-notice.ts"
     ],
+    "isStorageCleanup": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
     "isStorageLocation": [
       "packages/contracts/types/src/trust-mode-contract.ts"
     ],
@@ -67317,6 +67966,10 @@
     "isTrustedReleaseAssetUrl": [
       "apps/web/lib/releases/trusted-release-asset-url.ts"
     ],
+    "isTurnContextText": [
+      "packages/ai/provider-protocol/src/index.ts",
+      "packages/ai/provider-protocol/src/turn-context.ts"
+    ],
     "isTurnTruncated": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-completeness.ts"
     ],
@@ -67526,6 +68179,10 @@
     "isWorkspaceRootKind": [
       "packages/contracts/local-runtime/src/index.ts",
       "packages/contracts/local-runtime/src/workspace.ts"
+    ],
+    "isWorktreeBranchPrefix": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "isWritingStyle": [
       "packages/ui/unified-chat/src/index.ts",
@@ -67740,6 +68397,10 @@
     "joinSurfaceNames": [
       "apps/web/lib/surface-status.ts"
     ],
+    "joinSystemTextsAtCacheBoundary": [
+      "packages/ai/provider-protocol/src/index.ts",
+      "packages/ai/provider-protocol/src/system-prompt-cache-boundary.ts"
+    ],
     "joinUpgradeWaitlist": [
       "apps/web/features/billing/services/upgrade-waitlist.ts"
     ],
@@ -67939,6 +68600,7 @@
     ],
     "key": [
       "apps/cli/src/tui/widgets/approval_overlay.rs",
+      "apps/desktop/gpui/tests/rendering/model_picker.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/accelerator.rs"
     ],
     "KEY_ACTOR": [
@@ -68697,9 +69359,6 @@
     ],
     "launchExtension": [
       "apps/extension/e2e/extension-harness.mjs"
-    ],
-    "LaunchHookTests": [
-      ".codex/hooks/test_launch.py"
     ],
     "LaunchPermissionMode": [
       "apps/cli/src/cli_options.rs"
@@ -70122,6 +70781,11 @@
     ],
     "listDeveloperCheckpoints": [
       "apps/desktop/electron/runtime/developerSessionService.ts"
+    ],
+    "listDeveloperMcpServers": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "listDeveloperModels": [
       "apps/web/features/desktop-host/index.ts",
@@ -72370,6 +73034,9 @@
     "local_stt": [
       "apps/desktop/src-tauri/src/features/speech/mod.rs"
     ],
+    "LOCAL_TERMINAL_COPY": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "LOCAL_TERMINAL_SHORTCUT": [
       "apps/web/features/code/local-code.ts"
     ],
@@ -72439,6 +73106,12 @@
     "LocalBranchPush": [
       "packages/contracts/local-runtime/src/developer-sessions.ts",
       "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "LocalBrowserPanel": [
+      "apps/web/features/code/components/LocalBrowserPanel.tsx"
+    ],
+    "LocalBrowserPanelProps": [
+      "apps/web/features/code/components/LocalBrowserPanel.tsx"
     ],
     "LocalByokHandoffDialog": [
       "packages/ui/unified-chat/src/components/LocalByokHandoffDialog.tsx",
@@ -72725,8 +73398,14 @@
     "LocalListNoticeProps": [
       "apps/web/features/code/components/LocalListNotice.tsx"
     ],
+    "localMcpAvailable": [
+      "apps/desktop/electron/runtime/developerSessionService.ts"
+    ],
     "localMcpServerKey": [
       "apps/web/features/code/local-code.ts"
+    ],
+    "LocalMcpSettings": [
+      "apps/web/features/desktop-host/components/LocalMcpSettings.tsx"
     ],
     "LocalMemoryControl": [
       "apps/web/features/code/components/LocalMemoryControl.tsx"
@@ -72898,6 +73577,12 @@
     ],
     "localProviderSetups": [
       "apps/web/features/code/local-code.ts"
+    ],
+    "LocalPtyTerminal": [
+      "apps/web/features/code/components/LocalPtyTerminal.tsx"
+    ],
+    "LocalPtyTerminalProps": [
+      "apps/web/features/code/components/LocalPtyTerminal.tsx"
     ],
     "LocalPublishResult": [
       "apps/desktop/src/features/artifacts/publishAdapter.ts",
@@ -73315,6 +74000,12 @@
     ],
     "localWorktreeKeep": [
       "apps/web/features/code/services/local-review-client.ts"
+    ],
+    "LocalWorktreePreferences": [
+      "apps/web/features/code/components/LocalWorktreePreferences.tsx"
+    ],
+    "LocalWorktreePreferencesProps": [
+      "apps/web/features/code/components/LocalWorktreePreferences.tsx"
     ],
     "localWorktreeRemovedLine": [
       "apps/web/features/code/local-code.ts"
@@ -73788,6 +74479,7 @@
       ".agents/skills/antislop-human/contrast-check.py",
       ".agents/skills/antislop-human/contrast-mcp.py",
       ".claude/hooks/heavy-job-gate.py",
+      "apps/desktop/gpui/src/native_frame.rs",
       "apps/desktop/scripts/check-wiring.mjs",
       "apps/mobile/scripts/release/parse-privacy-manifest.py",
       "apps/mobile/scripts/release/setup-privacy-parser.py",
@@ -76586,6 +77278,12 @@
     "MAP_CONFIG_PATH": [
       "packages/contracts/cloud-contracts/src/map-config.ts"
     ],
+    "MAP_ENTER_FULLSCREEN_LABEL": [
+      "apps/web/features/chat/components/messages/cards/map/LeafletMapCanvas.tsx"
+    ],
+    "MAP_EXIT_FULLSCREEN_LABEL": [
+      "apps/web/features/chat/components/messages/cards/map/LeafletMapCanvas.tsx"
+    ],
     "MAP_FIT_PADDING_PX": [
       "apps/web/features/chat/components/messages/cards/map/LeafletMapCanvas.tsx"
     ],
@@ -77527,6 +78225,14 @@
       "packages/contracts/local-runtime/src/filesystem.ts",
       "packages/contracts/local-runtime/src/index.ts"
     ],
+    "MAX_BROWSER_ADDRESS_LENGTH": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "MAX_BROWSER_SITES": [
+      "packages/contracts/local-runtime/src/browser-pane.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "MAX_BUNDLE_BYTES": [
       "apps/desktop/src-tauri/src/sys/support_bundle.rs"
     ],
@@ -77778,6 +78484,15 @@
     ],
     "MAX_EDIT_FILE_BYTES": [
       "apps/cli/src/file_state.rs"
+    ],
+    "MAX_EDITOR_RECOVERY_FILES": [
+      "crates/agiworkforce-protocol/src/workspace_files.rs"
+    ],
+    "MAX_EDITOR_RECOVERY_STORAGE_BYTES": [
+      "crates/agiworkforce-protocol/src/workspace_files.rs"
+    ],
+    "MAX_EDITOR_TEXT_BYTES": [
+      "crates/agiworkforce-protocol/src/workspace_files.rs"
     ],
     "max_effort_when_thinking_disabled": [
       "apps/desktop/src-tauri/src/core/llm/models_config.rs"
@@ -78482,6 +79197,10 @@
     "MAX_WORKSPACE_WALK_DEPTH": [
       "packages/client/ide-runtime/src/index.ts",
       "packages/client/ide-runtime/src/workspace.ts"
+    ],
+    "MAX_WORKTREE_BRANCH_PREFIX_LENGTH": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "MAX_ZOOM_LEVEL": [
       "apps/desktop/electron/garnishCore.ts"
@@ -79950,6 +80669,9 @@
     "ME_CONTRACT": [
       "scripts/check-feature-flags.mjs"
     ],
+    "ME_PLAN_MAX_AGE_MS": [
+      "packages/contracts/cloud-contracts/src/me.ts"
+    ],
     "ME_ROUTE": [
       "scripts/check-kill-switch-readers.mjs"
     ],
@@ -80032,6 +80754,12 @@
     ],
     "measureSurface": [
       "scripts/check-surface-reachability.mjs"
+    ],
+    "MeBillingOwner": [
+      "packages/contracts/cloud-contracts/src/me.ts"
+    ],
+    "MeBillingOwnerSchema": [
+      "packages/contracts/cloud-contracts/src/me.ts"
     ],
     "media": [
       "apps/desktop/src-tauri/src/sys/commands/mod.rs"
@@ -82936,6 +83664,9 @@
     "MOD_SHIFT_ENTER_KEY": [
       "packages/ui/unified-chat/src/composer-editor/extensions/submit-keymap.ts"
     ],
+    "mode": [
+      "apps/desktop/gpui/tests/support/upload_fixture.rs"
+    ],
     "MODE_AUTO": [
       "apps/cli/src/tui/mod.rs"
     ],
@@ -83329,6 +84060,9 @@
     ],
     "ModelCatalogueStatus": [
       "apps/web/features/chat/lib/use-model-catalogue.ts"
+    ],
+    "ModelChoice": [
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
     ],
     "ModelCollection": [
       "apps/web/features/models/lib/model-filters.ts"
@@ -84415,6 +85149,9 @@
     "NativeHostManifest": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs"
     ],
+    "NativeIdentitySession": [
+      "apps/web/lib/identity/client.ts"
+    ],
     "NativeMessage": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs"
     ],
@@ -84526,6 +85263,11 @@
     ],
     "NAVIGATE_STEP": [
       "apps/desktop/src-tauri/src/automation/computer_use/step_routing.rs"
+    ],
+    "navigateBrowserPane": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "navigateHistoryTarget": [
       "apps/extension/src/features/computer-use/cdpDriver.ts"
@@ -84832,7 +85574,6 @@
       "apps/cli/src/agent/mod.rs",
       "apps/cli/src/app_server/account_host.rs",
       "apps/cli/src/app_server/account_service.rs",
-      "apps/cli/src/app_server/developer_host.rs",
       "apps/cli/src/approval_audit.rs",
       "apps/cli/src/cloud/chat.rs",
       "apps/cli/src/cloud/memory.rs",
@@ -85190,7 +85931,6 @@
       "apps/cli/src/agent/mod.rs"
     ],
     "new_with_store": [
-      "apps/cli/src/app_server/developer_host.rs",
       "apps/desktop/src-tauri/src/sys/commands/scheduler.rs"
     ],
     "new_with_trust": [
@@ -85207,6 +85947,9 @@
     ],
     "newAttemptId": [
       "apps/web/lib/identity/operation-identity.ts"
+    ],
+    "NewBranchRequest": [
+      "apps/desktop/electron/runtime/gitService.ts"
     ],
     "NewChatConnectorSuggestions": [
       "apps/mobile/src/features/chat/components/NewChatConnectorSuggestions.tsx",
@@ -85248,6 +85991,9 @@
     ],
     "newer": [
       "apps/cli/src/tui/prompt_history.rs"
+    ],
+    "newestFirst": [
+      "packages/ui/ui/src/sidebar/order.ts"
     ],
     "newLocalSessionMemory": [
       "apps/web/features/code/local-session-memory.ts"
@@ -85624,6 +86370,9 @@
     ],
     "normalizeAnsweredModel": [
       "apps/extension/src/features/cloud-bridge/answeredModel.ts"
+    ],
+    "normalizeAnswerUiInput": [
+      "apps/web/lib/services/answer-ui-tool-service.ts"
     ],
     "normalizeAppleStoreNotification": [
       "apps/web/lib/server/payments/apple-provider.ts"
@@ -86130,6 +86879,10 @@
     ],
     "normalizeTeamSeatType": [
       "packages/contracts/types/src/billing-catalog.ts"
+    ],
+    "normalizeTerminalPreferences": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "normalizeText": [
       "apps/web/lib/support/agent/retrieval/tokenize.ts"
@@ -87134,6 +87887,8 @@
       "apps/cli/src/models/managed_approvals.rs",
       "apps/cli/src/tui/composer_edits.rs",
       "apps/cli/src/tui/turn_transcript.rs",
+      "apps/desktop/gpui/src/drafts.rs",
+      "apps/desktop/gpui/src/editor_recovery.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/accelerator.rs"
     ],
     "observe_screen": [
@@ -87487,8 +88242,16 @@
     "ok_with_input": [
       "crates/agiworkforce-worktree/src/git.rs"
     ],
+    "OLD_ARCHIVE_AGE_DAYS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
     "OLD_DANGEROUS_PATTERNS": [
       "apps/desktop/src-tauri/src/sys/security/exec_gate_parity_tests.rs"
+    ],
+    "OLD_LOG_AGE_DAYS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
     ],
     "older": [
       "apps/cli/src/tui/prompt_history.rs",
@@ -87733,6 +88496,10 @@
       "apps/desktop/src/features/onboarding/OnboardingWizard.tsx",
       "apps/web/features/onboarding/components/OnboardingWizard.tsx"
     ],
+    "onBrowserPaneState": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "ONCALL_ESCALATE_AFTER_MINUTES_ENV": [
       "apps/web/lib/server/incident/on-call.ts"
     ],
@@ -87776,6 +88543,10 @@
       "apps/extension/src/features/computer-use/debuggerSession.ts"
     ],
     "onDeveloperSessionEvent": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
+    "onDeveloperTerminal": [
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
@@ -88335,6 +89106,11 @@
     "openBrowserAddress": [
       "apps/desktop/electron/windowPolicy.ts"
     ],
+    "openBrowserPane": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "openCapabilitySurface": [
       "apps/extension-vscode/src/features/surfaces/index.ts"
     ],
@@ -88405,9 +89181,18 @@
     "openDesktopCloudSignInWindow": [
       "apps/desktop/src/services/desktopCloudSignInWindow.ts"
     ],
+    "openDeveloperMcpConfig": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "openDeveloperSessionLink": [
       "apps/extension-vscode/src/features/context-handoff/developerSessionLink.ts",
       "apps/extension-vscode/src/features/context-handoff/index.ts"
+    ],
+    "openDeveloperTerminal": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "openDictationBar": [
       "apps/desktop/electron/dictationBar.ts"
@@ -91060,6 +91845,12 @@
     "parseAllowlist": [
       "scripts/check-scan-findings.mjs"
     ],
+    "parseAnswerUiExpression": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "parseAnswerUiTemplate": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
     "parseApprovalHistory": [
       "apps/extension/src/features/options/approval-history-section.ts"
     ],
@@ -93628,6 +94419,12 @@
     "person_at_terminal_with": [
       "apps/cli/src/interactive.rs"
     ],
+    "PERSONAL_GRANT_PLAN_SENTENCE": [
+      "apps/web/features/billing/lib/subscription-owner-presentation.ts"
+    ],
+    "PERSONAL_GRANT_SUPPORT_PATH": [
+      "apps/web/features/billing/lib/subscription-owner-presentation.ts"
+    ],
     "PERSONAL_SEGMENTS": [
       "scripts/check-log-redaction.mjs"
     ],
@@ -93918,6 +94715,11 @@
     ],
     "pin_workspace": [
       "apps/cli/src/app_server/review.rs"
+    ],
+    "pinDeveloperThread": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "pinDeveloperWorktree": [
       "apps/desktop/electron/runtime/developerSessionService.ts"
@@ -94465,6 +95267,10 @@
     ],
     "PlanAllowanceSubject": [
       "apps/web/lib/server/managed-usage-policy.ts"
+    ],
+    "planAnthropicCacheBreakpoints": [
+      "packages/ai/provider-protocol/src/anthropic-payload-policy.ts",
+      "packages/ai/provider-protocol/src/index.ts"
     ],
     "planBrowserCommand": [
       "apps/desktop/electron/browser/commandGate.ts"
@@ -97469,7 +98275,6 @@
     ],
     "prepare": [
       "apps/cli/src/app_server/account_uploads.rs",
-      "apps/cli/src/app_server/developer_host.rs",
       "apps/cli/src/app_server/project_downloads.rs",
       "apps/cli/src/app_server/project_uploads.rs",
       "apps/cli/src/app_server/worktree_apply.rs",
@@ -97778,6 +98583,9 @@
     "previewUpgrade": [
       "apps/web/features/billing/services/stripe-payments.ts"
     ],
+    "PreviousVersionKeeper": [
+      "apps/desktop/electron/runtime/filesystemService.ts"
+    ],
     "PricedModel": [
       "packages/contracts/types/src/model-catalog.ts"
     ],
@@ -97997,6 +98805,10 @@
     ],
     "privacy": [
       "apps/desktop/src-tauri/src/sys/commands/mod.rs"
+    ],
+    "PRIVACY_BOUNDARY_ERROR_CODE": [
+      "packages/contracts/local-runtime/src/developer-session.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "privacy_delete_account": [
       "apps/desktop/src-tauri/src/sys/commands/privacy.rs"
@@ -99175,6 +99987,9 @@
     "projectEdit": [
       "apps/extension-vscode/src/features/projects/projectActions.ts"
     ],
+    "ProjectEdit": [
+      "apps/desktop/gpui/src/projects.rs"
+    ],
     "ProjectEntry": [
       "apps/cli/src/project_registry.rs"
     ],
@@ -99813,6 +100628,12 @@
     "promptBeforeReply": [
       "apps/web/features/schedules/components/schedule-from-turn.ts",
       "apps/web/features/schedules/index.ts"
+    ],
+    "PromptCacheBreakpointTtl": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic.ts"
+    ],
+    "PromptCacheBreakpointTtls": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic.ts"
     ],
     "PromptCachePlan": [
       "packages/contracts/types/src/prompt-cache-plan.ts"
@@ -102978,6 +103799,9 @@
       "apps/web/features/desktop-host/lib/runtime-client.ts",
       "apps/web/features/remote-dispatch/lib/browser-pairing.ts"
     ],
+    "readBrowserPaneConsole": [
+      "apps/desktop/electron/browserPane.ts"
+    ],
     "readBrowserPermissionMode": [
       "apps/extension/src/features/computer-use/askBeforeActing.ts"
     ],
@@ -102985,6 +103809,11 @@
       "apps/desktop/electron/browserSignIn.ts"
     ],
     "readBrowserSignInState": [
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
+    "readBrowserSites": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "readCachedProviderProxyAccess": [
@@ -103573,6 +104402,9 @@
     ],
     "readImageFileAsBase64": [
       "apps/web/features/chat/lib/imageGenerationOptions.ts"
+    ],
+    "readImagePng": [
+      "apps/desktop/electron/runtime/clipboardService.ts"
     ],
     "readImageUrlAsBase64": [
       "apps/web/features/chat/lib/imageGenerationOptions.ts"
@@ -104561,6 +105393,10 @@
     ],
     "readStepUpConsequence": [
       "apps/mobile/src/features/auth/services/stepUp.ts"
+    ],
+    "readStorageUsage": [
+      "apps/desktop/electron/runtime/storageService.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "readStoredActiveProject": [
       "apps/extension/src/features/side-panel/activeProject.ts"
@@ -107834,9 +108670,6 @@
     "releaseTargets": [
       "apps/cli/scripts/generate-third-party-notices.mjs"
     ],
-    "releaseTombstonedProject": [
-      "apps/web/lib/server/project-deletion.ts"
-    ],
     "releaseUnapprovedHostPermissions": [
       "apps/extension/src/features/computer-use/hostPermissionReconcile.ts"
     ],
@@ -108454,6 +109287,11 @@
     "removeBrowserControlHostPermission": [
       "apps/extension/src/features/computer-use/browserControlConsent.ts"
     ],
+    "removeBrowserSite": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "removeCase": [
       "apps/web/features/developers/lib/prompts-client.ts"
     ],
@@ -108472,6 +109310,11 @@
     ],
     "REMOVED_PERSISTED_SETTINGS_KEYS": [
       "packages/ui/unified-chat/src/stores/settingsStore.ts"
+    ],
+    "removeDeveloperMcpServer": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "RemovedMcpServer": [
       "apps/cli/src/installs.rs"
@@ -108569,6 +109412,11 @@
     "RenameConversationModal": [
       "apps/mobile/src/features/conversation-actions/index.ts",
       "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx"
+    ],
+    "renameDeveloperThread": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "renameLabel": [
       "apps/web/features/code/code-surface.ts"
@@ -108924,6 +109772,9 @@
     "renderAnswerInto": [
       "apps/extension/src/features/content/in-page-panel/answerMarkdown.ts"
     ],
+    "renderAnswerUiTemplate": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
     "renderAtomFeed": [
       "apps/web/app/release-notes/changelog-feed.ts"
     ],
@@ -109105,6 +109956,9 @@
     ],
     "rendersResearchPlan": [
       "apps/web/features/chat/utils/research-plan.ts"
+    ],
+    "rendersThroughSetupComposer": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
     ],
     "renderSupportContext": [
       "apps/web/lib/support/agent/prompt/render-context.ts"
@@ -111006,6 +111860,9 @@
     "resetAuthOrchestrator": [
       "apps/desktop/src/stores/authOrchestrator.ts"
     ],
+    "resetAutoArchiveSweep": [
+      "apps/desktop/electron/runtime/sessionAutoArchive.ts"
+    ],
     "resetAutomationAuditFlushForTests": [
       "apps/extension/src/features/observability/automationAudit.ts"
     ],
@@ -111220,6 +112077,11 @@
     "resize_terminal": [
       "apps/cli/src/terminals.rs",
       "apps/desktop/gpui/src/ui/terminal.rs"
+    ],
+    "resizeDeveloperTerminal": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "ResizeHandle": [
       "apps/desktop/src/ui/ResizeHandle.tsx",
@@ -111472,6 +112334,9 @@
     "resolveAnsweredParentId": [
       "apps/web/app/api/chat/conversations/[id]/messages/lib/message-thread.ts"
     ],
+    "resolveAnswerUiNumber": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
     "resolveAnthropicModel": [
       "tools/evals/src/anthropic.ts"
     ],
@@ -111547,6 +112412,9 @@
     ],
     "resolveBillingCustomerId": [
       "apps/web/lib/server/billing-owner-row.ts"
+    ],
+    "resolveBillingOwner": [
+      "apps/web/lib/server/subscription-billing-owner.ts"
     ],
     "resolveBinaryPath": [
       "apps/desktop/electron/runtime/developerSessionService.ts",
@@ -113654,6 +114522,9 @@
     "ResponsiveLayout": [
       "apps/mobile/src/shared/hooks/useResponsiveLayout.ts"
     ],
+    "restart": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "restart_label": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -114234,6 +115105,9 @@
     "RETRY_POLICY_DEFAULTS": [
       "packages/platform/utils/src/index.ts",
       "packages/platform/utils/src/retryPolicy.ts"
+    ],
+    "retry_size": [
+      "apps/desktop/gpui/src/terminal_view.rs"
     ],
     "RetryableRead": [
       "apps/mobile/src/shared/hooks/useRetryableRead.ts"
@@ -116016,6 +116890,16 @@
       "apps/cli/src/cloud/personalization.rs",
       "apps/cli/src/remote_control/mod.rs",
       "apps/cli/src/tui/mod.rs",
+      "apps/desktop/gpui/src/ui/mod.rs",
+      "apps/desktop/gpui/tests/rendering/conversation_controls.rs",
+      "apps/desktop/gpui/tests/rendering/drafts.rs",
+      "apps/desktop/gpui/tests/rendering/frame.rs",
+      "apps/desktop/gpui/tests/rendering/model_picker.rs",
+      "apps/desktop/gpui/tests/rendering/project_download.rs",
+      "apps/desktop/gpui/tests/rendering/project_files.rs",
+      "apps/desktop/gpui/tests/rendering/project_form.rs",
+      "apps/desktop/gpui/tests/rendering/project_upload.rs",
+      "apps/desktop/gpui/tests/rendering/workspace_picker.rs",
       "apps/desktop/src-tauri/src/automation/action_router/dispatch.rs",
       "apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs",
       "apps/desktop/src-tauri/src/lib.rs",
@@ -117585,7 +118469,8 @@
       "apps/cli/src/sandbox.rs"
     ],
     "sandboxed": [
-      "apps/desktop/src-tauri/src/automation/computer_use/safety.rs"
+      "apps/desktop/src-tauri/src/automation/computer_use/safety.rs",
+      "apps/web/features/code/local-code.ts"
     ],
     "sandboxed_program": [
       "apps/cli/src/sandbox.rs",
@@ -120579,6 +121464,9 @@
     "SectionOutcome": [
       "crates/agiworkforce-worktree/src/checkpoint.rs"
     ],
+    "SectionReader": [
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
+    ],
     "sections": [
       "apps/desktop/gpui/src/changes.rs"
     ],
@@ -122581,7 +123469,10 @@
       "crates/agiworkforce-model-registry/src/lib.rs"
     ],
     "ServingModel": [
-      "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
+    ],
+    "servingModelBlocks": [
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
     ],
     "servingModelFor": [
       "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
@@ -123400,6 +124291,11 @@
     "setBillingUpgradesOpen": [
       "apps/web/lib/feature-flags/flag-admin-service.ts"
     ],
+    "setBrowserPaneBounds": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "setCachedAccountStatus": [
       "apps/web/lib/server/request-context-cache.ts"
     ],
@@ -123486,6 +124382,11 @@
     ],
     "setDefaultEffort": [
       "apps/mobile/src/features/model-picker/components/EffortSlider.tsx"
+    ],
+    "setDeveloperMcpServerEnabled": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "setDeveloperPluginEnabled": [
       "apps/desktop/electron/runtime/developerSessionService.ts",
@@ -123869,7 +124770,7 @@
       "apps/mobile/src/features/settings/Common.tsx"
     ],
     "SettingsGuidance": [
-      "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
     ],
     "settingsGuidanceFor": [
       "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
@@ -125713,6 +126614,11 @@
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/sidebar/index.ts",
       "packages/ui/ui/src/sidebar/types.ts"
+    ],
+    "sidebarSessionOrder": [
+      "packages/ui/ui/src/index.ts",
+      "packages/ui/ui/src/sidebar/index.ts",
+      "packages/ui/ui/src/sidebar/order.ts"
     ],
     "SidebarSessionRowOptions": [
       "apps/web/shared/components/layout/sidebar-session-rows.ts"
@@ -129786,6 +130692,11 @@
     "STEP_UP_VERIFICATION_REQUIRED": [
       "apps/web/lib/server/step-up/actions.ts"
     ],
+    "stepBrowserPane": [
+      "apps/desktop/electron/browserPane.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "StepExecution": [
       "apps/desktop/src-tauri/src/automation/computer_use/step_routing.rs"
     ],
@@ -130073,6 +130984,22 @@
       "apps/desktop/src-tauri/src/sys/security/mod.rs",
       "apps/mobile/lib/mmkv.ts"
     ],
+    "STORAGE_CATEGORIES": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
+    "STORAGE_CLEAN_COMMAND": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
+    "STORAGE_CLEANUPS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
+    "STORAGE_COMMANDS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
     "STORAGE_COST_SHARE_OF_PRICE": [
       "packages/contracts/types/src/billing-catalog.ts"
     ],
@@ -130085,11 +131012,33 @@
     "STORAGE_LOCATIONS": [
       "packages/contracts/types/src/trust-mode-contract.ts"
     ],
+    "STORAGE_READ_COMMAND": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
     "STORAGE_TABLE_TEST": [
       "scripts/check-privacy-claims.mjs"
     ],
     "StorageAccessLevelAreas": [
       "apps/extension/src/features/background/storageAccess.ts"
+    ],
+    "StorageCategory": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
+    "StorageCategoryUsage": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
+    "StorageCleanup": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
+    ],
+    "StorageCleanupRefused": [
+      "apps/desktop/electron/runtime/storageService.ts"
+    ],
+    "StorageEnvironment": [
+      "apps/desktop/electron/runtime/storageService.ts"
     ],
     "storageFallback": [
       "apps/desktop/src/lib/storageFallback.ts",
@@ -130109,6 +131058,13 @@
     ],
     "StorageScopeNotice": [
       "apps/mobile/src/features/settings/StorageScopeNotice.tsx"
+    ],
+    "StorageSettings": [
+      "apps/web/features/desktop-host/components/StorageSettings.tsx"
+    ],
+    "StorageUsage": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/storage.ts"
     ],
     "StorageUsageAdapter": [
       "apps/mobile/src/features/settings/storageUsage.ts"
@@ -131598,7 +132554,8 @@
       "scripts/report-cargo-audit.mjs"
     ],
     "summarizeChart": [
-      "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts"
+      "packages/ui/unified-chat/src/components/artifact-components/chart-spec.ts",
+      "packages/ui/unified-chat/src/index.ts"
     ],
     "summarizeCloudAgentRunOutcome": [
       "apps/web/lib/services/cloud-agent-execution-service.ts"
@@ -132560,6 +133517,9 @@
     "SurfacePanel": [
       "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
+    "surfacePublishesArtifactApps": [
+      "apps/web/lib/chat-surface-rendering.ts"
+    ],
     "surfaceQuickAsk": [
       "apps/desktop/electron/quickAsk.ts"
     ],
@@ -132577,6 +133537,9 @@
     ],
     "SurfaceRemedy": [
       "packages/contracts/types/src/lifecycle-status.ts"
+    ],
+    "surfaceRendersWritingCards": [
+      "apps/web/lib/chat-surface-rendering.ts"
     ],
     "SurfaceRowAction": [
       "apps/extension-vscode/src/features/surfaces/treeQuickPick.ts"
@@ -132918,6 +133881,9 @@
       "packages/client/client-runtime/src/index.ts",
       "packages/client/client-runtime/src/queue/index.ts",
       "packages/client/client-runtime/src/queue/messageQueueManager.ts"
+    ],
+    "syncLaunchAtLogin": [
+      "apps/desktop/electron/launchAtLogin.ts"
     ],
     "syncLocalConversationsToCloud": [
       "apps/mobile/src/features/settings/data-controls/localCloudSyncService.ts"
@@ -134179,7 +135145,8 @@
     "TEMPORARY_CHAT_RETENTION_DAYS": [
       "apps/web/lib/server/media-assets.ts",
       "apps/web/lib/server/temporary-files/index.ts",
-      "apps/web/lib/server/temporary-files/retention.ts"
+      "apps/web/lib/server/temporary-files/retention.ts",
+      "tools/evals/src/chat-prompt.ts"
     ],
     "TEMPORARY_CHAT_RETENTION_NOTE": [
       "apps/web/lib/temporary-chat-policy.ts"
@@ -134285,6 +135252,10 @@
     "terminal_create_session": [
       "apps/desktop/src-tauri/src/sys/commands/terminal.rs"
     ],
+    "TERMINAL_CURSOR_STYLES": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "terminal_detect_shells": [
       "apps/desktop/src-tauri/src/sys/commands/terminal.rs"
     ],
@@ -134305,6 +135276,18 @@
     ],
     "TERMINAL_LIST": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "TERMINAL_MAX_COLUMNS": [
+      "packages/contracts/local-runtime/src/developer-sessions.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "TERMINAL_MAX_ROWS": [
+      "packages/contracts/local-runtime/src/developer-sessions.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
+    "TERMINAL_MIN_SIZE": [
+      "packages/contracts/local-runtime/src/developer-sessions.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "terminal_palette": [
       "apps/cli/src/tui/mod.rs"
@@ -134334,7 +135317,9 @@
       "apps/desktop/src-tauri/src/sys/security/sandbox_runtime.rs"
     ],
     "TERMINAL_SCROLLBACK_LINES": [
-      "crates/agiworkforce-protocol/src/workspace_terminal.rs"
+      "crates/agiworkforce-protocol/src/workspace_terminal.rs",
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "terminal_send_input": [
       "apps/desktop/src-tauri/src/sys/commands/terminal.rs"
@@ -134368,6 +135353,10 @@
     "TERMINAL_WRITE": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "TERMINAL_WRITE_LIMIT": [
+      "packages/contracts/local-runtime/src/developer-sessions.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "TerminalAI": [
       "apps/desktop/src-tauri/src/features/terminal/ai_assistant.rs",
       "apps/desktop/src-tauri/src/features/terminal/mod.rs"
@@ -134398,6 +135387,10 @@
     ],
     "TerminalCommandEvent": [
       "apps/desktop/src/hooks/useAgenticEvents.ts"
+    ],
+    "TerminalCursorStyle": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
     ],
     "TerminalErrorKind": [
       "apps/cli/src/crash_reports/startup_metrics.rs"
@@ -134492,8 +135485,15 @@
       "crates/agiworkforce-protocol/src/workspace_terminal.rs",
       "packages/contracts/types/src/generated/protocol/TerminalScreen.ts"
     ],
+    "TerminalScrollbackLines": [
+      "packages/contracts/local-runtime/src/host-bridge.ts",
+      "packages/contracts/local-runtime/src/index.ts"
+    ],
     "TerminalSession": [
       "apps/desktop/src/stores/terminalStore.ts"
+    ],
+    "TerminalSettings": [
+      "apps/web/features/desktop-host/components/TerminalSettings.tsx"
     ],
     "TerminalShellExecutionCommandLineConfidence": [
       "apps/extension-vscode/src/__tests__/__mocks__/vscode.ts"
@@ -134798,6 +135798,11 @@
     "TestDatabase": [
       "apps/desktop/e2e/utils/test-database.ts"
     ],
+    "testDeveloperMcpServer": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
+    ],
     "TestFailure": [
       "apps/desktop/src-tauri/src/sys/commands/test_runner.rs"
     ],
@@ -134923,10 +135928,13 @@
       "apps/web/features/chat/services/export-math.ts"
     ],
     "TextOnlyChatSetup": [
-      "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
     ],
     "TextOnlyPreambleInput": [
       "apps/web/app/api/llm/v1/chat/completions/lib/capability-preamble.ts"
+    ],
+    "textOnlySetupBlock": [
+      "apps/web/lib/prompts/chat-system-prompt-assembly.ts"
     ],
     "TextPosition": [
       "crates/agiworkforce-execpolicy/src/error.rs",
@@ -139007,6 +140015,12 @@
     "TURN_INTERRUPT": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "TURN_INTERRUPTED": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
+    "TURN_MODEL": [
+      "crates/agiworkforce-protocol/src/developer_session.rs"
+    ],
     "turn_notice": [
       "apps/cli/src/cloud/client.rs"
     ],
@@ -139349,6 +140363,9 @@
     "TurnToolHistory": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-history.ts"
     ],
+    "TurnToolOffer": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-offer.ts"
+    ],
     "TurnToolProhibition": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-prohibition.ts"
     ],
@@ -139369,6 +140386,9 @@
     ],
     "TurnVisibleOutput": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-completeness.ts"
+    ],
+    "turnWithholdsTool": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-offer.ts"
     ],
     "twitter": [
       "apps/web/lib/connectors/oauth-scope-allowlist.ts"
@@ -139655,6 +140675,11 @@
     ],
     "unarchiveCloudAgentRun": [
       "apps/web/lib/services/cloud-agent-run-service.ts"
+    ],
+    "unarchiveDeveloperThread": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "unarchiveSession": [
       "apps/web/features/code/code-surface.ts"
@@ -141736,6 +142761,14 @@
     "UsageAccumulator": [
       "apps/web/app/api/llm/v1/chat/completions/lib/adapter-usage.ts"
     ],
+    "usageAllowanceSubject": [
+      "apps/web/lib/services/effective-subscription-service.ts",
+      "apps/web/lib/services/entitlement-resolution.ts"
+    ],
+    "UsageAllowanceSubject": [
+      "apps/web/lib/services/effective-subscription-service.ts",
+      "apps/web/lib/services/entitlement-resolution.ts"
+    ],
     "UsageAttribution": [
       "apps/web/lib/billing/usage-attribution.ts"
     ],
@@ -142064,6 +143097,9 @@
       "apps/desktop/src/stores/chat/agentStore.ts",
       "apps/desktop/src/stores/unifiedChatStore.ts",
       "apps/mobile/stores/agentStore.ts"
+    ],
+    "useAnswerUiFollowUp": [
+      "apps/web/features/chat/components/messages/cards/answer-ui/answer-ui-follow-up.ts"
     ],
     "useAPIKeys": [
       "apps/web/features/settings/hooks/use-settings-queries.ts"
@@ -142702,6 +143738,9 @@
     ],
     "useDocumentStore": [
       "apps/desktop/src/stores/documentStore.ts"
+    ],
+    "useDocumentTheme": [
+      "packages/ui/unified-chat/src/components/artifact-components/chartTheme.ts"
     ],
     "useDocumentTitleSync": [
       "apps/web/features/chat/components/DocumentTitleSync.tsx"
@@ -143457,6 +144496,7 @@
       "apps/web/lib/services/capability-handshake-service.ts"
     ],
     "useReadonlyIdentityLifetime": [
+      "apps/web/lib/identity/client.ts",
       "apps/web/lib/identity/useSessionSnapshot.ts"
     ],
     "useRecorderNarration": [
@@ -143469,6 +144509,7 @@
       "apps/web/features/developers/hooks/use-developer-webhooks.ts"
     ],
     "useReducedMotion": [
+      "packages/ui/unified-chat/src/components/artifact-components/chartTheme.ts",
       "packages/ui/unified-chat/src/hooks/useReducedMotion.ts",
       "packages/ui/unified-chat/src/index.ts"
     ],
@@ -143752,6 +144793,7 @@
       "apps/web/lib/identity/client.ts"
     ],
     "useSessionSnapshot": [
+      "apps/web/lib/identity/client.ts",
       "apps/web/lib/identity/useSessionSnapshot.ts"
     ],
     "useSessionTimeout": [
@@ -144220,6 +145262,9 @@
       "apps/web/features/notifications/components/WebPushToggle.tsx",
       "apps/web/features/notifications/index.ts"
     ],
+    "useWindowEdgeOffset": [
+      "apps/web/features/chat/hooks/use-window-edge-offset.ts"
+    ],
     "useWindowManager": [
       "apps/desktop/src/hooks/useWindowManager.ts"
     ],
@@ -144617,6 +145662,12 @@
     ],
     "validateAndBuildScheduleRequest": [
       "apps/web/features/schedules/lib/schedule-form.ts"
+    ],
+    "validateAnswerUiValue": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
+    "validateAnswerUiValues": [
+      "packages/contracts/types/src/answer-ui.ts"
     ],
     "validateAppUrl": [
       "apps/web/lib/validate-env.ts"
@@ -145851,6 +146902,9 @@
     "visibilityGrantsView": [
       "packages/contracts/types/src/resource-lifecycle.ts"
     ],
+    "VisibleBillingOwnership": [
+      "apps/web/features/billing/lib/subscription-owner-presentation.ts"
+    ],
     "visibleChatIds": [
       "apps/web/features/desktop-host/lib/adjacent-chat.ts"
     ],
@@ -145859,9 +146913,6 @@
     ],
     "visibleLines": [
       "apps/desktop/electron/runtime/dialogText.ts"
-    ],
-    "VisibleSubscriptionSource": [
-      "apps/web/features/billing/lib/subscription-owner-presentation.ts"
     ],
     "visibleThreadFor": [
       "apps/mobile/src/features/chat/utils/conversationThread.ts"
@@ -146905,6 +147956,9 @@
       "scripts/lib/managed-safety-floor.mjs",
       "scripts/lib/workspace-policy-enforcement.mjs"
     ],
+    "walkAnswerUiBlocks": [
+      "packages/contracts/types/src/answer-ui.ts"
+    ],
     "walkFiles": [
       "scripts/lib/ui-systems.mjs"
     ],
@@ -147736,6 +148790,9 @@
     "window_dock": [
       "apps/desktop/src-tauri/src/sys/commands/window.rs"
     ],
+    "WINDOW_EDGE_OFFSET_PROPERTY": [
+      "apps/web/features/chat/hooks/use-window-edge-offset.ts"
+    ],
     "window_get_state": [
       "apps/desktop/src-tauri/src/sys/commands/window.rs"
     ],
@@ -147984,9 +149041,6 @@
     ],
     "with_bins": [
       "apps/desktop/src-tauri/src/core/skills/skill.rs"
-    ],
-    "with_bypass_permissions_available": [
-      "apps/cli/src/app_server/developer_host.rs"
     ],
     "with_cache": [
       "apps/desktop/src-tauri/src/sys/commands/llm.rs"
@@ -148291,9 +149345,6 @@
     "with_workspace_consent": [
       "apps/desktop/src-tauri/src/core/agi/tools/skill_tool.rs"
     ],
-    "with_worktrees_root": [
-      "apps/cli/src/app_server/developer_host.rs"
-    ],
     "withAdmittedRateLimitHeaders": [
       "apps/web/lib/rate-limit-headers.ts"
     ],
@@ -148483,8 +149534,17 @@
     "WithheldReason": [
       "apps/cli/src/mcp/consent.rs"
     ],
+    "withheldToolNames": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-offer.ts"
+    ],
+    "withheldToolResultMessage": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-offer.ts"
+    ],
     "withheldToolsDirective": [
       "apps/web/lib/services/scheduled-agent-executor.ts"
+    ],
+    "withheldToolsTurnNotice": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-offer.ts"
     ],
     "withhold_secrets": [
       "apps/cli/src/schedules/triggers.rs"
@@ -148540,6 +149600,9 @@
     ],
     "without_redirects": [
       "apps/desktop/src-tauri/src/sys/security/egress_policy.rs"
+    ],
+    "withoutAnswerUiTool": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop-routing.ts"
     ],
     "withoutAnthropicPublished": [
       "apps/web/lib/connectors/directory/vendor-directory.ts"
@@ -149732,6 +150795,9 @@
     "WorkspaceNotTrustedError": [
       "apps/extension-vscode/src/integrations/localRuntimeClient.ts"
     ],
+    "WorkspaceOption": [
+      "apps/desktop/gpui/src/workspace_select.rs"
+    ],
     "WorkspaceOverview": [
       "apps/mobile/src/features/team/index.ts",
       "apps/mobile/src/features/team/service.ts"
@@ -150270,6 +151336,9 @@
       "crates/agiworkforce-protocol/src/developer_session.rs",
       "packages/contracts/types/src/generated/protocol/WorktreeSetupStream.ts"
     ],
+    "worktreesRootArgs": [
+      "apps/desktop/electron/runtime/developerSessionService.ts"
+    ],
     "WorktreeStartPoint": [
       "crates/agiworkforce-protocol/bindings/WorktreeStartPoint.ts",
       "crates/agiworkforce-protocol/src/developer_session.rs",
@@ -150342,6 +151411,10 @@
     "wrapTextExportWithMarker": [
       "packages/contracts/compliance/src/article50-marker.ts",
       "packages/contracts/compliance/src/index.ts"
+    ],
+    "writable": [
+      "apps/cli/src/app_server/upload_destination.rs",
+      "apps/cli/src/cloud/project_files/upload.rs"
     ],
     "writable_install_directory": [
       "apps/cli/src/update_check.rs"
@@ -150475,6 +151548,11 @@
     ],
     "writeDesktopNotices": [
       "apps/desktop/electron/openSourceNotices.mjs"
+    ],
+    "writeDeveloperTerminal": [
+      "apps/desktop/electron/runtime/developerSessionService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
     "writeDictationLanguage": [
       "apps/extension/src/features/side-panel/dictation-language.ts"
@@ -150752,6 +151830,9 @@
     ],
     "youtubeVideoId": [
       "apps/extension/src/features/content/in-page-panel/youtubeTranscript.ts"
+    ],
+    "Z_": [
+      "tools/evals/src/chat-prompt.ts"
     ],
     "Zap": [
       "apps/extension/src/assets/icons.ts"

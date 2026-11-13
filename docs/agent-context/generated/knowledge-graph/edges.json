@@ -633,6 +633,12 @@
     },
     {
       "from": "packages/ai/providers/anthropic",
+      "to": "packages/ai/agent-core",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/anthropic",
       "to": "packages/ai/provider-protocol",
       "type": "depends_on",
       "via": "typescript"

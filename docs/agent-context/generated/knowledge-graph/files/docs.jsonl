@@ -38,8 +38,6 @@
 {"path":"docs/agent-context/generated/knowledge-graph/files/tools.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/guards.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/migrations.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/routes.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/skills.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
@@ -128,11 +126,13 @@
 {"path":"docs/research/assistant-comparison-2026-11-11.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/assistant-identity-disclosure-2026-10-02.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/autonomous-company-roadmap.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/research/browser-assistants-2026-10-25.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/chat-system-prompt-references-2026-10-10.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/chatgpt-chrome-ui-reference-2026-10-13.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/claude-ai-ui-reference-2026-09-03.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/claude-chrome-ui-reference-2026-10-13.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/research/coding-assistants-2026-10-25.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/competitor-surfaces-2026-10-24.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/cross-surface-continuity-2026-09-21.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/enterprise-controls-architecture-evidence-2026-10-07.md","unit":"docs","role":"doc","unparsed":"notCode"}
@@ -143,9 +143,11 @@
 {"path":"docs/research/free-inference-tos-workbook-2026-09-01.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/global-distribution-research-2026-10-05.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/infrastructure-unit-costs-2026-09-27.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/research/intelligent-ui-2026-10-25.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/jev-typesafe-public-evidence-2026-09-21.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/leader-clients-2026-09-14.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/leader-code-surface-2026-09-05.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/research/leader-mobile-ecosystem-valuations-2026-10-25.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/leader-observation-2026-09-13.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/leader-settings-and-directory-reference-2026-09-07.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/research/leader-ui-measurements-2026-09-04.md","unit":"docs","role":"doc","unparsed":"notCode"}
@@ -194,6 +196,9 @@
 {"path":"docs/specs/agi-code-cloud-parity/spec.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/agi-code-cloud-parity/tasks.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/desktop-global-voice/spec.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/specs/desktop-parity/plan.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/specs/desktop-parity/spec.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/specs/desktop-parity/tasks.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/guardian-phase-3/plan.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/guardian-phase-3/spec.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/specs/guardian-phase-3/tasks.md","unit":"docs","role":"doc","unparsed":"notCode"}

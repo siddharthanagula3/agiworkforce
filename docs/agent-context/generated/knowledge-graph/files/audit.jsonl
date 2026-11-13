@@ -325,6 +325,7 @@
 {"path":"audit/prior-audits/evidence/frontend-ui-audit-2026-09-01/12-mobile-drawer-my-platform.png","unit":"audit","role":"asset","unparsed":"binary"}
 {"path":"audit/prior-audits/frontend-ecosystem-release-2026-09-14.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/mobile-public-release-audit.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/prior-audits/one-product-billing-audit-2026-10-27.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/openai-api-audit-2026-09-16.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/parity-implementation-matrix.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/product-gaps-register.md","unit":"audit","role":"doc","unparsed":"notCode"}

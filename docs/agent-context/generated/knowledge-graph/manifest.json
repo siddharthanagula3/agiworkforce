@@ -2,19 +2,19 @@
   "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "schemaVersion": 1,
   "generatedFrom": "git ls-files, pnpm-workspace.yaml, Cargo.toml members, package and crate manifests, tsconfig paths, docs/agent-context/repo-map.json, docs/agent-context/lanes.json, and the TypeScript and Rust dependency graphs",
-  "trackedFiles": 19202,
-  "fileNodes": 19202,
+  "trackedFiles": 19796,
+  "fileNodes": 19796,
   "units": 194,
   "routes": 1039,
-  "migrations": 740,
-  "symbols": 44569,
-  "workspaceEdges": 218,
+  "migrations": 746,
+  "symbols": 45641,
+  "workspaceEdges": 219,
   "generatorEdges": 15,
   "unparsed": {
     "binary": 160,
-    "oversize": 22,
+    "oversize": 26,
     "lockfile": 2,
-    "notCode": 2484,
+    "notCode": 2535,
     "parseError": 0
   },
   "unmappedDependencies": [
@@ -60,7 +60,7 @@
     "migration",
     "stats"
   ],
-  "foldedFiles": 80,
+  "foldedFiles": 98,
   "shards": [
     "knowledge-graph/files/agents.jsonl",
     "knowledge-graph/files/apps__cli.jsonl",
