@@ -119,41 +119,6 @@ export function shortcutRegistrations(): ShortcutRegistration[] {
   return registrations;
 }
 
-function lostAlwaysOnShortcut(): string | null {
-  const lost = registrations.find(
-    (registration) => !shortcutMayBeOff(registration.key) && registration.status !== 'registered',
-  );
-  if (!lost) return null;
-  return `${SHORTCUT_LABELS[lost.key]} could not take that shortcut: it ${
-    shortcutStatusDetail(lost.status) ?? 'was not registered'
-  }. The shortcut it had is kept. Choose another one.`;
-}
-
-/**
- * Saves new chords and registers every shortcut again. A shortcut that is never
- * off has to end the change still registered: a chord another app holds is saved
- * like any other and reports `taken`, which for Stop Agents would leave no way to
- * stop an agent controlling the screen, so the previous chords are put back.
- * The settings page and the tray both change shortcuts through this. Answers what
- * to tell the person when the change was undone, otherwise null.
- */
-export function changeShortcuts(
-  patch: Partial<GarnishShortcuts>,
-  handlers: GarnishShortcutHandlers,
-): string | null {
-  const previous = getShortcuts();
-  saveSettings(patch);
-  unregisterGarnishShortcuts();
-  registerGarnishShortcuts(handlers);
-  const lost = lostAlwaysOnShortcut();
-  if (lost) {
-    saveSettings(previous);
-    unregisterGarnishShortcuts();
-    registerGarnishShortcuts(handlers);
-  }
-  return lost;
-}
-
 export function unregisterGarnishShortcuts(): void {
   for (const registration of registrations) {
     if (registration.status === 'registered') globalShortcut.unregister(registration.accelerator);

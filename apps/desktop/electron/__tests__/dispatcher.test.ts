@@ -243,7 +243,7 @@ vi.mock('../runtime/appsService', () => ({
   openWithDefaultApplication,
   revealInFileManager,
 }));
-vi.mock('../runtime/clipboardService', () => ({ readClipboard }));
+vi.mock('../runtime/clipboardService', () => ({ readClipboard, readImagePng: vi.fn() }));
 vi.mock('../runtime/filesystemService', () => ({
   OPEN_FILE_FOR_CHECKED_READ: 0,
   openChecked: vi.fn(),

@@ -36,7 +36,6 @@ function changeLaunchAtLogin(item: MenuItem): void {
 
 export interface AppMenuActions {
   newChat: () => void;
-  openFolder: () => void;
   newWindow: () => void;
   openCurrentChatInNewWindow: () => void;
   copyConversationUrl: () => void;
@@ -49,6 +48,7 @@ export interface AppMenuActions {
   openSettings: () => void;
   openLogs: () => void;
   copyDiagnostics: () => void;
+  clearCacheAndRestart: () => void;
   openProductHelp: () => void;
   openWhatsNew: () => void;
   openSupport: () => void;
@@ -100,10 +100,6 @@ export interface AppMenuAccelerators {
  */
 const PAGE_TOGGLE_SIDEBAR_ACCELERATOR = 'CommandOrControl+B';
 const PAGE_KEYBOARD_SHORTCUTS_ACCELERATOR = 'CommandOrControl+/';
-/** `apps/web/features/chat/components/messages/ChatMessageList.tsx` binds find in a conversation. */
-const PAGE_FIND_ACCELERATOR = 'CommandOrControl+F';
-/** `OPEN_SEARCH_SHORTCUT` in `packages/ui/ui/src/sidebar/searchShortcut.ts`. */
-const PAGE_SEARCH_ACCELERATOR = 'CommandOrControl+Shift+F';
 
 /**
  * The chords this menu claims come from the contract, which is also what the
@@ -281,18 +277,6 @@ function editMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   if (isMac) {
     items.splice(6, 0, { role: 'pasteAndMatchStyle' }, { role: 'delete' });
   }
-  // Find searches the conversation on screen, so it is unavailable, not hidden,
-  // anywhere else.
-  items.push(
-    { type: 'separator' },
-    {
-      label: 'Find…',
-      accelerator: PAGE_FIND_ACCELERATOR,
-      registerAccelerator: false,
-      enabled: actions.hasFocusedConversation(),
-      click: () => actions.sendHostCommand('find'),
-    },
-  );
   return { label: 'Edit', submenu: items };
 }
 
@@ -430,12 +414,9 @@ function viewMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return { label: 'View', submenu: items };
 }
 
-function goMenu(actions: AppMenuActions): MenuItemConstructorOptions {
-  // Previous and Next Chat move through the chats in the order the sidebar
-  // lists them, from the one on screen, so they wait for a conversation.
-  const onConversation = actions.hasFocusedConversation();
+function historyMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return {
-    label: 'Go',
+    label: 'History',
     submenu: [
       { label: 'Back', accelerator: hostAccelerator('host-back'), click: actions.goBack },
       { label: 'Forward', accelerator: hostAccelerator('host-forward'), click: actions.goForward },
@@ -558,9 +539,7 @@ function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
       }
     }
   }
-  // The window role is what makes macOS add its window list, Move & Resize,
-  // Full Screen Tile and Bring All to Front to this menu.
-  return { label: 'Window', role: 'window', submenu: items };
+  return { label: 'Window', submenu: items };
 }
 
 function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
@@ -587,6 +566,8 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
         submenu: [
           { label: 'Open Logs', click: actions.openLogs },
           { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
+          { type: 'separator' },
+          { label: 'Clear Cache and Restart…', click: actions.clearCacheAndRestart },
         ],
       },
       { label: 'Open-Source Licenses', click: actions.openOpenSourceNotices },
@@ -605,7 +586,7 @@ export function appMenuTemplate(
     fileMenu(actions, accelerators, computerUse),
     editMenu(actions),
     viewMenu(actions),
-    goMenu(actions),
+    historyMenu(actions),
     windowMenu(actions),
     helpMenu(actions),
   ];

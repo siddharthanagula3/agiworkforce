@@ -6,7 +6,7 @@ import {
 
 const IMAGE_TYPE = 'image/png';
 
-async function readImagePng(): Promise<Buffer | null> {
+export async function readImagePng(): Promise<Buffer | null> {
   const items = await clipboard.read();
   const item = items.find((entry) => entry.types.includes(IMAGE_TYPE));
   if (!item) return null;

@@ -5,7 +5,6 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DeveloperSessionEvent } from '@agiworkforce/local-runtime-contract';
 import { DESKTOP_RUNTIME_CHANNEL, localSessionPath } from '@agiworkforce/local-runtime-contract';
-import { CLOUD_CODE_PAGE_ROUTE } from '@agiworkforce/types';
 import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
 import { defineShellInkGlobals } from './shellTokenGlobals';
 
@@ -1206,62 +1205,5 @@ describe('Help > Troubleshooting > Clear Cache and Restart', () => {
     });
     expect(electron.app.relaunch).toHaveBeenCalledTimes(1);
     expect(quit).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('File > Open Folder…', () => {
-  function menuActions(): import('../appMenu').AppMenuActions {
-    appHandlers.get('browser-window-focus')?.();
-    const actions = vi.mocked(installAppMenu).mock.calls.at(-1)?.[0];
-    if (!actions) throw new Error('the menu was never installed');
-    return actions;
-  }
-
-  function codeLoads(): string[] {
-    return loadedUrls.filter((url) => new URL(url).pathname === CLOUD_CODE_PAGE_ROUTE);
-  }
-
-  it('grants the folder through the dispatcher, then opens the Code page that lists it', async () => {
-    dispatchRuntime.mockClear();
-    loadedUrls.length = 0;
-
-    menuActions().openFolder();
-    await settle();
-
-    expect(dispatchRuntime).toHaveBeenCalledWith(expect.anything(), 'workspace_pick_root');
-    expect(codeLoads()).toHaveLength(1);
-  });
-
-  it('does nothing more when the person cancels the folder picker', async () => {
-    dispatchRuntime.mockResolvedValueOnce({
-      ok: false,
-      error: { code: 'cancelled', message: 'No folder was chosen.' },
-    } as never);
-    showMessageBox.mockReset();
-    loadedUrls.length = 0;
-
-    menuActions().openFolder();
-    await settle();
-
-    expect(codeLoads()).toEqual([]);
-    expect(showMessageBox).not.toHaveBeenCalled();
-  });
-
-  it('says why when the folder could not be granted', async () => {
-    dispatchRuntime.mockResolvedValueOnce({
-      ok: false,
-      error: { code: 'invalid-arguments', message: 'That folder cannot be used.' },
-    } as never);
-    showMessageBox.mockReset();
-    showMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false });
-    loadedUrls.length = 0;
-
-    menuActions().openFolder();
-    await settle();
-    await settle();
-
-    expect(codeLoads()).toEqual([]);
-    const options = (showMessageBox.mock.calls[0] as unknown[]).at(-1) as { message: string };
-    expect(options.message).toBe('That folder cannot be used.');
   });
 });

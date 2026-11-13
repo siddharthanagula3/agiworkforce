@@ -654,9 +654,59 @@ function closeServer(server: RunningServer, error: Error, announce = true): void
   }
   server.pending.clear();
   server.buffer = '';
-  if (servers.get(server.root.id) === server) {
+  if (announce && servers.get(server.root.id) === server) {
     emit(server.root.id, { type: 'runtime-stopped', message: error.message });
   }
+}
+
+/**
+ * Whether the server is doing anything a restart would cut short: a turn, an
+ * approval or question it waits on, a terminal, a setup script, or a request
+ * still unanswered.
+ */
+function serverBusy(server: RunningServer): boolean {
+  return (
+    server.activeTurns.size > 0 ||
+    server.terminals.size > 0 ||
+    server.setups.size > 0 ||
+    server.pending.size > 0
+  );
+}
+
+/**
+ * Ends a server started with a worktree location the user has since changed,
+ * once nothing on it would be interrupted. The next request starts its
+ * replacement with the new location. Nothing was running, so no session hears
+ * that its runtime stopped.
+ */
+function restartIfStale(server: RunningServer): void {
+  if (server.closed || server.worktreesRoot === null) return;
+  if (server.worktreesRoot === worktreesRoot() || serverBusy(server)) return;
+  closeServer(server, new Error('The AGI CLI restarted to use the new worktree location.'), false);
+}
+
+function countSetup(server: RunningServer, worktreeId: string, change: 1 | -1): void {
+  const count = (server.setups.get(worktreeId) ?? 0) + change;
+  if (count > 0) server.setups.set(worktreeId, count);
+  else server.setups.delete(worktreeId);
+}
+
+/**
+ * Applies a change that may leave the server idle, then looks again once the
+ * caller has had its turn to send a follow-up request on the same server.
+ */
+function settle(server: RunningServer, change: () => unknown): void {
+  change();
+  if (server.worktreesRoot === null || server.worktreesRoot === worktreesRoot()) return;
+  setTimeout(() => restartIfStale(server), 0);
+}
+
+/**
+ * The saved worktree location changed: every CLI started with the old one is
+ * restarted, now when idle, otherwise as soon as its last session settles.
+ */
+export function applyWorktreesRootChange(): void {
+  for (const server of [...servers.values()]) restartIfStale(server);
 }
 
 function ownsRuntime(server: RunningServer): boolean {

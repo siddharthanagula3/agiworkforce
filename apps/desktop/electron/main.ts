@@ -400,7 +400,6 @@ const UPDATE_RESTART_TIMEOUT_MS = 60_000;
 const HELP_PATH = '/help';
 const WHATS_NEW_PATH = '/changelog';
 const SUPPORT_PATH = '/support';
-const HELP_CENTER_PATH = '/help';
 
 /**
  * Which document may call the bridge.
@@ -1921,7 +1920,6 @@ const garnishHandlers = {
   onRevokeComputerUse: () => void confirmRevokeComputerUse(),
   onOpenSession: openLocalSession,
   onCheckForUpdates: () => void checkForCloudUpdate(),
-  onChangeShortcut: changeShortcutFromTray,
   activity: trayActivity,
 };
 
@@ -2199,24 +2197,26 @@ async function writeHostPreferences(
         `Use letters, numbers, dots, dashes and slashes, up to ${MAX_WORKTREE_BRANCH_PREFIX_LENGTH} characters, starting with a letter or number.`,
       );
     }
-    saveSettings({ worktreeBranchPrefix: prefix });
+    saveSettingsDurably({ worktreeBranchPrefix: prefix });
   }
 
   if (typeof patch.worktreeLocation === 'string') {
-    if (patch.worktreeLocation === '') saveSettings({ worktreeLocation: '' });
+    if (patch.worktreeLocation === '') saveSettingsDurably({ worktreeLocation: '' });
     else {
       const chosen = await chooseWorktreeLocation(window, before.worktreeLocation);
-      if (chosen !== null) saveSettings({ worktreeLocation: chosen });
+      if (chosen !== null) saveSettingsDurably({ worktreeLocation: chosen });
     }
     if (getPreferences().worktreeLocation !== before.worktreeLocation) applyWorktreesRootChange();
   }
 
   if (isAutoArchiveIdleDays(patch.autoArchiveIdleDays)) {
-    saveSettings({ autoArchiveIdleDays: patch.autoArchiveIdleDays });
+    saveSettingsDurably({ autoArchiveIdleDays: patch.autoArchiveIdleDays });
   }
 
   if (typeof patch.terminal === 'object' && patch.terminal !== null) {
-    saveSettings({ terminal: normalizeTerminalPreferences(patch.terminal, before.terminal) });
+    saveSettingsDurably({
+      terminal: normalizeTerminalPreferences(patch.terminal, before.terminal),
+    });
   }
 
   if (typeof patch.preventSleepWhileRunning === 'boolean') {
@@ -2247,32 +2247,6 @@ function openWhatsNew(): void {
 
 function openSupport(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
-}
-
-/**
- * File > Open Folder…: the folder picker and grant the Code page's Add a
- * folder runs, through the same dispatcher checks, then the Code page, which
- * lists the folder from then on. A cancelled picker changes nothing.
- */
-async function openFolder(): Promise<void> {
-  const window = commandWindow();
-  const response = await dispatchDesktopRuntime(window, 'workspace_pick_root', {});
-  if (response.ok) {
-    openRoute(CLOUD_CODE_PAGE_ROUTE);
-    return;
-  }
-  if (response.error.code === 'cancelled') return;
-  await showNativeMessage(window, {
-    type: 'warning',
-    buttons: ['OK'],
-    title: 'Folder not opened',
-    message: response.error.message,
-    noLink: true,
-  }).catch(() => undefined);
-}
-
-function openHelpCenter(): void {
-  openExternally(`${CLOUD_APP_ORIGIN}${HELP_CENTER_PATH}`);
 }
 
 /**
@@ -2507,7 +2481,6 @@ function installMenu(): void {
   installAppMenu(
     {
       newChat: garnishHandlers.onNewChat,
-      openFolder: () => void openFolder(),
       newWindow: openNewWindow,
       openCurrentChatInNewWindow,
       copyConversationUrl: copyCurrentConversationUrl,
@@ -2520,6 +2493,7 @@ function installMenu(): void {
       openSettings,
       openLogs: openLogsFolder,
       copyDiagnostics,
+      clearCacheAndRestart: () => void clearCacheAndRestart(),
       openProductHelp,
       openWhatsNew,
       openSupport,

@@ -198,6 +198,7 @@ type State = {
 
 beforeEach(() => {
   storedSettings = {};
+  systemOpensAtLogin = false;
   diskRefusesWrites = false;
   trayCalls.length = 0;
   registeredAccelerators = [];
@@ -456,6 +457,7 @@ describe('the host preferences channel', () => {
 
   it('does not apply launch at login to the system when the setting could not be saved', async () => {
     storedSettings = { launchAtLogin: true };
+    systemOpensAtLogin = true;
     diskRefusesWrites = true;
 
     await expect(invoke({ launchAtLogin: false })).rejects.toThrow(/could not be saved/u);

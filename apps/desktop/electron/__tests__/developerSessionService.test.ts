@@ -413,6 +413,7 @@ describe('developer session runtime', () => {
       service.applyWorktreesRootChange();
 
       expect(first.ended).toBe(true);
+      first.emit('exit', 0, null);
       expect(events.some(({ event }) => event.type === 'runtime-stopped')).toBe(false);
       await service.listDeveloperSessions();
       expect(appServerRoots(spawn)).toEqual([
@@ -448,6 +449,7 @@ describe('developer session runtime', () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(first.ended).toBe(true);
+      first.emit('exit', 0, null);
       expect(events.some(({ event }) => event.type === 'runtime-stopped')).toBe(false);
       await service.listDeveloperSessions();
       expect(appServerRoots(spawn)).toEqual([

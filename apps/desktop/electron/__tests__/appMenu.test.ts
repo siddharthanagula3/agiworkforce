@@ -61,7 +61,6 @@ const {
 function actions() {
   return {
     newChat: vi.fn(),
-    openFolder: vi.fn(),
     newWindow: vi.fn(),
     openCurrentChatInNewWindow: vi.fn(),
     copyConversationUrl: vi.fn(),
@@ -74,6 +73,7 @@ function actions() {
     openSettings: vi.fn(),
     openLogs: vi.fn(),
     copyDiagnostics: vi.fn(),
+    clearCacheAndRestart: vi.fn(),
     openProductHelp: vi.fn(),
     openWhatsNew: vi.fn(),
     openSupport: vi.fn(),
@@ -128,11 +128,6 @@ function submenu(menu: MenuItemConstructorOptions[], label: string): MenuItemCon
   return (found?.submenu as MenuItemConstructorOptions[] | undefined) ?? [];
 }
 
-function troubleshooting(menu: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] {
-  const found = submenu(menu, 'Help').find((entry) => entry.label === 'Troubleshooting');
-  return (found?.submenu as MenuItemConstructorOptions[] | undefined) ?? [];
-}
-
 function item(
   menu: MenuItemConstructorOptions[],
   menuLabel: string,
@@ -160,7 +155,7 @@ describe('the application menu', () => {
     const { menu } = template();
     const labels = menu.map((entry) => entry.label ?? entry.role);
 
-    expect(labels).toEqual(expect.arrayContaining(['File', 'Edit', 'View', 'Go', 'Window']));
+    expect(labels).toEqual(expect.arrayContaining(['File', 'Edit', 'View', 'History', 'Window']));
     expect(menu.some((entry) => entry.role === 'help')).toBe(true);
   });
 
@@ -460,61 +455,14 @@ describe('the application menu', () => {
   it('moves through history from the History menu', () => {
     const { menu, actions: spies } = template();
 
-    (item(menu, 'File', 'Open Folder…').click as () => void)();
+    expect(item(menu, 'History', 'Back').accelerator).toBe(contractAccelerator('host-back'));
+    expect(item(menu, 'History', 'Forward').accelerator).toBe(contractAccelerator('host-forward'));
 
-    expect(spies.openFolder).toHaveBeenCalledTimes(1);
-  });
-
-  it('moves through history from the Go menu', () => {
-    const { menu, actions: spies } = template();
-
-    expect(item(menu, 'Go', 'Back').accelerator).toBe(contractAccelerator('host-back'));
-    expect(item(menu, 'Go', 'Forward').accelerator).toBe(contractAccelerator('host-forward'));
-
-    (item(menu, 'Go', 'Back').click as () => void)();
-    (item(menu, 'Go', 'Forward').click as () => void)();
+    (item(menu, 'History', 'Back').click as () => void)();
+    (item(menu, 'History', 'Forward').click as () => void)();
 
     expect(spies.goBack).toHaveBeenCalledTimes(1);
     expect(spies.goForward).toHaveBeenCalledTimes(1);
-  });
-
-  it('asks the page for find, search, the chats either side and a temporary chat', () => {
-    const { menu, actions: spies } = template();
-
-    (item(menu, 'Edit', 'Find…').click as () => void)();
-    (item(menu, 'Go', 'Search…').click as () => void)();
-    (item(menu, 'Go', 'Previous Chat').click as () => void)();
-    (item(menu, 'Go', 'Next Chat').click as () => void)();
-    (item(menu, 'File', 'New Temporary Chat').click as () => void)();
-
-    const sent = spies.sendHostCommand.mock.calls.map(([command]) => command);
-    expect(sent).toEqual(['find', 'search', 'previous-chat', 'next-chat', 'new-temporary-chat']);
-    for (const command of sent) expect(HOST_COMMANDS).toContain(command);
-  });
-
-  it('shows the page bindings for find and search without claiming them', () => {
-    const { menu } = template();
-
-    expect(item(menu, 'Edit', 'Find…').accelerator).toBe('CommandOrControl+F');
-    expect(item(menu, 'Edit', 'Find…').registerAccelerator).toBe(false);
-    expect(item(menu, 'Go', 'Search…').accelerator).toBe('CommandOrControl+Shift+F');
-    expect(item(menu, 'Go', 'Search…').registerAccelerator).toBe(false);
-  });
-
-  it('offers find and the chats either side only while the front window is on a conversation', () => {
-    const elsewhere = template({ ...actions(), hasFocusedConversation: vi.fn(() => false) }).menu;
-    const onOne = template().menu;
-
-    for (const [menuLabel, label] of [
-      ['Edit', 'Find…'],
-      ['Go', 'Previous Chat'],
-      ['Go', 'Next Chat'],
-    ] as const) {
-      expect(item(elsewhere, menuLabel, label).enabled, label).toBe(false);
-      expect(item(onOne, menuLabel, label).enabled, label).toBe(true);
-    }
-    expect(item(elsewhere, 'Go', 'Search…').enabled).not.toBe(false);
-    expect(item(elsewhere, 'File', 'New Temporary Chat').enabled).not.toBe(false);
   });
 
   it('keeps the help items wired to something', () => {
@@ -534,12 +482,9 @@ describe('the application menu', () => {
     (logs?.click as () => void)();
     (item(menu, UPDATES_MENU, UPDATES_LABEL).click as () => void)();
 
-    expect(spies.openHelpCenter).toHaveBeenCalledTimes(1);
     expect(spies.openSupport).toHaveBeenCalledTimes(1);
-    expect(spies.openOpenSourceNotices).toHaveBeenCalledTimes(1);
     expect(spies.openLogs).toHaveBeenCalledTimes(1);
-    expect(spies.copyDiagnostics).toHaveBeenCalledTimes(1);
-    expect(spies.clearCacheAndRestart).toHaveBeenCalledTimes(1);
+    expect(spies.openOpenSourceNotices).toHaveBeenCalledTimes(1);
     expect(spies.checkForUpdates).toHaveBeenCalledTimes(1);
   });
 
@@ -1020,6 +965,18 @@ describe('the application menu', () => {
     (logs?.click as () => void)();
 
     expect(spies.openLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the cache and restarts from Help > Troubleshooting', () => {
+    const { menu, actions: spies } = template();
+    const trouble = submenu(menu, 'Help').find((entry) => entry.label === 'Troubleshooting');
+    const clear = (trouble?.submenu as MenuItemConstructorOptions[] | undefined)?.find(
+      (entry) => entry.label === 'Clear Cache and Restart…',
+    );
+
+    (clear?.click as () => void)();
+
+    expect(spies.clearCacheAndRestart).toHaveBeenCalledTimes(1);
   });
 
   it('copies the current chat URL from the public window View menu', () => {

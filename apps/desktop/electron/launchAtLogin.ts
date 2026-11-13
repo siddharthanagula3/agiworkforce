@@ -1,5 +1,5 @@
 import { app } from 'electron';
-import { getPreferences, saveSettingsDurably } from './settingsStore';
+import { getPreferences, saveSettings, saveSettingsDurably } from './settingsStore';
 
 /**
  * Opt-in launch at login.

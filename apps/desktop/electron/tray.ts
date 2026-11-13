@@ -40,8 +40,6 @@ export interface TrayHandlers {
   onRevokeComputerUse: () => void;
   onOpenSession: (rootId: string, threadId: string) => void;
   onCheckForUpdates: () => void;
-  /** Saves and registers a chord, undoing it when Stop Agents would lose its shortcut. */
-  onChangeShortcut: (key: ShortcutKey, accelerator: string) => void;
   activity: () => TrayActivity;
 }
 
@@ -99,7 +97,7 @@ function shortcutChoiceItems(
     label: describeAccelerator(value, process.platform),
     type: 'radio',
     checked: value === current,
-    click: () => handlers.onChangeShortcut(key, value),
+    click: () => applyShortcut(key, value, handlers),
   }));
 }
 
