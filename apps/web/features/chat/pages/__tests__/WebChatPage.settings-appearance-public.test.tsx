@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
   MANAGED_CLOUD_WORKSPACES_PATH,
@@ -319,6 +319,10 @@ function settingsResponse(input: RequestInfo | URL, init?: RequestInit): Respons
 }
 
 describe('public settings window appearance', () => {
+  beforeAll(async () => {
+    await import('@/features/settings/components/WebSettingsModal');
+  });
+
   beforeEach(() => {
     savedSettings = {
       notifications: { browserReplyReady: true },
