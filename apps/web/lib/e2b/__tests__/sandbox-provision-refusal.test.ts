@@ -55,6 +55,8 @@ vi.mock('../templates', async (importOriginal) => ({
   templateComputeShape: async () => ({ vcpuCount: null, memoryGib: null }),
 }));
 
+type EntitlementModule = typeof import('@/lib/services/entitlement-resolution');
+
 vi.mock('@/lib/services/effective-subscription-service', async () => ({
   EntitlementBundle: vi.fn(),
   EntitlementResolutionOptions: vi.fn(),
@@ -67,9 +69,7 @@ vi.mock('@/lib/services/effective-subscription-service', async () => ({
   resolveEntitlementBundle: async () => ({ entitled: true, subscription: { plan_tier: 'pro' } }),
   resolveEffectiveSubscription: async () => ({ plan_tier: 'pro' }),
   usageAllowanceSubject: (
-    await vi.importActual<typeof import('@/lib/services/entitlement-resolution')>(
-      '@/lib/services/entitlement-resolution',
-    )
+    await vi.importActual<EntitlementModule>('@/lib/services/entitlement-resolution')
   ).usageAllowanceSubject,
 }));
 
