@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_TEXT_READ_BYTES, type WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import {
   WriteConflict,
   configurePreviousVersions,
@@ -1088,7 +1089,8 @@ describe('keeping what an overwrite replaced', () => {
     expect(await fs.readFile(path.join(root.path, 'notes.md'), 'utf8')).toBe('second draft\n');
     expect(kept).toHaveLength(1);
     expect(kept[0]?.text).toBe('first draft\n');
-    expect(kept[0]?.name).toMatch(/^notes \(before AGI edit .+\)\.md$/);
+    expect(kept[0]?.name.startsWith(`notes (before ${PRODUCT_BRAND} edit `)).toBe(true);
+    expect(kept[0]?.name.endsWith(').md')).toBe(true);
   });
 
   it('names the copy with the time on this computer, as the Trash shows it', async () => {
@@ -1100,7 +1102,7 @@ describe('keeping what an overwrite replaced', () => {
     } finally {
       vi.useRealTimers();
     }
-    expect(kept[0]?.name).toBe('clock (before AGI edit 2026-10-25 06.02.38).md');
+    expect(kept[0]?.name).toBe(`clock (before ${PRODUCT_BRAND} edit 2026-10-25 06.02.38).md`);
   });
 
   it('keeps the previous text of an edit too', async () => {
