@@ -1276,3 +1276,42 @@ is either redone on main or closed here.
 **What remains after founder action** Engineering redoes the chosen items against current main.
 **Impact** NOT BLOCKING.
 **Status** FOUNDER DECISION REQUIRED
+
+## [Prompts] Measure `chat.system@16` and move the chat prompt pin
+
+**Why founder assistance is required**
+Moving the pin changes what every customer's assistant is told, and the release ledger accepts a
+canary or stable record only with a measured eval run behind it. A live run calls paid provider
+routes, and two of the three slots the current pin was measured on sit on the Anthropic account,
+which has no API credit (see "[Providers] The Anthropic account has no API credit").
+
+Customers are still served `chat.system@6`. It names the assistant "AGI Workforce" and says nothing
+about artifacts, the chat's setup, Settings, or what the assistant must never produce.
+`chat.system@16`, internal since 2026-11-13, joins the two later lineages into one version and adds
+tone, mistakes, hard limits, wellbeing, professional advice, evenhandedness, copyright and consent
+before an action with consequences. A platform admin can try it now by enabling the
+`prompt.chat.system` flag with the variant `v16`; nobody else is served it.
+
+**Exact action**
+
+1. Fund the routes the run needs, then run both arms on each slot the pin was measured on:
+   `pnpm evals:live --model <modelKey> --chat-prompt-version <6 or 16> --sample 3 --suites golden,refusal,jailbreak,chat,chat-prompt`
+2. Compare the arms as `tools/evals/README.md` describes under live measurement. Refusal and
+   jailbreak must be no lower than version 6 on any slot; register row
+   `WEB-CHAT-PROMPT-V14-REFUSAL-REGRESSION-01` records the version that failed this.
+3. If it holds, say so, and engineering records canary then stable for `chat.system@16` with that
+   run as the quality signal, sets `CHAT_SYSTEM_PROMPT_PINNED_VERSION` to 16, and pins
+   `voice.live_instructions` to version 2 in the same change, because the ledger test requires the
+   chat, voice and guest identities to agree.
+4. Say deploy, so the web app serves the new pin.
+
+**Where** `tools/evals`, `packages/ai/model-registry/catalog/routing-policies.json`,
+`apps/web/lib/prompts/chat-system-prompt.ts`.
+**Needed input** Provider credit for the run, and the go-ahead to move the pin.
+**How to verify completion** `apps/web/lib/prompts/__tests__/chat-system-prompt-output.test.ts`
+asserts the new pin and its channel, and a production chat answers "AGI" when asked who it is.
+**What remains after founder action** The `chat-prompt` corpus has no rows for the sections
+version 16 adds, so the run above measures regressions against version 6, not the new behaviour.
+Engineering adds those rows before the next version is measured.
+**Impact** NOT BLOCKING. Production keeps serving version 6 until this is done.
+**Status** FOUNDER ACTION REQUIRED
