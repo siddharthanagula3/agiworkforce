@@ -8,7 +8,6 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import {
   cancelLocalCommand,
-  openLocalPreview,
   readBackgroundActivity,
   readPreviewConsoleErrors,
 } from '@/features/desktop-host';
@@ -44,6 +43,8 @@ export interface LocalRunningCommandsProps {
   refreshKey: number;
   /** Absent where the session cannot take a turn, which leaves preview errors unsent. */
   onSendToAgent?: (message: string) => void;
+  /** Absent where there is no browser pane to show a page in, which leaves Preview out. */
+  onOpenPreview?: (url: string) => void;
   now?: () => number;
 }
 
@@ -51,6 +52,7 @@ export function LocalRunningCommands({
   rootId,
   refreshKey,
   onSendToAgent,
+  onOpenPreview,
   now = Date.now,
 }: LocalRunningCommandsProps) {
   const [runs, setRuns] = useState<BackgroundCommandRun[]>([]);
@@ -81,15 +83,6 @@ export function LocalRunningCommands({
     const timer = setInterval(() => void load(), POLL_MS);
     return () => clearInterval(timer);
   }, [load, refreshKey]);
-
-  const preview = async (url: string) => {
-    try {
-      await openLocalPreview(url);
-      setError(null);
-    } catch (cause: unknown) {
-      setError(toUserMessage(cause, LOCAL_CODE_COPY.previewFailed));
-    }
-  };
 
   const sendErrors = async () => {
     if (!onSendToAgent || !previewErrors) return;
@@ -179,13 +172,13 @@ export function LocalRunningCommands({
                 {LOCAL_CODE_COPY.runningSince(Math.floor((now() - run.startedAtMs) / MINUTE_MS))}
               </span>
             </span>
-            {run.previewUrl && (
+            {run.previewUrl && onOpenPreview && (
               <button
                 type="button"
                 className={styles['secondaryButton']}
                 aria-label={LOCAL_CODE_COPY.openPreviewOf(run.previewUrl)}
                 title={run.previewUrl}
-                onClick={() => run.previewUrl && void preview(run.previewUrl)}
+                onClick={() => run.previewUrl && onOpenPreview(run.previewUrl)}
               >
                 <ExternalLink size={GLYPH_SIZE} aria-hidden="true" />
                 {LOCAL_CODE_COPY.openPreview}

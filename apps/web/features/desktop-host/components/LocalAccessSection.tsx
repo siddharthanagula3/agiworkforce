@@ -75,6 +75,7 @@ const CAPABILITY_TITLES: Record<DesktopCapability, string> = {
   'computer.use': 'Read the screen and control the mouse and keyboard',
   'application.control': 'Open files in other apps',
   'screen.capture': 'Capture the screen',
+  'simulator.control': 'Run and control the iOS Simulator',
   'clipboard.read': 'Read the clipboard',
   microphone: 'Use the microphone',
   'local.inference': 'Run models on this Mac',

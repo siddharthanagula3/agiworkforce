@@ -72,11 +72,29 @@ function isEditorHandoff(parsed: URL): boolean {
   return parsed.protocol === 'vscode:' && parsed.host === VSCODE_CONTEXT_HANDOFF_AUTHORITY;
 }
 
+/**
+ * The one rule for an address a browser may be sent to, whether that is the
+ * user's own browser or the browser pane: http or https, with no credentials
+ * in it. Anything else is no address at all.
+ */
+export function browserAddress(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+    return null;
+  }
+  return parsed.toString();
+}
+
 export async function openBrowserAddress(url: string): Promise<void> {
-  const parsed = new URL(url);
-  if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password)
-    throw new Error('Only HTTP addresses without credentials can be opened.');
-  await shell.openExternal(parsed.toString());
+  const address = browserAddress(url);
+  if (address === null) throw new Error('Only HTTP addresses without credentials can be opened.');
+  await shell.openExternal(address);
 }
 
 export function openExternally(url: string): void {

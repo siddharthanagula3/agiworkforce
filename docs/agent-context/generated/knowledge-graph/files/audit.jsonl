@@ -23,6 +23,7 @@
 {"path":"audit/doc-corrections/contradictions-register.md","unit":"audit","role":"doc","unparsed":"oversize"}
 {"path":"audit/flows/competitive-ecosystem-review-2026-09-29.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/flows/cross-product-flows.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/flows/desktop-code-tab-parity-2026-11-13.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/flows/retained-tauri-cloud-visual-defects.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/flows/soc2-readiness-2026-10-18.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/flows/tauri-desktop-completeness-2026-10-17.md","unit":"audit","role":"doc","unparsed":"notCode"}

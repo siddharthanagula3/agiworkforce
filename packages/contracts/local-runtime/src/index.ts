@@ -219,6 +219,62 @@ export type {
   PreviewConsoleReport,
 } from './apps';
 
+export {
+  BROWSER_PANE_ADDRESS_LIMIT,
+  BROWSER_PANE_COMMANDS,
+  BROWSER_PANE_HISTORY_ACTIONS,
+  BROWSER_PANE_TAB_LIMIT,
+  BROWSER_PANE_TITLE_LIMIT,
+  EMPTY_BROWSER_PANE_STATE,
+  browserPaneAddress,
+  isBrowserPaneHistoryAction,
+  readBrowserPaneBounds,
+} from './browser-pane';
+export type {
+  BrowserPaneBounds,
+  BrowserPaneCapture,
+  BrowserPaneCommand,
+  BrowserPaneHistoryAction,
+  BrowserPaneLayout,
+  BrowserPaneState,
+  BrowserPaneTab,
+} from './browser-pane';
+
+export {
+  SIMULATOR_APPEARANCES,
+  SIMULATOR_CAPTURE_KINDS,
+  SIMULATOR_CAPTURE_LIMIT,
+  SIMULATOR_CLIPBOARD_TEXT_LIMIT,
+  SIMULATOR_COMMANDS,
+  SIMULATOR_FRAME_INTERVAL_MS,
+  SIMULATOR_RECORDING_LIMIT_MS,
+  SIMULATOR_STATUS_BARS,
+  SIMULATOR_UNAVAILABLE_MESSAGES,
+  SIMULATOR_UNAVAILABLE_REASONS,
+  isSimulatorAppearance,
+  isSimulatorCaptureId,
+  isSimulatorCommand,
+  isSimulatorStatusBar,
+  isSimulatorUdid,
+  readSimulatorDevices,
+  simulatorRuntimeLabel,
+} from './simulator';
+export type {
+  SimulatorAppearance,
+  SimulatorCapture,
+  SimulatorCaptureImage,
+  SimulatorCaptureKind,
+  SimulatorClipboardResult,
+  SimulatorCommand,
+  SimulatorDevice,
+  SimulatorFrame,
+  SimulatorRecording,
+  SimulatorSettings,
+  SimulatorStatus,
+  SimulatorStatusBar,
+  SimulatorUnavailableReason,
+} from './simulator';
+
 export { CLIPBOARD_COMMANDS, MAX_CLIPBOARD_TEXT_LENGTH } from './clipboard';
 export type { ClipboardCommand, ClipboardImage, ClipboardSnapshot } from './clipboard';
 

@@ -105,6 +105,7 @@ export interface LocalChangesPanelProps {
   onClose: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSendToAgent?: (message: string) => void;
+  onOpenPreview?: (url: string) => void;
 }
 
 export function LocalChangesPanel({
@@ -117,6 +118,7 @@ export function LocalChangesPanel({
   onClose,
   onDirtyChange,
   onSendToAgent,
+  onOpenPreview,
 }: LocalChangesPanelProps) {
   const [changes, setChanges] = useState<WorkingTreeChanges | null>(null);
   const [repository, setRepository] = useState(true);
@@ -298,6 +300,7 @@ export function LocalChangesPanel({
           rootId={rootId}
           refreshKey={runningCommandsKey}
           {...(onSendToAgent ? { onSendToAgent } : {})}
+          {...(onOpenPreview ? { onOpenPreview } : {})}
         />
       </div>
       {dialog}

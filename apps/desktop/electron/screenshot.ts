@@ -11,6 +11,7 @@ import {
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { focusPageComposer } from './composerFocus';
 import { showsTrustedPage } from './permissionPolicy';
+import { readClipboardPng } from './runtime/clipboardService';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { pickSourceForDisplay } from './garnishCore';
 import { physicalCaptureSize } from './runtime/computerUseProtocol';
@@ -70,10 +71,10 @@ function isPasteDestination(win: BrowserWindow, destination: PasteDestination): 
   );
 }
 
-function clipboardImageFingerprint(): string | null {
-  const image = clipboard.readImage();
-  if (image.isEmpty()) return null;
-  return createHash('sha256').update(image.toBitmap()).digest('hex');
+async function clipboardImageFingerprint(): Promise<string | null> {
+  const png = await readClipboardPng();
+  if (!png || png.length === 0) return null;
+  return createHash('sha256').update(png).digest('hex');
 }
 
 export async function putCaptureOnClipboard(png: Buffer): Promise<string | null> {
@@ -88,16 +89,33 @@ export async function putCaptureOnClipboard(png: Buffer): Promise<string | null>
 // Every app can read the clipboard, so the capture stays there only as long
 // as the paste needs it; an empty or image clipboard must not keep the screen.
 // Anything the user copied since is theirs and is left alone.
-export function takeCaptureBackFromClipboard(
+export async function takeCaptureBackFromClipboard(
   priorText: string,
   captureFingerprint: string | null,
-): void {
-  if (captureFingerprint === null || clipboardImageFingerprint() !== captureFingerprint) return;
+): Promise<void> {
+  if (captureFingerprint === null) return;
+  if ((await clipboardImageFingerprint()) !== captureFingerprint) return;
   if (priorText !== '') {
-    clipboard.writeText(priorText);
+    await clipboard.writeText(priorText);
     return;
   }
   clipboard.clear();
+}
+
+async function takeCaptureBackAfterPaste(
+  priorText: string,
+  captureFingerprint: string | null,
+): Promise<void> {
+  await delay(CLIPBOARD_RESTORE_MS);
+  try {
+    await takeCaptureBackFromClipboard(priorText, captureFingerprint);
+  } catch (error) {
+    console.error('[screenshot] clipboard cleanup failed:', error);
+    notify(
+      'Screenshot still on your clipboard',
+      'The capture could not be removed from your clipboard. Copy something else to replace it.',
+    );
+  }
 }
 
 async function pasteIntoChat(
@@ -174,8 +192,7 @@ export async function captureWindowToChat(
     notify('Window capture failed', 'The window in front could not be captured.');
   } finally {
     if (captureOnClipboard && !leftForTheUserToPaste) {
-      await delay(CLIPBOARD_RESTORE_MS);
-      takeCaptureBackFromClipboard(priorText, captureFingerprint);
+      await takeCaptureBackAfterPaste(priorText, captureFingerprint);
     }
     capturing = false;
   }
@@ -227,8 +244,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     // In `finally` so a throw between the write and the paste cannot be the
     // one path that leaves the screen on the clipboard.
     if (captureOnClipboard && !leftForTheUserToPaste) {
-      await delay(CLIPBOARD_RESTORE_MS);
-      takeCaptureBackFromClipboard(priorText, captureFingerprint);
+      await takeCaptureBackAfterPaste(priorText, captureFingerprint);
     }
     if (mainWasVisible && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.show();

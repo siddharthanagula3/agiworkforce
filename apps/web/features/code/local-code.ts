@@ -136,7 +136,6 @@ export const LOCAL_CODE_COPY = {
       : `The page I opened in the preview, ${url}, logged these errors in its console:`,
   consoleErrorsDropped: (count: number): string =>
     count === 1 ? '1 more error was not kept.' : `${count} more errors were not kept.`,
-  previewFailed: 'The preview could not be opened.',
   keepRunning: 'Keep running',
   keepRunningHint:
     'Start it to keep running, such as a dev server, and stop it from the list above.',

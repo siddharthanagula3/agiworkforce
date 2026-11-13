@@ -31,7 +31,7 @@
     "test:e2e:dom": "playwright test",
     "test:e2e:dom:ui": "playwright test --ui",
     "test:smoke": "playwright test smoke.spec.ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && pnpm run typecheck:electron",
     "lint:fix": "eslint . --ext ts,tsx --fix --cache --cache-strategy content --cache-location .cache/eslint"
   },
   "dependencies": {

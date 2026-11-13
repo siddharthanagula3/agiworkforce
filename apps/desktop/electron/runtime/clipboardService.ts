@@ -6,7 +6,7 @@ import {
 
 const IMAGE_TYPE = 'image/png';
 
-async function readImagePng(): Promise<Buffer | null> {
+export async function readClipboardPng(): Promise<Buffer | null> {
   const items = await clipboard.read();
   const item = items.find((entry) => entry.types.includes(IMAGE_TYPE));
   if (!item) return null;
@@ -20,7 +20,7 @@ async function readImagePng(): Promise<Buffer | null> {
  * comes back.
  */
 export async function readClipboard(): Promise<ClipboardSnapshot> {
-  const [png, text] = await Promise.all([readImagePng(), clipboard.readText()]);
+  const [png, text] = await Promise.all([readClipboardPng(), clipboard.readText()]);
   const textTruncated = text.length > MAX_CLIPBOARD_TEXT_LENGTH;
 
   const snapshot: ClipboardSnapshot = { textTruncated };

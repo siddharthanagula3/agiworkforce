@@ -9,13 +9,11 @@ type ScanModule0 = typeof import('@/features/desktop-host');
 
 const readBackgroundActivity = vi.fn();
 const cancelLocalCommand = vi.fn();
-const openLocalPreview = vi.fn();
 const readPreviewConsoleErrors = vi.fn();
 
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   cancelLocalCommand,
-  openLocalPreview,
   readBackgroundActivity,
   readPreviewConsoleErrors,
 }));
@@ -147,28 +145,42 @@ describe('the commands running in a local folder', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('opens the address a dev server printed, and says so when it cannot', async () => {
+  it('hands the address a dev server printed to the browser pane', async () => {
     const user = userEvent.setup();
+    const onOpenPreview = vi.fn();
     readBackgroundActivity.mockResolvedValue(
       activity([
         { ...run('run-1', 'pnpm dev', 'root-1', 2), previewUrl: 'http://localhost:5173/' },
         run('run-2', 'pnpm test --watch', 'root-1', 2),
       ]),
     );
-    openLocalPreview
-      .mockResolvedValueOnce({ url: 'http://localhost:5173/' })
-      .mockRejectedValueOnce(new Error('Nothing answered at http://localhost:5173/.'));
-    render(<LocalRunningCommands rootId="root-1" refreshKey={0} now={() => NOW} />);
+    render(
+      <LocalRunningCommands
+        rootId="root-1"
+        refreshKey={0}
+        now={() => NOW}
+        onOpenPreview={onOpenPreview}
+      />,
+    );
 
     const open = await screen.findByRole('button', {
       name: 'Open a preview of http://localhost:5173/',
     });
     expect(screen.getAllByRole('button', { name: /Open a preview/u })).toHaveLength(1);
     await user.click(open);
-    expect(openLocalPreview).toHaveBeenCalledWith('http://localhost:5173/');
+    expect(onOpenPreview).toHaveBeenCalledWith('http://localhost:5173/');
+  });
 
-    await user.click(open);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Nothing answered');
+  it('offers no preview where there is no browser pane to show it in', async () => {
+    readBackgroundActivity.mockResolvedValue(
+      activity([
+        { ...run('run-1', 'pnpm dev', 'root-1', 2), previewUrl: 'http://localhost:5173/' },
+      ]),
+    );
+    render(<LocalRunningCommands rootId="root-1" refreshKey={0} now={() => NOW} />);
+
+    expect(await screen.findByText('pnpm dev')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open a preview/u })).not.toBeInTheDocument();
   });
 });
 

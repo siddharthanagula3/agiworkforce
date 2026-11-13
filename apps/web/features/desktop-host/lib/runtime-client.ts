@@ -92,7 +92,10 @@ export class DesktopHostUnavailable extends Error {
  * `DesktopRuntimeError` carrying the capability the caller would need, so a
  * permission denial reads differently from a missing file at the call site.
  */
-async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+export async function invokeDesktopRuntime<T>(
+  command: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
   const host = getHostBridge();
   if (!host) throw new DesktopHostUnavailable();
 
@@ -103,6 +106,8 @@ async function invoke<T>(command: string, args?: Record<string, unknown>): Promi
   }
   throw new DesktopRuntimeError(response.error);
 }
+
+const invoke = invokeDesktopRuntime;
 
 export function listWorkspaceRoots(): Promise<WorkspaceRoot[]> {
   return invoke<WorkspaceRoot[]>('workspace_list_roots');
@@ -322,10 +327,6 @@ export function startBackgroundLocalCommand(input: {
       ...(input.path ? { path: input.path } : {}),
     }),
   };
-}
-
-export function openLocalPreview(url: string): Promise<{ url: string }> {
-  return invoke<{ url: string }>('app_open_preview', { url });
 }
 
 export function readPreviewConsoleErrors(

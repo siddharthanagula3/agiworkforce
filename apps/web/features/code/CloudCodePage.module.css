@@ -502,6 +502,14 @@ svg + .menuRowLabel {
   min-height: 0;
 }
 
+.columnHidden {
+  display: none;
+}
+
+.bodyFloatHost {
+  position: relative;
+}
+
 .scroll {
   overflow-y: auto;
   flex: 1;

@@ -8,6 +8,7 @@ type ClipboardEntry = { kind: 'text'; value: string } | { kind: 'image' } | { ki
 const clipboardLog: ClipboardEntry[] = [];
 let clipboardText = '';
 let clipboardImage: string | null = null;
+let clipboardReadFails = false;
 let screenAvailable = true;
 
 const notifications: { title: string; body: string }[] = [];
@@ -15,12 +16,13 @@ const composerFocused = vi.fn(async () => true);
 
 vi.mock('electron', () => ({
   clipboard: {
-    readText: () => clipboardText,
-    readImage: () => ({
-      isEmpty: () => clipboardImage === null,
-      toBitmap: () => Buffer.from(clipboardImage ?? ''),
-    }),
-    writeText: (value: string) => {
+    readText: async () => clipboardText,
+    read: async () => {
+      if (clipboardReadFails) throw new Error('the clipboard could not be read');
+      const held = clipboardImage;
+      return held === null ? [] : [{ types: ['image/png'], getType: async () => new Blob([held]) }];
+    },
+    writeText: async (value: string) => {
       clipboardText = value;
       clipboardImage = null;
       clipboardLog.push({ kind: 'text', value });
@@ -107,6 +109,7 @@ beforeEach(() => {
   notifications.length = 0;
   clipboardText = '';
   clipboardImage = null;
+  clipboardReadFails = false;
   screenAvailable = true;
   composerFocused.mockResolvedValue(true);
   vi.useRealTimers();
@@ -157,6 +160,24 @@ describe('what the screenshot shortcut leaves behind', () => {
 
     expect(clipboardLog.map((entry) => entry.kind)).toEqual(['image', 'cleared']);
     expect(notifications.at(-1)?.title).toBe('Screenshot failed');
+  });
+});
+
+describe('when the capture cannot be taken back', () => {
+  it('tells the user it is still on the clipboard, and the shortcut keeps working', async () => {
+    const window = chatWindow({ url: CHAT_URL }, () => {
+      clipboardReadFails = true;
+    });
+
+    await captureToChat(window);
+
+    expect(clipboardLog.map((entry) => entry.kind)).toEqual(['image']);
+    expect(notifications.at(-1)?.title).toBe('Screenshot still on your clipboard');
+
+    clipboardReadFails = false;
+    await captureToChat(chatWindow());
+
+    expect(clipboardLog.map((entry) => entry.kind)).toEqual(['image', 'image', 'cleared']);
   });
 });
 

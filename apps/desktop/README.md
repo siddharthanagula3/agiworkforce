@@ -21,19 +21,19 @@ reachable from it.
 
 ## Commands
 
-| Task                      | Command                                                  |
-| ------------------------- | -------------------------------------------------------- |
-| Tauri dev                 | `pnpm --filter @agiworkforce/desktop dev`                |
-| Renderer only             | `pnpm --filter @agiworkforce/desktop dev:vite`           |
-| Tauri release build       | `pnpm --filter @agiworkforce/desktop build`              |
-| Tauri unsigned build      | `pnpm --filter @agiworkforce/desktop build:local`        |
-| Electron dev shell        | `pnpm --filter @agiworkforce/desktop dev:electron`       |
-| Electron installer        | `pnpm --filter @agiworkforce/desktop dist:electron`      |
-| Unit tests                | `pnpm --filter @agiworkforce/desktop test`               |
-| Typecheck (renderer)      | `pnpm --filter @agiworkforce/desktop typecheck`          |
-| Typecheck (Electron main) | `pnpm --filter @agiworkforce/desktop typecheck:electron` |
-| Rust tests                | `cargo test -p agiworkforce-desktop --lib`               |
-| WebdriverIO end to end    | `pnpm --filter @agiworkforce/desktop test:e2e`           |
+| Task                                     | Command                                                  |
+| ---------------------------------------- | -------------------------------------------------------- |
+| Tauri dev                                | `pnpm --filter @agiworkforce/desktop dev`                |
+| Renderer only                            | `pnpm --filter @agiworkforce/desktop dev:vite`           |
+| Tauri release build                      | `pnpm --filter @agiworkforce/desktop build`              |
+| Tauri unsigned build                     | `pnpm --filter @agiworkforce/desktop build:local`        |
+| Electron dev shell                       | `pnpm --filter @agiworkforce/desktop dev:electron`       |
+| Electron installer                       | `pnpm --filter @agiworkforce/desktop dist:electron`      |
+| Unit tests                               | `pnpm --filter @agiworkforce/desktop test`               |
+| Typecheck (renderer, then Electron main) | `pnpm --filter @agiworkforce/desktop typecheck`          |
+| Typecheck (Electron main only)           | `pnpm --filter @agiworkforce/desktop typecheck:electron` |
+| Rust tests                               | `cargo test -p agiworkforce-desktop --lib`               |
+| WebdriverIO end to end                   | `pnpm --filter @agiworkforce/desktop test:e2e`           |
 
 `docs/agent-context/commands.json` is the machine-readable inventory; read it
 rather than guessing a filter.

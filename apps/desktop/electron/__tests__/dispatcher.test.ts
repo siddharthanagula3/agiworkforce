@@ -2,10 +2,11 @@ import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   APPLICATION_COMMANDS,
   BROWSER_PAIRING_COMMANDS,
+  BROWSER_PANE_COMMANDS,
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
   BROWSER_SIGN_IN_STATE,
@@ -25,6 +26,8 @@ import {
   PERMISSION_COMMANDS,
   REMOTE_CONTROL_COMMANDS,
   SHELL_COMMANDS,
+  SIMULATOR_COMMANDS,
+  SIMULATOR_UNAVAILABLE_MESSAGES,
   SKILL_CAPTURE_COMMANDS,
   WINDOW_LAYOUT_COMMANDS,
   WORKSPACE_COMMANDS,
@@ -228,20 +231,103 @@ vi.mock('../runtime/applicationLaunch', () => ({
   launchApplication,
   listInstalledApplications,
 }));
-const openLocalPreview = vi.fn(async (url: string) => ({ url }));
-const readPreviewConsoleErrors = vi.fn((_clear: boolean) => ({
-  url: 'http://localhost:5173/',
-  errors: [{ message: 'boom', source: null, line: null, count: 1 }],
-  dropped: 0,
-}));
-vi.mock('../previewWindow', () => ({ openLocalPreview, readPreviewConsoleErrors }));
+const PANE_STATE = { tabs: [], activeTabId: null, notice: null };
+const browserPane = vi.hoisted(() => {
+  class BrowserPaneRefused extends Error {
+    readonly reason: string;
+    constructor(reason: string, message: string) {
+      super(message);
+      this.reason = reason;
+    }
+  }
+  const state = { tabs: [], activeTabId: null, notice: null };
+  return {
+    BrowserPaneRefused,
+    browserPaneState: vi.fn((..._args: unknown[]) => state),
+    captureBrowserPane: vi.fn(async (..._args: unknown[]) => ({
+      dataUrl: 'data:image/png;base64,AAAA',
+      width: 640,
+      height: 480,
+      url: 'https://example.com/',
+    })),
+    closeBrowserPane: vi.fn((..._args: unknown[]) => true),
+    closeBrowserPaneTab: vi.fn((..._args: unknown[]) => state),
+    layoutBrowserPane: vi.fn((..._args: unknown[]) => true),
+    moveBrowserPaneHistory: vi.fn((..._args: unknown[]) => state),
+    navigateBrowserPane: vi.fn((..._args: unknown[]) => state),
+    openBrowserPaneTab: vi.fn((..._args: unknown[]) => state),
+    readBrowserPaneConsoleErrors: vi.fn((_clear: boolean, _origin?: string) => ({
+      url: 'http://localhost:5173/',
+      errors: [{ message: 'boom', source: null, line: null, count: 1 }],
+      dropped: 0,
+    })),
+    selectBrowserPaneTab: vi.fn((..._args: unknown[]) => state),
+  };
+});
+const { readBrowserPaneConsoleErrors } = browserPane;
+vi.mock('../browserPane', () => browserPane);
+
+const SIMULATOR_STATUS = {
+  available: true,
+  unavailableReason: null,
+  devices: [],
+  recording: null,
+  captures: [],
+};
+const simulator = vi.hoisted(() => {
+  class SimulatorRefused extends Error {
+    readonly reason: string;
+    constructor(reason: string, message: string) {
+      super(message);
+      this.reason = reason;
+    }
+  }
+  const status = {
+    available: true,
+    unavailableReason: null,
+    devices: [],
+    recording: null,
+    captures: [],
+  };
+  const settings = { appearance: 'light', statusBar: 'live' };
+  return {
+    SimulatorRefused,
+    bootSimulator: vi.fn(async (..._args: unknown[]) => status),
+    copySimulatorClipboard: vi.fn(async (..._args: unknown[]) => ({ characters: 3 })),
+    deleteSimulatorCapture: vi.fn(async (..._args: unknown[]) => status),
+    pressSimulatorHome: vi.fn(async (..._args: unknown[]) => true),
+    readSimulatorCapture: vi.fn(async (..._args: unknown[]) => ({
+      dataUrl: 'data:image/png;base64,AAAA',
+      name: 'x.png',
+    })),
+    revealSimulatorCapture: vi.fn(async (..._args: unknown[]) => true),
+    sendClipboardToSimulator: vi.fn(async (..._args: unknown[]) => ({ characters: 3 })),
+    setSimulatorAppearance: vi.fn(async (..._args: unknown[]) => settings),
+    setSimulatorStatusBar: vi.fn(async (..._args: unknown[]) => settings),
+    shutdownSimulator: vi.fn(async (..._args: unknown[]) => status),
+    simulatorFrame: vi.fn(async (..._args: unknown[]) => ({
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      takenAtMs: 1,
+    })),
+    simulatorSettings: vi.fn(async (..._args: unknown[]) => settings),
+    simulatorStatus: vi.fn(async (..._args: unknown[]) => status),
+    simulatorSupported: vi.fn(() => true),
+    startSimulatorRecording: vi.fn(async (..._args: unknown[]) => status),
+    stopSimulatorRecording: vi.fn(async (..._args: unknown[]) => status),
+    takeSimulatorScreenshot: vi.fn(async (..._args: unknown[]) => ({ id: 'capture' })),
+  };
+});
+vi.mock('../runtime/simulatorService', () => simulator);
 vi.mock('../runtime/appsService', () => ({
   editorFileUrl: vi.fn(),
   openInEditor,
   openWithDefaultApplication,
   revealInFileManager,
 }));
-vi.mock('../runtime/clipboardService', () => ({ readClipboard }));
+vi.mock('../runtime/clipboardService', () => ({
+  readClipboard,
+  readClipboardPng: vi.fn(async () => null),
+}));
 vi.mock('../runtime/filesystemService', () => ({
   OPEN_FILE_FOR_CHECKED_READ: 0,
   openChecked: vi.fn(),
@@ -445,6 +531,7 @@ const window = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  simulator.simulatorSupported.mockReturnValue(true);
   resetApprovalConfirmations();
   resetNativeQuestions();
   resetComputerRuns();
@@ -2430,24 +2517,6 @@ describe('the screen steps a user can stop', () => {
   });
 });
 
-describe('previewing what a session serves', () => {
-  it('opens a page on this computer, asking nothing', async () => {
-    const response = await dispatch(window, 'app_open_preview', { url: 'http://0.0.0.0:5173/' });
-
-    expect(response).toMatchObject({ ok: true, value: { url: 'http://localhost:5173/' } });
-    expect(openLocalPreview).toHaveBeenCalledWith('http://localhost:5173/');
-    expect(requestPermission).not.toHaveBeenCalled();
-  });
-
-  it('opens nothing that is not served on this computer', async () => {
-    for (const url of ['https://agiworkforce.com', 'file:///etc/hosts', 'http://10.0.0.2:3000']) {
-      const response = await dispatch(window, 'app_open_preview', { url });
-      expect(response, url).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
-    }
-    expect(openLocalPreview).not.toHaveBeenCalled();
-  });
-});
-
 describe('reading what the preview page logged', () => {
   it('reads the errors without clearing them unless asked, and asks nothing', async () => {
     const kept = await dispatch(window, 'app_preview_errors', {});
@@ -2455,29 +2524,471 @@ describe('reading what the preview page logged', () => {
       ok: true,
       value: { url: 'http://localhost:5173/', errors: [{ message: 'boom' }], dropped: 0 },
     });
-    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(false);
+    expect(readBrowserPaneConsoleErrors).toHaveBeenLastCalledWith(false);
 
     await dispatch(window, 'app_preview_errors', { clear: true });
-    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(true);
+    expect(readBrowserPaneConsoleErrors).toHaveBeenLastCalledWith(true);
     expect(requestPermission).not.toHaveBeenCalled();
   });
 
   it('treats anything but true as not clearing', async () => {
     await dispatch(window, 'app_preview_errors', { clear: 'yes' });
-    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(false);
+    expect(readBrowserPaneConsoleErrors).toHaveBeenLastCalledWith(false);
   });
 
   it('reads only the server it is asked about, and refuses an address that is not local', async () => {
     await dispatch(window, 'app_preview_errors', { clear: true, url: 'http://0.0.0.0:5173/a' });
-    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(true, 'http://localhost:5173');
+    expect(readBrowserPaneConsoleErrors).toHaveBeenLastCalledWith(true, 'http://localhost:5173');
 
-    readPreviewConsoleErrors.mockClear();
+    readBrowserPaneConsoleErrors.mockClear();
     const refused = await dispatch(window, 'app_preview_errors', {
       clear: true,
       url: 'https://example.com/',
     });
-    expect(refused).toMatchObject({ ok: false });
-    expect(readPreviewConsoleErrors).not.toHaveBeenCalled();
+    expect(refused).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    expect(readBrowserPaneConsoleErrors).not.toHaveBeenCalled();
+  });
+
+  it('refuses a url that is not a string or not served on this computer', async () => {
+    for (const url of [42, null, '', 'file:///etc/hosts', 'http://192.168.1.4:3000/']) {
+      const refused = await dispatch(window, 'app_preview_errors', { url });
+      expect(refused, String(url)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid-arguments' },
+      });
+    }
+    expect(readBrowserPaneConsoleErrors).not.toHaveBeenCalled();
+  });
+
+  it('no longer has a preview window of its own to open', async () => {
+    expect(commandGates('app_open_preview')).toEqual([]);
+
+    const response = await dispatch(window, 'app_open_preview', { url: 'http://localhost:5173/' });
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'unknown-command' } });
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+});
+
+const PANE_ID = 'code';
+const PANE_BOUNDS = { x: 10, y: 20, width: 300, height: 200 };
+
+describe('the browser pane commands', () => {
+  const CALLS: Array<[string, Record<string, unknown>, Mock, unknown[]]> = [
+    ['browser_pane_state', {}, browserPane.browserPaneState, [PANE_ID]],
+    [
+      'browser_pane_layout',
+      { bounds: { x: 10.4, y: 19.6, width: 300.2, height: 199.5 }, visible: true },
+      browserPane.layoutBrowserPane,
+      [PANE_ID, PANE_BOUNDS, true],
+    ],
+    ['browser_pane_open_tab', {}, browserPane.openBrowserPaneTab, [PANE_ID, undefined]],
+    [
+      'browser_pane_open_tab',
+      { url: 'localhost:3000' },
+      browserPane.openBrowserPaneTab,
+      [PANE_ID, 'localhost:3000'],
+    ],
+    [
+      'browser_pane_close_tab',
+      { tabId: 'tab-1' },
+      browserPane.closeBrowserPaneTab,
+      [PANE_ID, 'tab-1'],
+    ],
+    [
+      'browser_pane_select_tab',
+      { tabId: 'tab-1' },
+      browserPane.selectBrowserPaneTab,
+      [PANE_ID, 'tab-1'],
+    ],
+    [
+      'browser_pane_navigate',
+      { url: 'https://example.com/' },
+      browserPane.navigateBrowserPane,
+      [PANE_ID, 'https://example.com/'],
+    ],
+    [
+      'browser_pane_history',
+      { action: 'reload' },
+      browserPane.moveBrowserPaneHistory,
+      [PANE_ID, 'reload'],
+    ],
+    ['browser_pane_capture', {}, browserPane.captureBrowserPane, [PANE_ID]],
+    ['browser_pane_close', {}, browserPane.closeBrowserPane, [PANE_ID]],
+  ];
+
+  it('are each covered here', () => {
+    expect(new Set(CALLS.map(([command]) => command))).toEqual(new Set(BROWSER_PANE_COMMANDS));
+  });
+
+  it.each(CALLS)(
+    '%s runs ungated, for the window that asked, with the arguments it checked',
+    async (command, args, service, expected) => {
+      getPermissionState.mockReturnValue('denied');
+
+      const response = await dispatch(window, command, { paneId: PANE_ID, ...args });
+
+      expect(response).toMatchObject({ ok: true });
+      expect(service).toHaveBeenCalledOnce();
+      expect(service).toHaveBeenCalledWith(window, ...expected);
+      expect(commandGates(command)).toEqual(['none']);
+      expect(requestPermission).not.toHaveBeenCalled();
+      expect(consumeSingleUse).not.toHaveBeenCalled();
+    },
+  );
+
+  it('hands back what the service answered', async () => {
+    expect(await dispatch(window, 'browser_pane_state', { paneId: PANE_ID })).toEqual({
+      ok: true,
+      value: PANE_STATE,
+    });
+    expect(await dispatch(window, 'browser_pane_capture', { paneId: PANE_ID })).toMatchObject({
+      ok: true,
+      value: { dataUrl: 'data:image/png;base64,AAAA', width: 640, height: 480 },
+    });
+    expect(await dispatch(window, 'browser_pane_close', { paneId: PANE_ID })).toEqual({
+      ok: true,
+      value: true,
+    });
+  });
+
+  it('refuse a pane identifier that is missing or not a non-empty string, before any service', async () => {
+    for (const [command, args] of CALLS) {
+      for (const paneId of [undefined, '', 7, null, ['code']]) {
+        const response = await dispatch(window, command, { ...args, paneId });
+        expect(response, `${command} ${String(paneId)}`).toMatchObject({
+          ok: false,
+          error: { code: 'invalid-arguments' },
+        });
+      }
+    }
+    for (const [, , service] of CALLS) expect(service).not.toHaveBeenCalled();
+  });
+
+  it('refuse bounds that are not four numbers none below zero', async () => {
+    for (const bounds of [
+      undefined,
+      null,
+      'x',
+      [10, 20, 300, 200],
+      { x: 10, y: 20, width: 300 },
+      { x: -1, y: 20, width: 300, height: 200 },
+      { x: 10, y: 20, width: 300, height: Number.NaN },
+      { x: 10, y: 20, width: '300', height: 200 },
+      { x: 10, y: 20, width: 300, height: 1e9 },
+    ]) {
+      const response = await dispatch(window, 'browser_pane_layout', {
+        paneId: PANE_ID,
+        bounds,
+        visible: true,
+      });
+      expect(response, JSON.stringify(bounds)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid-arguments' },
+      });
+    }
+    expect(browserPane.layoutBrowserPane).not.toHaveBeenCalled();
+  });
+
+  it('refuse a visible that is not true or false', async () => {
+    for (const visible of [undefined, 'true', 1, null]) {
+      const response = await dispatch(window, 'browser_pane_layout', {
+        paneId: PANE_ID,
+        bounds: PANE_BOUNDS,
+        visible,
+      });
+      expect(response, String(visible)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid-arguments' },
+      });
+    }
+    expect(browserPane.layoutBrowserPane).not.toHaveBeenCalled();
+  });
+
+  it('refuse a history action that is not back, forward, reload or stop', async () => {
+    for (const action of [undefined, '', 'Back', 'home', 'constructor', 3, null]) {
+      const response = await dispatch(window, 'browser_pane_history', { paneId: PANE_ID, action });
+      expect(response, String(action)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid-arguments' },
+      });
+    }
+    expect(browserPane.moveBrowserPaneHistory).not.toHaveBeenCalled();
+    for (const action of ['back', 'forward', 'reload', 'stop']) {
+      expect(
+        await dispatch(window, 'browser_pane_history', { paneId: PANE_ID, action }),
+        action,
+      ).toMatchObject({ ok: true });
+    }
+  });
+
+  it('refuse a tab, an address or a url that is missing or not a string', async () => {
+    for (const command of ['browser_pane_close_tab', 'browser_pane_select_tab']) {
+      for (const tabId of [undefined, '', 5]) {
+        expect(await dispatch(window, command, { paneId: PANE_ID, tabId }), command).toMatchObject({
+          ok: false,
+          error: { code: 'invalid-arguments' },
+        });
+      }
+    }
+    for (const url of [undefined, '', 5, null]) {
+      expect(
+        await dispatch(window, 'browser_pane_navigate', { paneId: PANE_ID, url }),
+      ).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    }
+    for (const url of ['', 5, null]) {
+      expect(
+        await dispatch(window, 'browser_pane_open_tab', { paneId: PANE_ID, url }),
+      ).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    }
+    expect(browserPane.closeBrowserPaneTab).not.toHaveBeenCalled();
+    expect(browserPane.selectBrowserPaneTab).not.toHaveBeenCalled();
+    expect(browserPane.navigateBrowserPane).not.toHaveBeenCalled();
+    expect(browserPane.openBrowserPaneTab).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['invalid', 'invalid-arguments'],
+    ['not-found', 'not-found'],
+    ['limit', 'conflict'],
+    ['unavailable', 'io-error'],
+  ])('answers a %s refusal with the code %s and the message of the pane', async (reason, code) => {
+    browserPane.navigateBrowserPane.mockImplementationOnce(() => {
+      throw new browserPane.BrowserPaneRefused(reason, 'The pane said no.');
+    });
+
+    const response = await dispatch(window, 'browser_pane_navigate', {
+      paneId: PANE_ID,
+      url: 'https://example.com/',
+    });
+
+    expect(response).toEqual({ ok: false, error: { code, message: 'The pane said no.' } });
+  });
+
+  it('answers a refusal of a capture, which is asynchronous, the same way', async () => {
+    browserPane.captureBrowserPane.mockRejectedValueOnce(
+      new browserPane.BrowserPaneRefused('not-found', 'There is no page open to capture.'),
+    );
+
+    expect(await dispatch(window, 'browser_pane_capture', { paneId: PANE_ID })).toMatchObject({
+      ok: false,
+      error: { code: 'not-found' },
+    });
+  });
+});
+
+const PHONE = 'A1B2C3D4-0000-4000-8000-000000000001';
+const CAPTURE_ID = '0b9e6c1a-2f4d-4a3b-9c8d-1e2f3a4b5c6d';
+
+describe('the iOS Simulator commands', () => {
+  const GATED: Array<[string, Record<string, unknown>, Mock, unknown[]]> = [
+    ['simulator_status', {}, simulator.simulatorStatus, []],
+    ['simulator_boot', { udid: PHONE }, simulator.bootSimulator, [PHONE]],
+    ['simulator_shutdown', { udid: PHONE }, simulator.shutdownSimulator, [PHONE]],
+    ['simulator_frame', { udid: PHONE }, simulator.simulatorFrame, [PHONE]],
+    ['simulator_settings', { udid: PHONE }, simulator.simulatorSettings, [PHONE]],
+    [
+      'simulator_set_appearance',
+      { udid: PHONE, appearance: 'dark' },
+      simulator.setSimulatorAppearance,
+      [PHONE, 'dark'],
+    ],
+    [
+      'simulator_set_status_bar',
+      { udid: PHONE, statusBar: 'clean' },
+      simulator.setSimulatorStatusBar,
+      [PHONE, 'clean'],
+    ],
+    ['simulator_home', { udid: PHONE }, simulator.pressSimulatorHome, [PHONE]],
+    ['simulator_screenshot', { udid: PHONE }, simulator.takeSimulatorScreenshot, [PHONE]],
+    ['simulator_record_start', { udid: PHONE }, simulator.startSimulatorRecording, [PHONE]],
+    ['simulator_clipboard_get', { udid: PHONE }, simulator.copySimulatorClipboard, [PHONE]],
+    ['simulator_clipboard_send', { udid: PHONE }, simulator.sendClipboardToSimulator, [PHONE]],
+    ['simulator_capture_read', { id: CAPTURE_ID }, simulator.readSimulatorCapture, [CAPTURE_ID]],
+    [
+      'simulator_capture_reveal',
+      { id: CAPTURE_ID },
+      simulator.revealSimulatorCapture,
+      [CAPTURE_ID],
+    ],
+    [
+      'simulator_capture_delete',
+      { id: CAPTURE_ID },
+      simulator.deleteSimulatorCapture,
+      [CAPTURE_ID],
+    ],
+  ];
+  const STOP: [string, Record<string, unknown>, Mock, unknown[]] = [
+    'simulator_record_stop',
+    {},
+    simulator.stopSimulatorRecording,
+    [],
+  ];
+
+  it('are each covered here', () => {
+    expect(new Set([...GATED, STOP].map(([command]) => command))).toEqual(
+      new Set(SIMULATOR_COMMANDS),
+    );
+  });
+
+  it.each(GATED)(
+    '%s asks for simulator.control, and stops on a refusal',
+    async (command, args, service) => {
+      getPermissionState.mockReturnValue('prompt');
+      requestPermission.mockResolvedValue('denied');
+
+      const response = await dispatch(window, command, args);
+
+      expect(requestPermission).toHaveBeenCalledWith(
+        window,
+        'simulator.control',
+        { kind: 'global' },
+        expect.any(String),
+      );
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: 'permission-denied', capability: 'simulator.control' },
+      });
+      expect(service).not.toHaveBeenCalled();
+      expect(commandGates(command)).toEqual(['session']);
+    },
+  );
+
+  it.each(GATED)('%s does not ask again once refused for good', async (command, args, service) => {
+    getPermissionState.mockReturnValue('denied');
+
+    const response = await dispatch(window, command, args);
+
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
+    expect(service).not.toHaveBeenCalled();
+  });
+
+  it.each(GATED)(
+    '%s runs once allowed, with the arguments it checked',
+    async (command, args, service, expected) => {
+      getPermissionState.mockReturnValue('prompt');
+      requestPermission.mockResolvedValue('granted');
+
+      const response = await dispatch(window, command, args);
+
+      expect(response).toMatchObject({ ok: true });
+      expect(service).toHaveBeenCalledOnce();
+      expect(service).toHaveBeenCalledWith(...expected);
+      expect(consumeSingleUse).toHaveBeenCalledWith('simulator.control', { kind: 'global' });
+    },
+  );
+
+  it('stops a recording without asking for anything', async () => {
+    getPermissionState.mockReturnValue('denied');
+
+    const response = await dispatch(window, STOP[0], {});
+
+    expect(response).toEqual({ ok: true, value: SIMULATOR_STATUS });
+    expect(simulator.stopSimulatorRecording).toHaveBeenCalledOnce();
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(commandGates(STOP[0])).toEqual(['none']);
+  });
+
+  it('refuses an appearance or status bar that is not one of the listed values', async () => {
+    for (const appearance of [undefined, 'auto', 'Dark', 1]) {
+      expect(
+        await dispatch(window, 'simulator_set_appearance', { udid: PHONE, appearance }),
+        String(appearance),
+      ).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    }
+    for (const statusBar of [undefined, 'override', 'Clean', 0]) {
+      expect(
+        await dispatch(window, 'simulator_set_status_bar', { udid: PHONE, statusBar }),
+        String(statusBar),
+      ).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    }
+    expect(simulator.setSimulatorAppearance).not.toHaveBeenCalled();
+    expect(simulator.setSimulatorStatusBar).not.toHaveBeenCalled();
+  });
+
+  it.each([...GATED, STOP])(
+    '%s answers unsupported-platform, and asks nothing, off macOS',
+    async (command, args, service) => {
+      simulator.simulatorSupported.mockReturnValue(false);
+      getPermissionState.mockReturnValue('prompt');
+
+      const response = await dispatch(window, command, args);
+
+      expect(response).toEqual({
+        ok: false,
+        error: {
+          code: 'unsupported-platform',
+          message: SIMULATOR_UNAVAILABLE_MESSAGES['unsupported-platform'],
+        },
+      });
+      expect(requestPermission).not.toHaveBeenCalled();
+      expect(getPermissionState).not.toHaveBeenCalled();
+      expect(service).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['unsupported', 'unsupported-platform'],
+    ['unavailable', 'runtime-unavailable'],
+    ['busy', 'conflict'],
+    ['not-found', 'not-found'],
+    ['invalid', 'invalid-arguments'],
+    ['failed', 'io-error'],
+  ])(
+    'answers a %s refusal with the code %s and the message of the service',
+    async (reason, code) => {
+      simulator.bootSimulator.mockRejectedValueOnce(
+        new simulator.SimulatorRefused(reason, 'The simulator said no.'),
+      );
+
+      const response = await dispatch(window, 'simulator_boot', { udid: PHONE });
+
+      expect(response).toEqual({ ok: false, error: { code, message: 'The simulator said no.' } });
+    },
+  );
+
+  it('answers a synchronous refusal of a frame the same way', async () => {
+    simulator.simulatorFrame.mockImplementationOnce(() => {
+      throw new simulator.SimulatorRefused('invalid', '"udid" must be a simulator identifier.');
+    });
+
+    expect(await dispatch(window, 'simulator_frame', { udid: 'x' })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-arguments' },
+    });
+  });
+
+  it('answers a failure it does not know with a generic message, never the cause', async () => {
+    simulator.simulatorStatus.mockRejectedValueOnce(new Error('/Users/me/secret path leaked'));
+
+    const response = await dispatch(window, 'simulator_status', {});
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'io-error' } });
+    expect(JSON.stringify(response)).not.toContain('secret');
+  });
+
+  it('stops a recording when simulator.control is revoked, before the grant goes', async () => {
+    const response = await dispatch(window, 'permission_revoke', {
+      capability: 'simulator.control',
+      scope: { kind: 'global' },
+    });
+
+    expect(response).toEqual({ ok: true, value: REVIEW });
+    expect(simulator.stopSimulatorRecording).toHaveBeenCalledOnce();
+    expect(revokePermission).toHaveBeenCalledWith('simulator.control', { kind: 'global' });
+    expect(simulator.stopSimulatorRecording.mock.invocationCallOrder[0]).toBeLessThan(
+      revokePermission.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('leaves a recording alone when another permission is revoked', async () => {
+    await dispatch(window, 'permission_revoke', {
+      capability: 'computer.use',
+      scope: { kind: 'global' },
+    });
+
+    expect(simulator.stopSimulatorRecording).not.toHaveBeenCalled();
   });
 });
 
@@ -3342,6 +3853,8 @@ describe('the commands the contract lists', () => {
     ...SHELL_COMMANDS,
     ...SKILL_CAPTURE_COMMANDS,
     ...APPLICATION_COMMANDS,
+    ...BROWSER_PANE_COMMANDS,
+    ...SIMULATOR_COMMANDS,
     ...CLIPBOARD_COMMANDS,
     ...BROWSER_PAIRING_COMMANDS,
     ...REMOTE_CONTROL_COMMANDS,

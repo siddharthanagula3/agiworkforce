@@ -1,0 +1,199 @@
+.annotator {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--chat-surface-base);
+}
+
+.stage {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.sheet {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid var(--chat-border);
+  border-radius: var(--chat-radius-md);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.canvas[data-tool='text'] {
+  cursor: text;
+}
+
+.textEntry {
+  position: absolute;
+  min-width: 140px;
+  padding: 4px 8px;
+  border: 1px solid var(--chat-border-strong);
+  border-radius: var(--chat-radius-sm);
+  background: var(--chat-surface-elevated);
+  color: var(--chat-text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.textEntry:focus-visible {
+  outline: 2px solid var(--chat-focus-ring);
+  outline-offset: 1px;
+}
+
+.message {
+  max-width: 360px;
+  color: var(--chat-text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--chat-border-subtle);
+  background: var(--chat-surface-elevated);
+}
+
+.tool,
+.toolMore {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--chat-radius-md);
+  background: transparent;
+  color: var(--chat-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.toolMore {
+  min-width: 20px;
+}
+
+.toolWide {
+  padding: 0 10px;
+}
+
+.tool:hover:not(:disabled),
+.toolMore:hover {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+.tool:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.tool:focus-visible,
+.toolMore:focus-visible,
+.swatch:focus-visible,
+.add:focus-visible {
+  outline: 2px solid var(--chat-focus-ring);
+  outline-offset: 1px;
+}
+
+.toolGroup {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--chat-radius-md);
+}
+
+.toolActive {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--chat-border);
+}
+
+.swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+}
+
+.swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--chat-border-strong);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.swatchActive {
+  outline: 2px solid var(--chat-text-primary);
+  outline-offset: 2px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--chat-radius-md);
+  background: var(--chat-text-primary);
+  color: var(--chat-surface-base);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.add:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+@media (pointer: coarse) {
+  .tool,
+  .toolMore,
+  .add {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .swatch {
+    width: 28px;
+    height: 28px;
+  }
+}
