@@ -1,7 +1,27 @@
 use super::*;
 
+pub(crate) struct HeldFileLock {
+    file: File,
+}
+
+impl Drop for HeldFileLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
+}
+
+impl HeldFileLock {
+    pub(super) fn new(file: File) -> Self {
+        Self { file }
+    }
+
+    pub(super) fn file(&self) -> &File {
+        &self.file
+    }
+}
+
 impl DirectoryAuthority {
-    pub(crate) fn coordination_lock(&self, name: &Path) -> Result<File> {
+    pub(crate) fn coordination_lock(&self, name: &Path) -> Result<HeldFileLock> {
         self.identity()?;
         let relative = normal_relative(name)?;
         anyhow::ensure!(
@@ -24,8 +44,9 @@ impl DirectoryAuthority {
         validate_regular(&Metadata::from_file(&file)?, 0)?;
         file.try_lock()
             .context("Another settings operation is in progress; retry after it finishes")?;
-        validate_named_file(&self.file, &relative, &Metadata::from_file(&file)?)?;
-        Ok(file)
+        let lock = HeldFileLock::new(file);
+        validate_named_file(&self.file, &relative, &Metadata::from_file(lock.file())?)?;
+        Ok(lock)
     }
 }
 
@@ -49,5 +70,23 @@ impl WorkspaceFileAuthority {
         }
         self.identity()?;
         Ok(Some(directory))
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_released_coordination_lock_is_free_while_a_spawned_child_still_shares_its_description() {
+        let base = tempfile::tempdir().unwrap();
+        let directory = DirectoryAuthority::open(base.path()).unwrap();
+        let held = directory.coordination_lock(Path::new("lock")).unwrap();
+        let inherited = held.file().try_clone().unwrap();
+        assert!(directory.coordination_lock(Path::new("lock")).is_err());
+        drop(held);
+        let reacquired = directory.coordination_lock(Path::new("lock")).unwrap();
+        drop(inherited);
+        drop(reacquired);
     }
 }

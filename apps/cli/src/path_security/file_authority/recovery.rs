@@ -42,7 +42,7 @@ impl DirectoryAuthority {
         }
     }
 
-    pub(crate) fn recovery_lock(&self) -> Result<File> {
+    pub(crate) fn recovery_lock(&self) -> Result<super::instructions::HeldFileLock> {
         #[cfg(not(unix))]
         anyhow::bail!("Private recovery storage is unavailable on this platform");
         #[cfg(unix)]
@@ -67,10 +67,32 @@ impl DirectoryAuthority {
             );
             file.try_lock()
                 .context("Recovery storage is busy in another window; retry after it finishes")?;
-            validate_named_file(&self.file, name, &Metadata::from_file(&file)?)?;
-            file.sync_all()?;
+            let lock = super::instructions::HeldFileLock::new(file);
+            validate_named_file(&self.file, name, &Metadata::from_file(lock.file())?)?;
+            lock.file().sync_all()?;
             self.sync_directory()?;
-            Ok(file)
+            Ok(lock)
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_released_lock_is_free_while_a_spawned_child_still_shares_its_description() {
+        let base = tempfile::tempdir().unwrap();
+        let directory = DirectoryAuthority::open(base.path())
+            .unwrap()
+            .private_child(Path::new("recovery"))
+            .unwrap();
+        let held = directory.recovery_lock().unwrap();
+        let inherited = held.file().try_clone().unwrap();
+        assert!(directory.recovery_lock().is_err());
+        drop(held);
+        let reacquired = directory.recovery_lock().unwrap();
+        drop(inherited);
+        drop(reacquired);
     }
 }
