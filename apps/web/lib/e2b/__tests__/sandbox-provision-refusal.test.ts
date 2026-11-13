@@ -55,16 +55,22 @@ vi.mock('../templates', async (importOriginal) => ({
   templateComputeShape: async () => ({ vcpuCount: null, memoryGib: null }),
 }));
 
-vi.mock('@/lib/services/effective-subscription-service', () => ({
+vi.mock('@/lib/services/effective-subscription-service', async () => ({
   EntitlementBundle: vi.fn(),
   EntitlementResolutionOptions: vi.fn(),
   EntitlementSource: vi.fn(),
+  UsageAllowanceSubject: vi.fn(),
   ensureSeatMemberCreditAccount: vi.fn(),
   isSeatBearingBillingPlan: vi.fn(),
   provisionSeatMemberCreditAccounts: vi.fn(),
   resolveEntitledPlanTier: vi.fn(),
-  resolveEntitlementBundle: vi.fn(),
+  resolveEntitlementBundle: async () => ({ entitled: true, subscription: { plan_tier: 'pro' } }),
   resolveEffectiveSubscription: async () => ({ plan_tier: 'pro' }),
+  usageAllowanceSubject: (
+    await vi.importActual<typeof import('@/lib/services/entitlement-resolution')>(
+      '@/lib/services/entitlement-resolution',
+    )
+  ).usageAllowanceSubject,
 }));
 
 const withUserSandboxLock = vi.fn(async (_scope: unknown, critical: () => Promise<unknown>) => ({
