@@ -1224,3 +1224,66 @@ policy and its audit trail, which is a security decision.
    in the two clients.
    **Impact** NOT BLOCKING for any release.
    **Status** FOUNDER DECISION REQUIRED
+
+## [Release 2026-11-13] What the branch merges did not carry over, and the calls they left open
+
+**Why founder assistance is required**
+On 2026-11-13 the owner had every web-related branch merged into main for a production web release.
+Several forked in October, about 1,300 commits before main's tip. In the web app and the shared
+packages a branch's lines were kept unless main had changed the same lines, where main's lines won.
+Git now lists those branches as merged, so the work below is on no open branch list, yet it is not
+on main. Each line names the branch and commit that still holds it.
+
+**Not carried over**
+
+- Everything the October branches changed in the Chrome extension, the Code extension, the CLI, the
+  Rust crates and the mobile app (`test/extensions-integration`, `feat/intelligent-ui`,
+  `feat/desktop-parity`, `feat/one-product-account-billing`, `feat/prompt-v11-2026-10-15`,
+  `codex/fix-main-ci-security-final-20261108`). Main rewrote and audited those trees after the
+  branches forked, so they stay exactly as main had them.
+- `codex/capability-resource-sync` `58b99e0485`, retain imported connector requirements: every
+  line collided with newer code on main.
+- `feat/prompt-v11-2026-10-15` chat system prompt version 11 (`323f808f93`, `64c11a4f83`,
+  `eb79c093bc`): main has its own published versions 11 to 15. Releasing the branch prompt needs
+  a prompt release under a new number.
+- `feat/one-product-account-billing` `f57bc4dfb3`, refuse a store purchase while a payment dispute
+  is open, and `bd2f9112b8`, store refund sizing (main's `e2f0bd2c47` replaced it).
+- `feat/intelligent-ui` `a769b7a1ab`: charging a step that failed, dropped or was stopped, and
+  per-turn platform notices placed inside the user message (a user or a document could imitate
+  them, so they are back in the system role).
+- `feat/intelligent-ui` `0af2a22ebe`: the CLI file-removal guard and trash module.
+- `test/extensions-integration` `ac7d0098e9`, connector tool schemas chosen regardless of the
+  turn, and `852340984d`, cross-origin access for every origin the identity provider authorizes.
+- `test/extensions-integration`: the MCP Logs button (the CLI never advertises it; a dead
+  `developer_mcp_logs` command remains in the desktop dispatcher and shared contract), duplicate
+  find and chat-navigation listeners, the withheld-folder link notice on the Code page, and
+  opening the free-model section on paid plans.
+- `codex/fix-main-ci-security-final-20261108` `f9058e35e8`: its rewrites of four security guards
+  and the looser database-isolation rule. Main's guards stand.
+
+**Exact action** Decide each of these; none blocks the web release.
+
+1. Store purchases during a payment dispute: re-apply `f57bc4dfb3` before in-app purchases launch,
+   or accept that only the web checkout refuses.
+2. Whether a failed, dropped or stopped model step is ever charged. If yes, it has to apply to
+   every provider, not only Anthropic. Today it is not charged, except main's existing estimate
+   when visible text had already streamed.
+3. Prompt caching is on by default for first-party apps since this release
+   (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`); main cached only when the
+   client asked. Cache writes cost more with the provider and cache reads less. Keep or revert.
+4. A failed background-workflow turn with no provider call is now free
+   (`apps/web/lib/workflows/steps/settle-workflow-invocation.ts`); main charged the reservation
+   estimate. Keep or revert.
+5. A billing renewal writes the same ledger row an operator reset does, so with migration 0396 a
+   renewal also restarts the 5-hour and weekly usage windows. Keep or give renewals their own row.
+6. `/privacy` says no connector "can be connected yet" while connectors are selectively released.
+   An Opus pass should correct the sentence.
+7. Which of the not-carried items above are worth redoing against today's code.
+
+**Where** The branches named above, all pushed to the repository.
+**Needed input** The choices.
+**How to verify completion** Each numbered item has a recorded decision, and each not-carried item
+is either redone on main or closed here.
+**What remains after founder action** Engineering redoes the chosen items against current main.
+**Impact** NOT BLOCKING for the web release.
+**Status** FOUNDER DECISION REQUIRED
