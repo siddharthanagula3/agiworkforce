@@ -1214,7 +1214,9 @@ On 2026-11-13 the owner had every web-related branch merged into main, and that 
 (`e822c4fda6`) is the web app in production since the same day. Several branches forked in October, about 1,300 commits before main's tip. In the web app and the shared
 packages a branch's lines were kept unless main had changed the same lines, where main's lines won.
 Git now lists those branches as merged, so the work below is on no open branch list, yet it is not
-on main. Each line names the branch and commit that still holds it.
+on main. Each line names the branch it came from and the commit that still holds it. The owner had
+the merged branch names deleted from GitHub the same day; every commit named here is in main's
+history, so `git show <commit>` still reads it.
 
 **Not carried over**
 
