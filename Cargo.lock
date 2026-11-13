@@ -18371,7 +18371,3 @@ dependencies = [
  "syn 3.0.9",
  "winnow 1.0.4",
 ]
-
-[[patch.unused]]
-name = "sqlcipher-src"
-version = "419.0.6+agi.420"
