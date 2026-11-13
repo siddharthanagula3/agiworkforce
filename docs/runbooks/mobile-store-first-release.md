@@ -16,7 +16,8 @@ needed for version 1.
 
 ## One date and one fact before a submission
 
-Neither is a console step.
+**No store build can start before 2026-11-12** (step 7, item 1). It is not a
+console step.
 
 1. **No store build can start before 2026-11-12** (step 7, item 1).
 2. **Production accepts phone sessions, and `main` carries the same fix.**
@@ -33,9 +34,23 @@ Neither is a console step.
    sign-in working. App Review and Play review both sign in.
    `https://agiworkforce.com/api/version` names the commit production runs.
 
-Fixed on 2026-11-10 and worth knowing: the Google and GitHub buttons failed
-in every build because the app never declared `expo-auth-session`. It is now
-declared, and `apps/mobile/__tests__/sso-native-dependencies.test.ts` holds it.
+- **Phone sign-in to Cloud.** Production refused every phone session: sign-in
+  succeeded, then the app's first call to `agiworkforce.com` was refused and
+  the app showed "Session Expired". The server checked the phone's token
+  against the list of allowed web origins, and a token minted by a native app
+  names no origin. Production has accepted phone sessions since a hotfix that
+  day (commit `a8e278c62e`, the previous production commit plus only that
+  change): an email-and-code sign-in in the iPhone simulator reached the
+  Cloud chat screen. `main` carries the same change, so a release from `main`
+  keeps it. `https://agiworkforce.com/api/version` names the commit
+  production runs.
+- **"Session Expired" after restarting the app in Cloud mode.** This one was
+  in the app: its first requests left before sign-in had loaded, were
+  refused, and the app signed itself out. The fix is in the app's code, so it
+  reaches phones only in a build made from `main` as it is now.
+- **Google and GitHub sign-in.** The buttons failed in every build because
+  the app never declared `expo-auth-session`. It is now declared, and
+  `apps/mobile/__tests__/sso-native-dependencies.test.ts` holds it.
 
 ## What version 1 is
 
