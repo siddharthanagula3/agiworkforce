@@ -104,5 +104,3 @@ describe('resolveSessionsPrincipal binds Clerk bearer verification to an authori
     expect(principal).toMatchObject({ userId: 'user_sessions_1', currentSessionId: null });
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');

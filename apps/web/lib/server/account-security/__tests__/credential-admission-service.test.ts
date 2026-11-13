@@ -490,7 +490,3 @@ describe('locked enrollment promotion admission', () => {
     noPostCommitEffects();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/server/session-revocation');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');

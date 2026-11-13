@@ -264,5 +264,3 @@ describe('POST /api/voice/live/sessions/[sessionId]/tools', () => {
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');

@@ -1014,9 +1014,3 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/cors');
-type RetainedMockModule2 = typeof import('@/lib/logger');
-type RetainedMockModule3 = typeof import('@shared/utils/env');

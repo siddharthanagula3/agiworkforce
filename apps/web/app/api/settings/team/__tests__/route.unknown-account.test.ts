@@ -156,7 +156,3 @@ describe('POST /api/settings/team unknown account honesty', () => {
     expect(body.error.message).toMatch(/no email was sent/i);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

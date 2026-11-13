@@ -155,8 +155,3 @@ describe('GET /api/llm/v1/models under a kill switch', () => {
     expect(withoutFlags.length).toBeGreaterThan(0);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/cors');
-type RetainedMockModule1 = typeof import('@/lib/logger');

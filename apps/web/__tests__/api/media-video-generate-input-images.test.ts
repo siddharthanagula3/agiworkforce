@@ -724,8 +724,3 @@ describe('POST /api/media/video/generate input images', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');
-type RetainedMockModule1 = typeof import('@/lib/cors');

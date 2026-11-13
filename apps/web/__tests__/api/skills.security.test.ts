@@ -311,8 +311,3 @@ describe('skills API security contract', () => {
     ).rejects.toThrow('Unauthorized');
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');
-type RetainedMockModule1 = typeof import('@/lib/error-handler');

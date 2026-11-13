@@ -438,8 +438,3 @@ describe('GET /api/media/image/status', () => {
     expect(response.status).toBe(400);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');
-type RetainedMockModule1 = typeof import('@/lib/cors');

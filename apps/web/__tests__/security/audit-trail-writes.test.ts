@@ -563,7 +563,3 @@ describe('recordAuditEvent, rows are readable through the existing audit-log end
     }
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');

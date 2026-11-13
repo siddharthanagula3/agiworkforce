@@ -704,8 +704,3 @@ describe('Article 50(2), the mark survives to the download', () => {
     expect(response.headers.get(AI_GENERATED_HEADER)).toBeNull();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/cors');
-type RetainedMockModule2 = typeof import('@/lib/logger');

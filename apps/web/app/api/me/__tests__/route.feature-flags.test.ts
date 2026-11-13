@@ -359,7 +359,3 @@ describe('GET /api/me, capabilities held closed', () => {
     expect(body.disabled_features).toEqual([]);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/services/org-sharing-service');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

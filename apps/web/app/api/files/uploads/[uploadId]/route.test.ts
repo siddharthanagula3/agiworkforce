@@ -208,7 +208,3 @@ describe('POST to complete', () => {
     expect(mocks.completeChatAttachmentUpload).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/server/project-knowledge-object-storage');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

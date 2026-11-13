@@ -369,7 +369,3 @@ describe('GET /api/settings/team authorization invariants', () => {
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

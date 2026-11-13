@@ -244,7 +244,3 @@ describe('GET /api/connectors/oauth/start, a record that needs no sign-in', () =
     expect(mocks.begin).toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');

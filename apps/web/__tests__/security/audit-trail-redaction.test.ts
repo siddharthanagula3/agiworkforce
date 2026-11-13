@@ -272,7 +272,3 @@ describe('POST /api/settings/api-keys, the generated key never lands in the audi
     expect(JSON.stringify(details)).not.toContain(rawKey);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');

@@ -690,10 +690,3 @@ describe('captured connector-policy workspace', () => {
     expect(JSON.stringify(policies.get(ORG))).toBe(savedPolicy);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/services/active-workspace-service');
-type CompleteMockModule1 = typeof import('@/lib/services/org-entitlements');
-
-type RetainedMockModule0 = typeof import('@/lib/error-handler');
-type RetainedMockModule1 = typeof import('@/lib/cors');
-type RetainedMockModule3 = typeof import('@/lib/logger');

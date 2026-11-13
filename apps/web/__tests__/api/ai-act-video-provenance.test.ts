@@ -199,8 +199,3 @@ describe('Article 50(2), generated video provenance', () => {
     expect(response.headers.get(AI_GENERATED_HEADER)).toBeNull();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/cors');
-type RetainedMockModule1 = typeof import('@/lib/logger');

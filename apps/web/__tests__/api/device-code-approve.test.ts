@@ -208,8 +208,3 @@ describe('Device code approve compatibility API', () => {
     expect(mockQuery).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/security-audit');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');
-type RetainedMockModule2 = typeof import('@/lib/cors');

@@ -214,7 +214,3 @@ describe('PATCH /api/github/installations, pull request review setting', () => {
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

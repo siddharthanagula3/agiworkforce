@@ -311,7 +311,3 @@ describe('GET /api/search message scoping', () => {
     ]);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

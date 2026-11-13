@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { NextRequest, NextResponse } from 'next/server';
@@ -167,5 +166,3 @@ describe('publication preparation shared by restore and Publish', () => {
     expect(inspectOutboundContent).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/services/organization-policy-gate');

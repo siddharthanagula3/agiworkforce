@@ -202,7 +202,3 @@ describe('GET /api/connectors/oauth/start, API-key reconnect', () => {
     expect(mocks.credentialSpec).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');

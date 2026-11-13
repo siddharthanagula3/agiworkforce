@@ -226,7 +226,3 @@ describe('organization shared surface · cross-org isolation', () => {
     expect(insert).toBeUndefined();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/services/organization-permission-service');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

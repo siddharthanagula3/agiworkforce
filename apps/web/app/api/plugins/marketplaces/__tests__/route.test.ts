@@ -317,5 +317,3 @@ describe('a marketplace the account registered itself', () => {
     ]);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');

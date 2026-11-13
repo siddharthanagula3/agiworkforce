@@ -748,7 +748,3 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

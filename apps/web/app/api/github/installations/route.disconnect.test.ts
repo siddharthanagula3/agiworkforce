@@ -180,7 +180,3 @@ describe('DELETE /api/github/installations revokes the installation at GitHub', 
     );
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

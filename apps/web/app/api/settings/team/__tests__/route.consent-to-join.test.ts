@@ -247,7 +247,3 @@ describe('POST /api/settings/team requires the target account to be the organiza
     expect(insertStatements()).toHaveLength(1);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

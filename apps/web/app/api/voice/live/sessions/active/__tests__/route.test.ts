@@ -134,5 +134,3 @@ describe('GET /api/voice/live/sessions/active', () => {
     expect(getActiveVoiceSessionForConversationMock).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');

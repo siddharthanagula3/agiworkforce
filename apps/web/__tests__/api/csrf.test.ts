@@ -365,7 +365,3 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');

@@ -508,8 +508,3 @@ describe('developer webhook enqueue transaction with the canonical job service',
     expect(mocks.error).not.toHaveBeenCalled();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/crypto/cmek');
-type CompleteMockModule1 = typeof import('@/lib/crypto/envelope');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');

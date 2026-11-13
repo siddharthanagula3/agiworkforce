@@ -308,7 +308,3 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
     });
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/cors');

@@ -213,5 +213,3 @@ describe('owned two-factor transport (source-authored, unrun fixtures)', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/client/csrf');

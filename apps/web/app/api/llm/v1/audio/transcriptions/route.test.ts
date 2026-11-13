@@ -678,9 +678,3 @@ describe('POST /api/llm/v1/audio/transcriptions, outside the proxy', () => {
     expect(served.status).toBe(200);
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/cors');
-type RetainedMockModule2 = typeof import('@/lib/logger');
-type RetainedMockModule3 = typeof import('@shared/utils/env');

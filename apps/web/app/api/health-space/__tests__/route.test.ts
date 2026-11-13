@@ -168,5 +168,3 @@ describe('/api/health-space', () => {
     expect(mocks.ensureHealthSpace).toHaveBeenCalledWith(db, 'user-1');
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');

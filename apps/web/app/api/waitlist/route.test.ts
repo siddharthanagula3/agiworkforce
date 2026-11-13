@@ -208,7 +208,3 @@ describe('GET /api/waitlist', () => {
     await expect((await GET(get())).json()).resolves.toMatchObject({ noticeEmail: null });
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule1 = typeof import('@/lib/logger');

@@ -164,7 +164,3 @@ describe('GitHub installation listing ownership proof', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Failed to fetch installations' });
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
-
-type RetainedMockModule0 = typeof import('@/lib/logger');

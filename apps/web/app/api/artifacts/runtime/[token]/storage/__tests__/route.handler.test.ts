@@ -293,5 +293,3 @@ describe('POST /api/artifacts/runtime/[token]/storage', () => {
     );
   });
 });
-
-type CompleteMockModule0 = typeof import('@/lib/api-auth');
