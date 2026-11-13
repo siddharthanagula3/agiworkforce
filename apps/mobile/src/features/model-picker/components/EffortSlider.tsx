@@ -62,6 +62,9 @@ export function EffortSlider({ steps, value, onChange, testID }: EffortSliderPro
   const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const description = value ? EFFORT_DESCRIPTION[value] : undefined;
+  const lightest = steps[0];
+  const heaviest = steps[steps.length - 1];
+  const showsEnds = steps.length > 2 && lightest !== undefined && heaviest !== undefined;
 
   const select = (effort: Effort) => {
     if (effort === value) return;
@@ -133,6 +136,26 @@ export function EffortSlider({ steps, value, onChange, testID }: EffortSliderPro
           );
         })}
       </View>
+      {showsEnds ? (
+        <View
+          testID={`${testID}-ends`}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginTop: 6,
+            paddingHorizontal: 12,
+          }}
+        >
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+            {EFFORT_LABEL[lightest]}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+            {EFFORT_LABEL[heaviest]}
+          </Text>
+        </View>
+      ) : null}
       {description ? (
         <Text
           testID={`${testID}-description`}

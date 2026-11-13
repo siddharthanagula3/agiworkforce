@@ -69,7 +69,7 @@ export async function readShellIdentity(): Promise<ShellIdentity | null> {
   } catch {
     return null;
   }
-  if (response.status === 401 || response.status === 403) return { signedIn: false, email: null };
+  if (response.status === 401) return { signedIn: false, email: null };
   if (!response.ok || !isJson(response)) return null;
   const body = (await response.json().catch(() => null)) as { email?: unknown } | null;
   return { signedIn: true, email: typeof body?.email === 'string' ? body.email : null };
