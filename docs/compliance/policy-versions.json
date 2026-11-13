@@ -43,6 +43,12 @@
       "served": "4eb9c07140e18e5758c28bf47013002d4843e4fb",
       "main": "d7b10dd830783c5979a305839f15bdaa3343a34a",
       "note": "Production read on 11 November 2026: /api/version returned a8e278c62ec39ae410c070a190a63ac60507c10d, and /privacy, /privacy/india, /data-use, /terms, /dpa and /privacy/requests printed Last updated 2026-10-18, 2026-10-15, 2026-10-15, 2026-10-08, 2026-10-08 and 2026-10-08, the dates POLICY_LAST_UPDATED gives at 4eb9c07140e18e5758c28bf47013002d4843e4fb. d7b10dd830783c5979a305839f15bdaa3343a34a moves those six dates to 2026-11-11, so the 2026-11-10 privacy, India notice and data-use versions were replaced before this site published them."
+    },
+    {
+      "checkedOn": "2026-11-13",
+      "served": "a8e278c62ec39ae410c070a190a63ac60507c10d",
+      "main": "42f2f1e3017a08cb108642b70f8a212a1d8ccfd9",
+      "note": "Production check for the 2026-11-13 release: before it, production served application commit a8e278c62ec39ae410c070a190a63ac60507c10d, whose policy pages print the dates POLICY_LAST_UPDATED gives at that commit, among them /terms 2026-10-08, /privacy 2026-10-18, /dpa 2026-10-08, /subprocessors 2026-10-15, /security 2026-10-08, /trust 2026-10-18, /privacy/india 2026-10-15, /privacy/requests 2026-10-08, /data-use 2026-10-15 and /agent-permissions 2026-11-01, as the release lead verified for this release. a8e278c62ec39ae410c070a190a63ac60507c10d is on this branch's history, so it is recorded as served directly. 42f2f1e3017a08cb108642b70f8a212a1d8ccfd9 moves those ten dates to 2026-11-13, the ship day, so the 2026-11-10 and 2026-11-11 versions of those pages were replaced before this site published them."
     }
   ],
   "documents": {

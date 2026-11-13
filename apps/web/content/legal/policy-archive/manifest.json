@@ -8,7 +8,8 @@
     "2026-10-18",
     "2026-11-01",
     "2026-11-10",
-    "2026-11-11"
+    "2026-11-11",
+    "2026-11-13"
   ],
   "policies": {
     "terms": {
@@ -26,7 +27,7 @@
           "date": "2026-11-11",
           "summary": "Corrects what happens to your data when you delete your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The terms used to say the request schedules permanent erasure 24 hours later without that exception. The product already worked this way, and you do not need to accept the terms again.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-10-08",
@@ -69,7 +70,7 @@
           "date": "2026-11-11",
           "summary": "Corrects what the policy says about deleting your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The policy used to say the account was permanently erased 24 hours after the request. It also names three more things the Chrome extension handles: the titles, addresses and last visit times of up to 20 matching pages when you turn on Browsing history and allow a search; a tab's console messages and network request lines, never their bodies or headers, during browser control; and the record of each action it takes and the website it acted on. It also says what a page attach in the Chrome extension sends: up to 30,000 characters of the page's visible text and what is in its visible form fields, leaving out password, payment card, one-time code, PIN and Social Security number fields; that each extension chat request carries your browser's time zone name; and that private messages can reach us through a page you let the extension read or act on. It also says what we keep when you pair a device for Remote Control: a pairing record with the pairing code, your account and workspace, the paired device identifiers and a rotating connection credential, kept while the pairing lasts and at most seven days, then deleted when either device ends the pairing or about an hour after it expires, and when you delete your account. This version also carries the 2026-11-10 corrections about Desktop and the Cloud name, which were not published on their own.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-11-10",
@@ -173,7 +174,7 @@
           "date": "2026-11-11",
           "summary": "Corrects the deletion terms. Erasure after an account deletion request or termination is scheduled 24 hours out and carried out by a daily job, and if an active legal hold covers the account, including one the Customer places on its workspace, erasure waits until the hold is released. The agreement used to say erasure is performed without that exception.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-10-08",
@@ -229,7 +230,7 @@
           "date": "2026-11-10",
           "summary": "The hosted mode is now called Cloud. The Model providers row is headed Model providers (Cloud), every row that mentions the mode says Cloud where it said Managed Cloud, and the E2B row says Sandbox runtime. No recipient was added or removed. The BYOK section also corrects which surfaces have a user-supplied-key path: the web app and Desktop chat have none, and a Desktop local coding session runs the CLI and can use a key you set up there.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-10-15",
@@ -284,7 +285,7 @@
           "date": "2026-11-10",
           "summary": "Corrects what the page says about Desktop. Desktop chat uses Cloud and keeps no chat database of its own. A local coding session in Desktop runs the CLI and can use the same local runtimes as CLI Local mode; for it, Desktop signs the CLI in to your account, and the CLI keeps that sign-in in the operating system credential store. The page used to call Desktop cloud only. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-10-08",
@@ -403,7 +404,7 @@
           "date": "2026-11-10",
           "summary": "Corrects two rows. Local mode isolation and Desktop credential storage said Desktop uses Cloud only. Desktop chat does, but its local coding sessions run the CLI, which can use a local model or a provider key set up in the CLI, and Desktop signs that CLI in to your account, which keeps the sign-in in the operating system credential store. The hosted mode is also called Cloud throughout, and the Managed Cloud maturity row is now Cloud maturity.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-10-18",
@@ -540,7 +541,7 @@
           "date": "2026-11-11",
           "summary": "Corrects what the notice says about deleting your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The notice used to say the account was permanently erased 24 hours after the request. This version also carries the 2026-11-10 corrections about Desktop and the Cloud name, which were not published on their own.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-11-10",
@@ -583,7 +584,7 @@
           "date": "2026-11-11",
           "summary": "Corrects the account deletion row. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The page used to say erasure is then performed without that exception.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-10-08",
@@ -614,7 +615,7 @@
           "date": "2026-11-11",
           "summary": "Corrects the answer on deleting everything. Deletion is scheduled 24 hours out and carried out by a daily job, and if an active legal hold covers your account, it waits until the hold is released. The answer used to say deletion is then performed without that exception. This version also carries the 2026-11-10 correction about Desktop and the Cloud name, which was not published on its own.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-11-10",
@@ -676,7 +677,7 @@
           "date": "2026-11-11",
           "summary": "Adds a Browsing history row to Computer use in Chrome. The search is off until you turn it on in the extension's settings and accept Chrome's permission prompt, the extension asks before every search, and it sends the titles, addresses and last visit times of at most 20 matching pages, with secret-looking parts of each address removed and blocked sites left out. It also corrects how the extension asks before acting: there are three permission modes, Auto is the default and asks only before crucial steps and controls it cannot identify, purchases are never completed, and an unanswered approval is skipped after 5 minutes, not denied after 30 seconds.",
           "status": "archived",
-          "published": null
+          "published": false
         },
         {
           "date": "2026-11-01",
