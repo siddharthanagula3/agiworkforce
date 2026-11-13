@@ -353,6 +353,7 @@ import {
 import { CHAT_SYSTEM_PROMPT_ID, chatSystemPromptSections } from '@/lib/prompts/chat-system-prompt';
 import {
   renderChatToolInventory,
+  type ChatSetup,
   type ChatTurnMemory,
 } from '@/lib/prompts/chat-system-prompt-assembly';
 import type { PromptId } from '@/lib/prompts/prompt-manifest';
@@ -1957,19 +1958,6 @@ export function separateTurnTime(timedCapabilityPreamble: string | null): {
 }
 
 /**
- * Assembles the leading system message so the cacheable prefix (static
- * capability preamble + custom instructions) stays byte-identical across
- * turns of one conversation, with everything that varies per turn
- * (matched skills, recalled memories) folded in after
- * `SYSTEM_PROMPT_CACHE_BOUNDARY`. `capabilityPreamble` already carries that
- * boundary ahead of any dynamic context of its own; `dynamicSystemAddition`
- * (skill/memory content) is inserted right after it, and
- * `customInstructionsPreamble` (static, per-user config) joins the stable
- * side. `projectInstruction` joins it too: the workspace sets it once, so it
- * is stable for the conversation, and it outranks the account's own
- * preference, so it is ordered by layer rather than by arrival.
- */
-/**
  * Instructions that hold for this turn only go behind every leading system
  * message and after the cache boundary, so the cached system prefix is the same
  * bytes on the turns that carry them and on the turns that do not. Each stays a
@@ -2000,21 +1988,19 @@ export function placeTurnSystemNotices(
   );
 }
 
-export const TURN_INSTRUCTIONS_HEADING =
-  'Platform instructions for this turn. They come from the system, not the user, and take ' +
-  'precedence over the defaults above. Follow them without quoting or describing them to the ' +
-  'user unless one tells you to:';
-
 /**
- * Per-turn instructions ride in the turn context after the conversation, so a
- * notice that differs from one turn to the next leaves the system prompt, the
- * tools and the history byte-identical and cached.
+ * Assembles the leading system message so the cacheable prefix (static
+ * capability preamble + custom instructions) stays byte-identical across
+ * turns of one conversation, with everything that varies per turn
+ * (matched skills, recalled memories) folded in after
+ * `SYSTEM_PROMPT_CACHE_BOUNDARY`. `capabilityPreamble` already carries that
+ * boundary ahead of any dynamic context of its own; `dynamicSystemAddition`
+ * (skill/memory content) is inserted right after it, and
+ * `customInstructionsPreamble` (static, per-user config) joins the stable
+ * side. `projectInstruction` joins it too: the workspace sets it once, so it
+ * is stable for the conversation, and it outranks the account's own
+ * preference, so it is ordered by layer rather than by arrival.
  */
-export function turnInstructionsText(notices: readonly string[]): string {
-  if (notices.length === 0) return '';
-  return [TURN_INSTRUCTIONS_HEADING, ...notices.map((notice) => `- ${notice}`)].join('\n');
-}
-
 export function composeManagedSystemPreamble(input: {
   capabilityPreamble: string | null;
   customInstructionsPreamble: string | null | undefined;
@@ -6379,9 +6365,9 @@ async function processAdmittedRequest(
     const layer = dynamicSystemMessageRefs.get(msg);
     if (layer) dynamicSystemBlocks.push({ layer, text: extractTextContent(msg.content) });
   }
-  const staticSourceMessages = chatRequest.messages.filter(
-    (msg) => !dynamicSystemMessageRefs.has(msg),
-  );
+  const staticSourceMessages = (
+    chatSurface === 'api' ? chatRequest.messages : fillEmptyAssistantTurns(chatRequest.messages)
+  ).filter((msg) => !dynamicSystemMessageRefs.has(msg));
   const internalMessages: ProcessedRequest['llmRequest']['messages'] = staticSourceMessages.map(
     (msg) => ({
       role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
@@ -6592,6 +6578,7 @@ async function processAdmittedRequest(
 
   let connectorsAllowed: boolean | undefined;
   let managedToolInventoryVersion: number | undefined;
+  let turnTimeContext = '';
   if (chatSurface !== 'api') {
     const turnMemory = chatTurnMemoryFor({
       read: managedMemoryPolicyRead,
@@ -6663,6 +6650,9 @@ async function processAdmittedRequest(
         productCapabilities !== undefined &&
         productArtifactConnectors(subscription.plan_tier, productCapabilities),
       ...(productCapabilities ? { productCapabilities } : {}),
+      sourceLinks: chatRequest[PAST_CHAT_LINKS_REQUEST_KEY] === true,
+      writingCards: surfaceRendersWritingCards(chatSurface),
+      artifactApps: surfacePublishesArtifactApps(chatSurface),
       promptSelection: {
         variants: {
           ...promptSelection.variants,
@@ -6791,8 +6781,7 @@ async function processAdmittedRequest(
   }
   const withheldToolsNotice = resolvedTools ? withheldToolsTurnNotice(turnWithheldTools) : null;
   if (withheldToolsNotice) turnSystemNotices.push(withheldToolsNotice);
-  const turnInstructions = chatSurface === 'api' ? '' : turnInstructionsText(turnSystemNotices);
-  if (chatSurface === 'api') placeTurnSystemNotices(internalMessages, turnSystemNotices);
+  placeTurnSystemNotices(internalMessages, turnSystemNotices);
   const responseFormat = requestedResponseFormat(chatRequest.response_format);
   const llmRequest: ProcessedRequest['llmRequest'] = {
     model: chatRequest.model,
@@ -6882,11 +6871,8 @@ async function processAdmittedRequest(
     }
     return messageTooLongResponse();
   }
-  const turnContextText = [turnTimeContext, turnInstructions]
-    .filter((text) => text.length > 0)
-    .join('\n\n');
-  if (turnContextText) {
-    llmRequest.turnContext = { text: turnContextText, afterMessages: llmRequest.messages.length };
+  if (turnTimeContext) {
+    llmRequest.turnContext = { text: turnTimeContext, afterMessages: llmRequest.messages.length };
   }
 
   const sentCitations =

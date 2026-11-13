@@ -46,10 +46,6 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
   }),
 }));
 
-vi.mock('@shared/hooks/use-workspace-policy', () => ({
-  useWorkspacePolicy: () => ({ policy: null, source: 'none', stale: false, checkedAt: null }),
-}));
-
 function openPlusMenu(): void {
   fireEvent.click(screen.getByRole('button', { name: /Add attachments and tools/ }));
 }
@@ -434,7 +430,6 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
     ...(await importOriginal<ReadonlyIdentityModule>()),
     useSessionSnapshot: () => () => null,
     useReadonlyIdentityLifetime: () => capture,
-    useSessionSnapshot: () => () => null,
   };
 });
 

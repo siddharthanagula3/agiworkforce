@@ -449,8 +449,8 @@ export function ArtifactsPanel({
   useLayoutEffect(() => {
     const artifactId = selectedArtifact?.id;
     return () => {
-      if (artifactId && !publicationOperations.entries.get(artifactId)?.pending) {
-        publicationOperations.entries.delete(artifactId);
+      if (artifactId && !publicationOperations.get(artifactId)?.pending) {
+        publicationOperations.delete(artifactId);
       }
     };
   }, [publicationView, selectedArtifact?.id, publicationOperations]);
@@ -547,7 +547,7 @@ export function ArtifactsPanel({
     publicationLease,
   ]);
   const publicationRevision = selectedArtifactKey
-    ? (publicationOperations.entries.get(selectedArtifactKey)?.revision ?? 0)
+    ? (publicationOperations.get(selectedArtifactKey)?.revision ?? 0)
     : 0;
   const changeAudience = useCallback(
     async (next: PublishedArtifactAudience) => {
@@ -585,7 +585,7 @@ export function ArtifactsPanel({
           !publicationView.active &&
           publicationOperations.get(selectedArtifactKey) === operation
         ) {
-          publicationOperations.entries.delete(selectedArtifactKey);
+          publicationOperations.delete(selectedArtifactKey);
         }
         if (isPublicationLeaseCurrent(publicationLease) && panelLifetime.active) {
           setSettledPublication((value) => value + 1);

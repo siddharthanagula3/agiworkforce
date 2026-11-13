@@ -467,6 +467,31 @@ describe('WebChatPage auto-title (WEB-85)', () => {
     });
   }, 20000);
 
+  it('reads the title once the first answer has finished, when the server writes it', async () => {
+    seedFirstTurn({ title: 'New Chat', streaming: true });
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ conversation: { id: CONVERSATION_ID, title: GENERATED_TITLE } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(conversationTitleReads(fetchMock)).toEqual([]);
+
+    act(() => {
+      useChatStore
+        .getState()
+        .updateMessage(
+          '00000000-0000-4000-8000-0000000008a2',
+          { isStreaming: false },
+          CONVERSATION_ID,
+        );
+    });
+
+    await waitFor(() => expect(storeTitle()).toBe(GENERATED_TITLE));
+  });
+
   it('keeps a temporary chat title on this device and never writes it to the server', async () => {
     seedFirstTurn({ title: 'New Chat', isTemporary: true });
     const fetchMock = vi.fn(async () => jsonResponse({}));

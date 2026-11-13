@@ -14,7 +14,6 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { useElectronHost } from '../lib/host';
 import {
   addDeveloperMcpServer,
-  developerMcpServerLogs,
   developerMcpServerTools,
   listDeveloperMcpServers,
   listDeveloperSessions,
@@ -45,10 +44,8 @@ const LOAD_FAILED = 'MCP servers could not be read.';
 const ACTION_FAILED = 'That could not be done.';
 const TEST_LABEL = 'Test';
 const TOOLS_LABEL = 'Tools';
-const LOGS_LABEL = 'Logs';
 const REMOVE_LABEL = 'Remove';
 const PROJECT_NOTE = 'From a project. Review it in the Code rail before it can run.';
-const LOGS_EMPTY = 'Nothing logged yet.';
 const FIELD_CLASS =
   'h-8 w-full rounded-md border border-border bg-transparent px-2.5 text-sm text-[var(--text-1)]';
 const AREA_CLASS =
@@ -70,8 +67,7 @@ const SCOPE_LABELS: Record<McpServerSummary['scope'], string> = {
 
 type Detail =
   | { kind: 'test'; text: string; failure: boolean }
-  | { kind: 'tools'; names: Array<{ name: string; description: string }> }
-  | { kind: 'logs'; lines: string[] };
+  | { kind: 'tools'; names: Array<{ name: string; description: string }> };
 
 function parseLines(text: string): string[] {
   return text
@@ -445,19 +441,6 @@ export function LocalMcpSettings() {
                 >
                   {TOOLS_LABEL}
                 </button>
-                <button
-                  type="button"
-                  className={DESKTOP_SETTINGS_BUTTON_CLASS}
-                  disabled={busy !== null}
-                  onClick={() =>
-                    void show(server.name, async () => ({
-                      kind: 'logs',
-                      lines: (await developerMcpServerLogs(rootId as string, server.name)).lines,
-                    }))
-                  }
-                >
-                  {LOGS_LABEL}
-                </button>
                 {editable && (
                   <button
                     type="button"
@@ -492,11 +475,6 @@ export function LocalMcpSettings() {
                     </li>
                   ))}
                 </ul>
-              )}
-              {detail?.kind === 'logs' && (
-                <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 font-mono text-xs text-[var(--text-1)]">
-                  {detail.lines.length > 0 ? detail.lines.join('\n') : LOGS_EMPTY}
-                </pre>
               )}
             </div>
           );

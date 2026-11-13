@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect } from 'react';
+import { useEffect } from 'react';
 import {
   managedMemoryLocalContextUrl,
   parseManagedMemoryLocalContextResponse,
@@ -157,7 +157,7 @@ export function useLocalPersonalContextPrefetch(projectId: string | null): void 
     onFocus();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [localModelSelected, owner, owner?.epoch, data, scopeKey, projectId]);
+  }, [localModelSelected, candidate, projectId]);
 }
 
 export function readLocalPersonalContext(

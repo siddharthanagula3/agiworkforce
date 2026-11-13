@@ -26,11 +26,6 @@ function installHost(overrides: Record<string, (args: Record<string, unknown>) =
         return { ok: true, value: SERVERS };
       case 'developer_mcp_test':
         return { ok: true, value: { name: 'files', connected: true, elapsedMs: 42, toolCount: 3 } };
-      case 'developer_mcp_logs':
-        return {
-          ok: true,
-          value: { name: 'files', lines: ['started', 'ready'], truncated: false },
-        };
       case 'developer_mcp_open_config':
         return { ok: true, value: true };
       default:
@@ -73,20 +68,13 @@ describe('the developer page', () => {
     expect(within(rowOf('repo-tools')).queryByRole('button', { name: 'Remove' })).toBeNull();
   });
 
-  it('tests a server and shows its logs', async () => {
+  it('tests a server', async () => {
     const user = userEvent.setup();
-    const { invokeRuntime } = installHost();
+    installHost();
     render(<LocalMcpSettings />);
     await screen.findByText('files');
     await user.click(within(rowOf('files')).getByRole('button', { name: 'Test' }));
     expect(await screen.findByText('Connected in 42 ms with 3 tools.')).toBeInTheDocument();
-    await user.click(within(rowOf('files')).getByRole('button', { name: 'Logs' }));
-    expect(await screen.findByText(/started\s+ready/)).toBeInTheDocument();
-    expect(invokeRuntime).toHaveBeenCalledWith('developer_mcp_logs', {
-      rootId: 'root-1',
-      name: 'files',
-      limit: 200,
-    });
   });
 
   it('asks before removing a server and names what is lost', async () => {

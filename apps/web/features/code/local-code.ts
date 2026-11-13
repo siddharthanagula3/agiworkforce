@@ -1,7 +1,6 @@
 import { translateUiPlural } from '@agiworkforce/ui';
 import {
   DEVELOPER_AGENT_MODES,
-  approvedRootId,
   isSshEnvironmentId,
   DEVELOPER_FILE_CHANGE_LABELS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
@@ -1031,37 +1030,6 @@ export function localMcpServerKey(
 }
 
 /** The approved folders, without the worktrees made from them. */
-export type LocalSessionLink =
-  | { kind: 'found'; session: LocalDeveloperSession }
-  | { kind: 'withheld'; folder: DeveloperSessionGroup }
-  | { kind: 'unlisted'; message: string }
-  | { kind: 'missing' };
-
-/**
- * What a link to a local session finds in the list. A folder whose sessions
- * were not read, because running commands there is not allowed yet or its
- * runtime is unavailable, has not said the session is gone; only a folder
- * whose sessions were listed without it has.
- */
-export function resolveLocalSessionLink(
-  groups: readonly DeveloperSessionGroup[],
-  wanted: { rootId: string; threadId: string },
-): LocalSessionLink {
-  const session = groups
-    .find((group) => group.rootId === wanted.rootId)
-    ?.sessions.find((candidate) => candidate.id === wanted.threadId);
-  if (session) return { kind: 'found', session };
-  const folderId = approvedRootId(wanted.rootId);
-  const folder = groups.find((group) => group.worktree === undefined && group.rootId === folderId);
-  if (!folder) return { kind: 'missing' };
-  if (folder.sessionsWithheld === true) return { kind: 'withheld', folder };
-  if (folder.unavailable) return { kind: 'unlisted', message: folder.unavailable.message };
-  if (folderId !== wanted.rootId && folder.worktreesUnavailable) {
-    return { kind: 'unlisted', message: folder.worktreesUnavailable };
-  }
-  return { kind: 'missing' };
-}
-
 export function localFolderGroups(
   groups: readonly DeveloperSessionGroup[],
 ): DeveloperSessionGroup[] {

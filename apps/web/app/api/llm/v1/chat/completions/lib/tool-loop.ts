@@ -186,6 +186,7 @@ import {
   TOOL_RESULT_READER_TOOL_NAME,
   keepTrimmedToolResult,
   createToolResultReference,
+  earlierToolResultsNotice,
   listConversationToolResults,
   readStoredToolResult,
   referenceOversizedToolResult,
@@ -354,13 +355,13 @@ import {
   collectManagedPromptMaterials,
   extractTextContent,
   managedToolInventoryProviderView,
+  placeTurnSystemNotices,
   type ProcessedRequest,
 } from './request-processor';
 import {
   addToolSpend,
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
-  hasObservedProviderUsage,
   mergeObservedProviderUsage,
   observedTurnCost,
   type ObservedProviderUsage,
@@ -1887,41 +1888,6 @@ export interface CollectedProviderLine {
 }
 
 /** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
-/** Bounds how long a failed step waits for its stream to record what it measured. */
-const FAILED_STEP_USAGE_SETTLE_MS = 2_000;
-
-const failedProviderStepUsage = new WeakMap<object, ObservedProviderUsage>();
-
-/**
- * What a provider step that threw had already consumed: a stop or a dropped
- * stream after message_start is still charged by the provider, so it is
- * settled at its measured usage rather than released.
- */
-export function usageOfFailedProviderStep(error: unknown): ObservedProviderUsage | null {
-  return typeof error === 'object' && error !== null
-    ? (failedProviderStepUsage.get(error) ?? null)
-    : null;
-}
-
-async function recordFailedProviderStepUsage(
-  error: unknown,
-  sink: ToolLoopStepSink,
-  usage: ObservedProviderUsage,
-): Promise<void> {
-  if (typeof error !== 'object' || error === null) return;
-  if (sink.settled) {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      sink.settled,
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, FAILED_STEP_USAGE_SETTLE_MS);
-      }),
-    ]);
-    clearTimeout(timer);
-  }
-  if (hasObservedProviderUsage(usage)) failedProviderStepUsage.set(error, usage);
-}
-
 export async function collectProviderStream(
   stream: ReadableStream,
   onLine?: (entry: CollectedProviderLine) => void,
@@ -3955,7 +3921,16 @@ export async function* runToolLoop(
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
   const storedResultsNotice = earlierToolResultsNotice(earlierStoredResults);
-  if (storedResultsNotice) placeTurnSystemNotices(messages, [storedResultsNotice]);
+  if (storedResultsNotice) {
+    placeTurnSystemNotices(messages, [storedResultsNotice]);
+    if (llmRequest.turnContext) {
+      llmRequest.turnContext = {
+        ...llmRequest.turnContext,
+        afterMessages:
+          llmRequest.turnContext.afterMessages + messages.length - llmRequest.messages.length,
+      };
+    }
+  }
 
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
@@ -4378,8 +4353,6 @@ export async function* runToolLoop(
           }) ?? servedRouteId;
         return result;
       } catch (err) {
-        const spentBeforeFailure = options.providerExecutor ? null : usageOfFailedProviderStep(err);
-        if (spentBeforeFailure) mergeObservedProviderUsage(observedUsage, spentBeforeFailure);
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof SharedProviderStreamDeadlineError) throw err;
         if (releasedLinesToClient) throw err;
@@ -6496,12 +6469,12 @@ export async function* runToolLoop(
       });
       const turnTools =
         stepMcpTools.length > 0 ? [...(requestTools ?? []), ...stepMcpTools] : requestTools;
-      const offeredTools = mapSearchBatchCompleted
-        ? turnTools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
-        : turnTools;
-      const stepTools = toolGovernor.capReached()
-        ? undefined
-        : toolGovernor.offered(offeredTools, offeredToolName);
+      // The tool list is part of the cached prompt prefix, so it stays the same
+      // from step to step and a closed tool is refused when it is called. A
+      // provider-run tool is the exception: nothing here sees its call to refuse.
+      const stepTools = turnTools?.filter(
+        (tool) => !nativeSearchToolName(tool) || !toolGovernor.isWithdrawn(offeredToolName(tool)),
+      );
       if ((stepTools?.length ?? 0) > 0) toolCapabilityEvidence.toolsOffered = true;
       const stepRequest = {
         ...llmRequest,
@@ -7154,11 +7127,21 @@ export async function* runToolLoop(
       const prohibitedCalls = pendingToolCalls.filter(
         (tc) =>
           (!callerContinuation || !callerOwnedTools.has(tc.qualifiedName)) &&
-          turnProhibitsTool(turnToolProhibition, tc.qualifiedName),
+          (turnProhibitsTool(turnToolProhibition, tc.qualifiedName) ||
+            turnWithholdsTool(turnWithheldTools, tc.qualifiedName)),
+      );
+      // A call to a tool this turn never offered has nothing to approve: the
+      // model named a tool it saw earlier or invented one. Asking would put a
+      // card in front of the user for a call that can only fail.
+      const unofferedCalls = pendingToolCalls.filter(
+        (tc) =>
+          (!callerContinuation || !callerOwnedTools.has(tc.qualifiedName)) &&
+          !prohibitedCalls.includes(tc) &&
+          !toolOfferedThisTurn(tc.qualifiedName),
       );
       const gatedCalls = pendingToolCalls
         .filter((tc) => !callerContinuation || !callerOwnedTools.has(tc.qualifiedName))
-        .filter((tc) => !prohibitedCalls.includes(tc))
+        .filter((tc) => !prohibitedCalls.includes(tc) && !unofferedCalls.includes(tc))
         .map((tc) => ({
           tc,
           gate: gateForToolCall(tc, pendingToolCalls),

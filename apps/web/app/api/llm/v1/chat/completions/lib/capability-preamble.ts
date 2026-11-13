@@ -26,7 +26,11 @@ import {
   assembleChatSystemPrompt,
   chatSetupBlock,
   CODE_EXECUTION_TOOL_NAMES,
+  formatKnowledgeCutoff,
   renderChatToolInventory,
+  servingModelBlocks,
+  textOnlySetupBlock,
+  type ChatSetup,
   type ChatTurnMemory,
   type ChatTurnState,
   type ModelChoice,
@@ -339,33 +343,6 @@ function buildPublishedCapabilityPreamble(
     },
   );
   return `${body}${SYSTEM_PROMPT_CACHE_BOUNDARY}${time}`;
-}
-
-type SectionReader = (key: string, values?: Readonly<Record<string, string>>) => string;
-
-function servingModelBlocks(section: SectionReader, model: ServingModel | null): string[] {
-  if (!model) return [section('model_unknown')];
-  if (model.kind === 'unattributed') {
-    const values = { modelName: model.name };
-    return [section('model_unattributed', values), section('model_rules_unattributed', values)];
-  }
-  if (model.kind === 'router') {
-    const values = { modelName: model.name, modelDeveloper: model.developer };
-    return [section('model_router', values), section('model_rules_router', values)];
-  }
-  const values = {
-    modelName: model.name,
-    modelDeveloper: model.developer,
-    knowledgeCutoff: model.knowledgeCutoff ?? '',
-    ...('label' in model.choice ? { autoLabel: model.choice.label } : {}),
-  };
-  const serving = [
-    section(`model_${model.choice.kind}`, values),
-    model.knowledgeCutoff ? section('model_knowledge_cutoff', values) : '',
-  ]
-    .filter((text) => text.length > 0)
-    .join(' ');
-  return [serving, section('model_rules', values)];
 }
 
 export function retargetServingModel<T extends { role: string; content: unknown }>(

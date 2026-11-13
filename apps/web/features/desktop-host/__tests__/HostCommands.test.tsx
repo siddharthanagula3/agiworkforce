@@ -185,10 +185,10 @@ describe('host commands', () => {
   });
 
   it.each([
-    ['find', 'open-find'],
-    ['search', 'open-search'],
-    ['previous-chat', 'go-to-previous-chat'],
-    ['next-chat', 'go-to-next-chat'],
+    ['find', 'find'],
+    ['open-search', 'open-search'],
+    ['previous-chat', 'previous-chat'],
+    ['next-chat', 'next-chat'],
     ['new-temporary-chat', 'new-temporary-chat'],
   ] as const)('turns the %s menu command into the %s app command', (command, appCommand) => {
     const answered = vi.fn();

@@ -10,7 +10,6 @@ import {
 import {
   DEVELOPER_RUNTIME_CAPABILITIES,
   DesktopRuntimeError,
-  worktreeRootId,
   type DeveloperSessionGroup,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
@@ -3872,62 +3871,6 @@ describe('the environment the composer starts a session in', () => {
         await screen.findByText('That coding session is not on this device any more.'),
       ).toBeInTheDocument();
       expect(replace).toHaveBeenCalledWith('/code');
-    } finally {
-      window.history.replaceState({}, '', '/');
-    }
-  });
-
-  it('keeps a link to a session in a withheld folder until the folder is allowed, then opens it', async () => {
-    const user = userEvent.setup();
-    replace.mockClear();
-    host = {};
-    localGroups = [folder({ rootId: 'root-recent', sessions: [], sessionsWithheld: true })];
-    allowDeveloperSessions.mockImplementationOnce(async () => {
-      localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
-      return true;
-    });
-    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
-    try {
-      render(<CloudCodePage api={createApi()} />);
-
-      const pending = await screen.findByTestId('local-session-link-pending');
-      expect(pending).toHaveTextContent(
-        'That session is in qa-project. Allow running commands there to open it.',
-      );
-      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
-      expect(replace).not.toHaveBeenCalledWith('/code');
-
-      await user.click(within(pending).getByRole('button', { name: 'Allow running commands' }));
-
-      expect(allowDeveloperSessions).toHaveBeenCalledWith('root-recent');
-      expect(
-        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
-      ).toBeInTheDocument();
-      expect(screen.queryByTestId('local-session-link-pending')).toBeNull();
-      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
-      expect(replace).not.toHaveBeenCalledWith('/code');
-    } finally {
-      window.history.replaceState({}, '', '/');
-    }
-  });
-
-  it('keeps a link to a worktree session while its folder is withheld', async () => {
-    replace.mockClear();
-    host = {};
-    localGroups = [folder({ rootId: 'root-recent', sessions: [], sessionsWithheld: true })];
-    window.history.replaceState(
-      {},
-      '',
-      `/code?local=${encodeURIComponent(worktreeRootId('root-recent', 'abcd1234'))}&thread=thread-1`,
-    );
-    try {
-      render(<CloudCodePage api={createApi()} />);
-
-      expect(await screen.findByTestId('local-session-link-pending')).toHaveTextContent(
-        'That session is in qa-project.',
-      );
-      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
-      expect(replace).not.toHaveBeenCalledWith('/code');
     } finally {
       window.history.replaceState({}, '', '/');
     }

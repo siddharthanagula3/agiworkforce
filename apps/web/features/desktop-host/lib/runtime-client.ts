@@ -83,7 +83,6 @@ import type {
   SkillListResponse,
   ThreadCompactResponse,
   ThreadDeleteResponse,
-  McpLogsResponse,
   McpServerSummary,
   McpServerToolsResponse,
 } from '@agiworkforce/types/protocol';
@@ -1130,14 +1129,6 @@ export function developerMcpServerTools(
   name: string,
 ): Promise<McpServerToolsResponse> {
   return invoke<McpServerToolsResponse>('developer_mcp_tools', { rootId, name });
-}
-
-export function developerMcpServerLogs(
-  rootId: string,
-  name: string,
-  limit = 200,
-): Promise<McpLogsResponse> {
-  return invoke<McpLogsResponse>('developer_mcp_logs', { rootId, name, limit });
 }
 
 export function openDeveloperMcpConfig(): Promise<boolean> {

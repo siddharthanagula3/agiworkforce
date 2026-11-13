@@ -43,7 +43,6 @@ import {
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
   runToolLoop,
-  usageOfFailedProviderStep,
   type CollectedProviderLine,
   type FetchedSource,
   type PendingToolCall,

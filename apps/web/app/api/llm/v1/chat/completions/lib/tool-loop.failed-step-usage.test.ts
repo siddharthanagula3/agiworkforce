@@ -1,11 +1,9 @@
-/**
- * A stopped turn is charged for what the provider measured before the stop.
- * The provider step threw on the abort and its operation recorded no usage,
- * so the turn settled at nothing although the provider had billed the input.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolLoopStepSink } from './tool-loop-anthropic';
-import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
+import {
+  createObservedProviderUsage,
+  type ObservedProviderUsage,
+} from '@/lib/services/managed-usage-accounting-service';
 
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
@@ -31,15 +29,8 @@ vi.mock('@/lib/mcp-tool-executor', async () => {
   };
 });
 
-import { runToolLoop, usageOfFailedProviderStep } from './tool-loop';
+import { runToolLoop } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
-
-function chunk(delta: Record<string, unknown>, finishReason: string | null = null): string {
-  return `data: ${JSON.stringify({
-    choices: [{ index: 0, delta, finish_reason: finishReason }],
-    model: 'test-model',
-  })}\n\n`;
-}
 
 function makeProcessed(): ProcessedRequest {
   return {
@@ -76,27 +67,24 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<void> {
 }
 
 function stoppedStream(sink: ToolLoopStepSink, inputTokens: number): ReadableStream {
-  let settle!: () => void;
-  sink.settled = new Promise<void>((resolve) => {
-    settle = resolve;
-  });
-  const encoder = new TextEncoder();
   return new ReadableStream({
     start(controller) {
-      controller.enqueue(encoder.encode(chunk({ content: 'Half an ans' })));
       controller.error(Object.assign(new Error('Request was aborted.'), { name: 'AbortError' }));
       setTimeout(() => {
         if (sink.usage) {
           sink.usage.providerCalls += 1;
           sink.usage.inputTokens += inputTokens;
         }
-        settle();
       }, 20);
     },
   });
 }
 
-describe('runToolLoop, a provider step that stops part way', () => {
+function afterLateUsage(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 60));
+}
+
+describe('runToolLoop, a provider step that stops before any output', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();
@@ -104,63 +92,35 @@ describe('runToolLoop, a provider step that stops part way', () => {
     mockExecuteWebMcpTool.mockReset();
   });
 
-  it('hands the usage the provider measured before the stop to its operation', async () => {
+  it('hands its operation no usage to charge, even when the stream measures some after the stop', async () => {
     mockBuildToolLoopStream.mockImplementation(
       async (_provider: unknown, _processed: unknown, _request: unknown, _model: unknown, sink) =>
         stoppedStream(sink as ToolLoopStepSink, 7773),
     );
-    let spent: ReturnType<typeof usageOfFailedProviderStep> = null;
+    const seen: (ObservedProviderUsage | null)[] = [];
 
     await drain(
       runToolLoop(makeProcessed(), {
         approvalMode: 'auto',
         userId: 'user-1',
         shouldPropagateExecutionError: () => true,
-        providerExecutor: async ({ execute }) => {
+        providerExecutor: async ({ execute, failureUsage }) => {
           try {
             return await execute();
           } catch (error) {
-            spent = usageOfFailedProviderStep(error);
+            seen.push(failureUsage());
             throw error;
           }
         },
       }),
     ).catch(() => undefined);
-
-    expect(spent).toMatchObject({ providerCalls: 1, inputTokens: 7773 });
-  });
-
-  it('hands over nothing when the provider measured nothing before the stop', async () => {
-    mockBuildToolLoopStream.mockImplementation(
-      async (_provider: unknown, _processed: unknown, _request: unknown, _model: unknown, sink) =>
-        stoppedStream(sink as ToolLoopStepSink, 0),
-    );
-    const seen: unknown[] = [];
-
-    await drain(
-      runToolLoop(makeProcessed(), {
-        approvalMode: 'auto',
-        userId: 'user-1',
-        shouldPropagateExecutionError: () => true,
-        providerExecutor: async ({ execute }) => {
-          try {
-            return await execute();
-          } catch (error) {
-            seen.push(error);
-            throw error;
-          }
-        },
-      }),
-    ).catch(() => undefined);
+    await afterLateUsage();
 
     expect(seen.length).toBeGreaterThan(0);
-    for (const error of seen) {
-      const usage = usageOfFailedProviderStep(error);
-      expect(usage === null || usage.inputTokens === 0).toBe(true);
-    }
+    expect(seen.every((usage) => usage === null)).toBe(true);
   });
 
-  it('counts what a stopped step measured in the turn usage when the loop runs inline', async () => {
+  it('adds nothing to the turn usage when the loop runs inline', async () => {
     mockBuildToolLoopStream.mockImplementation(
       async (_provider: unknown, _processed: unknown, _request: unknown, _model: unknown, sink) =>
         stoppedStream(sink as ToolLoopStepSink, 7773),
@@ -175,7 +135,8 @@ describe('runToolLoop, a provider step that stops part way', () => {
         shouldPropagateExecutionError: () => true,
       }),
     ).catch(() => undefined);
+    await afterLateUsage();
 
-    expect(usage).toMatchObject({ providerCalls: 1, inputTokens: 7773 });
+    expect(usage).toMatchObject({ providerCalls: 0, inputTokens: 0 });
   });
 });

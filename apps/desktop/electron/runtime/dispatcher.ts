@@ -2387,10 +2387,70 @@ async function execute(
       return openLocalPreview(url);
     }
     case 'app_preview_errors': {
-      if (args['url'] === undefined) return readPreviewConsoleErrors(args['clear'] === true);
+      if (args['url'] === undefined) {
+        return (
+          (window ? readBrowserPaneConsole(window, args['clear'] === true) : null) ??
+          readPreviewConsoleErrors(args['clear'] === true)
+        );
+      }
       const origin = localPreviewOrigin(args['url']);
       if (!origin) throw new InvalidArguments('Only a page served on this computer has errors.');
       return readPreviewConsoleErrors(args['clear'] === true, origin);
+    }
+    case 'browser_pane_open':
+      return paneCall(() =>
+        openBrowserPane(
+          requirePaneWindow(window),
+          requireBounds(args),
+          args['address'] === undefined || args['address'] === null
+            ? null
+            : requireString(args, 'address'),
+        ),
+      );
+    case 'browser_pane_navigate':
+      return paneCall(() =>
+        navigateBrowserPane(requirePaneWindow(window), requireString(args, 'address')),
+      );
+    case 'browser_pane_back':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'back'));
+    case 'browser_pane_forward':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'forward'));
+    case 'browser_pane_reload':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'reload'));
+    case 'browser_pane_bounds':
+      return paneCall(() => setBrowserPaneBounds(requirePaneWindow(window), requireBounds(args)));
+    case 'browser_pane_hide':
+      return hideBrowserPane(requirePaneWindow(window));
+    case 'browser_pane_close':
+      return closeBrowserPane(requirePaneWindow(window));
+    case 'browser_pane_state':
+      return browserPaneState(requirePaneWindow(window));
+    case 'browser_sites_read':
+      return readBrowserSites();
+    case 'browser_sites_remove':
+      return paneCall(() => removeBrowserSite(requireString(args, 'host')));
+    case 'browser_sites_block':
+      return paneCall(() => blockBrowserSite(requireString(args, 'host')));
+    case 'browser_pane_clear_data':
+      await clearBrowserPaneData();
+      return true;
+    case 'desktop_storage_read':
+      return readStorageUsage(storageEnvironment());
+    case 'desktop_storage_clean': {
+      const cleanup = args['cleanup'];
+      if (!isStorageCleanup(cleanup)) {
+        throw new InvalidArguments(`"cleanup" must be one of ${STORAGE_CLEANUPS.join(', ')}.`);
+      }
+      try {
+        if (cleanup === 'archived-sessions') {
+          await deleteOldArchivedSessions(window);
+          return await readStorageUsage(storageEnvironment());
+        }
+        return await cleanStorage(storageEnvironment(), cleanup);
+      } catch (error) {
+        if (error instanceof StorageCleanupRefused) throw new InvalidArguments(error.message);
+        throw error;
+      }
     }
     case 'app_open_in_editor':
       return openInEditor(resolveRoot(args));

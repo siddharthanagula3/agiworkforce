@@ -1,9 +1,7 @@
-import { localModelId } from '@agiworkforce/local-runtime-contract';
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { ChatMessageList, groupMessages, patchMessageGroups } from './ChatMessageList';
-import { emitAppCommand } from '@shared/lib/app-commands';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { getSelectableModels } from '@agiworkforce/types';
 import { LOCAL_MODEL_SERVERS, localModelId } from '@agiworkforce/local-runtime-contract';
@@ -273,24 +271,6 @@ describe('groupMessages()', () => {
     expect(nextGroups[498]).toBe(groups[498]);
     expect(nextGroups[499]).not.toBe(groups[499]);
     expect(nextGroups[499]?.messages[0]?.content).toBe('updated');
-  });
-});
-
-describe('ChatMessageList find', () => {
-  const messages = [
-    makeMessage({ id: 'm1', role: 'user', content: 'Hello' }),
-    makeMessage({ id: 'm2', role: 'assistant', content: 'Hi there' }),
-  ];
-
-  it('opens the conversation find from the desktop menu, as the shortcut does', () => {
-    render(<ChatMessageList messages={messages} />);
-    expect(screen.queryByRole('textbox', { name: 'Search messages' })).not.toBeInTheDocument();
-
-    act(() => {
-      emitAppCommand('open-find');
-    });
-
-    expect(screen.getByRole('textbox', { name: 'Search messages' })).toBeInTheDocument();
   });
 });
 

@@ -35,6 +35,10 @@ describe('CodeFirstRunWizard', () => {
       'href',
       '/api/github/install/start?returnPath=%2Fcode',
     );
+    const connect = new URL(
+      screen.getByRole('link', { name: 'Connect GitHub' }).getAttribute('href') ?? '',
+      'https://agi.test',
+    );
     expect(connect.pathname).toBe(CODE_ROUTES.githubInstall);
     expect(connect.searchParams.get('returnPath')).toBe(CODE_ROUTES.root);
   });

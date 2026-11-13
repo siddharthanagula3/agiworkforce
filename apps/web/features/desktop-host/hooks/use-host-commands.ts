@@ -141,7 +141,7 @@ export function useHostCommands(host: HostBridge | null): void {
         emitAppCommand('focus-follow-up');
         return;
       }
-      emitAppCommand('open-shortcuts');
+      if (command === 'show-keyboard-shortcuts') emitAppCommand('open-shortcuts');
     });
   }, [host]);
 }

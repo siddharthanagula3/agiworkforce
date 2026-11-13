@@ -1619,11 +1619,6 @@ export function ComposerFooter({
                             sources={freeModelSources}
                             defaultExpanded={!paidPlan}
                             selectedId={selectedModelId}
-                            defaultExpanded={
-                              !paidPlan ||
-                              freeQuotaSelection(selectedModelId) !== null ||
-                              selectedModelId === freeDefaultModel?.id
-                            }
                             fallback={
                               freeDefaultModel
                                 ? {

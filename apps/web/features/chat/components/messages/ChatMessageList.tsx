@@ -71,7 +71,6 @@ import { useSoftKeyboardInset } from '../Composer/soft-keyboard-inset';
 import { TranscriptNotice } from './TranscriptNotice';
 import { ArrowRight, ChevronDown, RefreshCw, ShieldAlert, Square } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
-import { onAppCommand } from '@shared/lib/app-commands';
 import { useTTS } from '@/lib/hooks/useTTS';
 import { currentReadAloudMessage, messageReadAloudUnavailable } from '@/lib/read-aloud-policy';
 import {
@@ -1549,9 +1548,6 @@ const ChatMessageListComponent = ({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [closeSearch, searchOpen]);
-
-  // The desktop menu's Edit > Find opens the same find the shortcut does.
-  useEffect(() => onAppCommand('open-find', () => setSearchOpen(true)), []);
 
   const scrollFrameRef = useRef<number | null>(null);
   const pendingScrollBehaviorRef = useRef<ScrollBehavior>('smooth');

@@ -22,6 +22,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: mocks.scopedQuery },
     userId: 'user-pro',
+    organizationId: null,
   })),
 }));
 
@@ -54,11 +55,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { CLARIFY_TOOL_NAME } from '@/lib/services/clarify-tool-service';
 import type { AuthGateSuccess } from './auth-gate';
 import { toCanonicalChatRequest } from './canonical-request';
-import {
-  applyAnswerUiCapability,
-  processRequest,
-  TURN_INSTRUCTIONS_HEADING,
-} from './request-processor';
+import { applyAnswerUiCapability, processRequest } from './request-processor';
 import { ANSWER_UI_TOOL_NAME } from '@agiworkforce/types';
 import { withheldToolsTurnNotice } from './turn-tool-offer';
 import { EMPTY_ASSISTANT_TURN_HISTORY_TEXT } from '@/features/chat/lib/assistant-history-turn';
@@ -197,15 +194,17 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
       }
     });
 
-    it('tells the model to keep a withheld tool out of the answer', async () => {
+    it('tells the model, in the system role, to keep a withheld tool out of the answer', async () => {
       const result = await turn('withheld-1', 'what is 17 times 23');
       expect(result.turnWithheldTools ?? []).not.toHaveLength(0);
-      const wire = JSON.stringify(toCanonicalChatRequest(result).messages.at(-1));
-      expect(wire).toContain('do not mention');
-      expect(wire).toContain('without quoting or describing them to the user');
+      const wire = toCanonicalChatRequest(result);
+      const notice = withheldToolsTurnNotice(result.turnWithheldTools ?? [])!;
+      expect(notice).toContain('do not mention');
+      expect(wire.system).toContain(notice);
+      expect(JSON.stringify(wire.messages)).not.toContain(notice);
     });
 
-    it('keeps system, tools and history byte-identical when the per-turn notice changes', async () => {
+    it('keeps tools and history byte-identical and the per-turn notice out of user text', async () => {
       const history: ChatTurnMessage[] = [
         { role: 'user', content: 'Which language is the repo in?' },
         { role: 'assistant', content: 'TypeScript and Rust.' },
@@ -234,8 +233,8 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
       expect(prefix(summaryWire)).not.toContain(notice);
       const last = JSON.stringify(summaryWire.messages.at(-1));
       expect(last.indexOf(SUMMARY_REQUEST)).toBeGreaterThan(-1);
-      expect(last.indexOf(notice)).toBeGreaterThan(last.indexOf(SUMMARY_REQUEST));
-      expect(last).toContain(TURN_INSTRUCTIONS_HEADING);
+      expect(last).not.toContain(notice);
+      expect(summaryWire.system).toContain(notice);
     });
   },
 );

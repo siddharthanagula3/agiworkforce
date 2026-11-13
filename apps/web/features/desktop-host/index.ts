@@ -99,7 +99,6 @@ export {
   setDeveloperMcpServerEnabled,
   testDeveloperMcpServer,
   developerMcpServerTools,
-  developerMcpServerLogs,
   openDeveloperMcpConfig,
   openDeveloperTerminal,
   writeDeveloperTerminal,

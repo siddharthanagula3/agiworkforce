@@ -103,7 +103,6 @@ import {
   resolveLocalRoute,
   startingModelId,
   type LocalPlacement,
-  type LocalSessionLink,
 } from './local-code';
 import { useLocalSessions } from './hooks/use-local-sessions';
 import { forgetLocalSession } from './local-session-memory';
@@ -223,10 +222,6 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [error, setError] = useState<string | null>(null);
   const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [routeNotice, setRouteNotice] = useState<string | null>(null);
-  const [pendingLocalLink, setPendingLocalLink] = useState<Extract<
-    LocalSessionLink,
-    { kind: 'withheld' | 'unlisted' }
-  > | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
   const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
@@ -1610,42 +1605,6 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
               type="button"
               className={styles['secondaryButton']}
               onClick={() => setLocalArchivedThread(null)}
-            >
-              <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
-              {CODE_COPY.dismiss}
-            </button>
-          </span>
-        </div>
-      )}
-      {pendingLocalLink && (
-        <div className={styles['notice']} role="status" data-testid="local-session-link-pending">
-          <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
-          <span>
-            {pendingLocalLink.kind === 'withheld'
-              ? LOCAL_CODE_COPY.linkedSessionWithheld(pendingLocalLink.folder.name)
-              : pendingLocalLink.message}
-            {pendingLocalLink.kind === 'withheld' &&
-              local.allowRefusals[pendingLocalLink.folder.rootId] !== undefined && (
-                <span role="alert"> {local.allowRefusals[pendingLocalLink.folder.rootId]}</span>
-              )}
-          </span>
-          <span className={styles['noticeActions']}>
-            {pendingLocalLink.kind === 'withheld' && (
-              <button
-                type="button"
-                className={styles['secondaryButton']}
-                disabled={local.allowing !== null}
-                onClick={() => void local.allowSessions(pendingLocalLink.folder.rootId)}
-              >
-                {local.allowing === pendingLocalLink.folder.rootId
-                  ? LOCAL_CODE_COPY.allowingSessions
-                  : LOCAL_CODE_COPY.allowSessions}
-              </button>
-            )}
-            <button
-              type="button"
-              className={styles['secondaryButton']}
-              onClick={dropPendingLocalLink}
             >
               <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
               {CODE_COPY.dismiss}

@@ -198,7 +198,6 @@ import {
   TooltipTrigger,
   TooltipContent,
   TooltipProvider,
-  adjacentSidebarSessionId,
   translateUiPlural,
 } from '@agiworkforce/ui';
 import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
@@ -6716,30 +6715,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       workModeByConversation,
     ],
   );
-
-  // The desktop menu's Previous Chat, Next Chat and New Temporary Chat. The
-  // moves follow the rail's own order and open a chat the way a rail row does.
-  useEffect(() => {
-    const step = (direction: 'previous' | 'next') => {
-      const target = adjacentSidebarSessionId(
-        sidebarSessions,
-        displayedConversationId ?? null,
-        direction,
-      );
-      if (target) handleSelectSession(target);
-    };
-    const stopPrevious = onAppCommand('go-to-previous-chat', () => step('previous'));
-    const stopNext = onAppCommand('go-to-next-chat', () => step('next'));
-    const stopTemporary = onAppCommand('new-temporary-chat', () => {
-      handleNewChat();
-      useChatStore.getState().setPendingTemporaryChat(true);
-    });
-    return () => {
-      stopPrevious();
-      stopNext();
-      stopTemporary();
-    };
-  }, [displayedConversationId, handleNewChat, handleSelectSession, sidebarSessions]);
 
   // Top-level destinations stay visible in the production sidebar. The rail body
   // still owns chat recents; the Chat item is the stable mode destination paired

@@ -269,6 +269,9 @@ describe('tool loop · unavailable tool withdrawal', () => {
       .mockResolvedValueOnce(
         toolCallStream(EXECUTE_CODE_TOOL, { language: 'python', code: 'print(1)' }, 'call_x4'),
       )
+      .mockResolvedValueOnce(
+        toolCallStream(WRITE_FILE_TOOL, { path: 'a.txt', content: 'x' }, 'call_x5'),
+      )
       .mockResolvedValueOnce(finalAnswerStream('Answered without running code.'));
 
     const output = await collect(
@@ -300,13 +303,16 @@ describe('tool loop · unavailable tool withdrawal', () => {
 
     await collect(runToolLoop(processed, { approvalMode: 'auto' }));
 
-    expect(offeredToolNames(1)).toHaveLength(0);
-    expect(requestAt(1)?.tool_choice).toBeUndefined();
-    const request = factoryMocks.streamRequest.mock.calls[1]?.[2] as ProcessedRequest['llmRequest'];
-    expect(
-      request.messages.find((message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME)
-        ?.content,
-    ).toBe(chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION)['no_tools']);
+    expect(offeredToolNames(1)).toEqual(offeredToolNames(0));
+    expect(requestAt(1)?.tool_choice).toBe('auto');
+    const inventoryAt = (callIndex: number) =>
+      (
+        factoryMocks.streamRequest.mock.calls[callIndex]?.[2] as ProcessedRequest['llmRequest']
+      ).messages.find((message) => message.name === MANAGED_TOOL_INVENTORY_MESSAGE_NAME)?.content;
+    expect(inventoryAt(1)).toBe(inventoryAt(0));
+    expect(inventoryAt(1)).not.toBe(
+      chatSystemPromptSections(CHAT_SYSTEM_PROMPT_PINNED_VERSION)['no_tools'],
+    );
     expect(processed.llmRequest.messages).toEqual(source);
   });
 });

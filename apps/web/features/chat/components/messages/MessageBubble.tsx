@@ -2170,13 +2170,16 @@ const MessageBubbleComponent = function MessageBubble({
       }),
     [interactiveCards, inlineToolImages],
   );
+  const interactiveCardTextOffsets = message.metadata?.interactiveCardTextOffsets;
   const leadingInteractiveCards = useMemo(
-    () => separateInteractiveCards.filter((card) => interactiveCardRendersBeforeProse(card.kind)),
-    [separateInteractiveCards],
+    () =>
+      separateInteractiveCards.filter((card) => cardLeadsProse(card, interactiveCardTextOffsets)),
+    [separateInteractiveCards, interactiveCardTextOffsets],
   );
   const trailingInteractiveCards = useMemo(
-    () => separateInteractiveCards.filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
-    [separateInteractiveCards],
+    () =>
+      separateInteractiveCards.filter((card) => !cardLeadsProse(card, interactiveCardTextOffsets)),
+    [separateInteractiveCards, interactiveCardTextOffsets],
   );
 
   /**
@@ -3663,7 +3666,7 @@ const MessageBubbleComponent = function MessageBubble({
                         ariaLabel:
                           searchNotice === 'no-results'
                             ? 'Retry this response with web search'
-                            : 'Search the web and answer this turn again',
+                            : 'Send this turn again with a web search required',
                         icon: RefreshCw,
                         onClick: () => onRegenerate(message.id),
                       }
