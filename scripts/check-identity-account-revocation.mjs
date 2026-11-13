@@ -4,7 +4,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import { credentialVerifiers, ROUTE_GATE } from './check-membership-revocation.mjs';
@@ -96,6 +95,8 @@ export function withCallees(source, body, seen = new Set()) {
   return reached;
 }
 
+const PRINCIPAL_RETURN =
+  /\breturn\s+(?!null\b|undefined\b|await\s+getClerkAuthUser\b)[A-Za-z_$({]/g;
 const EXPORTED_FUNCTION = /^export\s+(?:async\s+)?function\s+(\w+)/gm;
 
 const DELEGATED_RETURN = /^return\s+(?:await\s+)?([A-Za-z_$][\w$]*)\s*\(/;
@@ -148,144 +149,7 @@ export function ungatedReturns(source, name, seen = new Set()) {
     if (delegatesToGatedFunction(source, expression, seen)) continue;
     ungated.push(statement);
   }
-  if (!functions.get(name)) return null;
-  const facts = new Map();
-  for (const [id, node] of functions) {
-    if (!node) continue;
-    const shadowed = new Set();
-    const returns = [];
-    const awaited = [];
-    const addBinding = (binding) => {
-      if (ts.isIdentifier(binding)) shadowed.add(binding.text);
-      else
-        for (const element of binding.elements) {
-          if (ts.isBindingElement(element)) addBinding(element.name);
-        }
-    };
-    const visit = (child) => {
-      if (ts.isFunctionLike(child) || ts.isClassLike(child)) {
-        if (child.name && ts.isIdentifier(child.name)) shadowed.add(child.name.text);
-        return;
-      }
-      if (ts.isVariableDeclaration(child)) addBinding(child.name);
-      if (ts.isCatchClause(child) && child.variableDeclaration) {
-        addBinding(child.variableDeclaration.name);
-      }
-      if (ts.isReturnStatement(child)) returns.push(child);
-      if (
-        ts.isAwaitExpression(child) &&
-        ts.isCallExpression(child.expression) &&
-        ts.isIdentifier(child.expression.expression)
-      ) {
-        const parent = child.parent;
-        if (
-          ts.isExpressionStatement(parent) ||
-          (ts.isVariableDeclaration(parent) && parent.initializer === child)
-        ) {
-          awaited.push(child.expression);
-        }
-      }
-      ts.forEachChild(child, visit);
-    };
-    for (const parameter of node.parameters) {
-      addBinding(parameter.name);
-    }
-    visit(node.body);
-    const body = node.body.getText(parsed);
-    facts.set(id, { node, body, shadowed, returns, awaited });
-  }
-  const callName = (call, fact) => {
-    if (!ts.isIdentifier(call.expression)) return null;
-    const id = call.expression.text;
-    return fact.shadowed.has(id) || !functions.get(id) ? null : id;
-  };
-  const dominatesExit = (call, fact, exit) => {
-    const awaited = call.parent;
-    const statement = ts.isVariableDeclaration(awaited.parent)
-      ? awaited.parent.parent.parent
-      : awaited.parent;
-    const block = statement.parent;
-    if (!ts.isBlock(block)) return false;
-    if (exit === null) return block === fact.node.body;
-    let child = exit;
-    while (child && child.parent !== block) child = child.parent;
-    return Boolean(child && statement.getStart(parsed) < child.getStart(parsed));
-  };
-  const proven = new Set([ACCOUNT_GATE]);
-  const root = facts.get(ACCOUNT_GATE);
-  if (root) {
-    for (const call of root.awaited) {
-      const id = callName(call, root);
-      const callee = id ? facts.get(id) : null;
-      const parameter = root.node.parameters[0];
-      if (
-        !callee ||
-        callee.node.parameters.length !== 1 ||
-        callee.node.parameters[0].initializer ||
-        callee.node.parameters[0].questionToken ||
-        callee.node.parameters[0].dotDotDotToken ||
-        !parameter ||
-        !ts.isIdentifier(parameter.name) ||
-        call.arguments.length !== 1 ||
-        !ts.isIdentifier(call.arguments[0]) ||
-        call.arguments[0].text !== parameter.name.text ||
-        !new RegExp(`\\b${DECISION}\\b`).test(withCallees(source, callee.body))
-      )
-        continue;
-      if (
-        !dominatesExit(call, root, null) ||
-        !root.returns.every((ret) => dominatesExit(call, root, ret))
-      )
-        continue;
-      proven.add(id);
-    }
-  }
-  const covered = (fact, exit) =>
-    fact.awaited.some(
-      (call) => proven.has(callName(call, fact)) && dominatesExit(call, fact, exit),
-    );
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const [id, fact] of facts) {
-      if (proven.has(id)) continue;
-      if (!fact.returns.every((ret) => covered(fact, ret))) continue;
-      const last = fact.node.body.statements.at(-1);
-      if (
-        (!last || (!ts.isReturnStatement(last) && !ts.isThrowStatement(last))) &&
-        !covered(fact, null)
-      )
-        continue;
-      proven.add(id);
-      changed = true;
-    }
-  }
-  const inspect = (id, visiting) => {
-    const fact = facts.get(id);
-    if (!fact || visiting.has(id)) return null;
-    const stack = new Set(visiting).add(id);
-    const ungated = [];
-    let principals = 0;
-    for (const ret of fact.returns) {
-      let expression = ret.expression;
-      if (
-        !expression ||
-        expression.kind === ts.SyntaxKind.NullKeyword ||
-        (ts.isIdentifier(expression) && expression.text === 'undefined')
-      )
-        continue;
-      principals += 1;
-      if (covered(fact, ret)) continue;
-      while (ts.isAwaitExpression(expression) || ts.isParenthesizedExpression(expression))
-        expression = expression.expression;
-      const target = ts.isCallExpression(expression) ? callName(expression, fact) : null;
-      const delegate = target ? inspect(target, stack) : null;
-      if (delegate && delegate.principals > 0 && delegate.ungated.length === 0) continue;
-      ungated.push(ret.getText(parsed).split('\n')[0]);
-    }
-    return { ungated, principals };
-  };
-  return inspect(name, new Set())?.ungated ?? null;
+  return ungated;
 }
 
 export function checkAccountRevocation(root = scanRoot) {

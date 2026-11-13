@@ -554,18 +554,6 @@ test('a workspace-scoped read carrying only user_id fails: it reads Personal and
 
 for (const { name, declarations, query, parameters = 'userId: string', status } of [
   {
-    name: 'an immutable local SQL predicate carries its real workspace scope',
-    declarations: "const workspaceClause = 'organization_id is not distinct from $2::uuid';",
-    query: '`select id from web_conversations where user_id = $1 and ${workspaceClause}`',
-    status: 0,
-  },
-  {
-    name: 'a static template predicate carries its real workspace scope',
-    declarations: 'const workspaceClause = `organization_id is not distinct from $2::uuid`;',
-    query: '`select id from web_conversations where user_id = $1 and ${workspaceClause}`',
-    status: 0,
-  },
-  {
     name: 'a nearby scoped declaration cannot lend scope to an unrelated literal',
     declarations: "const workspaceClause = 'true'; const otherClause = 'organization_id = $2';",
     query: '`select id from web_conversations where user_id = $1 and ${workspaceClause}`',

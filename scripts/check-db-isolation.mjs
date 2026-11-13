@@ -1,10 +1,5 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import {
-  localSqlConstantExpansion,
-  scopingInterpolations,
-  sqlPredicateCode,
-} from './lib/sql-constant-expansion.mjs';
 import { stripComments } from './lib/module-graph.mjs';
 import { USER_OWNED_TABLES } from './lib/db-isolation-tables.mjs';
 import { expandProjectReadScope } from './lib/project-scope-sql.mjs';
@@ -1160,13 +1155,15 @@ const ALLOWLIST = [
   },
   {
     match: /lib\/server\/retention\/deleted-project-files\.ts$/,
-    tables: ['project_knowledge_files'],
+    tables: ['project_knowledge_files', 'project_knowledge_objects'],
     functions: ['deleteUnreferencedObjects'],
     reason:
       'the purge of soft-deleted project files deletes a stored object only when no live row ' +
       'anywhere still names it, because a duplicated project shares the object across accounts. ' +
-      'The input is the URIs of the rows this purge just confirmed, and the answer is the subset ' +
-      'still referenced, which only keeps objects and never exposes a row',
+      'For the same reason it leaves an object the knowledge object ledger tracks to the ' +
+      'ledger cleanup, whichever account the ledger row names. The input is the URIs of the rows ' +
+      'this purge just confirmed, and the answer is the subset still referenced or ledger owned, ' +
+      'which only keeps objects and never exposes a row. Reached only from api/cron',
   },
   {
     match: /lib\/services\/cogs-import-coverage\.ts$/,
@@ -1429,16 +1426,22 @@ function resolvesToScope(rawSource, name, depth) {
   return false;
 }
 
-function containsExpandedWorkspacePredicate(sql) {
-  const code = sqlPredicateCode(sql);
-  if (code === null) return false;
-  const where = code.search(/\bwhere\b/);
-  return (
-    where >= 0 &&
-    /\b(?:organization_id|org_id)\s*(?:=|is\s+not\s+distinct\s+from|in\s*\()/.test(
-      code.slice(where),
-    )
-  );
+function scopingInterpolations(sql, lower) {
+  const names = [];
+  const start = lower.search(/\b(?:where|on\s+conflict)\b/);
+  if (start >= 0) {
+    const tail = lower.slice(start).search(/\b(?:returning|order\s+by|group\s+by|limit)\b/);
+    const end = tail < 0 ? lower.length : start + tail;
+    for (const m of sql.matchAll(/\$\{\s*([A-Za-z_$][\w$]*)/g)) {
+      if (m.index >= start && m.index < end) names.push(m[1]);
+    }
+  }
+  for (const m of sql.matchAll(
+    /insert\s+into\s+(?:public\.)?[a-z_]+\s*\(\s*\$\{\s*([A-Za-z_$][\w$]*)/gi,
+  )) {
+    names.push(m[1]);
+  }
+  return names;
 }
 
 const MIGRATIONS_DIR = 'apps/web/db/neon';
@@ -1466,7 +1469,6 @@ for (const file of files) {
   const exemptions = ALLOWLIST.filter((a) => a.match.test(rel));
   if (exemptions.some((a) => !a.tables)) continue;
   const decls = declarationIndex(maskLiterals(source));
-  let expandConstants;
 
   for (const { sql: sourceSql, index } of extractStatements(source)) {
     const sql = expandProjectReadScope(sourceSql, source, rel, root);
@@ -1489,16 +1491,13 @@ for (const file of files) {
       !carriesWorkspacePredicateHelper(sql, source, rel) &&
       !workspaceScopeExempt(rel)
     ) {
-      expandConstants ??= localSqlConstantExpansion(file);
-      if (!containsExpandedWorkspacePredicate(expandConstants(sql, index))) {
-        workspaceScoped += 1;
-        workspaceCounts.set(rel, (workspaceCounts.get(rel) ?? 0) + 1);
-        workspaceErrors.push(
-          `${rel}: statement over workspace-scoped table(s) [${workspaceTables.join(', ')}] carries ` +
-            `no organization_id predicate, so it reads Personal and every organization at once.\n    ` +
-            sql.replace(/\s+/g, ' ').trim().slice(0, 160),
-        );
-      }
+      workspaceScoped += 1;
+      workspaceCounts.set(rel, (workspaceCounts.get(rel) ?? 0) + 1);
+      workspaceErrors.push(
+        `${rel}: statement over workspace-scoped table(s) [${workspaceTables.join(', ')}] carries ` +
+          `no organization_id predicate, so it reads Personal and every organization at once.\n    ` +
+          sql.replace(/\s+/g, ' ').trim().slice(0, 160),
+      );
     }
 
     if (mentionsScopeToken(lower)) continue;
