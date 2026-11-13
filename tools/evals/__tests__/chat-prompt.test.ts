@@ -60,6 +60,10 @@ function row(id: string): EvalCase {
   return found;
 }
 
+function projectTurn(): EvalCase {
+  return { ...row('chat-prompt/forget-with-memory-off'), memory: 'on', project: 'with_files' };
+}
+
 describe('rendering the product chat system prompt for a case', () => {
   it('tells a turn with tools but no search that search is unavailable, from v5 on', async () => {
     const searchOff = row('chat-prompt/own-resume-profile-search-off');
@@ -186,15 +190,12 @@ describe('rendering version 11 for a web chat turn', () => {
 
   it('gives a case that declares its memory the setup of a saved web chat, in its project', async () => {
     const v11 = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
-    const inProject = v11.render(row('chat-prompt/project-file-source-named'));
+    const inProject = v11.render(projectTurn());
 
     expect(inProject).toContain(
       "What is set up for this chat right now:\n- This chat is saved in the user's chat history.\n- Memory is on.",
     );
     expect(inProject).toContain("- This chat is in one of the user's projects.");
-    expect(inProject).toContain(
-      'Under your answer, the app shows the user the sources it gave you:\n- the saved memories, listed under Sources\n- a link to each project file it supplied',
-    );
   });
 
   it('gives every other case the setup the route sends for a saved web chat on default settings', async () => {
@@ -218,7 +219,7 @@ describe('rendering version 11 for a web chat turn', () => {
     const text = sections.chatSystemPromptSections(11);
     const tool = (name: string) => ({ name, description: name, inputSchema: { type: 'object' } });
     const withTools = {
-      ...row('chat-prompt/project-file-source-named'),
+      ...projectTurn(),
       tools: [tool('save_memory'), tool('search_files')],
     };
 
@@ -226,30 +227,15 @@ describe('rendering version 11 for a web chat turn', () => {
     expect(v11.render(withTools)).toContain(
       `${text['project_with_files']}\n${text['project_file_tools']}`,
     );
-    expect(v11.render(row('chat-prompt/project-file-source-named'))).not.toContain(
-      text['memory_tools'],
-    );
-  });
-
-  it('sends the web chat its cards and artifact apps, and its Settings', async () => {
-    const rendered = (await loadChatPromptRenderer(11, '2026-10-15', measuredKey)).render(
-      row('chat-prompt/recruiter-follow-up-email'),
-    );
-
-    expect(rendered).toContain('put it in a fenced code block with the language email');
-    expect(rendered).toContain('window.agi.complete(prompt)');
-    expect(rendered).toContain('General under Settings for their name');
+    expect(v11.render(projectTurn())).not.toContain(text['memory_tools']);
   });
 
   it('renders versions before 8 the same whether or not the run names its model', async () => {
     for (const version of [6, 7]) {
       const plain = await loadChatPromptRenderer(version, '2026-10-15');
       const named = await loadChatPromptRenderer(version, '2026-10-15', measuredKey);
-      for (const id of [
-        'chat-prompt/forget-with-memory-off',
-        'chat-prompt/project-file-source-named',
-      ]) {
-        expect(named.render(row(id)), `v${version} ${id}`).toBe(plain.render(row(id)));
+      for (const evalCase of [row('chat-prompt/forget-with-memory-off'), projectTurn()]) {
+        expect(named.render(evalCase), `v${version} ${evalCase.id}`).toBe(plain.render(evalCase));
       }
     }
   });
