@@ -7,6 +7,8 @@ import {
   tier2Release,
   tier2LoadedPresetName,
   _setLLMModuleForTesting,
+  _setPresetDownloadedCheckForTesting,
+  Tier2ModelNotDownloadedError,
 } from '../tier2.js';
 
 const makeInstance = () => ({
@@ -29,6 +31,7 @@ beforeEach(() => {
   mockInstance = makeInstance();
   mockFromModelName.mockImplementation(() => Promise.resolve(mockInstance));
   _setLLMModuleForTesting(mockLLMModule);
+  _setPresetDownloadedCheckForTesting(async () => true);
   tier2Release();
 });
 
@@ -437,5 +440,57 @@ describe('tier2: load reservations', () => {
     await expect(first).rejects.toThrow('load failed');
     await second;
     expect(tier2LoadedPresetName()).toBe(ALTERNATE_PRESET.modelName);
+  });
+});
+
+describe('tier2: generation never downloads', () => {
+  it('refuses with a readable error when the preset files are gone', async () => {
+    _setPresetDownloadedCheckForTesting(async () => false);
+    const failure = tier2Generate(DEFAULT_PRESET, { prompt: 'Hello' });
+    await expect(failure).rejects.toBeInstanceOf(Tier2ModelNotDownloadedError);
+    await expect(failure).rejects.toThrow(
+      `${getDefaultModel().displayName} needs to be downloaded again. Open Models to download it.`,
+    );
+    expect(mockFromModelName).not.toHaveBeenCalled();
+  });
+
+  it('checks the files of the preset being generated, not another one', async () => {
+    const isPresetDownloaded = vi.fn(
+      async (preset: ExecutorchPreset) => preset.modelName === DEFAULT_PRESET.modelName,
+    );
+    _setPresetDownloadedCheckForTesting(isPresetDownloaded);
+    await expect(tier2Generate(ALTERNATE_PRESET, { prompt: 'Hello' })).rejects.toBeInstanceOf(
+      Tier2ModelNotDownloadedError,
+    );
+    expect(isPresetDownloaded).toHaveBeenCalledWith(ALTERNATE_PRESET);
+  });
+
+  it('fails closed when the files cannot be listed', async () => {
+    _setPresetDownloadedCheckForTesting(null);
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'Hello' })).rejects.toBeInstanceOf(
+      Tier2ModelNotDownloadedError,
+    );
+    expect(mockFromModelName).not.toHaveBeenCalled();
+  });
+
+  it('does not re-check files for a model that is already loaded', async () => {
+    await tier2LoadModel(DEFAULT_PRESET);
+    const isPresetDownloaded = vi.fn(async () => false);
+    _setPresetDownloadedCheckForTesting(isPresetDownloaded);
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'Hello' })).resolves.toMatchObject({
+      runtime: 'executorch',
+    });
+    expect(isPresetDownloaded).not.toHaveBeenCalled();
+  });
+
+  it('releases the generation lease after a refusal so the next send can run', async () => {
+    _setPresetDownloadedCheckForTesting(async () => false);
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'first' })).rejects.toBeInstanceOf(
+      Tier2ModelNotDownloadedError,
+    );
+    _setPresetDownloadedCheckForTesting(async () => true);
+    await expect(tier2Generate(DEFAULT_PRESET, { prompt: 'second' })).resolves.toMatchObject({
+      aborted: false,
+    });
   });
 });

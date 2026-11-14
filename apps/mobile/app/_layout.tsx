@@ -101,6 +101,7 @@ import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
 import { registerAppTransactionForAccount } from '@/src/features/age-assurance/appTransaction';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
 import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
+import { useLocalModelMemoryRelease } from '@/src/features/model-picker/useLocalModelMemoryRelease';
 import '../global.css';
 
 holdLaunchSplash();
@@ -282,6 +283,7 @@ export default function RootLayout() {
       themeMode === 'dark' ? 'dark' : themeMode === 'light' ? 'light' : 'unspecified',
     );
   }, [themeMode]);
+  useLocalModelMemoryRelease();
   const { isUnlocked, isCovered, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
   const resetAppLock = useCallback(() => {

@@ -466,11 +466,18 @@
     "_send": [
       ".agents/skills/antislop-human/contrast-mcp.py"
     ],
+    "_setExecutorchResourcesForTesting": [
+      "apps/mobile/services/executorchModels.ts"
+    ],
     "_setLlamaModuleForTesting": [
       "packages/platform/local-llm/src/index.ts",
       "packages/platform/local-llm/src/tier3.ts"
     ],
     "_setLLMModuleForTesting": [
+      "packages/platform/local-llm/src/index.ts",
+      "packages/platform/local-llm/src/tier2.ts"
+    ],
+    "_setPresetDownloadedCheckForTesting": [
       "packages/platform/local-llm/src/index.ts",
       "packages/platform/local-llm/src/tier2.ts"
     ],
@@ -6003,6 +6010,9 @@
     "app_with_keyboard_focus": [
       "apps/desktop/src-tauri/src/automation/computer_use/mod.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/target_app.rs"
+    ],
+    "appAuthoredDownloadMessage": [
+      "apps/mobile/services/modelDownload.ts"
     ],
     "AppCommand": [
       "apps/web/shared/lib/app-commands.ts"
@@ -15425,6 +15435,9 @@
     ],
     "CancelErr": [
       "crates/agiworkforce-protocol/src/async_utils.rs"
+    ],
+    "cancelExecutorchPresetDownload": [
+      "apps/mobile/services/executorchModels.ts"
     ],
     "CancelFuture": [
       "crates/agiworkforce-agent-core/src/lib.rs"
@@ -35633,6 +35646,7 @@
       "packages/platform/files/vitest.config.ts",
       "packages/platform/identity/vitest.config.ts",
       "packages/platform/key-value/vitest.config.ts",
+      "packages/platform/local-llm/vitest.config.ts",
       "packages/platform/object-storage/vitest.config.ts",
       "packages/platform/observability/vitest.config.ts",
       "packages/platform/utils/vitest.config.ts",
@@ -36786,6 +36800,9 @@
     ],
     "deleteE2BSessionsForUser": [
       "apps/web/lib/e2b/session-store.ts"
+    ],
+    "deleteExecutorchPresetFiles": [
+      "apps/mobile/services/executorchModels.ts"
     ],
     "deleteExpiredSessions": [
       "services/signaling-server/src/db.ts"
@@ -47271,8 +47288,20 @@
     "EXECUTOR_PATH": [
       "scripts/check-image-job-states.mjs"
     ],
+    "EXECUTORCH_MANAGER": [
+      "apps/mobile/services/executorchModels.ts"
+    ],
     "ExecutorchPreset": [
       "packages/contracts/types/src/on-device-models.ts"
+    ],
+    "executorchPresetForModel": [
+      "apps/mobile/services/executorchModels.ts"
+    ],
+    "executorchPresetSources": [
+      "apps/mobile/services/executorchModels.ts"
+    ],
+    "ExecutorchResources": [
+      "apps/mobile/services/executorchModels.ts"
     ],
     "executorchVlmPresetInfo": [
       "packages/platform/local-llm/src/index.ts",
@@ -48776,6 +48805,9 @@
     "FeedbackKind": [
       "apps/cli/src/cloud/feedback.rs",
       "apps/extension-vscode/src/features/feedback/submitFeedback.ts"
+    ],
+    "feedbackMailtoUrl": [
+      "apps/mobile/src/features/feedback/index.tsx"
     ],
     "FeedbackMode": [
       "apps/cli/src/pr_feedback.rs"
@@ -66363,6 +66395,9 @@
     "isExecutionTool": [
       "apps/web/lib/e2b/execution-tools.ts"
     ],
+    "isExecutorchRecord": [
+      "apps/mobile/services/executorchModels.ts"
+    ],
     "isExempt": [
       "scripts/check-file-naming.mjs"
     ],
@@ -72067,6 +72102,9 @@
     "liveFunctionBodies": [
       "scripts/lib/search-index-coverage.mjs"
     ],
+    "liveInstalledModels": [
+      "apps/mobile/services/executorchModels.ts"
+    ],
     "livePricing": [
       "tools/evals/src/live.ts"
     ],
@@ -73171,6 +73209,9 @@
     ],
     "LOCAL_APPROVAL_RISK_LABELS": [
       "apps/web/features/code/local-code.ts"
+    ],
+    "LOCAL_ATTACH_NOTE": [
+      "apps/mobile/src/features/chat/components/AddToChatSheet.tsx"
     ],
     "LOCAL_ATTACHMENT_REFUSAL": [
       "packages/contracts/local-runtime/src/index.ts",
@@ -84104,6 +84145,9 @@
     "model_breakdown": [
       "apps/cli/src/cost_ledger.rs"
     ],
+    "MODEL_BUSY_REMOVAL_MESSAGE": [
+      "apps/mobile/services/modelDownload.ts"
+    ],
     "MODEL_CAPABILITY_FILTERS": [
       "apps/web/features/models/lib/model-filters.ts"
     ],
@@ -84790,6 +84834,9 @@
     ],
     "ModelReleaseStage": [
       "packages/ai/routing/src/model-picker.ts"
+    ],
+    "ModelRemovalError": [
+      "apps/mobile/services/modelDownload.ts"
     ],
     "modelRemovalUnsupportedReason": [
       "apps/mobile/services/modelDownload.ts"
@@ -109085,6 +109132,9 @@
     "ReleaseEventQuery": [
       "apps/web/lib/server/release-audit-store.ts"
     ],
+    "releaseExecutorchPreset": [
+      "apps/mobile/services/executorchModels.ts"
+    ],
     "releaseExpiredFreeTrialReservations": [
       "apps/web/lib/services/free-trial-service.ts"
     ],
@@ -109123,6 +109173,9 @@
     ],
     "releaseLegalHold": [
       "apps/web/lib/services/retention-service.ts"
+    ],
+    "releaseLocalModelMemory": [
+      "apps/mobile/src/features/model-picker/useLocalModelMemoryRelease.ts"
     ],
     "ReleaseNote": [
       "apps/web/app/release-notes/release-notes-data.ts"
@@ -137103,7 +137156,15 @@
     "Tier1Status": [
       "packages/platform/local-llm/src/types.ts"
     ],
+    "tier2AssertPresetDownloaded": [
+      "packages/platform/local-llm/src/index.ts",
+      "packages/platform/local-llm/src/tier2.ts"
+    ],
     "tier2Generate": [
+      "packages/platform/local-llm/src/index.ts",
+      "packages/platform/local-llm/src/tier2.ts"
+    ],
+    "tier2IsPresetDownloaded": [
       "packages/platform/local-llm/src/index.ts",
       "packages/platform/local-llm/src/tier2.ts"
     ],
@@ -137119,6 +137180,10 @@
       "packages/platform/local-llm/src/tier2.ts"
     ],
     "Tier2LoadOptions": [
+      "packages/platform/local-llm/src/index.ts",
+      "packages/platform/local-llm/src/tier2.ts"
+    ],
+    "Tier2ModelNotDownloadedError": [
       "packages/platform/local-llm/src/index.ts",
       "packages/platform/local-llm/src/tier2.ts"
     ],
@@ -144589,6 +144654,9 @@
     "useLocalModeHost": [
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/host.ts"
+    ],
+    "useLocalModelMemoryRelease": [
+      "apps/mobile/src/features/model-picker/useLocalModelMemoryRelease.ts"
     ],
     "useLocalModels": [
       "apps/web/features/desktop-host/hooks/use-local-models.ts",

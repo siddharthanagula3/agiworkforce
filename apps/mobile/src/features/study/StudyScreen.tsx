@@ -22,6 +22,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
 import { listStudySessions, startStudySession } from '@/src/features/study/service';
 import { useChatStore } from '@/stores/chatStore';
 import { useThemeColors } from '@/src/ui/theme';
@@ -100,7 +101,7 @@ export function StudyScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
+  const { switchToCloud } = useAppModeSwitch();
   const createConversation = useChatStore((s) => s.createConversation);
   const [topic, setTopic] = useState('');
   const [mode, setMode] = useState<StudyMode>('learn');
@@ -162,7 +163,7 @@ export function StudyScreen() {
           icon={BookOpen}
         />
         <Pressable
-          onPress={() => setAppMode('cloud')}
+          onPress={() => void switchToCloud()}
           accessibilityRole="button"
           accessibilityLabel="Switch to Cloud mode"
           style={{

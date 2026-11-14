@@ -7,6 +7,7 @@ import {
   tier2IsVisionReady,
   executorchVlmPresetInfo,
   _setLLMModuleForTesting,
+  _setPresetDownloadedCheckForTesting,
 } from '../tier2.js';
 import { effectiveTier2VisionIn, effectiveVisionIn } from '../multimodal.js';
 import { getDefaultModel } from '../catalog.js';
@@ -28,6 +29,7 @@ beforeEach(() => {
   mockInstance = makeInstance();
   mockFromModelName.mockImplementation(() => Promise.resolve(mockInstance));
   _setLLMModuleForTesting({ fromModelName: mockFromModelName });
+  _setPresetDownloadedCheckForTesting(async () => true);
   tier2Release();
 });
 

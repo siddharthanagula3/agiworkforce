@@ -16,12 +16,8 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import {
-  assertDownloadAllowed,
-  cancelDownload,
-  ModelDownloadError,
-} from '@/services/modelDownload';
-import { getInstalledModel, recordInstalledModel } from '@/storage/installedModels';
+import { appAuthoredDownloadMessage, ModelDownloadError } from '@/services/modelDownload';
+import { getInstalledModel } from '@/storage/installedModels';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
@@ -39,7 +35,6 @@ import {
   getModelById,
   getShippableModels,
   getSystemModelForTier1Runtime,
-  tier2LoadModel,
   type DeviceCapabilities,
   type LocalRuntimeTier,
 } from '@agiworkforce/local-llm';
@@ -50,6 +45,7 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { getSelectableModelById } from '@/src/features/model-picker/service';
 
 const HERO_SYMBOL_SIZE = 72;
+const DOWNLOAD_FAILED_MESSAGE = 'Download failed. You can try again or continue without the model.';
 
 type DeviceTierInfo = {
   tier: LocalRuntimeTier;
@@ -139,7 +135,6 @@ export default function OnboardingScreen() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSpeedMBs, setDownloadSpeedMBs] = useState(0);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [tier2Loading, setTier2Loading] = useState(false);
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onboardingOpenRef = useRef(true);
   const modelPickerRef = useRef<BottomSheet>(null);
@@ -239,16 +234,21 @@ export default function OnboardingScreen() {
     [router],
   );
 
-  const handleContinueToCloud = useCallback(() => {
+  const leaveDownloadScreen = useCallback(() => {
+    onboardingOpenRef.current = false;
     if (downloadTimerRef.current) {
       clearInterval(downloadTimerRef.current);
       downloadTimerRef.current = null;
     }
-    cancelDownload(recommendedModel.id);
+  }, []);
+
+  const handleContinueToCloud = useCallback(() => {
+    leaveDownloadScreen();
+    useModelInstallStore.getState().cancelModelDownload(recommendedModel.id);
     storage.set('onboarding-done', 'true');
     storage.delete('onboarding-mode');
     router.replace(beginCloudPostAuthIntent());
-  }, [recommendedModel.id, router]);
+  }, [leaveDownloadScreen, recommendedModel.id, router]);
 
   const handleHeroCTA = useCallback(() => {
     const alreadySatisfied = isDisclosureSatisfied(mmkvDisclosureLedger, false);
@@ -311,42 +311,27 @@ export default function OnboardingScreen() {
       setDownloadSpeedMBs(0);
       setDownloadError(null);
 
-      if (recommendedModel.executorchPreset) {
-        const preset = recommendedModel.executorchPreset;
-        setTier2Loading(true);
-        tier2LoadModel(
-          preset,
-          (fractional) => {
-            setDownloadProgress(fractional * 100);
-          },
-          {
-            ensureDownloadAllowed: () =>
-              assertDownloadAllowed({
-                wifiOnly: !cellularEnabled,
-                requiredBytes: recommendedModel.fileSizeBytes,
-              }),
-          },
-        )
-          .then(async () => {
-            await recordInstalledModel({
-              id: recommendedModel.id,
-              display_name: recommendedModel.displayName,
-              runtime: 'local',
-              format: 'pte',
-              size_bytes: recommendedModel.fileSizeBytes,
-              sha256: null,
-              local_path: null,
-              installed_at: Date.now(),
-              last_used_at: null,
-              capabilities: null,
-            });
-            setTier2Loading(false);
-            finishOnboarding(recommendedModel.id);
+      const presetModel = recommendedModel.executorchPreset
+        ? getSelectableModelById(recommendedModel.id)
+        : undefined;
+      if (presetModel) {
+        const modelId = presetModel.id;
+        const stopProgress = useModelInstallStore.subscribe((state) => {
+          const job = state.jobs[modelId];
+          if (job?.status === 'downloading') setDownloadProgress(job.progress * 100);
+        });
+        useModelInstallStore
+          .getState()
+          .prepareModel(presetModel)
+          .then(() => {
+            if (onboardingOpenRef.current) finishOnboarding(modelId);
           })
-          .catch(() => {
-            setTier2Loading(false);
-            setDownloadError('Download failed. You can try again or continue without the model.');
-          });
+          .catch((err: unknown) => {
+            if (!onboardingOpenRef.current) return;
+            if (err instanceof ModelDownloadError && err.kind === 'cancelled') return;
+            setDownloadError(appAuthoredDownloadMessage(err) ?? DOWNLOAD_FAILED_MESSAGE);
+          })
+          .finally(stopProgress);
         return;
       }
 
@@ -373,11 +358,7 @@ export default function OnboardingScreen() {
             if (kind === 'cancelled') {
               return;
             }
-            const msg =
-              err instanceof ModelDownloadError && kind !== 'network_error'
-                ? err.message
-                : 'Download failed. You can try again or continue without the model.';
-            setDownloadError(msg);
+            setDownloadError(appAuthoredDownloadMessage(err) ?? DOWNLOAD_FAILED_MESSAGE);
           });
         return;
       }
@@ -397,14 +378,9 @@ export default function OnboardingScreen() {
   }, [handleStartDownload]);
 
   const handleSkipToChat = useCallback(() => {
-    if (tier2Loading) return;
-    if (downloadTimerRef.current) {
-      clearInterval(downloadTimerRef.current);
-      downloadTimerRef.current = null;
-    }
-    onboardingOpenRef.current = false;
+    leaveDownloadScreen();
     finishOnboarding();
-  }, [tier2Loading, finishOnboarding]);
+  }, [leaveDownloadScreen, finishOnboarding]);
 
   return (
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>
@@ -449,7 +425,6 @@ export default function OnboardingScreen() {
             onSkip={handleSkipToChat}
             onRetry={canRetryDownload ? handleRetryDownload : undefined}
             error={downloadError}
-            skipDisabled={tier2Loading}
           />
         )}
       </Reanimated.View>
@@ -734,7 +709,6 @@ function DownloadScreen({
   onSkip,
   onRetry,
   error,
-  skipDisabled = false,
 }: {
   colors: ColorScheme;
   primaryButtonTextColor: string;
@@ -744,7 +718,6 @@ function DownloadScreen({
   onSkip: () => void;
   onRetry?: (() => void) | undefined;
   error?: string | null;
-  skipDisabled?: boolean;
 }) {
   const pct = Math.round(progress);
   const bytesDownloaded = (progress / 100) * model.fileSizeBytes;
@@ -810,7 +783,7 @@ function DownloadScreen({
         </Text>
       )}
 
-      {error && onRetry && !skipDisabled && (
+      {error && onRetry && (
         <PressableBox
           testID="download-retry-btn"
           onPress={onRetry}
@@ -825,14 +798,9 @@ function DownloadScreen({
       <PressableBox
         testID="download-skip-btn"
         onPress={onSkip}
-        disabled={skipDisabled}
         accessibilityRole="button"
         accessibilityLabel="Continue to chat"
-        accessibilityState={{ disabled: skipDisabled }}
-        style={[
-          styles.skipBtn,
-          { backgroundColor: colors.neutralSurface, opacity: skipDisabled ? 0.4 : 1 },
-        ]}
+        style={[styles.skipBtn, { backgroundColor: colors.neutralSurface }]}
       >
         <Text style={[styles.skipBtnText, { color: colors.textSecondary }]}>Continue to chat</Text>
       </PressableBox>

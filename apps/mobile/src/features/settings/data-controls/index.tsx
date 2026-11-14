@@ -31,6 +31,7 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { archiveAllConversations, deleteAllConversations } from '@/src/features/archived-chats';
+import { beginCloudPostAuthIntentForDestination } from '@/src/features/auth/services/postAuthIntent';
 import {
   captureCloudAccountEpoch,
   subscribeCloudAccountEpochChange,
@@ -56,6 +57,16 @@ export default function DataControlsScreen() {
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const loadConversations = useChatMessageStore((s) => s.loadConversations);
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const openCloudAccount = useCallback(() => {
+    if (!isClerkLoaded) return;
+    if (!isClerkSignedIn) {
+      router.push(beginCloudPostAuthIntentForDestination('/(app)/settings/cloud-account'));
+      return;
+    }
+    router.push('/(app)/settings/cloud-account');
+  }, [isClerkLoaded, isClerkSignedIn, router]);
 
   const [bulkScope, setBulkScope] = useState<BulkChatScope | null>(null);
   const bulkScopeRef = useRef<BulkChatScope | null>(null);
@@ -590,10 +601,10 @@ export default function DataControlsScreen() {
           label="Export Cloud data"
           icon={Download}
           value={cloudUnlocked ? undefined : 'Sign in required'}
-          onPress={() => router.push('/(app)/settings/cloud-account')}
+          onPress={openCloudAccount}
         />
         <PressableBox
-          onPress={() => router.push('/(app)/settings/cloud-account')}
+          onPress={openCloudAccount}
           accessibilityRole="button"
           accessibilityLabel={cloudUnlocked ? 'Delete account' : 'Delete account. Sign in required'}
           accessibilityHint="Opens account deletion, which asks you to confirm first"

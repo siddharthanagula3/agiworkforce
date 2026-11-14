@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDefaultModel, getLiteModeModel } from '../catalog.js';
-import { tier2Generate, tier2LoadModel, tier2Release, _setLLMModuleForTesting } from '../tier2.js';
+import {
+  tier2Generate,
+  tier2LoadModel,
+  tier2Release,
+  _setLLMModuleForTesting,
+  _setPresetDownloadedCheckForTesting,
+} from '../tier2.js';
 
 const STREAMED_TOKENS = ['The', ' sky', ' is', ' blue', '.'];
 
@@ -33,6 +39,7 @@ beforeEach(() => {
   mockInstance = makeInstance();
   mockFromModelName.mockImplementation(() => Promise.resolve(mockInstance));
   _setLLMModuleForTesting(mockLLMModule);
+  _setPresetDownloadedCheckForTesting(async () => true);
   tier2Release();
 });
 

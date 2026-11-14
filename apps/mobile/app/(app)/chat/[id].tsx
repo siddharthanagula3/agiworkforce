@@ -1012,13 +1012,18 @@ export default function ChatScreen() {
       } catch (error) {
         Alert.alert(
           'Could not create conversation branch',
-          toUserMessage(error, 'Check your connection and try again.'),
+          toUserMessage(
+            error,
+            conversationExecutionMode === 'cloud'
+              ? 'Check your connection and try again.'
+              : 'Try again.',
+          ),
         );
       } finally {
         branchingRef.current = false;
       }
     },
-    [forkConversation, id, router, title],
+    [conversationExecutionMode, forkConversation, id, router, title],
   );
 
   const retiredNotice = retiredModelNotice(conversation?.model);

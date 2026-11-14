@@ -837,12 +837,26 @@ function restoreComposerAttachments(attachments?: MessageAttachment[]): Attachme
   }));
 }
 
+const LOCAL_IMAGE_OCR_CACHE_LIMIT = 64;
+const localImageOcrCache = new Map<string, string>();
+
+async function localImageOcrText(url: string): Promise<string> {
+  const cached = localImageOcrCache.get(url);
+  if (cached !== undefined) return cached;
+  const text = (await recognizeText(url)).text.trim();
+  if (localImageOcrCache.size >= LOCAL_IMAGE_OCR_CACHE_LIMIT) {
+    const oldest = localImageOcrCache.keys().next().value;
+    if (oldest !== undefined) localImageOcrCache.delete(oldest);
+  }
+  localImageOcrCache.set(url, text);
+  return text;
+}
+
 async function buildLocalImageOcrContext(imageUploads: MessageAttachment[]): Promise<string[]> {
   const context: string[] = [];
   for (const image of imageUploads) {
     try {
-      const ocr = await recognizeText(image.url);
-      const text = ocr.text.trim();
+      const text = await localImageOcrText(image.url);
       if (text.length > 0) {
         context.push(
           `[Image: ${image.fileName ?? 'attached image'}]\nOn-device OCR text:\n${text}`,
@@ -988,9 +1002,15 @@ function localSetupMessage(error: unknown): string {
     raw.includes('No local runtime') ||
     raw.includes('Download a model') ||
     raw.includes('not downloaded') ||
+    raw.includes('needs to be downloaded again') ||
+    raw.includes('No local model is configured') ||
+    raw.includes('not selectable for local chat') ||
     raw.includes('not available on this device')
   ) {
     return LOCAL_NO_MODEL_MESSAGE;
+  }
+  if (raw.includes('thermally throttled')) {
+    return 'Your device is too warm to run the on-device model. Let it cool down, then try again.';
   }
   if (raw.includes('APPLE_INTELLIGENCE_UNAVAILABLE')) {
     return 'Apple Intelligence is not available on this device. Choose another on-device model to keep chatting privately.';
@@ -1811,13 +1831,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (executionMode !== 'cloud') {
       for (const earlier of existingMessages) {
         if (earlier.isStreaming || earlier.role !== 'user') continue;
-        const earlierDocuments = earlier.attachments?.filter(
-          (a) => !a.assetId && !a.mimeType.startsWith('image/'),
-        );
-        if (!earlierDocuments || earlierDocuments.length === 0) continue;
-        const documentContext = await buildAttachedDocumentContext(earlierDocuments);
+        const earlierDocuments =
+          earlier.attachments?.filter((a) => !a.assetId && !a.mimeType.startsWith('image/')) ?? [];
+        const earlierImages = shouldUseLocalRuntime
+          ? (earlier.attachments?.filter((a) => !a.assetId && a.mimeType.startsWith('image/')) ??
+            [])
+          : [];
+        if (earlierDocuments.length === 0 && earlierImages.length === 0) continue;
+        const documentContext =
+          earlierDocuments.length > 0 ? await buildAttachedDocumentContext(earlierDocuments) : [];
+        const imageContext =
+          earlierImages.length > 0 ? await buildLocalImageOcrContext(earlierImages) : [];
         if (!isTurnAccountCurrent()) return false;
-        earlierDocumentContext.set(earlier.id, documentContext);
+        earlierDocumentContext.set(earlier.id, [...documentContext, ...imageContext]);
       }
     }
 
@@ -4010,7 +4036,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (nextAttempt > MAX_RETRY_ATTEMPTS) {
       Alert.alert(
         'Retry Limit Reached',
-        `This message has failed ${MAX_RETRY_ATTEMPTS} times. Please check your connection and try a new message.`,
+        `This message failed ${MAX_RETRY_ATTEMPTS} times. Try sending a new message.`,
         [{ text: 'OK' }],
       );
       return;

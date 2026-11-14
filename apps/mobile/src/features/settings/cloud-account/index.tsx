@@ -34,8 +34,10 @@ import {
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
+  CloudAccountRequired,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
+import { beginCloudPostAuthIntentForDestination } from '@/src/features/auth/services/postAuthIntent';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
@@ -96,6 +98,27 @@ function parseOrganizationId(body: unknown): string | null {
 }
 
 export default function CloudAccountScreen() {
+  const router = useRouter();
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+
+  if (!isClerkLoaded || !isClerkSignedIn) {
+    return (
+      <SettingsScreenShell title="Account">
+        <CloudAccountRequired
+          isLoading={!isClerkLoaded}
+          onSignIn={() =>
+            router.push(beginCloudPostAuthIntentForDestination('/(app)/settings/cloud-account'))
+          }
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  return <SignedInCloudAccount />;
+}
+
+function SignedInCloudAccount() {
   const colors = useThemeColors();
   const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);

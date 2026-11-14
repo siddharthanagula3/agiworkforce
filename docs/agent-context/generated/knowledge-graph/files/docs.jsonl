@@ -9,14 +9,12 @@
 {"path":"docs/agent-context/generated/knowledge-graph/edges.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/agents.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/apps__cli.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/files/apps__cli.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/files/apps__cli.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/apps__desktop.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/apps__extension-vscode.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/apps__extension.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/apps__mobile.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
-{"path":"docs/agent-context/generated/knowledge-graph/files/apps__web.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
-{"path":"docs/agent-context/generated/knowledge-graph/files/apps__web.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
+{"path":"docs/agent-context/generated/knowledge-graph/files/apps__mobile.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
+{"path":"docs/agent-context/generated/knowledge-graph/files/apps__mobile.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/apps__web.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/audit.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/cargo.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
@@ -30,8 +28,6 @@
 {"path":"docs/agent-context/generated/knowledge-graph/files/infrastructure.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__ai.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__client.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/files/packages__contracts.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
-{"path":"docs/agent-context/generated/knowledge-graph/files/packages__contracts.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__contracts.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__guardian.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__platform.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
@@ -50,8 +46,6 @@
 {"path":"docs/agent-context/generated/knowledge-graph/routes.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/skills.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/slash-commands.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/symbols.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
-{"path":"docs/agent-context/generated/knowledge-graph/symbols.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
 {"path":"docs/agent-context/generated/knowledge-graph/symbols.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
 {"path":"docs/agent-context/generated/knowledge-graph/units.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/units.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
