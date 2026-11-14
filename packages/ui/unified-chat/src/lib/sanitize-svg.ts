@@ -108,7 +108,7 @@ const SVG_ALLOWED_ATTRS = new Set([
 // markerWidth/markerHeight left arrowhead markers with only spec defaults
 // (3x3, no offset), which drew a mermaid edge's arrowhead as a distorted loop
 // instead of a triangle.
-const SVG_POINT_NUMBER = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/;
+const SVG_POINT_NUMBER = /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$/;
 
 function isNumericPointList(value: string): boolean {
   return value
