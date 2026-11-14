@@ -30115,6 +30115,9 @@
     "ContextWithholdReason": [
       "apps/extension-vscode/src/data/contextExclusion.ts"
     ],
+    "continuableCloudModel": [
+      "apps/mobile/src/features/chat/utils/continuableAnswer.ts"
+    ],
     "ContinuableMessageLike": [
       "apps/web/features/chat/lib/continue-generation.ts",
       "packages/ui/unified-chat/src/index.ts",
@@ -109866,6 +109869,9 @@
     ],
     "removeAnswerRating": [
       "apps/extension-vscode/src/features/feedback/submitFeedback.ts"
+    ],
+    "removeAnswerUiHtml": [
+      "packages/contracts/cloud-contracts/src/answer-ui.ts"
     ],
     "removeApprovedSiteHostPermission": [
       "apps/extension/src/features/options/site-allowlist.ts"

@@ -2551,16 +2551,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1756,
+      "files": 1762,
       "roles": {
         "asset": 4,
         "config": 12,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 955,
+        "source": 956,
         "style": 1,
-        "test": 733
+        "test": 738
       }
     },
     {
@@ -2694,12 +2694,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 251,
+      "files": 245,
       "roles": {
         "asset": 1,
         "config": 21,
         "doc": 177,
-        "generated": 51,
+        "generated": 45,
         "other": 1
       }
     },
@@ -4268,12 +4268,12 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 962,
+      "files": 963,
       "roles": {
         "config": 29,
         "generated": 629,
         "source": 174,
-        "test": 130
+        "test": 131
       }
     },
     {
@@ -4949,6 +4949,7 @@
         "./composer-editor",
         "./composer-editor.css",
         "./continuation-seam",
+        "./continue-generation",
         "./ime-composition",
         "./markdown-document",
         "./math-markup",
