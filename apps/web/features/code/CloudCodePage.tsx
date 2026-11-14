@@ -360,6 +360,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     typeof window === 'undefined' || pane ? null : localSessionFromSearch(window.location.search),
   );
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleEditedRef = useRef(false);
 
   const router = useRouter();
   const routerRef = useRef(router);
@@ -668,7 +669,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
 
   useEffect(() => {
     if (!renaming) return;
-    const frame = window.requestAnimationFrame(() => titleInputRef.current?.select());
+    titleEditedRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      if (!titleEditedRef.current) titleInputRef.current?.select();
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [renaming]);
 
@@ -1466,6 +1470,13 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           reviewingMcp={local.reviewingMcp}
           mcpRefusals={local.mcpRefusals}
           onReviewMcpServer={(rootId, server) => void local.reviewMcpServer(rootId, server)}
+          showArchived={local.showArchived}
+          onToggleArchived={() => local.setShowArchived(!local.showArchived)}
+          sessionActions={local.sessionActions}
+          actionError={local.actionError}
+          onRename={local.renameSession}
+          onSetArchived={(session, archived) => void local.setSessionArchived(session, archived)}
+          onSetPinned={(session, pinned) => void local.setSessionPinned(session, pinned)}
         />
       </>
     ) : null,
@@ -1586,7 +1597,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       )}
       {localArchivedThread !== null && !selectedSession && (
         <div className={styles['notice']} role="status" data-testid="local-session-archived">
-          <span>{localSessionArchivedLine(localArchivedThread)}</span>
+          <span>
+            {localSessionArchivedLine(localArchivedThread, local.sessionActions.unarchive)}
+          </span>
           <span className={styles['noticeActions']}>
             <button
               type="button"
@@ -1799,7 +1812,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                           value={titleDraft}
                           aria-label={CODE_COPY.renameLabel}
                           maxLength={CODE_LIMITS.title}
-                          onChange={(event) => setTitleDraft(event.target.value)}
+                          onChange={(event) => {
+                            titleEditedRef.current = true;
+                            setTitleDraft(event.target.value);
+                          }}
                           onBlur={() => void handleRename()}
                           onKeyDown={(event) => {
                             if (isImeComposingKey(event.nativeEvent)) return;

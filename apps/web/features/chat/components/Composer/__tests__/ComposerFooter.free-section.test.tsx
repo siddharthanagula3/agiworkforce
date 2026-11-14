@@ -245,7 +245,7 @@ describe('ComposerFooter · free section', () => {
     );
     const user = userEvent.setup();
     const dialog = openPicker();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Free' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Free models' }));
     fireEvent.click(await within(dialog).findByRole('button', { name: /More models/ }));
     const search = within(dialog).getByRole('searchbox', { name: 'Search free models' });
 
@@ -261,7 +261,7 @@ describe('ComposerFooter · free section', () => {
     billing.tier = 'team';
     const dialog = openPicker();
 
-    const toggle = within(dialog).getByRole('button', { name: 'Free' });
+    const toggle = within(dialog).getByRole('button', { name: 'Free models' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(within(dialog).queryByRole('button', { name: READY_NAME })).not.toBeInTheDocument();
   });

@@ -44,6 +44,7 @@ import {
   creditsFromCents,
   creditsFromMicrousd,
   formatCredits as formatCreditsShared,
+  COMPANY_SITE_NAME,
 } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { ServiceNotices } from '@shared/components/ServiceNotices';
@@ -55,6 +56,11 @@ import {
   isStoreBillingSource,
 } from '@/lib/billing/store-subscription-management';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import {
+  PERSONAL_GRANT_PLAN_SENTENCE,
+  PERSONAL_GRANT_SUPPORT_PATH,
+  isPersonalGrantPlan,
+} from '@/features/billing/lib/subscription-owner-presentation';
 
 interface PaymentMethod {
   id: string;
@@ -116,7 +122,7 @@ type BillingListState<T> =
   | { status: 'error'; items: T[]; message: string };
 
 const BILLING_SOURCE_LABEL: Record<string, string> = {
-  stripe: 'AGI Workforce (card on file)',
+  stripe: `${COMPANY_SITE_NAME} (card on file)`,
   apple: 'the Apple App Store',
   google: 'Google Play',
   manual: 'your organization',
@@ -397,6 +403,12 @@ export function BillingSection() {
     ? STORE_SUBSCRIPTION_MANAGEMENT_URL[billingSource]
     : null;
   const isStoreBilled = storeManagementUrl !== null;
+  const personalGrant = isPersonalGrantPlan(subscription);
+  const billingSourceLabel = personalGrant
+    ? COMPANY_SITE_NAME
+    : billingSource
+      ? (BILLING_SOURCE_LABEL[billingSource] ?? billingSource)
+      : null;
 
   const isManagedPaid = !isFreeTier && ['active', 'trialing'].includes(subscription?.status ?? '');
   const billingStatus = (subscription?.status ?? 'none').trim().toLowerCase();
@@ -405,16 +417,28 @@ export function BillingSection() {
     isFreeTier ||
     billingOwnerTerminal ||
     (billingSource === 'stripe' && ['active', 'trialing'].includes(billingStatus));
-  const planChangeBlockedCopy =
-    billingSource === 'apple'
-      ? 'Change or cancel this subscription with Apple before starting web billing.'
-      : billingSource === 'google'
-        ? 'Change or cancel this subscription with Google Play before starting web billing.'
-        : billingSource === 'manual'
-          ? 'This plan is managed by your organization. Contact an administrator to change it.'
-          : billingSource === 'stripe'
-            ? 'Resolve the current billing status in Manage billing before changing plans.'
-            : 'Billing ownership is not verified. Refresh your account before changing plans.';
+  const planChangeBlockedCopy = personalGrant ? (
+    <>
+      {PERSONAL_GRANT_PLAN_SENTENCE}{' '}
+      <SettingsPageLink
+        href={PERSONAL_GRANT_SUPPORT_PATH}
+        style={{ color: 'inherit', textDecoration: 'underline' }}
+      >
+        Contact support
+      </SettingsPageLink>{' '}
+      to change it.
+    </>
+  ) : billingSource === 'apple' ? (
+    'Change or cancel this subscription with Apple before starting web billing.'
+  ) : billingSource === 'google' ? (
+    'Change or cancel this subscription with Google Play before starting web billing.'
+  ) : billingSource === 'manual' ? (
+    'This plan is managed by your organization. Contact an administrator to change it.'
+  ) : billingSource === 'stripe' ? (
+    'Resolve the current billing status in Manage billing before changing plans.'
+  ) : (
+    'Billing ownership is not verified. Refresh your account before changing plans.'
+  );
   const hasStripeBilling = billingInitialized && billingSource === 'stripe';
   const canBuyTopUps =
     isManagedPaid &&
@@ -785,9 +809,7 @@ export function BillingSection() {
             </Row>
             {billingSource && billingSource !== 'none' && (
               <Row label="Billed through">
-                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
-                  {BILLING_SOURCE_LABEL[billingSource] ?? billingSource}
-                </span>
+                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{billingSourceLabel}</span>
               </Row>
             )}
             {periodEndLabel && (
@@ -1140,11 +1162,13 @@ export function BillingSection() {
           <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
             {isStoreBilled
               ? `Receipts for this plan are issued by ${BILLING_SOURCE_LABEL[billingSource as string]} and are not available here.`
-              : billingSource === 'manual'
-                ? 'Invoices for this plan are provided by your organization and are not available here.'
-                : isFreeTier
-                  ? 'Invoices appear here once you are billed on a paid plan.'
-                  : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
+              : personalGrant
+                ? 'Invoices for this plan are not available here.'
+                : billingSource === 'manual'
+                  ? 'Invoices for this plan are provided by your organization and are not available here.'
+                  : isFreeTier
+                    ? 'Invoices appear here once you are billed on a paid plan.'
+                    : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
           </p>
         )}
       </div>

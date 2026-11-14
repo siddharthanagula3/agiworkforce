@@ -104,7 +104,7 @@ function inferLocalTarget(connectionString) {
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 }
 
-function assertMutationTarget(options, connectionString) {
+export function assertMutationTarget(options, connectionString) {
   options.target ??= inferLocalTarget(connectionString) ? 'local' : undefined;
   if (!options.target || !TARGETS.has(options.target)) {
     throw new MigrationContractError(

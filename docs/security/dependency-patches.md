@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-11-11
+Last updated: 2026-11-13
 
 GitHub withdrew the http-cache-semantics advisory on 2026-10-28 and the braces
 advisory on 2026-10-23. Their audit ignores and policy exceptions are removed.
@@ -40,6 +40,40 @@ Remove a retained patch only after its maintained dependency preserves the same
 required behavior and compatibility controls. Keep other high-severity
 advisories blocking. CLI filesystem fixtures use an unexpired test policy, while
 an explicit expired-policy control still verifies the real UTC-date check.
+
+## SQLCipher engine source
+
+Retained Tauri uses `rusqlite` 0.42.0 with bundled SQLCipher and vendored
+OpenSSL. Its `libsqlite3-sys` 0.40.0 build dependency requires crates.io
+`sqlcipher-src` `=420.0.0`, and `Cargo.lock` resolves
+`sqlcipher-src@420.0.0+sqlcipher-4.20.0-sqlite-3.54.1-libtomcrypt-1.18.2`
+with checksum
+`fd6b5280ed2593d07b2816ec531821c15c306903bcca224716f1fbcc2bbfedfe`. That
+crate carries the unmodified SQLCipher 4.20.0 amalgamation and header from the
+[upstream release](https://github.com/sqlcipher/sqlcipher/releases/tag/v4.20.0),
+which uses SQLite 3.54.1, above RUSTSEC-2026-0459's 3.54.0 fixed floor. The
+fix therefore comes from the registry crate; no Cargo patch or in-repository
+copy of the SQLCipher source remains. Provenance and licenses live in
+`THIRD_PARTY_LICENSES.md`. Retained Tauri's resource map ships Zetetic's
+license from `apps/desktop/src-tauri/licenses/sqlcipher-LICENSE.txt` to
+`licenses/sqlcipher-LICENSE.txt` in the bundle.
+
+Keyed connections require the fixed SQLite floor and a nonempty SQLCipher
+version before reading a schema, because plain SQLite silently accepts an
+unknown key PRAGMA. Encryption tests assert the actual linked versions, reject
+unkeyed and wrong-key reads, and read/update/checkpoint a database generated
+with the previous SQLCipher 4.5.7 engine. Existing plaintext migration and
+machine-key rekey tests also remain required. Keep the engine-level and
+old-format compatibility tests when the binding moves to a newer SQLCipher
+source. No advisory ignore or plaintext fallback is added; the only license
+allowance is the `sqlcipher-src` exception in `deny.toml`.
+
+Calamine is pinned to 0.38.0 in the CLI and retained Tauri for
+RUSTSEC-2026-0436. CLI reader tests cover a short OLE directory, a cyclic
+DIFAT chain and valid spreadsheet values/formula caches. The same short-directory
+fixture was independently run against 0.37.0 and reproduced its bounds panic.
+The full maintenance scan remains tracked separately under
+`RUST-DEPENDENCY-ADVISORIES-01`.
 
 ## Query parser interoperability
 

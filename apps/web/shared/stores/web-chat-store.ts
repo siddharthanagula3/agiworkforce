@@ -16,6 +16,7 @@
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import {
+  AGI_WORK_MODE,
   getModelMetadataById,
   isAutoModeModelId,
   normalizeModelId,
@@ -365,6 +366,7 @@ export interface MessageMetadata {
    * widget, never the answer.
    */
   interactiveCards?: InteractiveCard[];
+  interactiveCardTextOffsets?: Record<string, number>;
   interactiveCardsResumed?: boolean;
   interactiveCardSubmissionErrors?: Record<string, string>;
   /**
@@ -2301,7 +2303,7 @@ export const selectIsActiveConversationStreaming = (state: ChatState) =>
   state.streamingConversationIds.includes(state.activeConversationId);
 export const selectSelectedModel = (state: ChatState) => state.selectedModel;
 export const selectError = (state: ChatState) => state.error;
-export const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
+export { AGI_WORK_MODE } from '@agiworkforce/types';
 
 /**
  * Whether a conversation is an Work task, from either half of the answer:

@@ -552,7 +552,7 @@ const MarkdownTableCell = ({
   return (
     <td
       className={cn(
-        'border border-border px-3 py-2 align-top wrap-anywhere',
+        'min-w-24 border border-border px-3 py-2 align-top break-words',
         markdownTableAlignmentClass(align, style?.textAlign),
       )}
     >
@@ -572,7 +572,7 @@ const MarkdownTableHeader = ({
 }) => (
   <th
     className={cn(
-      'sticky top-0 z-[var(--z-content-raised)] border border-border bg-muted px-3 py-2 align-top font-semibold wrap-anywhere',
+      'sticky top-0 z-[var(--z-content-raised)] min-w-24 border border-border bg-muted px-3 py-2 align-top font-semibold break-words',
       markdownTableAlignmentClass(align, style?.textAlign),
     )}
   >

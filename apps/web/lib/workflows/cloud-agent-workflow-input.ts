@@ -153,6 +153,10 @@ const LlmRequestSchema = z
     responseFormat: ResponseFormatSchema.optional(),
     requestParameters: RequestParametersSchema.optional(),
     promptCacheScope: PromptCacheScopeSchema.optional(),
+    turnContext: z
+      .object({ text: z.string().min(1), afterMessages: z.number().int().nonnegative() })
+      .strict()
+      .optional(),
   })
   .strict();
 const llmRequestSchemaCoversProcessedRequest: SameKeys<

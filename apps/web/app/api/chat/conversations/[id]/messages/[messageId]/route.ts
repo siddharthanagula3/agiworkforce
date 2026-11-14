@@ -17,6 +17,11 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '../lib/index-artifacts';
 import { SAVE_ASSISTANT_CONTENT_EDIT_SQL } from '@/lib/server/assistant-content-edits';
 import {
+  WorkPlanReviewPatchSchema,
+  sameWorkPlanContent,
+  UPDATE_WORK_PLAN_REVIEW_SQL,
+} from '../lib/work-plan-review';
+import {
   collectSubtree,
   deleteMessages,
   lockConversationThread,
@@ -29,6 +34,7 @@ import {
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
 const PatchMessageSchema = z.union([
+  WorkPlanReviewPatchSchema,
   z
     .object({
       fenceEdit: z
@@ -86,6 +92,35 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
 
   if (!conv) {
     throw createError.notFound('Conversation not found');
+  }
+
+  if ('workPlanReview' in patch) {
+    const review = patch.workPlanReview;
+    const expected = patch.expectedWorkPlanReview;
+    if (
+      review.conversationId !== conversationId ||
+      review.planningMessageId !== messageId ||
+      (review.declined && review.awaitingApproval) ||
+      (expected !== null &&
+        (!sameWorkPlanContent(expected, review) ||
+          (expected.declined && !review.declined) ||
+          (!expected.awaitingApproval && review.awaitingApproval)))
+    ) {
+      throw createError.conflict('The Work plan changed. Reopen it before deciding.');
+    }
+    const [saved] = await db.query<{ id: string; review: unknown }>(UPDATE_WORK_PLAN_REVIEW_SQL, [
+      JSON.stringify({
+        agiWorkPlan: review.steps,
+        agiWorkPlanReview: review,
+        agiWorkPlanDeclined: review.declined,
+      }),
+      messageId,
+      conversationId,
+      JSON.stringify(expected),
+    ]);
+    if (!saved)
+      throw createError.conflict('The saved Work plan changed. Reopen it before deciding.');
+    return NextResponse.json({ id: saved.id, review: saved.review });
   }
 
   if ('fenceEdit' in patch) {

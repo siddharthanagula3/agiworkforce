@@ -1,7 +1,11 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
+type OriginalProjectKnowledgeFilesModule = typeof import('@/lib/server/project-knowledge-files');
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { getBillingPlanPricing } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+import { getBillingPlanPricing, getPlanMaxAttachmentBytes } from '@agiworkforce/types';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 const mockAdmitAttachmentUpload = vi.hoisted(() => vi.fn(async (_input: unknown) => undefined));
@@ -85,7 +89,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   ObjectStorageTimeoutError: class ObjectStorageTimeoutError extends Error {},
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
   copyPrivateObjectIfUnchanged: vi.fn(),
@@ -128,7 +133,8 @@ vi.mock('@/lib/connectors/google-drive-files', () => ({
   GoogleDriveFileError: mocks.GoogleDriveFileError,
   downloadGoogleDriveFile: mocks.downloadGoogleDriveFile,
 }));
-vi.mock('@/lib/server/project-knowledge-files', () => ({
+vi.mock('@/lib/server/project-knowledge-files', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeFilesModule>()),
   checkProjectKnowledgeCapacity: vi.fn(),
   findReadableProjectKnowledgeFile: vi.fn(),
   findProjectKnowledgeFileByChecksum: vi.fn(),
@@ -136,7 +142,8 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   readIndexStates: vi.fn(),
   registerProjectKnowledgeFile: mocks.registerProjectKnowledgeFile,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   assertUploadMatchesAuthorization: vi.fn(),
   createLocalProjectKnowledgeUploadUrl: vi.fn(),
   createProjectKnowledgeUploadAuthorization: vi.fn(),
@@ -308,8 +315,8 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
     expect(mocks.downloadGoogleDriveFile).toHaveBeenCalledWith(
       'ya29.token',
       DRIVE_A,
-      25 * 1024 * 1024,
-      `is too large. ${getBillingPlanPricing('pro').label} accounts can upload files up to 25 MB each.`,
+      getPlanMaxAttachmentBytes('pro'),
+      `is too large. ${getBillingPlanPricing('pro').label} accounts can upload files up to ${Math.round(getPlanMaxAttachmentBytes('pro') / (1024 * 1024))} MB each.`,
     );
     expect(mockAdmitAttachmentUpload).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'knowledge-file', byteCount: 3 }),

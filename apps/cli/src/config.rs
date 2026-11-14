@@ -15,6 +15,8 @@ pub struct ConfigSource {
 /// Top-level CLI configuration, loaded from ~/.agiworkforce/config.toml
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CliConfig {
+    #[serde(default, skip_serializing_if = "WorktreeApplyConfig::is_default")]
+    pub worktree_apply: WorktreeApplyConfig,
     #[serde(default = "DefaultConfig::new")]
     pub default: DefaultConfig,
 
@@ -35,6 +37,45 @@ pub struct CliConfig {
     /// Tracks provenance of configuration values. Excluded from serialization.
     #[serde(skip)]
     pub source: ConfigSource,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WorktreeApplyConfig {
+    pub max_files: usize,
+    pub max_file_bytes: u64,
+    pub max_total_bytes: u64,
+    pub max_preview_bytes: usize,
+}
+
+impl Default for WorktreeApplyConfig {
+    fn default() -> Self {
+        let max_file_bytes = agiworkforce_worktree::checkpoint::MAX_UNTRACKED_FILE_BYTES;
+        Self {
+            max_files: 256,
+            max_file_bytes,
+            max_total_bytes: max_file_bytes * 8,
+            max_preview_bytes: agiworkforce_protocol::workspace_files::MAX_EDITOR_TEXT_BYTES,
+        }
+    }
+}
+
+impl WorktreeApplyConfig {
+    fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+    pub fn validate(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.max_files > 0
+                && self.max_file_bytes > 0
+                && self.max_file_bytes < crate::process_tree::MAX_CAPTURED_PIPE_BYTES
+                && self.max_total_bytes >= self.max_file_bytes
+                && self.max_preview_bytes
+                    <= agiworkforce_protocol::workspace_files::MAX_EDITOR_TEXT_BYTES,
+            "The configured worktree apply limits are invalid"
+        );
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -412,6 +453,7 @@ impl Default for CliConfig {
 
         Self {
             default: DefaultConfig::new(),
+            worktree_apply: WorktreeApplyConfig::default(),
             ui: UiConfig::default(),
             providers,
             telemetry: TelemetryConfig::default(),
@@ -476,6 +518,7 @@ impl CliConfig {
         config.merge_from(&loaded);
         config.telemetry = loaded.telemetry;
         config.updates = loaded.updates;
+        config.worktree_apply = loaded.worktree_apply;
         config
     }
 
@@ -1842,6 +1885,26 @@ fn report_ignored_repository_settings(ignored: &[String]) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn worktree_apply_limits_load_from_global_config_and_cannot_be_raised_by_project_merge() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config.toml");
+        std::fs::write(&path, "[worktree_apply]\nmax_files = 7\nmax_file_bytes = 1024\nmax_total_bytes = 4096\nmax_preview_bytes = 16\n").unwrap();
+        let mut global = super::CliConfig::load_from(&path).unwrap();
+        assert_eq!(global.worktree_apply.max_files, 7);
+        global.worktree_apply.validate().unwrap();
+        let mut project = super::CliConfig::default();
+        project.worktree_apply.max_files = 1000;
+        global.merge_from(&project);
+        assert_eq!(global.worktree_apply.max_files, 7);
+        let mut invalid = global.worktree_apply.clone();
+        invalid.max_file_bytes = crate::process_tree::MAX_CAPTURED_PIPE_BYTES;
+        assert!(invalid.validate().is_err());
+        assert!(!super::CliConfig::default()
+            .written_toml()
+            .unwrap()
+            .contains("worktree_apply"));
+    }
     use super::*;
 
     #[test]

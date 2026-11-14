@@ -36,6 +36,11 @@ export const TOOL_COPY: Readonly<Record<string, { label: string; description: st
     description:
       'Renders the products a search found as a comparison card with prices, stores, buy links and specs. It keeps only links this turn retrieved, makes no request of its own and buys nothing.',
   },
+  render_answer_ui: {
+    label: 'Show an interactive answer',
+    description:
+      'Shows part of an answer as an interactive card in the conversation, such as a table, chart, checklist, sliders or a map. It makes no request of its own and changes nothing; a button in the card sends a message only when you press it.',
+  },
   url_fetch: {
     label: 'Fetch a page',
     description:

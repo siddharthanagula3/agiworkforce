@@ -7,20 +7,16 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
-import { projectStorageUrisUnderHold } from '@/lib/server/project-deletion';
+import { getProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import { retireProjectKnowledgeFile, ProjectContentHeldError } from '@/lib/server/project-deletion';
+import { refuseHeldDeletion } from '@/lib/services/legal-hold-gate';
 import { serializeDestructionWithHolds } from '@/lib/services/legal-hold-placement';
-import {
-  deleteProjectKnowledgeObject,
-  getProjectKnowledgeObject,
-} from '@/lib/server/project-knowledge-object-storage';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
 import {
   findReadableProjectKnowledgeFile,
   type ReadableProjectKnowledgeFile,
 } from '@/lib/server/project-knowledge-files';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
-
-class StoredSourceRemovalError extends Error {}
 
 type RouteContext = { params: Promise<{ id: string; fileId: string }> };
 
@@ -74,56 +70,25 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id: projectId, fileId } = await context.params;
-  const [file] = await db.query<{ storage_uri: string | null }>(
-    `select f.storage_uri
-       from project_knowledge_files f
-       join user_projects p on p.id = f.project_id
-      where f.id = $1
-        and f.project_id = $2
-        and f.deleted_at is null
-        and p.user_id = $3
-        and p.organization_id is not distinct from $4::uuid
-        and p.is_archived = false
-        and p.deleted_at is null
-      limit 1`,
-    [fileId, projectId, userId, organizationId],
-  );
-  if (!file) throw createError.notFound('Knowledge file not found');
-
-  const objectKey = file.storage_uri ? objectKeyFromStorageUri(file.storage_uri) : null;
+  let removed: boolean;
   try {
-    await db.transaction(async (tx) => {
+    removed = await db.transaction(async (tx) => {
       await serializeDestructionWithHolds(tx, organizationId);
-      await tx.execute(
-        `update project_knowledge_files
-            set deleted_at = now()
-          where id = $1 and project_id = $2 and deleted_at is null`,
-        [fileId, projectId],
-      );
-      if (!objectKey || !file.storage_uri) return;
-      const [sharer] = await tx.query<{ id: string }>(
-        `select id from project_knowledge_files
-          where storage_uri = $1 and deleted_at is null
-          limit 1`,
-        [file.storage_uri],
-      );
-      if (sharer !== undefined) return;
-      const preserved = await projectStorageUrisUnderHold(tx, [file.storage_uri]);
-      if (preserved.has(file.storage_uri)) return;
-      try {
-        await deleteProjectKnowledgeObject(objectKey);
-      } catch (error) {
-        logger.error({ error, projectId, fileId, objectKey }, 'Failed to delete knowledge object');
-        throw new StoredSourceRemovalError();
-      }
+      return retireProjectKnowledgeFile(tx, { projectId, fileId, userId, organizationId });
     });
   } catch (error) {
-    if (error instanceof StoredSourceRemovalError) {
-      throw createError.internal('Could not remove the stored source');
+    if (error instanceof ProjectContentHeldError) {
+      return refuseHeldDeletion({
+        resourceType: error.resourceType,
+        resourceId: error.resourceId,
+        userId,
+        organizationId,
+      });
     }
     logger.error({ error, projectId, fileId }, 'Failed to delete knowledge file');
     throw createError.internal('Failed to delete knowledge file');
   }
+  if (!removed) throw createError.notFound('Knowledge file not found');
 
   return NextResponse.json({ success: true });
 }

@@ -3,6 +3,90 @@ use super::{DirectoryAuthority, WorkspaceFileAuthority};
 
 #[cfg(unix)]
 #[test]
+fn private_revision_replacement_rechecks_content_after_staging() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("instructions.md");
+    std::fs::write(&path, "original").unwrap();
+    let authority = DirectoryAuthority::open(root.path()).unwrap();
+    let leaf = std::path::Path::new("instructions.md");
+    let revision = authority.read_file(leaf, 1024).unwrap().unwrap().revision();
+    let changed = path.clone();
+    *authority.hooks.after_staging_write.lock().unwrap() = Some(Box::new(move || {
+        std::fs::write(changed, "external edit").unwrap();
+    }));
+    assert!(authority
+        .replace_private_file_if_revision(leaf, b"my edits", 1024, &revision)
+        .is_err());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "external edit");
+}
+
+#[cfg(unix)]
+#[test]
+fn editor_revision_check_detects_a_write_after_the_write_handle_opens() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("notes.txt");
+    std::fs::write(&path, "original").unwrap();
+    let authority = WorkspaceFileAuthority::new(root.path()).unwrap();
+    let (directory, relative) = authority.editor_file("notes.txt").unwrap();
+    let revision = directory
+        .read_file(&relative, 1024)
+        .unwrap()
+        .unwrap()
+        .revision();
+    let later = path.clone();
+    *directory.hooks.after_write_open.lock().unwrap() = Some(Box::new(move || {
+        std::fs::write(later, "external edit").unwrap()
+    }));
+    assert!(directory
+        .replace_file_if_revision(&relative, b"my edit", 1024, &revision)
+        .is_err());
+    assert_eq!(std::fs::read_to_string(path).unwrap(), "external edit");
+}
+
+#[cfg(unix)]
+#[test]
+fn editor_revision_write_preserves_the_existing_inode_and_mode_and_refuses_link_replacement() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("script.sh");
+    let outside = tempfile::tempdir().unwrap();
+    let secret = outside.path().join("outside.txt");
+    std::fs::write(&path, "old\r\n").unwrap();
+    std::fs::write(&secret, "outside").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o750)).unwrap();
+    let before = std::fs::metadata(&path).unwrap();
+    let authority = WorkspaceFileAuthority::new(root.path()).unwrap();
+    let (directory, relative) = authority.editor_file("script.sh").unwrap();
+    let revision = directory
+        .read_file(&relative, 1024)
+        .unwrap()
+        .unwrap()
+        .revision();
+    assert!(directory
+        .replace_file_if_revision(&relative, b"new\r\n", 1024, &revision)
+        .unwrap());
+    let after = std::fs::metadata(&path).unwrap();
+    assert_eq!(before.ino(), after.ino());
+    assert_eq!(before.permissions().mode(), after.permissions().mode());
+    let revision = directory
+        .read_file(&relative, 1024)
+        .unwrap()
+        .unwrap()
+        .revision();
+    let target = path.clone();
+    let secret_link = secret.clone();
+    *directory.hooks.before_write_open.lock().unwrap() = Some(Box::new(move || {
+        std::fs::remove_file(&target).unwrap();
+        std::os::unix::fs::symlink(secret_link, target).unwrap();
+    }));
+    assert!(directory
+        .replace_file_if_revision(&relative, b"replace", 1024, &revision)
+        .is_err());
+    assert_eq!(std::fs::read_to_string(secret).unwrap(), "outside");
+}
+
+#[cfg(unix)]
+#[test]
 fn directory_grant_rejects_identity_change_during_initial_validation() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().canonicalize().unwrap();
@@ -497,4 +581,90 @@ fn directory_sync_retains_granted_identity_after_path_substitution() {
     assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 1);
     authority.fail_next_directory_sync();
     assert!(authority.sync_directory().is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn project_upload_selected_file_refuses_changes_after_the_picker_and_preserves_exact_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("selected.txt");
+    let expected = b"\xef\xbb\xbforiginal\r\n";
+    std::fs::write(&path, expected).unwrap();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(
+            std::fs::FileTimes::new()
+                .set_modified(std::time::UNIX_EPOCH - std::time::Duration::from_secs(1)),
+        )
+        .unwrap();
+    let authority = DirectoryAuthority::open(root.path()).unwrap();
+    let decision = chrono::Utc::now().timestamp_millis();
+    assert_eq!(
+        authority
+            .read_selected_file(std::path::Path::new("selected.txt"), 1024, decision)
+            .unwrap()
+            .unwrap()
+            .bytes,
+        expected
+    );
+    let future = std::time::UNIX_EPOCH + std::time::Duration::from_millis((decision + 1000) as u64);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(future))
+        .unwrap();
+    assert!(authority
+        .read_selected_file(std::path::Path::new("selected.txt"), 1024, decision)
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("picker"));
+}
+
+#[cfg(unix)]
+#[test]
+fn project_upload_selected_file_rejects_identity_swaps_and_linked_or_special_files() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("selected.txt");
+    let outside = root.path().join("other.txt");
+    std::fs::write(&path, "selected").unwrap();
+    std::fs::write(&outside, "other").unwrap();
+    let authority = DirectoryAuthority::open(root.path()).unwrap();
+    let next = path.clone();
+    let replaced = outside.clone();
+    *authority.hooks.before_leaf_open.lock().unwrap() = Some(Box::new(move || {
+        std::fs::remove_file(&next).unwrap();
+        std::fs::rename(replaced, next).unwrap();
+    }));
+    assert!(authority
+        .read_selected_file(
+            std::path::Path::new("selected.txt"),
+            1024,
+            chrono::Utc::now().timestamp_millis()
+        )
+        .is_err());
+    std::fs::hard_link(&path, root.path().join("hard.txt")).unwrap();
+    std::os::unix::fs::symlink(&path, root.path().join("link.txt")).unwrap();
+    nix::unistd::mkfifo(&root.path().join("pipe.txt"), nix::sys::stat::Mode::S_IRUSR).unwrap();
+    for name in [
+        "selected.txt",
+        "hard.txt",
+        "link.txt",
+        "pipe.txt",
+        "../selected.txt",
+    ] {
+        assert!(
+            authority
+                .read_selected_file(
+                    std::path::Path::new(name),
+                    1024,
+                    chrono::Utc::now().timestamp_millis()
+                )
+                .is_err(),
+            "{name}"
+        );
+    }
 }

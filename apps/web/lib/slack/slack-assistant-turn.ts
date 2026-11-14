@@ -23,8 +23,8 @@ import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter
 import {
   buildCapabilityPreamble,
   servingModelFor,
-  type ServingModel,
 } from '@/app/api/llm/v1/chat/completions/lib/capability-preamble';
+import type { ServingModel } from '@/lib/prompts/chat-system-prompt-assembly';
 import {
   resolveManagedUsageLeaseSeconds,
   type ChatCompletionRequest,

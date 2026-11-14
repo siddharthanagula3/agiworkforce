@@ -98,6 +98,9 @@
     "voice": "Sprache",
     "desktop": "Allgemein",
     "computer-use": "Computernutzung",
+    "browser-pane": "Browser",
+    "local-mcp": "Entwickler",
+    "storage": "Speicher",
     "groupSettings": "Einstellungen",
     "groupCustomize": "Anpassen",
     "groupDesktop": "Desktop-App"

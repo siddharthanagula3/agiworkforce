@@ -366,6 +366,27 @@ describe('runToolLoop, cancellation reaches connector tools', () => {
       `Tool \\"${CREATE_FOLDER_TOOL}\\" was not run: the user stopped this run before it started.`,
     );
   });
+
+  it('ends a turn stopped mid-answer as cancelled, not as an interrupted failure', async () => {
+    const controller = new AbortController();
+
+    const output = await drain(
+      runToolLoop(makeProcessed(), {
+        approvalMode: 'auto',
+        userId: 'user-1',
+        signal: controller.signal,
+        isCancellationRequested: async () => controller.signal.aborted,
+        providerExecutor: async () => {
+          controller.abort();
+          throw new Error('Request was aborted.');
+        },
+      }),
+    );
+
+    expect(output).toContain('"state":"cancelled"');
+    expect(output).not.toContain('x_stream_error');
+    expect(output).not.toContain('"state":"failed"');
+  });
 });
 
 type ImportedModule0 = typeof import('@/lib/mcp-tool-executor');

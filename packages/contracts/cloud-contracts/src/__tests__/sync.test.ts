@@ -187,6 +187,23 @@ describe('chat delta branch pointers', () => {
   });
 });
 
+describe('ConversationSyncPushItemSchema', () => {
+  it('accepts an update without a title and rejects a create without one', () => {
+    expect(
+      ChatSyncPushRequestSchema.safeParse({
+        protocolVersion: 2,
+        conversations: [{ id: conversationDelta.id, baseVersion: '42' }],
+      }).success,
+    ).toBe(true);
+    expect(
+      ChatSyncPushRequestSchema.safeParse({
+        protocolVersion: 2,
+        conversations: [{ id: conversationDelta.id, baseVersion: '0' }],
+      }).success,
+    ).toBe(false);
+  });
+});
+
 describe('ChatSyncPushResponseSchema', () => {
   it('requires v2 CAS inputs, strips client clocks, and rejects duplicate ids', () => {
     expect(

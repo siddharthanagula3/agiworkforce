@@ -1,6 +1,7 @@
 import terms_2026_08_11 from './terms/2026-08-11.json';
 import terms_2026_09_23 from './terms/2026-09-23.json';
 import terms_2026_10_08 from './terms/2026-10-08.json';
+import terms_2026_11_11 from './terms/2026-11-11.json';
 import privacy_2026_09_12 from './privacy/2026-09-12.json';
 import privacy_2026_09_21 from './privacy/2026-09-21.json';
 import privacy_2026_09_22 from './privacy/2026-09-22.json';
@@ -10,11 +11,13 @@ import privacy_2026_10_08 from './privacy/2026-10-08.json';
 import privacy_2026_10_15 from './privacy/2026-10-15.json';
 import privacy_2026_10_18 from './privacy/2026-10-18.json';
 import privacy_2026_11_10 from './privacy/2026-11-10.json';
+import privacy_2026_11_11 from './privacy/2026-11-11.json';
 import acceptableUse_2026_08_05 from './acceptableUse/2026-08-05.json';
 import acceptableUse_2026_09_22 from './acceptableUse/2026-09-22.json';
 import acceptableUse_2026_09_27 from './acceptableUse/2026-09-27.json';
 import dpa_2026_08_17 from './dpa/2026-08-17.json';
 import dpa_2026_10_08 from './dpa/2026-10-08.json';
+import dpa_2026_11_11 from './dpa/2026-11-11.json';
 import cookies_2026_09_12 from './cookies/2026-09-12.json';
 import cookies_2026_09_23 from './cookies/2026-09-23.json';
 import subprocessors_2026_09_12 from './subprocessors/2026-09-12.json';
@@ -23,8 +26,10 @@ import subprocessors_2026_09_22 from './subprocessors/2026-09-22.json';
 import subprocessors_2026_09_28 from './subprocessors/2026-09-28.json';
 import subprocessors_2026_10_08 from './subprocessors/2026-10-08.json';
 import subprocessors_2026_10_15 from './subprocessors/2026-10-15.json';
+import subprocessors_2026_11_10 from './subprocessors/2026-11-10.json';
 import security_2026_08_14 from './security/2026-08-14.json';
 import security_2026_10_08 from './security/2026-10-08.json';
+import security_2026_11_10 from './security/2026-11-10.json';
 import sla_2026_09_04 from './sla/2026-09-04.json';
 import refunds_2026_08_13 from './refunds/2026-08-13.json';
 import refunds_2026_09_27 from './refunds/2026-09-27.json';
@@ -35,6 +40,7 @@ import trust_2026_09_12 from './trust/2026-09-12.json';
 import trust_2026_09_21 from './trust/2026-09-21.json';
 import trust_2026_10_08 from './trust/2026-10-08.json';
 import trust_2026_10_18 from './trust/2026-10-18.json';
+import trust_2026_11_10 from './trust/2026-11-10.json';
 import euRepresentative_2026_08_05 from './euRepresentative/2026-08-05.json';
 import mobile_2026_08_13 from './mobile/2026-08-13.json';
 import mobile_2026_09_21 from './mobile/2026-09-21.json';
@@ -46,24 +52,29 @@ import indiaPrivacy_2026_08_13 from './indiaPrivacy/2026-08-13.json';
 import indiaPrivacy_2026_10_08 from './indiaPrivacy/2026-10-08.json';
 import indiaPrivacy_2026_10_15 from './indiaPrivacy/2026-10-15.json';
 import indiaPrivacy_2026_11_10 from './indiaPrivacy/2026-11-10.json';
+import indiaPrivacy_2026_11_11 from './indiaPrivacy/2026-11-11.json';
 import dataRights_2026_08_13 from './dataRights/2026-08-13.json';
 import dataRights_2026_10_08 from './dataRights/2026-10-08.json';
+import dataRights_2026_11_11 from './dataRights/2026-11-11.json';
 import dataUse_2026_08_14 from './dataUse/2026-08-14.json';
 import dataUse_2026_10_08 from './dataUse/2026-10-08.json';
 import dataUse_2026_10_15 from './dataUse/2026-10-15.json';
 import dataUse_2026_11_10 from './dataUse/2026-11-10.json';
+import dataUse_2026_11_11 from './dataUse/2026-11-11.json';
 import disclaimer_2026_09_02 from './disclaimer/2026-09-02.json';
 import agentPermissions_2026_09_02 from './agentPermissions/2026-09-02.json';
 import agentPermissions_2026_09_22 from './agentPermissions/2026-09-22.json';
 import agentPermissions_2026_09_27 from './agentPermissions/2026-09-27.json';
 import agentPermissions_2026_10_08 from './agentPermissions/2026-10-08.json';
 import agentPermissions_2026_11_01 from './agentPermissions/2026-11-01.json';
+import agentPermissions_2026_11_11 from './agentPermissions/2026-11-11.json';
 
 export const ARCHIVED_POLICY_TEXT = {
   terms: {
     '2026-08-11': terms_2026_08_11,
     '2026-09-23': terms_2026_09_23,
     '2026-10-08': terms_2026_10_08,
+    '2026-11-11': terms_2026_11_11,
   },
   privacy: {
     '2026-09-12': privacy_2026_09_12,
@@ -75,6 +86,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-10-15': privacy_2026_10_15,
     '2026-10-18': privacy_2026_10_18,
     '2026-11-10': privacy_2026_11_10,
+    '2026-11-11': privacy_2026_11_11,
   },
   acceptableUse: {
     '2026-08-05': acceptableUse_2026_08_05,
@@ -84,6 +96,7 @@ export const ARCHIVED_POLICY_TEXT = {
   dpa: {
     '2026-08-17': dpa_2026_08_17,
     '2026-10-08': dpa_2026_10_08,
+    '2026-11-11': dpa_2026_11_11,
   },
   cookies: {
     '2026-09-12': cookies_2026_09_12,
@@ -96,10 +109,12 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-09-28': subprocessors_2026_09_28,
     '2026-10-08': subprocessors_2026_10_08,
     '2026-10-15': subprocessors_2026_10_15,
+    '2026-11-10': subprocessors_2026_11_10,
   },
   security: {
     '2026-08-14': security_2026_08_14,
     '2026-10-08': security_2026_10_08,
+    '2026-11-10': security_2026_11_10,
   },
   sla: {
     '2026-09-04': sla_2026_09_04,
@@ -120,6 +135,7 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-09-21': trust_2026_09_21,
     '2026-10-08': trust_2026_10_08,
     '2026-10-18': trust_2026_10_18,
+    '2026-11-10': trust_2026_11_10,
   },
   euRepresentative: {
     '2026-08-05': euRepresentative_2026_08_05,
@@ -141,16 +157,19 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-10-08': indiaPrivacy_2026_10_08,
     '2026-10-15': indiaPrivacy_2026_10_15,
     '2026-11-10': indiaPrivacy_2026_11_10,
+    '2026-11-11': indiaPrivacy_2026_11_11,
   },
   dataRights: {
     '2026-08-13': dataRights_2026_08_13,
     '2026-10-08': dataRights_2026_10_08,
+    '2026-11-11': dataRights_2026_11_11,
   },
   dataUse: {
     '2026-08-14': dataUse_2026_08_14,
     '2026-10-08': dataUse_2026_10_08,
     '2026-10-15': dataUse_2026_10_15,
     '2026-11-10': dataUse_2026_11_10,
+    '2026-11-11': dataUse_2026_11_11,
   },
   disclaimer: {
     '2026-09-02': disclaimer_2026_09_02,
@@ -161,5 +180,6 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-09-27': agentPermissions_2026_09_27,
     '2026-10-08': agentPermissions_2026_10_08,
     '2026-11-01': agentPermissions_2026_11_01,
+    '2026-11-11': agentPermissions_2026_11_11,
   },
 } as const;

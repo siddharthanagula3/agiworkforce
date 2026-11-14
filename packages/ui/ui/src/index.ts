@@ -232,6 +232,8 @@ export {
   OPEN_SEARCH_SHORTCUT,
   openSearchShortcutLabel,
   TOGGLE_SIDEBAR_SHORTCUT,
+  adjacentSidebarSessionId,
+  sidebarSessionOrder,
 } from './sidebar';
 export {
   SETTINGS_NAV,

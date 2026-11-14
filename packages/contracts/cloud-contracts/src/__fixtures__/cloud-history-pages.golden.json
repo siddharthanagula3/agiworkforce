@@ -1,0 +1,54 @@
+{
+  "list": {
+    "conversations": [
+      {
+        "id": "0190a000-0000-7000-8000-0000000000aa",
+        "title": null,
+        "model": null,
+        "project_id": null,
+        "organization_id": null,
+        "pinned": true,
+        "starred": false,
+        "archived": false,
+        "is_temporary": false,
+        "work_mode": "chat",
+        "created_at": "2026-11-08T00:00:00Z",
+        "updated_at": "2026-11-08T00:00:00Z"
+      }
+    ],
+    "hasMore": true,
+    "nextOffset": 1,
+    "nextCursor": "opaque-next"
+  },
+  "read": {
+    "conversation": {
+      "id": "0190a000-0000-7000-8000-0000000000aa",
+      "title": null,
+      "model": null,
+      "project_id": null,
+      "organization_id": null,
+      "pinned": true,
+      "starred": false,
+      "archived": false,
+      "is_temporary": false,
+      "work_mode": "chat",
+      "created_at": "2026-11-08T00:00:00Z",
+      "updated_at": "2026-11-08T00:00:00Z"
+    },
+    "messages": [
+      {
+        "id": "0190a000-0000-7000-8000-0000000000bb",
+        "role": "assistant",
+        "content": "你好 🦀",
+        "model": null,
+        "provider": null,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "metadata": null,
+        "created_at": "2026-11-08T00:00:00Z"
+      }
+    ],
+    "hasMore": false,
+    "total": 1
+  }
+}

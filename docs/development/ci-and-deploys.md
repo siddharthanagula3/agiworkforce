@@ -2,7 +2,18 @@
 
 Status: Current
 Owner: Platform/release
-Last updated: 2026-11-10
+Last updated: 2026-11-11
+
+## Current state
+
+The `Deploy Production Surfaces` and `Deploy Staging Web` workflows exist in
+`.github/workflows/` and are disabled in GitHub (`gh workflow list --all` shows
+`disabled_manually`), so neither runs on a merge. Production web is deployed
+manually with the pinned Vercel CLI from a clean worktree. `/api/version` on the
+production origin reports the commit and migration high-water mark it serves.
+`Deploy Signaling Server` is active. The sections below describe the contract the
+disabled workflows enforce, and what re-enabling them restores; they are not the
+path production takes today.
 
 ## Production invariant
 
@@ -249,7 +260,7 @@ runtime. Provisioning must independently establish that the staging Neon databas
 is separate from production; `--target staging` does not check database identity.
 
 Vercel's Preview environment is the staging runtime, and it shares no Stripe,
-Clerk, Redis or OpenRouter credential with Production. `validate-env.ts` fails
+Clerk, Redis or OpenRouter credential with Production. `apps/web/lib/validate-env.ts` fails
 the boot without Clerk keys, Stripe keys, the five required `STRIPE_PRICE_*` ids
 and `NEXT_PUBLIC_APP_URL`, and refuses live Stripe keys in Preview, so Preview
 carries its own:

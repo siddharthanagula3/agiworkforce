@@ -98,6 +98,9 @@
     "voice": "الصوت",
     "desktop": "عام",
     "computer-use": "استخدام الكمبيوتر",
+    "browser-pane": "المتصفح",
+    "local-mcp": "المطوّر",
+    "storage": "التخزين",
     "groupSettings": "الإعدادات",
     "groupCustomize": "تخصيص",
     "groupDesktop": "تطبيق سطح المكتب"

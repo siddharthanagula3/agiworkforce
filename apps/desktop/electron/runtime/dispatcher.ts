@@ -8,8 +8,10 @@ import {
   removeLocalRoutine,
 } from './localRoutineService';
 import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
 import os from 'node:os';
-import { app, dialog, shell, type BrowserWindow } from 'electron';
+import path from 'node:path';
+import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import {
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
@@ -26,7 +28,6 @@ import {
   developerApprovalAllows,
   evaluateShellPolicy,
   isBackgroundWorkKind,
-  isBrowserPaneHistoryAction,
   isDesktopCapability,
   isSshEnvironmentId,
   isDeveloperApprovalDecision,
@@ -39,14 +40,12 @@ import {
   isSimulatorStatusBar,
   isSystemPermissionKind,
   localPreviewOrigin,
+  localPreviewUrl,
   isWorkspaceRootKind,
   normalizeShellPolicy,
   permissionScopeKey,
-  readBrowserPaneBounds,
   runtimeFailure,
   runtimeSuccess,
-  SIMULATOR_UNAVAILABLE_MESSAGES,
-  type BrowserPaneBounds,
   type DesktopCapability,
   type DesktopPermissionsReview,
   type DesktopRuntimeErrorCode,
@@ -61,6 +60,7 @@ import {
   type DeveloperSessionGroup,
   type DeveloperSessionList,
   type DeveloperThreadRevertRequest,
+  SIMULATOR_UNAVAILABLE_MESSAGES,
   type PermissionScope,
   type RefusableApplication,
   type ShellPolicy,
@@ -79,6 +79,13 @@ import {
   type DeviceKeyModifier,
   type DeviceMouseButton,
   type DeviceStepRegion,
+  STORAGE_CLEAN_COMMAND,
+  STORAGE_CLEANUPS,
+  STORAGE_READ_COMMAND,
+  OLD_ARCHIVE_AGE_DAYS,
+  isStorageCleanup,
+  BROWSER_PANE_COMMANDS,
+  type BrowserPaneBounds,
 } from '@agiworkforce/local-runtime-contract';
 import {
   CLOUD_CODE_TURN_STEP_BOUNDS,
@@ -109,18 +116,21 @@ import {
   listInstalledApplications,
 } from './applicationLaunch';
 import { openInEditor, openWithDefaultApplication, revealInFileManager } from './appsService';
+import { openLocalPreview, readPreviewConsoleErrors } from '../previewWindow';
 import {
   BrowserPaneRefused,
+  blockBrowserSite,
   browserPaneState,
-  captureBrowserPane,
+  clearBrowserPaneData,
   closeBrowserPane,
-  closeBrowserPaneTab,
-  layoutBrowserPane,
-  moveBrowserPaneHistory,
+  hideBrowserPane,
   navigateBrowserPane,
-  openBrowserPaneTab,
-  readBrowserPaneConsoleErrors,
-  selectBrowserPaneTab,
+  openBrowserPane,
+  readBrowserPaneConsole,
+  readBrowserSites,
+  removeBrowserSite,
+  setBrowserPaneBounds,
+  stepBrowserPane,
 } from '../browserPane';
 import {
   SimulatorRefused,
@@ -197,6 +207,7 @@ import {
 import { recordDesktopEvent } from './desktopTelemetryService';
 import { readClipboard } from './clipboardService';
 import {
+  activeShellRunCount,
   cancelShellRun,
   readBackgroundCommand,
   runShellCommand,
@@ -270,6 +281,22 @@ import {
   addDeveloperMemory,
   answerDeveloperApproval,
   archiveDeveloperThread,
+  openDeveloperTerminal,
+  writeDeveloperTerminal,
+  resizeDeveloperTerminal,
+  closeDeveloperTerminal,
+  addDeveloperMcpServer,
+  developerMcpServerLogs,
+  developerMcpServerTools,
+  listDeveloperMcpServers,
+  localMcpAvailable,
+  removeDeveloperMcpServer,
+  setDeveloperMcpServerEnabled,
+  testDeveloperMcpServer,
+  type DeveloperMcpServerInput,
+  unarchiveDeveloperThread,
+  renameDeveloperThread,
+  pinDeveloperThread,
   answerDeveloperUserInput,
   applyDeveloperWorktree,
   deleteDeveloperThread,
@@ -311,6 +338,17 @@ import { readShellLayout, writeShellLayout } from '../shellWindowStore';
 import { PathRefused, type PathRefusalReason } from './pathGuard';
 import { readRegularFile } from './regularFile';
 import { showsTrustedPage } from '../permissionPolicy';
+import { getPreferences } from '../settingsStore';
+import { archiveIdleSessions } from './sessionAutoArchive';
+import { REMOTE_SESSION_PARTITION } from '../config';
+import { cliConfigRoot } from '../browser/localClient';
+import {
+  StorageCleanupRefused,
+  cleanStorage,
+  defaultTempParents,
+  readStorageUsage,
+  type StorageEnvironment,
+} from './storageService';
 import {
   consumeSingleUse,
   describePermission,
@@ -508,14 +546,6 @@ function requireRegion(args: Args): DeviceStepRegion {
   return requireRegionFields(value as Args);
 }
 
-function requirePaneBounds(args: Args): BrowserPaneBounds {
-  const bounds = readBrowserPaneBounds(args['bounds']);
-  if (bounds === null) {
-    throw new InvalidArguments('"bounds" must give x, y, width and height, none below zero.');
-  }
-  return bounds;
-}
-
 function requireRegionFields(region: Args): DeviceStepRegion {
   return {
     x: requireNumber(region, 'x'),
@@ -607,6 +637,12 @@ class UnknownWorkspace extends Error {}
 function workspaceScope(root: WorkspaceRoot): PermissionScope {
   return { kind: 'workspace', target: root.path };
 }
+
+const TERMINAL_REASON =
+  'A terminal runs your shell in this folder, inside the same sandbox as agent commands. Only you type into it; the agent cannot.';
+
+const MCP_SERVERS_REASON =
+  'MCP servers are programs the AGI CLI starts on this computer with your account, so they can read files and reach the network. Listing, testing or changing them runs the CLI for this folder.';
 
 const DEVELOPER_SESSION_REASON =
   'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.';
@@ -785,6 +821,68 @@ const CAPABILITY_BY_COMMAND: Record<string, CommandRequirement> = {
     orGranted: 'shell.execute',
     reason:
       'Archiving a coding session takes it out of the list for this folder. Its conversation and checkpoints stay on this computer, and files in this folder stay as they are.',
+  },
+  developer_thread_unarchive: {
+    capability: 'filesystem.read',
+    orGranted: 'shell.execute',
+    reason:
+      'Restoring an archived coding session puts it back in the list for this folder. Files in this folder stay as they are.',
+  },
+  developer_thread_rename: {
+    capability: 'filesystem.read',
+    orGranted: 'shell.execute',
+    reason:
+      'Renaming a coding session changes the name it is listed under. Files in this folder stay as they are.',
+  },
+  developer_thread_pin: {
+    capability: 'filesystem.read',
+    orGranted: 'shell.execute',
+    reason:
+      'Pinning a coding session keeps it at the top of the list for this folder. Files in this folder stay as they are.',
+  },
+  developer_mcp_list: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_add: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_remove: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_set_enabled: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_test: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_tools: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_logs: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_terminal_open: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
+  },
+  developer_terminal_write: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
+  },
+  developer_terminal_resize: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
+  },
+  developer_terminal_close: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
   },
   developer_thread_takeover: {
     capability: 'shell.execute',
@@ -977,11 +1075,11 @@ function requireCheckpointSections(args: Args): DeveloperCheckpointSectionsReque
   };
 }
 
-const SIMULATOR_REASON =
-  'The iOS Simulator pane starts and shuts down simulators on this Mac, shows their screen, saves screenshots and recordings of it, changes their appearance and status bar, and moves text between their clipboard and yours.';
-
 const COMPUTER_USE_REASON =
   'The agent moves the pointer, clicks and types on this Mac as if you were doing it, and reads the screen to decide where. It can reach anything already open, including apps and pages you are signed into.';
+
+const SIMULATOR_REASON =
+  'The iOS Simulator pane starts and shuts down simulators on this Mac, shows their screen, saves screenshots and recordings of it, changes their appearance and status bar, and moves text between their clipboard and yours.';
 
 /** Capabilities scoped to the session rather than to one folder. */
 const GLOBAL_CAPABILITY_BY_COMMAND: Record<
@@ -1002,6 +1100,11 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   computer_key: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_wait: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
   computer_open_app: { capability: 'computer.use', reason: COMPUTER_USE_REASON },
+  remote_control_start: {
+    capability: 'host.remote',
+    reason:
+      'Remote Control lets a phone you pair read and steer coding sessions on this computer and answer the agent’s approval requests. You are asked again to allow the phone itself before it connects.',
+  },
   simulator_status: { capability: 'simulator.control', reason: SIMULATOR_REASON },
   simulator_boot: { capability: 'simulator.control', reason: SIMULATOR_REASON },
   simulator_shutdown: { capability: 'simulator.control', reason: SIMULATOR_REASON },
@@ -1017,11 +1120,6 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   simulator_capture_read: { capability: 'simulator.control', reason: SIMULATOR_REASON },
   simulator_capture_reveal: { capability: 'simulator.control', reason: SIMULATOR_REASON },
   simulator_capture_delete: { capability: 'simulator.control', reason: SIMULATOR_REASON },
-  remote_control_start: {
-    capability: 'host.remote',
-    reason:
-      'Remote Control lets a phone you pair read and steer coding sessions on this computer and answer the agent’s approval requests. You are asked again to allow the phone itself before it connects.',
-  },
 };
 
 /**
@@ -1044,10 +1142,13 @@ function stopScreenControl(): ReturnType<typeof stopComputerUse> {
  * and again on every launch. One without the grant is listed with its
  * sessions withheld, which is what offers the user the way to allow it.
  */
-async function listSessionsWithinGrants(): Promise<DeveloperSessionList> {
+async function listSessionsWithinGrants(
+  options: { includeArchived?: boolean; includeCloud?: boolean } = {},
+): Promise<DeveloperSessionList> {
   const roots = listRoots();
   const listed = await listDeveloperSessions(
     (root) => hasSshEnvironment(root.id) || agentAllowedIn(root.id),
+    options,
   );
   const withheld = await Promise.all(
     roots
@@ -1300,6 +1401,211 @@ async function pickRoot(window: BrowserWindow | null, args: Args): Promise<Works
 }
 
 class Cancelled extends Error {}
+
+const MCP_SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const MAX_MCP_ARGS = 64;
+const MAX_MCP_ENV = 64;
+
+function requireMcpServerInput(args: Args): DeveloperMcpServerInput {
+  const name = requireString(args, 'name').trim();
+  if (!MCP_SERVER_NAME.test(name)) {
+    throw new InvalidArguments(
+      'Name the server with letters, numbers, dots, dashes or underscores, up to 64 characters.',
+    );
+  }
+  const command = optionalString(args, 'command', '').trim();
+  const url = optionalString(args, 'url', '').trim();
+  if ((command === '') === (url === '')) {
+    throw new InvalidArguments('Give either a command to run or a server address, not both.');
+  }
+  if (url !== '') {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new InvalidArguments('The server address is not a web address.');
+    }
+    if (parsed.protocol !== 'https:' && !localPreviewUrl(url)) {
+      throw new InvalidArguments('Use an https address, or http only on this computer.');
+    }
+    const transport = args['transport'] === 'sse' ? 'sse' : 'http';
+    return { name, url, transport };
+  }
+  const list = optionalStringList(args, 'args', MAX_MCP_ARGS) ?? [];
+  const rawEnv = args['env'];
+  const env: Record<string, string> = {};
+  if (rawEnv !== undefined && rawEnv !== null) {
+    if (typeof rawEnv !== 'object' || Array.isArray(rawEnv)) {
+      throw new InvalidArguments('"env" must map names to values.');
+    }
+    const entries = Object.entries(rawEnv as Record<string, unknown>);
+    if (entries.length > MAX_MCP_ENV) throw new InvalidArguments('Too many environment values.');
+    for (const [key, value] of entries) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== 'string') {
+        throw new InvalidArguments(`"${key}" is not a usable environment value.`);
+      }
+      env[key] = value;
+    }
+  }
+  return { name, command, args: list, ...(Object.keys(env).length > 0 ? { env } : {}) };
+}
+
+async function confirmMcpServer(
+  window: BrowserWindow | null,
+  input: DeveloperMcpServerInput,
+): Promise<void> {
+  const target =
+    input.url !== undefined
+      ? `Address: ${visibleInDialog(input.url)}`
+      : [
+          `Program: ${visibleInDialog(input.command ?? '')}`,
+          ...(input.args && input.args.length > 0
+            ? [`Arguments: ${visibleInDialog(input.args.join(' '))}`]
+            : []),
+          ...(input.env ? [`Environment: ${Object.keys(input.env).join(', ')}`] : []),
+        ].join('\n');
+  const allowed = await confirmInMain(
+    window,
+    { group: 'mcp-add', key: input.name },
+    {
+      type: 'warning',
+      buttons: ['Cancel', 'Add server'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Add this MCP server?',
+      message: `Add ${visibleInDialog(input.name)} as an MCP server for every folder?`,
+      detail: `${
+        input.url !== undefined
+          ? 'Coding sessions will send requests to this address, including what the agent reads from your files.'
+          : 'Coding sessions will start this program with your account. It can read and change files and reach the network.'
+      } Add it only if you set it up yourself.\n\n${target}`,
+      noLink: true,
+    },
+  );
+  if (!allowed) throw new Cancelled('The server was not added.');
+}
+
+async function confirmMcpServerEnable(window: BrowserWindow | null, name: string): Promise<void> {
+  const allowed = await confirmInMain(
+    window,
+    { group: 'mcp-enable', key: name },
+    {
+      type: 'warning',
+      buttons: ['Cancel', 'Turn on'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Turn on this MCP server?',
+      message: `Turn on ${visibleInDialog(name)}?`,
+      detail:
+        'Coding sessions will start it again with your account, so it can read and change files and reach the network.',
+      noLink: true,
+    },
+  );
+  if (!allowed) throw new Cancelled('The server stays off.');
+}
+
+async function openMcpConfig(): Promise<boolean> {
+  const file = path.join(cliConfigRoot(), 'mcp.json');
+  await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  await fs
+    .writeFile(file, `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`, {
+      flag: 'wx',
+      mode: 0o600,
+    })
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EEXIST') throw error;
+    });
+  const failure = await shell.openPath(file);
+  if (failure !== '') throw new InvalidArguments(failure);
+  return true;
+}
+
+function requirePaneWindow(window: BrowserWindow | null): BrowserWindow {
+  if (!window || window.isDestroyed()) {
+    throw new InvalidArguments('The browser pane opens inside an app window.');
+  }
+  return window;
+}
+
+function requireBounds(args: Args): BrowserPaneBounds {
+  const raw = args['bounds'];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new InvalidArguments('"bounds" must give x, y, width and height.');
+  }
+  const value = raw as Record<string, unknown>;
+  const read = (key: string) => {
+    const n = value[key];
+    if (typeof n !== 'number' || !Number.isFinite(n)) {
+      throw new InvalidArguments(`"bounds.${key}" must be a number.`);
+    }
+    return n;
+  };
+  return { x: read('x'), y: read('y'), width: read('width'), height: read('height') };
+}
+
+async function paneCall<T>(work: () => T | Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof BrowserPaneRefused) throw new InvalidArguments(error.message);
+    throw error;
+  }
+}
+
+async function deleteOldArchivedSessions(window: BrowserWindow | null): Promise<void> {
+  const cutoff = Date.now() - OLD_ARCHIVE_AGE_DAYS * 86_400_000;
+  const listed = await listSessionsWithinGrants({ includeArchived: true });
+  const due = listed.groups.flatMap((group) =>
+    group.sessions.filter(
+      (session) => session.archivedAt !== undefined && session.archivedAt < cutoff,
+    ),
+  );
+  if (due.length === 0) {
+    throw new StorageCleanupRefused(
+      `No session was archived more than ${OLD_ARCHIVE_AGE_DAYS} days ago.`,
+    );
+  }
+  const allowed = await confirmInMain(
+    window,
+    { group: 'storage-archived-sessions', key: String(due.length) },
+    {
+      type: 'warning',
+      buttons: ['Cancel', 'Delete sessions'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Delete old archived sessions?',
+      message:
+        due.length === 1
+          ? 'Delete 1 coding session archived more than a month ago?'
+          : `Delete ${due.length} coding sessions archived more than a month ago?`,
+      detail:
+        'Their conversations and checkpoints are removed from this computer and cannot be brought back. Worktree archives they kept stay in git, and files in your folders stay as they are.',
+      noLink: true,
+    },
+  );
+  if (!allowed) throw new StorageCleanupRefused('Nothing was deleted.');
+  for (const session of due) {
+    await deleteDeveloperThread({ rootId: session.rootId, threadId: session.id }).catch(
+      () => undefined,
+    );
+  }
+}
+
+function storageEnvironment(): StorageEnvironment {
+  const cliHome = cliConfigRoot();
+  const remote = session.fromPartition(REMOTE_SESSION_PARTITION);
+  return {
+    cliHome,
+    worktreesRoot: getPreferences().worktreeLocation || path.join(cliHome, 'worktrees'),
+    userData: app.getPath('userData'),
+    logs: app.getPath('logs'),
+    tempParents: defaultTempParents(),
+    webCacheBytes: () => remote.getCacheSize(),
+    clearWebCache: () => remote.clearCache(),
+    shellRunsActive: activeShellRunCount,
+    now: Date.now,
+  };
+}
 
 /**
  * A yes or no asked in main. `subject` says what it is about, which is what
@@ -1981,7 +2287,7 @@ function describeDeviceForRegistry(): DeviceRegistryProfile {
       browser: pairingState().paired,
       computerUse: computerUseEnabled() && computerUseAvailability().supported,
       localModels: false,
-      localMcp: false,
+      localMcp: localMcpAvailable(),
       remoteControl: remoteControlAvailable(),
     },
   };
@@ -2118,52 +2424,61 @@ async function execute(
       return openWithDefaultApplication(resolveRoot(args), requireString(args, 'path'));
     case 'app_reveal_path':
       return revealInFileManager(resolveRoot(args), requireString(args, 'path'));
+    case 'app_open_preview': {
+      const url = localPreviewUrl(args['url']);
+      if (!url) throw new InvalidArguments('Only a page served on this computer can be previewed.');
+      return openLocalPreview(url);
+    }
     case 'app_preview_errors': {
-      if (args['url'] === undefined) return readBrowserPaneConsoleErrors(args['clear'] === true);
+      if (args['url'] === undefined) {
+        return (
+          (window ? readBrowserPaneConsole(window, args['clear'] === true) : null) ??
+          readPreviewConsoleErrors(args['clear'] === true)
+        );
+      }
       const origin = localPreviewOrigin(args['url']);
       if (!origin) throw new InvalidArguments('Only a page served on this computer has errors.');
-      return readBrowserPaneConsoleErrors(args['clear'] === true, origin);
+      return readPreviewConsoleErrors(args['clear'] === true, origin);
     }
-    case 'browser_pane_state':
-      return browserPaneState(window, requireString(args, 'paneId'));
-    case 'browser_pane_layout':
-      return layoutBrowserPane(
-        window,
-        requireString(args, 'paneId'),
-        requirePaneBounds(args),
-        requireBoolean(args, 'visible'),
-      );
-    case 'browser_pane_open_tab':
-      return openBrowserPaneTab(
-        window,
-        requireString(args, 'paneId'),
-        args['url'] === undefined ? undefined : requireString(args, 'url'),
-      );
-    case 'browser_pane_close_tab':
-      return closeBrowserPaneTab(
-        window,
-        requireString(args, 'paneId'),
-        requireString(args, 'tabId'),
-      );
-    case 'browser_pane_select_tab':
-      return selectBrowserPaneTab(
-        window,
-        requireString(args, 'paneId'),
-        requireString(args, 'tabId'),
+    case 'browser_pane_open':
+      return paneCall(() =>
+        openBrowserPane(
+          requirePaneWindow(window),
+          requireBounds(args),
+          args['address'] === undefined || args['address'] === null
+            ? null
+            : requireString(args, 'address'),
+        ),
       );
     case 'browser_pane_navigate':
-      return navigateBrowserPane(window, requireString(args, 'paneId'), requireString(args, 'url'));
-    case 'browser_pane_history': {
-      const action = args['action'];
-      if (!isBrowserPaneHistoryAction(action)) {
-        throw new InvalidArguments('"action" must be back, forward, reload or stop.');
-      }
-      return moveBrowserPaneHistory(window, requireString(args, 'paneId'), action);
-    }
-    case 'browser_pane_capture':
-      return captureBrowserPane(window, requireString(args, 'paneId'));
+      return paneCall(() =>
+        navigateBrowserPane(requirePaneWindow(window), requireString(args, 'address')),
+      );
+    case 'browser_pane_back':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'back'));
+    case 'browser_pane_forward':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'forward'));
+    case 'browser_pane_reload':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'reload'));
+    case 'browser_pane_bounds':
+      return paneCall(() => setBrowserPaneBounds(requirePaneWindow(window), requireBounds(args)));
+    case 'browser_pane_hide':
+      return hideBrowserPane(requirePaneWindow(window));
     case 'browser_pane_close':
-      return closeBrowserPane(window, requireString(args, 'paneId'));
+      return closeBrowserPane(requirePaneWindow(window));
+    case 'browser_pane_state':
+      return browserPaneState(requirePaneWindow(window));
+    case 'browser_sites_read':
+      return readBrowserSites();
+    case 'browser_sites_remove':
+      return paneCall(() => removeBrowserSite(requireString(args, 'host')));
+    case 'browser_sites_block':
+      return paneCall(() => blockBrowserSite(requireString(args, 'host')));
+    case 'browser_pane_clear_data':
+      await clearBrowserPaneData();
+      return true;
+    case 'simulator_supported':
+      return simulatorSupported();
     case 'simulator_status':
       return simulatorStatus();
     case 'simulator_boot':
@@ -2206,6 +2521,24 @@ async function execute(
       return revealSimulatorCapture(args['id']);
     case 'simulator_capture_delete':
       return deleteSimulatorCapture(args['id']);
+    case 'desktop_storage_read':
+      return readStorageUsage(storageEnvironment());
+    case 'desktop_storage_clean': {
+      const cleanup = args['cleanup'];
+      if (!isStorageCleanup(cleanup)) {
+        throw new InvalidArguments(`"cleanup" must be one of ${STORAGE_CLEANUPS.join(', ')}.`);
+      }
+      try {
+        if (cleanup === 'archived-sessions') {
+          await deleteOldArchivedSessions(window);
+          return await readStorageUsage(storageEnvironment());
+        }
+        return await cleanStorage(storageEnvironment(), cleanup);
+      } catch (error) {
+        if (error instanceof StorageCleanupRefused) throw new InvalidArguments(error.message);
+        throw error;
+      }
+    }
     case 'app_open_in_editor':
       return openInEditor(resolveRoot(args));
     case 'clipboard_read':
@@ -2350,8 +2683,21 @@ async function execute(
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':
       return readDeveloperModels(requireString(args, 'rootId'), args['refresh'] === true);
-    case 'developer_session_list':
-      return listSessionsWithinGrants();
+    case 'developer_session_list': {
+      const includeArchived = args['includeArchived'] === true;
+      return archiveIdleSessions(
+        await listSessionsWithinGrants({
+          includeArchived,
+          includeCloud: args['includeCloud'] === true,
+        }),
+        {
+          days: getPreferences().autoArchiveIdleDays,
+          now: Date.now(),
+          includeArchived,
+          archive: (session) => archiveDeveloperThread(session.rootId, session.id),
+        },
+      );
+    }
     case 'developer_sessions_allow':
       return true;
     case 'developer_session_read':
@@ -2441,8 +2787,76 @@ async function execute(
         threadId: requireString(args, 'threadId'),
         throughTurnId: requireString(args, 'throughTurnId'),
       });
+    case 'developer_terminal_open':
+      return openDeveloperTerminal(
+        requireString(args, 'rootId'),
+        typeof args['cols'] === 'number' ? args['cols'] : 80,
+        typeof args['rows'] === 'number' ? args['rows'] : 24,
+      );
+    case 'developer_terminal_write':
+      return writeDeveloperTerminal(
+        requireString(args, 'rootId'),
+        requireString(args, 'terminalId'),
+        requireString(args, 'data'),
+      );
+    case 'developer_terminal_resize':
+      return resizeDeveloperTerminal(
+        requireString(args, 'rootId'),
+        requireString(args, 'terminalId'),
+        typeof args['cols'] === 'number' ? args['cols'] : 80,
+        typeof args['rows'] === 'number' ? args['rows'] : 24,
+      );
+    case 'developer_terminal_close':
+      return closeDeveloperTerminal(
+        requireString(args, 'rootId'),
+        requireString(args, 'terminalId'),
+      );
+    case 'developer_mcp_list':
+      return listDeveloperMcpServers(requireString(args, 'rootId'));
+    case 'developer_mcp_add': {
+      const input = requireMcpServerInput(args);
+      await confirmMcpServer(window, input);
+      return addDeveloperMcpServer(requireString(args, 'rootId'), input);
+    }
+    case 'developer_mcp_remove':
+      return removeDeveloperMcpServer(requireString(args, 'rootId'), requireString(args, 'name'));
+    case 'developer_mcp_set_enabled': {
+      const name = requireString(args, 'name');
+      const enabled = args['enabled'] === true;
+      if (enabled) await confirmMcpServerEnable(window, name);
+      return setDeveloperMcpServerEnabled(requireString(args, 'rootId'), name, enabled);
+    }
+    case 'developer_mcp_test':
+      return testDeveloperMcpServer(requireString(args, 'rootId'), requireString(args, 'name'));
+    case 'developer_mcp_tools':
+      return developerMcpServerTools(requireString(args, 'rootId'), requireString(args, 'name'));
+    case 'developer_mcp_logs':
+      return developerMcpServerLogs(
+        requireString(args, 'rootId'),
+        requireString(args, 'name'),
+        typeof args['limit'] === 'number' ? Math.min(Math.max(1, args['limit']), 1000) : 200,
+      );
+    case 'developer_mcp_open_config':
+      return openMcpConfig();
     case 'developer_thread_archive':
       return archiveDeveloperThread(requireString(args, 'rootId'), requireString(args, 'threadId'));
+    case 'developer_thread_unarchive':
+      return unarchiveDeveloperThread(
+        requireString(args, 'rootId'),
+        requireString(args, 'threadId'),
+      );
+    case 'developer_thread_rename':
+      return renameDeveloperThread(
+        requireString(args, 'rootId'),
+        requireString(args, 'threadId'),
+        requireString(args, 'title'),
+      );
+    case 'developer_thread_pin':
+      return pinDeveloperThread(
+        requireString(args, 'rootId'),
+        requireString(args, 'threadId'),
+        args['pinned'] === true,
+      );
     case 'developer_thread_takeover':
       return takeOverDeveloperThread(
         requireString(args, 'rootId'),
@@ -2605,8 +3019,13 @@ async function execute(
       return listLocalBranches(resolveRoot(args).path);
     case 'developer_branch_switch':
       return switchLocalBranch(resolveRoot(args).path, requireString(args, 'branch'));
-    case 'developer_branch_push':
-      return pushLocalBranch(resolveRoot(args).path);
+    case 'developer_branch_push': {
+      const title = optionalString(args, 'newBranchTitle', '').trim();
+      return pushLocalBranch(
+        resolveRoot(args).path,
+        title === '' ? undefined : { title, prefix: getPreferences().worktreeBranchPrefix },
+      );
+    }
     case 'developer_skills_list':
       return listDeveloperSkills(requireString(args, 'rootId'));
     case 'developer_skill_set_enabled':
@@ -2679,15 +3098,6 @@ const REFUSAL_CODES: Record<PathRefusalReason, DesktopRuntimeErrorCode> = {
   'io-error': 'io-error',
 };
 
-const BROWSER_PANE_REFUSAL_CODES: Readonly<
-  Record<BrowserPaneRefused['reason'], DesktopRuntimeErrorCode>
-> = {
-  invalid: 'invalid-arguments',
-  'not-found': 'not-found',
-  limit: 'conflict',
-  unavailable: 'io-error',
-};
-
 const SIMULATOR_REFUSAL_CODES: Readonly<
   Record<SimulatorRefused['reason'], DesktopRuntimeErrorCode>
 > = {
@@ -2702,6 +3112,9 @@ const SIMULATOR_REFUSAL_CODES: Readonly<
 function toFailure(error: unknown): DesktopRuntimeResponse<never> {
   if (error instanceof PathRefused) {
     return runtimeFailure(REFUSAL_CODES[error.reason], error.message);
+  }
+  if (error instanceof SimulatorRefused) {
+    return runtimeFailure(SIMULATOR_REFUSAL_CODES[error.reason], error.message);
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
   if (error instanceof PermissionNotSaved) return runtimeFailure('io-error', error.message);
@@ -2744,12 +3157,6 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure(code, error.message);
   }
   if (error instanceof SkillCaptureRefused) return runtimeFailure(error.code, error.message);
-  if (error instanceof BrowserPaneRefused) {
-    return runtimeFailure(BROWSER_PANE_REFUSAL_CODES[error.reason], error.message);
-  }
-  if (error instanceof SimulatorRefused) {
-    return runtimeFailure(SIMULATOR_REFUSAL_CODES[error.reason], error.message);
-  }
   if (error instanceof ShellCommandRefused) {
     return runtimeFailure(
       error.reason === 'control-characters' || error.reason === 'unparseable'
@@ -2792,21 +3199,15 @@ const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
  * changes only this app's own settings and lists; it withdraws or stops
  * something; it asks its question in a native dialog inside the service; or
  * it answers a session whose folder grant was checked when the session was
- * read; or it drives the browser pane, whose pages hold no account, file or
- * grant of the user's. A command is here because someone decided that, never
- * by omission.
+ * read. A command is here because someone decided that, never by omission.
  */
 const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
+  'developer_mcp_open_config',
+  'app_open_preview',
   'app_preview_errors',
-  'browser_pane_capture',
-  'browser_pane_close',
-  'browser_pane_close_tab',
-  'browser_pane_history',
-  'browser_pane_layout',
-  'browser_pane_navigate',
-  'browser_pane_open_tab',
-  'browser_pane_select_tab',
-  'browser_pane_state',
+  STORAGE_READ_COMMAND,
+  STORAGE_CLEAN_COMMAND,
+  ...BROWSER_PANE_COMMANDS,
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
   BROWSER_SIGN_IN_STATE,
@@ -2851,6 +3252,7 @@ const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   'shell_policy_read',
   'shell_policy_write',
   'simulator_record_stop',
+  'simulator_supported',
   'skill_capture_discard',
   'skill_capture_save',
   'skill_capture_start',
@@ -2889,6 +3291,9 @@ const SSH_SESSION_COMMANDS = new Set([
   'developer_approval_answer',
   'developer_user_input_answer',
   'developer_thread_archive',
+  'developer_thread_unarchive',
+  'developer_thread_rename',
+  'developer_thread_pin',
   'developer_thread_takeover',
   'developer_thread_fork',
   'developer_thread_compact',
@@ -2909,6 +3314,12 @@ export async function dispatch(
   try {
     if (localInferenceCommands.has(command)) {
       return runtimeFailure('unsupported-platform', LOCAL_INFERENCE_UNSUPPORTED);
+    }
+    if (isSimulatorCommand(command) && !simulatorSupported()) {
+      return runtimeFailure(
+        'unsupported-platform',
+        SIMULATOR_UNAVAILABLE_MESSAGES['unsupported-platform'],
+      );
     }
 
     if (
@@ -2950,12 +3361,6 @@ export async function dispatch(
     }
     if (isBrowserCommand(command)) {
       return await runBrowserCommand(window, command, args);
-    }
-    if (isSimulatorCommand(command) && !simulatorSupported()) {
-      return runtimeFailure(
-        'unsupported-platform',
-        SIMULATOR_UNAVAILABLE_MESSAGES['unsupported-platform'],
-      );
     }
 
     const [gate, ...otherGates] = commandGates(command);

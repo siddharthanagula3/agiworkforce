@@ -91,7 +91,12 @@ import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { chatTypography, motion, typeScale } from '@/src/ui/theme/tokens';
-import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
+import {
+  getDisplayName,
+  getModelById,
+  getModelByIdForCloudAccess,
+  isAutoMode,
+} from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,
   getMessageStreamErrorCode,
@@ -458,7 +463,7 @@ function getProvenance(message: ChatMessage): { provider?: string; model?: strin
     return cloudTurn ? { provider: 'AGI Cloud' } : { provider: 'Local Mode', model: 'Auto' };
   }
 
-  const def = getModelById(answeredBy);
+  const def = getModelByIdForCloudAccess(answeredBy, true);
   if (!def) return cloudTurn ? { provider: 'AGI Cloud' } : null;
 
   if (def.surface === 'local') {

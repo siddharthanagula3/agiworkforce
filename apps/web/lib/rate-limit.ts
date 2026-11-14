@@ -308,6 +308,14 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'skills-catalog-read': {
+    // The skills page and every CLI or desktop skills mirror read the catalogue,
+    // each skill's body, its file list and its files. Spending that from
+    // `chat-conversation` let one mirror's first sync refuse /api/chat/sync.
+    limit: 300,
+    window: '1 m',
+    failClosed: false,
+  },
   'connector-directory-icon': {
     limit: 600,
     window: '1 m',

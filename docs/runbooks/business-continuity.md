@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-21
+Last updated: 2026-11-11
 
 This is the summary /trust points at. It states what the repository can prove
 about recovering the product, and names what it cannot. Nothing here is a
@@ -30,9 +30,10 @@ older than that window is gone, because there is no second backup underneath
 Neon's retention.
 
 For object storage there is no recovery point until the backup bucket is
-provisioned. The route runs at 25 minutes past each hour, but
-`isObjectBackupConfigured` reads the five `AGI_STORAGE_BACKUP_*` variables, and
-with any of them unset the run answers `{"replicated":0,"reason":"unconfigured"}`
+provisioned. The route runs at 6 minutes past each hour, but
+`isObjectBackupConfigured` requires four `AGI_STORAGE_BACKUP_*` variables
+(`ENDPOINT`, `BUCKET`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`), and with any of them
+unset the run answers `{"replicated":0,"reason":"unconfigured"}`
 and copies nothing. Do not read the cadence below as a recovery point until
 `objectBackupReadiness` reports ready in the deployment. Once it is configured,
 the bound is that cadence, carrying at most 200 new objects and 200 reconciled

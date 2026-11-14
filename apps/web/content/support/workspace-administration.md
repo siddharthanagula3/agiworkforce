@@ -4,7 +4,7 @@ title: Administering a workspace
 path: /workspace
 category: administration
 tags: admin, administration, workspace console, members, seats, invite, audit log, usage analytics, sharing, legal hold, retention, api keys, spend limit, create workspace, switch workspace, leave workspace, delete workspace, successor, owner
-updated: 2026-10-12
+updated: 2026-11-11
 description: How to create, switch, leave and delete a workspace, use its console and what members see.
 scope: public
 ---
@@ -23,6 +23,9 @@ settings. Its sections are:
   features and exceptions.
 - **Models**: which models and providers the workspace permits.
 - **Connectors**: which integrations the workspace permits.
+- **Code**: GitHub, MCP servers, desktop sync and review for the workspace.
+- **MCP servers**: the servers the workspace publishes to its members.
+- **Plugins**: the plugins the workspace publishes, and who gets them.
 - **Identity**: single sign-on, domain verification and SCIM directory
   provisioning.
 - **Sharing**: the projects, conversations, artifacts and connectors shared

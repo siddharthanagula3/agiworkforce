@@ -1,6 +1,77 @@
 export type AgiThemeMode = 'light' | 'dark';
 export type CssVariableMap = Record<`--${string}`, string>;
 
+export const agiTerminalPalette = {
+  light: {
+    black: '#000000',
+    red: '#cd3131',
+    green: '#00bc00',
+    yellow: '#949800',
+    blue: '#0451a5',
+    magenta: '#bc05bc',
+    cyan: '#0598bc',
+    white: '#555555',
+    brightBlack: '#666666',
+    brightRed: '#cd3131',
+    brightGreen: '#14ce14',
+    brightYellow: '#b5ba00',
+    brightBlue: '#0451a5',
+    brightMagenta: '#bc05bc',
+    brightCyan: '#0598bc',
+    brightWhite: '#a5a5a5',
+  },
+  dark: {
+    black: '#000000',
+    red: '#cd3131',
+    green: '#0dbc79',
+    yellow: '#e5e510',
+    blue: '#2472c8',
+    magenta: '#bc3fbc',
+    cyan: '#11a8cd',
+    white: '#e5e5e5',
+    brightBlack: '#666666',
+    brightRed: '#f14c4c',
+    brightGreen: '#23d18b',
+    brightYellow: '#f5f543',
+    brightBlue: '#3b8eea',
+    brightMagenta: '#d670d6',
+    brightCyan: '#29b8db',
+    brightWhite: '#e5e5e5',
+  },
+} as const;
+
+export function agiTerminalIndexedColors(mode: AgiThemeMode): string[] {
+  const palette = agiTerminalPalette[mode];
+  const colors: string[] = [
+    palette.black,
+    palette.red,
+    palette.green,
+    palette.yellow,
+    palette.blue,
+    palette.magenta,
+    palette.cyan,
+    palette.white,
+    palette.brightBlack,
+    palette.brightRed,
+    palette.brightGreen,
+    palette.brightYellow,
+    palette.brightBlue,
+    palette.brightMagenta,
+    palette.brightCyan,
+    palette.brightWhite,
+  ];
+  const component = (value: number): number => (value === 0 ? 0 : 55 + value * 40);
+  const rgb = (red: number, green: number, blue: number): string =>
+    `#${[red, green, blue].map((value) => value.toString(16).padStart(2, '0')).join('')}`;
+  for (let red = 0; red < 6; red++)
+    for (let green = 0; green < 6; green++)
+      for (let blue = 0; blue < 6; blue++)
+        colors.push(rgb(component(red), component(green), component(blue)));
+  for (let index = 0; index < 24; index++)
+    colors.push(rgb(8 + index * 10, 8 + index * 10, 8 + index * 10));
+  return colors;
+}
+
 /**
  * The brand ramps, mode invariant. foundation.css declares the same values as
  * `--hue-<family>` and `--hue-<family>-<step>` primitives; this mirror exists
@@ -397,6 +468,32 @@ export const agiTypography = {
   display: `'Newsreader', Georgia, 'Times New Roman', serif, ${EMOJI_FACES}`,
   greeting: `'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif, ${EMOJI_FACES}`,
   mono: `'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace, ${EMOJI_FACES}`,
+} as const;
+
+export const agiChatFrameGeometry = {
+  sidebarWidth: 260,
+  sidebarCollapsedWidth: 48,
+  sidebarRowHeight: 34,
+  sidebarFontSize: 14,
+  sidebarLineHeight: 20,
+  contentWidth: 768,
+  headerHeight: 48,
+  composerMinHeight: 52,
+  viewportGutter: 16,
+  controlGap: 8,
+  compactBreakpoint: 768,
+} as const;
+
+export const agiModelPickerGeometry = {
+  viewportMargin: 8,
+  rowHeight: 48,
+  rowPaddingBlock: 4,
+  menuWidth: 320,
+  menuMaxHeight: 320,
+  labelFontSize: 14,
+  labelLineHeight: 20,
+  guidanceFontSize: 12,
+  guidanceLineHeight: 16,
 } as const;
 
 export const agiChatTypography = {
@@ -998,6 +1095,8 @@ export const agiVsCodeCssVars = {
   '--agi-vscode-diff-added-gutter': 'var(--vscode-diffEditor-insertedTextBorder, #4caf50)',
   '--agi-vscode-diff-removed-gutter': 'var(--vscode-diffEditor-removedTextBorder, #f44336)',
   '--agi-vscode-diff-modified-gutter': '#ff9800',
+  // A QR code scans only against a light quiet zone, whatever the editor theme.
+  '--agi-vscode-qr-quiet-zone': '#ffffff',
 } as const satisfies CssVariableMap;
 
 export function cssVarsToString(vars: CssVariableMap): string {

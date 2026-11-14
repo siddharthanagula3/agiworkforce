@@ -116,3 +116,49 @@ describe('translateAnthropicStream, a stream that ends without a stop reason', (
     expect(seen).toHaveLength(1);
   });
 });
+
+describe('translateAnthropicStream, usage of a turn that did not finish', () => {
+  async function* abortedAfter(events: Event[]): AsyncIterable<Event> {
+    for (const event of events) yield event;
+    throw Object.assign(new Error('Request was aborted.'), {
+      name: 'AbortError',
+    });
+  }
+
+  function usageChunks(chunks: StreamChunk[]): StreamChunk[] {
+    return chunks.filter((chunk) => chunk.type === 'usage');
+  }
+
+  it('reports no usage for a stopped turn, even after text streamed', async () => {
+    const { chunks, error } = await collect(
+      translateAnthropicStream(abortedAfter([MESSAGE_START, textDelta('Half an ans')])),
+    );
+
+    expect((error as Error).message).toBe('Request was aborted.');
+    expect(usageChunks(chunks)).toEqual([]);
+  });
+
+  it('reports no usage for a failed turn that streamed nothing', async () => {
+    const { chunks, error } = await collect(
+      translateAnthropicStream(abortedAfter([MESSAGE_START])),
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect(usageChunks(chunks)).toEqual([]);
+  });
+
+  it('reports no usage for a stream that was cut off before a stop reason', async () => {
+    const { chunks, error } = await collect(
+      translateAnthropicStream(fromArray([MESSAGE_START, textDelta('Half an ans')])),
+    );
+
+    expect(error).toBeInstanceOf(EmptyStreamError);
+    expect(usageChunks(chunks)).toEqual([]);
+  });
+
+  it('reports nothing when the stream stopped before the provider measured anything', async () => {
+    const { chunks } = await collect(translateAnthropicStream(abortedAfter([])));
+
+    expect(usageChunks(chunks)).toEqual([]);
+  });
+});

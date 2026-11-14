@@ -28,7 +28,7 @@ upstream `LICENSE` and `THIRD_PARTY_NOTICES.md` are preserved verbatim. Source:
 <https://github.com/NVIDIA/skillspector>. See the repo-root `THIRD_PARTY_LICENSES.md`
 and `docs/strategy/PORTING-TRACKER.md` for the attribution record. Local changes:
 trimmed to the runnable package (`src/skillspector`) + two sample fixtures +
-this README; `model_registry.yaml` rewritten to AGI catalog model IDs (below).
+`verify.sh` + `tests/` + this README; `model_registry.yaml` rewritten to AGI catalog model IDs (below).
 
 ## Model IDs
 
@@ -43,14 +43,16 @@ is `packages/contracts/types/src/models.json`. Do not hand-add model IDs here; m
 Requires Python 3.12 and [`uv`](https://docs.astral.sh/uv/).
 
 ```bash
-# from services/skill-vetting/
+# from tools/skill-vetting/
 ./verify.sh          # creates a venv, installs, scans both samples, asserts verdicts
 ```
 
 `verify.sh` is the verification for INC-0.5: it asserts the malicious sample
 resolves to `DO_NOT_INSTALL` and the safe sample does not. It is intentionally
 **not** wired into `check:llm-operability` (it provisions a Python venv and is
-slow); run it directly or in a dedicated CI job.
+slow); run it directly. CI runs it in the `skill-supply-chain` job of
+`.github/workflows/repo-operability.yml`, which then applies the gate to every
+skill package vendored in the repository with `scripts/scan-skills-with-vetting.mjs`.
 
 Manual scan:
 

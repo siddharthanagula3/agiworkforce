@@ -13,7 +13,7 @@ Use this skill when the user needs a `.pptx` deliverable.
 1. Identify the audience, presentation goal, expected duration, and decision or action requested.
 2. Form a narrative with an opening, evidence-backed middle, and explicit conclusion.
 3. Give each slide one main idea and a descriptive title.
-4. Keep body text concise; use tables or charts only when they clarify a real relationship.
+4. Write each slide as a title, one to twelve short bullets and optional speaker notes, in at most 40 slides. The tool draws no tables, charts or images, so put the figures that matter in the bullets and offer a spreadsheet with a chart when the data needs one.
 5. Create the presentation with `create_office_file`; do not claim a file exists until the tool succeeds.
 6. Check the returned file metadata and summarize the deck, including any content or visual limitations.
 

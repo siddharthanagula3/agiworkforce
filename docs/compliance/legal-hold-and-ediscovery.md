@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Legal/compliance
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 
 What a legal hold does in this product, what an eDiscovery export contains, and
 what neither of them can do. Every statement below is provable from the file it
@@ -50,7 +50,7 @@ every destructive statement in `apps/web` and `packages` from the source, takes
 the reach of a delete from the foreign keys in `apps/web/db/neon`, and judges
 each statement individually: a predicate elsewhere in the same file does not
 vouch for it. It reports 17 of 17 statements gated with an empty baseline, and
-fails on a seventeenth.
+fails on any new statement that is not gated.
 
 Two paths refuse instead of filtering, which is the stronger answer: account
 erasure (`isSubjectUnderLegalHold` in `apps/web/lib/server/account-erasure.ts`)

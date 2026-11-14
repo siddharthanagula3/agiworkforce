@@ -1511,19 +1511,18 @@
     "dompurify": "^3.4.17",
     "markdown-it": "^15.0.3",
     "qrcode": "^1.5.4",
-    "ws": "^8.22.0",
+    "ws": "^8.22.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/dompurify": "^3.2.0",
     "@types/markdown-it": "^14.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.6",
     "@types/vscode": "^1.100.0",
     "@types/ws": "^8.18.2",
-    "@typescript-eslint/eslint-plugin": "^8.71.2",
-    "@typescript-eslint/parser": "^8.71.2",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
     "@vscode/codicons": "^0.0.45",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
@@ -1533,7 +1532,8 @@
     "glob": "^14.0.2",
     "jsdom": "^25.0.1",
     "mocha": "^11.8.0",
-    "rimraf": "^6.1.3",
+    "ovsx": "1.3.0",
+    "rimraf": "^6.1.4",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
   }

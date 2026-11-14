@@ -507,10 +507,7 @@ fn normalize_rule_path_candidate(raw: &str) -> Option<PathBuf> {
     // `path/to/file.rs:42:7`. Remove numeric line/column suffixes without
     // damaging Windows drive prefixes.
     let mut candidate = trimmed.trim_end_matches(['.', ':']);
-    loop {
-        let Some((head, tail)) = candidate.rsplit_once(':') else {
-            break;
-        };
+    while let Some((head, tail)) = candidate.rsplit_once(':') {
         if tail.chars().all(|character| character.is_ascii_digit()) && !tail.is_empty() {
             candidate = head;
         } else {

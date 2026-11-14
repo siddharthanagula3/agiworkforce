@@ -1,10 +1,11 @@
+import projectContract from './project-contract.json' with { type: 'json' };
 import { z } from 'zod';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_PROJECT_KNOWLEDGE_PRESIGN_PATH = '/api/uploads/presign';
 
 export function managedCloudProjectKnowledgePath(projectId: string): string {
-  return `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`;
+  return `${projectContract.path}/${encodeURIComponent(projectId)}/${projectContract.knowledgeFilesSegment}`;
 }
 
 export function managedCloudProjectKnowledgeFilePath(projectId: string, fileId: string): string {
@@ -107,6 +108,7 @@ export const ManagedCloudProjectKnowledgeFileSchema = z.object({
   retentionExpiresAt: z.string().nullable().optional(),
   deletedAt: z.string().nullable().optional(),
   storageUri: z.string().min(1),
+  textPreviewKind: z.enum(['text', 'table', 'office']).nullable().optional(),
   indexing: ManagedCloudProjectKnowledgeIndexStateSchema.nullable().optional(),
 });
 

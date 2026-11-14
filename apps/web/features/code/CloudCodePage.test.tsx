@@ -246,6 +246,11 @@ beforeEach(() => {
   pickWorkspaceRoot.mockClear();
 });
 
+const openSettings = vi.fn();
+vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
+  useSettingsModal: () => ({ isOpen: false, openSettings, closeSettings: vi.fn() }),
+}));
+
 vi.mock('@shared/stores/web-auth-store', () => {
   const state = {
     user: {
@@ -811,6 +816,15 @@ describe('CloudCodePage', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/Build in an isolated cloud workspace/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Managed Code/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the MCP servers page from the composer menu when this computer serves them', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Add to this session' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'MCP servers' }));
+    expect(openSettings).toHaveBeenCalledWith('local-mcp');
   });
 
   it('places the usage card under the home greeting with the account plan', async () => {
@@ -2382,6 +2396,32 @@ describe('CloudCodePage', () => {
     );
   });
 
+  it('keeps what was typed when the rename field selects its title late', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    const frames: FrameRequestCallback[] = [];
+    const frameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => frames.push(callback));
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+
+    const field = await screen.findByRole('textbox', { name: 'Session title' });
+    await user.clear(field);
+    await user.type(field, 'A');
+    act(() => frames.splice(0).forEach((callback) => callback(0)));
+    frameSpy.mockRestore();
+
+    expect(field).toHaveValue('A');
+    expect(field).toHaveProperty('selectionStart', 1);
+    expect(field).toHaveProperty('selectionEnd', 1);
+  });
+
   it('leaves Enter and Escape to an input method while the session title composes', async () => {
     const user = userEvent.setup();
     const rename: CloudCodeApi['rename'] = vi.fn(async (_sessionId, title) => ({
@@ -3547,11 +3587,11 @@ describe('the environment the composer starts a session in', () => {
         within(screen.getByTestId('local-code-composer')).getByRole('textbox') as HTMLElement;
       await user.type(box(), 'half a thought');
 
-      await user.click(screen.getByRole('button', { name: /Fix the build/u }));
+      await user.click(screen.getByRole('button', { name: /^Fix the build/u }));
       await screen.findByRole('heading', { level: 1, name: 'Fix the build' });
       expect(box()).toHaveValue('');
 
-      await user.click(screen.getByRole('button', { name: /Quote the readme/u }));
+      await user.click(screen.getByRole('button', { name: /^Quote the readme/u }));
       await screen.findByRole('heading', { level: 1, name: 'Quote the readme' });
       expect(box()).toHaveValue('half a thought');
     } finally {
@@ -3628,7 +3668,7 @@ describe('the environment the composer starts a session in', () => {
         within(screen.getByTestId('local-code-composer')).getByRole('textbox') as HTMLElement;
       await user.type(box(), 'only for the first session');
 
-      await user.click(screen.getByRole('button', { name: /Fix the build/u }));
+      await user.click(screen.getByRole('button', { name: /^Fix the build/u }));
 
       await screen.findByRole('heading', { level: 1, name: 'Fix the build' });
       expect(box()).toHaveValue('');
@@ -3809,7 +3849,7 @@ describe('the environment the composer starts a session in', () => {
 
       const notice = await screen.findByTestId('local-session-archived');
       expect(notice).toHaveTextContent('Session archived.');
-      expect(notice).toHaveTextContent('agi session unarchive thread-1');
+      expect(notice).toHaveTextContent('choose Show archived in the sidebar, then Restore');
       expect(archiveDeveloperThread).toHaveBeenCalledWith('root-recent', 'thread-1');
 
       await user.click(within(notice).getByRole('button', { name: 'Dismiss' }));
@@ -4124,7 +4164,9 @@ describe('leaving unsaved local edits', () => {
       })),
     });
     render(<CloudCodePage api={api} />);
-    await user.click(await screen.findByRole('button', { name: new RegExp(localSession.title) }));
+    await user.click(
+      await screen.findByRole('button', { name: new RegExp(`^${localSession.title}`) }),
+    );
     await user.click(await screen.findByRole('button', { name: 'Changes' }));
     await user.click(await screen.findByRole('button', { name: 'Edit src/edit.ts' }));
     const field = await screen.findByLabelText('src/edit.ts');

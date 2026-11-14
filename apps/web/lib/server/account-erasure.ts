@@ -203,6 +203,7 @@ export const EMAIL_SCOPED_USER_TABLES: ReadonlyArray<{
 ];
 
 const PROFILE_TABLE = 'profiles';
+const KNOWLEDGE_LEDGER_TABLE = 'project_knowledge_objects';
 const TOMBSTONE_TABLE = 'erasure_tombstones';
 const ORGANIZATION_USAGE_LEDGER_TABLE = 'organization_usage_ledger';
 
@@ -353,6 +354,8 @@ export const FINANCIAL_ERASURE_DISPOSITION: Readonly<Record<string, string>> = {
 };
 
 export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
+  project_knowledge_objects:
+    'Retired-object cleanup ledger: provenance stays while physical removal is unconfirmed. Migration 0419 requires deleted rows to clear object_key, user_id and organization_id. A row with recorded storage targets is cleared by the receipt function once every target confirms removal; a row without them, which the cleanup dispatcher never takes, is settled and cleared by settleUntrackedKnowledgeLedger after this erasure deletes its bytes and the subject projects. Fingerprint-only tombstones prevent resurrection.',
   media_assets: 'Erased by eraseUserMedia(): bytes first, then rows.',
   cloud_agent_events: 'Cascades from cloud_agent_runs.',
   cloud_agent_approval_checkpoints: 'Cascades from cloud_agent_runs.',
@@ -747,7 +750,7 @@ async function deleteObjectKeys(
       deleted++;
     } catch (error) {
       failed++;
-      logger.warn({ kind, key, error }, 'Failed to delete stored object');
+      logger.warn({ kind, objectKey: key, error }, 'Failed to delete stored object');
     }
   }
   return { deleted, failed };
@@ -758,6 +761,7 @@ async function eraseUserKnowledgeObjects(userId: string): Promise<{
   failed: number;
   backupObjectsDeleted: number;
   backupObjectsFailed: number;
+  erasedKeys: string[];
 }> {
   const rows = await getNeonDb().query<{ storage_uri: string | null }>(
     `select k.storage_uri
@@ -767,15 +771,25 @@ async function eraseUserKnowledgeObjects(userId: string): Promise<{
         and k.storage_uri is not null`,
     [userId],
   );
+  const untrackedLedgerKeys = await getNeonDb().query<{ object_key: string }>(
+    `select ledger.object_key
+       from public.${KNOWLEDGE_LEDGER_TABLE} ledger
+      where ledger.user_id = $1
+        and not ledger.origin_known
+        and ledger.state <> 'deleted'
+        and ledger.object_key is not null`,
+    [userId],
+  );
 
-  const keys: string[] = [];
+  const keys = new Set<string>();
   let unresolvedReferences = 0;
   for (const row of rows) {
     if (!row.storage_uri?.trim()) continue;
     const key = objectKeyFromStorageUri(row.storage_uri);
-    if (key) keys.push(key);
+    if (key) keys.add(key);
     else unresolvedReferences++;
   }
+  for (const row of untrackedLedgerKeys) keys.add(row.object_key);
   if (unresolvedReferences > 0) {
     logger.warn(
       { userId, count: unresolvedReferences },
@@ -783,7 +797,7 @@ async function eraseUserKnowledgeObjects(userId: string): Promise<{
     );
   }
   const erasedKeys: string[] = [];
-  const primary = await deleteObjectKeys(keys, 'knowledge-file', {
+  const primary = await deleteObjectKeys([...keys], 'knowledge-file', {
     configured: isProjectKnowledgeObjectStorageConfigured,
     deleteKey: async (key) => {
       await deleteProjectKnowledgeObject(key);
@@ -791,12 +805,52 @@ async function eraseUserKnowledgeObjects(userId: string): Promise<{
     },
   });
   const backup = await eraseBackupCopies(erasedKeys);
+  const backupStillStored = new Set(backup.failedKeys);
   return {
     ...primary,
     failed: primary.failed + unresolvedReferences,
     backupObjectsDeleted: backup.deleted,
     backupObjectsFailed: backup.failedKeys.length,
+    erasedKeys: erasedKeys.filter((key) => !backupStillStored.has(key)),
   };
+}
+
+/**
+ * The cleanup dispatcher only takes ledger rows whose storage targets were
+ * recorded (origin_known). A row 0419 backfilled has none, so nothing else ever
+ * settles it: once this erasure has removed its bytes and the subject's projects
+ * are gone, it is settled here and stripped of key, owner and workspace, as the
+ * receipt function does for a dispatched row.
+ */
+async function settleUntrackedKnowledgeLedger(
+  db: ReturnType<typeof getNeonDb>,
+  userId: string,
+  erasedKeys: readonly string[],
+): Promise<void> {
+  if (erasedKeys.length > 0) {
+    await db.execute(
+      `update public.${KNOWLEDGE_LEDGER_TABLE}
+          set state = 'deleted', object_key = null, user_id = null, organization_id = null,
+              targets = '{}'::jsonb, completed_at = now(), updated_at = now()
+        where user_id = $1
+          and not origin_known
+          and state = 'queued'
+          and reference_count = 0
+          and object_key = any($2::text[])`,
+      [userId, [...erasedKeys]],
+    );
+  }
+  const [residual] = await db.query<{ unsettled: number }>(
+    `select count(*)::int as unsettled
+       from public.${KNOWLEDGE_LEDGER_TABLE}
+      where user_id = $1
+        and not origin_known
+        and state <> 'deleted'`,
+    [userId],
+  );
+  if ((residual?.unsettled ?? 0) > 0) {
+    throw new Error(`${residual!.unsettled} untracked knowledge ledger rows are not settled`);
+  }
 }
 
 async function eraseUserAvatarObject(userId: string): Promise<{ deleted: number; failed: number }> {
@@ -1036,6 +1090,19 @@ export async function eraseUserAccountData(
           error: error instanceof Error ? error.message : String(error),
         });
         logger.error({ userId, table, error }, 'Account erasure failed for table');
+      }
+    }
+
+    if (tables['user_projects']?.deleted) {
+      try {
+        await settleUntrackedKnowledgeLedger(db, userId, knowledge.erasedKeys);
+        anonymized[KNOWLEDGE_LEDGER_TABLE] = { updated: true };
+      } catch (error) {
+        anonymized[KNOWLEDGE_LEDGER_TABLE] = {
+          updated: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+        logger.error({ userId, error }, 'Account erasure failed to settle the knowledge ledger');
       }
     }
 

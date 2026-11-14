@@ -79,7 +79,7 @@ pub fn workspace_file_candidates(root: &Path) -> Vec<MentionCandidate> {
             Some((modified, path.clone()))
         })
         .collect();
-    recent.sort_by(|a, b| b.0.cmp(&a.0));
+    recent.sort_by_key(|entry| std::cmp::Reverse(entry.0));
     let recent: Vec<String> = recent
         .into_iter()
         .take(RECENT_FIRST)

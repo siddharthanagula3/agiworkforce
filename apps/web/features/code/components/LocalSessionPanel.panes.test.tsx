@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -6,20 +6,19 @@ import {
   type DeveloperRuntimeModels,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
-import { safePlatform } from '@shared/utils/browser-utils';
-import { hostBridgeStub } from '@/test/host-bridge-stub';
-import type { BrowserPaneRequest } from '../browser-pane';
 
 const ONE_PIXEL_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-function capturedPage(): File {
+function capturedScreen(): File {
   const bytes = Uint8Array.from(atob(ONE_PIXEL_PNG), (character) => character.charCodeAt(0));
-  return new File([bytes], 'browser-capture.png', { type: 'image/png' });
+  return new File([bytes], 'simulator-capture.png', { type: 'image/png' });
 }
 
 const readDeveloperSession = vi.fn();
 const capabilities = vi.fn(() => new Set<string>(DEVELOPER_RUNTIME_CAPABILITIES));
+const browserPaneSupported = vi.fn(async () => false);
+const simulatorPaneSupported = vi.fn(async () => false);
 
 vi.mock('../services/local-review-client', () => ({
   listLocalCheckpoints: vi.fn(async () => ({ threadId: 'thread-1', available: true, turns: [] })),
@@ -44,62 +43,51 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
   readDeveloperSession,
   onDeveloperSessionEvent: () => () => undefined,
   useDeveloperCapabilities: () => capabilities(),
+  browserPaneSupported,
+  simulatorPaneSupported,
 }));
 
-vi.mock('./LocalBrowserPane', () => ({
-  LocalBrowserPane: ({
-    paneId,
-    request,
-    expanded,
-    onToggleExpanded,
-    onClose,
-    onAttachImage,
-  }: {
-    paneId: string;
-    request: BrowserPaneRequest | null;
-    expanded: boolean;
-    onToggleExpanded: () => void;
-    onClose: () => void;
-    onAttachImage?: (file: File) => void;
-  }) => (
-    <aside
-      aria-label="Browser"
-      data-pane-id={paneId}
-      data-request={request?.url ?? ''}
-      data-expanded={expanded}
-    >
-      <button type="button" onClick={onToggleExpanded}>
-        Expand the browser
-      </button>
+vi.mock('./LocalBrowserPanel', () => ({
+  LocalBrowserPanel: ({ onClose }: { onClose: () => void }) => (
+    <aside aria-label="Browser">
       <button type="button" onClick={onClose}>
         Close the browser
       </button>
-      {onAttachImage && (
-        <button type="button" onClick={() => onAttachImage(capturedPage())}>
-          Add the page to the chat
-        </button>
-      )}
     </aside>
   ),
 }));
 
 vi.mock('./LocalSimulatorPane', () => ({
   LocalSimulatorPane: ({
+    expanded,
+    onToggleExpanded,
     floating,
     onToggleFloating,
     onClose,
+    onAttachImage,
   }: {
+    expanded: boolean;
+    onToggleExpanded: () => void;
     floating: boolean;
     onToggleFloating: () => void;
     onClose: () => void;
+    onAttachImage?: (file: File) => void;
   }) => (
-    <aside aria-label="iOS Simulator" data-floating={floating}>
+    <aside aria-label="iOS Simulator" data-floating={floating} data-expanded={expanded}>
+      <button type="button" onClick={onToggleExpanded}>
+        Expand the simulator
+      </button>
       <button type="button" onClick={onToggleFloating}>
         Float over the chat
       </button>
       <button type="button" onClick={onClose}>
         Close the simulator
       </button>
+      {onAttachImage && (
+        <button type="button" onClick={() => onAttachImage(capturedScreen())}>
+          Add the screen to the chat
+        </button>
+      )}
     </aside>
   ),
 }));
@@ -154,15 +142,17 @@ function renderPanel() {
   );
 }
 
-function inElectron(mac: boolean) {
-  window.agiHost = hostBridgeStub({ platform: mac ? 'electron-darwin' : 'electron-win32' });
-  vi.spyOn(safePlatform, 'isMac').mockReturnValue(mac);
+function onDesktop({ simulator }: { simulator: boolean }) {
+  browserPaneSupported.mockResolvedValue(true);
+  simulatorPaneSupported.mockResolvedValue(simulator);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   forgetLocalSession('root-1', 'thread-1');
   capabilities.mockImplementation(() => new Set<string>(DEVELOPER_RUNTIME_CAPABILITIES));
+  browserPaneSupported.mockResolvedValue(false);
+  simulatorPaneSupported.mockResolvedValue(false);
   readDeveloperSession.mockResolvedValue({
     session: null,
     messages: [],
@@ -172,42 +162,42 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete window.agiHost;
   vi.restoreAllMocks();
 });
 
-describe('the browser and simulator panes of a local session', () => {
-  it('offers neither outside the desktop app', () => {
+describe('the iOS Simulator pane of a local session', () => {
+  it('is not offered where the desktop app cannot run it', async () => {
+    onDesktop({ simulator: false });
     renderPanel();
 
-    expect(screen.queryByRole('button', { name: 'Browser' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Browser' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'iOS Simulator' })).not.toBeInTheDocument();
   });
 
-  it('offers the browser but no simulator off macOS', () => {
-    inElectron(false);
+  it('is not offered outside the desktop app', async () => {
     renderPanel();
 
-    expect(screen.getByRole('button', { name: 'Browser' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    await vi.waitFor(() => expect(simulatorPaneSupported).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'iOS Simulator' })).not.toBeInTheDocument();
   });
 
-  it('opens one docked pane at a time, each for this session', async () => {
+  it('opens beside the session, one docked pane at a time', async () => {
     const user = userEvent.setup();
-    inElectron(true);
+    onDesktop({ simulator: true });
     renderPanel();
+
+    const toggle = await screen.findByRole('button', { name: 'iOS Simulator' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(toggle);
+    expect(screen.getByRole('complementary', { name: 'iOS Simulator' })).toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
 
     await user.click(screen.getByRole('button', { name: 'Browser' }));
-    expect(screen.getByRole('complementary', { name: 'Browser' })).toHaveAttribute(
-      'data-pane-id',
-      'thread-1',
-    );
-    expect(screen.getByRole('button', { name: 'Browser' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('complementary', { name: 'Browser' })).toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'iOS Simulator' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'iOS Simulator' }));
+    await user.click(toggle);
     expect(screen.getByRole('complementary', { name: 'iOS Simulator' })).toBeInTheDocument();
     expect(screen.queryByRole('complementary', { name: 'Browser' })).not.toBeInTheDocument();
 
@@ -215,24 +205,21 @@ describe('the browser and simulator panes of a local session', () => {
     expect(screen.getByRole('complementary', { name: 'Changes' })).toBeInTheDocument();
     expect(screen.queryByRole('complementary', { name: 'iOS Simulator' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Browser' }));
-    expect(screen.getByRole('complementary', { name: 'Browser' })).toBeInTheDocument();
+    await user.click(toggle);
+    expect(screen.getByRole('complementary', { name: 'iOS Simulator' })).toBeInTheDocument();
     expect(screen.queryByRole('complementary', { name: 'Changes' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Close the browser' }));
-    expect(screen.queryByRole('complementary', { name: 'Browser' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Browser' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    await user.click(screen.getByRole('button', { name: 'Close the simulator' }));
+    expect(screen.queryByRole('complementary', { name: 'iOS Simulator' })).not.toBeInTheDocument();
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('keeps a floating simulator beside another pane, and docks it in that pane’s place', async () => {
+  it('stays beside another pane while it floats, and docks in that pane’s place', async () => {
     const user = userEvent.setup();
-    inElectron(true);
+    onDesktop({ simulator: true });
     renderPanel();
 
-    await user.click(screen.getByRole('button', { name: 'iOS Simulator' }));
+    await user.click(await screen.findByRole('button', { name: 'iOS Simulator' }));
     await user.click(screen.getByRole('button', { name: 'Float over the chat' }));
     expect(screen.getByRole('complementary', { name: 'iOS Simulator' })).toHaveAttribute(
       'data-floating',
@@ -251,80 +238,49 @@ describe('the browser and simulator panes of a local session', () => {
     expect(screen.queryByRole('complementary', { name: 'Browser' })).not.toBeInTheDocument();
   });
 
-  it('lists both in the side panel shortcuts', async () => {
+  it('closes with the side panel when it is docked', async () => {
     const user = userEvent.setup();
-    inElectron(true);
+    onDesktop({ simulator: true });
     renderPanel();
 
+    await user.click(await screen.findByRole('button', { name: 'iOS Simulator' }));
     await user.click(screen.getByRole('button', { name: 'Side panel' }));
-    const list = screen.getByRole('complementary', { name: 'Panel shortcuts' });
-    await user.click(within(list).getByRole('button', { name: 'Browser' }));
 
-    expect(screen.getByRole('complementary', { name: 'Browser' })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('complementary', { name: 'Panel shortcuts' }),
-    ).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Side panel' }));
-    expect(screen.queryByRole('complementary', { name: 'Browser' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'iOS Simulator' })).not.toBeInTheDocument();
   });
 
-  it('shows a running dev server in the browser when Preview is pressed in Changes', async () => {
+  it('takes the whole row when expanded and brings the chat back for a capture', async () => {
     const user = userEvent.setup();
-    inElectron(true);
-    renderPanel();
-
-    await user.click(screen.getByRole('button', { name: 'Changes' }));
-    await user.click(screen.getByRole('button', { name: 'Preview' }));
-
-    expect(screen.getByRole('complementary', { name: 'Browser' })).toHaveAttribute(
-      'data-request',
-      'http://localhost:5173/',
-    );
-    expect(screen.queryByRole('complementary', { name: 'Changes' })).not.toBeInTheDocument();
-  });
-
-  it('offers no Preview in Changes where there is no browser pane', async () => {
-    const user = userEvent.setup();
-    renderPanel();
-
-    await user.click(screen.getByRole('button', { name: 'Changes' }));
-
-    expect(screen.queryByRole('button', { name: 'Preview' })).not.toBeInTheDocument();
-  });
-
-  it('gives the whole row to an expanded pane and brings the chat back for a capture', async () => {
-    const user = userEvent.setup();
-    inElectron(true);
+    onDesktop({ simulator: true });
     renderPanel();
     const column = screen.getByTestId('local-code-scroll').parentElement;
 
-    await user.click(screen.getByRole('button', { name: 'Browser' }));
-    await user.click(screen.getByRole('button', { name: 'Expand the browser' }));
-    expect(screen.getByRole('complementary', { name: 'Browser' })).toHaveAttribute(
+    await user.click(await screen.findByRole('button', { name: 'iOS Simulator' }));
+    await user.click(screen.getByRole('button', { name: 'Expand the simulator' }));
+    expect(screen.getByRole('complementary', { name: 'iOS Simulator' })).toHaveAttribute(
       'data-expanded',
       'true',
     );
     expect(column?.className).toMatch(/columnHidden/u);
 
-    await user.click(screen.getByRole('button', { name: 'Add the page to the chat' }));
+    await user.click(screen.getByRole('button', { name: 'Add the screen to the chat' }));
 
     expect(column?.className).not.toMatch(/columnHidden/u);
-    expect(await screen.findByAltText('browser-capture.png')).toBeInTheDocument();
+    expect(await screen.findByAltText('simulator-capture.png')).toBeInTheDocument();
   });
 
-  it('hands the panes no way to add a picture when the session takes none', async () => {
+  it('is given no way to add a picture when the session takes none', async () => {
     const user = userEvent.setup();
     capabilities.mockImplementation(
       () => new Set<string>(DEVELOPER_RUNTIME_CAPABILITIES.filter((name) => name !== 'images')),
     );
-    inElectron(true);
+    onDesktop({ simulator: true });
     renderPanel();
 
-    await user.click(screen.getByRole('button', { name: 'Browser' }));
+    await user.click(await screen.findByRole('button', { name: 'iOS Simulator' }));
 
     expect(
-      screen.queryByRole('button', { name: 'Add the page to the chat' }),
+      screen.queryByRole('button', { name: 'Add the screen to the chat' }),
     ).not.toBeInTheDocument();
   });
 });

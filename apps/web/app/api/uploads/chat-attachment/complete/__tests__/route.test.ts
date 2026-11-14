@@ -1,3 +1,4 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/security/upload-scan');
@@ -27,7 +28,8 @@ const {
 
 const BYTES = new TextEncoder().encode('hello world');
 
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   deleteObject: vi.fn(async () => undefined),
   getObject: vi.fn(async () => null),
   getObjectStream: vi.fn(async () => null),

@@ -5,6 +5,7 @@ import {
   splitSystemPromptCacheBoundary,
   stripSystemPromptCacheBoundary,
 } from './system-prompt-cache-boundary';
+import { isTurnContextText } from './turn-context';
 
 export type AnthropicServiceTier = 'auto' | 'standard_only';
 
@@ -26,6 +27,52 @@ export interface AnthropicPayloadPolicy {
   allowsServiceTier: boolean;
   cacheControl: AnthropicEphemeralCacheControl | undefined;
   serviceTier: AnthropicServiceTier | undefined;
+}
+
+export interface AnthropicCacheBreakpointPlan {
+  system: AnthropicEphemeralCacheControl | undefined;
+  conversation: AnthropicEphemeralCacheControl | undefined;
+}
+
+const CONVERSATION_CACHE_CONTROL: AnthropicEphemeralCacheControl = { type: 'ephemeral' };
+
+/**
+ * The stable system prefix is the one entry every later turn reads, so it alone
+ * takes the policy's TTL, an hour when the turn carries tools. The conversation
+ * entry is read only by the next request of a live exchange, seconds or minutes
+ * later, so a five-minute write (1.25x input) beats an hour-long one (2x); the
+ * ordering rule that an hour-long entry precede every five-minute one holds
+ * because the system renders first. A request with no tools and no prior reply
+ * ends the exchange, so its conversation entry could never be read.
+ */
+export function planAnthropicCacheBreakpoints(
+  policy: Pick<AnthropicPayloadPolicy, 'cacheControl'>,
+  request: { hasTools: boolean; hasAssistantTurn: boolean },
+): AnthropicCacheBreakpointPlan {
+  if (!policy.cacheControl) return { system: undefined, conversation: undefined };
+  return {
+    system: policy.cacheControl,
+    conversation:
+      request.hasTools || request.hasAssistantTurn ? CONVERSATION_CACHE_CONTROL : undefined,
+  };
+}
+
+function payloadHasTools(payloadObj: Record<string, unknown>): boolean {
+  const tools = payloadObj['tools'];
+  return Array.isArray(tools) && tools.length > 0;
+}
+
+function payloadHasAssistantTurn(payloadObj: Record<string, unknown>): boolean {
+  const messages = payloadObj['messages'];
+  return (
+    Array.isArray(messages) &&
+    messages.some(
+      (message: unknown) =>
+        !!message &&
+        typeof message === 'object' &&
+        (message as Record<string, unknown>)['role'] === 'assistant',
+    )
+  );
 }
 
 function resolveBaseUrlHostname(baseUrl: string): string | undefined {
@@ -146,49 +193,51 @@ function stripAnthropicSystemPromptBoundary(system: unknown): void {
   }
 }
 
+function acceptsMessageBreakpoint(type: unknown): boolean {
+  return type === 'text' || type === 'image' || type === 'tool_result';
+}
+
+function isTurnContextBlock(block: unknown): boolean {
+  if (!block || typeof block !== 'object') return false;
+  const record = block as Record<string, unknown>;
+  return record['type'] === 'text' && isTurnContextText(record['text']);
+}
+
+/**
+ * The breakpoint goes on the last block of the conversation itself, ahead of
+ * any turn context: the next request carries the same history without this
+ * turn's context, so only a breakpoint before it can be read back.
+ */
 function applyAnthropicCacheControlToMessages(
   messages: unknown,
   cacheControl: AnthropicEphemeralCacheControl,
 ): void {
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return;
-  }
+  if (!Array.isArray(messages)) return;
 
-  const lastMessage = messages[messages.length - 1];
-  if (!lastMessage || typeof lastMessage !== 'object') {
-    return;
-  }
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message: unknown = messages[index];
+    if (!message || typeof message !== 'object') return;
+    const record = message as Record<string, unknown>;
+    if (record['role'] !== 'user') return;
 
-  const record = lastMessage as Record<string, unknown>;
-  if (record['role'] !== 'user') {
-    return;
-  }
-
-  const content = record['content'];
-  if (Array.isArray(content)) {
-    const lastBlock = content[content.length - 1];
-    if (!lastBlock || typeof lastBlock !== 'object') {
+    const content = record['content'];
+    if (typeof content === 'string') {
+      if (isTurnContextText(content)) continue;
+      record['content'] = [{ type: 'text', text: content, cache_control: cacheControl }];
       return;
     }
-    const lastBlockRecord = lastBlock as Record<string, unknown>;
-    if (
-      lastBlockRecord['type'] === 'text' ||
-      lastBlockRecord['type'] === 'image' ||
-      lastBlockRecord['type'] === 'tool_result'
-    ) {
-      lastBlockRecord['cache_control'] = cacheControl;
-    }
-    return;
-  }
+    if (!Array.isArray(content)) return;
 
-  if (typeof content === 'string') {
-    record['content'] = [
-      {
-        type: 'text',
-        text: content,
-        cache_control: cacheControl,
-      },
-    ];
+    for (let blockIndex = content.length - 1; blockIndex >= 0; blockIndex -= 1) {
+      const block: unknown = content[blockIndex];
+      if (isTurnContextBlock(block)) continue;
+      if (!block || typeof block !== 'object') return;
+      const blockRecord = block as Record<string, unknown>;
+      if (acceptsMessageBreakpoint(blockRecord['type'])) {
+        blockRecord['cache_control'] = cacheControl;
+      }
+      return;
+    }
   }
 }
 
@@ -223,15 +272,19 @@ export function applyAnthropicPayloadPolicyToParams(
     payloadObj['service_tier'] = policy.serviceTier;
   }
 
-  if (policy.cacheControl) {
-    applyAnthropicCacheControlToSystem(payloadObj['system'], policy.cacheControl);
-  } else {
-    stripAnthropicSystemPromptBoundary(payloadObj['system']);
-  }
-
   if (!policy.cacheControl) {
+    stripAnthropicSystemPromptBoundary(payloadObj['system']);
     return;
   }
 
-  applyAnthropicCacheControlToMessages(payloadObj['messages'], policy.cacheControl);
+  const plan = planAnthropicCacheBreakpoints(policy, {
+    hasTools: payloadHasTools(payloadObj),
+    hasAssistantTurn: payloadHasAssistantTurn(payloadObj),
+  });
+  if (plan.system) {
+    applyAnthropicCacheControlToSystem(payloadObj['system'], plan.system);
+  }
+  if (plan.conversation) {
+    applyAnthropicCacheControlToMessages(payloadObj['messages'], plan.conversation);
+  }
 }

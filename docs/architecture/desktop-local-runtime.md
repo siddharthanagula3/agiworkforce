@@ -1,6 +1,6 @@
 # Desktop device runtime
 
-> **Path:** `apps/desktop/electron/runtime/` · **Contract:** `packages/contracts/local-runtime` · **Owner:** founder · **Status:** current Electron device-capability host · **Updated:** 2026-11-13.
+> **Path:** `apps/desktop/electron/runtime/` · **Contract:** `packages/contracts/local-runtime` · **Owner:** founder · **Status:** current Electron device-capability host · **Updated:** 2026-10-18.
 
 ## What this is
 
@@ -13,8 +13,8 @@ cloud, and conversations live in the cloud exactly as they do in a browser.
 What Desktop adds is a local device-capability runtime the same UI can call.
 “Local” in this document means privileged work on the device, not Local model
 inference. The public Electron dispatcher rejects every local-inference command,
-reports `localModels: false` and `localMcp: false`, and accepts no provider API
-key. Conversation inference remains Managed Cloud.
+reports `localModels: false`, reports `localMcp: true` when the bundled CLI
+serves MCP servers, and accepts no provider API key. Conversation inference remains Managed Cloud.
 
 ## Why the seam is `command()` and nothing else
 
@@ -283,28 +283,28 @@ minute and three Cancels quiet the rest of that kind (`nativeQuestions.ts`).
 
 ## What is implemented, honestly
 
-| Capability                            | State                                                                                            |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| Secure shell, deep links, tray        | ✅ shipped                                                                                       |
-| Quick Ask, global shortcuts           | ✅ shipped                                                                                       |
-| Secret storage (`safeStorage`)        | ✅ shipped                                                                                       |
-| Native application menu               | ✅ shipped                                                                                       |
-| Launch at login (opt-in)              | ✅ shipped                                                                                       |
-| Permission manager                    | ✅ enforced for every command the dispatcher serves                                              |
-| Approved workspace roots              | ✅ persisted, native picker                                                                      |
-| Filesystem read / write               | ✅ list, read, read bytes, write, edit in place, glob and grep                                   |
-| Git read state                        | ✅ branch, head, upstream, ahead/behind, status counts                                           |
-| Git write and destructive operations  | ⚠️ switch and push a session's branch, discard its changes, stage and revert agent checkpoints   |
-| Filesystem watcher                    | ❌ not started                                                                                   |
-| Shell execution                       | ✅ one-shot and long-running commands, sandboxed, asked in main                                  |
-| PTY terminal                          | ⚠️ a long-running command gets a pseudo-terminal on macOS, pipes elsewhere                       |
-| Embedded browser and CDP tools        | ⚠️ a browser pane the user drives, pages in a session of their own; the agent uses paired Chrome |
-| Computer use                          | ✅ opt-in; session grant, a native yes per run, asked per app                                    |
-| iOS simulator, Android emulator       | ⚠️ iOS on macOS through `simctl`: screen, captures, settings; no tap or type; no Android         |
-| Worktree isolation, parallel sessions | ✅ worktrees the CLI makes, admitted per run                                                     |
-| Local MCP                             | ✅ project servers, each launch approved in main                                                 |
-| Scheduled tasks                       | ✅ local routines: a scheduled prompt in an approved folder, run as a developer session          |
-| SSH                                   | ⚠️ developer sessions on an SSH host; no PTY, file editor, worktrees or jump hosts               |
+| Capability                            | State                                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Secure shell, deep links, tray        | ✅ shipped                                                                                     |
+| Quick Ask, global shortcuts           | ✅ shipped                                                                                     |
+| Secret storage (`safeStorage`)        | ✅ shipped                                                                                     |
+| Native application menu               | ✅ shipped                                                                                     |
+| Launch at login (opt-in)              | ✅ shipped                                                                                     |
+| Permission manager                    | ✅ enforced for every command the dispatcher serves                                            |
+| Approved workspace roots              | ✅ persisted, native picker                                                                    |
+| Filesystem read / write               | ✅ list, read, read bytes, write, edit in place, glob and grep                                 |
+| Git read state                        | ✅ branch, head, upstream, ahead/behind, status counts                                         |
+| Git write and destructive operations  | ⚠️ switch and push a session's branch, discard its changes, stage and revert agent checkpoints |
+| Filesystem watcher                    | ❌ not started                                                                                 |
+| Shell execution                       | ✅ one-shot and long-running commands, sandboxed, asked in main                                |
+| PTY terminal                          | ✅ user-only shell from the CLI's `terminal/*`, sandboxed, network off; line runner before it  |
+| Embedded browser and CDP tools        | ⚠️ browser pane for local addresses and approved sites; agent tools use the paired Chrome      |
+| Computer use                          | ✅ opt-in; session grant, a native yes per run, asked per app                                  |
+| iOS simulator, Android emulator       | ⚠️ iOS on macOS through `simctl`: screen, captures, settings; no tap or type; no Android       |
+| Worktree isolation, parallel sessions | ✅ worktrees the CLI makes, admitted per run                                                   |
+| Local MCP                             | ✅ project servers, each launch approved in main                                               |
+| Scheduled tasks                       | ✅ local routines: a scheduled prompt in an approved folder, run as a developer session        |
+| SSH                                   | ⚠️ developer sessions on an SSH host; no PTY, file editor, worktrees or jump hosts             |
 
 The contract carries a capability name only once a command is gated on it. A
 name for an unimplemented row is added with the first command that checks it.

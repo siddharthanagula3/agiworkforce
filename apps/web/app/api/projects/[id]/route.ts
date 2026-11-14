@@ -10,11 +10,14 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { ManagedCloudProjectUpdateRequestSchema } from '@agiworkforce/cloud-contracts';
 import { SYNCED_APP_SURFACES } from '@agiworkforce/types';
-import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
-  deleteDeletedProjectObjects,
-  releaseDeletedProjectContents,
-} from '@/lib/server/project-deletion';
+  preconditionFailedResponse,
+  readIfMatchVersion,
+  versionEtag,
+} from '@/lib/http-preconditions';
+import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { retireOwnedProject, ProjectContentHeldError } from '@/lib/server/project-deletion';
+import { refuseHeldDeletion } from '@/lib/services/legal-hold-gate';
 import {
   ProjectConversationMembershipError,
   replaceProjectConversationMembership,
@@ -130,9 +133,12 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
     throw createError.internal('Project version unavailable');
   }
 
-  return NextResponse.json({
-    project: { ...mapProjectRow(data), serverVersion: String(data['server_version']) },
-  });
+  return NextResponse.json(
+    {
+      project: { ...mapProjectRow(data), serverVersion: String(data['server_version']) },
+    },
+    { headers: { etag: versionEtag(String(data['server_version'])) } },
+  );
 }
 
 async function handleUpdateProject(request: NextRequest, context: RouteContext) {
@@ -146,6 +152,12 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
 
   const { id } = await context.params;
 
+  const precondition = readIfMatchVersion(request);
+  if (precondition.kind === 'malformed') {
+    throw createError.validation('If-Match must be a project version from its ETag');
+  }
+  const expectedVersion = precondition.kind === 'version' ? precondition.version : null;
+
   let rawBody: unknown;
   try {
     rawBody = await request.json();
@@ -155,6 +167,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   const body = parseProjectRequest(ManagedCloudProjectUpdateRequestSchema, rawBody);
 
   let writeAccess: ProjectWriteAccess = 'owner';
+  let conditionalMiss = false;
 
   const baseSetClauses: string[] = ['updated_at = now()'];
   const baseParams: unknown[] = [];
@@ -203,10 +216,18 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     const idIdx = baseParams.length + 1;
     const userIdx = baseParams.length + 2;
     const organizationIdx = baseParams.length + 3;
+    const versionPredicate =
+      expectedVersion === null ? '' : ` and server_version = $${organizationIdx + 1}::bigint`;
     const ownerPredicate = writeAccess === 'owner' ? '=' : '<>';
     const [updated] = await targetDb.query<Record<string, unknown>>(
-      `update user_projects set ${baseSetClauses.join(', ')} where id = $${idIdx} and user_id ${ownerPredicate} $${userIdx} and organization_id is not distinct from $${organizationIdx}::uuid and deleted_at is null returning *`,
-      [...baseParams, id, userId, organizationId],
+      `update user_projects set ${baseSetClauses.join(', ')} where id = $${idIdx} and user_id ${ownerPredicate} $${userIdx} and organization_id is not distinct from $${organizationIdx}::uuid and deleted_at is null${versionPredicate} returning *`,
+      [
+        ...baseParams,
+        id,
+        userId,
+        organizationId,
+        ...(expectedVersion === null ? [] : [expectedVersion]),
+      ],
     );
     if (!updated) throw new ProjectUpdateMiss();
   };
@@ -233,19 +254,28 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     } catch (error) {
       if (!(error instanceof ProjectUpdateMiss)) throw error;
       const access = await resolveProjectWriteAccess(db, { projectId: id, userId, organizationId });
-      if (access !== 'editor') throw createError.notFound('Project not found');
-      const ownerOnly = OWNER_ONLY_PROJECT_FIELDS.filter(
-        (field) => (body as Record<string, unknown>)[field] !== undefined,
-      );
-      if (ownerOnly.length > 0) {
-        throw createError
-          .forbidden(
-            `An editor on a shared project can change its name, description, instructions and appearance. ${ownerOnly.join(', ')} stays with the owner.`,
-          )
-          .asUserSafe();
+      if (access === 'owner' && expectedVersion !== null) {
+        conditionalMiss = true;
+      } else {
+        if (access !== 'editor') throw createError.notFound('Project not found');
+        const ownerOnly = OWNER_ONLY_PROJECT_FIELDS.filter(
+          (field) => (body as Record<string, unknown>)[field] !== undefined,
+        );
+        if (ownerOnly.length > 0) {
+          throw createError
+            .forbidden(
+              `An editor on a shared project can change its name, description, instructions and appearance. ${ownerOnly.join(', ')} stays with the owner.`,
+            )
+            .asUserSafe();
+        }
+        writeAccess = 'editor';
+        try {
+          await runUpdate();
+        } catch (error) {
+          if (!(error instanceof ProjectUpdateMiss) || expectedVersion === null) throw error;
+          conditionalMiss = true;
+        }
       }
-      writeAccess = 'editor';
-      await runUpdate();
     }
   } catch (error) {
     if (error instanceof ProjectUpdateMiss) throw createError.notFound('Project not found');
@@ -268,7 +298,28 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
         );
   if (!projectWithCount) throw createError.notFound('Project not found');
 
-  return NextResponse.json({ project: mapProjectRow(projectWithCount) });
+  const version = projectWithCount['server_version'];
+  if (conditionalMiss) {
+    if (version === null || version === undefined)
+      throw createError.internal('Project version unavailable');
+    return preconditionFailedResponse(
+      'This project changed. Review the latest project before saving again.',
+      { ...mapProjectRow(projectWithCount), serverVersion: String(version) },
+      String(version),
+    );
+  }
+  return NextResponse.json(
+    {
+      project: {
+        ...mapProjectRow(projectWithCount),
+        ...(version === null || version === undefined ? {} : { serverVersion: String(version) }),
+      },
+    },
+    {
+      headers:
+        version === null || version === undefined ? {} : { etag: versionEtag(String(version)) },
+    },
+  );
 }
 
 async function handleDeleteProject(request: NextRequest, context: RouteContext) {
@@ -283,34 +334,25 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   const { id } = await context.params;
 
   const scope = { projectId: id, userId, organizationId };
-  let outcome: { deleted: number; storageUris: string[] };
+  let removed: boolean;
   try {
-    outcome = await db.transaction(async (tx) => {
-      const deleted = await tx.execute(
-        `update user_projects
-           set deleted_at = now(), updated_at = now()
-         where id = $1
-           and user_id = $2
-           and organization_id is not distinct from $3::uuid
-           and deleted_at is null`,
-        [id, userId, organizationId],
-      );
-      if (deleted === 0) return { deleted, storageUris: [] as string[] };
-      return {
-        deleted,
-        storageUris: await releaseDeletedProjectContents(tx, scope),
-      };
-    });
+    removed = await retireOwnedProject(db, scope);
   } catch (error) {
+    if (error instanceof ProjectContentHeldError) {
+      return refuseHeldDeletion({
+        resourceType: error.resourceType,
+        resourceId: error.resourceId,
+        userId,
+        organizationId,
+      });
+    }
     logger.error({ error, projectId: id, userId }, 'Failed to delete project');
     throw createError.internal('Failed to delete project');
   }
 
-  if (outcome.deleted === 0) {
+  if (!removed) {
     throw createError.notFound('Project not found');
   }
-
-  await deleteDeletedProjectObjects(outcome.storageUris, scope);
 
   return NextResponse.json({ success: true });
 }

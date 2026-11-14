@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-17
+Last updated: 2026-11-11
 
 ## Why this exists
 
@@ -30,7 +30,7 @@ case the eight-hour ceiling and the one-hour default were sized for.
 1. The operator who needs the access calls
    `POST /api/admin/support-access` with `action: "request"`, the workspace id,
    the scopes (`conversations`, `files`, `projects`, `connectors`, `billing`,
-   `audit_logs`, `workspace_settings`), the ticket, and a reason of at least 20
+   `audit_logs`, `workspace_settings`, `background_jobs`), the ticket, and a reason of at least 20
    characters. The workspace's owners and admins can read that reason, so write
    it for them.
 2. A **different** platform operator calls the same route with

@@ -147,6 +147,34 @@ describe('managed usage public contract', () => {
     expect(parsed.credits?.five_hour?.reset_at).toBe('2026-09-10T00:00:00.000Z');
     expect(parsed.credits?.flagship_weekly).toBeNull();
     expect(parsed.credits?.purchased.remaining).toBeNull();
+    expect(parsed.credits?.purchased).not.toHaveProperty('self_serve');
+  });
+
+  it('keeps who can buy and switch on usage credits', () => {
+    const summary = {
+      plan_tier: 'max',
+      usage_percentage: 0,
+      usage_reset_at: null,
+      has_usage_remaining: false,
+      period_start: null,
+      period_end: null,
+      subscription_status: 'active',
+      session_usage_percentage: 100,
+      session_reset_at: null,
+      weekly_usage_percentage: 0,
+      weekly_reset_at: null,
+      flagship_weekly_usage_percentage: 0,
+      flagship_weekly_reset_at: null,
+      credits: {
+        monthly: { allowance: 10_000, used: 250, remaining: 9_750, reset_at: null },
+        weekly: { allowance: 2_500, used: 250, remaining: 2_250, reset_at: null },
+        five_hour: { allowance: 250, used: 250, remaining: 0, reset_at: null },
+        flagship_weekly: null,
+        purchased: { remaining: 616, overage_enabled: false, self_serve: false },
+      },
+    };
+
+    expect(parseManagedUsageSummaryResponse(summary).credits?.purchased.self_serve).toBe(false);
   });
 
   it('omits the credits block when the server does not send one', () => {

@@ -1,0 +1,10 @@
+{
+  "path": "/api/projects",
+  "nameMaxLength": 200,
+  "descriptionMaxLength": 2000,
+  "instructionsMaxLength": 10000,
+  "listDefaultPageSize": 50,
+  "listMaxPageSize": 100,
+  "listMaxOffset": 10000,
+  "knowledgeFilesSegment": "knowledge-files"
+}

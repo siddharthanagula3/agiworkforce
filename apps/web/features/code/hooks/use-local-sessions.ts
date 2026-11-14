@@ -13,14 +13,18 @@ import {
 import type { WorktreeCleanupFailure } from '@agiworkforce/types/protocol';
 import {
   allowDeveloperSessions,
+  archiveDeveloperThread,
   isDesktopHost,
   listDeveloperModels,
   listDeveloperSessions,
   onDeveloperSessionEvent,
   onWorkspaceChanged,
+  pinDeveloperThread,
   pickWorkspaceRoot,
+  renameDeveloperThread,
   reviewDeveloperMcpServer,
   startDeveloperSession,
+  unarchiveDeveloperThread,
   useDesktopHost,
   useDeveloperCapabilities,
 } from '@/features/desktop-host';
@@ -80,6 +84,16 @@ export interface LocalSessionsState {
   /** Older worktrees the CLI could not archive when it made a session's, by thread id. */
   cleanupFailures: Record<string, WorktreeCleanupFailure[]>;
   dismissCleanupFailures: (threadId: string) => void;
+  /** Archived sessions are listed beside the others. */
+  showArchived: boolean;
+  setShowArchived: (show: boolean) => void;
+  /** What the CLI here can do to a listed session. */
+  sessionActions: { rename: boolean; unarchive: boolean; pin: boolean };
+  /** Why the last rename, pin, archive or restore failed. */
+  actionError: string | null;
+  renameSession: (session: LocalDeveloperSession, title: string) => Promise<boolean>;
+  setSessionArchived: (session: LocalDeveloperSession, archived: boolean) => Promise<void>;
+  setSessionPinned: (session: LocalDeveloperSession, pinned: boolean) => Promise<void>;
 }
 
 /**
@@ -91,7 +105,10 @@ export function useLocalSessions(): LocalSessionsState {
   const supported = host !== null;
   const [models, setModels] = useState<Record<string, DeveloperRuntimeModels>>({});
   const [staleModelRoots, setStaleModelRoots] = useState<ReadonlySet<string>>(new Set());
-  const worktrees = useDeveloperCapabilities(models).has('worktrees');
+  const capabilities = useDeveloperCapabilities(models);
+  const worktrees = capabilities.has('worktrees');
+  const [showArchived, setShowArchived] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [groups, setGroups] = useState<DeveloperSessionGroup[]>([]);
   const [loading, setLoading] = useState(supported);
   const [settled, setSettled] = useState(false);
@@ -120,7 +137,7 @@ export function useLocalSessions(): LocalSessionsState {
     }
     let cancelled = false;
     setLoading(true);
-    listDeveloperSessions()
+    listDeveloperSessions(showArchived ? { includeArchived: true } : {})
       .then((list) => {
         if (cancelled) return;
         setGroups(list.groups);
@@ -137,7 +154,7 @@ export function useLocalSessions(): LocalSessionsState {
     return () => {
       cancelled = true;
     };
-  }, [supported, reloadKey]);
+  }, [supported, reloadKey, showArchived]);
 
   useEffect(() => {
     if (!supported) return;
@@ -307,6 +324,53 @@ export function useLocalSessions(): LocalSessionsState {
     [refresh, groups, models, worktrees],
   );
 
+  const act = useCallback(
+    async (work: () => Promise<unknown>, failure: string): Promise<boolean> => {
+      setActionError(null);
+      try {
+        await work();
+        refresh();
+        return true;
+      } catch (cause: unknown) {
+        setActionError(toUserMessage(cause, failure));
+        return false;
+      }
+    },
+    [refresh],
+  );
+
+  const renameSession = useCallback(
+    (session: LocalDeveloperSession, title: string) =>
+      act(
+        () => renameDeveloperThread(session.rootId, session.id, title),
+        LOCAL_CODE_COPY.renameFailed,
+      ),
+    [act],
+  );
+
+  const setSessionArchived = useCallback(
+    async (session: LocalDeveloperSession, archived: boolean) => {
+      await act(
+        () =>
+          archived
+            ? archiveDeveloperThread(session.rootId, session.id)
+            : unarchiveDeveloperThread(session.rootId, session.id),
+        archived ? LOCAL_CODE_COPY.archiveFailed : LOCAL_CODE_COPY.restoreFailed,
+      );
+    },
+    [act],
+  );
+
+  const setSessionPinned = useCallback(
+    async (session: LocalDeveloperSession, pinned: boolean) => {
+      await act(
+        () => pinDeveloperThread(session.rootId, session.id, pinned),
+        LOCAL_CODE_COPY.pinFailed,
+      );
+    },
+    [act],
+  );
+
   const dismissCleanupFailures = useCallback((threadId: string) => {
     setCleanupFailures((current) => {
       if (!(threadId in current)) return current;
@@ -351,5 +415,16 @@ export function useLocalSessions(): LocalSessionsState {
     mcpRefusals,
     reviewMcpServer,
     startSession,
+    showArchived,
+    setShowArchived,
+    sessionActions: {
+      rename: capabilities.has('thread_rename'),
+      unarchive: capabilities.has('thread_unarchive'),
+      pin: capabilities.has('thread_pin'),
+    },
+    actionError,
+    renameSession,
+    setSessionArchived,
+    setSessionPinned,
   };
 }

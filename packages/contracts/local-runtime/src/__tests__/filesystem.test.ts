@@ -66,6 +66,15 @@ describe('foldedFileName', () => {
 
 describe('isCredentialPath', () => {
   it.each([
+    'nested/private\u2028.tfstate',
+    'nested/private\u2029.auto.tfvars.json',
+    '.env.private\u2028tail',
+    '.env.private/child.txt',
+  ])('keeps credential filename protection for %j', (path) => {
+    expect(isCredentialPath(path)).toBe(true);
+  });
+
+  it.each([
     '.env',
     '.env.local',
     '.env.production',

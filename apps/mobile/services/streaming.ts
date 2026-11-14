@@ -589,6 +589,7 @@ async function attemptStream(
 
   for await (const event of readServerSentEvents(response, {
     acceptUnterminatedFinalFrame: true,
+    signal,
     onChunk: () => {
       assertCloudAccountEpochCurrent(account);
       callbacks.onActivity?.();

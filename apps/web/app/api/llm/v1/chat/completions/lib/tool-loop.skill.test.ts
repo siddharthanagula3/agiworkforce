@@ -406,8 +406,8 @@ describe('managed Cloud Skill tool loop', () => {
 
     const output = await collect(runToolLoop(makeProcessed(root, false), { approvalMode: 'auto' }));
 
-    expect(output).toContain('Unknown tool: skill');
-    expect(output).toContain('"status":"failed"');
+    expect(output).toContain('is not available on this turn and was not run');
+    expect(output).toContain('"isError":true');
     expect(output).not.toContain('Inspect the rendered interface');
   });
 

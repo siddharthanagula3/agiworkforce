@@ -18,18 +18,12 @@ import type { SyncManagerState } from '@/lib/offline/offlineSync';
 import { toUserMessage } from '@/lib/user-error-message';
 
 interface OfflineIndicatorProps {
-  position?: 'top' | 'bottom';
-
   className?: string;
 
   alwaysShow?: boolean;
 }
 
-export function OfflineIndicator({
-  position = 'bottom',
-  className = '',
-  alwaysShow = false,
-}: OfflineIndicatorProps) {
+export function OfflineIndicator({ className = '', alwaysShow = false }: OfflineIndicatorProps) {
   const [state, setState] = useState<SyncManagerState | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
@@ -134,61 +128,63 @@ export function OfflineIndicator({
 
   return (
     <div
-      className={`pointer-events-none fixed ${position}-0 start-0 end-0 z-[var(--z-notification)] ${className}`}
+      className={`pointer-events-none fixed top-[calc(var(--agi-header-height-compact)+var(--space-2))] start-0 end-0 z-[var(--z-notification)] flex justify-center ${className}`}
       role="status"
       aria-live="polite"
       aria-label="Network status indicator"
     >
-      <div
-        className={`
-          pointer-events-auto mx-4 mb-4 px-4 py-3 rounded-lg border
+      <div className="pointer-events-auto mx-4 w-fit max-w-[calc(100%-2rem)] overflow-hidden rounded-lg bg-background">
+        <div
+          className={`
+          px-4 py-3 rounded-lg border
           flex items-center justify-between gap-3
           ${bgColor} ${borderColor} ${textColor}
           transition-all duration-quick ease-standard
         `}
-      >
-        <div className="flex items-center gap-3 flex-1">
-          {getIcon()}
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-medium">{message}</p>
-            {state.state === SyncState.ERROR && state.error && (
-              <p className="text-xs opacity-75">
-                {toUserMessage(state.error, 'Sync did not finish. Retry when you are online.')}
-              </p>
-            )}
-            {state.lastSyncTime && state.state === SyncState.ONLINE && (
-              <p className="text-xs opacity-75">Last synced: {formatTime(state.lastSyncTime)}</p>
-            )}
+        >
+          <div className="flex items-center gap-3 flex-1">
+            {getIcon()}
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium">{message}</p>
+              {state.state === SyncState.ERROR && state.error && (
+                <p className="text-xs opacity-75">
+                  {toUserMessage(state.error, 'Sync did not finish. Retry when you are online.')}
+                </p>
+              )}
+              {state.lastSyncTime && state.state === SyncState.ONLINE && (
+                <p className="text-xs opacity-75">Last synced: {formatTime(state.lastSyncTime)}</p>
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex gap-2 flex-shrink-0">
-          {state.state === SyncState.ERROR && (
-            <button
-              onClick={() => retrySync()}
-              className={`
+          <div className="flex gap-2 flex-shrink-0">
+            {state.state === SyncState.ERROR && (
+              <button
+                onClick={() => retrySync()}
+                className={`
                 px-3 py-1 rounded-compact text-sm font-medium
                 bg-destructive/15 hover:bg-destructive/25
                 text-danger-text
                 transition-colors duration-quick
               `}
-              aria-label="Retry sync"
-            >
-              Retry
-            </button>
-          )}
+                aria-label="Retry sync"
+              >
+                Retry
+              </button>
+            )}
 
-          {state.queuedCount > 0 && state.state !== SyncState.SYNCING && (
-            <span className="px-2 py-1 rounded-compact text-xs font-medium bg-opacity-50">
-              {state.queuedCount} pending
-            </span>
-          )}
+            {state.queuedCount > 0 && state.state !== SyncState.SYNCING && (
+              <span className="px-2 py-1 rounded-compact text-xs font-medium bg-opacity-50">
+                {state.queuedCount} pending
+              </span>
+            )}
 
-          {state.state === SyncState.SYNCING && (
-            <span className="px-2 py-1 rounded-compact text-xs font-medium opacity-75">
-              Syncing…
-            </span>
-          )}
+            {state.state === SyncState.SYNCING && (
+              <span className="px-2 py-1 rounded-compact text-xs font-medium opacity-75">
+                Syncing…
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

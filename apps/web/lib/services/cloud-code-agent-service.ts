@@ -40,7 +40,10 @@ import {
 import { selectHarnessRunner } from '@/lib/e2b/harnesses';
 import { resolveHarnessModel } from '@/lib/e2b/harnesses/model';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
-import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from './cloud-code-turn-budget';
+import {
+  CLOUD_CODE_AGENT_TURN_BUDGET_MS,
+  CLOUD_CODE_AGENT_TURN_SANDBOX_HOLD_MS,
+} from './cloud-code-turn-budget';
 import { cloudCodeGoalPrompt } from './cloud-code-commands';
 import { mirrorCloudCodeStopOntoDurableRun } from './cloud-code-durable-run';
 import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
@@ -712,13 +715,16 @@ async function runClaimedAgentTurn(
     throw error;
   }
 
-  const scope = managedCloudCodeSessionScope(
-    owner.userId,
-    sessionId,
-    session.networkAccess,
-    planTier,
-    session.runtimeId,
-  );
+  const scope = {
+    ...managedCloudCodeSessionScope(
+      owner.userId,
+      sessionId,
+      session.networkAccess,
+      planTier,
+      session.runtimeId,
+    ),
+    releaseByMs: Date.now() + CLOUD_CODE_AGENT_TURN_SANDBOX_HOLD_MS,
+  };
   const executor = await getE2BExecutor(scope);
   if (!executor) {
     await settleReservationQuietly(reservation, { outcome: 'failed', actualCostCents: 0 });

@@ -97,7 +97,9 @@ const CLOUD_PCM_SAMPLE_RATE: u32 = 24_000;
 
 fn decode_pcm16_le(bytes: &[u8]) -> Vec<f32> {
     bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| f32::from(i16::from_le_bytes([pair[0], pair[1]])) / 32_768.0)
         .collect()
 }

@@ -11,9 +11,9 @@ import {
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { focusPageComposer } from './composerFocus';
 import { showsTrustedPage } from './permissionPolicy';
-import { readClipboardPng } from './runtime/clipboardService';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { pickSourceForDisplay } from './garnishCore';
+import { readImagePng } from './runtime/clipboardService';
 import { physicalCaptureSize } from './runtime/computerUseProtocol';
 import { hideQuickAsk, isQuickAskVisible } from './quickAsk';
 
@@ -72,7 +72,7 @@ function isPasteDestination(win: BrowserWindow, destination: PasteDestination): 
 }
 
 async function clipboardImageFingerprint(): Promise<string | null> {
-  const png = await readClipboardPng();
+  const png = await readImagePng();
   if (!png || png.length === 0) return null;
   return createHash('sha256').update(png).digest('hex');
 }
@@ -94,27 +94,15 @@ export async function takeCaptureBackFromClipboard(
   captureFingerprint: string | null,
 ): Promise<void> {
   if (captureFingerprint === null) return;
-  if ((await clipboardImageFingerprint()) !== captureFingerprint) return;
-  if (priorText !== '') {
-    await clipboard.writeText(priorText);
-    return;
-  }
-  clipboard.clear();
-}
-
-async function takeCaptureBackAfterPaste(
-  priorText: string,
-  captureFingerprint: string | null,
-): Promise<void> {
-  await delay(CLIPBOARD_RESTORE_MS);
   try {
-    await takeCaptureBackFromClipboard(priorText, captureFingerprint);
+    if ((await clipboardImageFingerprint()) !== captureFingerprint) return;
+    if (priorText !== '') {
+      await clipboard.writeText(priorText);
+      return;
+    }
+    clipboard.clear();
   } catch (error) {
-    console.error('[screenshot] clipboard cleanup failed:', error);
-    notify(
-      'Screenshot still on your clipboard',
-      'The capture could not be removed from your clipboard. Copy something else to replace it.',
-    );
+    console.warn('[screenshot] the capture could not be taken back off the clipboard:', error);
   }
 }
 
@@ -192,7 +180,8 @@ export async function captureWindowToChat(
     notify('Window capture failed', 'The window in front could not be captured.');
   } finally {
     if (captureOnClipboard && !leftForTheUserToPaste) {
-      await takeCaptureBackAfterPaste(priorText, captureFingerprint);
+      await delay(CLIPBOARD_RESTORE_MS);
+      await takeCaptureBackFromClipboard(priorText, captureFingerprint);
     }
     capturing = false;
   }
@@ -244,7 +233,8 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     // In `finally` so a throw between the write and the paste cannot be the
     // one path that leaves the screen on the clipboard.
     if (captureOnClipboard && !leftForTheUserToPaste) {
-      await takeCaptureBackAfterPaste(priorText, captureFingerprint);
+      await delay(CLIPBOARD_RESTORE_MS);
+      await takeCaptureBackFromClipboard(priorText, captureFingerprint);
     }
     if (mainWasVisible && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.show();

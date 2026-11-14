@@ -29,7 +29,7 @@
         "api keys"
       ],
       "description": "How to manage passkeys, two-factor authentication, your password, active sessions and API keys.",
-      "updated": "2026-10-15",
+      "updated": "2026-11-08",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -182,7 +182,7 @@
         "deliverables"
       ],
       "description": "How AGI Work runs a multi-step task, shows progress, asks for approvals and keeps past sessions.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-11",
       "source": "content/support/agi-work.md",
       "chunks": [
         {
@@ -190,7 +190,7 @@
           "ordinal": 0,
           "heading": "What AGI Work is",
           "headingPath": "Run a task with AGI Work › What AGI Work is",
-          "text": "AGI Work is the mode for a task rather than a question: you describe a\nmulti-step job and what it should deliver, and the session plans, works and\nproduces files. The composer switches between **Chat**, for quick questions and\nconversation, and **AGI Work**, where the placeholder asks you to describe a\nmulti-step task and what it should deliver."
+          "text": "AGI Work is the mode for a task rather than a question: you describe a\nmulti-step job and what it should deliver, and the session plans, works and\nproduces files. The composer switches between **Chat**, for quick questions and\nconversation, and **Work**, where the placeholder asks you to describe a\nmulti-step task and what it should deliver."
         },
         {
           "id": "agi-work#1",
@@ -307,7 +307,7 @@
         "renewal"
       ],
       "description": "Where billing lives, and how to upgrade, switch between monthly and yearly billing, cancel and find invoices.",
-      "updated": "2026-10-15",
+      "updated": "2026-11-11",
       "source": "content/support/billing-and-plans.md",
       "chunks": [
         {
@@ -343,7 +343,7 @@
           "ordinal": 4,
           "heading": "Cancelling",
           "headingPath": "Plans, upgrading, and cancelling › Cancelling",
-          "text": "On a plan billed through the web, **Cancel plan** in Settings, Billing opens the\nbilling portal at the cancellation flow. Once cancellation is scheduled the\nperiod row changes from \"Renews on\" to \"Cancels on\", and access continues to\nthat date."
+          "text": "On a plan billed through the web, **Cancel plan** in Settings, Billing opens the\nbilling portal at the cancellation flow. Once cancellation is scheduled the\nperiod row is relabelled and access continues to the date it shows."
         },
         {
           "id": "billing-and-plans#5",
@@ -477,7 +477,7 @@
         "response style"
       ],
       "description": "How to start a chat, choose how answers are written, attach files, edit or branch a conversation and organize chats.",
-      "updated": "2026-10-16",
+      "updated": "2026-11-11",
       "source": "content/support/chat-basics.md",
       "chunks": [
         {
@@ -527,7 +527,7 @@
           "ordinal": 6,
           "heading": "Change the theme and appearance",
           "headingPath": "Start, steer and manage a chat › Change the theme and appearance",
-          "text": "Open Settings, General and find the **Preferences** group. The **Appearance**\nrow sets the theme: System follows your device, while Light and Dark stay as\nyou chose. To switch to dark theme, choose Dark there.\n\nThe rows beneath it change how the app looks. **Accent colour** offers AGI\namber, Green, Blue, Violet and Rose. **High contrast** is a switch. **Motion**\noffers System, which follows your device setting, and Reduced, which turns down\nanimation in streaming responses and other interface elements. **Chat font**\nchanges the typeface of message text to Sans, Serif or Dyslexic friendly, and\ncode stays monospace. **Chat text size** runs from Small to Large.\n\n**Display Language** translates pricing, marketing pages, device sign-in, and\nthe app's navigation: the sidebar, menus, and the composer's own labels.\nSettings field labels and your conversations are unaffected."
+          "text": "Open Settings, General and find the **Preferences** group. The **Appearance**\nrow sets the theme: System follows your device, while Light and Dark stay as\nyou chose. To switch to dark theme, choose Dark there.\n\nThe rows beneath it change how the app looks. **Accent colour** offers AGI\namber, Green, Blue, Violet and Rose. **Contrast** offers System, which follows your device setting, and High. **Motion**\noffers System, which follows your device setting, and Reduced, which turns down\nanimation in streaming responses and other interface elements. **Chat font**\nchanges the typeface of message text to Sans, Serif or Dyslexic friendly, and\ncode stays monospace. **Chat text size** runs from Small to Large.\n\n**Display Language** translates pricing, marketing pages, device sign-in, and\nthe app's navigation: the sidebar, menus, and the composer's own labels.\nSettings field labels and your conversations are unaffected."
         },
         {
           "id": "chat-basics#7",
@@ -933,7 +933,7 @@
           "ordinal": 0,
           "heading": "How deletion works",
           "headingPath": "Delete your account, or cancel a scheduled deletion › How deletion works",
-          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and its Cloud data are scheduled for permanent deletion,\nand erasure starts after a cancellation deadline 24 hours later. It also says\nthat anything the law or an active legal hold requires us to keep is kept.\n\nIn the AGI Mobile app for iPhone and Android, Settings, Cloud Account carries\n**Delete Account**.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes.\n\nIf an active legal hold covers your account, for example one your workspace has\nplaced, nothing is erased until the hold is released."
+          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and its Cloud data are scheduled for permanent deletion,\nand erasure starts after a cancellation deadline 24 hours later. It also says\nthat anything the law or an active legal hold requires us to keep is kept.\n\nIn the AGI Mobile app for iPhone and Android, Settings, Account carries\n**Delete Account**.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes.\n\nIf an active legal hold covers your account, for example one your workspace has\nplaced, nothing is erased until the hold is released."
         },
         {
           "id": "delete-your-account#1",
@@ -1274,7 +1274,7 @@
         "windows"
       ],
       "description": "Definitions of the terms AGI uses for trust modes, usage and billing, chat, tools, connectors and surfaces.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-11",
       "source": "content/support/glossary.md",
       "chunks": [
         {
@@ -1317,7 +1317,7 @@
           "ordinal": 5,
           "heading": "Platform and surface names",
           "headingPath": "Glossary of AGI terms › Platform and surface names",
-          "text": "**Surface** is one of the places AGI is built to run: {{SURFACES.names}}. A\nfeature can be available on one surface and not another, so articles name the\nsurface rather than assuming it.\n\n{{AVAILABILITY.summary}}\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app, published for macOS, Windows and\nLinux as those releases become available.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to."
+          "text": "**Surface** is one of the places AGI is built to run: {{SURFACES.names}}. A\nfeature can be available on one surface and not another, so articles name the\nsurface rather than assuming it.\n\n{{AVAILABILITY.summary}}\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app for macOS. Windows and Linux\ninstallers have not been published.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to."
         }
       ]
     },
@@ -1559,7 +1559,7 @@
         "search files"
       ],
       "description": "How to find, open, delete and restore your uploads, generated files and artifacts in the Library.",
-      "updated": "2026-10-06",
+      "updated": "2026-11-11",
       "source": "content/support/library.md",
       "chunks": [
         {
@@ -1574,7 +1574,7 @@
           "ordinal": 1,
           "heading": "Working with an item",
           "headingPath": "Find your files and artifacts in the Library › Working with an item",
-          "text": "Select a file to preview it. The viewer carries an **Ask about this file** box:\ntype a question there and it opens a new chat with the file attached and your\nquestion already written. From the item's own menu you can:\n\n- **Add to chat** or **Add to AGI Work**, which stages it for the next session.\n- Add it to a project's knowledge. Relevant extracted passages can be used\n  when answering in that project.\n- Create a share link for an artifact.\n\nFor a supported artifact, open its preview and choose **Export as PDF** or\n**Export as Word**, when those options are offered.\n\nA file too large to preview in place says so and offers a download instead."
+          "text": "Select a file to preview it. The viewer carries an **Ask about this file** box:\ntype a question there and it opens a new chat with the file attached and your\nquestion already written. From the item's own menu you can:\n\n- **Add to chat** or **Add to Work**, which stages it for the next session.\n- Add it to a project's knowledge. Relevant extracted passages can be used\n  when answering in that project.\n- Create a share link for an artifact.\n\nFor a supported artifact, open its preview and choose **Export as PDF** or\n**Export as Word**, when those options are offered.\n\nA file too large to preview in place says so and offers a download instead."
         },
         {
           "id": "library#2",
@@ -2856,7 +2856,7 @@
         "owner"
       ],
       "description": "How to create, switch, leave and delete a workspace, use its console and what members see.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-11",
       "source": "content/support/workspace-administration.md",
       "chunks": [
         {
@@ -2864,7 +2864,7 @@
           "ordinal": 0,
           "heading": "The workspace console",
           "headingPath": "Administering a workspace › The workspace console",
-          "text": "A workspace is administered from its own console rather than from personal\nsettings. Its sections are:\n\n- **Overview**: the workspace's current posture at a glance.\n- **Members**: who belongs to the workspace, what role they hold, and how many\n  seats that consumes. Invitations and removals happen here.\n- **Roles**: built-in and custom roles, additional roles, and the roles a\n  directory group grants.\n- **Policy**: privacy modes, managed compute, sync surfaces, retention,\n  features and exceptions.\n- **Models**: which models and providers the workspace permits.\n- **Connectors**: which integrations the workspace permits.\n- **Identity**: single sign-on, domain verification and SCIM directory\n  provisioning.\n- **Sharing**: the projects, conversations, artifacts and connectors shared\n  across the workspace.\n- **Usage**: managed cloud spend by member, model and provider.\n- **Data**: legal holds, and the record of what retention has deleted.\n- **Audit**: administrative and policy events, with export and SIEM streaming.\n- **Billing**: plan, seats, and where workspace billing is managed."
+          "text": "A workspace is administered from its own console rather than from personal\nsettings. Its sections are:\n\n- **Overview**: the workspace's current posture at a glance.\n- **Members**: who belongs to the workspace, what role they hold, and how many\n  seats that consumes. Invitations and removals happen here.\n- **Roles**: built-in and custom roles, additional roles, and the roles a\n  directory group grants.\n- **Policy**: privacy modes, managed compute, sync surfaces, retention,\n  features and exceptions.\n- **Models**: which models and providers the workspace permits.\n- **Connectors**: which integrations the workspace permits.\n- **Code**: GitHub, MCP servers, desktop sync and review for the workspace.\n- **MCP servers**: the servers the workspace publishes to its members.\n- **Plugins**: the plugins the workspace publishes, and who gets them.\n- **Identity**: single sign-on, domain verification and SCIM directory\n  provisioning.\n- **Sharing**: the projects, conversations, artifacts and connectors shared\n  across the workspace.\n- **Usage**: managed cloud spend by member, model and provider.\n- **Data**: legal holds, and the record of what retention has deleted.\n- **Audit**: administrative and policy events, with export and SIEM streaming.\n- **Billing**: plan, seats, and where workspace billing is managed."
         },
         {
           "id": "workspace-administration#1",
@@ -2944,7 +2944,7 @@
         "override"
       ],
       "description": "What a workspace policy controls, including exceptions, retention, spend and audit.",
-      "updated": "2026-09-17",
+      "updated": "2026-11-11",
       "source": "content/support/workspace-policy.md",
       "chunks": [
         {
@@ -2952,7 +2952,7 @@
           "ordinal": 0,
           "heading": "What policy controls",
           "headingPath": "Workspace policy: features, models and exceptions › What policy controls",
-          "text": "A workspace policy narrows what its members can do. Four things can be set:\n\n- **Feature access**: each of Work, Code, Research, Skills, Plugins, Hooks,\n  Browser, Computer use, Remote Control, Schedules, Event triggers and Projects\n  can be turned off for the workspace. All are on by default.\n- **Default model**: the model members start on.\n- **Highest reasoning level**: a ceiling on how hard a model may think, chosen\n  from none, minimal, low, medium, high, xhigh and max. Left unset, there is no\n  reasoning limit.\n- **Where work may run**: the countries and the surfaces the workspace permits.\n\nModel policy and connector policy have their own pages: which models and\nproviders are permitted, and which integrations are."
+          "text": "A workspace policy narrows what its members can do. Four things can be set:\n\n- **Feature access**: each of Work, Code, Research, Skills, Plugins, Hooks,\n  Browser, Computer use, Remote Control, Schedules, Event triggers, Projects,\n  Connected apps in artifacts and Fast mode can be switched for the workspace.\n  All are on by default except Fast mode, which stays off until an administrator\n  turns it on.\n- **Default model**: the model members start on.\n- **Highest reasoning level**: a ceiling on how hard a model may think, chosen\n  from none, minimal, low, medium, high, xhigh and max. Left unset, there is no\n  reasoning limit.\n- **Where work may run**: the countries and the surfaces the workspace permits.\n\nModel policy and connector policy have their own pages: which models and\nproviders are permitted, and which integrations are."
         },
         {
           "id": "workspace-policy#1",

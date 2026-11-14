@@ -148,7 +148,7 @@ import {
 } from '../test-utils/modelFixtures';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
-import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '../stores/chat/chatViewStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
@@ -272,6 +272,10 @@ const RESEARCH_MODEL = requireMobileCloudModel((model) => {
   const capabilities = getModelMetadataById(model.id)?.capabilities;
   return capabilities?.research === true && capabilities.search === true;
 }, 'research-and-search-capable Mobile Cloud model').id;
+const CODE_MODEL = requireMobileCloudModel((model) => {
+  const capabilities = getModelMetadataById(model.id)?.capabilities;
+  return capabilities?.codeExecution === true && capabilities.tools === true;
+}, 'code-execution-capable Mobile Cloud model').id;
 
 function seedCloudConversation(model = CLOUD_MODEL) {
   const existing = getState().conversations.find((conversation) => conversation.id === CONV_ID);
@@ -453,6 +457,92 @@ describe('chatStore, streaming state', () => {
       });
 
       expect(capturedBody?.web_search).toBeUndefined();
+    });
+
+    describe('code execution', () => {
+      async function sendCodeCapableTurn(text: string) {
+        let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+        useTierStore.setState({
+          tier: 'max',
+          billingTier: 'max',
+          codeExecutionAvailable: true,
+          grantedCapabilities: ['canUseWebSearch', 'canUseCloudExecution'],
+        } as never);
+        seedCloudConversation(CODE_MODEL);
+        mockStreamChat.mockImplementation(
+          (body, callbacks) =>
+            new Promise<void>((resolve) => {
+              capturedBody = body;
+              callbacks.onDone();
+              resolve();
+            }),
+        );
+        await act(async () => {
+          await getState().sendMessage(CONV_ID, text, CODE_MODEL);
+        });
+        return capturedBody as Parameters<typeof streamChat>[0] | null;
+      }
+
+      beforeEach(() => {
+        useChatViewStore.setState({ runCodeByConversation: {} });
+        useChatStore.setState({
+          features: {
+            webSearch: true,
+            imageGen: true,
+            health: false,
+            codeExecution: true,
+            research: false,
+          },
+        });
+      });
+
+      it('leaves a plain message on a code-capable model to the server instead of forcing a run', async () => {
+        const body = await sendCodeCapableTurn('Hi');
+
+        expect(body).not.toBeNull();
+        expect(body).not.toHaveProperty('code_execution');
+        expect(body).not.toHaveProperty('office_creation');
+      });
+
+      it('asks for a run on every turn only while Run code is on for that chat', async () => {
+        useChatViewStore.getState().setRunCode(CONV_ID, true);
+        expect((await sendCodeCapableTurn('Chart the first 20 primes'))?.code_execution).toBe(true);
+
+        useChatViewStore.getState().setRunCode(CONV_ID, false);
+        expect(await sendCodeCapableTurn('Hi again')).not.toHaveProperty('code_execution');
+      });
+
+      it('keeps Run code from another chat out of this one', async () => {
+        useChatViewStore.getState().setRunCode('another-conversation', true);
+
+        expect(await sendCodeCapableTurn('Hi')).not.toHaveProperty('code_execution');
+      });
+
+      it('tells the server not to run code or create files when the permission is off', async () => {
+        useChatViewStore.getState().setRunCode(CONV_ID, true);
+        useChatStore.setState({
+          features: {
+            webSearch: true,
+            imageGen: true,
+            health: false,
+            codeExecution: false,
+            research: false,
+          },
+        });
+
+        const body = await sendCodeCapableTurn('Run this Python: print(1)');
+
+        expect(body?.code_execution).toBe(false);
+        expect(body?.office_creation).toBe(false);
+      });
+
+      it('carries the new-chat Run code choice to the conversation it creates', () => {
+        useChatViewStore.getState().setRunCode(NEW_CHAT_STYLE_KEY, true);
+
+        useChatViewStore.getState().adoptStyleSelection(NEW_CHAT_STYLE_KEY, CONV_ID);
+
+        expect(useChatViewStore.getState().runCodeByConversation).toEqual({ [CONV_ID]: true });
+      });
     });
 
     it('keeps the model capability clamp when the web-search preference is on', async () => {

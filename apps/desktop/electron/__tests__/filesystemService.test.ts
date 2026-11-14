@@ -5,8 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_TEXT_READ_BYTES, type WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import {
   WriteConflict,
+  configurePreviousVersions,
   editTextFile,
   globFiles,
   grepFiles,
@@ -1066,5 +1068,62 @@ describe('serialized local file editing', () => {
       editTextFile(root, 'edit-race.txt', 'right', 'RIGHT', false),
     ]);
     expect(await fs.readFile(path.join(sandbox, 'edit-race.txt'), 'utf8')).toBe('LEFT RIGHT');
+  });
+});
+
+describe('keeping what an overwrite replaced', () => {
+  const kept: Array<{ name: string; text: string }> = [];
+
+  beforeEach(() => {
+    kept.length = 0;
+    configurePreviousVersions(async (copy) => {
+      kept.push({ name: path.basename(copy), text: await fs.readFile(copy, 'utf8') });
+    });
+  });
+
+  afterEach(() => configurePreviousVersions(null));
+
+  it('hands the old contents to the keeper before they are gone', async () => {
+    await fs.writeFile(path.join(root.path, 'notes.md'), 'first draft\n');
+    await writeTextFile(root, 'notes.md', 'second draft\n');
+    expect(await fs.readFile(path.join(root.path, 'notes.md'), 'utf8')).toBe('second draft\n');
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.text).toBe('first draft\n');
+    expect(kept[0]?.name.startsWith(`notes (before ${PRODUCT_BRAND} edit `)).toBe(true);
+    expect(kept[0]?.name.endsWith(').md')).toBe(true);
+  });
+
+  it('names the copy with the time on this computer, as the Trash shows it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 25, 6, 2, 38));
+    try {
+      await fs.writeFile(path.join(root.path, 'clock.md'), 'before\n');
+      await writeTextFile(root, 'clock.md', 'after\n');
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(kept[0]?.name).toBe(`clock (before ${PRODUCT_BRAND} edit 2026-10-25 06.02.38).md`);
+  });
+
+  it('keeps the previous text of an edit too', async () => {
+    await fs.writeFile(path.join(root.path, 'edit.txt'), 'alpha beta\n');
+    await editTextFile(root, 'edit.txt', 'beta', 'gamma', false);
+    expect(kept.map((entry) => entry.text)).toEqual(['alpha beta\n']);
+  });
+
+  it('keeps nothing for a new file or an unchanged one', async () => {
+    await writeTextFile(root, 'fresh.txt', 'new\n');
+    await fs.writeFile(path.join(root.path, 'same.txt'), 'same\n');
+    await writeTextFile(root, 'same.txt', 'same\n');
+    expect(kept).toEqual([]);
+  });
+
+  it('still writes when the keeper fails', async () => {
+    configurePreviousVersions(async () => {
+      throw new Error('trash unavailable');
+    });
+    await fs.writeFile(path.join(root.path, 'keeper-fails.txt'), 'old\n');
+    await writeTextFile(root, 'keeper-fails.txt', 'new\n');
+    expect(await fs.readFile(path.join(root.path, 'keeper-fails.txt'), 'utf8')).toBe('new\n');
   });
 });

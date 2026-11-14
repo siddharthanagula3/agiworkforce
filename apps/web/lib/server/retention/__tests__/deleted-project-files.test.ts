@@ -267,6 +267,26 @@ describe('purgeDeletedProjectFiles after a legal hold is released', () => {
       false,
     );
   });
+
+  it('leaves an object the reference ledger tracks to the lifecycle worker', async () => {
+    const { db, stored, deleteObject } = world();
+    db.tables.set('project_knowledge_objects', [
+      { object_key: RELEASED, state: 'queued', reference_count: 0 },
+    ]);
+
+    const result = await purgeDeletedProjectFiles(db as unknown as DatabaseAdapter, {
+      deleteObject,
+    });
+
+    expect(rowIds(db)).not.toContain('f-released');
+    expect(deleteObject).not.toHaveBeenCalled();
+    expect(stored.has(RELEASED)).toBe(true);
+    expect(result).toMatchObject({
+      rowsPurged: 2,
+      objectsDeleted: 0,
+      objectsLeftToLifecycle: 1,
+    });
+  });
 });
 
 type ImportedModule1 = typeof import('@/lib/logger');

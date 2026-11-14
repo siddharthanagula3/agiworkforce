@@ -1,7 +1,13 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-22",
+  "lastUpdated": "2026-10-25",
   "verificationLog": [
+    {
+      "date": "2026-10-25",
+      "verifiedBy": "bundled-claude-api-reference-and-platform-extended-thinking-page",
+      "status": "CORRECTION",
+      "notes": "Added reasoning.thinkingDisplay summarized to claude-fable-5-1, claude-opus-5-5, claude-sonnet-5-5 and claude-haiku-5-5. On all four the thinking display defaults to omitted, so thinking blocks stream with empty text unless the request sets thinking.display to summarized; the owner decided to show a reasoning summary as ChatGPT and Claude do. The Anthropic adapters send the declared value with adaptive or enabled thinking and never with between_tools, which takes no other field. Display changes visibility only; thinking is billed the same. Read from the bundled Claude API reference (cached 2026-10-06) and platform.claude.com/docs/en/build-with-claude/extended-thinking on 2026-10-25; no live call was made."
+    },
     {
       "date": "2026-09-14",
       "verifiedBy": "registry-contract-test-and-free-inference-tos-workbook-2026-09-01",
@@ -1252,6 +1258,7 @@
         "defaultEffort": "high",
         "canDisableThinking": false,
         "rejectsSamplingParameters": true,
+        "thinkingDisplay": "summarized",
         "request": {
           "api": "messages",
           "effortPath": "output_config.effort",
@@ -1321,6 +1328,7 @@
         "thinkingDefault": "adaptive",
         "supportsManualThinking": false,
         "rejectsSamplingParameters": true,
+        "thinkingDisplay": "summarized",
         "request": {
           "api": "messages",
           "effortPath": "output_config.effort",
@@ -1394,6 +1402,7 @@
         "maxEffortWhenThinkingDisabled": "high",
         "disabledThinkingType": "between_tools",
         "rejectsSamplingParameters": true,
+        "thinkingDisplay": "summarized",
         "request": {
           "api": "messages",
           "effortPath": "output_config.effort",
@@ -1476,6 +1485,7 @@
         "supportsManualThinking": false,
         "maxEffortWhenThinkingDisabled": "high",
         "rejectsSamplingParameters": true,
+        "thinkingDisplay": "summarized",
         "request": {
           "api": "messages",
           "effortPath": "output_config.effort",

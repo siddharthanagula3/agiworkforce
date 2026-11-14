@@ -105,6 +105,7 @@ export interface LocalChangesPanelProps {
   onClose: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSendToAgent?: (message: string) => void;
+  /** Opens a running command's page in the session's browser pane instead of its own window. */
   onOpenPreview?: (url: string) => void;
 }
 

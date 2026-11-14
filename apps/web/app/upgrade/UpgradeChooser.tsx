@@ -15,6 +15,7 @@ import {
 } from '@features/billing/lib/plan-display';
 import { formatBillingDate } from '@features/billing/lib/billing-format';
 import {
+  billingOwnerPlanActionHref,
   billingOwnerPlanActionLabel,
   billingOwnerPlanChangeMessage,
 } from '@features/billing/lib/subscription-owner-presentation';
@@ -158,10 +159,13 @@ export function UpgradeChooser() {
           {ownerBlocked ? (
             <section className="rounded-2xl border border-border bg-card p-5">
               <p className="text-sm text-foreground">
-                {billingOwnerPlanChangeMessage(subscription?.subscription_source)}
+                {billingOwnerPlanChangeMessage(subscription)}
               </p>
-              <Link href="/settings/billing" className={panelActionClassName}>
-                {billingOwnerPlanActionLabel(subscription?.subscription_source)}
+              <Link
+                href={billingOwnerPlanActionHref(subscription)}
+                className={panelActionClassName}
+              >
+                {billingOwnerPlanActionLabel(subscription)}
               </Link>
             </section>
           ) : paymentOverdue ? (

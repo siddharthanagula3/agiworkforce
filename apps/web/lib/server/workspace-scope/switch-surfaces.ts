@@ -42,7 +42,7 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
   {
     surface: 'projects',
     effect: 'partitioned',
-    tables: ['user_projects', 'organization_project_access'],
+    tables: ['user_projects', 'organization_project_access', 'project_knowledge_objects'],
     transferable: false,
     copyable: false,
     exportable: true,

@@ -18,7 +18,7 @@
 
 - [ ] Local only.
 - [ ] BYOK/direct provider.
-- [ ] Managed/waitlist/private beta.
+- [ ] Managed Cloud.
 - [ ] No privacy-mode impact.
 
 If Local can move to BYOK or Managed, explain the explicit fork/preview/consent path:

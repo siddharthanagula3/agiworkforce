@@ -61,7 +61,7 @@ describe('createManagedCloudProjectsClient', () => {
         mutation ? { 'x-csrf-token': 'csrf' } : { Authorization: 'Bearer token' },
     });
 
-    await client.listProjects({ limit: 100, offset: 0 });
+    await client.listProjects({ limit: 100, offset: 0, cursor: 'opaque-project-page' });
     expect((await client.getProject('project/with spaces')).serverVersion).toBe('42');
     await client.createProject({ name: 'Launch plan' });
     await client.updateProject(project.id, { name: 'Renamed' });
@@ -69,7 +69,7 @@ describe('createManagedCloudProjectsClient', () => {
 
     const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
     expect(calls.map(([url]) => url)).toEqual([
-      'https://cloud.example/api/projects?limit=100&offset=0',
+      'https://cloud.example/api/projects?limit=100&offset=0&cursor=opaque-project-page',
       'https://cloud.example/api/projects/project%2Fwith%20spaces',
       'https://cloud.example/api/projects',
       `https://cloud.example/api/projects/${project.id}`,

@@ -192,7 +192,7 @@ def main():
         stop_owned(child)
     failure_stage = 'scanner-report'
     require(code in (0, 1), 'Scanner execution failed. This is a broken scanner, not a clean scan.')
-    require(output.is_file() and not output.is_symlink() and output.stat().st_size <= 192*1024*1024, 'Scanner report is missing or oversized.')
+    require(output.is_file() and not output.is_symlink() and output.stat().st_size <= 256*1024*1024, 'Scanner report is missing or oversized.')
     output.chmod(0o600)
     report = json.loads(output.read_bytes())
     require(isinstance(report, dict) and report.get('version') == args.expected_version and isinstance(report.get('results'), list), 'Scanner report version or results are invalid.')

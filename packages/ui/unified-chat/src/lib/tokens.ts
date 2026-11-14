@@ -1,3 +1,5 @@
+import { agiChatFrameGeometry } from '@agiworkforce/design-tokens';
+
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 export const tokens = {
@@ -11,8 +13,8 @@ export const tokens = {
     accentPrimary: 'var(--chat-accent-primary, #3b82f6)',
   },
   spacing: {
-    sidebarWidth: 260,
-    sidebarCollapsedWidth: 48,
+    sidebarWidth: agiChatFrameGeometry.sidebarWidth,
+    sidebarCollapsedWidth: agiChatFrameGeometry.sidebarCollapsedWidth,
     artifactPanelWidth: 420,
   },
   sidebar: {

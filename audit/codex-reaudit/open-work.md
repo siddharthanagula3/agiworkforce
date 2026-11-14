@@ -12,7 +12,7 @@ delete this file when it is empty. An entry marked "same fix as" closes with its
 primary. Codex's raw report stays outside the repository, in its read-only
 worktree `.worktrees/codex-reaudit/audit/codex-reaudit-2026-09-30/`.
 
-Open now: 396 entries (118 defects, 278 half-built).
+Open now: 392 entries (114 defects, 278 half-built).
 
 ## Signaling relay
 

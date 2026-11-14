@@ -550,12 +550,18 @@ describe('a held row survives every path and its unheld sibling does not', () =>
 describe('a refusal promises a later deletion only where a sweep performs it', () => {
   it('keeps the promise for files, which stay tombstoned for the purge cron', () => {
     expect(heldDeletionRefusal('file')).toBe(HELD_DELETION_REFUSAL);
-    expect(heldDeletionRefusal('project_file')).toBe(HELD_DELETION_REFUSAL);
     expect(HELD_DELETION_REFUSAL).toMatch(/once the hold is released/u);
   });
 
   it('makes no promise for a message or any store nothing finishes later', () => {
-    for (const store of ['message', 'conversation', 'project', 'artifact', 'work_run'] as const) {
+    for (const store of [
+      'message',
+      'conversation',
+      'project',
+      'project_file',
+      'artifact',
+      'work_run',
+    ] as const) {
       const refusal = heldDeletionRefusal(store);
       expect(refusal).toMatch(/legal hold/u);
       expect(refusal).not.toMatch(/will be deleted|once the hold is released/u);

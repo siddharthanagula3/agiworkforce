@@ -8,6 +8,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import {
   cancelLocalCommand,
+  openLocalPreview,
   readBackgroundActivity,
   readPreviewConsoleErrors,
 } from '@/features/desktop-host';
@@ -43,7 +44,7 @@ export interface LocalRunningCommandsProps {
   refreshKey: number;
   /** Absent where the session cannot take a turn, which leaves preview errors unsent. */
   onSendToAgent?: (message: string) => void;
-  /** Absent where there is no browser pane to show a page in, which leaves Preview out. */
+  /** Present when the session has a browser pane to show the page in. */
   onOpenPreview?: (url: string) => void;
   now?: () => number;
 }
@@ -83,6 +84,19 @@ export function LocalRunningCommands({
     const timer = setInterval(() => void load(), POLL_MS);
     return () => clearInterval(timer);
   }, [load, refreshKey]);
+
+  const preview = async (url: string) => {
+    if (onOpenPreview) {
+      onOpenPreview(url);
+      return;
+    }
+    try {
+      await openLocalPreview(url);
+      setError(null);
+    } catch (cause: unknown) {
+      setError(toUserMessage(cause, LOCAL_CODE_COPY.previewFailed));
+    }
+  };
 
   const sendErrors = async () => {
     if (!onSendToAgent || !previewErrors) return;
@@ -172,13 +186,13 @@ export function LocalRunningCommands({
                 {LOCAL_CODE_COPY.runningSince(Math.floor((now() - run.startedAtMs) / MINUTE_MS))}
               </span>
             </span>
-            {run.previewUrl && onOpenPreview && (
+            {run.previewUrl && (
               <button
                 type="button"
                 className={styles['secondaryButton']}
                 aria-label={LOCAL_CODE_COPY.openPreviewOf(run.previewUrl)}
                 title={run.previewUrl}
-                onClick={() => run.previewUrl && onOpenPreview(run.previewUrl)}
+                onClick={() => run.previewUrl && void preview(run.previewUrl)}
               >
                 <ExternalLink size={GLYPH_SIZE} aria-hidden="true" />
                 {LOCAL_CODE_COPY.openPreview}

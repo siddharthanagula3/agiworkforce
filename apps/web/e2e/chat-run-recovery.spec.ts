@@ -293,12 +293,12 @@ test.describe('chat run recovery', () => {
     }, FAILURE_REASON);
     expect(rowsWithReason).toHaveLength(1);
     expect(rowsWithReason[0]).toContain(TURN_FAILED_LEAD);
-    await expect(page.getByRole('button', { name: 'Open the model picker' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Regenerate this response' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Switch model' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Retry this response' })).toBeVisible();
 
     await shoot(page, 'a6-inline-failure');
 
-    await page.getByRole('button', { name: 'Open the model picker' }).click();
+    await page.getByRole('button', { name: 'Switch model' }).click();
     await expect(page.getByRole('dialog', { name: 'Models' })).toBeVisible();
     await shoot(page, 'a6-picker-opened');
   });

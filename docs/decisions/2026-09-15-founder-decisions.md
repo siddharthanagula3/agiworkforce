@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder, recorded by Fable (architect)
-Last updated: 2026-09-15
+Last updated: 2026-10-24
 
 The founder's answers of 2026-09-15 to the open product, privacy, security,
 reliability, billing, connector, QA and policy questions, in the living
@@ -84,6 +84,13 @@ capabilities hidden or clearly unavailable, never presented as working.
   is advertised only where the Electron implementation supports it; Tauri
   code stays only while it has internal value and never creates ambiguity.
 - Why: one desktop story, like the leaders.
+- Superseded in part on 2026-10-24: the public Electron Desktop runs local
+  MCP servers through the bundled `agi` app-server, with a Developer settings
+  page; project servers still need approval. Inference stays Managed Cloud.
+- Superseded in part on 2026-10-24: the owner chose to ship the Tauri app as
+  a second public desktop app after the Electron batch, loading the hosted
+  web app and implementing the same host contract. Electron stays the main
+  AGI Desktop; the Tauri app's public name is still the owner's to choose.
 - Derived (leader precedent, decided autonomously): the installed application
   carries the surface name the site uses, AGI Desktop, the way the leaders'
   desktop apps carry their product names. The Electron package is currently

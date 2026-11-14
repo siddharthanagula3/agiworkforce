@@ -1,3 +1,4 @@
+import attachmentPolicy from './attachment-policy.json' with { type: 'json' };
 /**
  * @file file-reference.ts
  * @module @agiworkforce/types/file-reference
@@ -28,7 +29,7 @@ import type { SourceSurface } from './suite-contracts';
  * The one cap on text read out of a file. Every extractor and every pipeline
  * that truncates reads it from here; a second copy is free to disagree.
  */
-export const MAX_FILE_TEXT_CHARS = 200_000;
+export const MAX_FILE_TEXT_CHARS = attachmentPolicy.maxTextPreviewChars;
 
 /**
  * How the platform came to hold this file. `share` is a file another app handed

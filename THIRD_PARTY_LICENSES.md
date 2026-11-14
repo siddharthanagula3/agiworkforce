@@ -4,6 +4,15 @@ This file documents source code in this proprietary repository that was
 ported from third-party open-source projects, along with the upstream license
 that travels with that code.
 
+## SQLCipher
+
+- **Upstream**: [sqlcipher/sqlcipher, v4.20.0](https://github.com/sqlcipher/sqlcipher/releases/tag/v4.20.0), SQLite baseline 3.54.1
+- **License**: BSD-3-Clause (Zetetic's complete notice is retained at `apps/desktop/src-tauri/licenses/sqlcipher-LICENSE.txt`; the underlying SQLite source retains its public-domain dedication)
+- **Imported into**: no copy in this repository. Cargo fetches the source as a build dependency of `libsqlite3-sys` 0.40.0, which requires `sqlcipher-src =420.0.0`.
+- **Source**: the unmodified `sqlcipher.c`, `sqlite3.h` and SQLCipher license from crates.io `sqlcipher-src@420.0.0+sqlcipher-4.20.0-sqlite-3.54.1-libtomcrypt-1.18.2`. Archive SHA-256: `fd6b5280ed2593d07b2816ec531821c15c306903bcca224716f1fbcc2bbfedfe`, as recorded in `Cargo.lock`. The retained license file is byte-identical to that crate's `sqlcipher/LICENSE-sqlcipher`. Retained Tauri enables `bundled-sqlcipher-vendored-openssl`, so the OpenSSL provider is used rather than the crate's libtomcrypt provider.
+- **Local integration**: none. Retained Tauri encryption tests verify the actual linked SQLite/SQLCipher versions and an encrypted database generated with the previous engine.
+- **Distribution**: Retained Tauri's bundle resource map ships the license at `licenses/sqlcipher-LICENSE.txt`.
+
 ## OpenClaw
 
 - **Upstream**: [openclaw/openclaw](https://github.com/openclaw/openclaw)

@@ -11,13 +11,13 @@ import {
 import { logger } from '@/lib/logger';
 import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
-import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
-import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import { retireOwnedProjectInTransaction } from '@/lib/server/project-deletion';
 import {
   holdCovers,
   legalHoldExclusion,
   legalHoldPredicate,
   listLegalHolds,
+  projectContentHoldPredicate,
   type LegalHold,
   type LegalHoldResourceType,
 } from './legal-hold-gate';
@@ -38,6 +38,7 @@ function domainHoldResource(domain: RetentionDomain): LegalHoldResourceType | nu
 }
 
 function holdAppliesTo(hold: LegalHold, domain: RetentionDomain): boolean {
+  if (domain === 'projects') return holdCovers(hold, 'project') || holdCovers(hold, 'project_file');
   const resource = DOMAIN_HOLD_RESOURCE[domain];
   return resource === undefined || holdCovers(hold, resource);
 }
@@ -73,37 +74,6 @@ function notHeldById(alias: string): string {
 
 function isHeld(alias: string): string {
   return heldPredicate(alias, false);
-}
-
-// A hold may name project_file without project, and the parent delete takes
-// its files with it, so a project with a held file is itself held.
-function hasHeldKnowledgeFile(alias: string, organization: string): string {
-  return `exists (
-      select 1 from public.project_knowledge_files held_file
-       where held_file.project_id = ${alias}.id
-         and ${
-           legalHoldPredicate(null, {
-             alias: 'held_file',
-             nextParamIndex: 3,
-             coversParam: "'project_file'",
-             organization,
-             owner: `${alias}.user_id`,
-           }).sql
-         }
-    )`;
-}
-
-// A duplicated project copies storage_uri rather than the object, so bytes a
-// project outside this sweep still lists, or a held one, must survive it.
-function stillReferencedElsewhere(file: string, project: string): string {
-  return `exists (
-      select 1 from public.project_knowledge_files shared
-        join public.user_projects sharer on sharer.id = shared.project_id
-       where shared.storage_uri = ${file}.storage_uri
-         and shared.project_id <> ${project}.id
-         and shared.deleted_at is null
-         and (sharer.updated_at >= $2 or ${isHeld('sharer')})
-    )`;
 }
 
 export const DOMAIN_RETENTION_BATCH = 200;
@@ -153,20 +123,6 @@ export interface DomainSweepResult {
 export type DomainObjectDeleter = (
   keys: readonly string[],
 ) => Promise<{ deleted: number; failedKeys: string[] }>;
-
-async function deleteKnowledgeObjects(keys: readonly string[]) {
-  let deleted = 0;
-  const failedKeys: string[] = [];
-  for (const key of keys) {
-    try {
-      await deleteProjectKnowledgeObject(key);
-      deleted++;
-    } catch {
-      failedKeys.push(key);
-    }
-  }
-  return { deleted, failedKeys };
-}
 
 async function deleteMediaObjects(keys: readonly string[]) {
   const { deleted, failedPathnames } = await deleteStoredMediaObjects(keys);
@@ -304,6 +260,74 @@ function objectBackedSweeper(options: {
   };
 }
 
+function projectRetentionHold(nextParamIndex: number) {
+  const project = projectContentHoldPredicate('project', { project: 'p.id', nextParamIndex });
+  const sources = projectContentHoldPredicate('project_file', {
+    project: 'p.id',
+    nextParamIndex: nextParamIndex + project.params.length,
+  });
+  return {
+    sql: `(${project.sql} or (exists (
+      select 1 from public.project_knowledge_files k where k.project_id=p.id
+    ) and ${sources.sql}))`,
+    params: [...project.params, ...sources.params],
+  };
+}
+
+function projectsSweeper(): DomainSweeper {
+  const held = projectRetentionHold(3);
+  const exclusion = { ...held, sql: `not ${held.sql}` };
+  const deletionHeld = projectRetentionHold(4);
+  const deletionExclusion = { ...deletionHeld, sql: `not ${deletionHeld.sql}` };
+  return {
+    countHeld: (db, context) =>
+      countRows(
+        db,
+        `select count(*)::int as count from public.user_projects p
+          where p.organization_id=$1 and p.updated_at<$2 and ${held.sql}`,
+        [context.organizationId, context.cutoff, ...held.params],
+      ),
+    async sweepBatch(db, context) {
+      return db.transaction(async (tx) => {
+        const projects = await tx.query<{ id: string; user_id: string }>(
+          `select p.id, p.user_id from public.user_projects p
+            where p.organization_id=$1 and p.updated_at<$2 and ${exclusion.sql}
+            order by p.updated_at, p.id limit $5 for update of p skip locked`,
+          [context.organizationId, context.cutoff, ...exclusion.params, context.limit],
+        );
+        let recordsDeleted = 0;
+        for (const project of projects) {
+          const scope = {
+            projectId: project.id,
+            userId: project.user_id,
+            organizationId: context.organizationId,
+          };
+          if (!(await retireOwnedProjectInTransaction(tx, scope))) {
+            throw new Error('A locked project could not be retired.');
+          }
+          const removed = await tx.query<{ id: string }>(
+            `delete from public.user_projects p
+              where p.id=$1 and p.user_id=$2 and p.organization_id=$3::uuid
+                and p.deleted_at is not null and ${deletionExclusion.sql}
+              returning p.id`,
+            [project.id, project.user_id, context.organizationId, ...deletionExclusion.params],
+          );
+          if (removed.length !== 1) {
+            throw new Error('A retired project became unavailable for retention cleanup.');
+          }
+          recordsDeleted++;
+        }
+        return {
+          recordsDeleted,
+          objectsDeleted: 0,
+          objectsFailed: 0,
+          candidates: projects.length,
+        };
+      });
+    },
+  };
+}
+
 function artifactsSweeper(): DomainSweeper {
   return {
     countHeld: (db, context) =>
@@ -361,52 +385,13 @@ function artifactsSweeper(): DomainSweeper {
 
 export function createDomainSweepers(
   objectDeleters: {
-    knowledge?: DomainObjectDeleter;
     media?: DomainObjectDeleter;
   } = {},
 ): Readonly<Record<RetentionDomain, DomainSweeper>> {
-  const knowledge = objectDeleters.knowledge ?? deleteKnowledgeObjects;
   const media = objectDeleters.media ?? deleteMediaObjects;
 
   return {
-    projects: objectBackedSweeper({
-      heldSql: `select count(*)::int as count from public.user_projects
-                 where organization_id = $1 and updated_at < $2
-                   and (${isHeld('user_projects')}
-                        or ${hasHeldKnowledgeFile('user_projects', '$1')})`,
-      candidatesSql: `select p.id,
-                             coalesce(array_agg(k.storage_uri) filter (
-                                        where k.storage_uri is not null
-                                          and not ${stillReferencedElsewhere('k', 'p')}),
-                                      '{}') as object_keys
-                        from public.user_projects p
-                        left join public.project_knowledge_files k on k.project_id = p.id
-                       where p.organization_id = $1
-                         and p.updated_at < $2
-                         and ${notHeld('p')}
-                         and not ${hasHeldKnowledgeFile('p', '$1')}
-                       group by p.id, p.updated_at
-                       order by p.updated_at asc
-                       limit $4`,
-      deleteSql: `delete from public.user_projects target
-                   where target.id = any($1::uuid[])
-                     and ${notHeldById('target')}
-                     and not ${hasHeldKnowledgeFile('target', '$2')}
-                   returning target.id`,
-      deleteObjects: async (uris) => {
-        const keyByUri = new Map<string, string>();
-        for (const uri of uris) {
-          const key = objectKeyFromStorageUri(uri);
-          if (key) keyByUri.set(uri, key);
-        }
-        const { deleted, failedKeys } = await knowledge([...keyByUri.values()]);
-        const failed = new Set(failedKeys);
-        return {
-          deleted,
-          failedKeys: [...keyByUri].filter(([, key]) => failed.has(key)).map(([uri]) => uri),
-        };
-      },
-    }),
+    projects: projectsSweeper(),
     work: rowsOnlySweeper({
       heldSql: `select count(*)::int as count from public.cloud_agent_runs
                  where organization_id = $1
@@ -651,7 +636,13 @@ export async function sweepOrganizationDomain(
     return result;
   }
 
-  if (holds.some((hold) => hold.scope === 'organization')) {
+  if (
+    holds.some(
+      (hold) =>
+        hold.scope === 'organization' &&
+        (policy.domain !== 'projects' || holdCovers(hold, 'project')),
+    )
+  ) {
     const result: DomainSweepResult = {
       ...base,
       outcome: 'held',

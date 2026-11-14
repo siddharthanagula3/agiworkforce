@@ -455,6 +455,21 @@ describe('durable cloud agent workflow settlement', () => {
     expect(mocks.finalize).toHaveBeenLastCalledWith(expect.objectContaining({ attempt: null }));
   });
 
+  it('releases, rather than charging the reservation for, a failed turn with no observed usage', async () => {
+    await settleWorkflowInvocation(makeInput(), 'failed', undefined, 'provider_error');
+    expect(mocks.finalize).toHaveBeenLastCalledWith(expect.objectContaining({ cancelled: true }));
+
+    await settleWorkflowInvocation(makeInput(), 'cancelled');
+    expect(mocks.finalize).toHaveBeenLastCalledWith(expect.objectContaining({ cancelled: true }));
+
+    for (const outcome of ['completed', 'awaiting_input', 'paused'] as const) {
+      await settleWorkflowInvocation(makeInput(), outcome);
+      expect(mocks.finalize).toHaveBeenLastCalledWith(
+        expect.objectContaining({ cancelled: false }),
+      );
+    }
+  });
+
   it('prices a run that was cancelled before any provider call at zero', async () => {
     mocks.usage.mockResolvedValue({
       providerCalls: 0,
@@ -478,6 +493,15 @@ describe('durable cloud agent workflow settlement', () => {
       db,
       expect.objectContaining({ usage: expect.objectContaining({ costCents: 0 }) }),
     );
+  });
+
+  it('releases a failed turn the provider never billed, the way the inline stream does', async () => {
+    await settleWorkflowInvocation(makeInput(), 'failed');
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ cancelled: true }));
+
+    mocks.finalize.mockClear();
+    await settleWorkflowInvocation(makeInput(), 'completed');
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ cancelled: false }));
   });
 
   it('never persists a Temporary Chat turn', async () => {

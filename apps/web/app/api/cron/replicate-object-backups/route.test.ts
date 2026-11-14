@@ -1,3 +1,4 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -33,7 +34,8 @@ vi.mock('@/lib/server/object-backup', () => ({
   reconcileBackupDeletions: mocks.reconcileBackupDeletions,
   backupReplicaSummary: mocks.backupReplicaSummary,
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   objectKeyFromStorageUri: mocks.objectKeyFromStorageUri,
 }));
 vi.mock('@/lib/logger', () => ({

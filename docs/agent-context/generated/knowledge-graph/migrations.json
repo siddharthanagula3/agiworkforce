@@ -2534,6 +2534,23 @@
       "follows": "apps/web/db/neon/0417_trial_reminder_settled_for.sql"
     },
     {
+      "path": "apps/web/db/neon/0419_project_knowledge_object_lifecycle.sql",
+      "tables": [
+        "public.project_knowledge_objects"
+      ],
+      "follows": "apps/web/db/neon/0418_feedback_screenshot_cleanups.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0420_managed_usage_plan_finishes_crossing_turn.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0419_project_knowledge_object_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0421_projects_follow_workspace_deletion.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0420_managed_usage_plan_finishes_crossing_turn.sql"
+    },
+    {
       "path": "apps/web/db/neon/down/0097_connector_oauth_broker.down.sql",
       "tables": [],
       "follows": null
@@ -4142,6 +4159,21 @@
       "path": "apps/web/db/neon/down/0418_feedback_screenshot_cleanups.down.sql",
       "tables": [],
       "follows": "apps/web/db/neon/down/0417_trial_reminder_settled_for.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0419_project_knowledge_object_lifecycle.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0418_feedback_screenshot_cleanups.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0420_managed_usage_plan_finishes_crossing_turn.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0419_project_knowledge_object_lifecycle.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0421_projects_follow_workspace_deletion.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0420_managed_usage_plan_finishes_crossing_turn.down.sql"
     }
   ]
 }

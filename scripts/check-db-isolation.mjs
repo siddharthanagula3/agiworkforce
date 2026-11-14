@@ -241,6 +241,13 @@ export function compareWorkspaceScopeToBaseline(
 
 const ALLOWLIST = [
   {
+    match: /lib\/server\/project-knowledge-lifecycle\.ts$/,
+    tables: ['project_knowledge_objects'],
+    functions: ['reconcileProjectKnowledgeObject'],
+    reason:
+      'System deletion worker only: the caller verifies the live job lease and original region before reconciliation and before each removal. The database claim enforces reference counts, legal holds and target identity. This fingerprint read returns state and receipt metadata, including anonymized deleted tombstones that have no subject to constrain by; no request-facing reader calls this function.',
+  },
+  {
     match: /api\/cron\//,
     reason: 'cron routes are platform-scoped by design and run without a user',
   },
@@ -1148,13 +1155,15 @@ const ALLOWLIST = [
   },
   {
     match: /lib\/server\/retention\/deleted-project-files\.ts$/,
-    tables: ['project_knowledge_files'],
+    tables: ['project_knowledge_files', 'project_knowledge_objects'],
     functions: ['deleteUnreferencedObjects'],
     reason:
       'the purge of soft-deleted project files deletes a stored object only when no live row ' +
       'anywhere still names it, because a duplicated project shares the object across accounts. ' +
-      'The input is the URIs of the rows this purge just confirmed, and the answer is the subset ' +
-      'still referenced, which only keeps objects and never exposes a row',
+      'For the same reason it leaves an object the knowledge object ledger tracks to the ' +
+      'ledger cleanup, whichever account the ledger row names. The input is the URIs of the rows ' +
+      'this purge just confirmed, and the answer is the subset still referenced or ledger owned, ' +
+      'which only keeps objects and never exposes a row. Reached only from api/cron',
   },
   {
     match: /lib\/services\/cogs-import-coverage\.ts$/,

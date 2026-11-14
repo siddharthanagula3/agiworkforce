@@ -73,6 +73,7 @@ function actions() {
     openSettings: vi.fn(),
     openLogs: vi.fn(),
     copyDiagnostics: vi.fn(),
+    clearCacheAndRestart: vi.fn(),
     openProductHelp: vi.fn(),
     openWhatsNew: vi.fn(),
     openSupport: vi.fn(),
@@ -964,6 +965,18 @@ describe('the application menu', () => {
     (logs?.click as () => void)();
 
     expect(spies.openLogs).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the cache and restarts from Help > Troubleshooting', () => {
+    const { menu, actions: spies } = template();
+    const trouble = submenu(menu, 'Help').find((entry) => entry.label === 'Troubleshooting');
+    const clear = (trouble?.submenu as MenuItemConstructorOptions[] | undefined)?.find(
+      (entry) => entry.label === 'Clear Cache and Restart…',
+    );
+
+    (clear?.click as () => void)();
+
+    expect(spies.clearCacheAndRestart).toHaveBeenCalledTimes(1);
   });
 
   it('copies the current chat URL from the public window View menu', () => {

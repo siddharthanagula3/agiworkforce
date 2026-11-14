@@ -1,3 +1,6 @@
+type OriginalProjectKnowledgeFilesModule = typeof import('@/lib/server/project-knowledge-files');
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryObjectStore } from '@agiworkforce/object-storage';
@@ -56,7 +59,8 @@ vi.mock('@/lib/server/chat-attachment-completion', () => ({
   resolveTemporaryChatUpload: vi.fn().mockResolvedValue(false),
   resolveUploadSourceSurface: () => 'web',
 }));
-vi.mock('@/lib/server/project-knowledge-files', () => ({
+vi.mock('@/lib/server/project-knowledge-files', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeFilesModule>()),
   findReadableProjectKnowledgeFile: vi.fn(),
   projectKnowledgeResponse: vi.fn(),
   readIndexStates: vi.fn(),
@@ -64,7 +68,8 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   findProjectKnowledgeFileByChecksum: vi.fn().mockResolvedValue(null),
   registerProjectKnowledgeFile: vi.fn(),
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   assertUploadMatchesAuthorization: vi.fn(),
   createLocalProjectKnowledgeUploadUrl: vi.fn(),
   createProjectKnowledgeUploadAuthorization: vi.fn(),

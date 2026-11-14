@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 import { loadArtifactsPackage } from '../src/artifacts-package';
@@ -29,10 +32,36 @@ const registry: RegistryLike = {
 
 const corpus = loadDataset('chat-prompt');
 
+interface CatalogModel {
+  readonly name: string;
+  readonly developer: string;
+  readonly knowledgeCutoff?: string;
+}
+
+const catalog = JSON.parse(
+  readFileSync(
+    fileURLToPath(new URL('../../../packages/contracts/types/src/models.json', import.meta.url)),
+    'utf8',
+  ),
+) as {
+  readonly models: Readonly<Record<string, CatalogModel>>;
+  readonly developers: Readonly<Record<string, { readonly label: string }>>;
+};
+
+const [measuredKey, measuredModel] = Object.entries(catalog.models).find(
+  ([, model]) =>
+    model.knowledgeCutoff !== undefined && catalog.developers[model.developer] !== undefined,
+) ?? ['', { name: '', developer: '' }];
+const measuredDeveloper = catalog.developers[measuredModel.developer]?.label ?? '';
+
 function row(id: string): EvalCase {
   const found = corpus.cases.find((entry) => entry.id === id);
   if (!found) throw new Error(`no row ${id}`);
   return found;
+}
+
+function projectTurn(): EvalCase {
+  return { ...row('chat-prompt/forget-with-memory-off'), memory: 'on', project: 'with_files' };
 }
 
 describe('rendering the product chat system prompt for a case', () => {
@@ -140,6 +169,75 @@ describe('rendering version 7 for a web chat turn', () => {
 
     expect(rendered).not.toContain('What this app offers');
     expect(rendered).not.toContain('first line of the block is its marker');
+  });
+});
+
+describe('rendering version 11 for a web chat turn', () => {
+  it('states the model the run measures, from the catalog, and says it is not known without one', async () => {
+    const measured = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
+    const unnamed = await loadChatPromptRenderer(11, '2026-10-15');
+    const rendered = measured.render(row('chat-prompt/make-a-calculator'));
+
+    expect(measuredKey.length).toBeGreaterThan(0);
+    expect(rendered).toContain(
+      `This turn runs on ${measuredModel.name}, a model made by ${measuredDeveloper}, which the user selected.`,
+    );
+    expect(rendered).toContain(`${measuredModel.name}'s training data runs to about`);
+    expect(unnamed.render(row('chat-prompt/make-a-calculator'))).toContain(
+      'Which model serves this turn is not stated here.',
+    );
+  });
+
+  it('gives a case that declares its memory the setup of a saved web chat, in its project', async () => {
+    const v11 = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
+    const inProject = v11.render(projectTurn());
+
+    expect(inProject).toContain(
+      "What is set up for this chat right now:\n- This chat is saved in the user's chat history.\n- Memory is on.",
+    );
+    expect(inProject).toContain("- This chat is in one of the user's projects.");
+  });
+
+  it('gives every other case the setup the route sends for a saved web chat on default settings', async () => {
+    const v11 = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
+    const rendered = v11.render(row('chat-prompt/make-a-calculator'));
+
+    expect(rendered).toContain(
+      "What is set up for this chat right now:\n- This chat is saved in the user's chat history.\n- Memory is off,",
+    );
+    expect(rendered).toContain('- Search past chats is off');
+    expect(rendered).toContain('- Connected apps are not available on this turn');
+    expect(rendered).toContain('- Skills the user has installed');
+    expect(rendered).not.toContain('Under your answer, the app shows the user the sources');
+  });
+
+  it('adds the memory and project file tool lines when a case offers those tools', async () => {
+    const v11 = await loadChatPromptRenderer(11, '2026-10-15', measuredKey);
+    const sections = (await import('../../../apps/web/lib/prompts/chat-system-prompt')) as {
+      chatSystemPromptSections: (version: number) => Readonly<Record<string, string>>;
+    };
+    const text = sections.chatSystemPromptSections(11);
+    const tool = (name: string) => ({ name, description: name, inputSchema: { type: 'object' } });
+    const withTools = {
+      ...projectTurn(),
+      tools: [tool('save_memory'), tool('search_files')],
+    };
+
+    expect(v11.render(withTools)).toContain(`${text['memory_on']}\n${text['memory_tools']}`);
+    expect(v11.render(withTools)).toContain(
+      `${text['project_with_files']}\n${text['project_file_tools']}`,
+    );
+    expect(v11.render(projectTurn())).not.toContain(text['memory_tools']);
+  });
+
+  it('renders versions before 8 the same whether or not the run names its model', async () => {
+    for (const version of [6, 7]) {
+      const plain = await loadChatPromptRenderer(version, '2026-10-15');
+      const named = await loadChatPromptRenderer(version, '2026-10-15', measuredKey);
+      for (const evalCase of [row('chat-prompt/forget-with-memory-off'), projectTurn()]) {
+        expect(named.render(evalCase), `v${version} ${evalCase.id}`).toBe(plain.render(evalCase));
+      }
+    }
   });
 });
 

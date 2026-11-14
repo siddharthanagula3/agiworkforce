@@ -60,6 +60,16 @@ pub struct TreeEntry {
     pub oid: String,
 }
 
+impl TreeEntry {
+    pub fn regular_executable(&self) -> Option<bool> {
+        match self.mode.as_str() {
+            "100644" => Some(false),
+            "100755" => Some(true),
+            _ => None,
+        }
+    }
+}
+
 /// What one snapshot may take in. The default takes every file of the whole
 /// checkout, which is what an archive or a carried-over start needs.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

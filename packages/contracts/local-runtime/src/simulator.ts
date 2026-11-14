@@ -1,4 +1,5 @@
 export const SIMULATOR_COMMANDS = [
+  'simulator_supported',
   'simulator_status',
   'simulator_boot',
   'simulator_shutdown',

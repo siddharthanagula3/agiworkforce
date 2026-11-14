@@ -1,6 +1,8 @@
 // The tenancy model every surface reads: Account is one person, Organization is
 // the billed tenant, Workspace is the container content lives in.
 
+import workspaceContract from './workspace-contract.json' with { type: 'json' };
+
 export const WORKSPACE_KINDS = ['personal', 'organization'] as const;
 
 export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
@@ -54,4 +56,4 @@ export interface Device {
   lastSeenAt: string | null;
 }
 
-export const PERSONAL_WORKSPACE_SELECTOR = 'personal';
+export const PERSONAL_WORKSPACE_SELECTOR = workspaceContract.personalSelector;

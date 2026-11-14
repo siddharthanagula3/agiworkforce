@@ -13,6 +13,27 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { invokeDesktopRuntime } from './runtime-client';
 
+const simulatorSupport = new WeakMap<object, Promise<boolean>>();
+
+/**
+ * Whether this shell can run the iOS Simulator pane: it is the desktop app, on
+ * a Mac, built with the simulator service. One built before it answers
+ * "unknown command", and one on another system answers "unsupported platform".
+ */
+export function simulatorPaneSupported(): Promise<boolean> {
+  const host = getHostBridge();
+  if (!host || host.shell !== 'electron') return Promise.resolve(false);
+  let probe = simulatorSupport.get(host);
+  if (!probe) {
+    probe = host
+      .invokeRuntime<boolean>('simulator_supported', {})
+      .then((response) => response.ok && response.value === true)
+      .catch(() => false);
+    simulatorSupport.set(host, probe);
+  }
+  return probe;
+}
+
 export function readSimulatorStatus(): Promise<SimulatorStatus> {
   return invokeDesktopRuntime<SimulatorStatus>('simulator_status');
 }

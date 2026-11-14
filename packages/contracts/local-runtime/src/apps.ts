@@ -2,6 +2,7 @@ export const APPLICATION_COMMANDS = [
   'app_open_path',
   'app_reveal_path',
   'app_open_in_editor',
+  'app_open_preview',
   'app_preview_errors',
 ] as const;
 
@@ -22,7 +23,7 @@ export interface PreviewConsoleError {
 }
 
 export interface PreviewConsoleReport {
-  /** The local page the browser pane shows, or null when it shows none. */
+  /** The page the preview shows, or null when no preview is open. */
   url: string | null;
   errors: PreviewConsoleError[];
   /** Errors logged since the last read that did not fit in `errors`. */

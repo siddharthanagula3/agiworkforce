@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-11-10
+Last updated: 2026-11-13
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -90,6 +90,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `ask_clarifying_questions`     | asks                   | runs                           | read, reversible                                                                 |
 | `plan_itinerary`               | asks                   | runs                           | read, reversible                                                                 |
 | `compare_products`             | asks                   | runs                           | read, reversible                                                                 |
+| `render_answer_ui`             | asks                   | runs                           | read, reversible                                                                 |
 | `url_fetch`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
 | `execute_code`                 | asks                   | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
 | `run_command`                  | asks                   | asks                           | execute, not reversible, acceptsUntrustedContent, createsEgressPath              |

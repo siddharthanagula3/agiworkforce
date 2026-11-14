@@ -20,6 +20,7 @@ export interface DeletedProjectFilesPurge {
   objectsFailed: number;
   /** Objects another live or held row still addresses, kept while its row went. */
   objectsKept: number;
+  objectsLeftToLifecycle: number;
   rowsPurged: number;
   heldFromPurge: number;
 }
@@ -93,6 +94,17 @@ async function deleteUnreferencedObjects(
   const kept = new Set(live.map((row) => row.storage_uri));
   for (const uri of await projectStorageUrisUnderHold(tx, uris)) kept.add(uri);
   tally.objectsKept += kept.size;
+  const ledgerOwned = await tx.query<{ object_key: string }>(
+    `select ledger.object_key
+       from public.project_knowledge_objects ledger
+      where ledger.object_key = any($1::text[])`,
+    [uris],
+  );
+  for (const row of ledgerOwned) {
+    if (kept.has(row.object_key)) continue;
+    kept.add(row.object_key);
+    tally.objectsLeftToLifecycle += 1;
+  }
 
   for (const uri of uris) {
     if (kept.has(uri)) continue;
@@ -200,6 +212,7 @@ export async function purgeDeletedProjectFiles(
     objectsDeleted: 0,
     objectsFailed: 0,
     objectsKept: 0,
+    objectsLeftToLifecycle: 0,
     rowsPurged: 0,
     heldFromPurge: 0,
   };

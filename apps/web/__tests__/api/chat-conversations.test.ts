@@ -619,8 +619,10 @@ describe('Chat Conversations API', () => {
         expect(response.status).toBe(404);
         expect(mockQuery).toHaveBeenCalledTimes(1);
         expect(mockQuery).toHaveBeenCalledWith(
-          expect.stringMatching(/user_projects[\s\S]*id = \$1[\s\S]*user_id = \$2/),
-          ['proj-foreign', 'user-123'],
+          expect.stringMatching(
+            /user_projects[\s\S]*id = \$1[\s\S]*user_id = \$2[\s\S]*organization_id is not distinct from \$3/,
+          ),
+          ['proj-foreign', 'user-123', null],
         );
       });
 

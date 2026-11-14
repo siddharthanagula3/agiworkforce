@@ -2413,19 +2413,21 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         executionModelMetadata?.capabilities?.search === true &&
         isCapabilityRequestable('canUseDeepResearch');
 
-      const codeExecutionEnabled =
-        FEATURES.codeExecution &&
+      const viewState = useChatViewStore.getState();
+      const cloudExecutionPermitted = FEATURES.codeExecution && viewState.features.codeExecution;
+      const cloudExecutionRequestable =
+        cloudExecutionPermitted &&
+        entitlementState.codeExecutionAvailable &&
+        isCapabilityRequestable('canUseCloudExecution');
+      const runCodeRequested =
+        cloudExecutionRequestable &&
         executionModelMetadata?.capabilities?.codeExecution === true &&
-        entitlementState.codeExecutionAvailable &&
-        isCapabilityRequestable('canUseCloudExecution') &&
-        useChatViewStore.getState().features.codeExecution;
+        viewState.runCodeByConversation[conversationId] === true;
       const officeFormat = useOutputFormatStore.getState().format;
-      const officeCreationEnabled =
-        FEATURES.codeExecution &&
+      const officeCreationRequested =
+        cloudExecutionRequestable &&
         executionModelMetadata?.capabilities?.tools === true &&
-        entitlementState.codeExecutionAvailable &&
-        isCapabilityRequestable('canUseCloudExecution') &&
-        (useChatViewStore.getState().features.codeExecution || officeFormat !== null);
+        officeFormat !== null;
       if (officeFormat !== null) useOutputFormatStore.getState().setFormat(null);
       const requestedWorkMode = options?.workMode ?? useChatViewStore.getState().workMode;
       const workMode = isCapabilityRequestable('canUseAgiWork') ? requestedWorkMode : 'chat';
@@ -2524,9 +2526,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     },
                   }
                 : {}),
-              ...(codeExecutionEnabled ? { code_execution: true } : {}),
-              ...(officeCreationEnabled ? { office_creation: true } : {}),
-              ...(officeCreationEnabled && officeFormat ? { office_format: officeFormat } : {}),
+              ...(runCodeRequested
+                ? { code_execution: true }
+                : cloudExecutionPermitted
+                  ? {}
+                  : { code_execution: false }),
+              ...(officeCreationRequested
+                ? { office_creation: true, office_format: officeFormat }
+                : cloudExecutionPermitted
+                  ? {}
+                  : { office_creation: false }),
               x_interactive_cards: MOBILE_INTERACTIVE_CARD_CAPABILITY,
               ...(disabledConnectorIds.length > 0
                 ? { disabled_connector_ids: disabledConnectorIds }

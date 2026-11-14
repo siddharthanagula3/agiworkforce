@@ -15,6 +15,7 @@ import {
 } from '@/lib/api-gateway-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS } from '@/lib/service-unavailable-retry';
 
 function request(method = 'POST', headers: Record<string, string> = {}): Request {
   return new Request('https://app.example.com/api/things', { method, headers });
@@ -190,8 +191,16 @@ describe('gateway inbound circuit breaking', () => {
 
     for (let attempt = 0; attempt < 20; attempt++) {
       const response = await handler(request('GET'));
-      expect([404, 503]).toContain(response.status);
-      expect(response.headers.get('retry-after')).toBeNull();
+      if (attempt % 2 === 1) {
+        expect(response.status).toBe(404);
+        expect(response.headers.get('retry-after')).toBeNull();
+        continue;
+      }
+      expect(response.status).toBe(503);
+      expect((await errorOf(response)).message).toBe('Workspace policy unreadable.');
+      expect(response.headers.get('retry-after')).toBe(
+        String(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS),
+      );
     }
     expect(call).toBe(20);
   });

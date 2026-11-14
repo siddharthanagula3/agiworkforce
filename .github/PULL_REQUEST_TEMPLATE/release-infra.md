@@ -8,7 +8,7 @@
 
 - [ ] GitHub Actions.
 - [ ] Web/Vercel.
-- [ ] Desktop/Tauri release.
+- [ ] Desktop release (Electron `release-desktop-cloud.yml`, or retained Tauri workflows).
 - [ ] CLI release.
 - [ ] Mobile store/build pipeline.
 - [ ] Neon database.

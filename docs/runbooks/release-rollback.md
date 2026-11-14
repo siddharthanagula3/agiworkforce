@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 Until 2026-09-18 the only rollback in this repository was a step inside the job
 that deployed. It fired on `failure()` of the same run, which covers exactly one
@@ -50,6 +50,10 @@ undo the migration (see "What the rollback does not do").
 ## Rolling production back
 
 Rollback is a **workflow dispatch**, not a step in the deploy run.
+
+**Deploy Production Surfaces** is disabled in GitHub Actions as of 2026-11-11, and
+production is deployed by hand with the Vercel CLI. Enable the workflow before
+using the dispatch below; until then use the laptop path under it.
 
 1. Actions -> **Deploy Production Surfaces** -> **Run workflow**.
 2. Set `rollback` to true and give `rollback_reason` a sentence. The reason is

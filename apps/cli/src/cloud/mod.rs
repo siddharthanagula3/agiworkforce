@@ -16,8 +16,10 @@ pub mod code_teleport;
 pub mod connectors;
 #[cfg(test)]
 mod contract_fixtures;
+mod conversation_contract;
 pub mod data_export;
 pub mod devices;
+pub mod drafts;
 pub mod feedback;
 pub mod handshake;
 pub mod image;
@@ -28,11 +30,14 @@ pub mod marketplaces;
 pub mod memory;
 pub mod personalization;
 pub mod product_analytics;
+pub mod project_files;
 pub mod projects;
 pub mod referrals;
 pub mod shares;
 pub mod skills;
 pub mod state;
+pub(crate) mod uploads;
+pub(crate) mod work_plan;
 pub mod workspace_policy;
 
 use std::path::{Path, PathBuf};
@@ -982,6 +987,10 @@ pub fn project_instructions_context(
         ),
         _ => String::new(),
     }
+}
+
+pub(crate) fn workspaces_path() -> &'static str {
+    conversation_contract::contract().workspaces_path.as_str()
 }
 
 #[cfg(test)]

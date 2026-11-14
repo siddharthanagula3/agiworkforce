@@ -77,6 +77,11 @@ export const ManagedSkillSummarySchema = z
      */
     installs: z.number().int().positive().optional().catch(undefined),
     updatedAt: z.string().trim().min(1).max(40).optional().catch(undefined),
+    /**
+     * Hash of the whole skill package, so a client that already holds this
+     * exact package can keep it instead of downloading it again.
+     */
+    treeHash: z.string().trim().min(1).max(200).optional().catch(undefined),
   })
   .superRefine((skill, context) => {
     if (skill.downloadable && (skill.source !== 'bundled' || skill.lifecycle !== 'included')) {

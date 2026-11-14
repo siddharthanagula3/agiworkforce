@@ -10,7 +10,7 @@ import {
   compareToBaseline,
   coverage,
   declaredClasses,
-  listLiterals,
+  declaredAdmission,
   read,
 } from './check-attachment-class-coverage.mjs';
 
@@ -35,10 +35,10 @@ export const DOCUMENT_CLASSES: readonly DocumentClass[] = [
 ] as const;
 `;
 
-const ADMISSION_SOURCE = `
-export const CHAT_ATTACHMENT_MIME_TYPES = ['image/png', 'text/csv', 'application/pdf'] as const;
-const CHAT_ATTACHMENT_EXTENSIONS = ['.csv', '.pdf'] as const;
-`;
+const ADMISSION_SOURCE = JSON.stringify({
+  mimeTypes: ['image/png', 'text/csv', 'application/pdf'],
+  extensions: ['.csv', '.pdf'],
+});
 
 function scratch(admission, classes) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'attachment-classes-'));
@@ -54,7 +54,7 @@ function scratch(admission, classes) {
 }
 
 test('both lists are read out of the contracts', () => {
-  assert.deepEqual(listLiterals(ADMISSION_SOURCE, 'CHAT_ATTACHMENT_EXTENSIONS'), ['.csv', '.pdf']);
+  assert.deepEqual(declaredAdmission(ADMISSION_SOURCE).extensions, ['.csv', '.pdf']);
   assert.deepEqual(
     declaredClasses(CLASSES_SOURCE).map((entry) => `${entry.id}:${entry.extractor}`),
     ['csv:text', 'pdf:pdf'],
@@ -75,10 +75,10 @@ test('an image needs no extractor', () => {
 
 test('an admitted type with no class is reported', () => {
   const root = scratch(
-    ADMISSION_SOURCE.replace(
-      "'application/pdf'] as const",
-      "'application/pdf', 'text/x-python'] as const",
-    ),
+    JSON.stringify({
+      ...JSON.parse(ADMISSION_SOURCE),
+      mimeTypes: [...JSON.parse(ADMISSION_SOURCE).mimeTypes, 'text/x-python'],
+    }),
     CLASSES_SOURCE,
   );
   assert.deepEqual(read(root).unclassed, ['media-type:text/x-python']);
@@ -86,7 +86,10 @@ test('an admitted type with no class is reported', () => {
 
 test('an admitted extension with no class is reported', () => {
   const root = scratch(
-    ADMISSION_SOURCE.replace("'.pdf'] as const", "'.pdf', '.rs'] as const"),
+    JSON.stringify({
+      ...JSON.parse(ADMISSION_SOURCE),
+      extensions: [...JSON.parse(ADMISSION_SOURCE).extensions, '.rs'],
+    }),
     CLASSES_SOURCE,
   );
   assert.deepEqual(read(root).unclassed, ['extension:rs']);
@@ -94,15 +97,15 @@ test('an admitted extension with no class is reported', () => {
 
 test('a class no upload can reach is reported', () => {
   const root = scratch(
-    ADMISSION_SOURCE.replace("'text/csv', ", '').replace("'.csv', ", ''),
+    JSON.stringify({ mimeTypes: ['image/png', 'application/pdf'], extensions: ['.pdf'] }),
     CLASSES_SOURCE,
   );
   assert.deepEqual(read(root).unreachable, ['class:csv']);
 });
 
 test('an empty accept list is an error, not a clean run', () => {
-  const root = scratch('export const CHAT_ATTACHMENT_MIME_TYPES = [] as const;', CLASSES_SOURCE);
-  assert.match(read(root).error, /declared no accepted types/);
+  const root = scratch(JSON.stringify({ mimeTypes: [], extensions: [] }), CLASSES_SOURCE);
+  assert.match(read(root).error, /no valid mimeTypes/);
 });
 
 test('no declared class at all is an error', () => {

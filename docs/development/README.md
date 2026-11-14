@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-05
+Last updated: 2026-11-11
 
 How to work in this repository: setup, commands, testing, debugging, migrations,
 CI, and the agent and parallel-agent workflows.
@@ -28,12 +28,20 @@ the process, not the rules.
 
 ## How-to guides
 
-- [`audit/prior-audits/qa-execution-ledger.md`](../../audit/prior-audits/qa-execution-ledger.md), the living evidence of
-  current work: objective, blockers, surfaces audited, dead UI, flows, CI,
-  surfaces ready or blocked.
+- [`audit/README.md`](../../audit/README.md), the index of open work: blockers,
+  gaps, the plan and the live-validation queue.
 - [`audit/prior-audits/product-gaps-register.md`](../../audit/prior-audits/product-gaps-register.md), the product completeness
   register: every route, control and state gap across the six surfaces, with
   what it connects to and whether it is complete.
+- [`ci-and-deploys.md`](./ci-and-deploys.md), the CI gates, the production and
+  staging deploy contract, which deploy workflows are enabled, and the local
+  pre-push gate.
+- [`troubleshooting.md`](./troubleshooting.md), symptoms whose cause is not where
+  the error points.
+- [`dead-code-detection.md`](./dead-code-detection.md), `pnpm check:knip`, the
+  discovery tool that is not yet a gate.
+- [`agent-operability.md`](./agent-operability.md), the source-of-truth map,
+  documentation and naming rules, and hook rules for agent-friendly repo upkeep.
 - [`add-a-gateway.md`](./add-a-gateway.md), the five steps to add an OpenAI-
   or Anthropic-compatible gateway to the model registry without a dedicated
   provider package.

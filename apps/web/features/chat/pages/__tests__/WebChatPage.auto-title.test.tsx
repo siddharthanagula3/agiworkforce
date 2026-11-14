@@ -1,6 +1,6 @@
 import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import type { ReactNode } from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('react-i18next');
 type ScanModule1 = typeof import('@/app/settings/_lib/preferences-client');
@@ -291,6 +291,7 @@ function seedFirstTurn(options: {
   title: string;
   isTemporary?: boolean;
   answeredOnDevice?: boolean;
+  streaming?: boolean;
 }): void {
   useChatStore.getState().reset();
   useChatStore.getState().setConversations([
@@ -314,6 +315,7 @@ function seedFirstTurn(options: {
       role: 'assistant',
       content: 'Sure.',
       createdAt: '2026-08-15T00:00:02.000Z',
+      ...(options.streaming ? { isStreaming: true } : {}),
       ...(options.answeredOnDevice
         ? { model: LOCAL_MODEL_ID, metadata: { privacyMode: 'local' as const } }
         : {}),
@@ -464,6 +466,31 @@ describe('WebChatPage auto-title (WEB-85)', () => {
       title: MANUAL_TITLE,
     });
   }, 20000);
+
+  it('reads the title once the first answer has finished, when the server writes it', async () => {
+    seedFirstTurn({ title: 'New Chat', streaming: true });
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ conversation: { id: CONVERSATION_ID, title: GENERATED_TITLE } }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(conversationTitleReads(fetchMock)).toEqual([]);
+
+    act(() => {
+      useChatStore
+        .getState()
+        .updateMessage(
+          '00000000-0000-4000-8000-0000000008a2',
+          { isStreaming: false },
+          CONVERSATION_ID,
+        );
+    });
+
+    await waitFor(() => expect(storeTitle()).toBe(GENERATED_TITLE));
+  });
 
   it('keeps a temporary chat title on this device and never writes it to the server', async () => {
     seedFirstTurn({ title: 'New Chat', isTemporary: true });

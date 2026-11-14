@@ -16,9 +16,9 @@ import {
   ChevronLeft,
   Code2,
   GitBranch,
-  Globe,
   ListChecks,
   FolderOpen,
+  Globe,
   PanelLeft,
   PanelsTopLeft,
   Smartphone,
@@ -77,15 +77,14 @@ import {
   cancelDeveloperThreadSummary,
   compactDeveloperThread,
   openWorkspaceInEditor,
-  useDesktopHost,
   useDeveloperCapabilities,
+  browserPaneSupported,
+  simulatorPaneSupported,
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import { getModelMetadata } from '@shared/config/llm';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { safePlatform } from '@shared/utils/browser-utils';
-import { BROWSER_PANE_COPY, browserPaneIdFor, type BrowserPaneRequest } from '../browser-pane';
-import { SIMULATOR_PANE_COPY } from '../simulator-pane';
 import {
   CODE_COPY,
   CODE_LIMITS,
@@ -126,6 +125,7 @@ import {
   nextCycledAgentMode,
   type LocalFailureAction,
 } from '../local-code';
+import { SIMULATOR_PANE_COPY } from '../simulator-pane';
 import {
   useLocalSession,
   type LocalMessage,
@@ -137,12 +137,12 @@ import { useLocalTurnOptions } from '../hooks/use-local-turn-options';
 import { localSessionMemory } from '../local-session-memory';
 import { runThreadSummary, useThreadSummarizing } from '../local-summaries';
 import { UsageRing } from './CodeComposer';
-import { LocalBrowserPane } from './LocalBrowserPane';
 import { LocalChangesPanel } from './LocalChangesPanel';
-import { LocalSimulatorPane } from './LocalSimulatorPane';
 import { LocalTerminalDock } from './LocalTerminal';
 import { useShowTerminal } from '../use-show-terminal';
 import { LocalFilesPanel } from './LocalFilesPanel';
+import { LocalBrowserPanel } from './LocalBrowserPanel';
+import { LocalSimulatorPane } from './LocalSimulatorPane';
 import { LocalExtensionsControl } from './LocalExtensionsControl';
 import { LocalMemoryControl } from './LocalMemoryControl';
 import { LocalModelChip } from './LocalModelChip';
@@ -413,6 +413,26 @@ export function LocalSessionPanel({
   const [loadsFinished, setLoadsFinished] = useState(0);
   const capabilities = useDeveloperCapabilities(loadsFinished);
   const remoteSsh = session.environment === 'ssh';
+  const [browserPaneAvailable, setBrowserPaneAvailable] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void browserPaneSupported().then((supported) => {
+      if (!cancelled) setBrowserPaneAvailable(supported);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const [simulatorAvailable, setSimulatorAvailable] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void simulatorPaneSupported().then((supported) => {
+      if (!cancelled) setSimulatorAvailable(supported);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const canChooseMode = !remoteSsh && capabilities.has('agent_mode');
   const canChooseEffort = capabilities.has('reasoning_effort');
   const canAttachFiles = !remoteSsh && capabilities.has('context_files');
@@ -463,6 +483,16 @@ export function LocalSessionPanel({
   const [changesOpen, setChangesOpen] = useState(false);
   const [editorDirty, setEditorDirty] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserAddress, setBrowserAddress] = useState<string | null>(null);
+  const [browserKey, setBrowserKey] = useState(0);
+  const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [simulatorExpanded, setSimulatorExpanded] = useState(false);
+  const [simulatorFloating, setSimulatorFloating] = useState(false);
+  const simulatorDocked = simulatorOpen && !simulatorFloating;
+  const closeDockedSimulator = () => {
+    if (!simulatorFloating) setSimulatorOpen(false);
+  };
   const [filesDirty, setFilesDirty] = useState(false);
   const [filesFocusKey, setFilesFocusKey] = useState(0);
   useEffect(() => {
@@ -505,21 +535,6 @@ export function LocalSessionPanel({
   const vsCodeHref = continueLocalSessionInVsCodeHref(session);
   const resumeCommand = localSessionResumeCommand(session.id);
   const worktree = group.worktree ?? null;
-  const host = useDesktopHost();
-  const canBrowse = host?.shell === 'electron';
-  const canUseSimulator = canBrowse && safePlatform.isMac();
-  const [browserOpen, setBrowserOpen] = useState(false);
-  const [browserExpanded, setBrowserExpanded] = useState(false);
-  const [browserRequest, setBrowserRequest] = useState<BrowserPaneRequest | null>(null);
-  const browserRequests = useRef(0);
-  const [simulatorOpen, setSimulatorOpen] = useState(false);
-  const [simulatorExpanded, setSimulatorExpanded] = useState(false);
-  const [simulatorFloating, setSimulatorFloating] = useState(false);
-  const simulatorDocked = simulatorOpen && !simulatorFloating;
-  const closeToolPanes = () => {
-    setBrowserOpen(false);
-    if (!simulatorFloating) setSimulatorOpen(false);
-  };
   const [reviewRequested, setReviewOpen] = useState(false);
   const reviewOpen = canReview && reviewRequested;
   const toggleReview = () => {
@@ -527,13 +542,11 @@ export function LocalSessionPanel({
       setReviewOpen(false);
       return;
     }
-    const show = () => {
-      closeToolPanes();
-      setReviewOpen(true);
-    };
-    if (changesOpen) closeChanges(show);
-    else if (filesOpen) closeFiles(show);
-    else show();
+    setBrowserOpen(false);
+    closeDockedSimulator();
+    if (changesOpen) closeChanges(() => setReviewOpen(true));
+    else if (filesOpen) closeFiles(() => setReviewOpen(true));
+    else setReviewOpen(true);
   };
   const toggleChanges = () => {
     if (changesOpen) {
@@ -541,8 +554,9 @@ export function LocalSessionPanel({
       return;
     }
     const show = () => {
-      closeToolPanes();
       setReviewOpen(false);
+      setBrowserOpen(false);
+      closeDockedSimulator();
       setChangesOpen(true);
     };
     if (filesOpen) closeFiles(show);
@@ -550,8 +564,9 @@ export function LocalSessionPanel({
   };
   const openFiles = (focusSearch: boolean) => {
     const show = () => {
-      closeToolPanes();
       setReviewOpen(false);
+      setBrowserOpen(false);
+      closeDockedSimulator();
       setFilesOpen(true);
       if (focusSearch) setFilesFocusKey((key) => key + 1);
     };
@@ -566,51 +581,46 @@ export function LocalSessionPanel({
     if (filesOpen) closeFiles();
     else openFiles(false);
   };
-  const showToolPane = (show: () => void) => {
-    const reveal = () => {
+  const openBrowser = (address: string | null) => {
+    const show = () => {
       setReviewOpen(false);
-      show();
-    };
-    if (changesOpen) closeChanges(reveal);
-    else if (filesOpen) closeFiles(reveal);
-    else reveal();
-  };
-  const openBrowser = (url?: string) => {
-    showToolPane(() => {
-      if (!simulatorFloating) setSimulatorOpen(false);
-      if (url) {
-        browserRequests.current += 1;
-        setBrowserRequest({ url, key: browserRequests.current });
-      }
+      closeDockedSimulator();
+      setBrowserAddress(address);
+      setBrowserKey((key) => key + 1);
       setBrowserOpen(true);
-    });
+    };
+    if (changesOpen) closeChanges(show);
+    else if (filesOpen) closeFiles(show);
+    else show();
   };
   const toggleBrowser = () => {
     if (browserOpen) setBrowserOpen(false);
-    else openBrowser();
+    else openBrowser(null);
+  };
+  const dockSimulator = (dock: () => void) => {
+    const show = () => {
+      setReviewOpen(false);
+      setBrowserOpen(false);
+      dock();
+    };
+    if (changesOpen) closeChanges(show);
+    else if (filesOpen) closeFiles(show);
+    else show();
   };
   const toggleSimulator = () => {
     if (simulatorOpen) setSimulatorOpen(false);
     else if (simulatorFloating) setSimulatorOpen(true);
-    else {
-      showToolPane(() => {
-        setBrowserOpen(false);
-        setSimulatorOpen(true);
-      });
-    }
+    else dockSimulator(() => setSimulatorOpen(true));
   };
   const toggleSimulatorFloating = () => {
     if (simulatorFloating) {
-      showToolPane(() => {
-        setBrowserOpen(false);
-        setSimulatorFloating(false);
-      });
+      dockSimulator(() => setSimulatorFloating(false));
       return;
     }
     setSimulatorExpanded(false);
     setSimulatorFloating(true);
   };
-  const paneExpanded = (browserOpen && browserExpanded) || (simulatorDocked && simulatorExpanded);
+  const simulatorFillsBody = simulatorDocked && simulatorExpanded;
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const sidePanelOpen =
     shortcutsOpen || changesOpen || filesOpen || reviewOpen || browserOpen || simulatorDocked;
@@ -620,9 +630,10 @@ export function LocalSessionPanel({
       return;
     }
     const hide = () => {
-      closeToolPanes();
       setShortcutsOpen(false);
       setReviewOpen(false);
+      setBrowserOpen(false);
+      closeDockedSimulator();
     };
     if (changesOpen) closeChanges(hide);
     else if (filesOpen) closeFiles(hide);
@@ -683,28 +694,6 @@ export function LocalSessionPanel({
             icon: FolderOpen,
             badge: localShortcutBadge(LOCAL_FILES_SHORTCUT, isMac),
             onSelect: () => openFiles(false),
-          },
-        ]
-      : []),
-    ...(canBrowse
-      ? [
-          {
-            id: 'browser',
-            label: BROWSER_PANE_COPY.pane,
-            icon: Globe,
-            badge: null,
-            onSelect: () => openBrowser(),
-          },
-        ]
-      : []),
-    ...(canUseSimulator
-      ? [
-          {
-            id: 'simulator',
-            label: SIMULATOR_PANE_COPY.pane,
-            icon: Smartphone,
-            badge: null,
-            onSelect: toggleSimulator,
           },
         ]
       : []),
@@ -921,7 +910,6 @@ export function LocalSessionPanel({
   };
 
   const attachCapture = (file: File) => {
-    setBrowserExpanded(false);
     setSimulatorExpanded(false);
     if (images.attachments.length >= DEVELOPER_TURN_LIMITS.images) {
       setComposerNotice(LOCAL_CODE_COPY.tooManyImages(DEVELOPER_TURN_LIMITS.images));
@@ -1007,6 +995,30 @@ export function LocalSessionPanel({
               <FolderOpen size={HEADER_GLYPH_SIZE} aria-hidden="true" />
             </button>
           )}
+          {!remoteSsh && browserPaneAvailable && (
+            <button
+              type="button"
+              className={`${styles['headerButton']} ${browserOpen ? styles['headerButtonActive'] : ''}`}
+              aria-label={LOCAL_CODE_COPY.browser}
+              aria-pressed={browserOpen}
+              title={LOCAL_CODE_COPY.browser}
+              onClick={toggleBrowser}
+            >
+              <Globe size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+            </button>
+          )}
+          {!remoteSsh && simulatorAvailable && (
+            <button
+              type="button"
+              className={`${styles['headerButton']} ${simulatorOpen ? styles['headerButtonActive'] : ''}`}
+              aria-label={SIMULATOR_PANE_COPY.pane}
+              aria-pressed={simulatorOpen}
+              title={SIMULATOR_PANE_COPY.pane}
+              onClick={toggleSimulator}
+            >
+              <Smartphone size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+            </button>
+          )}
           <button
             type="button"
             className={`${styles['headerButton']} ${changesOpen ? styles['headerButtonActive'] : ''}`}
@@ -1028,30 +1040,6 @@ export function LocalSessionPanel({
               onClick={toggleReview}
             >
               <GitBranch size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-            </button>
-          )}
-          {canBrowse && (
-            <button
-              type="button"
-              className={`${styles['headerButton']} ${browserOpen ? styles['headerButtonActive'] : ''}`}
-              aria-label={BROWSER_PANE_COPY.toggle}
-              aria-pressed={browserOpen}
-              title={BROWSER_PANE_COPY.toggle}
-              onClick={toggleBrowser}
-            >
-              <Globe size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-            </button>
-          )}
-          {canUseSimulator && (
-            <button
-              type="button"
-              className={`${styles['headerButton']} ${simulatorOpen ? styles['headerButtonActive'] : ''}`}
-              aria-label={SIMULATOR_PANE_COPY.pane}
-              aria-pressed={simulatorOpen}
-              title={SIMULATOR_PANE_COPY.pane}
-              onClick={toggleSimulator}
-            >
-              <Smartphone size={HEADER_GLYPH_SIZE} aria-hidden="true" />
             </button>
           )}
           {!remoteSsh && (
@@ -1164,7 +1152,11 @@ export function LocalSessionPanel({
                 setDeleteError(null);
                 confirm({
                   title: LOCAL_CODE_COPY.archiveSessionTitle,
-                  description: localArchiveSessionConsequence(session.title, session.id),
+                  description: localArchiveSessionConsequence(
+                    session.title,
+                    session.id,
+                    capabilities.has('thread_unarchive'),
+                  ),
                   confirmLabel: LOCAL_CODE_COPY.archiveSessionConfirm,
                   onConfirm: async () => {
                     try {
@@ -1253,7 +1245,7 @@ export function LocalSessionPanel({
       <div
         className={`${styles['body']} ${simulatorOpen && simulatorFloating ? styles['bodyFloatHost'] : ''}`}
       >
-        <div className={`${styles['column']} ${paneExpanded ? styles['columnHidden'] : ''}`}>
+        <div className={`${styles['column']} ${simulatorFillsBody ? styles['columnHidden'] : ''}`}>
           <div className={styles['scroll']} data-testid="local-code-scroll">
             <div className={styles['center']}>
               {state.loading && (
@@ -1740,7 +1732,24 @@ export function LocalSessionPanel({
             }}
             onDirtyChange={setEditorDirty}
             onSendToAgent={sendTextToAgent}
-            {...(canBrowse ? { onOpenPreview: openBrowser } : {})}
+            {...(browserPaneAvailable ? { onOpenPreview: (url: string) => openBrowser(url) } : {})}
+          />
+        )}
+        {browserOpen && (
+          <LocalBrowserPanel
+            address={browserAddress}
+            addressKey={browserKey}
+            onClose={() => setBrowserOpen(false)}
+          />
+        )}
+        {!remoteSsh && simulatorAvailable && simulatorOpen && (
+          <LocalSimulatorPane
+            expanded={simulatorExpanded}
+            onToggleExpanded={() => setSimulatorExpanded((expanded) => !expanded)}
+            floating={simulatorFloating}
+            onToggleFloating={toggleSimulatorFloating}
+            onClose={() => setSimulatorOpen(false)}
+            {...(canPasteImages ? { onAttachImage: attachCapture } : {})}
           />
         )}
         {filesOpen && (
@@ -1762,28 +1771,6 @@ export function LocalSessionPanel({
             onSendComments={sendTextToAgent}
           />
         )}
-        {canBrowse && browserOpen && (
-          <LocalBrowserPane
-            paneId={browserPaneIdFor(session.id)}
-            rootId={session.rootId}
-            request={browserRequest}
-            onRequestHandled={() => setBrowserRequest(null)}
-            expanded={browserExpanded}
-            onToggleExpanded={() => setBrowserExpanded((expanded) => !expanded)}
-            onClose={() => setBrowserOpen(false)}
-            {...(canPasteImages ? { onAttachImage: attachCapture } : {})}
-          />
-        )}
-        {canUseSimulator && simulatorOpen && (
-          <LocalSimulatorPane
-            expanded={simulatorExpanded}
-            onToggleExpanded={() => setSimulatorExpanded((expanded) => !expanded)}
-            floating={simulatorFloating}
-            onToggleFloating={toggleSimulatorFloating}
-            onClose={() => setSimulatorOpen(false)}
-            {...(canPasteImages ? { onAttachImage: attachCapture } : {})}
-          />
-        )}
         {showShortcuts && (
           <aside className={styles['panelShortcuts']} aria-label={LOCAL_PANEL_COPY.shortcuts}>
             <ul className={styles['panelShortcutList']}>
@@ -1796,9 +1783,7 @@ export function LocalSessionPanel({
                   >
                     <shortcut.icon size={HEADER_GLYPH_SIZE} aria-hidden="true" />
                     <span className={styles['panelShortcutLabel']}>{shortcut.label}</span>
-                    {shortcut.badge !== null && (
-                      <kbd className={styles['panelShortcutBadge']}>{shortcut.badge}</kbd>
-                    )}
+                    <kbd className={styles['panelShortcutBadge']}>{shortcut.badge}</kbd>
                   </button>
                 </li>
               ))}
@@ -1811,6 +1796,7 @@ export function LocalSessionPanel({
           rootId={session.rootId}
           folder={folder}
           open={terminalOpen}
+          pty={capabilities.has('terminals')}
           onClose={() => setTerminalOpen(false)}
           onCommandFinished={() => setTerminalRuns((count) => count + 1)}
           onBackgroundStarted={() => setBackgroundRuns((count) => count + 1)}

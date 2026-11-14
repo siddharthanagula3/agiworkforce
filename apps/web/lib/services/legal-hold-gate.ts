@@ -353,6 +353,51 @@ export function legalHoldExclusion(
   return { table, params, sql: branches.map((branch) => `not ${branch}`).join('\n and ') };
 }
 
+export function projectContentHoldPredicate(
+  resourceType: 'project' | 'project_file',
+  options: { project: string; nextParamIndex: number },
+): LegalHoldPredicate {
+  return {
+    table: null,
+    sql: `public.app_project_content_held(${options.project}, $${options.nextParamIndex})`,
+    params: [resourceType],
+  };
+}
+
+export function projectContentHoldFunctionSql(): string {
+  const types = ['user_projects', 'project_knowledge_files'].map((table) => {
+    const resource = holdableResourceForTable(table);
+    if (!resource) throw new Error('Project hold resource contract is unavailable.');
+    return `'${resource.resourceType.replaceAll("'", "''")}'`;
+  });
+  const held = legalHoldPredicate(null, {
+    alias: 'p',
+    owner: 'p.user_id',
+    organization: 'p.organization_id',
+    nextParamIndex: 1,
+    coversParam: 'content_type',
+  });
+  return `create function public.app_project_content_held(target_project uuid, content_type text)
+returns boolean language plpgsql security definer set search_path = pg_catalog, public
+as $$
+declare
+  trusted_caller boolean;
+  held_result boolean;
+begin
+  if content_type is null or content_type not in (${types.join(', ')}) then return true; end if;
+  trusted_caller := pg_has_role(coalesce(nullif(current_setting('role'), 'none'), session_user)::name, current_user, 'USAGE');
+  select ${held.sql} into held_result from public.user_projects p
+    where p.id=target_project and (trusted_caller or (
+      p.user_id=public.current_app_user_id()
+      and p.organization_id is not distinct from public.current_app_org_id()
+      and (p.organization_id is null or public.current_app_org_role() is not null)
+    ));
+  if not found then raise exception 'Project content access is unavailable' using errcode = '42501'; end if;
+  return held_result;
+end
+$$;`;
+}
+
 // `where` is the sweep's own condition over `alias`; the hold predicate takes
 // the placeholders after `params`.
 async function countRowsMatching(
@@ -509,12 +554,9 @@ export const HELD_MESSAGE_DELETION_REFUSAL =
 export const HELD_UNDEFERRED_DELETION_REFUSAL =
   'This is preserved by an active legal hold and cannot be deleted while the hold is active.';
 
-// Only these stores keep the refused item tombstoned for the purge cron that
+// Only this store keeps the refused item tombstoned for the purge cron that
 // finishes the deletion after release.
-const DEFERRED_HELD_DELETIONS: ReadonlySet<LegalHoldResourceType> = new Set([
-  'file',
-  'project_file',
-]);
+const DEFERRED_HELD_DELETIONS: ReadonlySet<LegalHoldResourceType> = new Set(['file']);
 
 export function heldDeletionRefusal(resourceType: LegalHoldResourceType): string {
   if (DEFERRED_HELD_DELETIONS.has(resourceType)) return HELD_DELETION_REFUSAL;

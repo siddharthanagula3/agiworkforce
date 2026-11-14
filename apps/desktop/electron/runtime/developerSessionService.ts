@@ -92,6 +92,10 @@ import {
   normalizeDeveloperAgentMode,
   parseWorktreeRootId,
   worktreeRootId,
+  TERMINAL_MAX_COLUMNS,
+  TERMINAL_MAX_ROWS,
+  TERMINAL_MIN_SIZE,
+  TERMINAL_WRITE_LIMIT,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperSessionActivity } from '@agiworkforce/utils/remote-control';
 import {
@@ -205,6 +209,13 @@ interface RunningServer {
   confirmExit: () => void;
   /** What this process said at initialize that it serves, and nothing a later one said. */
   advertised: AdvertisedCapabilities | null;
+  /** The worktree location it was started with; null when it was given none to honor. */
+  worktreesRoot: string | null;
+  /** Turns it is running, waiting on an approval or an answer included. */
+  activeTurns: Set<string>;
+  terminals: Set<string>;
+  /** Setup scripts it is running or was just asked to run, by worktree. */
+  setups: Map<string, number>;
 }
 
 const servers = new Map<string, RunningServer>();
@@ -229,6 +240,17 @@ export interface DeveloperSessionConfiguration {
   spawn?: SpawnDeveloperRuntime;
   /** Whether a page is there to answer the agent's questions. */
   answersUserInput?: () => boolean;
+  /** The folder the user chose for new worktrees; empty keeps the CLI's default. */
+  worktreesRoot?: () => string;
+  /** What a terminal the user opened printed, or that it ended. */
+  onTerminalEvent?: (event: DeveloperTerminalEvent) => void;
+}
+
+export interface DeveloperTerminalEvent {
+  rootId: string;
+  terminalId: string;
+  data?: string;
+  exitCode?: number | null;
 }
 
 let emit: DeveloperSessionEmitter = () => undefined;
@@ -238,6 +260,9 @@ let spawnRuntime: SpawnDeveloperRuntime = nodeSpawn as SpawnDeveloperRuntime;
 let workspaceConsentAtMs: (root: WorkspaceRoot) => number | null = () => null;
 let accountBridge: DeveloperAccountBridge | null = null;
 let answersUserInput: () => boolean = () => true;
+let worktreesRoot: () => string = () => '';
+let terminalEmit: (event: DeveloperTerminalEvent) => void = () => undefined;
+const terminalRoots = new Map<string, string>();
 let accountSyncError: string | null = null;
 let accountSyncChain: Promise<void> = Promise.resolve();
 let cachedStatus: { binary: string; status: DeveloperRuntimeStatus } | null = null;
@@ -254,6 +279,13 @@ interface AdvertisedCapabilities {
   writerLease: boolean;
   mcpApproval: boolean;
   reasoningEffortLadder: boolean;
+  threadRename: boolean;
+  threadUnarchive: boolean;
+  threadPin: boolean;
+  mcpLogs: boolean;
+  terminals: boolean;
+  mcp: boolean;
+  mcpSetEnabled: boolean;
 }
 
 /**
@@ -271,11 +303,17 @@ export function configureDeveloperSessions(configuration: DeveloperSessionConfig
   spawnRuntime = configuration.spawn ?? (nodeSpawn as SpawnDeveloperRuntime);
   accountBridge = configuration.accountBridge ?? null;
   answersUserInput = configuration.answersUserInput ?? (() => true);
+  worktreesRoot = configuration.worktreesRoot ?? (() => '');
+  terminalEmit = configuration.onTerminalEvent ?? (() => undefined);
   accountSyncError = null;
   accountSyncChain = Promise.resolve();
   cachedStatus = null;
   lastAdvertised = null;
   stopAllDeveloperRuntimes();
+}
+
+export function worktreesRootArgs(location: string): string[] {
+  return location !== '' && path.isAbsolute(location) ? ['--worktrees-root', location] : [];
 }
 
 function isExecutableFile(candidate: string): boolean {
@@ -441,6 +479,12 @@ const CAPABILITY_FROM_HANDSHAKE: Record<
   thread_archive: () => true,
   thread_takeover: (cli) => cli.writerLease,
   reasoning_effort_ladder: (cli) => cli.reasoningEffortLadder,
+  thread_rename: (cli) => cli.threadRename,
+  thread_unarchive: (cli) => cli.threadUnarchive,
+  thread_pin: (cli) => cli.threadPin,
+  mcp_servers: (cli) => cli.mcp,
+  mcp_logs: (cli) => cli.mcpLogs,
+  terminals: (cli) => cli.terminals,
 };
 
 /**
@@ -599,7 +643,7 @@ function killProcess(server: RunningServer): void {
  * only the registry entry left the CLI running, and each retry started
  * another beside it.
  */
-function closeServer(server: RunningServer, error: Error): void {
+function closeServer(server: RunningServer, error: Error, announce = true): void {
   if (server.closed) return;
   server.closed = true;
   server.stopReason = error.message;
@@ -610,9 +654,59 @@ function closeServer(server: RunningServer, error: Error): void {
   }
   server.pending.clear();
   server.buffer = '';
-  if (servers.get(server.root.id) === server) {
+  if (announce && servers.get(server.root.id) === server) {
     emit(server.root.id, { type: 'runtime-stopped', message: error.message });
   }
+}
+
+/**
+ * Whether the server is doing anything a restart would cut short: a turn, an
+ * approval or question it waits on, a terminal, a setup script, or a request
+ * still unanswered.
+ */
+function serverBusy(server: RunningServer): boolean {
+  return (
+    server.activeTurns.size > 0 ||
+    server.terminals.size > 0 ||
+    server.setups.size > 0 ||
+    server.pending.size > 0
+  );
+}
+
+/**
+ * Ends a server started with a worktree location the user has since changed,
+ * once nothing on it would be interrupted. The next request starts its
+ * replacement with the new location. Nothing was running, so no session hears
+ * that its runtime stopped.
+ */
+function restartIfStale(server: RunningServer): void {
+  if (server.closed || server.worktreesRoot === null) return;
+  if (server.worktreesRoot === worktreesRoot() || serverBusy(server)) return;
+  closeServer(server, new Error('The AGI CLI restarted to use the new worktree location.'), false);
+}
+
+function countSetup(server: RunningServer, worktreeId: string, change: 1 | -1): void {
+  const count = (server.setups.get(worktreeId) ?? 0) + change;
+  if (count > 0) server.setups.set(worktreeId, count);
+  else server.setups.delete(worktreeId);
+}
+
+/**
+ * Applies a change that may leave the server idle, then looks again once the
+ * caller has had its turn to send a follow-up request on the same server.
+ */
+function settle(server: RunningServer, change: () => unknown): void {
+  change();
+  if (server.worktreesRoot === null || server.worktreesRoot === worktreesRoot()) return;
+  setTimeout(() => restartIfStale(server), 0);
+}
+
+/**
+ * The saved worktree location changed: every CLI started with the old one is
+ * restarted, now when idle, otherwise as soon as its last session settles.
+ */
+export function applyWorktreesRootChange(): void {
+  for (const server of [...servers.values()]) restartIfStale(server);
 }
 
 function ownsRuntime(server: RunningServer): boolean {
@@ -678,7 +772,7 @@ function acceptLine(server: RunningServer, line: string): void {
     const pending = server.pending.get(parsed['id']);
     if (!pending) return;
     clearTimeout(pending.timer);
-    server.pending.delete(parsed['id']);
+    settle(server, () => server.pending.delete(parsed['id'] as number));
     const failure = parsed['error'];
     if (isRecord(failure)) {
       const message = readString(failure, 'message') ?? 'The AGI CLI refused that request.';
@@ -841,6 +935,8 @@ function worktreeSetupEvent(
 ): void {
   const worktreeId = readString(params, 'worktreeId');
   const threadId = readString(params, 'threadId');
+  if (worktreeId && method === 'worktree/managed/setup/finished')
+    settle(server, () => countSetup(server, worktreeId, -1));
   if (!worktreeId || !threadId) return;
   const rootId = worktreeRootId(server.root.id, worktreeId);
   if (method === 'worktree/managed/setup/log') {
@@ -871,12 +967,31 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     worktreeSetupEvent(server, method, params);
     return;
   }
+  if (method === 'terminal/output' || method === 'terminal/exited') {
+    const terminalId = readString(params, 'terminalId');
+    if (!terminalId || terminalRoots.get(terminalId) !== server.root.id) return;
+    if (method === 'terminal/output') {
+      const data = params['data'];
+      if (typeof data === 'string') terminalEmit({ rootId: server.root.id, terminalId, data });
+      return;
+    }
+    terminalRoots.delete(terminalId);
+    settle(server, () => server.terminals.delete(terminalId));
+    const code = params['code'];
+    terminalEmit({
+      rootId: server.root.id,
+      terminalId,
+      exitCode: typeof code === 'number' ? code : null,
+    });
+    return;
+  }
 
   const threadId = readString(params, 'threadId');
   const turnId = readString(params, 'turnId');
   if (!threadId || !turnId) return;
 
   if (method === 'turn/started') {
+    server.activeTurns.add(turnId);
     emit(server.root.id, { type: 'turn-started', threadId, turnId });
     return;
   }
@@ -897,6 +1012,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
   if (method === 'approval/requested') {
     const approval = toApprovalRequest(params);
     if (!approval) return;
+    server.activeTurns.add(turnId);
     emit(server.root.id, { type: 'approval-requested', threadId, turnId, ...approval });
     return;
   }
@@ -904,6 +1020,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     const requestId = readString(params, 'requestId');
     const question = readString(params, 'question');
     if (!requestId || !question) return;
+    server.activeTurns.add(turnId);
     if (!answersUserInput()) {
       void requestOrNull(server, 'userInput/respond', {
         threadId,
@@ -923,6 +1040,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
 
   const outcome = turnOutcome(method);
   if (!outcome) return;
+  settle(server, () => server.activeTurns.delete(turnId));
   const unsentSteers = readNumber(params, 'unsentSteers') ?? 0;
   const contextTokens = readCursor(params, 'contextTokens');
   emit(server.root.id, {
@@ -981,7 +1099,7 @@ function request(
   const id = server.nextId++;
   return new Promise<unknown>((resolve, reject) => {
     const timer = setTimeout(() => {
-      server.pending.delete(id);
+      settle(server, () => server.pending.delete(id));
       reject(new Error(`The AGI CLI did not answer ${method} in time.`));
     }, timeoutMs);
     server.pending.set(id, { resolve, reject, timer });
@@ -1216,6 +1334,13 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
     revertRestore: capabilities['revertRestore'] === true,
     mcpApproval: capabilities['mcpApproval'] === true,
     reasoningEffortLadder: capabilities['reasoningEffortLadder'] === true,
+    threadRename: capabilities['threadRename'] === true,
+    threadUnarchive: capabilities['threadUnarchive'] === true,
+    threadPin: capabilities['threadPin'] === true,
+    mcpLogs: capabilities['mcpLogs'] === true,
+    terminals: capabilities['terminals'] === true,
+    mcp: capabilities['mcp'] === true,
+    mcpSetEnabled: capabilities['mcpSetEnabled'] === true,
   };
   lastAdvertised = server.advertised;
 }
@@ -1280,14 +1405,16 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
     throw new DeveloperAgentNotAllowedError(
       'Allow commands in this folder again to provide its current consent.',
     );
+  const location = !remote && source === 'bundled' ? worktreesRoot() : null;
   const localArgs =
-    source === 'bundled'
+    location !== null
       ? [
           'app-server',
           '--workspace-consent',
           root.path,
           '--workspace-consent-at-ms',
           String(consentAt),
+          ...worktreesRootArgs(location),
         ]
       : ['app-server'];
   let child: ChildProcessWithoutNullStreams;
@@ -1321,6 +1448,10 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
     exitObserved,
     confirmExit,
     advertised: null,
+    worktreesRoot: location,
+    activeTurns: new Set(),
+    terminals: new Set(),
+    setups: new Map(),
   };
 
   servers.set(root.id, server);
@@ -1390,7 +1521,14 @@ function requireAdvertised(
     | 'revertRestore'
     | 'threadCompact'
     | 'writerLease'
-    | 'mcpApproval',
+    | 'mcpApproval'
+    | 'threadRename'
+    | 'threadUnarchive'
+    | 'threadPin'
+    | 'mcpLogs'
+    | 'terminals'
+    | 'mcp'
+    | 'mcpSetEnabled',
 ): void {
   if (!server.advertised?.[feature]) {
     const { binary, source } = selectRuntimeBinary();
@@ -1549,6 +1687,10 @@ function toSession(rootId: string, raw: unknown): LocalDeveloperSession | null {
     updatedAt: readString(raw, 'updatedAt') ?? '',
     origin: (readString(raw, 'createdBy') ?? 'cli') as DeveloperSessionSource,
     ...(readString(raw, 'location') === 'cloud' ? { location: 'cloud' as const } : {}),
+    ...(raw['pinned'] === true ? { pinned: true } : {}),
+    ...(typeof raw['archivedAt'] === 'number' && Number.isFinite(raw['archivedAt'])
+      ? { archivedAt: raw['archivedAt'] }
+      : {}),
   };
 }
 
@@ -1561,6 +1703,7 @@ function requireSession(rootId: string, raw: unknown): LocalDeveloperSession {
 async function listForRoot(
   root: WorkspaceRoot,
   includeCloud: boolean,
+  includeArchived = false,
 ): Promise<DeveloperSessionGroup[]> {
   const remote = hasSshEnvironment(root.id);
   const { git, unavailableReason } = remote
@@ -1585,6 +1728,7 @@ async function listForRoot(
     const result = await request(server, 'thread/list', {
       cwd: root.path,
       ...(includeCloud ? { includeCloud } : {}),
+      ...(includeArchived ? { includeArchived } : {}),
     });
     const threads = isRecord(result) ? result['threads'] : null;
     if (Array.isArray(threads)) {
@@ -1643,6 +1787,141 @@ async function serversAwaitingApproval(
 ): Promise<DeveloperMcpServerAwaitingApproval[]> {
   if (!server.advertised?.mcpApproval) return [];
   return toAwaitingApproval(await requestOrNull(server, 'mcp/list'));
+}
+
+function terminalSize(cols: number, rows: number): { cols: number; rows: number } {
+  const clamp = (value: number, max: number) =>
+    Math.min(max, Math.max(TERMINAL_MIN_SIZE, Math.round(Number.isFinite(value) ? value : 0)));
+  return { cols: clamp(cols, TERMINAL_MAX_COLUMNS), rows: clamp(rows, TERMINAL_MAX_ROWS) };
+}
+
+export async function openDeveloperTerminal(
+  rootId: string,
+  cols: number,
+  rows: number,
+): Promise<{ terminalId: string }> {
+  const root = await resolveRoot(rootId);
+  if (hasSshEnvironment(rootId)) {
+    throw new DeveloperRuntimeUnavailableError('Terminals open only for folders on this computer.');
+  }
+  const server = await readyServer(root);
+  requireAdvertised(server, 'terminals');
+  const result = await request(server, 'terminal/open', {
+    cwd: root.path,
+    ...terminalSize(cols, rows),
+  });
+  const terminalId = isRecord(result) ? readString(result, 'terminalId') : null;
+  if (!terminalId) throw new Error('The AGI CLI did not open a terminal.');
+  terminalRoots.set(terminalId, rootId);
+  server.terminals.add(terminalId);
+  return { terminalId };
+}
+
+async function terminalServer(rootId: string, terminalId: string): Promise<RunningServer> {
+  if (terminalRoots.get(terminalId) !== rootId) {
+    throw new DeveloperRuntimeUnavailableError('That terminal has closed.');
+  }
+  return readyServer(await resolveRoot(rootId));
+}
+
+export async function writeDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  data: string,
+): Promise<boolean> {
+  if (data.length > TERMINAL_WRITE_LIMIT) throw new Error('That is too much to type at once.');
+  await request(await terminalServer(rootId, terminalId), 'terminal/write', { terminalId, data });
+  return true;
+}
+
+export async function resizeDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  cols: number,
+  rows: number,
+): Promise<boolean> {
+  await request(await terminalServer(rootId, terminalId), 'terminal/resize', {
+    terminalId,
+    ...terminalSize(cols, rows),
+  });
+  return true;
+}
+
+export async function closeDeveloperTerminal(rootId: string, terminalId: string): Promise<boolean> {
+  if (terminalRoots.get(terminalId) !== rootId) return true;
+  terminalRoots.delete(terminalId);
+  const server = await readyServer(await resolveRoot(rootId));
+  await requestOrNull(server, 'terminal/close', { terminalId });
+  settle(server, () => server.terminals.delete(terminalId));
+  return true;
+}
+
+/** Whether the CLI this shell last heard from serves MCP servers on this computer. */
+export function localMcpAvailable(): boolean {
+  return lastAdvertised?.mcp === true;
+}
+
+export interface DeveloperMcpServerInput {
+  name: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  transport?: 'http' | 'sse';
+  env?: Record<string, string>;
+}
+
+async function mcpServer(rootId: string): Promise<RunningServer> {
+  const server = await readyServer(await resolveRoot(rootId));
+  requireAdvertised(server, 'mcp');
+  return server;
+}
+
+export async function listDeveloperMcpServers(rootId: string): Promise<unknown[]> {
+  const result = await request(await mcpServer(rootId), 'mcp/list', {});
+  return isRecord(result) && Array.isArray(result['servers']) ? result['servers'] : [];
+}
+
+export async function addDeveloperMcpServer(
+  rootId: string,
+  input: DeveloperMcpServerInput,
+): Promise<unknown> {
+  return request(await mcpServer(rootId), 'mcp/add', { ...input });
+}
+
+export async function removeDeveloperMcpServer(rootId: string, name: string): Promise<unknown> {
+  return request(await mcpServer(rootId), 'mcp/remove', { name });
+}
+
+export async function setDeveloperMcpServerEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<unknown> {
+  const server = await mcpServer(rootId);
+  requireAdvertised(server, 'mcpSetEnabled');
+  return request(server, 'mcp/setEnabled', { name, enabled });
+}
+
+export async function testDeveloperMcpServer(rootId: string, name: string): Promise<unknown> {
+  const result = await request(await mcpServer(rootId), 'mcp/test', { name });
+  if (isRecord(result) && typeof result['elapsedMs'] === 'bigint') {
+    return { ...result, elapsedMs: Number(result['elapsedMs']) };
+  }
+  return result;
+}
+
+export async function developerMcpServerTools(rootId: string, name: string): Promise<unknown> {
+  return request(await mcpServer(rootId), 'mcp/tools', { name });
+}
+
+export async function developerMcpServerLogs(
+  rootId: string,
+  name: string,
+  limit: number,
+): Promise<unknown> {
+  const server = await mcpServer(rootId);
+  requireAdvertised(server, 'mcpLogs');
+  return request(server, 'mcp/logs', { name, limit });
 }
 
 /**
@@ -1945,12 +2224,14 @@ export async function readDeveloperModels(
 
 export async function listDeveloperSessions(
   includeRoot: (root: WorkspaceRoot) => boolean = () => true,
-  options: { includeCloud?: boolean } = {},
+  options: { includeCloud?: boolean; includeArchived?: boolean } = {},
 ): Promise<DeveloperSessionList> {
   const groups = await Promise.all(
     [...listRoots(), ...listSshRoots()]
       .filter(includeRoot)
-      .map((root) => listForRoot(root, options.includeCloud === true)),
+      .map((root) =>
+        listForRoot(root, options.includeCloud === true, options.includeArchived === true),
+      ),
   );
   return { groups: groups.flat() };
 }
@@ -2346,7 +2627,13 @@ export async function applyDeveloperWorktree(
 export async function runDeveloperWorktreeSetup(rootId: string, sha256: string): Promise<boolean> {
   const { parent, worktreeId } = requireWorktree(rootId);
   const server = await readyServer(parent);
-  await request(server, 'worktree/managed/setup/run', { worktreeId, sha256 });
+  countSetup(server, worktreeId, 1);
+  try {
+    await request(server, 'worktree/managed/setup/run', { worktreeId, sha256 });
+  } catch (error) {
+    settle(server, () => countSetup(server, worktreeId, -1));
+    throw error;
+  }
   return true;
 }
 
@@ -2506,6 +2793,48 @@ export async function archiveDeveloperThread(rootId: string, threadId: string): 
     throw new Error('The AGI CLI did not say it archived the session.');
   }
   return true;
+}
+
+export async function unarchiveDeveloperThread(rootId: string, threadId: string): Promise<boolean> {
+  const root = await resolveRoot(rootId);
+  const server = await readyServer(root);
+  requireAdvertised(server, 'threadUnarchive');
+  const result = await request(server, 'thread/unarchive', { threadId });
+  if (!isRecord(result) || result['acknowledged'] !== true) {
+    throw new Error('The AGI CLI did not say it restored the session.');
+  }
+  return true;
+}
+
+export async function renameDeveloperThread(
+  rootId: string,
+  threadId: string,
+  title: string,
+): Promise<LocalDeveloperSession> {
+  const trimmed = title.trim();
+  if (trimmed === '') throw new Error('A session needs a name.');
+  const root = await resolveRoot(rootId);
+  const server = await readyServer(root);
+  requireAdvertised(server, 'threadRename');
+  return requireSession(
+    rootId,
+    await request(server, 'thread/rename', { threadId, title: trimmed }),
+  );
+}
+
+export async function pinDeveloperThread(
+  rootId: string,
+  threadId: string,
+  pinned: boolean,
+): Promise<boolean> {
+  const root = await resolveRoot(rootId);
+  const server = await readyServer(root);
+  requireAdvertised(server, 'threadPin');
+  const result = await request(server, 'thread/pin', { threadId, pinned });
+  if (!isRecord(result) || result['pinned'] !== pinned) {
+    throw new Error('The AGI CLI did not say it changed the pin.');
+  }
+  return pinned;
 }
 
 /**

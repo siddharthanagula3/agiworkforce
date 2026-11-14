@@ -24,7 +24,7 @@ export const DEFAULT_TOOL_SCHEMA_BUDGET: ToolSchemaBudget = {
 
 export interface SelectToolSchemasInput {
   tools: readonly WebMcpToolDef[];
-  turnText: string;
+  turnText?: string;
   pinnedQualifiedNames?: readonly string[];
   budget?: Partial<ToolSchemaBudget>;
 }
@@ -94,7 +94,7 @@ function deferredEntry(tool: WebMcpToolDef): DeferredTool {
 export function selectToolSchemas(input: SelectToolSchemasInput): SelectedToolSchemas {
   const budget: ToolSchemaBudget = { ...DEFAULT_TOOL_SCHEMA_BUDGET, ...input.budget };
   const pinned = new Set(input.pinnedQualifiedNames ?? []);
-  const turn = words(input.turnText);
+  const turn = words(input.turnText ?? '');
 
   const ranked = input.tools
     .map((tool, index) => ({

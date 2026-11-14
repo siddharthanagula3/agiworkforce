@@ -102,6 +102,8 @@ vi.mock('@/lib/server/media-storage', () => ({
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   copyPrivateObjectIfUnchanged: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
+  createPrivateObjectWriter: vi.fn(),
   deleteObject: vi.fn(async () => undefined),
   deletePrivateObject: vi.fn(async () => undefined),
   isObjectStorageConfigured: () => true,

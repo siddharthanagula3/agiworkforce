@@ -1,7 +1,7 @@
 {
   "name": "@agiworkforce/local-runtime-contract",
   "version": "0.0.1",
-  "description": "Typed contract for the privileged Electron local runtime. Pure types and validation; performs no I/O.",
+  "description": "Typed contract for privileged desktop runtimes. Pure types and validation; performs no I/O.",
   "private": true,
   "type": "module",
   "exports": {

@@ -1,0 +1,40 @@
+{
+  "maxBytes": 26214400,
+  "allowedMimePrefixes": ["application/pdf", "text/", "application/json", "application/xml"],
+  "imageMimeTypes": [
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+    "image/heif"
+  ],
+  "deniedMimeTypes": ["image/svg+xml", "image/svg"],
+  "deniedExtensions": ["svg", "svgz"],
+  "imageExtensions": ["png", "jpg", "jpeg", "gif", "webp", "heic"],
+  "officeMimeTypes": [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+  ],
+  "officeExtensions": ["docx", "xlsx", "pptx"],
+  "textExtensions": [
+    "txt",
+    "md",
+    "csv",
+    "json",
+    "xml",
+    "js",
+    "jsx",
+    "ts",
+    "tsx",
+    "py",
+    "rs",
+    "go",
+    "java",
+    "html",
+    "css"
+  ],
+  "maxTextPreviewChars": 200000,
+  "fixedExtensions": ["pdf"]
+}

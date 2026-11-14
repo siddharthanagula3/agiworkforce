@@ -553,7 +553,48 @@ export async function switchLocalBranch(directory: string, branch: string): Prom
   return branch;
 }
 
-export async function pushLocalBranch(directory: string): Promise<LocalBranchPush> {
+export interface NewBranchRequest {
+  title: string;
+  prefix: string;
+}
+
+const NEW_BRANCH_SLUG_LENGTH = 48;
+
+export function branchSlug(title: string): string {
+  const slug = title
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7e]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, NEW_BRANCH_SLUG_LENGTH)
+    .replace(/-+$/g, '');
+  return slug === '' ? 'changes' : slug;
+}
+
+async function createBranchAtHead(root: string, request: NewBranchRequest): Promise<string> {
+  const base = `${request.prefix}${branchSlug(request.title)}`;
+  for (let attempt = 1; attempt <= 50; attempt += 1) {
+    const candidate = attempt === 1 ? base : `${base}-${attempt}`;
+    const valid = await gitOrNull(root, ['check-ref-format', '--branch', candidate]);
+    if (valid === null) throw new Error(`${candidate} is not a valid branch name.`);
+    const taken = await gitOrNull(root, [
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      `refs/heads/${candidate}`,
+    ]);
+    if (taken !== null) continue;
+    await git(root, ['switch', '-c', candidate]);
+    return candidate;
+  }
+  throw new Error(`Branches named ${base} already exist. Rename one and try again.`);
+}
+
+export async function pushLocalBranch(
+  directory: string,
+  newBranch?: NewBranchRequest,
+): Promise<LocalBranchPush> {
   const root = await findRepositoryRoot(directory);
   if (!root) throw new Error('This folder is not a git repository, so there is nothing to push.');
   const pushing: GitRunOptions = {
@@ -561,7 +602,8 @@ export async function pushLocalBranch(directory: string): Promise<LocalBranchPus
     systemConfig: true,
   };
   await assertHostGitAllowed(root, pushing);
-  const branch = await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']);
+  const current = await gitOrNull(root, ['symbolic-ref', '--short', '--quiet', 'HEAD']);
+  const branch = current ?? (newBranch ? await createBranchAtHead(root, newBranch) : null);
   if (!branch) throw new Error('Check out a branch before opening a pull request.');
   const remoteUrl = await gitOrNull(root, ['remote', 'get-url', PUSH_REMOTE]);
   if (!remoteUrl) throw new Error('This repository has no origin remote to push to.');

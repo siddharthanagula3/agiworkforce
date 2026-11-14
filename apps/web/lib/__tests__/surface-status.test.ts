@@ -82,6 +82,10 @@ describe('platforms of released surfaces', () => {
   it('adds a platform only when a surface that runs on it is released', () => {
     expect(releasedPlatforms(ONLY_WEB_RELEASED)).toEqual(['Web']);
     expect(releasedPlatforms(CLI_RELEASED)).toEqual(['Web', 'macOS', 'Windows', 'Linux']);
+    expect(releasedPlatforms({ ...ONLY_WEB_RELEASED, desktop: AVAILABLE_NOW_LABEL })).toEqual([
+      'Web',
+      'macOS',
+    ]);
     expect(releasedPlatforms(ALL_RELEASED)).toEqual([
       'Web',
       'macOS',

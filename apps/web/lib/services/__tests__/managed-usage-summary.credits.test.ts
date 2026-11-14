@@ -3,9 +3,11 @@ import {
   MANAGED_USAGE_LIMITS,
   MICROUSD_PER_CREDIT,
   getEffectivePlanCreditAllowance,
+  isEntitledSubscriptionStatus,
   parseManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/bonus-credit-service');
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
 type PricingModule = typeof import('@/lib/pricing');
 
 const INR_BASIC_PRICE_ID = 'price_fixture_basic_monthly_inr';
@@ -16,6 +18,7 @@ const {
   mockEntitledPlan,
   mockGetSpendableCredits,
   mockGetRollingUsage,
+  mockGetAccountOverage,
   mockGetFreeTrialPublicUsage,
   mockGetPrepaidCreditBalances,
 } = vi.hoisted(() => ({
@@ -24,6 +27,7 @@ const {
   mockEntitledPlan: vi.fn(),
   mockGetSpendableCredits: vi.fn(),
   mockGetRollingUsage: vi.fn(),
+  mockGetAccountOverage: vi.fn(),
   mockGetFreeTrialPublicUsage: vi.fn(),
   mockGetPrepaidCreditBalances: vi.fn(),
 }));
@@ -41,12 +45,22 @@ vi.mock('@/lib/services/usage-limit-promotion-service', async (importOriginal) =
   readSummaryPromotions: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/services/effective-subscription-service', () => ({
-  resolveEntitlementBundle: async (...args: unknown[]) => {
-    const subscription = await mockResolveEffectiveSubscription(...args);
-    return { subscription, plan: mockEntitledPlan() ?? subscription?.plan_tier ?? 'free' };
-  },
-}));
+vi.mock('@/lib/services/effective-subscription-service', async () => {
+  const { usageAllowanceSubject } = await vi.importActual<EntitlementResolutionModule>(
+    '@/lib/services/entitlement-resolution',
+  );
+  return {
+    resolveEntitlementBundle: async (...args: unknown[]) => {
+      const subscription = await mockResolveEffectiveSubscription(...args);
+      return {
+        subscription,
+        plan: mockEntitledPlan() ?? subscription?.plan_tier ?? 'free',
+        entitled: Boolean(subscription) && isEntitledSubscriptionStatus(subscription.status),
+      };
+    },
+    usageAllowanceSubject,
+  };
+});
 
 vi.mock('@/lib/server/spendable-credits', () => ({
   getSpendableCredits: mockGetSpendableCredits,
@@ -54,6 +68,7 @@ vi.mock('@/lib/server/spendable-credits', () => ({
 
 vi.mock('@/lib/server/rolling-usage', () => ({
   getRollingUsage: mockGetRollingUsage,
+  getAccountOverageMicrousd: mockGetAccountOverage,
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({
@@ -101,8 +116,13 @@ function subscription(planTier: string) {
 describe('managed usage summary, stated in credits', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSpendableCredits.mockResolvedValue({ availableCents: 400, overageEnabled: true });
+    mockGetSpendableCredits.mockResolvedValue({
+      availableCents: 400,
+      overageEnabled: true,
+      selfServe: true,
+    });
     mockGetRollingUsage.mockResolvedValue({ usedMicrousd: 0, usedCents: 0, oldestAt: null });
+    mockGetAccountOverage.mockResolvedValue(0);
     mockGetPrepaidCreditBalances.mockResolvedValue({
       bonusCredits: 500,
       purchasedCredits: 1_000,
@@ -139,7 +159,11 @@ describe('managed usage summary, stated in credits', () => {
     expect(summary.credits?.weekly).toMatchObject({ allowance: 500, used: 60, remaining: 440 });
     expect(summary.credits?.five_hour).toMatchObject({ allowance: 50, used: 15, remaining: 35 });
     expect(summary.credits?.flagship_weekly).toMatchObject({ allowance: 150, used: 20 });
-    expect(summary.credits?.purchased).toEqual({ remaining: 1_000, overage_enabled: true });
+    expect(summary.credits?.purchased).toEqual({
+      remaining: 1_000,
+      overage_enabled: true,
+      self_serve: true,
+    });
     expect(summary.credits?.bonus).toEqual({
       remaining: 500,
       next_expiry_at: '2026-12-01T00:00:00.000Z',
@@ -205,6 +229,43 @@ describe('managed usage summary, stated in credits', () => {
 
     expect(summary.plan_tier).toBe('pro');
     expect(summary.effective_plan_tier).toBe('free');
+  });
+
+  it('meters a lapsed paid plan on the Free ledger chat now serves it from, not on paid windows', async () => {
+    mockResolveEffectiveSubscription.mockResolvedValue({
+      ...subscription('max_15x'),
+      status: 'past_due',
+    });
+    mockEntitledPlan.mockReturnValueOnce('free');
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: credits(1_000),
+      credits_used_microusd: 0,
+      credits_remaining_microusd: credits(1_000),
+      period_start: null,
+      period_end: null,
+    });
+    mockGetFreeTrialPublicUsage.mockResolvedValue({
+      usagePercentage: 100,
+      resetAt: '2026-10-01T00:00:00.000Z',
+      sessionUsagePercentage: 100,
+      sessionResetAt: '2026-09-27T15:00:00.000Z',
+      weeklyUsagePercentage: 100,
+      weeklyResetAt: '2026-10-03T00:00:00.000Z',
+      hasUsageRemaining: false,
+      monthlyUsedMicrousd: credits(20),
+      weeklyUsedMicrousd: credits(15),
+      fiveHourUsedMicrousd: credits(2),
+    });
+
+    const summary = await getManagedUsageSummary(db, 'user-3');
+
+    expect(summary.plan_tier).toBe('max_15x');
+    expect(summary.subscription_status).toBe('past_due');
+    expect(summary.has_usage_remaining).toBe(false);
+    expect(summary.usage_percentage).toBe(100);
+    expect(summary.credits?.monthly).toMatchObject({ allowance: 20, remaining: 0 });
+    expect(summary).not.toHaveProperty('usage_allocation');
+    expect(mockGetRollingUsage).not.toHaveBeenCalled();
   });
 
   it('states an India web Basic subscriber in the budget their rupee price pays for', async () => {

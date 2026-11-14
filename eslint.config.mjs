@@ -353,6 +353,8 @@ export default [
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
+      'no-redeclare': 'off',
+      '@typescript-eslint/no-redeclare': 'error',
       'no-undef': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
