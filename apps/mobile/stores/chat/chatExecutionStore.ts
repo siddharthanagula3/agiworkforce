@@ -224,6 +224,12 @@ import {
   turnProducedNothing,
   type StreamFailure,
 } from '@/src/features/chat/utils/messageStreamError';
+import { CONTINUE_GENERATION_INSTRUCTION } from '@agiworkforce/unified-chat/continue-generation';
+import { continuableCloudModel } from '@/src/features/chat/utils/continuableAnswer';
+import {
+  repairContinuationSeam,
+  SEAM_INSPECTION_WINDOW,
+} from '@agiworkforce/unified-chat/continuation-seam';
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import {
   generatedFileArtifactsFromWire,
@@ -331,6 +337,7 @@ interface ExecutionState {
     guidance?: string,
   ) => Promise<void>;
   continuePausedCloudTurn: (conversationId: string, assistantMessageId: string) => Promise<void>;
+  continueCloudAnswer: (conversationId: string, assistantMessageId: string) => Promise<boolean>;
   answerToolInput: (
     conversationId: string,
     assistantMessageId: string,
@@ -1200,6 +1207,93 @@ function pathEndingAt(conversationId: string, leafMessageId: string | null): Cha
   });
 }
 
+type WireHistoryEntry = {
+  role: string;
+  content:
+    | string
+    | Array<{
+        type: string;
+        text?: string;
+        image_url?: { url: string };
+        file?: { asset_id: string };
+      }>;
+};
+
+function wireHistory(
+  messages: ChatMessage[],
+  executionMode: ConversationExecutionMode,
+  documentContextByMessage: ReadonlyMap<string, string[]> = new Map(),
+): WireHistoryEntry[] {
+  return messages
+    .filter((m) => !m.isStreaming)
+    .flatMap((m): WireHistoryEntry[] => {
+      const settled =
+        m.role === 'assistant'
+          ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
+          : null;
+      const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
+      const documentContext = documentContextByMessage.get(m.id);
+      const turnText = documentContext
+        ? [...documentContext, m.content].filter(Boolean).join('\n\n')
+        : m.content;
+      const replayedAttachments = m.attachments?.filter((a) =>
+        executionMode === 'cloud'
+          ? Boolean(a.assetId) ||
+            (a.mimeType.startsWith('image/') && /^(https:|data:)/i.test(a.url))
+          : a.mimeType.startsWith('image/'),
+      );
+      if (replayedAttachments && replayedAttachments.length > 0) {
+        return [
+          {
+            role: m.role,
+            content: [
+              ...(turnText ? [{ type: 'text' as const, text: turnText }] : []),
+              ...replayedAttachments.map((a) =>
+                a.assetId
+                  ? { type: 'file' as const, file: { asset_id: a.assetId } }
+                  : { type: 'image_url' as const, image_url: { url: a.url } },
+              ),
+            ],
+          },
+          ...settledTurn,
+        ];
+      }
+      return [{ role: m.role, content: turnText }, ...settledTurn];
+    });
+}
+
+const CONTINUE_FAILED_MESSAGE = 'This answer could not be continued. Try again.';
+
+type ContinuationFailure = Partial<
+  Pick<
+    ExecutionState,
+    'error' | 'failureCode' | 'paywallError' | 'providerConsentError' | 'freeCapacityError'
+  >
+>;
+
+function continuationFailure(error: unknown): ContinuationFailure {
+  if (error instanceof ApiPaywallError) {
+    return { paywallError: paywallErrorStateFromApiError(error) };
+  }
+  if (error instanceof CloudProviderConsentRequiredError) return { error: null };
+  const providerConsentError = providerConsentErrorStateFromError(error);
+  if (providerConsentError) {
+    return { error: providerConsentErrorMessage(providerConsentError), providerConsentError };
+  }
+  if (error instanceof ApiFreeCapacityError) {
+    return {
+      error: FREE_CAPACITY_BUSY_MESSAGE,
+      freeCapacityError: freeCapacityErrorStateFromApiError(error),
+    };
+  }
+  if (error instanceof ApiHttpError) {
+    const message = withFailureReference(error.message, error.requestId);
+    return { error: message, failureCode: error.code ? { message, code: error.code } : null };
+  }
+  if (error instanceof RemoteChatDisabledError) return { error: error.message };
+  return { error: CONTINUE_FAILED_MESSAGE };
+}
+
 /**
  * Gives a conversation that has only ever been linear the parent pointers its
  * history implies, so the turn about to be written has something to branch
@@ -1847,54 +1941,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     }
 
-    const historyMessages: Array<{
-      role: string;
-      content:
-        | string
-        | Array<{
-            type: string;
-            text?: string;
-            image_url?: { url: string };
-            file?: { asset_id: string };
-          }>;
-    }> = [
-      ...existingMessages
-        .filter((m) => !m.isStreaming)
-        .flatMap((m) => {
-          const settled =
-            m.role === 'assistant'
-              ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
-              : null;
-          const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
-          const documentContext = earlierDocumentContext.get(m.id);
-          const turnText = documentContext
-            ? [...documentContext, m.content].filter(Boolean).join('\n\n')
-            : m.content;
-          const replayedAttachments = m.attachments?.filter((a) =>
-            executionMode === 'cloud'
-              ? Boolean(a.assetId) ||
-                (a.mimeType.startsWith('image/') && /^(https:|data:)/i.test(a.url))
-              : a.mimeType.startsWith('image/'),
-          );
-          if (replayedAttachments && replayedAttachments.length > 0) {
-            return [
-              {
-                role: m.role,
-                content: [
-                  ...(turnText ? [{ type: 'text' as const, text: turnText }] : []),
-                  ...replayedAttachments.map((a) =>
-                    a.assetId
-                      ? { type: 'file' as const, file: { asset_id: a.assetId } }
-                      : { type: 'image_url' as const, image_url: { url: a.url } },
-                  ),
-                ],
-              },
-              ...settledTurn,
-            ];
-          }
-          return [{ role: m.role, content: turnText }, ...settledTurn];
-        }),
-    ];
+    const historyMessages = wireHistory(existingMessages, executionMode, earlierDocumentContext);
 
     if (
       isFreeQuotaChat &&
@@ -3843,6 +3890,311 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
       set({ ...streamingFlags() });
       void settlePhoneDeviceSteps(conversationId, assistantMessageId);
+      flushDeferredSend(conversationId);
+    }
+  },
+
+  continueCloudAnswer: async (conversationId, assistantMessageId) => {
+    if (abortControllers.has(conversationId) || streamingConversations.has(conversationId)) {
+      return false;
+    }
+    const msgStore = getConversationMessageStore(conversationId);
+    const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
+    if (!conversation) return false;
+    const thread = historyMessagesForConversation(conversationId, 'cloud');
+    const answer = thread[thread.length - 1];
+    if (!answer || answer.id !== assistantMessageId) return false;
+    const model = continuableCloudModel(conversation, answer);
+    if (!model) return false;
+
+    const accountEpoch = captureCloudAccountEpoch();
+    const { isClerkLoaded, isClerkSignedIn } = useAuthStore.getState();
+    if (accountEpoch === null || (FEATURES.auth && isClerkLoaded && !isClerkSignedIn)) {
+      set({ error: 'Sign in to use AGI Cloud.', paywallError: null });
+      return false;
+    }
+    const generation = cloudExecutionGeneration;
+    const isAccountCurrent = () =>
+      generation === cloudExecutionGeneration && isCloudAccountEpochCurrent(accountEpoch);
+    const provenance: MobileArtifactProvenance = { scope: 'cloud', ownerId: accountEpoch.ownerId };
+
+    const chatView = useChatViewStore.getState();
+    const viewSystemPrompt = buildChatViewSystemPrompt(
+      chatView.chatMode,
+      styleForConversation(chatView, conversationId),
+    );
+    const disabledConnectorIds = chatView.disabledConnectorIdsByConversation[conversationId] ?? [];
+    const messages: WireHistoryEntry[] = [
+      ...(viewSystemPrompt ? [{ role: 'system', content: viewSystemPrompt }] : []),
+      ...wireHistory(thread, 'cloud'),
+      { role: 'user', content: CONTINUE_GENERATION_INSTRUCTION },
+    ];
+
+    const seedContent = answer.content;
+    const priorReasoning = answer.reasoning ?? '';
+    const priorFinishReason = answer.metadata?.finishReason;
+    const controller = new AbortController();
+    abortControllers.set(conversationId, controller);
+    streamingConversations.add(conversationId);
+    cloudStreamingConversations.add(conversationId);
+    cancelledBeforeStream.delete(conversationId);
+    lastDeltaTimes.set(conversationId, Date.now());
+
+    const patchAnswer = (patch: (message: ChatMessage) => ChatMessage): ChatMessage[] => {
+      const store = getConversationMessageStore(conversationId);
+      const next = (store.getState().messages[conversationId] ?? []).map((m) =>
+        m.id === assistantMessageId ? patch(m) : m,
+      );
+      store.setState((s) => ({ messages: { ...s.messages, [conversationId]: next } }));
+      return next;
+    };
+    const releaseConversation = () => {
+      abortControllers.delete(conversationId);
+      streamingConversations.delete(conversationId);
+      cloudStreamingConversations.delete(conversationId);
+      activeCloudRuns.delete(conversationId);
+    };
+
+    patchAnswer((m) => ({
+      ...m,
+      isStreaming: true,
+      metadata: { ...m.metadata, finishReason: undefined },
+    }));
+    set({
+      ...streamingFlags(),
+      streamingContent: seedContent,
+      streamingReasoning: priorReasoning,
+      error: null,
+      failureCode: null,
+      paywallError: null,
+    });
+
+    let continuationRaw = '';
+    let continuationText = '';
+    let continuationReasoning = '';
+    let unacknowledgedPublicText = '';
+    let seam: { consumed: number; repaired: string } | null = null;
+    let finishReason: string | undefined;
+    let streamError: StreamFailure | undefined;
+    let cloudAgentRun: ManagedCloudAgentRunReference | undefined;
+
+    const continuation = (final: boolean): string => {
+      if (!seam) {
+        if (!final && continuationText.length < SEAM_INSPECTION_WINDOW) return '';
+        seam = {
+          consumed: continuationText.length,
+          repaired: repairContinuationSeam(seedContent, continuationText),
+        };
+      }
+      return seam.repaired + continuationText.slice(seam.consumed);
+    };
+    const reasoning = () =>
+      [priorReasoning, continuationReasoning].filter(Boolean).join('\n\n') || undefined;
+
+    try {
+      await streamChat(
+        {
+          model,
+          messages,
+          stream: true,
+          operationId: uuidv7(),
+          ...(CLOUD_CONVERSATION_ID.test(conversationId)
+            ? { conversation_id: conversationId }
+            : {}),
+          ...(disabledConnectorIds.length > 0
+            ? { disabled_connector_ids: disabledConnectorIds }
+            : {}),
+          ...(conversation.temporary === true &&
+          !useSettingsStore.getState().temporaryChatPersonalized
+            ? { personalization: false as const }
+            : {}),
+        },
+        {
+          onReconnecting: () => markReconnecting(set, assistantMessageId, true),
+          onRunReference: (reference) => {
+            if (controller.signal.aborted || !isAccountCurrent()) return;
+            const run = {
+              ...reference,
+              lastSequence: Math.max(cloudAgentRun?.lastSequence ?? -1, reference.lastSequence),
+            };
+            cloudAgentRun = run;
+            activeCloudRuns.set(conversationId, { ...run });
+            patchAnswer((m) => ({ ...m, metadata: { ...m.metadata, cloudAgentRun: { ...run } } }));
+          },
+          onDelta: (delta: StreamDelta) => {
+            if (controller.signal.aborted || !isAccountCurrent()) return;
+            markReconnecting(set, assistantMessageId, false);
+            lastDeltaTimes.set(conversationId, Date.now());
+
+            let chunk = delta.content;
+            const canonicalText =
+              delta.x_agent_event?.event.type === 'text-delta'
+                ? delta.x_agent_event.event.delta
+                : undefined;
+            if (delta.durableReplay && canonicalText !== undefined) {
+              const reconciled = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                canonicalText,
+              );
+              unacknowledgedPublicText = reconciled.pending;
+              chunk = reconciled.unmatchedIncoming;
+            }
+            if (chunk) {
+              const previousText = continuationText;
+              continuationRaw += chunk;
+              const parsed = parseLocalThinking(continuationRaw);
+              // The parser trims leading whitespace, which here is the model's
+              // own word or paragraph boundary with the text it continues.
+              const leading = parsed.hasReasoning ? '' : (/^\s+/.exec(continuationRaw)?.[0] ?? '');
+              continuationText = leading + parsed.content;
+              continuationReasoning = parsed.reasoning;
+              if (!delta.durableReplay && continuationText.startsWith(previousText)) {
+                unacknowledgedPublicText += continuationText.slice(previousText.length);
+              }
+            }
+            if (!delta.durableReplay && canonicalText !== undefined) {
+              unacknowledgedPublicText = reconcileManagedCloudPublicText(
+                unacknowledgedPublicText,
+                canonicalText,
+              ).pending;
+            }
+            if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
+              finishReason = delta.finish_reason;
+            }
+            streamError ??= parseStreamFailure(delta.x_stream_error);
+
+            const content = seedContent + continuation(false);
+            const nextReasoning = reasoning();
+            set({ streamingContent: content, streamingReasoning: nextReasoning ?? '' });
+            patchAnswer((m) => ({ ...m, content, reasoning: nextReasoning, isStreaming: true }));
+          },
+          onDone: () => {
+            markReconnecting(set, assistantMessageId, false);
+            if (controller.signal.aborted || !isAccountCurrent()) return;
+            const added = continuation(true);
+            releaseConversation();
+            const failed = streamError !== undefined || !added.trim();
+            const content = seedContent + added;
+            const completedAt = new Date().toISOString();
+            let artifacts: NonNullable<ChatMessage['artifacts']> = [];
+            if (added) {
+              const conversationTitle =
+                getConversationMessageStore(conversationId)
+                  .getState()
+                  .conversations.find((c) => c.id === conversationId)?.title ?? '';
+              artifacts = mergeDerivedAndGeneratedFileArtifacts(
+                deriveChatMessageArtifacts(
+                  content,
+                  conversationId,
+                  assistantMessageId,
+                  completedAt,
+                ),
+                generatedFileArtifactsFromWire(
+                  generatedFileWireFromMetadata(answer.metadata?.generatedFiles),
+                  completedAt,
+                ),
+              );
+              captureArtifactsFromMessage(
+                content,
+                assistantMessageId,
+                conversationId,
+                conversationTitle,
+                completedAt,
+                provenance,
+              );
+            }
+            const settled = patchAnswer((m) => ({
+              ...m,
+              content,
+              reasoning: reasoning(),
+              isStreaming: false,
+              ...(artifacts.length > 0 ? { artifacts } : {}),
+              metadata: {
+                ...m.metadata,
+                finishReason: failed ? priorFinishReason : finishReason,
+                ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+              },
+            }));
+            if (added) {
+              getConversationMessageStore(conversationId).setState((s) => ({
+                conversations: s.conversations.map((c) =>
+                  c.id === conversationId
+                    ? { ...c, lastMessage: content.slice(0, 100), updatedAt: completedAt }
+                    : c,
+                ),
+              }));
+              pushCloudAssistantUpdate(conversationId, settled, assistantMessageId);
+            }
+            set({
+              ...streamingFlags(),
+              streamingContent: '',
+              streamingReasoning: '',
+              ...(failed
+                ? {
+                    error: streamError
+                      ? withFailureReference(streamError.message, streamError.requestId)
+                      : CONTINUE_FAILED_MESSAGE,
+                  }
+                : {}),
+            });
+          },
+          onError: (error: Error) => {
+            markReconnecting(set, assistantMessageId, false);
+            if (controller.signal.aborted || !isAccountCurrent()) return;
+            releaseConversation();
+            const added = continuation(true);
+            const settled = patchAnswer((m) => ({
+              ...m,
+              content: seedContent + added,
+              reasoning: reasoning(),
+              isStreaming: false,
+              metadata: {
+                ...m.metadata,
+                finishReason: priorFinishReason,
+                ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+              },
+            }));
+            if (added) pushCloudAssistantUpdate(conversationId, settled, assistantMessageId);
+            set({
+              ...streamingFlags(),
+              streamingContent: '',
+              streamingReasoning: '',
+              ...continuationFailure(error),
+            });
+          },
+        },
+        controller.signal,
+        { ignorePickerSpeed: true, purpose: 'continue' },
+      );
+      return true;
+    } catch (caughtErr) {
+      if (!isAccountCurrent()) return true;
+      if (!controller.signal.aborted) set(continuationFailure(caughtErr));
+      return true;
+    } finally {
+      lastDeltaTimes.delete(conversationId);
+      if (abortControllers.get(conversationId) === controller) {
+        abortControllers.delete(conversationId);
+      }
+      streamingConversations.delete(conversationId);
+      cloudStreamingConversations.delete(conversationId);
+      if (isAccountCurrent()) {
+        const stillStreaming = (
+          getConversationMessageStore(conversationId).getState().messages[conversationId] ?? []
+        ).some((m) => m.id === assistantMessageId && m.isStreaming);
+        if (stillStreaming) {
+          const settled = patchAnswer((m) => ({
+            ...m,
+            isStreaming: false,
+            metadata: {
+              ...m.metadata,
+              finishReason: controller.signal.aborted ? 'stopped' : priorFinishReason,
+            },
+          }));
+          pushCloudAssistantUpdate(conversationId, settled, assistantMessageId);
+        }
+      }
+      set({ ...streamingFlags() });
       flushDeferredSend(conversationId);
     }
   },

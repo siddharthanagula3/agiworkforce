@@ -126,6 +126,7 @@ import {
   useModelInstallStore,
 } from '@/src/features/model-picker/installStore';
 import { visibleThreadFor } from '@/src/features/chat/utils/conversationThread';
+import { continuableCloudModel } from '@/src/features/chat/utils/continuableAnswer';
 import {
   captureImageAssetsFromCamera,
   imageAssetsToChatAttachments,
@@ -263,6 +264,7 @@ export default function ChatScreen() {
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setMessageReaction = useChatStore((s) => s.setMessageReaction);
   const retryMessage = useChatStore((s) => s.retryMessage);
+  const continueCloudAnswer = useChatStore((s) => s.continueCloudAnswer);
   const resumeResearch = useChatStore((s) => s.resumeResearch);
   const editMessage = useChatStore((s) => s.editMessage);
   const resolveToolApproval = useChatStore((s) => s.resolveToolApproval);
@@ -1521,6 +1523,25 @@ export default function ChatScreen() {
     ],
   );
 
+  const continuableMessageId = useMemo(() => {
+    const lastVisibleMessage = conversationMessages[conversationMessages.length - 1];
+    return !isStreaming &&
+      conversation &&
+      lastVisibleMessage &&
+      continuableCloudModel(conversation, lastVisibleMessage)
+      ? lastVisibleMessage.id
+      : null;
+  }, [conversation, conversationMessages, isStreaming]);
+
+  const handleContinueMessage = useCallback(
+    (messageId: string) => {
+      if (!id) return;
+      stopSpeaking();
+      void continueCloudAnswer(id, messageId);
+    },
+    [continueCloudAnswer, id, stopSpeaking],
+  );
+
   const handleRetryMessage = useCallback(
     (messageId: string) => {
       if (!id) return;
@@ -1994,6 +2015,8 @@ export default function ChatScreen() {
               onReaction={handleReaction}
               onRetryMessage={handleRetryMessage}
               onRetryWithModel={handleRetryWithModel}
+              continuableMessageId={continuableMessageId}
+              onContinueMessage={handleContinueMessage}
               onBranch={conversation?.temporary ? undefined : handleBranchFromMessage}
               onScheduleMessage={
                 conversationExecutionMode === 'cloud' && !conversation?.temporary

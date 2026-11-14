@@ -42,11 +42,10 @@ nothing is left.
 
 - Done when: A code block can be downloaded as a source file with a sensible extension.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -67,22 +66,20 @@ nothing is left.
 
 - Done when: Changed lines in a code suggestion are visually highlighted (added/removed).
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
 ## S21.10: Diff formatting.
 
 - Done when: Diffs render with diff formatting (+/- lines coloured, hunks readable).
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
 ## S21.12: Run-code action.

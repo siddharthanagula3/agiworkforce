@@ -48,7 +48,10 @@ import {
   readModelSubstitution,
   type ModelSubstitution,
 } from '@/src/features/chat/utils/fallbackNotice';
-import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
+import {
+  createManagedChatIdempotencyKey,
+  type ManagedChatPurpose,
+} from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudAgentRunClient,
   parseToolStatusDelta,
@@ -455,6 +458,8 @@ export interface FreeQuotaStreamRequest {
   }>;
 }
 
+type CompletionPurpose = Extract<ManagedChatPurpose, 'send' | 'continue'>;
+
 async function attemptStream(
   body:
     | InitialStreamRequest
@@ -467,6 +472,7 @@ async function attemptStream(
   account: CloudAccountEpoch,
   path: string = COMPLETIONS_PATH,
   sessionRecovered = false,
+  purpose: CompletionPurpose = 'send',
 ): Promise<boolean> {
   assertCloudAccountEpochCurrent(account);
   const token = await getAuthToken();
@@ -506,7 +512,7 @@ async function attemptStream(
             path === TOOL_INPUT_RESUME_PATH ||
             path === DEVICE_STEP_RESUME_PATH
               ? 'tool-resume'
-              : 'send',
+              : purpose,
           operationId,
         }),
         Authorization: `Bearer ${token}`,
@@ -526,7 +532,7 @@ async function attemptStream(
       const recovered = await recoverStreamSession(account);
       assertCloudAccountEpochCurrent(account);
       if (recovered) {
-        return attemptStream(body, callbacks, signal, account, path, true);
+        return attemptStream(body, callbacks, signal, account, path, true, purpose);
       }
     }
 
@@ -708,6 +714,11 @@ function withDeviceTimeZone(body: InitialStreamRequest): InitialStreamRequest {
 
 export interface StreamChatOptions {
   ignorePickerSpeed?: boolean;
+  /**
+   * The gateway keeps its adaptive response budget off for a `continue`, so a
+   * turn cut off by that budget is not cut off again at the same point.
+   */
+  purpose?: CompletionPurpose;
 }
 
 export async function streamChat(
@@ -916,7 +927,15 @@ export async function streamChat(
     }
 
     try {
-      const completed = await attemptStream(request, timedCallbacks, combinedSignal, account);
+      const completed = await attemptStream(
+        request,
+        timedCallbacks,
+        combinedSignal,
+        account,
+        COMPLETIONS_PATH,
+        false,
+        options.purpose,
+      );
       if (completed) {
         clearTimeout(timeoutId);
         return;

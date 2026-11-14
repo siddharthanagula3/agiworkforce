@@ -15,6 +15,7 @@
     "./task-display": "./src/components/tasks/task-display.ts",
     "./assistant-fence": "./src/components/markdown/assistantFence.ts",
     "./assistant-fence-edits": "./src/components/markdown/assistantFenceEdits.ts",
+    "./continue-generation": "./src/lib/continue-generation.ts",
     "./continuation-seam": "./src/lib/continuation-seam.ts",
     "./markdown-document": "./src/components/markdown/markdownDocument.ts",
     "./math-markup": "./src/lib/math-markup.ts",
