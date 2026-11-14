@@ -179,6 +179,7 @@ import { useArtifactStore } from '@/src/features/artifacts/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   DEFAULT_LOCAL_MODEL_ID,
+  getDisplayName,
   getModelById,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
@@ -331,6 +332,25 @@ describe('MessageBubble model label', () => {
 
     expect(getByText(`AGI Cloud · ${getModelById(cloudModel.id)?.name}`)).toBeTruthy();
     expect(queryByText(/Local Mode/)).toBeNull();
+  });
+
+  it('names a picked Cloud model that is not its provider preview model', () => {
+    const pickedModel = requireMobileCloudModel(
+      (model) => getModelById(model.id) === undefined,
+      'Cloud model outside the per-provider preview list',
+    );
+    const message: ChatMessage = {
+      id: 'm-cloud-picked',
+      role: 'assistant',
+      content: 'Answered by the picked model.',
+      createdAt: new Date().toISOString(),
+      model: pickedModel.id,
+      metadata: { requestedModel: pickedModel.id, resolvedModel: pickedModel.id },
+    };
+
+    const { getByText } = render(<MessageBubble message={message} />);
+
+    expect(getByText(`AGI Cloud · ${getDisplayName(pickedModel.id)}`)).toBeTruthy();
   });
 
   it('renders canonical Cloud activity once and suppresses duplicate legacy step/tool rows', () => {

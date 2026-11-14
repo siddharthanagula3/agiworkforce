@@ -394,6 +394,12 @@ const SUBAGENT_WAIT_LIMIT: std::time::Duration = std::time::Duration::from_secs(
 
 const ABANDONED_SETTLE_LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
 
+/// Stack for a thread that runs a whole agent turn on its own runtime. The
+/// turn's future is polled on that thread, and the 2 MiB a spawned thread gets
+/// by default overflowed in an unoptimized build once a child asked for an
+/// approval. The main thread, which runs the same loop, has 8 MiB.
+pub(crate) const AGENT_THREAD_STACK_BYTES: usize = 16 * 1024 * 1024;
+
 /// Maximum subagent nesting depth. The root interactive session is depth 0; a
 /// subagent it spawns runs at depth 1, and so on. Spawning is refused once a
 /// session at this depth would create a deeper child, bounding the subagent
@@ -661,6 +667,7 @@ impl SubagentManager {
         // This avoids the `Send` requirement of `tokio::spawn`.
         let handle = thread::Builder::new()
             .name(format!("subagent-{}", task_id))
+            .stack_size(AGENT_THREAD_STACK_BYTES)
             .spawn(move || {
                 let rt = tokio::runtime::Builder::new_current_thread()
                     .enable_all()

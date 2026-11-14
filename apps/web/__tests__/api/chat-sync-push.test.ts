@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+type WorkspaceGateModule = typeof import('@/lib/managed-compute-gate');
+
 const queryMock = vi.fn();
 
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<WorkspaceGateModule>()),
+  buildChatSyncGateResponse: vi.fn(async () => null),
+}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({ db: { query: queryMock }, userId: 'u1' })),
 }));

@@ -315,6 +315,50 @@ svg + .menuRowLabel {
   padding-bottom: 5px;
 }
 
+.railLocalItem {
+  position: relative;
+}
+
+.railLocalItem > .railLocalRow {
+  padding-right: 36px;
+}
+
+.railRowMenu {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  opacity: 0;
+}
+
+.railLocalItem:hover .railRowMenu,
+.railLocalItem:focus-within .railRowMenu,
+.railRowMenu[data-state='open'] {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .railRowMenu {
+    opacity: 1;
+  }
+}
+
+.railSectionAction {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--chat-radius-sm);
+  background: transparent;
+  color: var(--chat-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.railSectionAction:hover {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
 .railLocalText {
   display: flex;
   overflow: hidden;
@@ -2846,6 +2890,32 @@ svg + .menuRowLabel {
   color: var(--chat-text-secondary);
   font-size: 12px;
   line-height: 21px;
+}
+
+.ptyScreen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--chat-bg);
+  color: var(--chat-text-primary);
+  font-family: var(--chat-font-mono);
+  /* xterm draws its selection on canvas; it reads this as a resolved colour. */
+  caret-color: var(--chat-border-strong);
+}
+
+.ptyViewport {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0 4px 16px;
+}
+
+.ptyStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
 }
 
 @media (max-width: 767px) {

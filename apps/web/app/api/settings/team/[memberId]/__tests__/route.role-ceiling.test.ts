@@ -48,6 +48,7 @@ vi.mock('@/lib/services/deprovision-service', () => ({
 vi.mock('@/lib/server/identity', () => ({
   getRequestIdentity: vi.fn(async () => null),
   getIdentityProvider: vi.fn(() => ({})),
+  getIdentityAuthorizedParties: vi.fn(() => []),
 }));
 vi.mock('@/lib/server/request-context-cache', () => ({
   getCachedActiveOrganizationId: vi.fn(async () => null),

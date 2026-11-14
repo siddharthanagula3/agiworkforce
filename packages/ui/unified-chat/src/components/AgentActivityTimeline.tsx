@@ -93,6 +93,12 @@ export interface AgentActivityTimelineProps {
   /** Actions for that failure, rendered beside the summary line. */
   failureActions?: ReactNode;
   /**
+   * The number of sources the finished turn lists under its answer. A search
+   * reports only the results it rendered, so the answer's own list is the count
+   * both places show.
+   */
+  sourceCount?: number;
+  /**
    * The picture a screen step returned, as a data URL, looked up by tool call
    * id. Only the machine that took the shot has one, so every other surface
    * renders the same step without an image rather than a broken one.
@@ -328,10 +334,16 @@ function isSearchOnlyRun(entries: readonly AgentActivityEntry[]): boolean {
 }
 
 function totalSearchSources(entries: readonly AgentActivityEntry[]): number {
-  return entries.reduce((total, entry) => {
-    if (entry.kind !== 'tool' || entry.category !== 'web-search') return total;
-    return total + (entry.sources?.length ?? 0);
-  }, 0);
+  const urls = new Set<string>();
+  let unkeyed = 0;
+  for (const entry of entries) {
+    if (entry.kind !== 'tool' || entry.category !== 'web-search') continue;
+    for (const source of entry.sources ?? []) {
+      if (source.url) urls.add(source.url);
+      else unkeyed += 1;
+    }
+  }
+  return urls.size + unkeyed;
 }
 
 function formatElapsedDuration(startedAtMs: number, endedAtMs: number): string {
@@ -408,11 +420,14 @@ function cancelledSummary(activity: AgentActivityState): string | undefined {
   return lastSummary(activity, (entry) => !isLocalPlaceholderActivityEntry(entry));
 }
 
-function collapsedCompletionSummary(activity: AgentActivityState): string {
+function collapsedCompletionSummary(
+  activity: AgentActivityState,
+  turnSourceCount?: number,
+): string {
   if (isSearchOnlyRun(activity.entries)) {
     return (
       distinctCompletedToolSummary(activity) ??
-      webSearchCompletedLabel(totalSearchSources(activity.entries))
+      webSearchCompletedLabel(turnSourceCount ?? totalSearchSources(activity.entries))
     );
   }
   return `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`;
@@ -422,6 +437,7 @@ export function buildAgentActivitySummary(
   activity: AgentActivityState,
   nowMs: number,
   workMode?: CloudWorkMode,
+  turnSourceCount?: number,
 ): string {
   const isAgiWork = workMode === AGI_WORK_MODE;
   const active = latestActiveSummary(activity);
@@ -443,7 +459,7 @@ export function buildAgentActivitySummary(
   if (status === 'completed') {
     return isAgiWork
       ? `${AGI_WORK_COMPLETED_PREFIX} ${formatRunDuration(activity)}`
-      : collapsedCompletionSummary(activity);
+      : collapsedCompletionSummary(activity, turnSourceCount);
   }
   if (isAgiWork) {
     const currentStep = labelForActivity(activity, nowMs, false);
@@ -857,6 +873,7 @@ export function AgentActivityTimeline({
   renderInputRequest,
   renderApprovalRequest,
   renderConnectorMark,
+  sourceCount,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -955,8 +972,8 @@ export function AgentActivityTimeline({
   useGenericStartWindowExpiry(activity.startedAtMs, activity.status, setNowMs);
 
   const rawSummary = useMemo(
-    () => buildAgentActivitySummary(activity, nowMs, workMode),
-    [activity, nowMs, workMode],
+    () => buildAgentActivitySummary(activity, nowMs, workMode, sourceCount),
+    [activity, nowMs, workMode, sourceCount],
   );
   const summary = useHeldRunningSummary(
     activity.turnId,

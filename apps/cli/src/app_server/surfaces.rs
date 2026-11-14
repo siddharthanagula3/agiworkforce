@@ -396,11 +396,11 @@ pub fn list_hooks(workspace_root: &Path) -> HookListResponse {
 fn user_instructions_path() -> Result<PathBuf, DeveloperSessionHostError> {
     Ok(CliConfig::config_dir()
         .map_err(internal)?
-        .join("instructions.md"))
+        .join(crate::compaction::USER_INSTRUCTIONS_FILE))
 }
 
 fn project_instructions_path(workspace_root: &Path) -> PathBuf {
-    workspace_root.join(".agiworkforce").join("instructions.md")
+    workspace_root.join(crate::compaction::PROJECT_INSTRUCTIONS_FILE)
 }
 
 fn read_instruction_file(path: &Path) -> Option<String> {
@@ -452,6 +452,16 @@ fn permission_mode_to_config(
 pub fn read_settings(
     workspace_root: &Path,
 ) -> Result<SettingsReadResponse, DeveloperSessionHostError> {
+    let mut settings = read_settings_defaults(workspace_root)?;
+    settings.user_instructions = read_instruction_file(&user_instructions_path()?);
+    settings.project_instructions =
+        read_project_instruction_file(workspace_root, &project_instructions_path(workspace_root));
+    Ok(settings)
+}
+
+pub(super) fn read_settings_defaults(
+    workspace_root: &Path,
+) -> Result<SettingsReadResponse, DeveloperSessionHostError> {
     let config = CliConfig::load().map_err(internal)?;
     let user_path = user_instructions_path()?;
     let project_path = project_instructions_path(workspace_root);
@@ -468,28 +478,14 @@ pub fn read_settings(
             .permission_mode
             .as_deref()
             .and_then(permission_mode_from_config),
-        user_instructions: read_instruction_file(&user_path),
-        project_instructions: read_project_instruction_file(workspace_root, &project_path),
+        user_instructions: None,
+        project_instructions: None,
         user_instructions_path: display(&user_path),
         project_instructions_path: display(&project_path),
         config_path: CliConfig::config_path()
             .map(|path| display(&path))
             .map_err(internal)?,
     })
-}
-
-fn write_instruction_file(path: &Path, contents: &str) -> Result<(), DeveloperSessionHostError> {
-    if contents.is_empty() {
-        return match std::fs::remove_file(path) {
-            Ok(()) => Ok(()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(internal(error)),
-        };
-    }
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(internal)?;
-    }
-    std::fs::write(path, contents).map_err(internal)
 }
 
 pub fn write_settings(
@@ -529,10 +525,24 @@ pub fn write_settings(
     }
 
     if let Some(contents) = params.user_instructions.as_deref() {
-        write_instruction_file(&user_instructions_path()?, contents)?;
+        let authority =
+            crate::path_security::WorkspaceFileAuthority::new(workspace_root).map_err(internal)?;
+        super::instruction_settings::write_legacy(
+            &CliConfig::config_dir().map_err(internal)?,
+            &authority,
+            agiworkforce_protocol::instruction_settings::InstructionSettingsScope::User,
+            contents,
+        )?;
     }
     if let Some(contents) = params.project_instructions.as_deref() {
-        write_instruction_file(&project_instructions_path(workspace_root), contents)?;
+        let authority =
+            crate::path_security::WorkspaceFileAuthority::new(workspace_root).map_err(internal)?;
+        super::instruction_settings::write_legacy(
+            &CliConfig::config_dir().map_err(internal)?,
+            &authority,
+            agiworkforce_protocol::instruction_settings::InstructionSettingsScope::Project,
+            contents,
+        )?;
     }
 
     read_settings(workspace_root)

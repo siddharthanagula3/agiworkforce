@@ -174,7 +174,7 @@ async function live(args: readonly string[]): Promise<void> {
   const renderer =
     promptVersion === undefined
       ? undefined
-      : await loadChatPromptRenderer(promptVersion, recordedOn);
+      : await loadChatPromptRenderer(promptVersion, recordedOn, modelKey);
   const datasets = loadDatasets(selectedSuites(args));
   const outcome = await runLive(
     renderer === undefined ? datasets : withChatPrompt(datasets, renderer),

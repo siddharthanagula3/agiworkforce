@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type Anthropic from '@anthropic-ai/sdk';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import { translateAnthropicStream } from '../stream';
+import { translateChatRequest } from '../translate';
 import { ANTHROPIC_PREMIUM_MODEL_ID } from './model-fixtures';
 
 async function* events(seq: unknown[]): AsyncIterable<Anthropic.MessageStreamEvent> {
@@ -274,6 +275,48 @@ describe('web v1 wire parity · streaming', () => {
     });
     expect(wire[0]).toHaveProperty('id');
     expect(wire[0]).toHaveProperty('created');
+  });
+});
+
+describe('web v1 wire parity · thinking summary', () => {
+  it('asks for a summarized display and streams the summary to the client inside thinking tags', async () => {
+    const request = translateChatRequest({
+      model: ANTHROPIC_PREMIUM_MODEL_ID,
+      messages: [{ role: 'user', content: 'Which option is safer?' }],
+    });
+    expect(request.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+
+    const wire = await collectWire(
+      [
+        { type: 'message_start', message: { usage: { input_tokens: 20 } } },
+        { type: 'content_block_start', index: 0, content_block: { type: 'thinking' } },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'thinking_delta', thinking: 'Comparing the two options on risk.' },
+        },
+        {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'signature_delta', signature: 'sig' },
+        },
+        { type: 'content_block_stop', index: 0 },
+        { type: 'content_block_start', index: 1, content_block: { type: 'text' } },
+        { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'B.' } },
+        { type: 'content_block_stop', index: 1 },
+        { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 9 } },
+        { type: 'message_stop' },
+      ],
+      { model: ANTHROPIC_PREMIUM_MODEL_ID, wireMode: 'legacy-web' },
+    );
+    const content = wire
+      .map(
+        (frame) =>
+          (frame as { choices?: Array<{ delta?: { content?: string } }> }).choices?.[0]?.delta
+            ?.content ?? '',
+      )
+      .join('');
+    expect(content).toBe('<thinking>Comparing the two options on risk.</thinking>B.');
   });
 });
 

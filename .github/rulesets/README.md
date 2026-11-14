@@ -101,7 +101,7 @@ comm -23 \
 ```
 
 Empty output means every required context exists. As of 2026-09-18 the only
-required context is `CI complete`, the aggregate job at `ci.yml:1403`.
+required context is `CI complete`, the aggregate `ci-complete` job in `ci.yml`.
 
 After applying:
 
@@ -177,5 +177,5 @@ Tag signing is not enforced here. It needs a separate `tag`-target ruleset and a
 signing key on every release machine; until that key exists, an enforced rule
 would block releases rather than secure them. The release tag patterns are
 instead constrained on the environment side, in `environments.json`: a
-`v-desktop-*` tag can reach the macOS signing secrets, an arbitrary branch
+`v-desktop-*` or `v-cloud-desktop-*` tag can reach the macOS signing secrets, an arbitrary branch
 cannot.

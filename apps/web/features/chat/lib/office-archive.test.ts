@@ -55,7 +55,11 @@ describe('browser Office archive bounds', () => {
     const zip = new JSZip();
     zip.file('bomb.xml', 'A'.repeat(1_000_000));
     const archive = await openOfficeArchive(
-      await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' }),
+      await zip.generateAsync({
+        type: 'arraybuffer',
+        compression: 'DEFLATE',
+        comment: 'Office package',
+      }),
     );
     await expect(officeMemberText(archive, 'bomb.xml')).rejects.toMatchObject({ limit: 'ratio' });
   });
@@ -96,7 +100,13 @@ describe('browser Office archive bounds', () => {
     zip.file('word/document.xml', '<document>Text</document>');
     zip.file('unreferenced.bin', 'A'.repeat(1_000_000));
     await expect(
-      storedOfficeArchive(await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' })),
+      storedOfficeArchive(
+        await zip.generateAsync({
+          type: 'arraybuffer',
+          compression: 'DEFLATE',
+          comment: 'Office package',
+        }),
+      ),
     ).rejects.toBeInstanceOf(DecompressionLimitError);
   });
 });

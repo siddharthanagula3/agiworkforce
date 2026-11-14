@@ -111,12 +111,23 @@ describe('long content', () => {
     expect(paragraph?.textContent).toHaveLength(4000);
   });
 
-  it('breaks a long unbroken token inside a list item and a table cell', () => {
+  it('breaks a long unbroken token inside a list item', () => {
     const token = 'y'.repeat(600);
-    const container = renderMarkdown(`- ${token}\n\n| a |\n| --- |\n| ${token} |`);
+    const container = renderMarkdown(`- ${token}`);
 
     expect(container.querySelector('li')?.className).toContain('wrap-anywhere');
-    expect(container.querySelector('td')?.className).toContain('wrap-anywhere');
+  });
+
+  it('keeps table cell words whole and lets the table scroll instead', () => {
+    const container = renderMarkdown('| RAM | Storage |\n| --- | --- |\n| 16 GB | 512 GB SSD |');
+
+    for (const cell of Array.from(container.querySelectorAll('th, td'))) {
+      expect(cell.className).not.toContain('wrap-anywhere');
+      expect(cell.className).not.toContain('break-all');
+      expect(cell.className).toContain('break-words');
+      expect(cell.className).toContain('min-w-18');
+    }
+    expect(screen.getByRole('region', { name: 'Table' }).className).toContain('overflow-x-auto');
   });
 
   it('keeps an extremely long code line scrollable instead of wrapping it', () => {

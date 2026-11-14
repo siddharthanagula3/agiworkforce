@@ -113,7 +113,14 @@ function makeProcessed(): ProcessedRequest {
       messages: [{ role: 'user', content: 'Do the thing.' }],
       max_tokens: 512,
       stream: true,
-      tools: [createMapSearchToolDefinition(), webSearchToolDef()],
+      tools: [
+        createMapSearchToolDefinition(),
+        webSearchToolDef(),
+        ...['create_folder', 'write_file'].map((name) => ({
+          type: 'function',
+          function: { name, description: name, parameters: { type: 'object' } },
+        })),
+      ],
     },
   } as ProcessedRequest;
 }

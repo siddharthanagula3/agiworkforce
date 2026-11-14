@@ -53,7 +53,7 @@ export interface ClarifyOfferContext {
   agiWork?: boolean;
 }
 
-export function shouldOfferClarifyTool(context: ClarifyOfferContext): boolean {
+export function turnWarrantsClarifyTool(context: ClarifyOfferContext): boolean {
   if (context.research) return false;
   const trimmed = context.userMessage.trim();
   if (trimmed.length === 0) return false;

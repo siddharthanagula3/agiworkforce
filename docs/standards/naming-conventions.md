@@ -2,11 +2,11 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-24
+Last updated: 2026-11-11
 
 This is the locked naming policy for AGI Workforce. New files, docs, packages, branches, commands, and release notes should follow this unless a current decision doc explicitly overrides it.
 
-As of 2026-06-28 this policy also mandates the structural / file-granularity conventions in the "Structural & File-Granularity Conventions" section below (folder-per-tool, co-located prompt/UI/logic, barrels, one concern per file), adapted from best-in-class agent codebases. All new code follows them immediately; existing code migrates opportunistically per `docs/strategy/15-structure-and-granularity-conventions.md` and `scripts/migrate-structure.mjs`.
+As of 2026-06-28 this policy also mandates the structural / file-granularity conventions in the "Structural & File-Granularity Conventions" section below (folder-per-tool, co-located prompt/UI/logic, barrels, one concern per file), adapted from best-in-class agent codebases. All new code follows them immediately; existing code migrates opportunistically with `scripts/migrate-structure.mjs`.
 
 ## External Standards
 
@@ -46,6 +46,7 @@ Keep only these active control files at repo root:
 - `PLAN.md` - active strategy and phase structure.
 - `CHANGELOG.md` - completed work log.
 - `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`, `THIRD_PARTY_LICENSES.md`.
+- `DPDP_PROGRESS.md` - a stub that points to `audit/prior-audits/dpdp-audit-log-2026-08-22.md`. Applied migrations cite its path, so it stays.
 
 `scripts/check-repo-organization.mjs` holds the enforced allowlist; this list
 describes it and must not drift from it. `TODO.md`, `BUILD.md`, `NOTICE` and
@@ -78,11 +79,9 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 ## File Names
 
 - Markdown docs: lowercase kebab-case, except root all-caps convention files such as `README.md`, `CHANGELOG.md`, `AGENTS.md`, `CODEOWNERS`.
-- Active plan docs: `docs/plans/<topic>.md`.
 - There is no archive directory and one must not be created. Historical material lives in git history.
 - Durable findings belong in `audit/registers/known-flaws.md`; decision/evidence ledgers live under the live root `audit/` directory (e.g. `capability-gaps.csv`, `inventory.json`).
 - Research summaries: `docs/research/<topic>-YYYY-MM-DD.md`.
-- Design prompts and generated design specs: `docs/design/<topic>-YYYY-MM-DD.md`.
 - `.tsx` files are PascalCase (`ChatInput.tsx`, `ChatInput.test.tsx`), except hooks (`useX.tsx`, `use` + PascalCase) and framework route files (`page`, `layout`, `route`, `loading`, `error`, `not-found`, `template`, `default`, `global-error`, `opengraph-image`, `twitter-image`, `icon`, `apple-icon`, `sitemap`, `robots`, `manifest`, `index`, and Expo's `_layout`, `+html`, `+not-found`). Everything under `apps/mobile/app/` (the file name is the screen URL), paths with a `[` or `(` segment, `audit/`, `.agents/skills/` and `__fixtures__` keep their names. `pnpm check:file-naming` enforces this.
 - `.ts` modules stay camelCase for now, Markdown docs stay kebab-case for now, and Rust source files and modules use snake_case.
 - The owner is deciding whether `.ts` modules, scripts and docs also move to PascalCase.
@@ -90,7 +89,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 
 ## Structural And File-Granularity Conventions
 
-Canonical as of 2026-06-28. Full version + CI enforcement: `docs/strategy/15-structure-and-granularity-conventions.md`.
+Canonical as of 2026-06-28. CI enforcement: `scripts/check-structure-conventions.mjs`.
 
 - **Folder-per-feature.** Every tool, command, agent, and major UI feature is a folder, not a loose file.
 - **Co-locate by feature.** A tool's logic, `prompt`, `UI`, `constants`, validators, and `types` live in the same folder, never split across `prompts/`, `ui/`, `logic/`.

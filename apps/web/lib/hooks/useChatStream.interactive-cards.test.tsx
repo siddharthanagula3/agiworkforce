@@ -193,6 +193,7 @@ describe('useChatStream, interactive cards', () => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body['x_interactive_cards']).toEqual({
       supported: [
+        'answer-ui.v1',
         'clarify.v1',
         'image.v1',
         'itinerary.v1',
@@ -205,6 +206,33 @@ describe('useChatStream, interactive cards', () => {
     });
   });
 
+  it('carries an answer UI card onto the assistant message so it replays from metadata', async () => {
+    const answerUi = {
+      schemaVersion: 1,
+      cardId: 'answer-ui-toolu_9',
+      kind: 'answer-ui.v1',
+      createdAt: '2026-10-25T10:00:00.000Z',
+      fallback: { headline: 'Checklist', text: '- [ ] Check links' },
+      producedBy: { toolCallId: 'toolu_9', toolName: 'render_answer_ui' },
+      body: {
+        blocks: [
+          {
+            type: 'checklist',
+            id: 'qa',
+            items: [{ id: 'links', label: 'Check links', checked: false }],
+          },
+        ],
+      },
+    };
+    mockSseStream([textEvent('Here is a checklist.'), cardEvent(answerUi)]);
+    await send();
+
+    const [card] = assistantMessage()?.metadata?.interactiveCards ?? [];
+    expect(card?.recognized).toBe(true);
+    expect(card?.kind).toBe('answer-ui.v1');
+    expect(card?.fallback.text).toBe('- [ ] Check links');
+  });
+
   it('keeps the prose of the same turn intact', async () => {
     mockSseStream([textEvent('Happy to help. '), cardEvent(CARD), textEvent('Tap through these:')]);
     await send();
@@ -212,6 +240,22 @@ describe('useChatStream, interactive cards', () => {
     expect(assistantMessage()?.content).toContain('Happy to help.');
     expect(assistantMessage()?.content).toContain('Tap through these:');
     expect(assistantMessage()?.metadata?.interactiveCards).toHaveLength(1);
+  });
+
+  it('records where in the prose each card arrived, so it renders in stream order', async () => {
+    const leading = clone(CARD);
+    leading.cardId = 'toolu_lead';
+    mockSseStream([
+      cardEvent(leading),
+      textEvent('Here is the image you asked for. '),
+      cardEvent(CARD),
+    ]);
+    await send();
+
+    expect(assistantMessage()?.metadata?.interactiveCardTextOffsets).toEqual({
+      toolu_lead: 0,
+      toolu_01abc: 'Here is the image you asked for. '.length,
+    });
   });
 
   it('keeps an unknown kind as a fallback-bearing card', async () => {

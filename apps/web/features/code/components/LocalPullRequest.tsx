@@ -45,6 +45,7 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
       const read = await listLocalBranches(rootId);
       if (!isCurrent()) return;
       setBranches(read);
+      setLookup(null);
       if (read?.remoteUrl && read.current) {
         const found = await readLocalPullRequest({
           remoteUrl: read.remoteUrl,
@@ -67,12 +68,12 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
     };
   }, [load, refreshKey]);
 
-  const open = async () => {
+  const open = async (createBranch: boolean) => {
     setBusy(true);
     setError(null);
     setReconnectGitHub(false);
     try {
-      const pushed = await pushLocalBranch(rootId);
+      const pushed = await pushLocalBranch(rootId, createBranch ? title : undefined);
       if (!pushed.baseBranch) throw new Error(LOCAL_CODE_COPY.pullRequestNoBase);
       setOpened(
         await openLocalPullRequest({
@@ -82,6 +83,7 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
           title,
         }),
       );
+      if (createBranch) setBranches(await listLocalBranches(rootId));
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.pullRequestOpenFailed));
       setReconnectGitHub(cause instanceof LocalPullRequestRequestError && cause.reconnectGitHub);
@@ -106,6 +108,32 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
   }, [checksRunning, load, lookup]);
 
   const onBase = Boolean(branches?.current) && branches?.current === branches?.baseBranch;
+
+  if (branches !== null && branches.remoteUrl && !branches.current && pullRequest === null) {
+    return (
+      <div className={styles['pullRequestBlock']}>
+        <button
+          type="button"
+          className={styles['secondaryButton']}
+          disabled={busy || !branches.baseBranch}
+          onClick={() => void open(true)}
+        >
+          {busy && <Spinner size="sm" aria-hidden="true" />}
+          {busy ? CODE_COPY.creatingPullRequest : LOCAL_CODE_COPY.createBranchAndOpenPullRequest}
+        </button>
+        <span className={styles['formHelp']}>
+          {branches.baseBranch
+            ? LOCAL_CODE_COPY.pullRequestDetached
+            : LOCAL_CODE_COPY.pullRequestNoBase}
+        </span>
+        {error !== null && (
+          <span className={styles['formHelp']} role="alert">
+            {error}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   if (branches === null || !branches.remoteUrl || !branches.current) {
     return error !== null ? (
@@ -148,7 +176,7 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
             type="button"
             className={styles['secondaryButton']}
             disabled={busy || onBase || lookup === null}
-            onClick={() => void open()}
+            onClick={() => void open(false)}
           >
             {busy && <Spinner size="sm" aria-hidden="true" />}
             {busy ? CODE_COPY.creatingPullRequest : LOCAL_CODE_COPY.pushAndOpenPullRequest}

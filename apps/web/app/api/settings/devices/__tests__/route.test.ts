@@ -47,6 +47,7 @@ vi.mock('@/lib/services/account-activity-notifications', () => ({
 }));
 
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(() => []),
   getIdentityProvider: () => ({
     getSession: mockGetSession,
     revokeSession: mockRevokeSession,

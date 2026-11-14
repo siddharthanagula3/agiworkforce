@@ -20,6 +20,7 @@ import {
   X,
   Pencil,
   Telescope,
+  Terminal,
   Sparkles,
   Clock,
 } from 'lucide-react-native';
@@ -52,7 +53,7 @@ import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { FileMentionPalette } from './FileMentionPalette';
 import { trailingMention, withoutTrailingMention } from '@/src/features/chat/utils/fileMention';
 import { MediaModeChip } from './MediaModeChip';
-import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
 import { resolveUploadContext } from '@/src/features/chat/upload/uploadContext';
 import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
@@ -236,6 +237,7 @@ export function ChatInput({
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
+  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
   const { colors: themeColors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -248,6 +250,9 @@ export function ChatInput({
   const mediaMode = useChatViewStore((s) => s.mediaMode);
   const composerEffort = useComposerEffort(selectedModel, conversationId);
   const workMode = useChatViewStore((s) => s.workMode);
+  const runCodeOn = useChatViewStore(
+    (s) => s.runCodeByConversation[s.styleConversationId ?? NEW_CHAT_STYLE_KEY] === true,
+  );
   const mediaModelId = mediaModelIdForMode(mediaMode);
   const mediaModelName = mediaModelId
     ? (getModelMetadataById(mediaModelId)?.name ?? mediaModelId)
@@ -271,16 +276,36 @@ export function ChatInput({
     selectedModelMetadata?.capabilities.research === true &&
     selectedModelMetadata.capabilities.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
-  const activeToolStatuses = researchActive
-    ? [
-        {
-          key: 'research',
-          label: 'Research',
-          accessibilityLabel: 'Deep Research active',
-          Icon: Telescope,
-        },
-      ]
-    : [];
+  const codeExecutionActive =
+    isSignedInCloudChat &&
+    FEATURES.codeExecution &&
+    chatFeatures.codeExecution &&
+    runCodeOn &&
+    selectedModelMetadata?.capabilities.codeExecution === true &&
+    codeExecutionAvailable &&
+    grantedCapabilities.includes('canUseCloudExecution');
+  const activeToolStatuses = [
+    ...(researchActive
+      ? [
+          {
+            key: 'research',
+            label: 'Research',
+            accessibilityLabel: 'Deep Research active',
+            Icon: Telescope,
+          },
+        ]
+      : []),
+    ...(codeExecutionActive
+      ? [
+          {
+            key: 'code',
+            label: 'Run code',
+            accessibilityLabel: 'Run code on',
+            Icon: Terminal,
+          },
+        ]
+      : []),
+  ];
 
   const applyTranscript = useCallback((transcript: string) => {
     if (!cleanupVoiceDictation(transcript)) {

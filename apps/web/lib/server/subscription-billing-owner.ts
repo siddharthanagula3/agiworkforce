@@ -1,6 +1,11 @@
 import 'server-only';
 
-import type { MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
+import type { MeBillingOwner, MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
+import {
+  isEnterprisePlanTier,
+  isTeamPlanTier,
+  normalizeBillingPlanTier,
+} from '@agiworkforce/types';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 
 export type SubscriptionBillingSource = MeSubscriptionSource | 'unverified';
@@ -59,6 +64,16 @@ export function resolveSubscriptionBillingSource(
   if (isStripeCustomerId(subscription.stripe_customer_id)) return 'stripe';
 
   return 'manual';
+}
+
+export function resolveBillingOwner(input: {
+  holdsOrganizationSeat: boolean;
+  planTier: string | null | undefined;
+}): MeBillingOwner {
+  const tier = normalizeBillingPlanTier(input.planTier);
+  return input.holdsOrganizationSeat || isTeamPlanTier(tier) || isEnterprisePlanTier(tier)
+    ? 'organization'
+    : 'personal';
 }
 
 export function isTerminalSubscriptionStatus(status: string): boolean {

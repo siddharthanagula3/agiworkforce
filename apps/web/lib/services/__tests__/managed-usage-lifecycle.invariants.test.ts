@@ -1,15 +1,31 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getPlanSandboxTtlMs } from '@agiworkforce/types';
+import { CHAT_TOOL_LOOP_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
 import { getPlanSessionUsageCapMicrousd } from '@/lib/server/managed-usage-policy';
 
 vi.mock('server-only', () => ({}));
 
+const neonDb = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getNeonDb: () => {
+    if (!neonDb.current) throw new Error('no database is wired for this test');
+    return neonDb.current;
+  },
+}));
+vi.mock('@/lib/server/claimed-user-scope-db', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  createClaimedUserScopedDb: (db: unknown) => db,
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/services/cogs-ledger-service', () => ({
+vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   recordSettledProviderCost: vi.fn(async () => undefined),
   getOrganizationMonthToDateSpendCents: vi.fn(async () => 0),
 }));
@@ -35,6 +51,11 @@ const {
 } = await import('../managed-usage-request-service');
 
 const { recordSettledProviderCost } = await import('../cogs-ledger-service');
+const {
+  admittedSandboxLifetimeMs,
+  getSandboxComputeMicrousdPerSecond,
+  reserveSandboxComputeInterval,
+} = await import('@/lib/e2b/compute-metering');
 
 const MICROUSD_PER_CENT = 10_000;
 const MANAGED_SETTLEMENT_TYPES = [
@@ -2045,5 +2066,80 @@ describe('spending past the plan allowance', () => {
     await expect(
       reserveManagedUsageRequest(reservationInput(ledger, 'not-enabled', 100_000)),
     ).rejects.toMatchObject({ status: 429, code: 'rolling_five_hour_limit_reached' });
+  });
+});
+
+describe('a code run inside a Team chat turn', () => {
+  const TEAM = 'team';
+  const STEP_MICROUSD = 4_342;
+  let ledger: LedgerDatabase;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ledger = new LedgerDatabase();
+    neonDb.current = ledger;
+  });
+
+  afterEach(() => {
+    neonDb.current = null;
+  });
+
+  async function startTurnThenRunCode(releaseByMs: number | undefined) {
+    const sessionCap = getPlanSessionUsageCapMicrousd(TEAM) ?? 0;
+    ledger.openAccount({ userId: USER_ID, allocatedMicrousd: 40 * sessionCap });
+    const turn = await reserveManagedUsageRequest({
+      ...reservationInput(ledger, 'team-code-turn', STEP_MICROUSD),
+      planTier: TEAM,
+    });
+    await markManagedUsageProviderStarted(turn);
+    await reserveManagedUsageProviderStep({
+      reservation: turn,
+      operationKey: 'provider:1',
+      planTier: TEAM,
+      isFlagship: false,
+      estimatedCostMicrousd: STEP_MICROUSD,
+    });
+    const sandbox = await reserveSandboxComputeInterval({
+      userId: USER_ID,
+      planTier: TEAM,
+      conversationId: 'team-code-conversation',
+      microusdPerSecond: getSandboxComputeMicrousdPerSecond(),
+      ttlMs: admittedSandboxLifetimeMs(getPlanSandboxTtlMs(TEAM), releaseByMs),
+    });
+    return { turn, sandbox, sessionCap };
+  }
+
+  it('holds the sandbox for the turn, so the model step after the code run is admitted', async () => {
+    const { turn, sandbox, sessionCap } = await startTurnThenRunCode(
+      Date.now() + CHAT_TOOL_LOOP_BUDGET_MS + FUNCTION_TEARDOWN_RESERVE_MS,
+    );
+    expect(sandbox.outcome).toBe('reserved');
+
+    await expect(
+      reserveManagedUsageProviderStep({
+        reservation: turn,
+        operationKey: 'provider:2',
+        planTier: TEAM,
+        isFlagship: false,
+        estimatedCostMicrousd: STEP_MICROUSD,
+      }),
+    ).resolves.toMatchObject({ operationResult: 'extended' });
+
+    const { session } = ledger.rollingWindows(USER_ID);
+    expect(session).toBeGreaterThan(3 * STEP_MICROUSD);
+    expect(session).toBeLessThanOrEqual(sessionCap);
+    assertLedgerInvariants(ledger);
+  });
+
+  it('cannot fit the plan lifetime hold into a Team five-hour window at all', async () => {
+    const { sandbox, sessionCap } = await startTurnThenRunCode(undefined);
+
+    expect(
+      Math.ceil(getPlanSandboxTtlMs(TEAM) / 1_000) * getSandboxComputeMicrousdPerSecond(),
+    ).toBeGreaterThan(sessionCap);
+    expect(sandbox).toMatchObject({
+      outcome: 'refused',
+      error: { status: 429, code: 'rolling_five_hour_limit_reached' },
+    });
   });
 });

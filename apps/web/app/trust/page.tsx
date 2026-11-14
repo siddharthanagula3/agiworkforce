@@ -390,7 +390,7 @@ export default function TrustPage() {
                     caption="Change record"
                     rows={[
                       {
-                        label: '2026-11-10',
+                        label: '2026-11-13',
                         value:
                           'Two rows corrected, with no review of the rest of the page. Local mode isolation and Desktop credential storage said Desktop uses Cloud only. Desktop chat does, but its local coding sessions run the CLI, which can use a local model or a provider key set up in the CLI, and Desktop signs that CLI in to your account, which keeps the sign-in in the operating system credential store.',
                       },

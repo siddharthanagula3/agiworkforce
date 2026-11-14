@@ -14,7 +14,7 @@ use crate::platform::runtime::session::PrivacyMode;
 use crate::schedules::api_error_message;
 use crate::tier_cache;
 
-const CLOUD_TIMEOUT: Duration = Duration::from_secs(20);
+pub(crate) const CLOUD_TIMEOUT: Duration = Duration::from_secs(20);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(3600);
 
 #[derive(Debug)]
@@ -191,15 +191,161 @@ impl Route {
     }
 }
 
+#[derive(Clone)]
 pub struct CloudClient {
     base: String,
     jwt: String,
     auth_base: String,
     owner: String,
+    workspace: Option<agiworkforce_protocol::account_cloud::CloudConversationWorkspace>,
+    source_surface: Option<&'static str>,
     http: reqwest::Client,
 }
 
 impl CloudClient {
+    pub(crate) fn with_source_surface(&self, surface: &'static str) -> Self {
+        let mut client = self.clone();
+        client.source_surface = Some(surface);
+        client
+    }
+
+    pub(crate) fn workspace(
+        &self,
+    ) -> Option<&agiworkforce_protocol::account_cloud::CloudConversationWorkspace> {
+        self.workspace.as_ref()
+    }
+
+    pub(crate) fn with_workspace(
+        &self,
+        workspace: Option<&agiworkforce_protocol::account_cloud::CloudConversationWorkspace>,
+    ) -> Result<Self, CloudError> {
+        if workspace.is_some_and(|workspace| matches!(workspace, agiworkforce_protocol::account_cloud::CloudConversationWorkspace::Organization { id } if uuid::Uuid::parse_str(id).is_err())) { return Err(CloudError::Decode("The Cloud workspace identity is invalid".into())); }
+        let mut client = self.clone();
+        if let Some(workspace) = workspace {
+            client.workspace = Some(workspace.clone());
+        }
+        Ok(client)
+    }
+
+    fn handshake_request(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let mut headers = reqwest::header::HeaderMap::new();
+        for (name, value) in crate::cloud::handshake::headers() {
+            let value = if name == crate::cloud::handshake::SURFACE_HEADER {
+                self.source_surface.unwrap_or(value)
+            } else {
+                value
+            };
+            headers.insert(
+                reqwest::header::HeaderName::from_static(name),
+                reqwest::header::HeaderValue::from_static(value),
+            );
+        }
+        request.headers(headers)
+    }
+
+    fn workspace_request(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        let Some(workspace) = &self.workspace else {
+            return request;
+        };
+        let contract = super::conversation_contract::contract();
+        let value = match workspace {
+            agiworkforce_protocol::account_cloud::CloudConversationWorkspace::Personal => {
+                contract.personal_workspace.as_str()
+            }
+            agiworkforce_protocol::account_cloud::CloudConversationWorkspace::Organization {
+                id,
+            } => id.as_str(),
+        };
+        request.header(contract.organization_header.as_str(), value)
+    }
+
+    pub(crate) fn gateway_runs_path(&self) -> Result<String, CloudError> {
+        let endpoint = crate::models::streaming::managed_chat_endpoint(&self.base)
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let url = reqwest::Url::parse(&endpoint)
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        Ok(format!("{}/runs", url.path()))
+    }
+
+    pub(crate) fn gateway_run_path(&self, run_id: &str) -> Result<String, CloudError> {
+        Ok(format!(
+            "{}/{}",
+            self.gateway_runs_path()?,
+            urlencoding::encode(run_id)
+        ))
+    }
+
+    pub(crate) async fn open_chat_stream(
+        &self,
+        body: &serde_json::Value,
+        key: &str,
+        surface: &str,
+    ) -> Result<reqwest::Response, CloudError> {
+        let endpoint = crate::models::streaming::managed_chat_endpoint(&self.base)
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        self.open_gateway_stream(&endpoint, body, key, surface)
+            .await
+    }
+
+    pub(crate) async fn open_chat_resume(
+        &self,
+        run_id: Option<&str>,
+        body: &serde_json::Value,
+        key: &str,
+        surface: &str,
+    ) -> Result<reqwest::Response, CloudError> {
+        let endpoint = crate::models::streaming::managed_chat_endpoint(&self.base)
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let endpoint = match run_id {
+            Some(id) => format!("{endpoint}/runs/{}/resume", urlencoding::encode(id)),
+            None => format!("{endpoint}/approve"),
+        };
+        self.open_gateway_stream(&endpoint, body, key, surface)
+            .await
+    }
+
+    async fn open_gateway_stream(
+        &self,
+        endpoint: &str,
+        body: &serde_json::Value,
+        key: &str,
+        surface: &str,
+    ) -> Result<reqwest::Response, CloudError> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::HeaderName::from_static(crate::cloud::handshake::SURFACE_HEADER),
+            reqwest::header::HeaderValue::from_str(surface)
+                .map_err(|error| CloudError::Transport(error.to_string()))?,
+        );
+        let request =
+            crate::cloud::handshake::apply(self.http.post(endpoint).bearer_auth(&self.jwt))
+                .headers(headers)
+                .header("Idempotency-Key", key)
+                .header("Accept", "text/event-stream")
+                .timeout(DOWNLOAD_TIMEOUT)
+                .json(body);
+        let request = self.workspace_request(request);
+        let response = tokio::time::timeout(CLOUD_TIMEOUT, request.send())
+            .await
+            .map_err(|_| {
+                CloudError::Transport(
+                    "The gateway did not accept the request before its deadline".into(),
+                )
+            })?
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        if !response.status().is_success() {
+            let status = response.status().as_u16();
+            let body = response
+                .text()
+                .await
+                .map_err(|error| CloudError::Transport(error.to_string()))?;
+            return Err(CloudError::Api {
+                status,
+                message: api_error_message(&body),
+            });
+        }
+        Ok(response)
+    }
     /// Connect for a session running under `privacy`. Only Managed sessions may
     /// reach the account: Local and BYOK sessions are a different trust
     /// boundary and are refused here rather than at the call site.
@@ -236,6 +382,8 @@ impl CloudClient {
             jwt,
             auth_base: crate::app_server::account::device_auth_base(),
             owner,
+            workspace: None,
+            source_surface: None,
             http,
         })
     }
@@ -269,6 +417,8 @@ impl CloudClient {
             jwt: jwt.clone(),
             auth_base: crate::app_server::account::device_auth_base(),
             owner,
+            workspace: None,
+            source_surface: None,
             http,
         })
     }
@@ -281,6 +431,10 @@ impl CloudClient {
 
     /// The deployment these calls reach, so a caller can name a page on the
     /// same host it just read from rather than assuming production.
+    pub(crate) fn auth_base(&self) -> &str {
+        &self.auth_base
+    }
+
     pub fn base(&self) -> &str {
         &self.base
     }
@@ -322,31 +476,72 @@ impl CloudClient {
             request = request.header(name, value);
         }
         if account_destination {
-            request = crate::cloud::handshake::apply(request.bearer_auth(&self.jwt));
+            request =
+                self.workspace_request(self.handshake_request(request.bearer_auth(&self.jwt)));
         }
         Ok(request)
     }
 
     fn request(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
-        crate::cloud::handshake::apply(
-            self.http
-                .request(method, format!("{}{path}", self.base))
-                .header("Authorization", format!("Bearer {}", self.jwt))
-                .header("Accept", "application/json"),
+        self.workspace_request(
+            self.handshake_request(
+                self.http
+                    .request(method, format!("{}{path}", self.base))
+                    .header("Authorization", format!("Bearer {}", self.jwt))
+                    .header("Accept", "application/json"),
+            ),
         )
     }
 
     async fn exchange(&self, builder: reqwest::RequestBuilder) -> Result<Reply, CloudError> {
-        let response = builder
+        self.exchange_with_limit(builder, None).await
+    }
+
+    async fn exchange_with_limit(
+        &self,
+        builder: reqwest::RequestBuilder,
+        limit: Option<usize>,
+    ) -> Result<Reply, CloudError> {
+        let mut response = builder
             .send()
             .await
-            .map_err(|error| CloudError::Transport(error.to_string()))?;
+            .map_err(|error| CloudError::Transport(error.without_url().to_string()))?;
+        let etag = response
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
         let status = response.status().as_u16();
         let minimum_api_version = crate::cloud::handshake::minimum_api_version(response.headers());
-        let body = response
-            .text()
-            .await
-            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let body = match limit {
+            None => response
+                .text()
+                .await
+                .map_err(|error| CloudError::Transport(error.without_url().to_string()))?,
+            Some(limit) => {
+                if response
+                    .content_length()
+                    .is_some_and(|length| length > limit as u64)
+                {
+                    return Err(CloudError::Decode(
+                        "The Cloud response exceeds the native page budget. Read a smaller page."
+                            .into(),
+                    ));
+                }
+                let mut bytes = Vec::new();
+                while let Some(chunk) = response
+                    .chunk()
+                    .await
+                    .map_err(|error| CloudError::Transport(error.without_url().to_string()))?
+                {
+                    if bytes.len().saturating_add(chunk.len()) > limit {
+                        return Err(CloudError::Decode("The Cloud response exceeds the native page budget. Read a smaller page.".into()));
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+                String::from_utf8(bytes).map_err(|error| CloudError::Decode(error.to_string()))?
+            }
+        };
         if let Some(error) =
             crate::cloud::handshake::upgrade_required(status, minimum_api_version, &body)
         {
@@ -356,21 +551,22 @@ impl CloudClient {
             tier_cache::invalidate_for_request(&self.base, &self.jwt);
             return Err(CloudError::SessionExpired);
         }
-        Ok(Reply { status, body })
+        Ok(Reply { status, body, etag })
+    }
+
+    async fn send_with_limit<T: DeserializeOwned>(
+        &self,
+        builder: reqwest::RequestBuilder,
+        limit: Option<usize>,
+    ) -> Result<T, CloudError> {
+        self.exchange_with_limit(builder, limit).await?.decode()
     }
 
     async fn send<T: DeserializeOwned>(
         &self,
         builder: reqwest::RequestBuilder,
     ) -> Result<T, CloudError> {
-        let reply = self.exchange(builder).await?;
-        if !reply.is_success() {
-            return Err(CloudError::Api {
-                status: reply.status,
-                message: api_error_message(&reply.body),
-            });
-        }
-        serde_json::from_str(&reply.body).map_err(|error| CloudError::Decode(error.to_string()))
+        self.send_with_limit(builder, None).await
     }
 
     // A retry retains this request's deployment and session. Resolving a fresh
@@ -379,7 +575,41 @@ impl CloudClient {
         &self,
         build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
     ) -> Result<T, CloudError> {
-        match self.send(build(self)).await {
+        self.send_renewing_with_limit(build, None).await
+    }
+
+    async fn send_renewing_with_limit<T: DeserializeOwned>(
+        &self,
+        build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
+        limit: Option<usize>,
+    ) -> Result<T, CloudError> {
+        self.exchange_renewing(build, limit).await?.decode()
+    }
+
+    async fn exchange_renewing(
+        &self,
+        build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
+        limit: Option<usize>,
+    ) -> Result<Reply, CloudError> {
+        self.exchange_renewing_checked(|client| Ok(build(client)), limit)
+            .await
+    }
+    async fn exchange_renewing_checked(
+        &self,
+        build: impl Fn(&CloudClient) -> Result<reqwest::RequestBuilder, CloudError>,
+        limit: Option<usize>,
+    ) -> Result<Reply, CloudError> {
+        self.renewing(|client| {
+            let request = build(&client);
+            async move { client.exchange_with_limit(request?, limit).await }
+        })
+        .await
+    }
+    async fn renewing<T, F: std::future::Future<Output = Result<T, CloudError>>>(
+        &self,
+        send: impl Fn(CloudClient) -> F,
+    ) -> Result<T, CloudError> {
+        match send(self.clone()).await {
             Err(CloudError::SessionExpired) => {}
             other => return other,
         }
@@ -393,9 +623,11 @@ impl CloudClient {
                     jwt,
                     auth_base: self.auth_base.clone(),
                     owner: self.owner.clone(),
+                    workspace: self.workspace.clone(),
+                    source_surface: self.source_surface,
                     http: self.http.clone(),
                 };
-                match renewed.send(build(&renewed)).await {
+                match send(renewed.clone()).await {
                     Err(CloudError::SessionExpired) => {
                         forget_refused_session(&renewed.jwt).map_err(|error| CloudError::Api {
                             status: 401,
@@ -417,6 +649,64 @@ impl CloudClient {
             }
         }
     }
+    pub(crate) async fn download_bounded(
+        &self,
+        path: &str,
+        limit: usize,
+        timeout: Duration,
+        progress: impl Fn(usize) + Send + Sync,
+    ) -> Result<Vec<u8>, CloudError> {
+        self.renewing(|client| {
+            let request = client
+                .request(reqwest::Method::GET, path)
+                .header("Accept", "*/*")
+                .timeout(timeout);
+            let progress = &progress;
+            async move {
+                let mut response = request
+                    .send()
+                    .await
+                    .map_err(|error| CloudError::Transport(error.without_url().to_string()))?;
+                let status = response.status().as_u16();
+                if status == 401 {
+                    tier_cache::invalidate_for_request(&client.base, &client.jwt);
+                    return Err(CloudError::SessionExpired);
+                }
+                if !(200..300).contains(&status) {
+                    return Err(CloudError::Api {
+                        status,
+                        message: "The account did not permit this file download".into(),
+                    });
+                }
+                if response
+                    .content_length()
+                    .is_some_and(|length| length > limit as u64)
+                {
+                    return Err(CloudError::Decode(
+                        "The source exceeds the reviewed download size. Refresh project files."
+                            .into(),
+                    ));
+                }
+                let mut bytes = Vec::new();
+                while let Some(chunk) = response
+                    .chunk()
+                    .await
+                    .map_err(|error| CloudError::Transport(error.without_url().to_string()))?
+                {
+                    if bytes.len().saturating_add(chunk.len()) > limit {
+                        return Err(CloudError::Decode(
+                            "The source exceeds the reviewed download size. Refresh project files."
+                                .into(),
+                        ));
+                    }
+                    bytes.extend_from_slice(&chunk);
+                    progress(bytes.len());
+                }
+                Ok(bytes)
+            }
+        })
+        .await
+    }
 
     pub async fn get<T: DeserializeOwned>(
         &self,
@@ -427,6 +717,75 @@ impl CloudClient {
             .await
     }
 
+    pub async fn get_bounded<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+        limit: usize,
+    ) -> Result<T, CloudError> {
+        self.send_renewing_with_limit(
+            |client| client.request(reqwest::Method::GET, path).query(query),
+            Some(limit),
+        )
+        .await
+    }
+
+    pub async fn get_versioned<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        query: &[(&str, String)],
+        limit: usize,
+    ) -> Result<(T, Option<String>), CloudError> {
+        let reply = self
+            .exchange_renewing(
+                |client| client.request(reqwest::Method::GET, path).query(query),
+                Some(limit),
+            )
+            .await?;
+        let etag = reply.etag.clone();
+        Ok((reply.decode()?, etag))
+    }
+
+    pub async fn put_versioned<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+        version: &str,
+        limit: usize,
+    ) -> Result<(T, Option<String>), CloudError> {
+        if version.trim().is_empty() || version.trim() == "*" {
+            return Err(CloudError::Decode(
+                "An exact conversation revision is required".into(),
+            ));
+        }
+        let reply = self
+            .exchange_renewing(
+                |client| {
+                    client
+                        .request(reqwest::Method::PUT, path)
+                        .header(reqwest::header::IF_MATCH, version)
+                        .json(body)
+                },
+                Some(limit),
+            )
+            .await?;
+        let etag = reply.etag.clone();
+        Ok((reply.decode()?, etag))
+    }
+
+    pub(crate) async fn put_reply_bounded<B: Serialize>(
+        &self,
+        path: &str,
+        body: &B,
+        limit: usize,
+    ) -> Result<Reply, CloudError> {
+        self.exchange_renewing(
+            |client| client.request(reqwest::Method::PUT, path).json(body),
+            Some(limit),
+        )
+        .await
+    }
+
     pub async fn post<B: Serialize, T: DeserializeOwned>(
         &self,
         path: &str,
@@ -434,6 +793,19 @@ impl CloudClient {
     ) -> Result<T, CloudError> {
         self.send_renewing(|client| client.request(reqwest::Method::POST, path).json(body))
             .await
+    }
+
+    pub async fn post_bounded<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+        limit: usize,
+    ) -> Result<T, CloudError> {
+        self.send_renewing_with_limit(
+            |client| client.request(reqwest::Method::POST, path).json(body),
+            Some(limit),
+        )
+        .await
     }
 
     /// Send one declared [`Route`]. Commands that name their route go through
@@ -527,6 +899,83 @@ impl CloudClient {
             .await
             .map(|bytes| (bytes.to_vec(), value))
             .map_err(|error| CloudError::Transport(error.to_string()))
+    }
+
+    pub(crate) async fn upload_bytes_bounded(
+        &self,
+        url: &str,
+        headers: &HashMap<String, String>,
+        body: bytes::Bytes,
+        timeout: Duration,
+        limit: usize,
+    ) -> Result<(), CloudError> {
+        let request = self
+            .upload_request(url, headers)?
+            .timeout(timeout)
+            .body(body.clone());
+        let same_origin = reqwest::Url::parse(url)
+            .ok()
+            .zip(reqwest::Url::parse(&self.base).ok())
+            .is_some_and(|(url, base)| url.origin() == base.origin());
+        if same_origin {
+            let reply = self
+                .exchange_renewing_checked(
+                    |client| {
+                        client
+                            .upload_request(url, headers)
+                            .map(|request| request.timeout(timeout).body(body.clone()))
+                    },
+                    Some(limit),
+                )
+                .await?;
+            if reply.is_success() {
+                return Ok(());
+            }
+            return Err(CloudError::Api {
+                status: reply.status,
+                message: "The account did not accept this upload part".into(),
+            });
+        }
+        let response = request
+            .send()
+            .await
+            .map_err(|error| CloudError::Transport(error.without_url().to_string()))?;
+        if !response.status().is_success() {
+            return Err(CloudError::Api {
+                status: response.status().as_u16(),
+                message: "Storage did not accept this upload part".into(),
+            });
+        }
+        Ok(())
+    }
+    pub(crate) async fn post_bounded_timeout<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+        limit: usize,
+        timeout: Duration,
+    ) -> Result<T, CloudError> {
+        self.send_renewing_with_limit(
+            |client| {
+                client
+                    .request(reqwest::Method::POST, path)
+                    .timeout(timeout)
+                    .json(body)
+            },
+            Some(limit),
+        )
+        .await
+    }
+    pub(crate) async fn delete_bounded<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        limit: usize,
+    ) -> Result<T, CloudError> {
+        self.send_renewing_with_limit(
+            |client| client.request(reqwest::Method::DELETE, path),
+            Some(limit),
+        )
+        .await
     }
 
     pub async fn download_to(
@@ -664,9 +1113,19 @@ fn local_file_error(target: &std::path::Path, error: &std::io::Error) -> CloudEr
 pub struct Reply {
     pub status: u16,
     pub body: String,
+    pub etag: Option<String>,
 }
 
 impl Reply {
+    pub(crate) fn decode<T: DeserializeOwned>(self) -> Result<T, CloudError> {
+        if !self.is_success() {
+            return Err(CloudError::Api {
+                status: self.status,
+                message: api_error_message(&self.body),
+            });
+        }
+        serde_json::from_str(&self.body).map_err(|error| CloudError::Decode(error.to_string()))
+    }
     pub fn is_success(&self) -> bool {
         (200..300).contains(&self.status)
     }
@@ -716,6 +1175,49 @@ pub async fn connectivity_line(privacy: PrivacyMode) -> String {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn bounded_history_reads_refuse_declared_and_streamed_oversize_bodies() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        for chunked in [false, true] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    let mut chunk = [0; 1024];
+                    let read = socket.read(&mut chunk).await.unwrap();
+                    assert!(read > 0);
+                    request.extend_from_slice(&chunk[..read]);
+                    assert!(request.len() <= 8192);
+                }
+                assert!(String::from_utf8_lossy(&request).contains("Bearer fixture"));
+                let response = if chunked {
+                    "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n10\r\n0123456789abcdef\r\n0\r\n\r\n"
+                } else {
+                    "HTTP/1.1 200 OK\r\nContent-Length: 16\r\nConnection: close\r\n\r\n0123456789abcdef"
+                };
+                socket.write_all(response.as_bytes()).await.unwrap();
+            });
+            let client = CloudClient {
+                base: format!("http://{address}"),
+                jwt: "fixture".into(),
+                auth_base: format!("http://{address}"),
+                owner: "fixture".into(),
+                workspace: None,
+                source_surface: None,
+                http: reqwest::Client::new(),
+            };
+            let result = client
+                .get_bounded::<serde_json::Value>("/history", &[], 8)
+                .await;
+            assert!(
+                matches!(result, Err(CloudError::Decode(message)) if message.contains("page budget"))
+            );
+            server.await.unwrap();
+        }
+    }
+
     #[test]
     fn upload_credentials_stay_on_the_configured_account_origin() {
         let client = CloudClient {
@@ -723,6 +1225,10 @@ mod tests {
             jwt: "fixture-account-token".to_string(),
             auth_base: "https://cloud.example".to_string(),
             owner: "fixture-owner".to_string(),
+            workspace: Some(
+                agiworkforce_protocol::account_cloud::CloudConversationWorkspace::Personal,
+            ),
+            source_surface: None,
             http: reqwest::Client::new(),
         };
         let headers = HashMap::from([("Content-Type".to_string(), "text/plain".to_string())]);
@@ -741,6 +1247,11 @@ mod tests {
             "Bearer fixture-account-token"
         );
         assert_eq!(account.headers()["content-type"], "text/plain");
+        let contract = crate::cloud::conversation_contract::contract();
+        assert_eq!(
+            account.headers()[&contract.organization_header],
+            contract.personal_workspace
+        );
         for destination in [
             "https://storage.example/object?signature=fixture",
             "https://cloud.example:444/upload",
@@ -752,6 +1263,9 @@ mod tests {
                 .build()
                 .expect("request builds");
             assert!(!storage.headers().contains_key("authorization"));
+            assert!(!storage
+                .headers()
+                .contains_key(&contract.organization_header));
         }
         for destination in [
             "http://storage.example/object",
@@ -769,6 +1283,8 @@ mod tests {
             jwt: "fixture-account-token".to_string(),
             auth_base: "https://cloud.example".to_string(),
             owner: "fixture-owner".to_string(),
+            workspace: None,
+            source_surface: None,
             http: reqwest::Client::new(),
         };
         let destination = "https://storage.example/object?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption&X-Amz-Signature=fixture";
@@ -799,12 +1315,75 @@ mod tests {
     }
 
     #[test]
+    fn scoped_clients_keep_their_workspace_until_an_explicit_override() {
+        use agiworkforce_protocol::account_cloud::CloudConversationWorkspace;
+        let client = CloudClient {
+            base: "https://cloud.example".into(),
+            jwt: "fixture-token".into(),
+            auth_base: "https://cloud.example".into(),
+            owner: "fixture-owner".into(),
+            workspace: None,
+            source_surface: None,
+            http: reqwest::Client::new(),
+        };
+        let desktop = client.with_source_surface("desktop");
+        for (client, expected) in [(&client, "cli"), (&desktop, "desktop")] {
+            let request = client
+                .request(reqwest::Method::POST, "/fixture")
+                .build()
+                .unwrap();
+            let values = request
+                .headers()
+                .get_all(crate::cloud::handshake::SURFACE_HEADER)
+                .iter()
+                .collect::<Vec<_>>();
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0], expected);
+            let request = client
+                .upload_request("https://cloud.example/fixture", &HashMap::new())
+                .unwrap()
+                .build()
+                .unwrap();
+            let values = request
+                .headers()
+                .get_all(crate::cloud::handshake::SURFACE_HEADER)
+                .iter()
+                .collect::<Vec<_>>();
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0], expected);
+        }
+        let organization = CloudConversationWorkspace::Organization {
+            id: uuid::Uuid::new_v4().to_string(),
+        };
+        let scoped = client.with_workspace(Some(&organization)).unwrap();
+        assert_eq!(
+            scoped.with_workspace(None).unwrap().workspace,
+            Some(organization)
+        );
+        assert_eq!(
+            scoped
+                .with_workspace(Some(&CloudConversationWorkspace::Personal))
+                .unwrap()
+                .workspace,
+            Some(CloudConversationWorkspace::Personal)
+        );
+        assert!(scoped
+            .with_workspace(Some(&CloudConversationWorkspace::Organization {
+                id: "invalid".into()
+            }))
+            .is_err());
+        assert!(client.workspace.is_none());
+    }
+
+    #[test]
     fn upload_relay_accepts_only_the_configured_development_origin_over_http() {
         let client = CloudClient {
             base: "http://localhost:3000".to_string(),
             jwt: "fixture-account-token".to_string(),
             auth_base: "http://localhost:3000".to_string(),
             owner: "fixture-owner".to_string(),
+            workspace: None,
+            source_surface: None,
             http: reqwest::Client::new(),
         };
         let request = client
@@ -1030,6 +1609,8 @@ mod tests {
             jwt: "fixture-token".to_string(),
             auth_base: format!("http://{}/api", listener.local_addr().unwrap()),
             owner: "fixture-owner".to_string(),
+            workspace: None,
+            source_surface: None,
             http: reqwest::Client::new(),
         };
         let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
@@ -1091,6 +1672,8 @@ mod tests {
             jwt: "fixture-token".to_string(),
             auth_base: format!("http://{}/api", listener.local_addr().unwrap()),
             owner: "fixture-owner".to_string(),
+            workspace: None,
+            source_surface: None,
             http: reqwest::Client::new(),
         };
         let server = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });

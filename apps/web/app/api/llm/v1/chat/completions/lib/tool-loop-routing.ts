@@ -6,6 +6,7 @@ import { isWebSearchTool } from '@/lib/web-search/web-search-tool';
 import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import { isManagedOfficeFileTool } from '@/lib/services/managed-office-file-service';
 import { isMapSearchTool } from '@/lib/services/map-search-tool-service';
+import { isAnswerUiTool } from '@/lib/services/answer-ui-tool-service';
 import {
   ITINERARY_TOOL_NAME,
   PLACES_SEARCH_TOOL_NAME,
@@ -30,6 +31,7 @@ export interface ToolLoopInputClassification {
   hasMapSearchTools: boolean;
   hasPlaceTools: boolean;
   hasProductComparisonTools: boolean;
+  hasAnswerUiTools: boolean;
   hasImageTools: boolean;
   hasDeviceStepTools: boolean;
   shouldRun: boolean;
@@ -57,6 +59,13 @@ function anyToolNeedsApproval(names: readonly string[], policy: ToolApprovalPoli
   return names.some((name) => !policyAutoApprovesTool(policy, name));
 }
 
+export function withoutAnswerUiTool<T>(tools: T[] | undefined): T[] | undefined {
+  if (!tools) return tools;
+  const kept = tools.filter((tool) => !isAnswerUiTool(functionToolName(tool)));
+  if (kept.length === tools.length) return tools;
+  return kept.length > 0 ? kept : undefined;
+}
+
 export function classifyToolLoopInputs(
   mcpTools: WebMcpToolDef[],
   requestTools: unknown[] | undefined,
@@ -75,6 +84,7 @@ export function classifyToolLoopInputs(
     (name) => name === PLACES_SEARCH_TOOL_NAME || name === ITINERARY_TOOL_NAME,
   );
   const hasProductComparisonTools = names.includes(PRODUCT_COMPARISON_TOOL_NAME);
+  const hasAnswerUiTools = names.some(isAnswerUiTool);
   const hasImageTools = names.some(isImageChatToolName);
   // A device step is carried out by the user's own machine while the loop is
   // suspended. Without the loop there is nothing to suspend, and the raw tool
@@ -91,6 +101,7 @@ export function classifyToolLoopInputs(
     hasMapSearchTools,
     hasPlaceTools,
     hasProductComparisonTools,
+    hasAnswerUiTools,
     hasImageTools,
     hasDeviceStepTools,
     shouldRun:

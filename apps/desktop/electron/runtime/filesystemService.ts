@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { constants, promises as fs, type BigIntStats } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {
   MAX_BINARY_READ_BYTES,
@@ -27,7 +28,7 @@ import {
   MAX_WORKSPACE_WALK_DEPTH,
   toPosixPath,
 } from '@agiworkforce/ide-runtime/workspace';
-import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   assertNotDeniedFile,
   assertWritable,
@@ -610,6 +611,48 @@ async function writeBeside(
  * seen straight after, and the contents are then emptied through the handle
  * and the write refused.
  */
+export type PreviousVersionKeeper = (copy: string) => Promise<void>;
+
+let keepPreviousVersion: PreviousVersionKeeper | null = null;
+
+export function configurePreviousVersions(keeper: PreviousVersionKeeper | null): void {
+  keepPreviousVersion = keeper;
+}
+
+const PREVIOUS_COMPARE_LIMIT = 1_048_576;
+
+function previousVersionName(absolute: string, now: Date): string {
+  const extension = path.extname(absolute);
+  const base = path.basename(absolute, extension);
+  const two = (value: number) => String(value).padStart(2, '0');
+  const stamp = `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())} ${two(now.getHours())}.${two(now.getMinutes())}.${two(now.getSeconds())}`;
+  return `${base} (before ${PRODUCT_BRAND} edit ${stamp})${extension}`;
+}
+
+async function copyPreviousVersion(absolute: string, next: Buffer): Promise<string | null> {
+  const stat = await fs.lstat(absolute);
+  if (stat.size <= PREVIOUS_COMPARE_LIMIT && stat.size === next.length) {
+    if ((await fs.readFile(absolute)).equals(next)) return null;
+  }
+  const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'agi-previous-'));
+  const copy = path.join(folder, previousVersionName(absolute, new Date()));
+  await fs.copyFile(absolute, copy, constants.COPYFILE_EXCL);
+  return copy;
+}
+
+async function settlePreviousVersion(copy: string | null, replaced: boolean): Promise<void> {
+  if (copy === null) return;
+  const folder = path.dirname(copy);
+  if (replaced && keepPreviousVersion) {
+    try {
+      await keepPreviousVersion(copy);
+    } catch {
+      return;
+    }
+  }
+  await fs.rm(folder, { recursive: true, force: true }).catch(() => undefined);
+}
+
 async function replaceFileContents(
   resolved: ResolvedWorkspacePath,
   relativePath: string,
@@ -627,9 +670,13 @@ async function replaceFileContents(
   const { handle, created } = opened;
   let beside: { handle: fs.FileHandle; absolute: string } | null = null;
   let replaced = false;
+  let previous: string | null = null;
   try {
     assertStanding(await openedFileStanding(handle, resolved.absolute), relativePath);
     if (!created) await inspectHeldFile(handle, resolved, relativePath, inspectReplaced);
+    if (!created && keepPreviousVersion) {
+      previous = await copyPreviousVersion(resolved.absolute, bytes);
+    }
     const mode = Number((await handle.stat({ bigint: true })).mode & PERMISSION_BITS);
     beside = await writeBeside(resolved.absolute, bytes, mode);
     assertStanding(await openedFileStanding(handle, resolved.absolute), relativePath);
@@ -648,6 +695,7 @@ async function replaceFileContents(
   } finally {
     await beside?.handle.close();
     await handle.close();
+    await settlePreviousVersion(previous, replaced);
   }
 }
 

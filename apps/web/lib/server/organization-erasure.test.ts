@@ -572,6 +572,26 @@ describe('eraseOrganizationData', () => {
     ).toBe(false);
   });
 
+  it('detaches the stored-source ledger from the workspace instead of deleting it', async () => {
+    primeDb();
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(report.anonymized['project_knowledge_objects']).toEqual({ updated: true });
+    expect(report.tables['project_knowledge_objects']).toBeUndefined();
+    const statements = executedStatements();
+    expect(
+      statements.some((sql) =>
+        sql.includes(
+          'update public.project_knowledge_objects set organization_id = null where organization_id = $1',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      statements.some((sql) => sql.includes('delete from public.project_knowledge_objects')),
+    ).toBe(false);
+  });
+
   it('never deletes organization_members directly, only through the final row cascade', async () => {
     // assert_organization_has_owner() (0085_organization_seats_lifecycle) fails
     // a direct delete of the last owner while the organizations row still

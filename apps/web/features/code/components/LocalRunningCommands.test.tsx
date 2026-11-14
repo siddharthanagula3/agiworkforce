@@ -355,3 +355,26 @@ describe('sending the preview console errors to the agent', () => {
     expect(screen.queryByRole('button', { name: /preview error/u })).not.toBeInTheDocument();
   });
 });
+
+describe('opening a running command in the session browser', () => {
+  it('hands the address to the browser pane instead of a separate window', async () => {
+    const onOpenPreview = vi.fn();
+    readBackgroundActivity.mockResolvedValue(
+      activity([
+        { ...run('run-1', 'pnpm dev', 'root-1', 1), previewUrl: 'http://localhost:3000/' },
+      ]),
+    );
+    render(
+      <LocalRunningCommands
+        rootId="root-1"
+        refreshKey={0}
+        onOpenPreview={onOpenPreview}
+        now={() => NOW}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /localhost:3000/ }));
+    expect(onOpenPreview).toHaveBeenCalledWith('http://localhost:3000/');
+    expect(openLocalPreview).not.toHaveBeenCalled();
+  });
+});

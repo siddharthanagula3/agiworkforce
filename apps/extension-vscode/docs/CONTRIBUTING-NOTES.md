@@ -4,7 +4,7 @@ Status: Current
 
 Owner role: Extension lead
 
-Last updated: 2026-08-05
+Last updated: 2026-11-11
 
 Kind: app
 
@@ -15,7 +15,7 @@ This file holds the engineering-facing content that used to live in
 "Details" page, so it now carries only user-facing listing copy; `docs/**` is
 excluded by `.vscodeignore` and never reaches the published extension.
 
-Read `AGENTS.md` in this package for the lane contract and high-risk areas.
+Read the root `AGENTS.md` and `docs/agent-context/lanes.json` for the lane contract and ownership.
 
 ## Purpose
 
@@ -53,7 +53,7 @@ in.
 1. Install or build the extension.
 2. Install the AGI CLI so `agi` is on `PATH`, or set `agiWorkforce.cliPath` to the binary.
 3. Open a trusted workspace folder.
-4. Open the AGI sidebar, run `AGI: Open Chat in Editor`, or use `@agi` in VS Code Chat.
+4. Open the AGI sidebar, run `Code: Open Chat in Editor`, or use `@agi` in VS Code Chat.
 
 No AGI Cloud sign-in or extension API key is required for the local developer-session transport. Provider credentials and routing are owned by the local runtime configuration. Inline completions and older cloud-backed utility commands have separate credential requirements.
 
@@ -92,7 +92,7 @@ moves a local developer session across a trust boundary.
 - Editor context, catalog-driven model selection, diagnostics sharing, and reviewable diff proposals.
 - The editor-panel Apply action opens the proposed change in VS Code's native diff view.
 - Workspace-file attachments are validated against traversal, symlinks, folders, and sensitive filenames.
-- User-curated memory is bounded and injected as untrusted context for future turns.
+- User-curated memory, saved to the AGI Cloud account and shared with the other AGI apps, is bounded and injected as untrusted context for future turns while memory is on.
 - Visible Local host and resolved provider/Auto-routing labels, including in narrow sidebars.
 - Inline completions, CodeLens, hover, diagnostics, terminal helpers and memory UI.
 

@@ -218,6 +218,7 @@ const OPERATIONAL_RECORD = [
   'plugin_marketplace_sources',
   'plugin_submission_installs',
   'profiles',
+  'project_knowledge_objects',
   'provider_cost_events',
   'referral_codes',
   'referrals',

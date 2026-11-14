@@ -49,7 +49,7 @@ pub async fn mcp_server_get_config(
     let redacted = if token.len() > 4 {
         format!(
             "{}...{}",
-            &"*".repeat(token.len() - 4),
+            "*".repeat(token.len() - 4),
             &token[token.len() - 4..]
         )
     } else {

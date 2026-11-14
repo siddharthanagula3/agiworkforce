@@ -13,8 +13,8 @@ cloud, and conversations live in the cloud exactly as they do in a browser.
 What Desktop adds is a local device-capability runtime the same UI can call.
 “Local” in this document means privileged work on the device, not Local model
 inference. The public Electron dispatcher rejects every local-inference command,
-reports `localModels: false` and `localMcp: false`, and accepts no provider API
-key. Conversation inference remains Managed Cloud.
+reports `localModels: false`, reports `localMcp: true` when the bundled CLI
+serves MCP servers, and accepts no provider API key. Conversation inference remains Managed Cloud.
 
 ## Why the seam is `command()` and nothing else
 
@@ -297,8 +297,8 @@ minute and three Cancels quiet the rest of that kind (`nativeQuestions.ts`).
 | Git write and destructive operations  | ⚠️ switch and push a session's branch, discard its changes, stage and revert agent checkpoints |
 | Filesystem watcher                    | ❌ not started                                                                                 |
 | Shell execution                       | ✅ one-shot and long-running commands, sandboxed, asked in main                                |
-| PTY terminal                          | ⚠️ a long-running command gets a pseudo-terminal on macOS, pipes elsewhere                     |
-| Embedded browser and CDP tools        | ❌ not started; a paired Chrome extension is used                                              |
+| PTY terminal                          | ✅ user-only shell from the CLI's `terminal/*`, sandboxed, network off; line runner before it  |
+| Embedded browser and CDP tools        | ⚠️ browser pane for local addresses and approved sites; agent tools use the paired Chrome      |
 | Computer use                          | ✅ opt-in; session grant, a native yes per run, asked per app                                  |
 | iOS simulator, Android emulator       | ❌ not started                                                                                 |
 | Worktree isolation, parallel sessions | ✅ worktrees the CLI makes, admitted per run                                                   |

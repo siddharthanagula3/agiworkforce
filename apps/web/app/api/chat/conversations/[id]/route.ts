@@ -311,9 +311,9 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       [ownedProject] = await db.query<{ id: string }>(
         `select id
            from user_projects
-          where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
+          where id = $1 and user_id = $2 and organization_id is not distinct from $3::uuid and is_archived = false and deleted_at is null
           limit 1`,
-        [targetProjectId, userId],
+        [targetProjectId, userId, organizationId],
       );
     } catch (error) {
       logger.error({ error, userId }, 'Failed to validate conversation project');

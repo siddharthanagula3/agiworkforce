@@ -227,6 +227,26 @@ export interface EntitlementBundle {
   denialReason: CapabilityDenialReason | null;
 }
 
+export interface UsageAllowanceSubject {
+  tier: string;
+  catalogVersion: number | null;
+  revenueContext: RevenueContext | null;
+}
+
+/**
+ * The plan the usage windows are held to, by the rule the chat gate applies: the
+ * row's own tier while it is entitled, and Free once it has lapsed. Meters,
+ * resets and quotas that describe those windows must read the same plan.
+ */
+export function usageAllowanceSubject(bundle: EntitlementBundle): UsageAllowanceSubject {
+  const subscription = bundle.entitled ? bundle.subscription : null;
+  return {
+    tier: subscription?.plan_tier || 'free',
+    catalogVersion: subscription?.plan_catalog_version ?? null,
+    revenueContext: revenueContextOfSubscription(subscription),
+  };
+}
+
 export interface EntitlementResolutionOptions {
   /**
    * Off for questions about what a person holds in their own right, such as an

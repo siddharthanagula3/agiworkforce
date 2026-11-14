@@ -242,11 +242,34 @@ export function EffortSlider({
 }: EffortSliderProps) {
   const colors = useThemeColors();
   const description = showDescription && value ? EFFORT_DESCRIPTION[value] : undefined;
+  const lightest = steps[0];
+  const heaviest = steps[steps.length - 1];
+  const showsEnds = steps.length > 2 && lightest !== undefined && heaviest !== undefined;
 
   return (
     <View testID={testID}>
       {value ? <EffortLevelName effort={value} testID={`${testID}-level`} /> : null}
       <EffortTrack steps={steps} value={value} onChange={onChange} testID={testID} />
+      {showsEnds ? (
+        <View
+          testID={`${testID}-ends`}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginTop: 6,
+            paddingHorizontal: 12,
+          }}
+        >
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+            {EFFORT_LABEL[lightest]}
+          </Text>
+          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
+            {EFFORT_LABEL[heaviest]}
+          </Text>
+        </View>
+      ) : null}
       {description ? (
         <Text
           testID={`${testID}-description`}

@@ -487,7 +487,7 @@ describe('ComposerFooter · picker keyboard', () => {
     const dialog = mountAndOpen();
     const rows = modelRows(dialog);
 
-    const freeSection = within(dialog).getByRole('button', { name: 'Free' });
+    const freeSection = within(dialog).getByRole('button', { name: 'Free models' });
     await waitFor(() => expect(document.activeElement).toBe(freeSection));
     fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(rows[0]);

@@ -38,6 +38,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 vi.mock('@/lib/server/rolling-usage', () => ({
   getRollingUsage: mockGetRollingUsage,
+  getAccountOverageMicrousd: async () => 0,
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({

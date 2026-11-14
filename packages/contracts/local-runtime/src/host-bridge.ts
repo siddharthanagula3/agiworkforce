@@ -75,11 +75,15 @@ export function hostKeepsSignInInWindow(url: URL): boolean {
 /**
  * What a native menu item or a platform shortcut asks the page to do.
  *
- * These are the actions the shell cannot carry out itself: the sidebar and the
- * shortcut sheet are the page's, not the window's. The shell owns the menu, the
- * page owns the behaviour, and this union is the whole of what crosses between
- * them. It is deliberately small; a command the page cannot honour is a dead
- * menu item.
+ * These are the actions the shell cannot carry out itself: the sidebar, the
+ * shortcut sheet, search, the conversation's find and the chat list are the
+ * page's, not the window's. The shell owns the menu, the page owns the
+ * behaviour, and this union is the whole of what crosses between them. It is
+ * deliberately small; a command the page cannot honour is a dead menu item.
+ *
+ * The page deploys on its own schedule, so it must ignore a command it does not
+ * know, and a shell release must not send a command before the page that
+ * answers it is live.
  */
 export const HOST_COMMANDS = [
   'toggle-sidebar',
@@ -343,6 +347,91 @@ export interface HostPreferences {
    * session it drives ends when the computer sleeps.
    */
   preventSleepWhileRunning?: boolean;
+  /**
+   * Put in front of the branch the shell creates when a pull request is opened
+   * from a worktree that has no branch of its own. Empty means no prefix.
+   */
+  worktreeBranchPrefix?: string;
+  /**
+   * The folder new worktrees are created in. Empty means the CLI's default.
+   * A page cannot name a folder: writing an empty string restores the default,
+   * and writing anything else opens the system folder picker, so the saved
+   * path is always one the user chose there.
+   */
+  worktreeLocation?: string;
+  /** Days without activity after which a local session is archived; 0 is off. */
+  autoArchiveIdleDays?: AutoArchiveIdleDays;
+  /** How the terminal in coding sessions draws its cursor, copies and keeps history. */
+  terminal?: HostTerminalPreferences;
+}
+
+export const DEFAULT_WORKTREE_BRANCH_PREFIX = 'agi/';
+
+export const MAX_WORKTREE_BRANCH_PREFIX_LENGTH = 40;
+
+const WORKTREE_BRANCH_PREFIX_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+
+export function isWorktreeBranchPrefix(value: string): boolean {
+  if (value === '') return true;
+  return (
+    value.length <= MAX_WORKTREE_BRANCH_PREFIX_LENGTH &&
+    WORKTREE_BRANCH_PREFIX_PATTERN.test(value) &&
+    !value.includes('..') &&
+    !value.includes('//') &&
+    !value.includes('/.') &&
+    !value.endsWith('.')
+  );
+}
+
+export const AUTO_ARCHIVE_IDLE_DAYS = [0, 7, 14, 30] as const;
+
+export type AutoArchiveIdleDays = (typeof AUTO_ARCHIVE_IDLE_DAYS)[number];
+
+export function isAutoArchiveIdleDays(value: unknown): value is AutoArchiveIdleDays {
+  return (AUTO_ARCHIVE_IDLE_DAYS as readonly unknown[]).includes(value);
+}
+
+export const TERMINAL_CURSOR_STYLES = ['block', 'bar', 'underline'] as const;
+
+export type TerminalCursorStyle = (typeof TERMINAL_CURSOR_STYLES)[number];
+
+export const TERMINAL_SCROLLBACK_LINES = [1_000, 5_000, 10_000, 50_000] as const;
+
+export type TerminalScrollbackLines = (typeof TERMINAL_SCROLLBACK_LINES)[number];
+
+export interface HostTerminalPreferences {
+  cursorStyle: TerminalCursorStyle;
+  cursorBlink: boolean;
+  copyOnSelect: boolean;
+  scrollback: TerminalScrollbackLines;
+}
+
+export const DEFAULT_TERMINAL_PREFERENCES: HostTerminalPreferences = {
+  cursorStyle: 'block',
+  cursorBlink: true,
+  copyOnSelect: false,
+  scrollback: 5_000,
+};
+
+export function normalizeTerminalPreferences(
+  raw: unknown,
+  fallback: HostTerminalPreferences = DEFAULT_TERMINAL_PREFERENCES,
+): HostTerminalPreferences {
+  const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const cursorStyle = source['cursorStyle'];
+  const scrollback = source['scrollback'];
+  return {
+    cursorStyle: (TERMINAL_CURSOR_STYLES as readonly unknown[]).includes(cursorStyle)
+      ? (cursorStyle as TerminalCursorStyle)
+      : fallback.cursorStyle,
+    cursorBlink:
+      typeof source['cursorBlink'] === 'boolean' ? source['cursorBlink'] : fallback.cursorBlink,
+    copyOnSelect:
+      typeof source['copyOnSelect'] === 'boolean' ? source['copyOnSelect'] : fallback.copyOnSelect,
+    scrollback: (TERMINAL_SCROLLBACK_LINES as readonly unknown[]).includes(scrollback)
+      ? (scrollback as TerminalScrollbackLines)
+      : fallback.scrollback,
+  };
 }
 
 /**

@@ -18,8 +18,20 @@ import type {
   WorktreeStartPoint,
 } from '@agiworkforce/types/protocol';
 import type { MessageKind } from '@agiworkforce/types';
+import developerSessionLimits from './developer-session-limits.json' with { type: 'json' };
 
-export const DEVELOPER_SESSION_MAX_FRAME_BYTES = 4 * 1024 * 1024;
+export const DEVELOPER_SESSION_MAX_FRAME_BYTES = developerSessionLimits.maxFrameBytes;
+
+export const GUARD_LIFTING_ENVIRONMENT: readonly string[] = [
+  'AGIWORKFORCE_NO_SANDBOX',
+  'AGIWORKFORCE_SANDBOX_HOOKS',
+  'AGIWORKFORCE_SANDBOX_MCP',
+  'AGI_POWERSHELL_ALLOW_UNSAFE',
+  'AGI_A2A_ALLOW_PRIVATE',
+  'AGI_A2A_ALLOW_FILE_READS',
+  'AGIWORKFORCE_NO_KEYRING',
+  'AGIWORKFORCE_VOICE_ALLOW_CLOUD',
+];
 
 export const DEVELOPER_SESSION_COMMANDS = [
   'developer_runtime_status',
@@ -58,8 +70,23 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_thread_fork',
   'developer_thread_compact',
   'developer_thread_archive',
+  'developer_thread_unarchive',
+  'developer_thread_rename',
+  'developer_thread_pin',
   'developer_thread_takeover',
   'developer_mcp_approval_review',
+  'developer_mcp_list',
+  'developer_mcp_add',
+  'developer_mcp_remove',
+  'developer_mcp_set_enabled',
+  'developer_mcp_test',
+  'developer_mcp_tools',
+  'developer_mcp_logs',
+  'developer_mcp_open_config',
+  'developer_terminal_open',
+  'developer_terminal_write',
+  'developer_terminal_resize',
+  'developer_terminal_close',
   'developer_account_report',
 ] as const;
 
@@ -98,6 +125,9 @@ export interface LocalDeveloperSession {
   origin: DeveloperSessionSource;
   location?: 'cloud';
   environment?: 'local' | 'worktree' | 'ssh';
+  pinned?: boolean;
+  /** When the session was archived, in milliseconds; absent while it is not. */
+  archivedAt?: number;
 }
 
 /**
@@ -213,6 +243,12 @@ export const DEVELOPER_RUNTIME_CAPABILITIES = [
   'thread_archive',
   'thread_takeover',
   'reasoning_effort_ladder',
+  'thread_rename',
+  'thread_unarchive',
+  'thread_pin',
+  'mcp_servers',
+  'mcp_logs',
+  'terminals',
 ] as const;
 
 export type DeveloperRuntimeCapability = (typeof DEVELOPER_RUNTIME_CAPABILITIES)[number];
@@ -873,3 +909,8 @@ export interface DeveloperThreadCompactRequest {
   threadId: string;
   fromTurnId?: string;
 }
+
+export const TERMINAL_WRITE_LIMIT = 65_536;
+export const TERMINAL_MIN_SIZE = 2;
+export const TERMINAL_MAX_COLUMNS = 1_000;
+export const TERMINAL_MAX_ROWS = 500;

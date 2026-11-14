@@ -183,6 +183,24 @@ describe('GET /api/skills catalog parameter', () => {
     ]);
   });
 
+  it('spends its own catalogue bucket and tells a mirror what is left of it', async () => {
+    const { recordAdmittedRateLimit } = await import('@/lib/rate-limit-headers');
+    mockRateLimit.mockImplementationOnce(async (request: Request) => {
+      recordAdmittedRateLimit(request, {
+        'X-RateLimit-Limit': '300',
+        'X-RateLimit-Remaining': '299',
+      });
+      return null;
+    });
+
+    const response = await GET(get('http://localhost:3000/api/skills'));
+
+    expect(mockRateLimit).toHaveBeenCalledWith(expect.anything(), 'skills-catalog-read');
+    expect(mockRateLimit).not.toHaveBeenCalledWith(expect.anything(), 'chat-conversation');
+    expect(response.headers.get('X-RateLimit-Remaining')).toBe('299');
+    expect(response.headers.get('X-RateLimit-Limit')).toBe('300');
+  });
+
   it('hides a skill the account uninstalled by default, for the composer', async () => {
     const response = await GET(get('http://localhost:3000/api/skills'));
     expect(await names(response)).toEqual(['code-review']);

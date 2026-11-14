@@ -7,9 +7,11 @@ import {
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockGetSubscription } = vi.hoisted(() => ({
+const { mockQuery, mockGetSubscription, releaseContents, transactionState } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockGetSubscription: vi.fn(),
+  releaseContents: vi.fn(async (_tx: unknown, _scope: unknown) => undefined),
+  transactionState: { active: false, committed: 0 },
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -26,10 +28,28 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
-    db: { query: (...args: unknown[]) => mockQuery(...args) },
+    db: {
+      query: (...args: unknown[]) => mockQuery(...args),
+      transaction: async (run: (tx: unknown) => unknown) => {
+        transactionState.active = true;
+        try {
+          const result = await run({ query: (...args: unknown[]) => mockQuery(...args) });
+          transactionState.committed++;
+          return result;
+        } finally {
+          transactionState.active = false;
+        }
+      },
+    },
     userId: 'user_contract_1',
     organizationId: '11111111-1111-4111-8111-111111111111',
   })),
+}));
+
+vi.mock('@/lib/server/project-deletion', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  releaseDeletedProjectContents: releaseContents,
+  assertProjectContentUnheld: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -127,7 +147,54 @@ describe('GET /api/projects/sync, shared cloud contract', () => {
 describe('POST /api/projects/sync, shared cloud contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    transactionState.committed = 0;
     mockGetSubscription.mockResolvedValue({ plan_tier: 'free' });
+  });
+
+  const deletePush = () =>
+    POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projects: [
+            {
+              id: PROJ_ID,
+              name: 'Removed project',
+              baseVersion: '3',
+              deletedAt: '2026-11-10T00:00:00Z',
+            },
+          ],
+        }),
+      }) as never,
+    );
+
+  it('releases tombstoned content inside the publishing transaction', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '6', current: null },
+    ]);
+    releaseContents.mockImplementationOnce(async (_tx, scope) => {
+      expect(transactionState.active).toBe(true);
+      expect(scope).toEqual({
+        projectId: PROJ_ID,
+        userId: 'user_contract_1',
+        organizationId: ORGANIZATION_ID,
+      });
+    });
+    expect((await deletePush()).status).toBe(200);
+    expect(releaseContents).toHaveBeenCalledOnce();
+    expect(transactionState.committed).toBe(1);
+  });
+
+  it('does not acknowledge a tombstone whose content release fails', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '6', current: null },
+    ]);
+    releaseContents.mockRejectedValueOnce(new Error('Retirement unavailable'));
+    const response = await deletePush();
+    expect(response.status).toBe(500);
+    expect(await response.json()).not.toHaveProperty('applied');
+    expect(transactionState.committed).toBe(0);
   });
 
   it('push ack parses against ProjectsSyncPushResponseSchema', async () => {

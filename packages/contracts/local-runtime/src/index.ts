@@ -59,6 +59,7 @@ export {
   DEVELOPER_FILE_CHANGES,
   DEVELOPER_SESSION_COMMANDS,
   DEVELOPER_SESSION_MAX_FRAME_BYTES,
+  GUARD_LIFTING_ENVIRONMENT,
   DEVELOPER_SESSION_EVENT_MESSAGE_KINDS,
   DEVELOPER_SESSION_ORIGIN_LABELS,
   DEVELOPER_SESSION_TRUST_LABELS,
@@ -326,6 +327,15 @@ export {
   NO_HOST_NAVIGATION,
   isHostNavigationDirection,
   isHostNavigationState,
+  AUTO_ARCHIVE_IDLE_DAYS,
+  DEFAULT_WORKTREE_BRANCH_PREFIX,
+  MAX_WORKTREE_BRANCH_PREFIX_LENGTH,
+  isAutoArchiveIdleDays,
+  isWorktreeBranchPrefix,
+  DEFAULT_TERMINAL_PREFERENCES,
+  TERMINAL_CURSOR_STYLES,
+  TERMINAL_SCROLLBACK_LINES,
+  normalizeTerminalPreferences,
 } from './host-bridge';
 export { agentNotificationsWrite, effectiveAgentNotifications } from './agent-notifications';
 export type {
@@ -351,6 +361,10 @@ export type {
   HostNavigationDirection,
   HostNavigationState,
   WindowLayoutCommand,
+  AutoArchiveIdleDays,
+  HostTerminalPreferences,
+  TerminalCursorStyle,
+  TerminalScrollbackLines,
 } from './host-bridge';
 
 export {
@@ -524,3 +538,41 @@ export { LOCAL_ROUTINE_COMMANDS } from './local-routines';
 
 export { SSH_ENVIRONMENT_COMMANDS, isSshEnvironmentId } from './ssh-environments';
 export type { SshEnvironment, SshEnvironmentInput } from './ssh-environments';
+export {
+  OLD_ARCHIVE_AGE_DAYS,
+  OLD_LOG_AGE_DAYS,
+  STORAGE_CATEGORIES,
+  STORAGE_CLEAN_COMMAND,
+  STORAGE_CLEANUPS,
+  STORAGE_COMMANDS,
+  STORAGE_READ_COMMAND,
+  isStorageCleanup,
+} from './storage';
+export type {
+  StorageCategory,
+  StorageCategoryUsage,
+  StorageCleanup,
+  StorageUsage,
+} from './storage';
+export {
+  BROWSER_PANE_COMMANDS,
+  CLOSED_BROWSER_PANE,
+  MAX_BROWSER_ADDRESS_LENGTH,
+  MAX_BROWSER_SITES,
+  browserPaneAddress,
+  browserPaneDecision,
+  browserSiteHost,
+} from './browser-pane';
+export type {
+  BrowserPaneBounds,
+  BrowserPaneCommand,
+  BrowserPaneDecision,
+  BrowserPaneState,
+  BrowserSites,
+} from './browser-pane';
+export {
+  TERMINAL_MAX_COLUMNS,
+  TERMINAL_MAX_ROWS,
+  TERMINAL_MIN_SIZE,
+  TERMINAL_WRITE_LIMIT,
+} from './developer-sessions';

@@ -499,7 +499,7 @@ pub(crate) fn managed_cloud_client_headers() -> Vec<(String, String)> {
 }
 
 fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec> {
-    let endpoint = managed_cloud_url_for_base(raw_base, "llm/v1/chat/completions")?;
+    let endpoint = managed_chat_endpoint(raw_base)?;
 
     Ok(ProviderSpec {
         id: "managed_cloud".to_string(),
@@ -544,6 +544,10 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
             }))
             .collect(),
     })
+}
+
+pub(crate) fn managed_chat_endpoint(raw_base: &str) -> Result<String> {
+    managed_cloud_url_for_base(raw_base, "llm/v1/chat/completions")
 }
 
 fn managed_cloud_spec(jwt: &str) -> Result<ProviderSpec> {

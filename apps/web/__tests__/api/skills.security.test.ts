@@ -150,6 +150,7 @@ describe('skills API security contract', () => {
       source: 'personal',
       lifecycle: 'included',
       downloadable: false,
+      treeHash: expect.stringMatching(/^sha256-tree-v1:[0-9a-f]{64}$/u),
     });
     expect(body).not.toContain('/Users/');
     expect(body).not.toContain('SKILL.md');

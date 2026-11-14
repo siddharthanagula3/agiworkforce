@@ -11,7 +11,7 @@ import { getModelMetadataById, getModelReasoning } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { LARGE_PASTE_THRESHOLD, pastedTextFileName } from '@agiworkforce/utils/composer-paste';
 import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
-import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '../stores/chat/chatViewStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 
 const mockCapabilityModelId = requireMobileCloudModel((model) => {
@@ -351,7 +351,11 @@ describe('ChatInput', () => {
       codeExecutionAvailable: false,
       genericWebSearchAvailable: false,
     };
-    useChatViewStore.setState({ workMode: 'chat' });
+    useChatViewStore.setState({
+      workMode: 'chat',
+      styleConversationId: null,
+      runCodeByConversation: {},
+    });
     useLocalSettingsStore.setState({ autoCorrectEnabled: true });
     mockGetDraft.mockReturnValue('');
   });
@@ -641,7 +645,7 @@ describe('ChatInput', () => {
       expect(queryByLabelText('Web Search active')).toBeNull();
     });
 
-    it('keeps an enabled Research option visible and never labels default code execution', () => {
+    it('keeps enabled Research and Run code options visible after the sheet closes', () => {
       mockAppMode = 'cloud';
       mockIsClerkSignedIn = true;
       mockChatFeatures = {
@@ -661,10 +665,12 @@ describe('ChatInput', () => {
         codeExecutionAvailable: true,
         genericWebSearchAvailable: true,
       };
+      useChatViewStore.getState().setRunCode(NEW_CHAT_STYLE_KEY, true);
 
       const { getByLabelText, queryByLabelText, rerender } = renderInput();
 
       expect(getByLabelText('Deep Research active')).toBeTruthy();
+      expect(getByLabelText('Run code on')).toBeTruthy();
       expect(queryByLabelText('Code execution active')).toBeNull();
       expect(queryByLabelText('Image generation active')).toBeNull();
 
@@ -677,8 +683,26 @@ describe('ChatInput', () => {
       rerender(<ChatInput {...defaultProps} />);
 
       expect(queryByLabelText('Deep Research active')).toBeNull();
-      expect(queryByLabelText('Code execution active')).toBeNull();
+      expect(queryByLabelText('Run code on')).toBeNull();
       expect(queryByLabelText('Image generation active')).toBeNull();
+    });
+
+    it('shows no Run code chip while code execution is only permitted, not requested', () => {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      mockChatFeatures = { ...mockChatFeatures, codeExecution: true };
+      mockTierState = {
+        tier: 'pro',
+        grantedCapabilities: ['canUseCloudExecution'],
+        codeExecutionAvailable: true,
+        genericWebSearchAvailable: false,
+      };
+      useChatViewStore.getState().setRunCode('another-conversation', true);
+
+      const { queryByLabelText } = renderInput();
+
+      expect(queryByLabelText('Run code on')).toBeNull();
+      expect(queryByLabelText('Code execution active')).toBeNull();
     });
 
     it('dismisses the keyboard when opening the + sheet', () => {

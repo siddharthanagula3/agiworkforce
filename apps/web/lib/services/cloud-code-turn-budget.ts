@@ -1,5 +1,9 @@
 import { CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS } from '@agiworkforce/types';
-import { CLOUD_CODE_TURN_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
+import {
+  CLOUD_CODE_HARNESS_COMMAND_FUNCTION_LIMIT_MS,
+  CLOUD_CODE_TURN_BUDGET_MS,
+  FUNCTION_TEARDOWN_RESERVE_MS,
+} from '@/lib/deadline-policy';
 
 /**
  * The wall-clock ceiling the platform enforces on the two routes that reach the
@@ -33,3 +37,20 @@ export const CLOUD_CODE_AGENT_TURN_BUDGET_MS = Math.min(
   CLOUD_CODE_TURN_BUDGET_MS,
   CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS - FUNCTION_TEARDOWN_RESERVE_MS,
 );
+
+/**
+ * How long an agent turn holds its sandbox: the turn's budget and the unwind
+ * that pauses the sandbox after it. The hold counts against the plan windows
+ * until it settles, so it is sized to the turn, not to the plan's longest run.
+ */
+export const CLOUD_CODE_AGENT_TURN_SANDBOX_HOLD_MS =
+  CLOUD_CODE_AGENT_TURN_BUDGET_MS + FUNCTION_TEARDOWN_RESERVE_MS;
+
+/**
+ * The longest any other Code session route runs: the `maxDuration = 600` the
+ * commands, commit and notebook routes declare; the rest take the platform's
+ * shorter default. Each of their operations pauses the sandbox before it
+ * returns, so none holds it longer than this.
+ */
+export const CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS =
+  CLOUD_CODE_HARNESS_COMMAND_FUNCTION_LIMIT_MS;

@@ -1113,7 +1113,7 @@
       "doc": "workspace-policy",
       "section": "What policy controls",
       "kind": "prose",
-      "sentence": "All are on by default.",
+      "sentence": "All are on by default except Fast mode, which stays off until an administrator turns it on.",
       "implementation": [
         "packages/contracts/types/src/enterprise/workspace-controls.ts#DEFAULT_WORKSPACE_FEATURE_ACCESS"
       ],
@@ -1122,6 +1122,11 @@
           "kind": "test",
           "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
           "name": "returns the workspace defaults when nothing overrides them"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "holds fast mode off until the workspace turns it on"
         }
       ]
     },
@@ -1741,7 +1746,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "revokes the chat’s link from the result state"
+          "name": "revokes the chat\u2019s link from the result state"
         },
         {
           "kind": "copy",
@@ -1827,7 +1832,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "updates the chat’s link in place, keeping its address and expiry"
+          "name": "updates the chat\u2019s link in place, keeping its address and expiry"
         },
         {
           "kind": "test",
@@ -3436,7 +3441,7 @@
       "doc": "chat-basics",
       "section": "Branch a conversation",
       "kind": "prose",
-      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
+      "sentence": "While a branch is being created the control reads \"Creating branch\u2026\" and cannot be pressed a second time.",
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/features/chat/hooks/use-conversation-branches.ts"
@@ -3661,6 +3666,29 @@
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
           "name": "states the same contract on the Desktop, Local, and BYOK pages"
+        }
+      ]
+    },
+    {
+      "id": "glossary-desktop-windows-linux-not-published",
+      "doc": "glossary",
+      "section": "Platform and surface names",
+      "kind": "prose",
+      "sentence": "Windows and Linux installers have not been published.",
+      "implementation": [
+        "apps/web/lib/surface-status.ts#SURFACE_PLATFORMS",
+        "apps/web/app/download/DesktopDownloadAvailability.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/download/__tests__/DesktopDownloadSurface.test.tsx",
+          "name": "names Windows and Linux as unavailable rather than leaving them out"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/surface-status.test.ts",
+          "name": "adds a platform only when a surface that runs on it is released"
         }
       ]
     },
@@ -4269,6 +4297,11 @@
           "kind": "copy",
           "file": "apps/web/app/api/settings/organization/policy/route.ts",
           "text": "if (next.requireMfa && !current.policy.requireMfa && !authenticatorEnrollmentAvailable())"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
+          "name": "keeps unavailable enrollment controls disabled for enabled=%s"
         }
       ]
     },
@@ -7448,7 +7481,7 @@
       "doc": "models-and-reasoning",
       "section": "What the badges mean",
       "kind": "prose",
-      "sentence": "**Auto (free) · community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
+      "sentence": "**Auto (free) \u00b7 community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
       "implementation": [
         "apps/web/features/chat/components/Composer/ComposerFooter.tsx#FREE_LANE_SLOT_TEXT"
       ],
@@ -7456,7 +7489,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';"
+          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) \u00b7 community models, capacity varies';"
         },
         {
           "kind": "test",

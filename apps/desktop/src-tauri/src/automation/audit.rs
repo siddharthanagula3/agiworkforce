@@ -231,6 +231,7 @@ pub fn configure_audit_store(connection: Arc<Mutex<Connection>>) -> Result<(), &
 fn persist_event(connection: &Connection, event: &AutomationAuditEvent) -> Result<(), String> {
     let payload =
         serde_json::to_string(&event.outcome_report()).map_err(|error| error.to_string())?;
+    let retained = i64::try_from(MAX_BUFFERED_EVENTS).map_err(|error| error.to_string())?;
     connection
         .execute(
             "INSERT INTO automation_audit_outbox (payload_json) VALUES (?1)",
@@ -245,7 +246,7 @@ fn persist_event(connection: &Connection, event: &AutomationAuditEvent) -> Resul
                  ORDER BY id DESC
                  LIMIT -1 OFFSET ?1
              )",
-            params![MAX_BUFFERED_EVENTS],
+            params![retained],
         )
         .map_err(|error| error.to_string())?;
     Ok(())

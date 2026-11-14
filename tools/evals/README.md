@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Tooling/security lead
-Last updated: 2026-10-10
+Last updated: 2026-11-11
 Purpose: Grade what the product's models actually say and do, per capability
 (chat, coding, reasoning, research, search, tools, structured output, long
 context, files, browser, computer use, multilingual, safety), with cost and
@@ -55,6 +55,11 @@ site.
 | `computer-use`      | next action on a recorded screen description     | action plan: click inside the target frame, type, key chord               |
 | `multilingual`      | reply or translate in another language           | deterministic language ID plus reference facts                            |
 | `chat-prompt`       | behaviour the chat system prompt asks for        | text and tool-call checks, run only under `--chat-prompt-version`         |
+
+Five retrieval and assembly corpora sit in `context-suites/` (`memory-quality`,
+`past-chat-retrieval`, `project-retrieval`, `research-grounding`, `work-plan`).
+`src/context-eval.ts` grades them against the context engine the product runs,
+with fixtures standing in for the loaders; nothing reaches a model or a network.
 
 Cost and latency are not suites of their own. They are axes every suite reports:
 per case, the provider layer's metered usage, cost (provider-reported, else
@@ -133,7 +138,16 @@ tsx tools/evals/scripts/evals.ts compare \
 case through `apps/web/lib/prompts/chat-system-prompt-assembly.ts`, the module
 the chat route uses. The tools a case offers stand in for the tools a turn
 attached, and a case's `memory` field stands in for the memory state the route
-knows. The clock is noon UTC on the run date. A case's own `system` text sits
+knows. Every case is a web chat turn, so a version that has them gets the web
+chat's Settings guidance, its email and writing cards, the artifact app runtime
+and its source links. A version that states the serving model is told the
+measured model, as the user's choice, from the model catalog. A version with a
+chat setup block gets the setup the route sends for a saved web chat on an
+account with default settings: memory and past chat search off unless the case
+declares `memory`, no personalization, connected apps only where the case's
+plan grants them, skills on, a project with knowledge files when the case sets
+`project: "with_files"`, and the memory and file tool lines when the case
+offers those tools. The clock is noon UTC on the run date. A case's own `system` text sits
 between the prompt body and the clock, where the route puts a client's system
 text. Such a run writes only its run report, under `measurements/prompt-evals/`,
 and refuses `--baseline`: family baselines stay bare-model readings. Its answers

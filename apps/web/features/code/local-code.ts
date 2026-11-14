@@ -161,10 +161,40 @@ export const LOCAL_CODE_COPY = {
   overwriteFileDescription: (path: string): string =>
     `Your version replaces what is on disk at ${path} now. Changes made there since you opened it cannot be recovered unless they were committed.`,
   pushAndOpenPullRequest: 'Push and open a pull request',
+  sessionActions: (title: string): string => `More actions for ${title}`,
+  pinSession: 'Pin',
+  unpinSession: 'Unpin',
+  renameSession: 'Rename',
+  restoreSession: 'Restore',
+  sessionName: 'Session name',
+  showArchived: 'Show archived',
+  hideArchived: 'Hide archived',
+  archivedLabel: 'Archived',
+  pinnedLabel: 'Pinned',
+  renameFailed: 'The session could not be renamed.',
+  pinFailed: 'The pin could not be changed.',
+  restoreFailed: 'The session could not be restored.',
+  browser: 'Browser',
+  closeBrowser: 'Close browser',
+  browserBack: 'Back',
+  browserForward: 'Forward',
+  browserReload: 'Reload',
+  browserAddress: 'Web address',
+  browserAddressPlaceholder: 'Type a URL',
+  browserEmptyTitle: 'Browse the web',
+  browserEmptyHint: 'Type a URL to open a site. Pages on this computer open right away.',
+  browserRefused: (host: string): string => `${host} isn't allowed in the browser pane.`,
+  browserTryAgain: 'Try again',
+  browserInvalid: 'Enter a web address such as example.com.',
+  browserFailed: 'The page could not be opened.',
+  openInSeparateWindow: 'Open in a separate window',
   pullRequestOnGitHub: 'Open a pull request on GitHub',
   pullRequestNotConnected:
     'The AGI GitHub App is not installed on this repository, so GitHub opens the compare page instead.',
   pullRequestOnBase: 'Switch to a branch other than the default branch to open a pull request.',
+  createBranchAndOpenPullRequest: 'Create branch and open pull request',
+  pullRequestDetached:
+    'These changes are not on a branch yet, so a new branch is created for them.',
   pullRequestNoBase: 'The remote has no default branch to open a pull request against.',
   pullRequestReadFailed: 'The pull request for this branch could not be read.',
   pullRequestOpenFailed: 'The pull request could not be opened.',
@@ -1366,11 +1396,19 @@ export function localDeleteSessionConsequence(title: string): string {
 }
 
 /**
- * The consequence of archiving a local session. This app has no way to bring
- * one back, so the answer names the command that does.
+ * The consequence of archiving a local session. A CLI that cannot restore one
+ * from this app leaves the command that does as the way back.
  */
-export function localArchiveSessionConsequence(title: string, threadId: string): string {
-  return `${title} leaves this list and can no longer be opened from this app. Its conversation and checkpoints stay on this computer, and files in the folder stay as they are. To bring it back, run "agi session unarchive ${threadId}" in a terminal.`;
+export function localArchiveSessionConsequence(
+  title: string,
+  threadId: string,
+  restorable: boolean,
+): string {
+  const kept =
+    'Its conversation and checkpoints stay on this computer, and files in the folder stay as they are.';
+  return restorable
+    ? `${title} is archived. ${kept} To bring it back, choose Show archived in the sidebar, then Restore.`
+    : `${title} leaves this list and can no longer be opened from this app. ${kept} To bring it back, run "agi session unarchive ${threadId}" in a terminal.`;
 }
 
 /** What the list says once a session's worktree has been removed with it. */
@@ -1379,8 +1417,10 @@ export function localWorktreeRemovedLine(snapshotRef: string): string {
 }
 
 /** What the list says once a session has been archived. */
-export function localSessionArchivedLine(threadId: string): string {
-  return `Session archived. To bring it back, run "agi session unarchive ${threadId}" in a terminal.`;
+export function localSessionArchivedLine(threadId: string, restorable: boolean): string {
+  return restorable
+    ? 'Session archived. To bring it back, choose Show archived in the sidebar, then Restore.'
+    : `Session archived. To bring it back, run "agi session unarchive ${threadId}" in a terminal.`;
 }
 
 /**
@@ -1503,6 +1543,33 @@ export const LOCAL_WORKTREE_SETTINGS_COPY = {
     'Start a coding session to change this. The count is kept by the CLI, which is not running yet.',
   readFailed: 'The worktree count could not be read.',
   range: (max: number): string => `Choose a whole number from 1 to ${max}.`,
+  locationLabel: 'Location',
+  locationDefault: 'Default, inside the AGI CLI folder',
+  locationChange: 'Change…',
+  locationReset: 'Use default',
+  locationHelp: 'New worktrees are created here. Existing ones stay where they are.',
+  prefixLabel: 'Branch prefix',
+  prefixHelp: (example: string): string =>
+    `Used when a pull request needs a new branch, for example ${example}.`,
+  prefixInvalid: (max: number): string =>
+    `Use letters, numbers, dots, dashes and slashes, up to ${max} characters, starting with a letter or number.`,
+  prefixSaved: 'Branch prefix saved.',
+  autoArchiveLabel: 'Archive idle sessions',
+  autoArchiveHelp:
+    'Local sessions you have not used for this long are archived. Archived sessions keep everything and can be restored; pinned and running ones are never archived.',
+  autoArchiveOff: 'Never',
+  autoArchiveDays: (days: number): string => `After ${days} days`,
+  preferencesFailed: 'This setting could not be saved.',
+} as const;
+
+export const LOCAL_TERMINAL_COPY = {
+  starting: 'Starting the shell…',
+  failed: 'The terminal could not start.',
+  exited: (code: number | null): string =>
+    code === null ? 'The shell ended.' : `The shell ended with exit code ${code}.`,
+  restart: 'Start a new shell',
+  sandboxed:
+    "This shell has the same limits as the agent's commands in this folder, including no network while they are on.",
 } as const;
 
 export type LocalReviewCommentSide = 'new' | 'old';

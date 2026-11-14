@@ -2,9 +2,9 @@
 # builds match CI exactly. Source of truth for the version: every CI
 # toolchain step (.github/workflows/ci.yml, codeql.yml,
 # build-windows-release.yml, release-cli.yml, release-desktop.yml) pins
-# `1.94.0` via actions-rust-lang/setup-rust-toolchain or the `RUST_VERSION`
-# env var. No Cargo.toml in this workspace declares a `rust-version` key, so
-# this file is the only pin, keep it in lockstep with CI when that changes.
+# `1.99.1` via actions-rust-lang/setup-rust-toolchain or the `RUST_VERSION`
+# env var. Keep the workspace pin and CI in lockstep; native GPUI also declares
+# its required compiler version in its package manifest.
 [toolchain]
-channel = "1.94.0"
+channel = "1.99.1"
 components = ["clippy", "rustfmt"]

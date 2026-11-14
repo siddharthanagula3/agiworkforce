@@ -294,6 +294,18 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
 
   // ---- Session row handlers (navigation-focused) ----
   const handleNewChat = useCallback(() => router.push('/chat'), [router]);
+  // The desktop menu's New Temporary Chat. A temporary chat cannot sit in a
+  // project, so the project this surface was on is set aside first; leaving it
+  // would quietly start an ordinary chat.
+  useEffect(
+    () =>
+      onAppCommand('new-temporary-chat', () => {
+        useProjectStore.getState().setActiveProject(null);
+        useChatStore.getState().setPendingTemporaryChat(true);
+        handleNewChat();
+      }),
+    [handleNewChat],
+  );
   const handleOpenCode = useCallback(() => router.push(CODE_ROUTES.root), [router]);
   const handleOpenAllChats = useCallback(() => router.push(CHATS_AND_TASKS_ROUTE), [router]);
   const handleOpenSearch = useCallback(() => {

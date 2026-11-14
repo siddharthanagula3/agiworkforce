@@ -1129,6 +1129,15 @@ describe('ModelPickerSheet', () => {
     }
     expect(getByTestId('model-picker-effort-level').props.children).toBe(effortLabel(selected));
     expect(queryByTestId('model-picker-effort-description')).toBeNull();
+    const ends = getByTestId('model-picker-effort-ends', { includeHiddenElements: true });
+    expect(
+      within(ends).getByText(effortLabel(efforts[0]!), { includeHiddenElements: true }),
+    ).toBeTruthy();
+    expect(
+      within(ends).getByText(effortLabel(efforts[efforts.length - 1]!), {
+        includeHiddenElements: true,
+      }),
+    ).toBeTruthy();
 
     const next = efforts.find((effort) => effort !== selected)!;
     fireEvent.press(getByTestId(`model-picker-effort-${next}`));

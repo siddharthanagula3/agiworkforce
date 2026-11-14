@@ -289,7 +289,10 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
 
     render(<ComposerFooter />);
 
-    expect(screen.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Free models' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(
       within(screen.getByTestId('popover-content')).getByRole('button', { name: /Free Router/i }),
     ).toBeVisible();
@@ -301,7 +304,10 @@ describe('ComposerFooter · plan claims wait for billing readiness', () => {
 
     render(<ComposerFooter />);
 
-    expect(screen.getByRole('button', { name: 'Free' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Free models' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
     expect(
       within(screen.getByTestId('popover-content')).getByRole('button', { name: /Free Router/i }),
     ).toBeVisible();

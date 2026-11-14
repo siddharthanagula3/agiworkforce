@@ -271,7 +271,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
 
     expect(config).toMatch(/Desktop chat has no Local mode/u);
     expect(dispatcher).toMatch(/localModels: false/u);
-    expect(dispatcher).toMatch(/localMcp: false/u);
+    expect(dispatcher).toMatch(/localMcp: localMcpAvailable\(\)/u);
     expect(dispatcher).toMatch(
       /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
     );
@@ -297,7 +297,12 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       /pub fn save_device_grant[\s\S]*AuthStore::transaction_with_commit/u,
     );
     expect(repoText('apps', 'desktop', 'electron', 'runtime', 'runtimeEnvironment.ts')).toContain(
-      "'AGIWORKFORCE_NO_KEYRING'",
+      "import { GUARD_LIFTING_ENVIRONMENT } from '@agiworkforce/local-runtime-contract';",
+    );
+    expect(
+      repoText('packages', 'contracts', 'local-runtime', 'src', 'developer-sessions.ts'),
+    ).toMatch(
+      /export const GUARD_LIFTING_ENVIRONMENT: readonly string\[\] = \[[^\]]*'AGIWORKFORCE_NO_KEYRING'/u,
     );
     expect(repoText('apps', 'cli', 'src', 'secure_store.rs')).toContain(
       '!cfg!(test) && !cfg!(target_os = "linux") && !keyring_disabled()',
@@ -451,7 +456,9 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       .join('\n');
 
     expect(currentDocs).toMatch(/Electron is the only public Desktop product/iu);
-    expect(currentDocs).toMatch(/public Electron Desktop reports `localMcp: false`/iu);
+    expect(currentDocs).toMatch(
+      /public Electron Desktop reports `localMcp: true` when its bundled CLI serves MCP/iu,
+    );
     expect(currentDocs).toMatch(/released CLI supports BYOK/iu);
 
     for (const [label, pattern] of [

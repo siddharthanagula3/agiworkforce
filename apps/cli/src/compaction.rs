@@ -18,7 +18,9 @@ const ROOT_MARKERS: &[&str] = &[
     "pyproject.toml",
 ];
 
-const INSTRUCTION_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", ".agiworkforce/instructions.md"];
+pub(crate) const USER_INSTRUCTIONS_FILE: &str = "instructions.md";
+pub(crate) const PROJECT_INSTRUCTIONS_FILE: &str = ".agiworkforce/instructions.md";
+const INSTRUCTION_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md", PROJECT_INSTRUCTIONS_FILE];
 
 /// Estimate text tokens using the shared code-point heuristic.
 pub fn estimate_tokens(text: &str) -> usize {
@@ -238,7 +240,7 @@ pub(crate) fn config_home() -> Option<PathBuf> {
 
 fn global_instructions() -> Option<(std::path::PathBuf, String)> {
     let home = config_home()?;
-    ["instructions.md", "INSTRUCTIONS.md"]
+    [USER_INSTRUCTIONS_FILE, "INSTRUCTIONS.md"]
         .iter()
         .map(|name| home.join(name))
         .find_map(|path| {

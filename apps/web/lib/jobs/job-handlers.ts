@@ -9,6 +9,7 @@ import {
   sendDataExportReadyEmailJob,
 } from '@/lib/server/data-export-archive';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import { runProjectKnowledgeCleanup } from '@/lib/server/project-knowledge-cleanup';
 import {
   eraseScheduledAccount,
   reEraseTombstonedAccount,
@@ -355,6 +356,7 @@ export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
   'webhooks.audit-stream-delivery': deliverAuditStream,
   'webhooks.developer-delivery': deliverDeveloperWebhookJob,
   'data-deletion.scheduled-account-erasure': eraseAccountOnSchedule,
+  'data-deletion.project-knowledge-object': runProjectKnowledgeCleanup,
   'file-processing.purge-upload-object': purgeUploadObject,
   'research.settle-report-cost': settleResearchReportCost,
   'event-triggers.fire': fireEventTriggerJob,

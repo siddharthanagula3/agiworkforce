@@ -18,7 +18,7 @@ must survive every filter that touches them.
 ## Production call site
 
 `loadManagedMemoryContext` in
-`apps/web/lib/services/managed-memory-context-service.ts:682`, formatted for the prompt
+`apps/web/lib/services/managed-memory-context-service.ts`, formatted for the prompt
 by `formatManagedMemorySystemPrompt` in the same file.
 
 Production applies **no relevance filter**. The SQL orders by `pinned desc, updated_at

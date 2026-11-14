@@ -3,8 +3,8 @@
 //! This module provides functions to open encrypted database connections using
 //! SQLCipher. When compiled with the `bundled-sqlcipher` feature (via the
 //! `rusqlite` crate), the PRAGMA key command enables transparent encryption.
-//! When compiled with the plain `bundled` feature (e.g., in tests), the PRAGMA
-//! is silently ignored by standard SQLite.
+//! A successful key PRAGMA alone does not prove encryption: plain SQLite
+//! silently ignores it. Keyed opens also require the linked SQLCipher engine.
 //!
 //! # Usage
 //!
@@ -76,8 +76,8 @@ pub enum DatabaseOpenError {
 /// to a hex-encoded PRAGMA key.
 ///
 /// When using SQLCipher (`bundled-sqlcipher` feature), this sets the encryption
-/// key for transparent database encryption. When using plain SQLite (`bundled`
-/// feature, e.g., in tests), the PRAGMA is silently ignored.
+/// key for transparent database encryption. A build without SQLCipher fails
+/// closed before accessing the schema.
 ///
 /// # Arguments
 /// * `conn` - A freshly opened database connection (no prior SQL executed)
@@ -91,6 +91,10 @@ pub fn apply_encryption_key(conn: &Connection, key: &[u8]) -> Result<(), String>
         return Ok(()); // No encryption key provided, skip
     }
 
+    if rusqlite::version_number() < 3_054_000 {
+        return Err("The linked SQLite engine is below the required security version".into());
+    }
+
     let hex_key = hex::encode(key);
 
     // Set the encryption key -- must be the first operation after opening.
@@ -101,6 +105,13 @@ pub fn apply_encryption_key(conn: &Connection, key: &[u8]) -> Result<(), String>
         .map_err(|_| {
             "Failed to set database encryption key (key redacted from logs)".to_string()
         })?;
+
+    let cipher_version: String = conn
+        .query_row("PRAGMA cipher_version;", [], |row| row.get(0))
+        .map_err(|_| "The linked database engine does not provide SQLCipher encryption")?;
+    if cipher_version.trim().is_empty() {
+        return Err("The linked database engine does not provide SQLCipher encryption".into());
+    }
 
     // Configure cipher page size for optimal security/performance balance
     conn.execute_batch("PRAGMA cipher_page_size = 4096;")
@@ -553,17 +564,58 @@ pub fn rekey_encrypted_database(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
 
-    /// Proves `open_keyed_connection` produces a working, encrypted database:
-    ///
-    /// 1. Round-trip: a row written through the keyed connection is readable
-    ///    through a freshly opened keyed connection to the same file. This holds
-    ///    under both the plain `bundled` and `bundled-sqlcipher` builds.
-    /// 2. Negative proof (only meaningful under SQLCipher): when the build
-    ///    actually supports SQLCipher (`PRAGMA cipher_version` is non-empty), a
-    ///    plain `rusqlite::Connection::open` without the key must NOT be able to
-    ///    read the database. Under a plain `bundled` test build the PRAGMA key is
-    ///    a no-op, so this negative assertion is correctly skipped.
+    #[test]
+    fn fixed_engine_reads_and_updates_the_previous_encrypted_format() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../../tests/fixtures/sqlcipher-4.5.7.json"))
+                .expect("legacy fixture");
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(fixture["databaseBase64"].as_str().expect("database bytes"))
+            .expect("decode fixture");
+        assert_eq!(
+            format!("{:x}", Sha256::digest(&bytes)),
+            fixture["sha256"].as_str().expect("fixture hash")
+        );
+        assert!(!bytes.starts_with(b"SQLite format 3"));
+        let key =
+            hex::decode(fixture["testKeyHex"].as_str().expect("test key")).expect("decode key");
+        let directory = tempfile::tempdir().expect("fixture directory");
+        let path = directory.path().join("legacy.db");
+        std::fs::write(&path, &bytes).expect("copy fixture");
+        assert_eq!(
+            inspect_database_format(&path, &key).unwrap(),
+            DatabaseFormat::Keyed
+        );
+        let path_text = path.to_str().expect("fixture path");
+        let conn = open_encrypted_connection(path_text, &key).expect("open old format");
+        let value: String = conn
+            .query_row("SELECT value FROM compatibility WHERE id = 1", [], |row| {
+                row.get(0)
+            })
+            .expect("read old ciphertext");
+        assert_eq!(value, "legacy encrypted payload");
+        conn.execute_batch(
+            "PRAGMA journal_mode = WAL; INSERT INTO compatibility VALUES(2, 'new encrypted payload'); PRAGMA wal_checkpoint(TRUNCATE);",
+        )
+        .expect("write and checkpoint with fixed engine");
+        drop(conn);
+        let conn = open_encrypted_connection(path_text, &key).expect("reopen updated format");
+        assert_eq!(
+            conn.query_row("SELECT count(*) FROM compatibility", [], |row| row
+                .get::<_, i64>(0))
+                .unwrap(),
+            2
+        );
+        assert!(open_encrypted_connection(path_text, &[0x55; 32]).is_err());
+        let unkeyed = Connection::open(&path).expect("open unkeyed handle");
+        assert!(unkeyed
+            .execute_batch("SELECT * FROM compatibility")
+            .is_err());
+    }
+
     #[test]
     fn open_keyed_connection_yields_encrypted_db() {
         let tmp = std::env::temp_dir().join(format!(
@@ -587,9 +639,8 @@ mod tests {
             )
             .expect("create + insert");
 
-            // Capture whether this build actually has SQLCipher available.
             conn.query_row("PRAGMA cipher_version;", [], |r| r.get::<_, String>(0))
-                .unwrap_or_default()
+                .expect("SQLCipher is linked")
         };
 
         // 1b. Round-trip through a second keyed connection (must always work).
@@ -601,18 +652,16 @@ mod tests {
             assert_eq!(value, "top-secret");
         }
 
-        if !cipher_version.trim().is_empty() {
-            let plain = Connection::open(&path).expect("plain open of file handle");
-            let read_result = plain.query_row("SELECT value FROM secret WHERE id = 1;", [], |r| {
-                r.get::<_, String>(0)
-            });
-            assert!(
-                read_result.is_err(),
-                "plaintext connection must NOT be able to read an encrypted database \
-                 (cipher_version = {:?})",
-                cipher_version
-            );
-        }
+        assert!(cipher_version.starts_with("4.20.0 "), "{cipher_version}");
+        assert_eq!(rusqlite::version(), "3.54.1");
+        let plain = Connection::open(&path).expect("plain open of file handle");
+        let read_result = plain.query_row("SELECT value FROM secret WHERE id = 1;", [], |r| {
+            r.get::<_, String>(0)
+        });
+        assert!(
+            read_result.is_err(),
+            "plaintext must not read encrypted data"
+        );
 
         let _ = std::fs::remove_file(&path);
     }

@@ -6,8 +6,8 @@
     "The hashing algorithm is specified in packages/tools/skills/src/integrity.ts and reimplemented identically in apps/cli/src/skills.rs and scripts/verify-skills-lock.mjs.",
     "v1 of this file recorded computedHash values for ai-seo, programmatic-seo, remotion-best-practices, and seo-geo with no algorithm field. Those hashes are NOT reproducible: re-hashing the exact bundle bytes from d694f17b2 under agiskill-sha256-v1 yields different digests, and no generator for the v1 values exists anywhere in the repo. They were never verified against anything.",
     "Those four bundles were themselves deleted from .agents/skills in 5b14585dd, so their entries were also stale. They are dropped here rather than carried forward as unverifiable claims; git history retains the original values.",
-    "The current bundles are original AGI Workforce instruction-only packages. Adding any skill under `roots` fails CI until it is locked with declared provenance.",
-    "`audience` decides who may see a skill. `product` reaches the in-product Skills catalog served by apps/web/lib/services/skill-catalog-service.ts; `developer` is repository tooling for coding agents and never reaches an end user. Vendored bundles and skills describing work on this repository are developer. A skill with no audience is treated as developer at runtime and fails verification here."
+    "Bundles whose sourceType is `first-party` are written in this repository; every other bundle is vendored from the upstream commit its `source` names. Adding any skill under `roots` fails CI until it is locked with declared provenance.",
+    "`audience` decides who may see a skill. `product` reaches the in-product Skills catalog served by apps/web/lib/services/skill-catalog-service.ts; `developer` is repository tooling for coding agents and never reaches an end user. Skills describing work on this repository and vendored engineering bundles are developer; vendored bundles chosen for customers, such as the marketing and knowledge-work sets, are product. A skill with no audience is treated as developer at runtime and fails verification here."
   ],
   "roots": [".agents/skills"],
   "referenceTrees": ["packages/tools/skills/reference-bundles"],
@@ -298,7 +298,7 @@
       "sourceType": "first-party",
       "audience": "product",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:c2001d48e29675009103092e17801daa63ffc615c6eaef9f6c8257fcd764e9f3"
+      "computedHash": "sha256-tree-v1:5615e96ef99a35cba950c27d734879611437d2cf3cc3b0663eb145cd90baf7f4"
     },
     "deal-review": {
       "path": ".agents/skills/deal-review",
@@ -594,7 +594,7 @@
       "sourceType": "first-party",
       "audience": "product",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:9a65a7cfc6a33583357ee1c9e531acdcb7cf3234a9594985e5eea31ac095fbe2"
+      "computedHash": "sha256-tree-v1:171f9aa89523d554a9eabf88c6309992198e40d1dd033b0d9a02fa6b43a4a4fd"
     },
     "performance-optimization": {
       "path": ".agents/skills/performance-optimization",
@@ -634,7 +634,7 @@
       "sourceType": "first-party",
       "audience": "product",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:f078799049723b0c48326bd17251691932d2add8e164b487f5c75bbf325c9637"
+      "computedHash": "sha256-tree-v1:41ae9adec4257e19128b3af671218d4507c87bab4cdb3850d03cc96abdf82622"
     },
     "pricing": {
       "path": ".agents/skills/pricing",
@@ -714,7 +714,7 @@
       "sourceType": "first-party",
       "audience": "product",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:eca343e67d70aefd2215b03435d8644090072f197d01626de058383494e4a243"
+      "computedHash": "sha256-tree-v1:c4cd17ec74ea38a63143b38a7566a60bb52aae3dac049fe63bac67ec4d6da1ae"
     },
     "review-animations": {
       "path": ".agents/skills/review-animations",
@@ -794,7 +794,7 @@
       "sourceType": "first-party",
       "audience": "product",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:3e808a8f26f6cda032bdaf26b09241b468c1c4ef525cf251f253d94a1a2e8fa2"
+      "computedHash": "sha256-tree-v1:d91621599f8cc1d986860fadc2ec1a4f84605677566e5c9e338906c5a93dcffb"
     },
     "social": {
       "path": ".agents/skills/social",

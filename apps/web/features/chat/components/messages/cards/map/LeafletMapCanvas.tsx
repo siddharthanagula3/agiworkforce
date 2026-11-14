@@ -4,7 +4,8 @@ import 'leaflet/dist/leaflet.css';
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import L from 'leaflet';
-import { Minus, Plus } from '@agiworkforce/icons';
+import { Maximize2, Minimize2, Minus, Plus } from '@agiworkforce/icons';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { mapTileStyle, type MapTileConfig } from './mapTileConfig';
 
@@ -67,7 +68,11 @@ interface LeafletMapCanvasProps {
   className?: string;
   style?: React.CSSProperties;
   children?: React.ReactNode;
+  fullscreenable?: boolean;
 }
+
+export const MAP_ENTER_FULLSCREEN_LABEL = 'Full screen map';
+export const MAP_EXIT_FULLSCREEN_LABEL = 'Exit full screen';
 
 export function LeafletMapCanvas({
   points,
@@ -82,8 +87,13 @@ export function LeafletMapCanvas({
   className,
   style,
   children,
+  fullscreenable = false,
 }: LeafletMapCanvasProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const fullscreenToggleRef = useRef<HTMLButtonElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const exitFullscreen = useCallback(() => setFullscreen(false), []);
   const mapRef = useRef<L.Map | null>(null);
   const [projections, setProjections] = useState<Record<string, MapProjection>>({});
   const [zoomBounds, setZoomBounds] = useState({ atMin: false, atMax: false });
@@ -200,6 +210,27 @@ export function LeafletMapCanvas({
     };
   }, [tile.minZoom, tile.maxZoom, tileStyle.urlTemplate]);
 
+  const renderedFullscreen = useRef(fullscreen);
+  useLayoutEffect(() => {
+    if (renderedFullscreen.current === fullscreen) return;
+    renderedFullscreen.current = fullscreen;
+    mapRef.current?.invalidateSize({ animate: false });
+    syncOverlay();
+    fullscreenToggleRef.current?.focus();
+  }, [fullscreen, syncOverlay]);
+
+  useDialogKeyboard({ open: fullscreen, onClose: exitFullscreen, panelRef });
+
+  useEffect(() => {
+    if (!fullscreen) return undefined;
+    const body = (panelRef.current?.ownerDocument ?? document).body;
+    const previousOverflow = body.style.overflow;
+    body.style.overflow = 'hidden';
+    return () => {
+      body.style.overflow = previousOverflow;
+    };
+  }, [fullscreen]);
+
   const changeZoom = useCallback(
     (delta: number) => {
       const map = mapRef.current;
@@ -210,7 +241,18 @@ export function LeafletMapCanvas({
   );
 
   return (
-    <div className={cn('relative isolate overflow-hidden', className)} style={style}>
+    <div
+      ref={panelRef}
+      className={cn(
+        'relative isolate overflow-hidden',
+        fullscreen
+          ? 'fixed inset-0 z-[var(--z-fullscreen)] bg-[var(--chat-surface-base)]'
+          : className,
+      )}
+      style={fullscreen ? undefined : style}
+      data-map-fullscreen={fullscreen ? 'true' : undefined}
+      {...(fullscreen ? { role: 'dialog', 'aria-modal': true, 'aria-label': label } : {})}
+    >
       <div
         ref={containerRef}
         role="application"
@@ -257,6 +299,23 @@ export function LeafletMapCanvas({
           <Minus className="size-4" aria-hidden="true" />
         </button>
       </div>
+
+      {fullscreenable ? (
+        <button
+          ref={fullscreenToggleRef}
+          type="button"
+          onClick={() => setFullscreen((current) => !current)}
+          aria-label={fullscreen ? MAP_EXIT_FULLSCREEN_LABEL : MAP_ENTER_FULLSCREEN_LABEL}
+          aria-pressed={fullscreen}
+          className="absolute end-3 top-3 z-[var(--z-content-sticky)] grid size-8 place-items-center rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[color:var(--chat-text-primary)] shadow-e1 transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:size-11"
+        >
+          {fullscreen ? (
+            <Minimize2 className="size-4" aria-hidden="true" />
+          ) : (
+            <Maximize2 className="size-4" aria-hidden="true" />
+          )}
+        </button>
+      ) : null}
 
       {children}
     </div>

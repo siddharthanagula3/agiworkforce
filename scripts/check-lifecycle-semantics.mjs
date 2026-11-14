@@ -749,6 +749,32 @@ function checkRecovery({ repoRoot, contract, errors }) {
       const entry = resource[kind];
       if (entry === undefined) continue;
 
+      if (entry.retirement !== undefined) {
+        const retirement = entry.retirement;
+        const retiredSource =
+          typeof retirement?.retiredBy === 'string'
+            ? readSource(repoRoot, retirement.retiredBy)
+            : null;
+        const purgeSource =
+          typeof entry.purgedBy === 'string' ? readSource(repoRoot, entry.purgedBy) : null;
+        const column = entry.column.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (
+          kind !== 'softDeleted' ||
+          entry.restoredBy !== null ||
+          (retirement?.reason ?? '').length < 80 ||
+          !retiredSource ||
+          !new RegExp(`\\bset\\s+${column}\\s*=\\s*(?:now|clock_timestamp)\\s*\\(`, 'i').test(
+            retiredSource,
+          ) ||
+          !purgeSource ||
+          !/await\s+input\.remove\s*\(/.test(purgeSource)
+        ) {
+          errors.push(
+            `${CONTRACT_PATH}: ${table} retirement needs an irreversible marker writer, the physical cleanup owner and a complete reason; it cannot masquerade as a restore.`,
+          );
+        }
+        continue;
+      }
       if (entry.restoredBy === null) {
         record(
           table,

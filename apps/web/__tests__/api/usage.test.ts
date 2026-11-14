@@ -70,6 +70,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 const mockGetRollingUsage = vi.fn();
 vi.mock('@/lib/server/rolling-usage', () => ({
   getRollingUsage: (...args: unknown[]) => mockGetRollingUsage(...args),
+  getAccountOverageMicrousd: async () => 0,
 }));
 
 vi.mock('@/lib/errors', async (importOriginal) => {
@@ -116,12 +117,12 @@ const MOCK_BALANCE = {
   account_id: 'acct-abc',
   period_start: '2026-02-01T00:00:00Z',
   period_end: '2026-02-28T23:59:59Z',
-  credits_allocated_microusd: 12_000_000,
-  credits_used_microusd: 3_000_000,
-  credits_remaining_microusd: 9_000_000,
-  credits_allocated_cents: 1200,
-  credits_used_cents: 300,
-  credits_remaining_cents: 900,
+  credits_allocated_microusd: 10_000_000,
+  credits_used_microusd: 2_500_000,
+  credits_remaining_microusd: 7_500_000,
+  credits_allocated_cents: 1000,
+  credits_used_cents: 250,
+  credits_remaining_cents: 750,
   daily_limit_cents: 360,
   daily_used_cents: 50,
   daily_remaining_cents: 310,

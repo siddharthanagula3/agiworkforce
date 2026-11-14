@@ -68,6 +68,13 @@ import {
   type WorkingTreeChanges,
   type WorkspaceRoot,
   type WorkspaceRootKind,
+  STORAGE_CLEAN_COMMAND,
+  STORAGE_READ_COMMAND,
+  type StorageCleanup,
+  type StorageUsage,
+  type BrowserPaneBounds,
+  type BrowserPaneState,
+  type BrowserSites,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary, BrowserTabSummary } from '@agiworkforce/types';
 import type {
@@ -76,6 +83,8 @@ import type {
   SkillListResponse,
   ThreadCompactResponse,
   ThreadDeleteResponse,
+  McpServerSummary,
+  McpServerToolsResponse,
 } from '@agiworkforce/types/protocol';
 
 const NO_HOST_MESSAGE = 'Local access is only available in Desktop.';
@@ -654,8 +663,12 @@ export function listDeveloperModels(
   });
 }
 
-export function listDeveloperSessions(): Promise<DeveloperSessionList> {
-  return invoke<DeveloperSessionList>('developer_session_list');
+export function listDeveloperSessions(
+  options: { includeArchived?: boolean } = {},
+): Promise<DeveloperSessionList> {
+  return options.includeArchived
+    ? invoke<DeveloperSessionList>('developer_session_list', { includeArchived: true })
+    : invoke<DeveloperSessionList>('developer_session_list');
 }
 
 /**
@@ -780,6 +793,26 @@ export function archiveDeveloperThread(rootId: string, threadId: string): Promis
   return invoke<boolean>('developer_thread_archive', { rootId, threadId });
 }
 
+export function unarchiveDeveloperThread(rootId: string, threadId: string): Promise<boolean> {
+  return invoke<boolean>('developer_thread_unarchive', { rootId, threadId });
+}
+
+export function renameDeveloperThread(
+  rootId: string,
+  threadId: string,
+  title: string,
+): Promise<LocalDeveloperSession> {
+  return invoke<LocalDeveloperSession>('developer_thread_rename', { rootId, threadId, title });
+}
+
+export function pinDeveloperThread(
+  rootId: string,
+  threadId: string,
+  pinned: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('developer_thread_pin', { rootId, threadId, pinned });
+}
+
 /** Take a session from the program writing it, so turns sent from here run. */
 export function takeOverDeveloperThread(
   rootId: string,
@@ -815,8 +848,11 @@ export function listLocalBranches(rootId: string): Promise<LocalBranches | null>
   return invoke<LocalBranches | null>('developer_branches_list', { rootId });
 }
 
-export function pushLocalBranch(rootId: string): Promise<LocalBranchPush> {
-  return invoke<LocalBranchPush>('developer_branch_push', { rootId });
+export function pushLocalBranch(rootId: string, newBranchTitle?: string): Promise<LocalBranchPush> {
+  return invoke<LocalBranchPush>(
+    'developer_branch_push',
+    newBranchTitle === undefined ? { rootId } : { rootId, newBranchTitle },
+  );
 }
 
 export function switchLocalBranch(rootId: string, branch: string): Promise<string> {
@@ -918,4 +954,183 @@ export function cancelBrowserSignIn(): Promise<{ cancelled: true }> {
 
 export function readBrowserSignInState(): Promise<PendingBrowserSignIn> {
   return invoke<PendingBrowserSignIn>(BROWSER_SIGN_IN_STATE);
+}
+
+export function readStorageUsage(): Promise<StorageUsage> {
+  return invoke<StorageUsage>(STORAGE_READ_COMMAND, {});
+}
+
+export function cleanStorage(cleanup: StorageCleanup): Promise<StorageUsage> {
+  return invoke<StorageUsage>(STORAGE_CLEAN_COMMAND, { cleanup });
+}
+
+export function openBrowserPane(
+  bounds: BrowserPaneBounds,
+  address: string | null,
+): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>('browser_pane_open', { bounds, address });
+}
+
+export function navigateBrowserPane(address: string): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>('browser_pane_navigate', { address });
+}
+
+export function stepBrowserPane(step: 'back' | 'forward' | 'reload'): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>(`browser_pane_${step}`, {});
+}
+
+export function setBrowserPaneBounds(bounds: BrowserPaneBounds): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>('browser_pane_bounds', { bounds });
+}
+
+export function hideBrowserPane(): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>('browser_pane_hide', {});
+}
+
+export function readBrowserSites(): Promise<BrowserSites> {
+  return invoke<BrowserSites>('browser_sites_read', {});
+}
+
+export function removeBrowserSite(host: string): Promise<BrowserSites> {
+  return invoke<BrowserSites>('browser_sites_remove', { host });
+}
+
+export function blockBrowserSite(host: string): Promise<BrowserSites> {
+  return invoke<BrowserSites>('browser_sites_block', { host });
+}
+
+export function clearBrowserPaneData(): Promise<boolean> {
+  return invoke<boolean>('browser_pane_clear_data', {});
+}
+
+export function onBrowserPaneState(listener: (state: BrowserPaneState) => void): () => void {
+  const host = getHostBridge();
+  if (!host) return () => undefined;
+  return host.onRuntimeEvent((event) => {
+    if (event.kind === 'browser-pane') listener(event.state);
+  });
+}
+
+export interface DeveloperTerminalOutput {
+  terminalId: string;
+  data?: string;
+  exitCode?: number | null;
+}
+
+export function openDeveloperTerminal(
+  rootId: string,
+  cols: number,
+  rows: number,
+): Promise<{ terminalId: string }> {
+  return invoke<{ terminalId: string }>('developer_terminal_open', { rootId, cols, rows });
+}
+
+export function writeDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  data: string,
+): Promise<boolean> {
+  return invoke<boolean>('developer_terminal_write', { rootId, terminalId, data });
+}
+
+export function resizeDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  cols: number,
+  rows: number,
+): Promise<boolean> {
+  return invoke<boolean>('developer_terminal_resize', { rootId, terminalId, cols, rows });
+}
+
+export function closeDeveloperTerminal(rootId: string, terminalId: string): Promise<boolean> {
+  return invoke<boolean>('developer_terminal_close', { rootId, terminalId });
+}
+
+export function onDeveloperTerminal(
+  rootId: string,
+  listener: (output: DeveloperTerminalOutput) => void,
+): () => void {
+  const host = getHostBridge();
+  if (!host) return () => undefined;
+  return host.onRuntimeEvent((event) => {
+    if (event.kind !== 'developer-terminal' || event.rootId !== rootId) return;
+    listener({
+      terminalId: event.terminalId,
+      ...(event.data === undefined ? {} : { data: event.data }),
+      ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
+    });
+  });
+}
+
+const browserPaneSupport = new WeakMap<object, Promise<boolean>>();
+
+/** Whether this shell has the browser pane; one built before it answers "unknown command". */
+export function browserPaneSupported(): Promise<boolean> {
+  const host = getHostBridge();
+  if (!host || host.shell !== 'electron') return Promise.resolve(false);
+  let probe = browserPaneSupport.get(host);
+  if (!probe) {
+    probe = host
+      .invokeRuntime<BrowserPaneState>('browser_pane_state', {})
+      .then((response) => response.ok || response.error.code !== 'unknown-command')
+      .catch(() => false);
+    browserPaneSupport.set(host, probe);
+  }
+  return probe;
+}
+
+export interface DeveloperMcpServerInput {
+  name: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  transport?: 'http' | 'sse';
+  env?: Record<string, string>;
+}
+
+export function listDeveloperMcpServers(rootId: string): Promise<McpServerSummary[]> {
+  return invoke<McpServerSummary[]>('developer_mcp_list', { rootId });
+}
+
+export function addDeveloperMcpServer(
+  rootId: string,
+  input: DeveloperMcpServerInput,
+): Promise<unknown> {
+  return invoke<unknown>('developer_mcp_add', { rootId, ...input });
+}
+
+export function removeDeveloperMcpServer(rootId: string, name: string): Promise<unknown> {
+  return invoke<unknown>('developer_mcp_remove', { rootId, name });
+}
+
+export function setDeveloperMcpServerEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<unknown> {
+  return invoke<unknown>('developer_mcp_set_enabled', { rootId, name, enabled });
+}
+
+export function testDeveloperMcpServer(
+  rootId: string,
+  name: string,
+): Promise<{
+  name: string;
+  connected: boolean;
+  elapsedMs: number;
+  toolCount: number;
+  error?: string;
+}> {
+  return invoke('developer_mcp_test', { rootId, name });
+}
+
+export function developerMcpServerTools(
+  rootId: string,
+  name: string,
+): Promise<McpServerToolsResponse> {
+  return invoke<McpServerToolsResponse>('developer_mcp_tools', { rootId, name });
+}
+
+export function openDeveloperMcpConfig(): Promise<boolean> {
+  return invoke<boolean>('developer_mcp_open_config', {});
 }

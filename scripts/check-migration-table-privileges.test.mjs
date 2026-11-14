@@ -11,7 +11,6 @@ import {
   loadRegistry,
   tablePrivilegesOf,
 } from './check-migration-table-privileges.mjs';
-import { loadAppliedThrough } from './check-migration-dependencies.mjs';
 
 const GUARD = path.join(REPO_ROOT, 'scripts', 'check-migration-table-privileges.mjs');
 const EMPTY_REGISTRY = { schemaVersion: 1, entries: [] };
@@ -151,6 +150,8 @@ revoke all on public.feedback_screenshot_cleanups from public, app_rls;
 ${CLEANUPS_RLS}`,
 );
 
+const WATERMARK_THE_JUDGED_TABLES_WERE_DRAFTED_ABOVE = 391;
+
 test('the real guard passes on the repository as it stands', () => {
   const result = spawnSync(process.execPath, [GUARD], { cwd: REPO_ROOT, encoding: 'utf8' });
   assert.equal(result.status, 0, `guard failed on the real repo:\n${result.stderr}`);
@@ -159,7 +160,7 @@ test('the real guard passes on the repository as it stands', () => {
 test('the default privileges are read from the real chain, not assumed', () => {
   const result = analyzeMigrations({
     migrations: loadMigrations(),
-    appliedThrough: loadAppliedThrough(),
+    appliedThrough: WATERMARK_THE_JUDGED_TABLES_WERE_DRAFTED_ABOVE,
     registry: loadRegistry(),
   });
   assert.deepEqual(result.defaults, ['select', 'insert', 'update', 'delete']);

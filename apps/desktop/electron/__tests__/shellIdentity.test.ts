@@ -47,6 +47,16 @@ describe('readShellIdentity', () => {
     await expect(readShellIdentity()).resolves.toEqual({ signedIn: false, email: null });
   });
 
+  it.each([
+    [403, { error: { code: 'FORBIDDEN', message: 'You are not a member of that workspace.' } }],
+    [503, { error: { code: 'SERVICE_UNAVAILABLE', message: 'Try again shortly.' } }],
+  ])('answers unknown rather than signed out on a %s', async (status, body) => {
+    fetchMock.mockResolvedValueOnce(json(body, status));
+    const { readShellIdentity } = await import('../shellIdentity');
+
+    await expect(readShellIdentity()).resolves.toBeNull();
+  });
+
   it('answers unknown rather than signed out when the read fails', async () => {
     fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'));
     const { readShellIdentity } = await import('../shellIdentity');

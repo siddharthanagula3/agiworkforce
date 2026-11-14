@@ -10,7 +10,7 @@ Use this skill for tables, datasets, metrics, and quantitative comparisons.
 
 1. Inspect the available schema, units, time range, nulls, and obvious quality problems.
 2. State the question, analysis grain, and assumptions before calculating.
-3. Use code for transformations and calculations so the result is reproducible.
+3. When code execution is on, use it for transformations and calculations so the result is reproducible. When it is off, show each calculation and say the figures were worked out without running code.
 4. Preserve source rows unless the user explicitly asks for a mutation.
 5. Validate totals, denominators, joins, filters, and date boundaries with independent checks.
 6. Separate observed results from interpretation. Do not imply causation from correlation.

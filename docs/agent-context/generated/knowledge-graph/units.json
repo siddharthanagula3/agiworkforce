@@ -2296,10 +2296,9 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 4,
+      "files": 1,
       "roles": {
-        "config": 2,
-        "source": 2
+        "config": 1
       }
     },
     {
@@ -2361,12 +2360,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 320,
+      "files": 355,
       "roles": {
         "config": 1,
         "doc": 6,
         "other": 3,
-        "source": 279,
+        "source": 314,
         "test": 31
       }
     },
@@ -2412,15 +2411,15 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1791,
+      "files": 1938,
       "roles": {
         "asset": 59,
-        "config": 20,
+        "config": 22,
         "doc": 1,
-        "other": 22,
-        "source": 1087,
+        "other": 24,
+        "source": 1179,
         "style": 2,
-        "test": 600
+        "test": 651
       }
     },
     {
@@ -2458,7 +2457,7 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 608,
+      "files": 609,
       "roles": {
         "asset": 12,
         "config": 6,
@@ -2466,7 +2465,7 @@
         "other": 31,
         "source": 243,
         "style": 3,
-        "test": 310
+        "test": 311
       }
     },
     {
@@ -2616,17 +2615,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8323,
+      "files": 8394,
       "roles": {
         "asset": 57,
-        "config": 83,
+        "config": 93,
         "doc": 51,
         "generated": 2,
-        "migration": 740,
+        "migration": 746,
         "other": 37,
-        "source": 3524,
+        "source": 3550,
         "style": 35,
-        "test": 3794
+        "test": 3823
       }
     },
     {
@@ -2643,11 +2642,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 356,
+      "files": 358,
       "roles": {
         "asset": 20,
         "config": 37,
-        "doc": 284,
+        "doc": 286,
         "other": 6,
         "source": 6,
         "test": 3
@@ -2672,13 +2671,13 @@
       "lanes": [
         "rust-runtime-protocol"
       ],
-      "files": 662,
+      "files": 817,
       "roles": {
         "config": 13,
         "generated": 4,
         "other": 1,
-        "source": 610,
-        "test": 34
+        "source": 762,
+        "test": 37
       }
     },
     {
@@ -2695,12 +2694,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 241,
+      "files": 257,
       "roles": {
         "asset": 1,
         "config": 21,
-        "doc": 173,
-        "generated": 45,
+        "doc": 177,
+        "generated": 57,
         "other": 1
       }
     },
@@ -2798,7 +2797,8 @@
         "apps/extension-vscode",
         "apps/mobile",
         "apps/web",
-        "packages/ai/provider-runtime"
+        "packages/ai/provider-runtime",
+        "packages/ai/providers/anthropic"
       ],
       "lanes": [],
       "files": 10,
@@ -2887,10 +2887,10 @@
       "lanes": [
         "provider-routing"
       ],
-      "files": 37,
+      "files": 38,
       "roles": {
         "config": 3,
-        "source": 19,
+        "source": 20,
         "test": 15
       }
     },
@@ -2974,6 +2974,7 @@
         "scripts/check-no-hardcoded-models.sh"
       ],
       "dependsOn": [
+        "packages/ai/agent-core",
         "packages/ai/provider-protocol",
         "packages/ai/provider-runtime",
         "packages/contracts/types"
@@ -4007,11 +4008,11 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 169,
+      "files": 179,
       "roles": {
-        "config": 7,
-        "source": 102,
-        "test": 60
+        "config": 13,
+        "source": 104,
+        "test": 62
       }
     },
     {
@@ -4110,7 +4111,7 @@
       "path": "packages/contracts/local-runtime",
       "name": "@agiworkforce/local-runtime-contract",
       "kind": "package",
-      "purpose": "Typed contract for the privileged Electron local runtime. Pure types and validation; performs no I/O.",
+      "purpose": "Typed contract for privileged desktop runtimes. Pure types and validation; performs no I/O.",
       "owner": "Privileged local runtime contract",
       "trustBoundary": "the request and response shapes the Electron shell's privileged local runtime accepts, with the path-safety and capability predicates that decide what a workspace grant reaches; pure types and validation, performs no I/O",
       "status": "active-canonical-owner",
@@ -4131,11 +4132,11 @@
         "packages/platform/utils"
       ],
       "lanes": [],
-      "files": 44,
+      "files": 48,
       "roles": {
-        "config": 3,
-        "source": 26,
-        "test": 15
+        "config": 4,
+        "source": 28,
+        "test": 16
       }
     },
     {
@@ -4267,11 +4268,11 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 818,
+      "files": 962,
       "roles": {
-        "config": 27,
-        "generated": 488,
-        "source": 173,
+        "config": 29,
+        "generated": 629,
+        "source": 174,
         "test": 130
       }
     },
@@ -4420,7 +4421,8 @@
       "entry": [
         ".",
         "./search",
-        "./src/index.ts"
+        "./src/index.ts",
+        "./testing"
       ],
       "agentsDoc": "AGENTS.md",
       "checks": [
@@ -4433,10 +4435,10 @@
       "lanes": [
         "database-compliance"
       ],
-      "files": 30,
+      "files": 31,
       "roles": {
         "config": 3,
-        "source": 14,
+        "source": 15,
         "test": 13
       }
     },
@@ -4920,13 +4922,13 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 188,
+      "files": 190,
       "roles": {
         "asset": 1,
         "config": 3,
-        "source": 106,
+        "source": 107,
         "style": 1,
-        "test": 77
+        "test": 78
       }
     },
     {
@@ -4985,12 +4987,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 450,
+      "files": 454,
       "roles": {
         "config": 3,
-        "source": 208,
+        "source": 210,
         "style": 3,
-        "test": 236
+        "test": 238
       }
     },
     {
@@ -5110,10 +5112,10 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 256,
+      "files": 274,
       "roles": {
         "asset": 2,
-        "config": 157,
+        "config": 175,
         "doc": 9,
         "other": 14,
         "source": 50,

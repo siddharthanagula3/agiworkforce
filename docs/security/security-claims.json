@@ -347,7 +347,7 @@
       "implementation": [
         "apps/web/lib/connectors/oauth-access.ts#disconnectConnectorOAuthGrant",
         "apps/web/lib/connectors/oauth-access.ts#revokeAllConnectorTokensAtProviders",
-        "apps/web/lib/connectors/oauth-store.ts#revokeConnectorOAuthGrant"
+        "apps/web/lib/connectors/oauth-store.ts#captureAndRevokeConnectorOAuthGrants"
       ],
       "proof": [
         {
@@ -1464,7 +1464,7 @@
       "id": "approval-precedence-and-tool-table",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "rows",
-      "rows": 85,
+      "rows": 86,
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ChatRequest } from '@agiworkforce/types';
+import { getModelsForProvider, type ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
 import {
   ANTHROPIC_BETWEEN_TOOLS_MODEL_ID,
@@ -16,23 +16,50 @@ function baseReq(overrides: Partial<ChatRequest> = {}): ChatRequest {
 }
 
 describe('translateChatRequest · adaptive thinking', () => {
-  it('maps {type: "adaptive"} straight through', () => {
+  it('maps {type: "adaptive"} straight through with the display the model needs', () => {
     const out = translateChatRequest(baseReq({ thinking: { type: 'adaptive' } }));
-    expect(out.thinking).toEqual({ type: 'adaptive' });
+    expect(out.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
   });
 
   it('normalizes legacy enabled thinking to adaptive and preserves disabled', () => {
     expect(
       translateChatRequest(baseReq({ thinking: { type: 'enabled', budgetTokens: 16384 } }))
         .thinking,
-    ).toEqual({ type: 'adaptive' });
+    ).toEqual({ type: 'adaptive', display: 'summarized' });
     expect(translateChatRequest(baseReq({ thinking: { type: 'disabled' } })).thinking).toEqual({
       type: 'disabled',
     });
   });
 
-  it('omits thinking entirely when unset', () => {
-    expect(translateChatRequest(baseReq()).thinking).toBeUndefined();
+  it('asks for a readable summary when the model thinks by default and the turn names no mode', () => {
+    expect(translateChatRequest(baseReq()).thinking).toEqual({
+      type: 'adaptive',
+      display: 'summarized',
+    });
+  });
+
+  it('asks every Anthropic model the catalog marks for a summarized display', () => {
+    const marked = getModelsForProvider('anthropic').filter(
+      (model) => model.reasoning?.thinkingDisplay === 'summarized',
+    );
+    expect(marked.length).toBeGreaterThan(0);
+    for (const model of marked) {
+      const out = translateChatRequest(
+        baseReq({ model: model.id, thinking: { type: 'adaptive' } }),
+      );
+      expect(out.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
+    }
+  });
+
+  it('never adds a display to between_tools, which takes no other field', () => {
+    const out = translateChatRequest(
+      baseReq({
+        model: ANTHROPIC_BETWEEN_TOOLS_MODEL_ID,
+        thinking: { type: 'disabled' },
+        effort: 'high',
+      }),
+    );
+    expect(out.thinking).toEqual({ type: 'between_tools' });
   });
 
   it('turns thinking off with the wire value a model declares when it rejects disabled', () => {
@@ -58,7 +85,7 @@ describe('translateChatRequest · effort / output_config', () => {
     const out = translateChatRequest(
       baseReq({ thinking: { type: 'enabled', budgetTokens: 32768 }, effort: 'high' }),
     );
-    expect(out.thinking).toEqual({ type: 'adaptive' });
+    expect(out.thinking).toEqual({ type: 'adaptive', display: 'summarized' });
     expect(out.output_config).toEqual({ effort: 'high' });
   });
 

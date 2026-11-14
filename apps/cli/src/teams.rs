@@ -428,6 +428,7 @@ impl TeamManager {
         let owner = crate::process_tree::current_owner();
         let started = std::thread::Builder::new()
             .name(format!("teammate-{name}"))
+            .stack_size(crate::subagent::AGENT_THREAD_STACK_BYTES)
             .spawn(move || {
                 let runtime = match tokio::runtime::Builder::new_current_thread()
                     .enable_all()

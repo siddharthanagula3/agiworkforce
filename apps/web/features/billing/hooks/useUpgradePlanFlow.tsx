@@ -104,7 +104,7 @@ export function useUpgradePlanFlow({
           return;
         }
         if (subscription?.subscription_source !== 'stripe') {
-          toast.error(billingOwnerPlanChangeMessage(subscription?.subscription_source));
+          toast.error(billingOwnerPlanChangeMessage(subscription));
           openSettings('billing');
           return;
         }

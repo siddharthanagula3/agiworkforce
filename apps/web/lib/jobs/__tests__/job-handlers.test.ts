@@ -1,5 +1,8 @@
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { JOB_KINDS } from '../job-queues';
 type ScanModule0 = typeof import('@/lib/device-steps/device-registry');
 type ScanModule1 = typeof import('../job-service');
 type ScheduleNotificationModule = typeof import('@/lib/services/schedule-notification-service');
@@ -56,7 +59,9 @@ vi.mock('@/lib/server/scheduled-account-erasure', () => ({
   eraseScheduledAccount: mocks.eraseScheduledAccount,
   reEraseTombstonedAccount: mocks.reEraseTombstonedAccount,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
+  createProjectKnowledgeCleanupPlan: vi.fn(),
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
   getProjectKnowledgeObject: vi.fn(),
 }));
@@ -557,8 +562,10 @@ describe('the registry', () => {
   });
 
   it('registers a handler for every kind a producer can enqueue', () => {
+    expect(Object.keys(BACKGROUND_JOB_HANDLERS).sort()).toEqual(Object.keys(JOB_KINDS).sort());
     expect(Object.keys(BACKGROUND_JOB_HANDLERS).sort()).toEqual(
       [
+        'data-deletion.project-knowledge-object',
         'data-deletion.scheduled-account-erasure',
         'data-export.build-archive',
         'data-export.expire-archive',
@@ -577,6 +584,9 @@ describe('the registry', () => {
         'webhooks.signaling-device-revoke',
       ].sort(),
     );
+    expect(
+      Object.values(BACKGROUND_JOB_HANDLERS).every((handler) => typeof handler === 'function'),
+    ).toBe(true);
   });
 });
 

@@ -39,7 +39,7 @@ const DESKTOP_OPERATING_SYSTEMS = ['macOS', 'Windows', 'Linux'] as const;
 
 export const SURFACE_PLATFORMS = {
   web: ['Web'],
-  desktop: DESKTOP_OPERATING_SYSTEMS,
+  desktop: ['macOS'],
   cli: DESKTOP_OPERATING_SYSTEMS,
   mobile: ['iOS', 'Android'],
   vscode: DESKTOP_OPERATING_SYSTEMS,

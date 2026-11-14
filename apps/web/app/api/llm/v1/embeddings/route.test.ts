@@ -7,14 +7,28 @@ type SideCallTrainingPolicyModule = typeof import('@/lib/server/side-call-traini
 
 const CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
-const mocks = vi.hoisted(() => ({
-  requireUser: vi.fn(async () => 'user-1'),
-  reserve: vi.fn(async () => ({ reservationId: 'reservation-1' })),
-  finalize: vi.fn(async () => ({})),
-  getSubscription: vi.fn(async () => ({ plan_tier: 'pro', status: 'active' })),
-  fetch: vi.fn(),
-  providerAllowed: vi.fn(async (..._args: unknown[]) => true),
-}));
+const mocks = vi.hoisted(() => {
+  const markStarted = vi.fn(async (_reservation: { reservationId?: string }) => undefined);
+  return {
+    requireUser: vi.fn(async () => 'user-1'),
+    reserve: vi.fn(async () => ({ reservationId: 'reservation-1' })),
+    markStarted,
+    // finalize_managed_usage_request_microusd refuses to complete a request the
+    // provider was never marked as started on, and the service throws on that.
+    finalize: vi.fn(async (input: { reservationId?: string; outcome: string }) => {
+      const started = markStarted.mock.calls.some(
+        ([reservation]) => reservation.reservationId === input.reservationId,
+      );
+      if (input.outcome === 'completed' && !started) {
+        throw new Error('Managed usage billing returned an invalid finalization.');
+      }
+      return {};
+    }),
+    getSubscription: vi.fn(async () => ({ plan_tier: 'pro', status: 'active' })),
+    fetch: vi.fn(),
+    providerAllowed: vi.fn(async (..._args: unknown[]) => true),
+  };
+});
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
@@ -53,6 +67,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
       (mocks.reserve as unknown as (...a: unknown[]) => unknown)(...args),
     finalizeManagedUsageRequest: (...args: unknown[]) =>
       (mocks.finalize as unknown as (...a: unknown[]) => unknown)(...args),
+    markManagedUsageProviderStarted: (...args: unknown[]) =>
+      (mocks.markStarted as unknown as (...a: unknown[]) => unknown)(...args),
   };
 });
 
@@ -163,13 +179,26 @@ describe('POST /api/llm/v1/embeddings, success', () => {
     expect(body.data).toHaveLength(1);
   });
 
-  it('settles the reservation as completed', async () => {
+  it('settles the reservation as completed and answers', async () => {
+    googleReturns([[0.1]]);
+
+    const response = await POST(post({ input: 'hello' }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+    expect((mocks.finalize.mock.calls[0] as unknown[])[0]).toMatchObject({ outcome: 'completed' });
+  });
+
+  it('marks the provider as started before calling it, so the turn can be billed', async () => {
     googleReturns([[0.1]]);
 
     await POST(post({ input: 'hello' }));
 
-    expect(mocks.finalize).toHaveBeenCalledTimes(1);
-    expect((mocks.finalize.mock.calls[0] as unknown[])[0]).toMatchObject({ outcome: 'completed' });
+    const providerCallOrder = firstProviderCallOrder();
+    expect(mocks.markStarted).toHaveBeenCalledWith(
+      expect.objectContaining({ reservationId: 'reservation-1' }),
+    );
+    expect(mocks.markStarted.mock.invocationCallOrder[0]!).toBeLessThan(providerCallOrder!);
   });
 
   it('reserves before calling the provider', async () => {

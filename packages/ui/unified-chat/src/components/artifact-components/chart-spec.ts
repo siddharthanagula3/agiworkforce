@@ -1,10 +1,11 @@
 import { agiPalette, type AgiThemeMode } from '@agiworkforce/design-tokens';
 import { translateUiPlural } from '@agiworkforce/ui';
-import type { ChartCellValue, ChartSeriesSpec, ChartSpec } from '@agiworkforce/types';
+import type { ChartCellValue, ChartRenderSpec, ChartSeriesSpec } from '@agiworkforce/types';
 
 export {
   CHART_DONUT_TYPES,
   CHART_KINDS,
+  CHART_RENDER_KINDS,
   CHART_ROW_CAP,
   CHART_SERIES_CAP,
   parseChartArtifact,
@@ -14,6 +15,8 @@ export type {
   ChartCellValue,
   ChartKind,
   ChartParseResult,
+  ChartRenderKind,
+  ChartRenderSpec,
   ChartRow,
   ChartSeriesSpec,
   ChartSpec,
@@ -121,7 +124,7 @@ export function formatChartShare(share: number): string {
   return `${Math.round(percent)}%`;
 }
 
-function describeSeries(spec: ChartSpec, entry: ChartSeriesSpec): string | null {
+function describeSeries(spec: ChartRenderSpec, entry: ChartSeriesSpec): string | null {
   const points = spec.rows
     .map((row) => ({ category: row[spec.xKey], value: row[entry.dataKey] }))
     .filter(
@@ -151,7 +154,7 @@ function describeSeries(spec: ChartSpec, entry: ChartSeriesSpec): string | null 
   return `${label}: starts at ${at(first)}, ends at ${at(last)}, lowest ${at(lowest)}, highest ${at(highest)}.`;
 }
 
-export function summarizeChart(spec: ChartSpec, fallbackTitle?: string): string {
+export function summarizeChart(spec: ChartRenderSpec, fallbackTitle?: string): string {
   const rawTitle = spec.title ?? fallbackTitle?.trim();
   let titleEnd = rawTitle?.length ?? 0;
   while (titleEnd > 0 && '.!?'.includes(rawTitle![titleEnd - 1]!)) titleEnd -= 1;
@@ -164,7 +167,7 @@ export function summarizeChart(spec: ChartSpec, fallbackTitle?: string): string 
   const plotted =
     spec.kind === 'pie'
       ? `${spec.donut ? 'Donut' : 'Pie'} chart of ${pointCount}, one slice per ${xAxis}.`
-      : `${spec.kind === 'bar' ? 'Bar' : 'Line'} chart of ${pointCount}, ${xAxis} on the horizontal axis${spec.yLabel ? ` and ${spec.yLabel} on the vertical axis` : ''}.`;
+      : `${spec.kind === 'bar' ? 'Bar' : spec.kind === 'scatter' ? 'Scatter' : 'Line'} chart of ${pointCount}, ${xAxis} on the horizontal axis${spec.yLabel ? ` and ${spec.yLabel} on the vertical axis` : ''}.`;
   const truncated =
     spec.totalRows > spec.rows.length
       ? `Showing the first ${spec.rows.length} of ${spec.totalRows} points.`

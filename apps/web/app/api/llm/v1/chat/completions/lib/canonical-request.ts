@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  formatTurnContext,
   openAIWireRequestToChatRequest,
   supportsOpenAIReasoningEffort,
   toProviderApiModelId,
@@ -52,6 +53,45 @@ function toWireMessage(
   if (msg.tool_calls !== undefined) wire.tool_calls = msg.tool_calls as OpenAIWireToolCall[];
   if (msg.__canonicalThinking !== undefined) wire.__canonicalThinking = msg.__canonicalThinking;
   return wire;
+}
+
+function wireParts(content: OpenAIWireMessage['content']): Array<Record<string, unknown>> {
+  if (Array.isArray(content)) return content;
+  return content ? [{ type: 'text', text: content }] : [];
+}
+
+/**
+ * Places the turn context right after the messages the turn arrived with, on
+ * the same message every step of a tool loop: moving it, or rebuilding the
+ * turn it joined, would be a history edit that invalidates both the prompt
+ * cache and any thinking block that follows.
+ */
+function withTurnContext(
+  messages: OpenAIWireMessage[],
+  turnContext: ProcessedRequest['llmRequest']['turnContext'],
+): OpenAIWireMessage[] {
+  if (!turnContext) return messages;
+  const text = formatTurnContext(turnContext.text);
+  const placed = [...messages];
+  const start = Math.max(Math.min(turnContext.afterMessages, placed.length) - 1, 0);
+  for (let index = start; index < placed.length; index += 1) {
+    const message = placed[index]!;
+    if (message.role === 'user') {
+      placed[index] = {
+        ...message,
+        content: [...wireParts(message.content), { type: 'text', text }],
+      };
+      return placed;
+    }
+    if (message.role === 'tool') {
+      let lastToolResult = index;
+      while (placed[lastToolResult + 1]?.role === 'tool') lastToolResult += 1;
+      placed.splice(lastToolResult + 1, 0, { role: 'user', content: text });
+      return placed;
+    }
+  }
+  placed.push({ role: 'user', content: text });
+  return placed;
 }
 
 function splitTools(tools: unknown[] | undefined): {
@@ -139,7 +179,10 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
 
   const wireRequest: OpenAIWireChatRequest = {
     model: wireModelId(llmRequest.model, processed.provider),
-    messages: llmRequest.messages.map((message) => toWireMessage(message, admitDocument)),
+    messages: withTurnContext(
+      llmRequest.messages.map((message) => toWireMessage(message, admitDocument)),
+      llmRequest.turnContext,
+    ),
     ...(llmRequest.stream !== undefined ? { stream: llmRequest.stream } : {}),
     ...(llmRequest.temperature !== undefined ? { temperature: llmRequest.temperature } : {}),
     ...(llmRequest.max_tokens !== undefined ? { max_tokens: llmRequest.max_tokens } : {}),

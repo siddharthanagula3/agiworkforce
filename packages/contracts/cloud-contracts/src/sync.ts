@@ -7,7 +7,11 @@ import {
   CONVERSATION_TITLE_MAX_LENGTH,
   MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH,
 } from './conversations';
-import { PROJECT_DESCRIPTION_MAX_LENGTH, PROJECT_INSTRUCTIONS_MAX_LENGTH } from './projects';
+import {
+  PROJECT_NAME_MAX_LENGTH,
+  PROJECT_DESCRIPTION_MAX_LENGTH,
+  PROJECT_INSTRUCTIONS_MAX_LENGTH,
+} from './projects';
 
 export const ServerVersionSchema = z
   .string()
@@ -182,15 +186,20 @@ export const ChatSyncPullResponseSchema = z.object({
 });
 export type ChatSyncPullResponse = z.infer<typeof ChatSyncPullResponseSchema>;
 
-export const ConversationSyncPushItemSchema = z.object({
-  id: z.string().uuid(),
-  title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH),
-  model: z.string().max(200).nullable().optional(),
-  projectId: z.string().max(200).nullable().optional(),
-  pinned: z.boolean().optional(),
-  baseVersion: ServerVersionSchema,
-  isDeleted: z.boolean().optional(),
-});
+export const ConversationSyncPushItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string().max(CONVERSATION_TITLE_MAX_LENGTH).optional(),
+    model: z.string().max(200).nullable().optional(),
+    projectId: z.string().max(200).nullable().optional(),
+    pinned: z.boolean().optional(),
+    baseVersion: ServerVersionSchema,
+    isDeleted: z.boolean().optional(),
+  })
+  .refine((item) => item.title !== undefined || Number(item.baseVersion) !== 0, {
+    path: ['title'],
+    message: 'A conversation created by a push must carry a title.',
+  });
 export type ConversationSyncPushItem = z.infer<typeof ConversationSyncPushItemSchema>;
 
 export const MessageSyncPushItemSchema = z.object({
@@ -358,7 +367,7 @@ export type ProjectsSyncPullResponse = z.infer<typeof ProjectsSyncPullResponseSc
 
 export const ProjectSyncPushItemSchema = z.object({
   id: z.string().uuid(),
-  name: z.string().max(200),
+  name: z.string().max(PROJECT_NAME_MAX_LENGTH),
   description: z.string().max(PROJECT_DESCRIPTION_MAX_LENGTH).nullable().optional(),
   instructions: z.string().max(PROJECT_INSTRUCTIONS_MAX_LENGTH).nullable().optional(),
   color: z.string().max(50).nullable().optional(),

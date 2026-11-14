@@ -17,6 +17,54 @@
 
 @layer base {
   :root {
+    --hue-terminal-light-black: #000000;
+    --hue-terminal-light-red: #cd3131;
+    --hue-terminal-light-green: #00bc00;
+    --hue-terminal-light-yellow: #949800;
+    --hue-terminal-light-blue: #0451a5;
+    --hue-terminal-light-magenta: #bc05bc;
+    --hue-terminal-light-cyan: #0598bc;
+    --hue-terminal-light-white: #555555;
+    --hue-terminal-light-bright-black: #666666;
+    --hue-terminal-light-bright-red: #cd3131;
+    --hue-terminal-light-bright-green: #14ce14;
+    --hue-terminal-light-bright-yellow: #b5ba00;
+    --hue-terminal-light-bright-blue: #0451a5;
+    --hue-terminal-light-bright-magenta: #bc05bc;
+    --hue-terminal-light-bright-cyan: #0598bc;
+    --hue-terminal-light-bright-white: #a5a5a5;
+    --hue-terminal-dark-black: #000000;
+    --hue-terminal-dark-red: #cd3131;
+    --hue-terminal-dark-green: #0dbc79;
+    --hue-terminal-dark-yellow: #e5e510;
+    --hue-terminal-dark-blue: #2472c8;
+    --hue-terminal-dark-magenta: #bc3fbc;
+    --hue-terminal-dark-cyan: #11a8cd;
+    --hue-terminal-dark-white: #e5e5e5;
+    --hue-terminal-dark-bright-black: #666666;
+    --hue-terminal-dark-bright-red: #f14c4c;
+    --hue-terminal-dark-bright-green: #23d18b;
+    --hue-terminal-dark-bright-yellow: #f5f543;
+    --hue-terminal-dark-bright-blue: #3b8eea;
+    --hue-terminal-dark-bright-magenta: #d670d6;
+    --hue-terminal-dark-bright-cyan: #29b8db;
+    --hue-terminal-dark-bright-white: #e5e5e5;
+    --terminal-ansi-black: var(--hue-terminal-light-black);
+    --terminal-ansi-red: var(--hue-terminal-light-red);
+    --terminal-ansi-green: var(--hue-terminal-light-green);
+    --terminal-ansi-yellow: var(--hue-terminal-light-yellow);
+    --terminal-ansi-blue: var(--hue-terminal-light-blue);
+    --terminal-ansi-magenta: var(--hue-terminal-light-magenta);
+    --terminal-ansi-cyan: var(--hue-terminal-light-cyan);
+    --terminal-ansi-white: var(--hue-terminal-light-white);
+    --terminal-ansi-bright-black: var(--hue-terminal-light-bright-black);
+    --terminal-ansi-bright-red: var(--hue-terminal-light-bright-red);
+    --terminal-ansi-bright-green: var(--hue-terminal-light-bright-green);
+    --terminal-ansi-bright-yellow: var(--hue-terminal-light-bright-yellow);
+    --terminal-ansi-bright-blue: var(--hue-terminal-light-bright-blue);
+    --terminal-ansi-bright-magenta: var(--hue-terminal-light-bright-magenta);
+    --terminal-ansi-bright-cyan: var(--hue-terminal-light-bright-cyan);
+    --terminal-ansi-bright-white: var(--hue-terminal-light-bright-white);
     /* ---- layer 1: neutral primitives ------------------------------------
      * Hue 220 at 8-18% saturation. A pure grey reads as unconsidered; this is
      * biased toward the accent so the neutrals read as chosen, without being
@@ -383,6 +431,22 @@
    * saturated than their light counterparts because the same value that reads
    * as a signal on white reads as a smear on near-black. */
   .dark {
+    --terminal-ansi-black: var(--hue-terminal-dark-black);
+    --terminal-ansi-red: var(--hue-terminal-dark-red);
+    --terminal-ansi-green: var(--hue-terminal-dark-green);
+    --terminal-ansi-yellow: var(--hue-terminal-dark-yellow);
+    --terminal-ansi-blue: var(--hue-terminal-dark-blue);
+    --terminal-ansi-magenta: var(--hue-terminal-dark-magenta);
+    --terminal-ansi-cyan: var(--hue-terminal-dark-cyan);
+    --terminal-ansi-white: var(--hue-terminal-dark-white);
+    --terminal-ansi-bright-black: var(--hue-terminal-dark-bright-black);
+    --terminal-ansi-bright-red: var(--hue-terminal-dark-bright-red);
+    --terminal-ansi-bright-green: var(--hue-terminal-dark-bright-green);
+    --terminal-ansi-bright-yellow: var(--hue-terminal-dark-bright-yellow);
+    --terminal-ansi-bright-blue: var(--hue-terminal-dark-bright-blue);
+    --terminal-ansi-bright-magenta: var(--hue-terminal-dark-bright-magenta);
+    --terminal-ansi-bright-cyan: var(--hue-terminal-dark-bright-cyan);
+    --terminal-ansi-bright-white: var(--hue-terminal-dark-bright-white);
     --background: var(--neutral-0);
     --foreground: var(--neutral-fg-1);
     --border: var(--neutral-4);

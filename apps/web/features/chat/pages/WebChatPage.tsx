@@ -5,6 +5,7 @@ import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-spac
 import { StudyModeIndicator } from '@/features/study/components/StudyModeIndicator';
 import { useConversationStudySession } from '@/features/study/hooks/use-conversation-study-session';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { useWindowEdgeOffset } from '@/features/chat/hooks/use-window-edge-offset';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { isKeepableChatMessage } from '@/lib/chat-kept-messages';
 import { clientProvisionalTitle } from '@/lib/chat-title';
@@ -355,6 +356,7 @@ import {
   type ResearchRunActionHandler,
   type ResearchRunControls,
 } from '../components/research/research-run-controls';
+import { AnswerUiFollowUpProvider } from '../components/messages/cards/answer-ui/answer-ui-follow-up';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
@@ -1125,6 +1127,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const settingsSectionParam = searchParams?.get(SETTINGS_DEEP_LINK_QUERY_KEY) ?? null;
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
+  const appHeaderRef = useRef<HTMLElement>(null);
+  useWindowEdgeOffset(appHeaderRef);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const shellLayout = useShellLayout();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -4396,6 +4400,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const sendAnswerUiFollowUp = useCallback(
+    (text: string) => {
+      handleSend(text);
+    },
+    [handleSend],
+  );
+
   const handleAcceptProviderNotice = useCallback(async () => {
     const pending = pendingProviderNotice;
     if (!pending || pendingProviderNoticeRef.current !== pending) return;
@@ -4769,8 +4780,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [storeProjects, activeProjectId, setActiveProject, handleComposerCreateProject],
   );
 
+  const firstAnswerStreaming = displayedMessages[1]?.isStreaming === true;
   useEffect(() => {
     if (!displayedConversationId || displayedMessages.length !== 2) return;
+    if (firstAnswerStreaming) return;
     const conversationId = displayedConversationId;
     if (autoTitledConversationsRef.current.has(conversationId)) return;
     const convo = conversations.find((c) => c.id === conversationId);
@@ -4822,6 +4835,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     displayedMessages.length,
+    firstAnswerStreaming,
     displayedConversationId,
     conversations,
     localModelSelection,
@@ -7036,7 +7050,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ) : null
           ) : (
             <header
+              ref={appHeaderRef}
               data-app-header=""
+              data-window-edge="offset"
               className={cn(
                 '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4 max-md:ps-2',
                 isEmptyChat
@@ -7460,50 +7476,52 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                           <ResearchRunControlsProvider value={researchRunControls}>
-                            <ProjectAnswerSaveProvider value={projectAnswerSave}>
-                              <ChatMessageList
-                                messages={chatMessages}
-                                transcriptPatch={chatMessageProjection.patch}
-                                currentTier={currentTier}
-                                conversationId={displayedConversationId}
-                                isLoading={isLoading && !isStreaming}
-                                isUserTyping={isUserTyping}
-                                onRegenerate={handleRegenerateMessage}
-                                onScheduleTurn={handleScheduleTurn}
-                                onRetryResearch={handleRetryResearch}
-                                onResearchPlanDecision={handleResearchPlanDecision}
-                                onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                                retryingResearchMessageId={retryingResearchMessageId}
-                                onContinue={handleContinueMessage}
-                                onEdit={handleEditMessage}
-                                onFenceEdit={handleFenceEdit}
-                                onDelete={handleDeleteMessage}
-                                onDeleteVariant={handleDeleteVariant}
-                                countVariantFollowers={countVariantFollowers}
-                                onReact={handleReactMessage}
-                                onPin={handlePinMessage}
-                                branchGroupsByMessageId={branchGroupsByMessageId}
-                                branchingMessageId={branchingMessageId}
-                                onBranch={createBranch}
-                                onSwitchBranch={switchBranch}
-                                variantInfoByMessageId={variantInfoByMessageId}
-                                onSelectVariant={handleSelectVariant}
-                                activeLeafId={activeLeafId}
-                                variantAnchorMessageId={variantAnchorMessageId}
-                                isConversationStreaming={isStreaming}
-                                onRegenerateImage={handleRegenerateImageInPlace}
-                                onResumeVideo={handleResumeVideo}
-                                onRetryVideo={handleRetryVideo}
-                                onSendMessage={setComposerPrefill}
-                                onSubmitPrompt={handleSubmitPrompt}
-                                onPaywallUpgrade={handlePaywallRecovery}
-                                onPaywallDismiss={handlePaywallDismiss}
-                                onRegenerateWithModel={handleRegenerateWithModel}
-                                regenerateModelOptions={regenerateModelOptions}
-                                turnErrorActive={turnErrorNotice !== null}
-                                temporaryChat={temporaryChatActive}
-                              />
-                            </ProjectAnswerSaveProvider>
+                            <AnswerUiFollowUpProvider value={sendAnswerUiFollowUp}>
+                              <ProjectAnswerSaveProvider value={projectAnswerSave}>
+                                <ChatMessageList
+                                  messages={chatMessages}
+                                  transcriptPatch={chatMessageProjection.patch}
+                                  currentTier={currentTier}
+                                  conversationId={displayedConversationId}
+                                  isLoading={isLoading && !isStreaming}
+                                  isUserTyping={isUserTyping}
+                                  onRegenerate={handleRegenerateMessage}
+                                  onScheduleTurn={handleScheduleTurn}
+                                  onRetryResearch={handleRetryResearch}
+                                  onResearchPlanDecision={handleResearchPlanDecision}
+                                  onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                                  retryingResearchMessageId={retryingResearchMessageId}
+                                  onContinue={handleContinueMessage}
+                                  onEdit={handleEditMessage}
+                                  onFenceEdit={handleFenceEdit}
+                                  onDelete={handleDeleteMessage}
+                                  onDeleteVariant={handleDeleteVariant}
+                                  countVariantFollowers={countVariantFollowers}
+                                  onReact={handleReactMessage}
+                                  onPin={handlePinMessage}
+                                  branchGroupsByMessageId={branchGroupsByMessageId}
+                                  branchingMessageId={branchingMessageId}
+                                  onBranch={createBranch}
+                                  onSwitchBranch={switchBranch}
+                                  variantInfoByMessageId={variantInfoByMessageId}
+                                  onSelectVariant={handleSelectVariant}
+                                  activeLeafId={activeLeafId}
+                                  variantAnchorMessageId={variantAnchorMessageId}
+                                  isConversationStreaming={isStreaming}
+                                  onRegenerateImage={handleRegenerateImageInPlace}
+                                  onResumeVideo={handleResumeVideo}
+                                  onRetryVideo={handleRetryVideo}
+                                  onSendMessage={setComposerPrefill}
+                                  onSubmitPrompt={handleSubmitPrompt}
+                                  onPaywallUpgrade={handlePaywallRecovery}
+                                  onPaywallDismiss={handlePaywallDismiss}
+                                  onRegenerateWithModel={handleRegenerateWithModel}
+                                  regenerateModelOptions={regenerateModelOptions}
+                                  turnErrorActive={turnErrorNotice !== null}
+                                  temporaryChat={temporaryChatActive}
+                                />
+                              </ProjectAnswerSaveProvider>
+                            </AnswerUiFollowUpProvider>
                           </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>

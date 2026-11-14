@@ -570,6 +570,7 @@ async function handlePush(request: NextRequest) {
           with input as materialized (
             select (item ->> 'id')::uuid as id,
                    item ->> 'title' as title,
+                   item ? 'title' as has_title,
                    item ->> 'model' as model,
                    item ? 'model' as has_model,
                    item ->> 'projectId' as project_id,
@@ -581,7 +582,7 @@ async function handlePush(request: NextRequest) {
               from jsonb_array_elements($2::jsonb) as source(item)
           ), updated as (
             update web_conversations as existing
-               set title = incoming.title,
+               set title = case when incoming.has_title then incoming.title else existing.title end,
                    model = case when incoming.has_model then incoming.model else existing.model end,
                    project_id = case when incoming.has_project_id then incoming.project_id else existing.project_id end,
                    pinned = case when incoming.has_pinned then incoming.pinned else existing.pinned end,

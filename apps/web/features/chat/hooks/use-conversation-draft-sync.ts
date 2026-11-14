@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MANAGED_CLOUD_DRAFT_SAVE_DEBOUNCE_MS } from '@agiworkforce/cloud-contracts';
 import { toast } from 'sonner';
 import { useSession } from '@/lib/identity/client';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
@@ -21,7 +22,6 @@ import {
   saveConversationDraft,
 } from '../services/conversation-draft';
 
-const DRAFT_SAVE_DEBOUNCE_MS = 1_500;
 const DRAFT_RETRY_DELAY_MS = 3_000;
 const MAX_AUTOMATIC_DRAFT_SAVE_ATTEMPTS = 3;
 
@@ -305,7 +305,7 @@ export function useConversationDraftSync(): DraftConflictControls {
           }
         });
       }
-    }, DRAFT_SAVE_DEBOUNCE_MS);
+    }, MANAGED_CLOUD_DRAFT_SAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [
     draftsByConversation,

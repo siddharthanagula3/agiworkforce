@@ -2124,6 +2124,15 @@ html[data-desktop-host^='electron-darwin'] [data-window-edge='left'] {
   padding-left: var(--agi-window-title-strip-inset);
 }
 
+/* A header that starts beside the sidebar rail rather than at the window's
+   left edge steps aside only by what is left of the inset there. */
+html[data-desktop-host^='electron-darwin'] [data-window-edge='offset'] {
+  padding-left: max(
+    1rem,
+    calc(var(--agi-window-title-strip-inset) - var(--window-edge-offset, 0px) + 0.5rem)
+  );
+}
+
 /* The server cannot know it is answering the shell, so it renders the browser
    version of a route and the page swaps after hydration. This is what stops a
    frame of the marketing site appearing in the app window in between. */

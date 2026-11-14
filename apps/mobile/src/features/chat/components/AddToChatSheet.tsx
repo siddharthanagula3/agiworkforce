@@ -35,6 +35,7 @@ import {
   BookOpen,
   Globe,
   ClipboardPaste,
+  Terminal,
   MonitorPlay,
   FileSpreadsheet,
 } from 'lucide-react-native';
@@ -192,11 +193,21 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     grantedCapabilities.includes('canUseDeepResearch');
   const showWebSearchToggle =
     FEATURES.webSearch && appMode === 'cloud' && grantedCapabilities.includes('canUseWebSearch');
+  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
+  const showRunCodeToggle =
+    FEATURES.codeExecution &&
+    appMode === 'cloud' &&
+    features.codeExecution &&
+    selectedModelMetadata?.capabilities?.codeExecution === true &&
+    codeExecutionAvailable &&
+    grantedCapabilities.includes('canUseCloudExecution');
   const sourcesKey = useChatViewStore((s) => s.styleConversationId) ?? NEW_CHAT_STYLE_KEY;
   const disabledConnectorIds = useChatViewStore(
     (s) => s.disabledConnectorIdsByConversation[sourcesKey],
   );
   const toggleChatConnector = useChatViewStore((s) => s.toggleChatConnector);
+  const runCodeOn = useChatViewStore((s) => s.runCodeByConversation[sourcesKey] === true);
+  const setRunCode = useChatViewStore((s) => s.setRunCode);
   const showConnectors =
     appMode === 'cloud' && FEATURES.connectors && grantedCapabilities.includes('canUseConnectors');
   const chatConnectors = useChatConnectorOptions(showConnectors);
@@ -277,7 +288,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     videoModelId !== null &&
     grantedCapabilities.includes('canUseVideoGeneration') &&
     canUseBillingPlanCapability(tier, 'video_generation');
-  const codeExecutionAvailable = useTierStore((s) => s.codeExecutionAvailable);
   const outputFormat = useOutputFormatStore((s) => s.format);
   const setOutputFormat = useOutputFormatStore((s) => s.setFormat);
   const showOutputSection =
@@ -285,6 +295,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     appMode === 'cloud' &&
     mediaMode === 'text' &&
     FEATURES.codeExecution &&
+    features.codeExecution &&
     selectedModelMetadata?.capabilities?.tools === true &&
     codeExecutionAvailable &&
     grantedCapabilities.includes('canUseCloudExecution');
@@ -1123,6 +1134,19 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 label="Deep research"
                 enabled={features.research}
                 onToggle={handleResearchToggle}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : null}
+            {showRunCodeToggle ? (
+              <CapabilityRow
+                icon={<Terminal size={18} color={themeColors.textMuted} />}
+                label="Run code"
+                enabled={runCodeOn}
+                onToggle={(value) => {
+                  haptic();
+                  setRunCode(sourcesKey, value);
+                }}
                 textColor={themeColors.textPrimary}
                 mutedColor={themeColors.textMuted}
               />

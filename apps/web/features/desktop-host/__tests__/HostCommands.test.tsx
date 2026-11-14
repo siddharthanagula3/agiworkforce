@@ -184,6 +184,35 @@ describe('host commands', () => {
     stop();
   });
 
+  it.each([
+    ['find', 'find'],
+    ['open-search', 'open-search'],
+    ['previous-chat', 'previous-chat'],
+    ['next-chat', 'next-chat'],
+    ['new-temporary-chat', 'new-temporary-chat'],
+  ] as const)('turns the %s menu command into the %s app command', (command, appCommand) => {
+    const answered = vi.fn();
+    const stop = onAppCommand(appCommand, answered);
+    render(<Harness host={fakeHost()} />);
+
+    deliver?.(command);
+
+    expect(answered).toHaveBeenCalledTimes(1);
+    stop();
+  });
+
+  it('ignores a command from a newer shell instead of opening the shortcut sheet', () => {
+    const opened = vi.fn();
+    const stop = onAppCommand('open-shortcuts', opened);
+    render(<Harness host={fakeHost()} />);
+
+    deliver?.('open-the-pod-bay-doors' as HostCommand);
+
+    expect(opened).not.toHaveBeenCalled();
+    expect(useUIStore.getState().sidebarCollapsed).toBe(false);
+    stop();
+  });
+
   it('subscribes to nothing in a browser', () => {
     render(<Harness host={null} />);
 

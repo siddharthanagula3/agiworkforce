@@ -166,3 +166,37 @@ describe('readServerSentEvents body ownership', () => {
     expect(body.locked).toBe(false);
   });
 });
+
+describe('readServerSentEvents abort', () => {
+  it('ends a read that never settles once its signal aborts, and cancels the body', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"partial":true}\n\n'));
+      },
+      cancel,
+    });
+    const controller = new AbortController();
+    const iterator = readServerSentEvents(body, { signal: controller.signal });
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { data: '{"partial":true}' },
+    });
+    const pending = iterator.next();
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(body.locked).toBe(false);
+  });
+
+  it('refuses to read at all when the signal has already aborted', async () => {
+    const body = new ReadableStream<Uint8Array>({ start() {} });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      readServerSentEvents(body, { signal: controller.signal }).next(),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});

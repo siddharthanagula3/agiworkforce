@@ -173,7 +173,7 @@ async function settleBilling(
       model,
       usage,
       reason: `cloud_agent_workflow_${outcome}`,
-      cancelled: outcome === 'cancelled',
+      cancelled: outcome === 'cancelled' || outcome === 'failed',
       attempt,
     });
     return {

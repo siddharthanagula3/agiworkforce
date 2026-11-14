@@ -405,6 +405,41 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     );
   });
 
+  it('keeps the stored title when an update push carries none', async () => {
+    mockQuery.mockResolvedValue([]);
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [{ id: CONV_ID, baseVersion: '45', pinned: true }],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const call = mockQuery.mock.calls.find(([sql]) =>
+      String(sql).includes('insert into web_conversations'),
+    );
+    expect(String(call?.[0])).toContain(
+      'set title = case when incoming.has_title then incoming.title else existing.title end',
+    );
+    const pushed = JSON.parse(String((call?.[1] as unknown[])[1])) as Array<
+      Record<string, unknown>
+    >;
+    expect(pushed[0]).not.toHaveProperty('title');
+  });
+
+  it('rejects a push that creates a conversation without a title', async () => {
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [{ id: CONV_ID, baseVersion: '0' }],
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
   it('counts only new conversations and messages against the Free daily caps', async () => {
     mockQuery.mockResolvedValue([]);
     const EXISTING_CONV_ID = '018f6f2a-0000-7000-8000-000000000005';

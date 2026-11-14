@@ -371,6 +371,10 @@
       },
       {
         "from": "@agiworkforce/providers-anthropic",
+        "to": "@agiworkforce/agent-core"
+      },
+      {
+        "from": "@agiworkforce/providers-anthropic",
         "to": "@agiworkforce/provider-protocol"
       },
       {
@@ -950,6 +954,7 @@
       "agiworkforce-cli",
       "agiworkforce-command-registry",
       "agiworkforce-desktop",
+      "agiworkforce-desktop-gpui",
       "agiworkforce-execpolicy",
       "agiworkforce-licensing",
       "agiworkforce-llm",
@@ -1012,6 +1017,18 @@
       },
       {
         "from": "agiworkforce-cli",
+        "to": "agiworkforce-worktree"
+      },
+      {
+        "from": "agiworkforce-desktop-gpui",
+        "to": "agiworkforce-app-server"
+      },
+      {
+        "from": "agiworkforce-desktop-gpui",
+        "to": "agiworkforce-protocol"
+      },
+      {
+        "from": "agiworkforce-desktop-gpui",
         "to": "agiworkforce-worktree"
       },
       {

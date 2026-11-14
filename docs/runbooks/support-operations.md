@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-07
+Last updated: 2026-11-11
 
 How a support request reaches a person, how it is prioritised, escalated and
 answered, and what support may say. Written for whoever answers support, and
@@ -93,12 +93,12 @@ reference id; the product never says a person is connecting when one is not
 The only response commitments are the ones `/support` publishes, from
 `apps/web/features/marketing/components/pages/company/support-content.ts`:
 
-| Plan                               | Channel and commitment                                                                                      |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Local, BYOK, Free, Basic, Pro, Max | Help centre and email. No response-time commitment                                                          |
-| Team                               | Email. First response within 1 business day, Central Time                                                   |
-| Enterprise                         | A named contact. First response within 4 business hours for a service-down report, 1 business day otherwise |
-| Premium support                    | Only as a negotiated line on an Enterprise order form                                                       |
+| Plan                                          | Channel and commitment                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Local, BYOK, Free, Basic, Premium, Max, Ultra | Help centre and email. No response-time commitment                                                          |
+| Team                                          | Email. First response within 1 business day, Central Time                                                   |
+| Enterprise                                    | A named contact. First response within 4 business hours for a service-down report, 1 business day otherwise |
+| Premium support                               | Only as a negotiated line on an Enterprise order form                                                       |
 
 There is no 24/7 coverage and no page may imply it. The live handoff's own
 reply promise is `AGI_SUPPORT_EXPECTED_REPLY_COPY`, "within one business day"

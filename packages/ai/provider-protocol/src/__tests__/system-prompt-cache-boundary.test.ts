@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   SYSTEM_PROMPT_CACHE_BOUNDARY,
+  joinSystemTextsAtCacheBoundary,
   prependSystemPromptAdditionAfterCacheBoundary,
   splitSystemPromptCacheBoundary,
   stripSystemPromptCacheBoundary,
@@ -70,5 +71,42 @@ describe('prependSystemPromptAdditionAfterCacheBoundary', () => {
   it('returns the original prompt when no addition is supplied', () => {
     const prompt = `stable${SYSTEM_PROMPT_CACHE_BOUNDARY}dynamic`;
     expect(prependSystemPromptAdditionAfterCacheBoundary({ systemPrompt: prompt })).toBe(prompt);
+  });
+});
+
+describe('joinSystemTextsAtCacheBoundary', () => {
+  it('keeps the opening text as the stable prefix when a later system text arrives', () => {
+    const opening = ['agent prompt\n', 'client rules'];
+    const alone = joinSystemTextsAtCacheBoundary(opening, []);
+    const withLater = joinSystemTextsAtCacheBoundary(opening, ['<attached_files/>']);
+
+    expect(alone).toBe('agent prompt\n\n\nclient rules');
+    expect(splitSystemPromptCacheBoundary(withLater)).toEqual({
+      stablePrefix: alone,
+      dynamicSuffix: '<attached_files/>',
+    });
+  });
+
+  it('trims trailing whitespace the boundary split would trim anyway', () => {
+    const alone = joinSystemTextsAtCacheBoundary(['agent prompt\n'], []);
+    const withLater = joinSystemTextsAtCacheBoundary(['agent prompt\n'], ['late']);
+
+    expect(alone).toBe('agent prompt');
+    expect(splitSystemPromptCacheBoundary(withLater)?.stablePrefix).toBe(alone);
+  });
+
+  it('appends later text to a dynamic tail already behind the boundary', () => {
+    const opening = [`stable${SYSTEM_PROMPT_CACHE_BOUNDARY}`];
+    expect(joinSystemTextsAtCacheBoundary(opening, [])).toBe(opening[0]);
+    expect(
+      splitSystemPromptCacheBoundary(joinSystemTextsAtCacheBoundary(opening, ['late'])),
+    ).toEqual({ stablePrefix: 'stable', dynamicSuffix: 'late' });
+  });
+
+  it('puts later text behind the boundary when nothing opens the conversation', () => {
+    expect(joinSystemTextsAtCacheBoundary([], ['late'])).toBe(
+      `${SYSTEM_PROMPT_CACHE_BOUNDARY}late`,
+    );
+    expect(joinSystemTextsAtCacheBoundary([], [])).toBe('');
   });
 });
