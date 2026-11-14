@@ -128,6 +128,8 @@ jest.mock('@/stores/notificationPrefsStore', () => {
     categoryEnabled: {
       chat_replies: true,
       tasks: true,
+      scheduled_tasks: true,
+      product_updates: false,
       product: false,
     },
     vibrationEnabled: { critical: true, high: true, normal: false, low: false },
@@ -1196,11 +1198,17 @@ describe('getCategoryForType', () => {
     'agent_failed',
     'emergency_stop_triggered',
     'agent_paused',
-    'schedule_run',
-    'schedule_triggered',
     'companion_connected',
   ] as const)('maps %s → tasks', (type) => {
     expect(getCategoryForType(type)).toBe('tasks');
+  });
+
+  it.each(['schedule_run', 'schedule_triggered'] as const)('maps %s → scheduled_tasks', (type) => {
+    expect(getCategoryForType(type)).toBe('scheduled_tasks');
+  });
+
+  it('maps product_update → product_updates', () => {
+    expect(getCategoryForType('product_update')).toBe('product_updates');
   });
 
   it('maps status_update → product', () => {
@@ -1233,6 +1241,8 @@ describe('NotificationPrefsStore, shouldNotify real logic', () => {
     const categoryEnabled = {
       chat_replies: true,
       tasks: true,
+      scheduled_tasks: true,
+      product_updates: false,
       product: false,
       ...overrides.categoryEnabled,
     };

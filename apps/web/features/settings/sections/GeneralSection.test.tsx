@@ -170,6 +170,26 @@ describe('GeneralSection preference hydration', () => {
     expect(mocks.setMotion).toHaveBeenCalledWith('reduced');
   });
 
+  it('titles the section on phones like every other section, and only there', () => {
+    render(<GeneralSection />);
+
+    const title = screen.getByRole('heading', { level: 1, name: 'General' });
+    expect(title.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['text-h1', 'font-medium', 'md:hidden']),
+    );
+  });
+
+  it('keeps each accent swatch round and gives it a 44px touch target outside the circle', () => {
+    render(<GeneralSection />);
+
+    for (const swatch of screen.getAllByRole('button', { name: / accent$/ })) {
+      const classes = swatch.className.split(/\s+/);
+      expect(classes).toEqual(
+        expect.arrayContaining(['h-7', 'w-7', 'min-h-0', 'pointer-coarse:after:-inset-2']),
+      );
+    }
+  });
+
   it('uses mobile-safe stacked rows for profile controls', () => {
     render(<GeneralSection />);
 
@@ -313,22 +333,20 @@ describe('GeneralSection read-aloud disclosure', () => {
 
     expect(screen.getByRole('combobox', { name: 'Backup read-aloud voice' })).toBeVisible();
     expect(screen.getByText(/system default output device/i)).toBeVisible();
-    expect(screen.getByText(/browsers give web pages no way to choose one/i)).toBeVisible();
+    expect(screen.getByText(/uses a few credits per reply/i)).toBeVisible();
   });
 
   it('describes read-aloud without denying the separate voice mode', () => {
     render(<GeneralSection />);
 
-    expect(screen.getByText(/Read-aloud plays a reply on request and then stops/i)).toBeVisible();
+    expect(screen.getByText(/The AGI voice uses a few credits per reply/i)).toBeVisible();
     expect(screen.queryByText(/no hands-free voice conversation/i)).toBeNull();
   });
 
   it('states how far display-language translation actually reaches', () => {
     render(<GeneralSection />);
 
-    expect(
-      screen.getByText(/Settings field labels and your conversations are unaffected/i),
-    ).toBeVisible();
+    expect(screen.getByText(/Settings labels and conversations are unaffected/i)).toBeVisible();
   });
 
   it('explains the absence rather than hiding the row when no voices exist', () => {
@@ -337,7 +355,7 @@ describe('GeneralSection read-aloud disclosure', () => {
 
     render(<GeneralSection />);
 
-    expect(screen.getByText(/no speech voices of its own/i)).toBeVisible();
+    expect(screen.getByText(/This browser has no voices/i)).toBeVisible();
   });
 });
 
@@ -489,9 +507,7 @@ describe('GeneralSection composer and theme captions', () => {
       ' + ',
     );
     expect(
-      screen.getByText(
-        `Queue follow-ups while AGI replies or steer the current reply. Press ${keys} to do the opposite for one message.`,
-      ),
+      screen.getByText(`Queue or steer while AGI replies. ${keys} does the opposite once.`),
     ).toBeVisible();
   });
 

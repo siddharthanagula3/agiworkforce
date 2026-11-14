@@ -63,8 +63,8 @@ function makeSections(input: {
   const cloudValue = cloudUnlocked ? 'Cloud' : 'Sign in';
   const localModeActive = appMode === 'local';
   const memoryDescription = localModeActive
-    ? 'View and manage local memory saved on this device.'
-    : 'View and manage the account memories used by Cloud chats.';
+    ? 'Saved on this device.'
+    : 'Account memories used in Cloud chats.';
 
   return [
     {
@@ -77,7 +77,7 @@ function makeSections(input: {
           label: 'Local Mode',
           description: localModeActive
             ? 'Private chat runs on this device.'
-            : 'Chat is set to AGI Cloud, so new chats run on our servers.',
+            : 'New chats run on AGI Cloud servers.',
           value: localModeActive ? 'Active' : 'Off',
         },
         {
@@ -125,7 +125,7 @@ function makeSections(input: {
           tone: 'cloud',
           label: 'Code execution and file creation',
           description: FEATURES.codeExecution
-            ? 'Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.'
+            ? 'Run code in a sandbox and create documents, sheets, slides and PDFs.'
             : 'Code execution is not available in this mobile release.',
           value: FEATURES.codeExecution ? cloudValue : 'Off',
           ...(FEATURES.codeExecution ? { toggle: 'codeExecution' as const } : {}),
@@ -136,7 +136,7 @@ function makeSections(input: {
           tone: 'cloud',
           label: 'Deep research',
           description: FEATURES.research
-            ? 'Allow supported Cloud models to run multi-step research with citations.'
+            ? 'Multi-step research with citations in Cloud chats.'
             : 'Deep research is not available in this mobile release.',
           value: FEATURES.research ? cloudValue : 'Off',
           ...(FEATURES.research ? { toggle: 'research' as const } : {}),
@@ -161,7 +161,7 @@ function makeSections(input: {
           tone: 'cloud',
           label: 'Web search',
           description: FEATURES.webSearch
-            ? 'Let Cloud models search the web when they need current information.'
+            ? 'Let Cloud models search the web for current information.'
             : 'Web search is not available in this mobile release.',
           value: FEATURES.webSearch ? cloudValue : 'Off',
           ...(FEATURES.webSearch ? { toggle: 'webSearch' as const } : {}),
@@ -171,7 +171,7 @@ function makeSections(input: {
           icon: RefreshCw,
           tone: 'cloud',
           label: 'Cross-device continuity',
-          description: 'See how Managed Cloud tasks continue across mobile, web, and desktop.',
+          description: 'Managed Cloud tasks across mobile, web and desktop.',
           href: '/(app)/continuity',
         },
         {
@@ -190,7 +190,7 @@ function makeSections(input: {
           icon: LockKeyhole,
           tone: 'desktop',
           label: 'Desktop control',
-          description: 'Run desktop workflows through paired Desktop sessions.',
+          description: 'Run workflows on your paired desktop.',
           href: '/(app)/companion',
         },
       ],

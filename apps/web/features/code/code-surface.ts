@@ -150,7 +150,7 @@ export const CODE_COPY = {
   harnessModelLabel: 'Model for this agent',
   harnessModelDefault: 'Automatic',
   harnessCredentialHelp:
-    'This agent runs on your own key. It stays in this session’s sandbox and is not saved to your account.',
+    'Uses your own key, kept in this session’s sandbox and not saved to your account.',
   extraHostsPlaceholder: 'api.example.com, *.internal.example.com',
   extraHostsHelp: 'Comma separated, one leading wildcard allowed, up to 10 hosts.',
   fullNetworkAcknowledgement:
@@ -158,8 +158,7 @@ export const CODE_COPY = {
   environmentPromotedToTrusted:
     'Cloning a repository needs Trusted hosts, so choosing one raises the tier.',
   approvalMode: 'Approval mode',
-  firstRunHint:
-    'Commands run in an isolated environment. Nothing reaches your local files or credentials.',
+  firstRunHint: 'Runs in the cloud. Your local files and credentials stay untouched.',
   dismissHint: 'Dismiss hint',
   changes: 'Changes',
   changesHeading: 'Changes',
@@ -203,8 +202,7 @@ export const CODE_COPY = {
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
   planNotEntitled: 'Your plan does not include managed environments.',
   upgradeHeading: 'Code is on paid plans',
-  upgradeBody:
-    'Give a task to an agent that works in its own cloud environment, on your repository or from scratch.',
+  upgradeBody: 'Give tasks to an agent that works in its own cloud environment.',
   upgradeFromPlan: 'It is included from the {plan} plan.',
   upgradeAction: 'Upgrade',
   loadFailed: 'Something went wrong. Please retry.',
@@ -268,8 +266,7 @@ export const CODE_COPY = {
   branchTruncated: 'Some branches are not listed. Type the full name to use one.',
   branchUseTyped: 'Use branch',
   branchSwitchFailed: 'That branch could not be checked out.',
-  branchSwitchHelp:
-    'Switching checks the branch out in this folder. Uncommitted changes come along when git allows it.',
+  branchSwitchHelp: 'Checks the branch out here. Uncommitted changes come along when git allows.',
 
   repositorySearchLabel: 'Search repositories',
   repositorySearchPlaceholder: 'Search repositories',
@@ -328,8 +325,7 @@ export const CODE_COPY = {
   wizardGithubTitle: 'Connect GitHub',
   wizardGithubSubtitle: 'Choose the repositories the environment may clone and push.',
   wizardGithubOption: 'Install the GitHub app',
-  wizardGithubOptionCopy:
-    'Sign in to GitHub and pick repositories. Organization repositories may need an admin to approve.',
+  wizardGithubOptionCopy: 'Pick repositories on GitHub. Organization ones may need admin approval.',
   wizardSkip: 'Skip this step',
   wizardChecking: 'Checking your setup',
   wizardStepOf: 'Step {step} of {total}',
@@ -361,8 +357,7 @@ export const CODE_COPY = {
   shareTeamHint: 'Members of your workspace can open it with the link.',
   sharePublic: 'Public',
   sharePublicHint: 'Anyone signed in to AGI can open it with the link.',
-  shareWarning:
-    'Check this session for sensitive content before you share it. It can contain code and credentials from private repositories.',
+  shareWarning: 'It can contain private code and credentials. Check it before sharing.',
   shareSnapshotNote:
     'People who open the link see your name and the session as it is when they open it.',
   shareRepositoryNote: 'Teammates also need GitHub access to the repository to open it.',
@@ -421,7 +416,7 @@ export const CODE_COPY = {
   continueElsewhere: 'Continue in VS Code or the terminal',
   resumeInTerminal: 'To continue in the terminal, run this in the same folder:',
   continueInVsCodeHelp:
-    'Opens this session in VS Code and offers to check out its branch in the folder you have open. Commit and push first so your computer can fetch it.',
+    'Opens it in VS Code and offers to check out its branch. Commit and push first.',
   changesSettings: 'Changes settings',
   changesExpand: 'Widen the panel',
   changesCollapse: 'Narrow the panel',

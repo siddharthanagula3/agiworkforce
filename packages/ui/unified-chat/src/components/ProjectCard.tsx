@@ -188,14 +188,14 @@ export function ProjectCard({
             </span>
           </div>
 
-          <div className="pointer-events-auto flex shrink-0 items-center gap-1">
+          <div className="pointer-events-auto flex shrink-0 items-center gap-1 max-md:pointer-coarse:gap-4">
             <button
               type="button"
               onClick={handleStarClick}
               aria-label={project.starred ? 'Unstar project' : 'Star project'}
               aria-pressed={project.starred ?? false}
               className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                'flex h-7 w-7 items-center justify-center rounded-md transition-colors relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-2 max-md:pointer-coarse:after:content-[""]',
                 'hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                 project.starred
                   ? 'text-[var(--chat-accent-primary-text)]'
@@ -217,7 +217,7 @@ export function ProjectCard({
                     e.stopPropagation();
                     setMenuOpen((v) => !v);
                   }}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+                  className="flex h-7 w-7 items-center justify-center rounded-md relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-2 max-md:pointer-coarse:after:content-[''] text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
                 >
                   <MoreHorizontal size={14} strokeWidth={1.75} aria-hidden="true" />
                 </button>

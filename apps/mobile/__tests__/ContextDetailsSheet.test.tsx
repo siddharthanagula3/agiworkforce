@@ -93,7 +93,7 @@ describe('context details', () => {
     );
 
     expect(getByText(/of 100 tokens/)).toBeTruthy();
-    expect(getByText(/limit of the on-device model/)).toBeTruthy();
+    expect(getByText(/on-device limit/)).toBeTruthy();
     expect(queryByText(/summarized/)).toBeNull();
   });
 
@@ -107,6 +107,6 @@ describe('context details', () => {
       />,
     );
 
-    expect(getByText(/oldest messages are summarized/)).toBeTruthy();
+    expect(getByText(/Oldest messages are summarized/)).toBeTruthy();
   });
 });

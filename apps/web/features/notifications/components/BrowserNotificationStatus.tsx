@@ -57,7 +57,7 @@ export function BrowserNotificationStatus({ id }: { id: string }) {
       role="note"
       aria-label="Browser delivery status"
       aria-live="polite"
-      className="rounded-md border border-[var(--settings-border)] p-3 text-xs text-[var(--text-3)]"
+      className="rounded-md border border-[var(--settings-border)] p-3 text-xs text-[var(--text-3)] max-md:text-sm"
     >
       <p className="m-0 font-medium text-[var(--text-1)]">Browser delivery: {copy.label}</p>
       <p className="mb-0 mt-1">{copy.detail}</p>
@@ -66,9 +66,9 @@ export function BrowserNotificationStatus({ id }: { id: string }) {
           Browser push is unavailable here; Reply ready can still use browser popups.
         </p>
       ) : null}
-      <p className="mb-0 mt-1">
-        Applies to Reply ready, browser Usage alerts and Agent run updates. Saved channels are kept;
-        email and mobile delivery are separate.
+      <p className="mb-0 mt-1 text-xs">
+        Covers Reply ready, Usage and Agent run updates. Saved channels are kept; email and mobile
+        delivery are separate.
       </p>
     </div>
   );

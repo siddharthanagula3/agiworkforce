@@ -330,7 +330,7 @@ describe('ProjectSettingsScreen sharing', () => {
     (api.get as jest.Mock).mockRejectedValue(new ApiHttpError('Forbidden', 403));
     render(<ProjectSettingsScreen projectId={PROJECT_ID} />);
     expect(await screen.findByTestId('project-members-personal')).toHaveTextContent(
-      'Only you can open this project. Projects in a workspace can be shared with its members.',
+      'Only you can open this project. Workspace projects can be shared.',
     );
   });
 

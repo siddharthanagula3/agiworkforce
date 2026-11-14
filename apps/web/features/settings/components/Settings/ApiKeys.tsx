@@ -172,7 +172,9 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-foreground">API Keys</CardTitle>
-            <CardDescription>Manage API keys for external integrations</CardDescription>
+            <CardDescription className="text-xs">
+              Manage API keys for external integrations
+            </CardDescription>
           </div>
           <Button
             onClick={() => onSetShowAPIKeyDialog(true)}
@@ -304,7 +306,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                               className="border-border bg-background text-foreground"
                             />
                           </FormControl>
-                          <FormDescription>
+                          <FormDescription className="text-xs">
                             A descriptive name to identify this API key
                           </FormDescription>
                           <FormMessage />
@@ -317,7 +319,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-foreground">Scopes</FormLabel>
-                          <FormDescription>
+                          <FormDescription className="text-xs">
                             Choose only the public API capabilities this key needs.
                           </FormDescription>
                           <div className="space-y-3 rounded-md border border-border p-3">
@@ -371,9 +373,8 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                               ))}
                             </select>
                           </FormControl>
-                          <FormDescription>
-                            The key&apos;s usage counts toward this project and its monthly limit. A
-                            key cannot move to another project later.
+                          <FormDescription className="text-xs">
+                            Usage counts toward this project. A key cannot move projects later.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -398,9 +399,8 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                               ))}
                             </select>
                           </FormControl>
-                          <FormDescription>
-                            Requests made with an expired key are refused. You can revoke a key at
-                            any time.
+                          <FormDescription className="text-xs">
+                            Expired keys are refused. You can revoke a key any time.
                           </FormDescription>
                           <FormMessage />
                         </FormItem>

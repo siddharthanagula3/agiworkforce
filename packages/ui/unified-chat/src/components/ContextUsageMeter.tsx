@@ -156,7 +156,7 @@ export function ContextUsageMeter({ conversationId, fetchInitialUsage }: Context
   const percent = contextUsagePercent(usage);
   const detail = t(
     'composer.contextUsageDetail',
-    'About {{used}} of {{window}} tokens in context. Older messages are summarized automatically as it fills; type /compact to do it now.',
+    'About {{used}} of {{window}} tokens. Older messages summarize automatically, or type /compact.',
     { used: formatTokens(usage.tokensUsed), window: formatTokens(usage.contextWindow) },
   );
 

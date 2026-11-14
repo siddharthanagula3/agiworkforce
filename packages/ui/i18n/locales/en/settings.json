@@ -62,7 +62,7 @@
   "saving": "Saving...",
   "resetToDefaults": "Reset to Defaults",
   "confirmReset": "Are you sure you want to reset all settings to defaults?",
-  "translationScope": "Translates pricing, marketing pages, device sign-in, and the app's navigation - sidebar, menus, and the composer's own labels. Settings field labels and your conversations are unaffected.",
+  "translationScope": "Translates menus, navigation and pricing. Settings labels and conversations are unaffected.",
   "connectors": {
     "filter": "Filter connectors"
   },

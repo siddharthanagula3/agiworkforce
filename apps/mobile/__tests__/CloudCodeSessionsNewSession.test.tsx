@@ -58,6 +58,21 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
+jest.mock('react-native-webrtc', () => ({
+  RTCPeerConnection: jest.fn(),
+  RTCSessionDescription: jest.fn(),
+  RTCIceCandidate: jest.fn(),
+}));
+
+jest.mock('../src/features/device-registry', () => ({
+  listAccountComputers: () => new Promise(() => undefined),
+}));
+
+jest.mock('../src/features/companion/remote-code/service', () => ({
+  listCodeSessions: jest.fn(),
+  startCodeSession: jest.fn(),
+}));
+
 jest.mock('../src/features/cloud-code/useCloudCodeAccess', () => ({
   useCloudCodeAccess: () => ({
     ready: true,
@@ -89,6 +104,10 @@ jest.mock('../src/features/cloud-code/components/NewCloudCodeSessionSheet', () =
 import { CloudCodeSessionsScreen } from '../src/features/cloud-code/CloudCodeSessionsScreen';
 import { lightColors } from '../src/ui/theme/tokens';
 import { FLOATING_PRIMARY_ACTION_GAP } from '../src/shared/components/FloatingPrimaryAction';
+import {
+  BOTTOM_SEARCH_BAR_HEIGHT,
+  BOTTOM_SEARCH_BAR_MARGIN,
+} from '../src/shared/components/BottomSearchBar';
 
 function pageBackground(screen: ReturnType<typeof render>) {
   const tree = screen.toJSON();
@@ -109,7 +128,12 @@ describe('Cloud code sessions new session action', () => {
     expect(screen.getByText('New session')).toBeTruthy();
     expect(style.position).toBe('absolute');
     expect(style.right).toBeGreaterThan(0);
-    expect(style.bottom).toBe(mockInsetBottom + FLOATING_PRIMARY_ACTION_GAP);
+    expect(style.bottom).toBe(
+      mockInsetBottom +
+        BOTTOM_SEARCH_BAR_MARGIN +
+        BOTTOM_SEARCH_BAR_HEIGHT +
+        FLOATING_PRIMARY_ACTION_GAP,
+    );
     expect(style.backgroundColor).toBe(lightColors.textPrimary);
     expect(screen.getAllByLabelText('New cloud session')).toHaveLength(1);
   });

@@ -88,6 +88,7 @@ import {
 } from './runtime/developerSessionService';
 import {
   configureRemoteControl,
+  phoneWatchesSession,
   relayDeveloperSessionEvent,
   remoteControlActive,
   remoteControlState,
@@ -2533,7 +2534,8 @@ if (!hasSingleInstanceLock) {
       workspaceConsentAtMs: (root) => agentConsentAt(root.id),
       accountBridge: { readShellIdentity, approveDeviceCode },
       spawn: spawnTrackedDeveloperRuntime,
-      answersUserInput: windowAnswersUserInput,
+      answersUserInput: (rootId, threadId) =>
+        windowAnswersUserInput() || phoneWatchesSession(rootId, threadId),
     });
 
     void startLocalRoutines((rootId, event) => agentNotifier.handle(rootId, event)).catch(

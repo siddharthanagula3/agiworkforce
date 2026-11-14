@@ -1,14 +1,24 @@
-import { render, screen } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ replace: vi.fn() }));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: mocks.replace }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 import VoiceSettingsPage from './page';
 
 describe('Web Voice settings', () => {
-  it('shows only the dictation toggle and language select that work on web', () => {
-    render(<VoiceSettingsPage />);
+  beforeEach(() => {
+    mocks.replace.mockClear();
+  });
 
-    expect(screen.getByRole('switch', { name: 'Dictation' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Dictation language' })).toBeInTheDocument();
-    expect(screen.queryByText('Managed voice is not available')).not.toBeInTheDocument();
-    expect(screen.queryByText(/Bring Your Own Key/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Learn about BYOK' })).not.toBeInTheDocument();
+  it('opens Voice inside the Settings dialog like every other section', async () => {
+    const { container } = render(<VoiceSettingsPage />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/chat?settings=voice'));
+    expect(container).toBeEmptyDOMElement();
   });
 });

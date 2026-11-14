@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ notify: vi.fn(), warn: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  notify: vi.fn(),
+  notifyReply: vi.fn(),
+  trackOutcome: vi.fn(),
+  warn: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -8,7 +13,14 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('./agent-notification-service', () => ({
   notifyAgentRunEvent: (...args: unknown[]) => mocks.notify(...args),
+  trackAgentRunOutcome: (...args: unknown[]) => mocks.trackOutcome(...args),
 }));
+vi.mock('./chat-reply-notification-service', async (importOriginal) => ({
+  ...(await importOriginal<ChatReplyNotificationModule>()),
+  notifyChatReplyReady: (...args: unknown[]) => mocks.notifyReply(...args),
+}));
+
+type ChatReplyNotificationModule = typeof import('./chat-reply-notification-service');
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -229,6 +241,51 @@ describe('cloud agent run notifications', () => {
       runId: RUN_ROW.id,
       event: 'failed',
     });
+  });
+
+  it('tells the phone its reply is ready instead of announcing an agent run', async () => {
+    const phoneChat = { ...RUN_ROW, work_mode: 'chat', origin_surface: 'mobile' };
+    vi.mocked(db.query).mockResolvedValueOnce([
+      { ...phoneChat, state: 'completed', previous_state: 'running' },
+    ]);
+
+    await transitionCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id, state: 'completed' });
+
+    expect(mocks.notify).not.toHaveBeenCalled();
+    expect(mocks.trackOutcome).toHaveBeenCalledTimes(1);
+    expect(mocks.trackOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', event: 'completed' }),
+    );
+    expect(mocks.notifyReply).toHaveBeenCalledTimes(1);
+    expect(mocks.notifyReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: RUN_ROW.id,
+        userId: 'user-1',
+        conversationId: RUN_ROW.conversation_id,
+      }),
+    );
+  });
+
+  it('keeps the run notice for a chat started on another surface or a failed reply', async () => {
+    vi.mocked(db.query)
+      .mockResolvedValueOnce([
+        { ...RUN_ROW, work_mode: 'chat', state: 'completed', previous_state: 'running' },
+      ])
+      .mockResolvedValueOnce([
+        {
+          ...RUN_ROW,
+          work_mode: 'chat',
+          origin_surface: 'mobile',
+          state: 'failed',
+          previous_state: 'running',
+        },
+      ]);
+
+    await transitionCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id, state: 'completed' });
+    await transitionCloudAgentRun(db, { userId: 'user-1', runId: RUN_ROW.id, state: 'failed' });
+
+    expect(mocks.notifyReply).not.toHaveBeenCalled();
+    expect(mocks.notify).toHaveBeenCalledTimes(2);
   });
 
   it('reads the pre-update state so a repeated terminal transition notifies once', async () => {

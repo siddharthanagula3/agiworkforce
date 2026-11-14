@@ -255,7 +255,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
       }
     }
   >
-    Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
+    Local file. Sharing doesn’t upload it to AGI Cloud.
   </Text>
 </View>
 `;
@@ -515,7 +515,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
       }
     }
   >
-    Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
+    Local file. Sharing doesn’t upload it to AGI Cloud.
   </Text>
 </View>
 `;
@@ -1025,7 +1025,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
       }
     }
   >
-    Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
+    Local file. Sharing doesn’t upload it to AGI Cloud.
   </Text>
 </View>
 `;

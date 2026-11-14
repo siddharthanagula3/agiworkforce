@@ -1107,6 +1107,15 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
       ).not.toHaveFocus();
     });
 
+    it('keeps the create split button at a 44px touch height on both halves', async () => {
+      const api = createApi();
+      render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+      const create = await screen.findByRole('button', { name: 'New task' });
+      const more = screen.getByRole('button', { name: 'More ways to create a task' });
+      expect(create.className).toContain('pointer-coarse:min-h-11');
+      expect(more.className).toContain('pointer-coarse:min-h-11');
+    });
+
     it('lays the templates out in two columns in reading order', async () => {
       const api = createApi();
       const user = userEvent.setup();

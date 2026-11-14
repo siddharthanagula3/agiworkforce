@@ -2552,16 +2552,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1685,
+      "files": 1751,
       "roles": {
         "asset": 4,
-        "config": 11,
+        "config": 12,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 913,
+        "source": 953,
         "style": 1,
-        "test": 705
+        "test": 730
       }
     },
     {
@@ -2616,7 +2616,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8311,
+      "files": 8323,
       "roles": {
         "asset": 57,
         "config": 83,
@@ -2624,9 +2624,9 @@
         "generated": 2,
         "migration": 740,
         "other": 37,
-        "source": 3520,
+        "source": 3524,
         "style": 35,
-        "test": 3786
+        "test": 3794
       }
     },
     {
@@ -2643,11 +2643,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 355,
+      "files": 356,
       "roles": {
         "asset": 20,
         "config": 37,
-        "doc": 283,
+        "doc": 284,
         "other": 6,
         "source": 6,
         "test": 3
@@ -2695,11 +2695,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 225,
+      "files": 241,
       "roles": {
         "asset": 1,
-        "config": 19,
-        "doc": 159,
+        "config": 21,
+        "doc": 173,
         "generated": 45,
         "other": 1
       }
@@ -4664,11 +4664,11 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 76,
+      "files": 77,
       "roles": {
         "config": 5,
         "source": 42,
-        "test": 29
+        "test": 30
       }
     },
     {

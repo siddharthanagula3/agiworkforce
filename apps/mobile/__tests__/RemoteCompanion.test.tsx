@@ -9,6 +9,7 @@ import { agiMobileColors } from '@agiworkforce/design-tokens';
 import { PRODUCT_NAMES, type RemoteCodeSessionSummary } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
+const mockNavigate = jest.fn();
 
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -37,7 +38,7 @@ jest.mock('expo-router', () => ({
     push: mockPush,
     replace: jest.fn(),
     back: jest.fn(),
-    navigate: jest.fn(),
+    navigate: mockNavigate,
     canGoBack: () => true,
   }),
   useLocalSearchParams: () => ({}),
@@ -98,8 +99,9 @@ import { PairingStatus } from '@/src/features/companion/components/PairingStatus
 import { DesktopInfoCard } from '@/src/features/companion/components/DesktopInfoCard';
 import {
   CodeSessionsCard,
-  groupSessionsByProject,
+  COMPUTER_SESSIONS_LINK_LABEL,
 } from '@/src/features/companion/components/CodeSessionsCard';
+import { listCodeSessions } from '@/src/features/companion/remote-code/service';
 import { QRScanner } from '@/src/features/companion/components/QRScanner';
 import RemoteControlSettingsScreen from '../app/(app)/settings/remote-control';
 
@@ -195,118 +197,46 @@ describe('desktop info card', () => {
   });
 });
 
-describe('remote projects', () => {
-  const roots = [
-    { rootId: 'r1', name: 'agiworkforce', branch: 'main', available: true },
-    { rootId: 'r2', name: 'website', branch: null, available: true },
-  ];
-
-  it('groups sessions under their project root and keeps empty roots', () => {
-    const groups = groupSessionsByProject(
-      [session('r1', 't1', 'Audit fix'), session('r3', 't3', 'Loose', 'scratch')],
-      roots,
-    );
-    expect(groups.map((g) => [g.name, g.sessions.length])).toEqual([
-      ['agiworkforce', 1],
-      ['website', 0],
-      ['scratch', 1],
-    ]);
-  });
-
-  it('expands a project to its sessions and collapses it again', () => {
+describe('computer sessions card on the Remote page', () => {
+  it('lists no session rows and links to the one Sessions list instead', () => {
     useRemoteCodeStore.setState({
-      roots,
-      sessions: [session('r1', 't1', 'Audit fix'), session('r2', 't2', 'Hero copy')],
+      roots: [{ rootId: 'r1', name: 'shop', branch: 'main', available: true }],
+      sessions: [session('r1', 't1', 'Audit fix'), session('r1', 't2', 'Hero copy')],
       sessionsSyncedAt: '2026-10-22T00:00:00.000Z',
     });
-    const { getByText, queryByText, getByLabelText, getAllByTestId } = render(
-      <CodeSessionsCard canStart={false} />,
-    );
-    expect(getByText('Projects')).toBeTruthy();
-    expect(queryByText('Audit fix')).toBeNull();
-    expect(getAllByTestId('icon-Folder')).toHaveLength(2);
-
-    const project = getByLabelText('agiworkforce, 1 session');
-    expect(project.props.accessibilityState).toMatchObject({ expanded: false });
-    fireEvent.press(project);
-    expect(getByText('Audit fix')).toBeTruthy();
-    expect(getByLabelText('agiworkforce, 1 session').props.accessibilityState).toMatchObject({
-      expanded: true,
-    });
-    expect(getAllByTestId('icon-FolderOpen')).toHaveLength(1);
-    expect(getAllByTestId('icon-ChevronDown')).toHaveLength(1);
-
-    fireEvent.press(getByLabelText('Open Audit fix'));
-    expect(mockPush).toHaveBeenCalledWith('/(app)/companion/code/t1?rootId=r1');
-
-    fireEvent.press(getByLabelText('agiworkforce, 1 session'));
-    expect(queryByText('Audit fix')).toBeNull();
-  });
-
-  it('keeps the flat session list when the desktop reports one project', () => {
-    useRemoteCodeStore.setState({
-      roots: [roots[0]],
-      sessions: [session('r1', 't1', 'Audit fix')],
-      sessionsSyncedAt: '2026-10-22T00:00:00.000Z',
-    });
-    const { getByText, queryByText } = render(<CodeSessionsCard canStart={false} />);
-    expect(queryByText('Projects')).toBeNull();
-    expect(getByText('Audit fix')).toBeTruthy();
-  });
-});
-
-describe('sessions list', () => {
-  const synced = '2026-10-22T00:00:00.000Z';
-
-  function seed(sessions: RemoteCodeSessionSummary[]) {
-    useRemoteCodeStore.setState({
-      roots: [{ rootId: 'r1', name: 'agiworkforce', branch: 'main', available: true }],
-      sessions,
-      sessionsSyncedAt: synced,
-    });
-  }
-
-  it('shows a Sessions header, an All filter and each session with its age', () => {
-    seed([
-      {
-        ...session('r1', 't1', 'Audit fix'),
-        updatedAt: new Date(Date.now() - 5 * 86_400_000).toISOString(),
-      },
-    ]);
-    const { getByText, getByLabelText } = render(<CodeSessionsCard canStart={false} />);
-    expect(getByText('Sessions')).toBeTruthy();
-    expect(getByLabelText('Filter sessions: All')).toBeTruthy();
-    expect(getByText('5d ago · r1')).toBeTruthy();
-  });
-
-  it('filters the list by status and says when nothing matches', () => {
-    seed([
-      { ...session('r1', 't1', 'Audit fix'), status: 'running' },
-      { ...session('r1', 't2', 'Hero copy'), status: 'idle' },
-    ]);
-    const { getByText, queryByText, getByLabelText } = render(
+    const { queryByText, getByLabelText, queryByLabelText } = render(
       <CodeSessionsCard canStart={false} />,
     );
 
-    fireEvent.press(getByLabelText('Filter sessions: All'));
-    fireEvent.press(getByLabelText('Running'));
-    expect(getByText('Audit fix')).toBeTruthy();
+    expect(queryByText('Audit fix')).toBeNull();
     expect(queryByText('Hero copy')).toBeNull();
-    expect(getByLabelText('Filter sessions: Running')).toBeTruthy();
+    expect(queryByLabelText('Filter sessions: All')).toBeNull();
+    expect(queryByLabelText('Search AGI Code sessions')).toBeNull();
 
-    fireEvent.press(getByLabelText('Filter sessions: Running'));
-    fireEvent.press(getByLabelText('Failed'));
-    expect(getByText('No sessions match this filter.')).toBeTruthy();
-
-    fireEvent.press(getByLabelText('Filter sessions: Failed'));
-    fireEvent.press(getByLabelText('All'));
-    expect(getByText('Hero copy')).toBeTruthy();
+    fireEvent.press(getByLabelText(COMPUTER_SESSIONS_LINK_LABEL));
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/cloud-code');
   });
 
-  it('offers no filter before there is a session to filter', () => {
-    seed([]);
-    const { queryByLabelText } = render(<CodeSessionsCard canStart={false} />);
-    expect(queryByLabelText('Filter sessions: All')).toBeNull();
+  it('asks the computer for its sessions and folders when it opens', () => {
+    render(<CodeSessionsCard canStart={false} />);
+    expect(listCodeSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the folders the computer could not read', () => {
+    useRemoteCodeStore.setState({
+      unavailable: [{ folder: 'archive', message: 'Folder is missing' }],
+    });
+    const { getByText } = render(<CodeSessionsCard canStart={false} />);
+    expect(getByText('archive: Folder is missing')).toBeTruthy();
+  });
+
+  it('keeps starting a session in a folder on this computer', () => {
+    useRemoteCodeStore.setState({
+      roots: [{ rootId: 'r1', name: 'shop', branch: 'main', available: true }],
+    });
+    const { getByText, getByLabelText } = render(<CodeSessionsCard canStart />);
+    expect(getByText('New session on this computer')).toBeTruthy();
+    expect(getByLabelText('Start the session')).toBeTruthy();
   });
 });
 

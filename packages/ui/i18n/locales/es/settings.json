@@ -61,7 +61,7 @@
   "saving": "Guardando...",
   "resetToDefaults": "Restablecer a Predeterminados",
   "confirmReset": "Estas seguro de que deseas restablecer todas las configuraciones a los valores predeterminados?",
-  "translationScope": "Traduce el sitio público, los precios y algunas etiquetas del chat. Los ajustes y la mayoría de las pantallas siguen en inglés.",
+  "translationScope": "Traduce menús, navegación y precios. Los ajustes siguen en inglés.",
   "connectors": {
     "filter": "Filtrar conectores"
   },

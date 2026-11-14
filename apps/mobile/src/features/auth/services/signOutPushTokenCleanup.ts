@@ -3,6 +3,8 @@ import { getDeviceId } from '@/lib/deviceId';
 import { secureFetch } from '@/services/secureFetch';
 
 const PUSH_TOKEN_PATH = '/api/mobile/push-token';
+const RELEASE_PARAM = 'release';
+const RELEASE_DEVICE = 'device';
 const CREDENTIAL_REJECTED_STATUS = 401;
 
 export class PushTokenCleanupCredentialRejectedError extends Error {
@@ -13,6 +15,19 @@ export class PushTokenCleanupCredentialRejectedError extends Error {
 }
 
 export async function unregisterPushTokenForSignOut(capturedClerkToken: string): Promise<void> {
+  await deletePushTokenRegistration(capturedClerkToken, { releaseDevice: false });
+}
+
+export async function releasePushDeviceForAccountHandover(
+  capturedClerkToken: string,
+): Promise<void> {
+  await deletePushTokenRegistration(capturedClerkToken, { releaseDevice: true });
+}
+
+async function deletePushTokenRegistration(
+  capturedClerkToken: string,
+  { releaseDevice }: { releaseDevice: boolean },
+): Promise<void> {
   const token = capturedClerkToken.trim();
   if (!token) return;
 
@@ -43,6 +58,7 @@ export async function unregisterPushTokenForSignOut(capturedClerkToken: string):
     await Promise.race([
       (async () => {
         endpoint.searchParams.set('deviceId', await getDeviceId());
+        if (releaseDevice) endpoint.searchParams.set(RELEASE_PARAM, RELEASE_DEVICE);
         if (controller.signal.aborted) return;
 
         const response = await secureFetch(endpoint.toString(), {

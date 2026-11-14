@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 vi.mock('./agent-notification-service', () => ({
   notifyAgentRunEvent: vi.fn(async () => ({ pushed: false })),
+  trackAgentRunOutcome: vi.fn(),
 }));
 
 import { readFileSync, readdirSync } from 'node:fs';

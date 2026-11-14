@@ -208,8 +208,7 @@ function ConnectorChoices({
       )}
       {connectors === null && connected.length > 0 ? (
         <p className="text-xs text-muted-foreground">
-          Every connector is included, including ones you connect later. Uncheck one to choose
-          exactly which the schedule uses.
+          Includes every connector, even ones you connect later. Uncheck to choose.
         </p>
       ) : connectors !== null && connected.length > 0 ? (
         <p className="text-xs text-muted-foreground">

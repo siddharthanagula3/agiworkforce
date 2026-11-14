@@ -18,13 +18,13 @@ export const AGI_WORK_INTRO_STORAGE_PREFIX = 'agi-work-intro-seen:';
 
 export const AGI_WORK_INTRO_TITLE = `Hand off a task to ${PRODUCT_NAMES.work}`;
 export const AGI_WORK_INTRO_BODY =
-  'Describe the result you want. It plans the steps and works through them with your tools.';
+  'Describe the result. It plans the steps and works through them with your tools.';
 export const AGI_WORK_INTRO_POINTS = [
   {
     icon: ShieldCheck,
-    text: 'It follows your Tool Approvals settings, so you decide what runs without asking.',
+    text: 'Your Tool Approvals decide what runs without asking.',
   },
-  { icon: ListChecks, text: 'Follow every task from Tasks on the web, desktop or phone.' },
+  { icon: ListChecks, text: 'Follow every task from Tasks on any device.' },
 ] as const;
 export const AGI_WORK_INTRO_CTA = 'Start a new task';
 
@@ -97,7 +97,11 @@ export function AgiWorkIntroDialog() {
           ))}
         </ul>
         <DialogFooter>
-          <Button type="button" className="h-10 rounded-full px-5" onClick={() => close(true)}>
+          <Button
+            type="button"
+            className="h-10 rounded-full px-5 max-md:pointer-coarse:h-11"
+            onClick={() => close(true)}
+          >
             {AGI_WORK_INTRO_CTA}
           </Button>
         </DialogFooter>

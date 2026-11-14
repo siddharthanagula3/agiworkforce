@@ -588,8 +588,7 @@ function ArtifactPreviewModal({
               </Text>
             </View>
             <Text className="text-sm leading-[18px]" style={{ color: c.textMuted }}>
-              Mobile previews, copies, and shares artifacts. Regeneration and execution stay on AGI
-              Desktop or AGI Cloud environments.
+              Preview, copy and share here. Run or regenerate on AGI Desktop or AGI Cloud.
             </Text>
           </View>
 

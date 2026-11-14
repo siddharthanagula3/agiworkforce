@@ -14,7 +14,7 @@ pub use provider_dispatch::{
 pub use streaming::{
     effort_reaches_model, offering_search, parse_paywall_body, stream_completion, WEB_SEARCH_TOOL,
 };
-pub(crate) use streaming::{routed, searching};
+pub(crate) use streaming::{forwarding_reasoning, routed, searching, ReasoningSink};
 
 // Chat wire types are shared with other surfaces through the extracted
 // `agiworkforce-llm` crate (Wave 5c1). Re-exported here so every existing

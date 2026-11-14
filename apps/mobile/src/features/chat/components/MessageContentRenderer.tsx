@@ -3,6 +3,7 @@ import { View, ScrollView, Alert, StyleSheet, type LayoutChangeEvent } from 'rea
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
+import { CodeLinesScroller } from '@/src/features/settings/code/CodeLinesScroller';
 import { MathBlock } from './MathBlock';
 import { ReportChart } from './ReportChart';
 import { MermaidDiagramBlock } from './MermaidDiagramBlock';
@@ -26,9 +27,45 @@ import { Download, Square, SquareCheck } from 'lucide-react-native';
 import { exportSourceFile, shareFile } from '@/services/fileCreation';
 import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
 
-const MIN_TABLE_COLUMN_WIDTH = 120;
+const MIN_TABLE_COLUMN_WIDTH = 48;
 const MAX_TABLE_COLUMN_WIDTH = 260;
+const MIN_FITTED_COLUMN_WIDTH = 72;
+const MIN_SCROLLED_COLUMN_WIDTH = 120;
 const WIDE_TABLE_GUTTER = 24;
+const TABLE_COLUMN_CHARACTER_WIDTH = 8;
+const TABLE_COLUMN_GAP = 12;
+const TABLE_LONG_TOKEN_LENGTH = 24;
+const MIN_LONG_TOKEN_COLUMN_WIDTH = 144;
+const MARKDOWN_LINK_TARGET = /\]\([^)]*\)/g;
+
+function clampTableColumnWidth(width: number): number {
+  return Math.min(MAX_TABLE_COLUMN_WIDTH, Math.max(MIN_TABLE_COLUMN_WIDTH, width));
+}
+
+export function markdownTableNaturalWidth(cells: readonly string[]): number {
+  const longestCell = cells.reduce((longest, cell) => Math.max(longest, cell.length), 0);
+  return clampTableColumnWidth(longestCell * TABLE_COLUMN_CHARACTER_WIDTH + TABLE_COLUMN_GAP);
+}
+
+/**
+ * The narrowest a column may get: wide enough for its longest word on one
+ * line. A token too long to keep whole (a link, a path, a hash) breaks
+ * wherever it must, so it only asks for a width that is comfortable to read.
+ */
+export function markdownTableWordWidth(cells: readonly string[]): number {
+  let width = 0;
+  for (const cell of cells) {
+    for (const token of cell.replace(MARKDOWN_LINK_TARGET, ']').split(/\s+/)) {
+      width = Math.max(
+        width,
+        token.length > TABLE_LONG_TOKEN_LENGTH
+          ? MIN_LONG_TOKEN_COLUMN_WIDTH
+          : token.length * TABLE_COLUMN_CHARACTER_WIDTH + TABLE_COLUMN_GAP,
+      );
+    }
+  }
+  return Math.min(MAX_TABLE_COLUMN_WIDTH, width);
+}
 
 export function wideTableOverflow(input: {
   tableWidth: number;
@@ -40,8 +77,63 @@ export function wideTableOverflow(input: {
   const widest = Math.max(containerWidth, paneWidth - WIDE_TABLE_GUTTER * 2);
   return Math.max(0, Math.min(tableWidth, widest) - containerWidth);
 }
-const TABLE_COLUMN_CHARACTER_WIDTH = 8;
-const TABLE_COLUMN_PADDING = 16;
+
+export interface MarkdownTableLayout {
+  /** Fitted tables show every column at once; scrolled ones have too many to read that way. */
+  mode: 'fit' | 'scroll';
+  widths: number[];
+  overflow: number;
+}
+
+/**
+ * A table is shown whole whenever each column can keep a readable width: at
+ * its natural size when that fits, otherwise narrowed with the text wrapping
+ * inside the cells, never below the column's longest word. Only a table with
+ * more columns than the width can hold scrolls sideways.
+ */
+export function markdownTableLayout(input: {
+  naturalWidths: readonly number[];
+  wordWidths: readonly number[];
+  containerWidth: number;
+  paneWidth: number;
+}): MarkdownTableLayout {
+  const { naturalWidths, wordWidths, paneWidth } = input;
+  const roomiest = Math.max(0, paneWidth - WIDE_TABLE_GUTTER * 2);
+  const containerWidth = input.containerWidth > 0 ? input.containerWidth : roomiest;
+  const widest = Math.max(containerWidth, roomiest);
+  const total = (widths: readonly number[]) => widths.reduce((sum, width) => sum + width, 0);
+  const natural = total(naturalWidths);
+  if (natural <= widest) {
+    return {
+      mode: 'fit',
+      widths: [...naturalWidths],
+      overflow: wideTableOverflow({ tableWidth: natural, containerWidth, paneWidth }),
+    };
+  }
+
+  const floors = naturalWidths.map((width, index) =>
+    Math.min(width, Math.max(MIN_FITTED_COLUMN_WIDTH, wordWidths[index] ?? 0)),
+  );
+  const spare = widest - total(floors);
+  if (spare >= 0) {
+    const wanted = naturalWidths.map((width, index) => width - (floors[index] ?? 0));
+    const wantedTotal = total(wanted);
+    return {
+      mode: 'fit',
+      widths: floors.map((floor, index) =>
+        wantedTotal > 0 ? floor + (spare * (wanted[index] ?? 0)) / wantedTotal : floor,
+      ),
+      overflow: widest - containerWidth,
+    };
+  }
+
+  const widths = naturalWidths.map((width) => Math.max(width, MIN_SCROLLED_COLUMN_WIDTH));
+  return {
+    mode: 'scroll',
+    widths,
+    overflow: wideTableOverflow({ tableWidth: total(widths), containerWidth, paneWidth }),
+  };
+}
 const FOOTNOTE_LINE_HEIGHT = 20;
 const TASK_MARKER_SIZE = 16;
 const listItemPattern = /^(\s*)(?:([-*+])|(\d{1,9})([.)]))\s+(.+)$/;
@@ -84,6 +176,7 @@ type TableSort = { column: number; direction: 'ascending' | 'descending' } | nul
 function MarkdownTable({
   rows,
   columnWidths,
+  columnWordWidths,
   alignments,
   keyBase,
   renderColors,
@@ -91,6 +184,7 @@ function MarkdownTable({
 }: {
   rows: string[][];
   columnWidths: number[];
+  columnWordWidths: number[];
   alignments: readonly TableAlignment[];
   keyBase: string;
   renderColors: ColorScheme;
@@ -109,106 +203,124 @@ function MarkdownTable({
   const sortable = body.length > 1;
   const { contentWidth: paneWidth } = useResponsiveLayout();
   const [containerWidth, setContainerWidth] = useState(0);
-  const tableWidth = columnWidths.reduce((total, width) => total + width, 0) + 2;
-  const overflow = wideTableOverflow({ tableWidth, containerWidth, paneWidth });
+  const layout = markdownTableLayout({
+    naturalWidths: columnWidths,
+    wordWidths: columnWordWidths,
+    containerWidth,
+    paneWidth,
+  });
+  const fitted = layout.mode === 'fit';
 
   const cellStyle = (colIdx: number) => ({
-    width: columnWidths[colIdx],
-    borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
-    borderRightColor: renderColors.border,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    ...(fitted
+      ? { flexGrow: layout.widths[colIdx] ?? 1, flexShrink: 1, flexBasis: 0, minWidth: 0 }
+      : { width: layout.widths[colIdx] }),
+    paddingRight: colIdx < numCols - 1 ? TABLE_COLUMN_GAP : 0,
+    paddingVertical: 8,
     justifyContent: 'center' as const,
   });
+
+  const tableRows = (
+    <>
+      <View
+        style={{
+          flexDirection: 'row',
+          borderBottomWidth: 1,
+          borderBottomColor: renderColors.border,
+        }}
+      >
+        {Array.from({ length: numCols }).map((_, colIdx) => {
+          const label = header[colIdx] ?? '';
+          const active = sort?.column === colIdx ? sort.direction : null;
+          const next = active === 'ascending' ? 'descending' : 'ascending';
+          const content = (
+            <Text
+              style={{
+                fontSize: typeScale.footnote,
+                color: renderColors.textPrimary,
+                fontWeight: '600',
+                lineHeight: 19,
+                textAlign: alignments[colIdx] ?? 'left',
+              }}
+            >
+              {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
+              {active ? (active === 'ascending' ? ' \u2191' : ' \u2193') : ''}
+            </Text>
+          );
+          return sortable ? (
+            <Pressable
+              key={`${keyBase}-th-${colIdx}`}
+              style={cellStyle(colIdx)}
+              onPress={() => setSort({ column: colIdx, direction: next })}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}${active ? `, sorted ${active}` : ''}`}
+              accessibilityHint={`Sorts the table by this column, ${next}`}
+            >
+              {content}
+            </Pressable>
+          ) : (
+            <View key={`${keyBase}-th-${colIdx}`} style={cellStyle(colIdx)}>
+              {content}
+            </View>
+          );
+        })}
+      </View>
+      {sortedBody.map((row, rowIdx) => (
+        <View
+          key={`${keyBase}-tr-${rowIdx}`}
+          style={{
+            flexDirection: 'row',
+            borderBottomWidth: rowIdx < sortedBody.length - 1 ? StyleSheet.hairlineWidth : 0,
+            borderBottomColor: renderColors.border,
+          }}
+        >
+          {Array.from({ length: numCols }).map((_, colIdx) => (
+            <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  color: renderColors.textSecondary,
+                  fontWeight: '400',
+                  lineHeight: 19,
+                  textAlign: alignments[colIdx] ?? 'left',
+                }}
+                selectable
+              >
+                {renderInlineMarkdown(
+                  row[colIdx] || '',
+                  `${keyBase}-tdil-${rowIdx}-${colIdx}`,
+                  renderColors,
+                  citations,
+                )}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </>
+  );
+  const frameStyle = { marginVertical: 8, marginHorizontal: -layout.overflow / 2 };
 
   return (
     <View
       onLayout={(event: LayoutChangeEvent) => setContainerWidth(event.nativeEvent.layout.width)}
       testID="markdown-table-frame"
     >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator
-        style={{ marginVertical: 8, marginHorizontal: -overflow / 2 }}
-        testID="markdown-table"
-        contentContainerStyle={{
-          borderWidth: 1,
-          borderColor: renderColors.border,
-          borderRadius: 4,
-          overflow: 'hidden',
-          flexDirection: 'column',
-        }}
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            borderBottomWidth: 1,
-            borderBottomColor: renderColors.border,
-            backgroundColor: renderColors.surfaceHover,
-          }}
-        >
-          {Array.from({ length: numCols }).map((_, colIdx) => {
-            const label = header[colIdx] ?? '';
-            const active = sort?.column === colIdx ? sort.direction : null;
-            const next = active === 'ascending' ? 'descending' : 'ascending';
-            const content = (
-              <Text
-                style={{
-                  fontSize: typeScale.footnote,
-                  color: renderColors.textPrimary,
-                  fontWeight: '500',
-                  lineHeight: 19,
-                  textAlign: alignments[colIdx] ?? 'left',
-                }}
-              >
-                {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
-                {active ? (active === 'ascending' ? ' \u2191' : ' \u2193') : ''}
-              </Text>
-            );
-            return sortable ? (
-              <Pressable
-                key={`${keyBase}-th-${colIdx}`}
-                style={cellStyle(colIdx)}
-                onPress={() => setSort({ column: colIdx, direction: next })}
-                accessibilityRole="button"
-                accessibilityLabel={`${label}${active ? `, sorted ${active}` : ''}`}
-                accessibilityHint={`Sorts the table by this column, ${next}`}
-              >
-                {content}
-              </Pressable>
-            ) : (
-              <View key={`${keyBase}-th-${colIdx}`} style={cellStyle(colIdx)}>
-                {content}
-              </View>
-            );
-          })}
+      {fitted ? (
+        <View style={frameStyle} testID="markdown-table">
+          {tableRows}
         </View>
-        {sortedBody.map((row, rowIdx) => (
-          <View key={`${keyBase}-tr-${rowIdx}`} style={{ flexDirection: 'row' }}>
-            {Array.from({ length: numCols }).map((_, colIdx) => (
-              <View key={`${keyBase}-td-${rowIdx}-${colIdx}`} style={cellStyle(colIdx)}>
-                <Text
-                  style={{
-                    fontSize: typeScale.footnote,
-                    color: renderColors.textSecondary,
-                    fontWeight: '400',
-                    lineHeight: 19,
-                    textAlign: alignments[colIdx] ?? 'left',
-                  }}
-                  selectable
-                >
-                  {renderInlineMarkdown(
-                    row[colIdx] || '',
-                    `${keyBase}-tdil-${rowIdx}-${colIdx}`,
-                    renderColors,
-                    citations,
-                  )}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ))}
-      </ScrollView>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          style={frameStyle}
+          testID="markdown-table"
+          contentContainerStyle={{ flexDirection: 'column' }}
+        >
+          {tableRows}
+        </ScrollView>
+      )}
       <Pressable
         onPress={() => {
           void exportSourceFile(markdownTableToCsv([header, ...sortedBody]), 'table', 'csv')
@@ -569,24 +681,15 @@ function renderTextSegment(
 
           if (tableRows.length > 0) {
             const numCols = Math.max(...tableRows.map((row) => row.length));
-            const columnWidths = Array.from({ length: numCols }, (_, colIdx) => {
-              const longestCell = tableRows.reduce(
-                (longest, row) => Math.max(longest, (row[colIdx] ?? '').length),
-                0,
-              );
-              return Math.min(
-                MAX_TABLE_COLUMN_WIDTH,
-                Math.max(
-                  MIN_TABLE_COLUMN_WIDTH,
-                  longestCell * TABLE_COLUMN_CHARACTER_WIDTH + TABLE_COLUMN_PADDING,
-                ),
-              );
-            });
+            const columns = Array.from({ length: numCols }, (_, colIdx) =>
+              tableRows.map((row) => row[colIdx] ?? ''),
+            );
             nodes.push(
               <MarkdownTable
                 key={`${keyBase}-table-${idx}`}
                 rows={tableRows}
-                columnWidths={columnWidths}
+                columnWidths={columns.map(markdownTableNaturalWidth)}
+                columnWordWidths={columns.map(markdownTableWordWidth)}
                 alignments={alignments}
                 keyBase={`${keyBase}-t${idx}`}
                 renderColors={renderColors}
@@ -697,22 +800,13 @@ function renderCodeCard(
         </Text>
         <CodeBlockCopyButton code={codeContent} />
       </View>
-      {wrapsLongLines ? (
-        <View style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}>{codeText}</View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={true}
-          scrollEventThrottle={16}
-          style={{
-            paddingTop: 2,
-            paddingBottom: 10,
-            paddingHorizontal: 12,
-          }}
-        >
-          {codeText}
-        </ScrollView>
-      )}
+      <CodeLinesScroller
+        alwaysWrap={wrapsLongLines}
+        showsIndicator
+        style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}
+      >
+        {codeText}
+      </CodeLinesScroller>
     </View>
   );
 }

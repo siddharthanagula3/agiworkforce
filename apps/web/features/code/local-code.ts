@@ -177,7 +177,7 @@ export const LOCAL_CODE_COPY = {
   extensionsUpdateFailed: 'That change could not be saved.',
   extensionsNone: 'No skills or plugins are installed for this folder.',
   projectSkillsUntrusted:
-    "This folder's own skills stay off until you trust them. Trusted skills can run their scripts with your account.",
+    'Off until you trust them. Trusted skills can run scripts with your account.',
   trustProjectSkills: "Trust this folder's skills",
   revokeProjectSkills: "Stop trusting this folder's skills",
   skillScopeLabels: { project: 'This folder', user: 'Your account', plugin: 'From a plugin' },
@@ -347,7 +347,7 @@ export function localSessionStatusLabel(status: ThreadStatus): string | null {
 export const LOCAL_AGENT_MODE_HINTS: Record<DeveloperAgentMode, string> = {
   plan: 'Reads and plans. Changes nothing.',
   ask: 'Asks before each edit or command.',
-  auto: 'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
+  auto: 'Edits files without asking. Asks before commands and git hook or MCP changes.',
   bypass: 'Does everything without asking, changes to git hooks and MCP servers included.',
 };
 
@@ -1219,8 +1219,7 @@ export const LOCAL_REVIEW_COPY = {
     code: 'Restore code',
   },
   summarizeLabel: 'Summarize from here',
-  summarizeCopy:
-    'The model keeps a summary of this turn and the ones after it, freeing context. The messages stay in the transcript.',
+  summarizeCopy: 'Condenses this turn and later ones to free context. Messages stay visible.',
   summarizeTitle: 'Summarize from this turn on?',
   summarizeConfirm: 'Summarize',
   summarizeConsequence:
@@ -1229,10 +1228,9 @@ export const LOCAL_REVIEW_COPY = {
     messages === 1 ? 'Summarized 1 message.' : `Summarized ${messages} messages.`,
   nothingToSummarize:
     'Nothing was summarized: the latest turn is always kept word for word, and nothing after this turn comes before it.',
-  commitInTerminal:
-    'This pane stages and reverts changes. To commit what you staged, run git commit in your terminal.',
+  commitInTerminal: 'Stages and reverts changes. Run git commit in your terminal to commit.',
   checkpointScope:
-    'Each turn saves every file in this folder, edits made by shell commands included. Files your .gitignore excludes and large files git does not track are not saved, so a rewind leaves them as they are.',
+    'Each turn saves this folder’s files, edits made by shell commands included, except ignored and large untracked ones.',
   rewound: (count: number): string =>
     count === 1
       ? 'Rewound 1 file and the conversation.'

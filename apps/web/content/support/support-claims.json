@@ -1265,7 +1265,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
-          "name": "states that no training opt-in exists"
+          "name": "states that customer content is not used to improve AGI-owned models"
         }
       ]
     },
@@ -6195,7 +6195,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
-          "name": "states that no training opt-in exists"
+          "name": "states that customer content is not used to improve AGI-owned models"
         }
       ]
     },

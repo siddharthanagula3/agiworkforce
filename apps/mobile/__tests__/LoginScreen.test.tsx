@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React, { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
   FREE_PLAN_TRAINING_SIGNUP_NOTICE,
@@ -952,6 +952,37 @@ describe('LoginScreen', () => {
       expect(signOut).toHaveBeenCalledTimes(1);
       expect(mockReplace).toHaveBeenCalledWith('/(app)');
     } finally {
+      useAuthStore.setState({ signOut: originalSignOut });
+    }
+  });
+
+  it('says so when logging out from the failure screen does not finish', async () => {
+    mockIsSignedIn = true;
+    mockUserId = 'person-a';
+    const signOut = jest.fn(async () => {
+      throw new Error('session removal failed');
+    });
+    const originalSignOut = useAuthStore.getState().signOut;
+    useAuthStore.setState({ signOut });
+    useTermsAcceptanceStore.setState({
+      userId: 'person-a',
+      status: 'error',
+      error: 'AGI Cloud could not verify this device session. Retry, or continue in Local Mode.',
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    try {
+      const screen = render(<LoginScreen />);
+      fireEvent.press(screen.getByTestId('mobile-terms-sign-out'));
+      await waitFor(() =>
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Log out failed',
+          expect.stringMatching(/try again/i),
+        ),
+      );
+      expect(signOut).toHaveBeenCalledTimes(1);
+    } finally {
+      alertSpy.mockRestore();
       useAuthStore.setState({ signOut: originalSignOut });
     }
   });

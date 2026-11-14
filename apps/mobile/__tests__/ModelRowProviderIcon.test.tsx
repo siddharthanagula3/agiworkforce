@@ -31,10 +31,11 @@ const CLOUD_MODEL: ModelDef = {
   detailLabel: 'Anthropic provider',
 };
 
-function renderRow(model: ModelDef) {
+function renderRow(model: ModelDef, nested = false) {
   return render(
     <ModelRow
       model={model}
+      nested={nested}
       isSelected={false}
       isFavorite={false}
       isExpanded={false}
@@ -48,22 +49,46 @@ function renderRow(model: ModelDef) {
   );
 }
 
-describe('model picker rows name the provider in text, without a brand logo', () => {
-  it('draws one generic icon for a third-party provider and names it in text', () => {
-    const { getByTestId, getByText, getByLabelText } = renderRow(CLOUD_MODEL);
+describe('model picker rows identify the provider', () => {
+  it("draws the provider's mark for a provider that has one, in place of its name", () => {
+    const { getByTestId, queryByTestId, queryByText, getByLabelText } = renderRow(CLOUD_MODEL);
 
-    expect(getByTestId('model-row-icon-cloud')).toBeTruthy();
-    expect(getByText('Anthropic provider')).toBeTruthy();
+    expect(getByTestId('provider-mark-anthropic', { includeHiddenElements: true })).toBeTruthy();
+    expect(queryByTestId('model-row-icon-cloud')).toBeNull();
+    expect(queryByText('Anthropic')).toBeNull();
     expect(getByLabelText(/^Fixture Cloud/)).toBeTruthy();
   });
 
-  it('uses the same generic icon whichever provider serves the model', () => {
-    const { getByTestId } = renderRow({
+  it('names a provider that has no mark in text beside a generic icon', () => {
+    const { getByTestId, getByText } = renderRow({
       ...CLOUD_MODEL,
-      provider: 'openai',
-      detailLabel: 'OpenAI provider',
+      provider: 'fixture-provider',
+      providerLabel: 'Fixture Provider',
     });
 
     expect(getByTestId('model-row-icon-cloud')).toBeTruthy();
+    expect(getByText('Fixture Provider')).toBeTruthy();
+  });
+
+  it('prints nothing else about the model', () => {
+    const { queryByText, queryByLabelText } = renderRow({
+      ...CLOUD_MODEL,
+      contextWindow: 1_000_000,
+      description: 'Best for coding',
+    });
+
+    expect(queryByText('Best for coding')).toBeNull();
+    expect(queryByText('Anthropic provider')).toBeNull();
+    expect(queryByText(/context/)).toBeNull();
+    expect(queryByLabelText(/^Accepts /)).toBeNull();
+  });
+
+  it('leaves the mark to the row above inside a dropdown', () => {
+    const { queryByTestId, queryByText, getByText } = renderRow(CLOUD_MODEL, true);
+
+    expect(getByText('Fixture Cloud')).toBeTruthy();
+    expect(queryByTestId('provider-mark-anthropic', { includeHiddenElements: true })).toBeNull();
+    expect(queryByTestId('model-row-icon-cloud')).toBeNull();
+    expect(queryByText('Anthropic')).toBeNull();
   });
 });

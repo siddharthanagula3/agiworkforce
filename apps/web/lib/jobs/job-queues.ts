@@ -110,6 +110,7 @@ export function isJobQueueName(value: string): value is JobQueueName {
 export const JOB_KINDS = {
   'notifications.schedule-completed': 'notifications',
   'notifications.deferred-push': 'notifications',
+  'notifications.product-update': 'notifications',
   'email.schedule-completed': 'email',
   'webhooks.audit-stream-delivery': 'webhooks',
   'webhooks.developer-delivery': 'webhooks',

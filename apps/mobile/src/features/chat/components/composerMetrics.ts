@@ -1,0 +1,4 @@
+export const COMPOSER_CONTROL_SIZE = 44;
+export const COMPOSER_ACTION_CIRCLE_SIZE = 36;
+export const COMPOSER_GLYPH_SIZE = 24;
+export const COMPOSER_PLUS_SIZE = 28;

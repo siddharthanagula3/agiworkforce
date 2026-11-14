@@ -1,5 +1,6 @@
-import React from 'react';
-import { View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, type LayoutChangeEvent } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import {
   EFFORT_DESCRIPTION,
@@ -12,14 +13,21 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
+import {
+  COMPOSER_ACTION_CIRCLE_SIZE,
+  COMPOSER_CONTROL_SIZE,
+} from '@/src/features/chat/components/composerMetrics';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { chatTypography, typeScale } from '@/src/ui/theme/tokens';
 
-const EFFORT_STEP_ORDER = Object.keys(EFFORT_LABEL) as Effort[];
+export const EFFORT_STEP_ORDER = Object.keys(EFFORT_LABEL) as Effort[];
 
-const CAPSULE_HEIGHT = 44;
-const PILL_INSET = 4;
-const STEP_DOT_SIZE = 6;
+const TRACK_HEIGHT = COMPOSER_ACTION_CIRCLE_SIZE;
+const TRACK_TOUCH_HEIGHT = COMPOSER_CONTROL_SIZE;
+const TRACK_INSET = 4;
+const KNOB_SIZE = TRACK_HEIGHT - TRACK_INSET * 2;
+const STEP_DOT_SIZE = 8;
+const COVERED_DOT_OPACITY = 0.6;
 
 export function effortStepsFor(reasoning: ModelReasoning): Effort[] {
   if (!reasoning.capable || reasoning.control !== 'effort_levels') return [];
@@ -51,17 +59,59 @@ export function setDefaultEffort(effort: Effort): void {
   useAgentControlStore.getState().setProjectDefault(DEFAULT_EFFORT_SCOPE, { effort });
 }
 
-interface EffortSliderProps {
+export function useScopedEffort(
+  conversationId: string | undefined,
+): [Effort, (effort: Effort) => void] {
+  const effort = useAgentControlStore(
+    (s) => s.resolve(conversationId ?? DEFAULT_EFFORT_SCOPE, null).effort,
+  );
+  const select = useCallback(
+    (next: Effort) => {
+      if (conversationId) {
+        useAgentControlStore.getState().setEffort(conversationId, next);
+      } else {
+        setDefaultEffort(next);
+      }
+    },
+    [conversationId],
+  );
+  return [effort, select];
+}
+
+export function EffortLevelName({ effort, testID }: { effort: Effort; testID?: string }) {
+  const colors = useThemeColors();
+  return (
+    <Text
+      testID={testID}
+      numberOfLines={1}
+      accessibilityRole="header"
+      style={{
+        ...chatTypography.heading2,
+        color: colors.textPrimary,
+        textAlign: 'center',
+        marginBottom: 12,
+      }}
+    >
+      {EFFORT_LABEL[effort]}
+    </Text>
+  );
+}
+
+interface EffortTrackProps {
   steps: readonly Effort[];
   value: Effort | undefined;
   onChange: (effort: Effort) => void;
   testID: string;
 }
 
-export function EffortSlider({ steps, value, onChange, testID }: EffortSliderProps) {
+export function EffortTrack({ steps, value, onChange, testID }: EffortTrackProps) {
   const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const description = value ? EFFORT_DESCRIPTION[value] : undefined;
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  const activeIndex = value ? steps.indexOf(value) : -1;
+  const travel = Math.max(trackWidth - TRACK_INSET * 2 - KNOB_SIZE, 0);
+  const stepSpacing = steps.length > 1 ? travel / (steps.length - 1) : 0;
 
   const select = (effort: Effort) => {
     if (effort === value) return;
@@ -69,70 +119,134 @@ export function EffortSlider({ steps, value, onChange, testID }: EffortSliderPro
     onChange(effort);
   };
 
+  const selectAt = (x: number) => {
+    if (stepSpacing === 0) return;
+    const nearest = Math.round((x - TRACK_INSET - KNOB_SIZE / 2) / stepSpacing);
+    const effort = steps[Math.min(steps.length - 1, Math.max(0, nearest))];
+    if (effort) select(effort);
+  };
+
+  const selectAtRef = useRef(selectAt);
+  useEffect(() => {
+    selectAtRef.current = selectAt;
+  });
+  const drag = useMemo(
+    () =>
+      Gesture.Pan()
+        .withTestId(`${testID}-drag`)
+        .runOnJS(true)
+        .activeOffsetX([-6, 6])
+        .failOffsetY([-14, 14])
+        .onUpdate((event) => selectAtRef.current(event.x)),
+    [testID],
+  );
+
   return (
-    <View testID={testID}>
+    <GestureDetector gesture={drag}>
       <View
-        testID={`${testID}-capsule`}
-        style={{
-          height: CAPSULE_HEIGHT,
-          borderRadius: CAPSULE_HEIGHT / 2,
-          padding: PILL_INSET,
-          flexDirection: 'row',
-          alignItems: 'center',
-          backgroundColor: colors.surfaceHover,
-        }}
+        testID={`${testID}-touch`}
+        style={{ height: TRACK_TOUCH_HEIGHT, justifyContent: 'center' }}
       >
-        {steps.map((effort) => {
-          const label = EFFORT_LABEL[effort];
-          const active = effort === value;
-          return (
+        <View
+          testID={`${testID}-capsule`}
+          onLayout={(event: LayoutChangeEvent) => setTrackWidth(event.nativeEvent.layout.width)}
+          style={{
+            height: TRACK_HEIGHT,
+            borderRadius: TRACK_HEIGHT / 2,
+            backgroundColor: colors.surfaceHover,
+            pointerEvents: 'none',
+          }}
+        >
+          {activeIndex >= 0 && trackWidth > 0 ? (
+            <View
+              testID={`${testID}-fill`}
+              style={{
+                position: 'absolute',
+                left: TRACK_INSET,
+                top: TRACK_INSET,
+                width: KNOB_SIZE + stepSpacing * activeIndex,
+                height: KNOB_SIZE,
+                borderRadius: KNOB_SIZE / 2,
+                backgroundColor: colors.textPrimary,
+              }}
+            />
+          ) : null}
+          <View
+            style={{
+              position: 'absolute',
+              left: TRACK_INSET,
+              right: TRACK_INSET,
+              top: 0,
+              bottom: 0,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            {steps.map((effort, index) => (
+              <View key={effort} style={{ width: KNOB_SIZE, alignItems: 'center' }}>
+                {index === activeIndex ? null : (
+                  <View
+                    testID={`${testID}-${effort}-dot`}
+                    style={{
+                      width: STEP_DOT_SIZE,
+                      height: STEP_DOT_SIZE,
+                      borderRadius: STEP_DOT_SIZE / 2,
+                      backgroundColor: index < activeIndex ? colors.surfaceBase : colors.textMuted,
+                      opacity: index < activeIndex ? COVERED_DOT_OPACITY : 1,
+                    }}
+                  />
+                )}
+              </View>
+            ))}
+          </View>
+        </View>
+        <View
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            flexDirection: 'row',
+          }}
+        >
+          {steps.map((effort) => (
             <PressableBox
               key={effort}
               testID={`${testID}-${effort}`}
               onPress={() => select(effort)}
-              hitSlop={{ top: PILL_INSET, bottom: PILL_INSET }}
               accessibilityRole="button"
-              accessibilityLabel={`Reasoning effort ${label}`}
+              accessibilityLabel={`Reasoning effort ${EFFORT_LABEL[effort]}`}
               accessibilityHint={EFFORT_DESCRIPTION[effort]}
-              accessibilityState={{ selected: active }}
-              style={{
-                flexGrow: active ? 0 : 1,
-                flexShrink: active ? 0 : 1,
-                flexBasis: active ? 'auto' : 0,
-                height: CAPSULE_HEIGHT - PILL_INSET * 2,
-                borderRadius: (CAPSULE_HEIGHT - PILL_INSET * 2) / 2,
-                paddingHorizontal: active ? 18 : 0,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: active ? colors.textPrimary : colors.transparent,
-              }}
-            >
-              {active ? (
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: colors.background,
-                    fontSize: typeScale.subhead,
-                    fontWeight: '600',
-                  }}
-                >
-                  {label}
-                </Text>
-              ) : (
-                <View
-                  testID={`${testID}-${effort}-dot`}
-                  style={{
-                    width: STEP_DOT_SIZE,
-                    height: STEP_DOT_SIZE,
-                    borderRadius: STEP_DOT_SIZE / 2,
-                    backgroundColor: colors.textMuted,
-                  }}
-                />
-              )}
-            </PressableBox>
-          );
-        })}
+              accessibilityState={{ selected: effort === value }}
+              style={{ flex: 1 }}
+            />
+          ))}
+        </View>
       </View>
+    </GestureDetector>
+  );
+}
+
+interface EffortSliderProps extends EffortTrackProps {
+  showDescription?: boolean;
+}
+
+export function EffortSlider({
+  steps,
+  value,
+  onChange,
+  testID,
+  showDescription = true,
+}: EffortSliderProps) {
+  const colors = useThemeColors();
+  const description = showDescription && value ? EFFORT_DESCRIPTION[value] : undefined;
+
+  return (
+    <View testID={testID}>
+      {value ? <EffortLevelName effort={value} testID={`${testID}-level`} /> : null}
+      <EffortTrack steps={steps} value={value} onChange={onChange} testID={testID} />
       {description ? (
         <Text
           testID={`${testID}-description`}

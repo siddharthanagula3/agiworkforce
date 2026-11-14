@@ -6407,6 +6407,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const voiceModeActive = useVoiceModeActive();
   useEffect(() => () => releaseVoiceSessionOnPageExit(), []);
+  const emptyStateExtras =
+    !compact && !voiceModeActive ? (
+      <>
+        {composerToggles?.workMode === AGI_WORK_MODE && (
+          <>
+            <HomeActiveTasks />
+            <AgiWorkIntroDialog />
+          </>
+        )}
+        <NewChatConnectorSuggestions
+          show={
+            !isConversationSidebarPending && conversations.length === 0 && !conversationListError
+          }
+        />
+      </>
+    ) : null;
   const voiceFocusMode = useVoiceSessionStore((state) => state.focusMode);
   const voiceActivityMessageId = useVoiceSessionStore((state) => state.activityMessageId);
   const setVoiceActivityMessageId = useVoiceSessionStore((state) => state.setActivityMessageId);
@@ -6973,6 +6989,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               {...sharedSidebarProps}
               collapsed={false}
               width={MOBILE_NAV_DRAWER_WIDTH}
+              className="max-w-full"
               onToggleCollapse={() => setMobileNavOpen(false)}
             />
           </SheetContent>
@@ -7021,7 +7038,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             <header
               data-app-header=""
               className={cn(
-                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4',
+                '@container relative mb-[var(--agi-product-notice-inset,0px)] flex h-12 shrink-0 items-center justify-between gap-2 px-4 max-md:ps-2',
                 isEmptyChat
                   ? 'border-b border-transparent'
                   : 'border-b border-[var(--chat-border-subtle)]',
@@ -7048,7 +7065,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:openNavigation')}
                     aria-expanded={mobileNavOpen}
                     aria-controls={MOBILE_NAV_DRAWER_ID}
-                    className="-ms-1 h-8 w-8 shrink-0 p-0 pointer-coarse:h-11 pointer-coarse:w-11"
+                    className="-ms-1 h-8 w-8 shrink-0 p-0 max-md:ms-0 pointer-coarse:h-11 pointer-coarse:w-11"
                   >
                     <Menu className="h-5 w-5" aria-hidden="true" />
                   </Button>
@@ -7352,7 +7369,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ) : isEmptyChat ? (
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 {/* Empty state: greeting banner + centered composer. */}
-                <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
+                <div
+                  className={cn(
+                    'flex min-h-full w-full flex-col items-center justify-center-safe gap-6',
+                    !voiceModeActive &&
+                      'max-md:pb-[env(safe-area-inset-bottom,0px)] max-md:[&>*]:mt-auto',
+                  )}
+                >
                   {!compact && !voiceModeActive && (
                     <GreetingBanner
                       showWorkspace
@@ -7360,6 +7383,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     />
                   )}
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
+                    {isNarrowViewport && (
+                      <div className="mb-3 empty:hidden">{emptyStateExtras}</div>
+                    )}
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />
@@ -7415,23 +7441,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           : {})}
                       />
                     )}
-                    {!compact &&
-                      !voiceModeActive &&
-                      composerToggles?.workMode === AGI_WORK_MODE && (
-                        <>
-                          <HomeActiveTasks />
-                          <AgiWorkIntroDialog />
-                        </>
-                      )}
-                    {!compact && !voiceModeActive && (
-                      <NewChatConnectorSuggestions
-                        show={
-                          !isConversationSidebarPending &&
-                          conversations.length === 0 &&
-                          !conversationListError
-                        }
-                      />
-                    )}
+                    {!isNarrowViewport && emptyStateExtras}
                   </div>
                 </div>
               </div>
@@ -7501,7 +7511,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   </ToolApprovalProvider>
                 </div>
 
-                <div className="shrink-0 pb-4">
+                <div className="shrink-0 pb-4 max-md:pb-[env(safe-area-inset-bottom,0px)]">
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}

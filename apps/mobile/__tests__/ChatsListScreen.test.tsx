@@ -391,7 +391,7 @@ describe('ChatsListScreen', () => {
     const screen = render(<ChatsListScreen searchOnly />);
 
     expect(screen.getByText('Search your workspace')).toBeTruthy();
-    expect(screen.getByText(/Find chats, projects, files/)).toBeTruthy();
+    expect(screen.getByText(/Search chats, projects, files/)).toBeTruthy();
     expect(screen.queryByText('Launch checklist')).toBeNull();
     expect(screen.queryByLabelText('New chat')).toBeNull();
     expect(screen.queryByLabelText('Filter chats. All chats')).toBeNull();

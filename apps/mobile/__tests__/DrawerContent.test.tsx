@@ -83,6 +83,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useProjectStore } from '../src/features/projects/store';
+import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
@@ -193,7 +194,11 @@ describe('DrawerContent', () => {
       favorites: [],
     } as never);
     useChatAppModeStore.setState({ appMode: 'local' });
-    useSettingsStore.setState({ listArrangement: 'by-project' });
+    useSettingsStore.setState({
+      listArrangement: 'by-project',
+      sidePanelMoreOpen: false,
+      sidePanelProjectsFolded: false,
+    });
     useCloudUsageStore.getState().clear();
     clearPostAuthIntent();
   });
@@ -247,44 +252,152 @@ describe('DrawerContent', () => {
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/(tabs)/chat' });
   });
 
+  it('puts the symbol above the Local and Cloud switch', () => {
+    const { toJSON } = renderDrawer();
+
+    const tree = JSON.stringify(toJSON());
+    const symbolAt = tree.indexOf('drawer.brand-symbol');
+    const switchAt = tree.indexOf('chat.mode-toggle');
+    expect(symbolAt).toBeGreaterThan(-1);
+    expect(switchAt).toBeGreaterThan(symbolAt);
+  });
+
   it('renders the AGI mobile drawer structure', () => {
-    const { getByText, getByTestId, getAllByText, getAllByLabelText, queryByText } = renderDrawer();
+    const { getByText, getByTestId, getAllByText, queryByLabelText, queryByText } = renderDrawer();
 
     expect(getByTestId('drawer.brand-symbol')).toBeTruthy();
     expect(queryByText('AGI')).toBeNull();
     expect(getAllByText('Projects').length).toBeGreaterThan(0);
-    expect(getByText('Chats')).toBeTruthy();
+    expect(queryByText('Chats')).toBeNull();
     expect(getByText('Library')).toBeTruthy();
-    expect(getByText('Remote')).toBeTruthy();
+    expect(queryByText('Remote')).toBeNull();
     expect(queryByText('Artifacts')).toBeNull();
     expect(queryByText('AGI Agent')).toBeNull();
     expect(getByText('Recents')).toBeTruthy();
     expect(getByText('Settings')).toBeTruthy();
-    expect(getAllByLabelText('Open profile')).toHaveLength(1);
+    expect(getByText('New chat')).toBeTruthy();
+    expect(queryByLabelText('Open profile')).toBeNull();
+    expect(queryByText('Voice')).toBeNull();
+    expect(queryByText('Camera')).toBeNull();
+    expect(queryByText('Scan')).toBeNull();
     expect(queryByText(/byok/i)).toBeNull();
   });
 
-  it('lists the primary destinations in the shared order', () => {
+  it('shows a short list in Cloud and folds the rest under More', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
-    const { toJSON } = renderDrawer();
+    const { toJSON, getByLabelText, queryByLabelText } = renderDrawer();
+    const order = (labels: string[]) => {
+      const tree = JSON.stringify(toJSON());
+      return labels.map((label) => tree.indexOf(`"accessibilityLabel":"${label}"`));
+    };
+    const ascending = (positions: number[]) =>
+      positions.every((position) => position >= 0) &&
+      [...positions].sort((a, b) => a - b).join() === positions.join();
+
+    expect(
+      ascending(order(['New chat', 'Projects', 'Library', 'AGI Code', 'Schedules', 'More'])),
+    ).toBe(true);
+    for (const hidden of ['Remote', 'AGI Work', 'Published sites', 'Agents', 'Reports']) {
+      expect(queryByLabelText(hidden)).toBeNull();
+    }
+    expect(getByLabelText('More').props.accessibilityState.expanded).toBe(false);
+
+    fireEvent.press(getByLabelText('More'));
+
+    expect(
+      ascending(order(['Schedules', 'Less', 'AGI Work', 'Published sites', 'Agents', 'Reports'])),
+    ).toBe(true);
+    expect(getByLabelText('Less').props.accessibilityState.expanded).toBe(true);
+    expect(useSettingsStore.getState().sidePanelMoreOpen).toBe(true);
+
+    fireEvent.press(getByLabelText('Less'));
+
+    expect(queryByLabelText('AGI Work')).toBeNull();
+    expect(getByLabelText('More')).toBeTruthy();
+  });
+
+  it('marks More as the current place while the open screen is folded inside it', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockPathname = '/reports';
+    const { getByLabelText } = renderDrawer();
+
+    expect(getByLabelText('More').props.accessibilityState.selected).toBe(true);
+
+    fireEvent.press(getByLabelText('More'));
+
+    expect(getByLabelText('Less').props.accessibilityState.selected).toBe(false);
+    expect(getByLabelText('Reports').props.accessibilityState.selected).toBe(true);
+  });
+
+  it('shows only what lives on the phone in Local, with no Remote and no More row', () => {
+    const { getByLabelText, queryByLabelText } = renderDrawer();
+
+    expect(getByLabelText('Projects')).toBeTruthy();
+    expect(getByLabelText('Library')).toBeTruthy();
+    expect(queryByLabelText('Remote')).toBeNull();
+    expect(queryByLabelText('More')).toBeNull();
+  });
+
+  it('folds and unfolds the Projects section', () => {
+    const { getByLabelText, getByText, queryByText } = renderDrawer();
+
+    expect(getByText('Launch demo')).toBeTruthy();
+    fireEvent.press(getByLabelText('Collapse projects'));
+
+    expect(queryByText('Launch demo')).toBeNull();
+    expect(useSettingsStore.getState().sidePanelProjectsFolded).toBe(true);
+
+    fireEvent.press(getByLabelText('Expand projects'));
+
+    expect(getByText('Launch demo')).toBeTruthy();
+  });
+
+  it('lists pinned chats under their own heading, apart from Recents', () => {
+    useChatStore.setState({
+      conversations: [
+        {
+          id: 'pinned-1',
+          title: 'Pinned chat',
+          updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          messageCount: 1,
+          pinned: true,
+          executionMode: 'local',
+        },
+        {
+          id: 'plain-1',
+          title: 'Plain chat',
+          updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          messageCount: 1,
+          pinned: false,
+          executionMode: 'local',
+        },
+      ],
+    });
+    const { toJSON, getByText } = renderDrawer();
     const tree = JSON.stringify(toJSON());
-    const labels = [
-      'Chats',
-      'Projects',
-      'Library',
-      'AGI Code',
-      'Remote',
-      'AGI Work',
-      'Published sites',
-      'Schedules',
-      'Agents',
-      'Reports',
-      'Customize',
-    ];
-    const positions = labels.map((label) => tree.indexOf(`"${label}`));
-    expect(positions.every((position) => position >= 0)).toBe(true);
-    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    const at = (text: string) => tree.indexOf(`"${text}"`);
+
+    expect(getByText('Pinned')).toBeTruthy();
+    expect(at('Pinned')).toBeLessThan(at('Pinned chat'));
+    expect(at('Pinned chat')).toBeLessThan(at('Recents'));
+    expect(at('Recents')).toBeLessThan(at('Plain chat'));
+  });
+
+  it('keeps account and help rows out of the panel, leaving Settings as the way in', () => {
+    useTierStore.setState({ tier: 'pro' });
+    useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'user-1' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByLabelText, queryByLabelText, queryByText } = renderDrawer();
+
+    expect(queryByLabelText('Notifications')).toBeNull();
+    expect(queryByLabelText('Help & About')).toBeNull();
+    expect(queryByText(/Usage remaining/)).toBeNull();
+    expect(queryByText(/Workspace/)).toBeNull();
+    fireEvent.press(getByLabelText('Settings'));
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings');
   });
 
   it('organizes chats by project by default and in one list on request', () => {
@@ -341,16 +454,18 @@ describe('DrawerContent', () => {
     useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
     const cloud = renderDrawer();
 
-    expect(cloud.getByLabelText('AGI Work. Cloud')).toBeTruthy();
-    expect(cloud.getByLabelText('Schedules. Cloud')).toBeTruthy();
-    expect(cloud.getByLabelText('Customize. Cloud')).toBeTruthy();
-    expect(cloud.getByLabelText('Agents. Cloud')).toBeTruthy();
-    expect(cloud.getByLabelText('Published sites. Cloud')).toBeTruthy();
+    fireEvent.press(cloud.getByLabelText('More'));
+    expect(cloud.getByLabelText('AGI Work')).toBeTruthy();
+    expect(cloud.getByLabelText('Schedules')).toBeTruthy();
+    expect(cloud.queryByText('Customize')).toBeNull();
+    expect(cloud.getByLabelText('Agents')).toBeTruthy();
+    expect(cloud.getByLabelText('Published sites')).toBeTruthy();
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
+    expect(cloud.queryByLabelText(/\. Cloud$/)).toBeNull();
     expect(cloud.queryByText('Launch demo')).toBeNull();
   });
 
-  it('shows account-scoped remaining Cloud usage and opens the full usage screen', () => {
+  it('shows no usage in the panel for a paid account, whatever the usage store holds', () => {
     useTierStore.setState({ tier: 'pro' });
     useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'user-1' });
     useChatAppModeStore.setState({ appMode: 'cloud' });
@@ -375,19 +490,10 @@ describe('DrawerContent', () => {
     });
 
     const drawer = renderDrawer();
-    fireEvent.press(drawer.getByLabelText('Usage remaining · This week 35%'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings/cloud-usage');
-    drawer.unmount();
-
-    useCloudUsageStore.setState({ ownerId: 'another-user' });
-    const switched = renderDrawer();
-    expect(switched.queryByText('Usage remaining · This week 35%')).toBeNull();
-    expect(switched.getByLabelText('Usage remaining')).toBeTruthy();
-    switched.unmount();
-
-    useChatAppModeStore.setState({ appMode: 'local' });
-    expect(renderDrawer().queryByLabelText('Usage remaining')).toBeNull();
+    expect(drawer.queryByLabelText(/Usage remaining/)).toBeNull();
+    expect(drawer.queryByText(/This week \d+%/)).toBeNull();
+    expect(drawer.queryByLabelText(resources.en.common.navUpgrade)).toBeNull();
   });
 
   it('shows a Free plan an Upgrade row to Billing instead of a usage meter', () => {
@@ -435,19 +541,30 @@ describe('DrawerContent', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText } = renderDrawer();
 
-    fireEvent.press(getByLabelText('Schedules. Cloud'));
+    fireEvent.press(getByLabelText('Schedules'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/schedules');
   });
 
-  it('opens Remote as a first-class drawer destination', () => {
+  it('has no Remote row in Cloud, folded or not, because computers live in AGI Code', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
+    const { getByLabelText, queryByLabelText } = renderDrawer();
+
+    expect(queryByLabelText('Remote')).toBeNull();
+    fireEvent.press(getByLabelText('More'));
+    expect(queryByLabelText('Remote')).toBeNull();
+    expect(getByLabelText('AGI Work')).toBeTruthy();
+  });
+
+  it('marks AGI Code as the current place while a computer page is open', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockPathname = '/companion';
     const { getByLabelText } = renderDrawer();
 
-    fireEvent.press(getByLabelText('Remote'));
-
-    expect(mockCloseDrawer).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/companion');
+    expect(getByLabelText('AGI Code').props.accessibilityState.selected).toBe(true);
+    expect(getByLabelText('More').props.accessibilityState.selected).toBe(false);
   });
 
   it('opens the durable agent-run list from AGI Work', () => {
@@ -455,7 +572,8 @@ describe('DrawerContent', () => {
     useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
     const { getByLabelText } = renderDrawer();
 
-    fireEvent.press(getByLabelText('AGI Work. Cloud'));
+    fireEvent.press(getByLabelText('More'));
+    fireEvent.press(getByLabelText('AGI Work'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/tasks');
@@ -468,6 +586,84 @@ describe('DrawerContent', () => {
     expect(getByText('First Chat')).toBeTruthy();
     expect(getByText('Second Chat')).toBeTruthy();
     expect(queryByText('Cloud Chat')).toBeNull();
+  });
+
+  it('lists pinned projects first in Local mode', () => {
+    const now = new Date().toISOString();
+    const project = (id: string, name: string, pinned?: boolean) => ({
+      id,
+      name,
+      description: '',
+      instructions: '',
+      sources: [],
+      pinned,
+      createdAt: now,
+      updatedAt: now,
+    });
+    useProjectStore.setState({
+      projects: [
+        project('proj-a', 'Alpha'),
+        project('proj-b', 'Bravo'),
+        project('proj-c', 'Charlie', true),
+      ],
+    });
+
+    const { getAllByLabelText } = renderDrawer();
+
+    expect(
+      getAllByLabelText(/^Open project: /).map((node) =>
+        (node.props.accessibilityLabel as string).replace('Open project: ', ''),
+      ),
+    ).toEqual(['Charlie', 'Alpha', 'Bravo']);
+  });
+
+  it('lists pinned Cloud projects first and leaves archived ones out', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const base = {
+      description: null,
+      instructions: null,
+      color: null,
+      source: 'web' as const,
+      createdAt: '2026-07-01T10:00:00.000Z',
+      deletedAt: null,
+    };
+    useCloudProjectStore.setState({
+      projects: [
+        {
+          ...base,
+          id: 'c-new',
+          name: 'Newest',
+          updatedAt: '2026-07-20T10:00:00.000Z',
+          isArchived: false,
+          metadata: null,
+        },
+        {
+          ...base,
+          id: 'c-pinned',
+          name: 'Pinned old',
+          updatedAt: '2026-07-02T10:00:00.000Z',
+          isArchived: false,
+          metadata: { starred: true },
+        },
+        {
+          ...base,
+          id: 'c-archived',
+          name: 'Archived',
+          updatedAt: '2026-07-21T10:00:00.000Z',
+          isArchived: true,
+          metadata: { starred: true },
+        },
+      ],
+    });
+
+    const { getAllByLabelText } = renderDrawer();
+
+    expect(
+      getAllByLabelText(/^Open project: /).map((node) =>
+        (node.props.accessibilityLabel as string).replace('Open project: ', ''),
+      ),
+    ).toEqual(['Pinned old', 'Newest']);
+    useCloudProjectStore.setState({ projects: [] });
   });
 
   it('lifts pinned chats above the rest and keeps them when the list is capped', () => {
@@ -518,7 +714,7 @@ describe('DrawerContent', () => {
   it('opens the full global-search and chat-history surface', () => {
     const { getByLabelText } = renderDrawer();
 
-    fireEvent.press(getByLabelText('Chats'));
+    fireEvent.press(getByLabelText('See all chats'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/chats');
@@ -570,17 +766,6 @@ describe('DrawerContent', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/search');
   });
 
-  it('gives the notification centre its own row, separate from notification settings', () => {
-    const { getByLabelText } = renderDrawer();
-
-    // The row that used to be removed as a duplicate pointed at
-    // /(app)/settings/notifications, the preferences screen. This one is the
-    // centre itself, which had no entry point at all once the unread pip on the
-    // drawer button became an indicator rather than a control.
-    fireEvent.press(getByLabelText('Notifications'));
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/notifications');
-  });
-
   describe('with Spanish selected', () => {
     beforeEach(async () => {
       await act(async () => {
@@ -599,19 +784,17 @@ describe('DrawerContent', () => {
       useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
       const { getByLabelText, queryByLabelText, getByText } = renderDrawer();
       const es = resources.es;
-      const cloud = es.chat.sidebar.cloud;
 
-      expect(getByLabelText(`${es.chat.sidebar.chats}`)).toBeTruthy();
       expect(getByLabelText(es.common.navProjects)).toBeTruthy();
       expect(getByLabelText(es.common.navLibrary)).toBeTruthy();
-      expect(getByLabelText(`${es.common.drawer.schedules}. ${cloud}`)).toBeTruthy();
-      expect(getByLabelText(`${es.common.navAgents}. ${cloud}`)).toBeTruthy();
-      expect(getByLabelText(`${es.common.drawer.reports}. ${cloud}`)).toBeTruthy();
-      expect(getByLabelText(`${es.common.drawer.customize}. ${cloud}`)).toBeTruthy();
-      expect(getByLabelText(`${es.common.drawer.publishedSites}. ${cloud}`)).toBeTruthy();
+      expect(getByLabelText(es.common.drawer.schedules)).toBeTruthy();
+      fireEvent.press(getByLabelText(es.common.more));
+      expect(getByLabelText(es.common.less)).toBeTruthy();
+      expect(getByLabelText(es.common.navAgents)).toBeTruthy();
+      expect(getByLabelText(es.common.drawer.reports)).toBeTruthy();
+      expect(getByLabelText(es.common.drawer.publishedSites)).toBeTruthy();
       expect(getByLabelText(es.common.settings)).toBeTruthy();
-      expect(getByLabelText(es.common.drawer.notifications)).toBeTruthy();
-      expect(getByLabelText(es.common.drawer.helpAndAbout)).toBeTruthy();
+      expect(getByLabelText(es.common.drawer.organizeChats)).toBeTruthy();
       expect(getByLabelText(es.common.search)).toBeTruthy();
       expect(getByLabelText(es.common.drawer.newChat)).toBeTruthy();
       expect(getByLabelText(es.common.drawer.seeAllChats)).toBeTruthy();
@@ -619,10 +802,10 @@ describe('DrawerContent', () => {
 
       expect(es.common.navAgents).toBe('Agentes');
       expect(es.common.drawer.schedules).toBe('Programaciones');
-      expect(queryByLabelText('Schedules. Cloud')).toBeNull();
-      expect(queryByLabelText('Agents. Cloud')).toBeNull();
-      expect(queryByLabelText('Notifications')).toBeNull();
-      expect(queryByLabelText('Help & About')).toBeNull();
+      expect(queryByLabelText('Schedules')).toBeNull();
+      expect(queryByLabelText('Agents')).toBeNull();
+      expect(queryByLabelText('More')).toBeNull();
+      expect(queryByLabelText('Organize chats')).toBeNull();
     });
   });
 });

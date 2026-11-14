@@ -35,10 +35,10 @@ const COMPARE_MINIMUM = 2;
 const COMPARE_ANSWERS_BLOCKED_REASON = 'Pick two models your plan includes to compare answers.';
 
 const CHIP_CLASS =
-  'rounded-full border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11';
+  'min-h-0 shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-9 max-md:px-3 max-md:text-sm';
 const CHIP_ACTIVE_CLASS = 'border-primary bg-primary/10 text-primary';
 const CHIP_IDLE_CLASS = 'border-[var(--chat-border)] text-muted-foreground hover:text-foreground';
-const GROUP_LABEL_CLASS = 'text-xs text-muted-foreground';
+const GROUP_LABEL_CLASS = 'shrink-0 text-xs text-muted-foreground';
 const FILTER_GROUP_CLASS =
   'flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-x-visible sm:pb-0';
 
@@ -132,9 +132,11 @@ export function ModelCatalogueBrowser({
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
       <header>
-        <h1 className="text-h2 text-foreground">Models</h1>
+        <h1 className="text-h2 text-foreground max-md:text-[28px] max-md:font-medium max-md:leading-[1.2]">
+          Models
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {`${entries.length} models from ${developers.length} developers${planLabel ? ` on ${planLabel}` : ''}. Every model runs on interchangeable providers, so you choose the model, not the supplier.`}
+          {`${entries.length} models from ${developers.length} developers${planLabel ? ` on ${planLabel}` : ''}.`}
         </p>
       </header>
 
@@ -173,7 +175,7 @@ export function ModelCatalogueBrowser({
             type="button"
             aria-pressed={developer === null}
             onClick={() => setDeveloper(null)}
-            className={`${chipClass(developer === null)} shrink-0`}
+            className={chipClass(developer === null)}
           >
             {`All developers (${entries.length})`}
           </button>
@@ -183,7 +185,7 @@ export function ModelCatalogueBrowser({
               type="button"
               aria-pressed={developer === option.key}
               onClick={() => setDeveloper(developer === option.key ? null : option.key)}
-              className={`${chipClass(developer === option.key)} shrink-0`}
+              className={chipClass(developer === option.key)}
             >
               {`${option.label} (${option.totalCount})`}
             </button>
@@ -197,17 +199,21 @@ export function ModelCatalogueBrowser({
               type="button"
               aria-pressed={capabilities.has(filter.capability)}
               onClick={() => toggleCapability(filter.capability)}
-              className={`${chipClass(capabilities.has(filter.capability))} shrink-0`}
+              className={chipClass(capabilities.has(filter.capability))}
             >
               {filter.label}
             </button>
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-4 max-md:flex-col max-md:items-stretch max-md:gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 max-md:min-w-0 max-md:flex-nowrap">
             <span className={GROUP_LABEL_CLASS}>Show</span>
-            <div role="group" aria-label="Model collection" className="flex flex-wrap gap-1.5">
+            <div
+              role="group"
+              aria-label="Model collection"
+              className="flex flex-wrap gap-1.5 max-md:min-w-0 max-md:flex-nowrap max-md:overflow-x-auto max-md:[scrollbar-width:none]"
+            >
               {MODEL_COLLECTIONS.map((option) => (
                 <button
                   key={option.key}
@@ -221,9 +227,13 @@ export function ModelCatalogueBrowser({
               ))}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5 max-md:min-w-0 max-md:flex-nowrap">
             <span className={GROUP_LABEL_CLASS}>Access</span>
-            <div role="group" aria-label="Plan access" className="flex flex-wrap gap-1.5">
+            <div
+              role="group"
+              aria-label="Plan access"
+              className="flex flex-wrap gap-1.5 max-md:min-w-0 max-md:flex-nowrap max-md:overflow-x-auto max-md:[scrollbar-width:none]"
+            >
               {MODEL_ACCESS_FILTERS.map((option) => (
                 <button
                   key={option.key}

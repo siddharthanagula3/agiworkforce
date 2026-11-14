@@ -34,6 +34,8 @@ result and extended the same day to the launch and onboarding screens.
   in two equal halves. The Chat/Work switch takes the centre of the header.
 - Why: the founder's call, in his words "remove local and cloud toggle on the
   top because it is there in the side panel".
+- Amended by `D-2026-11-12-02`: Settings carries the same switch, so the side
+  panel is no longer the only place to change mode.
 - Follow-through: the composer still shows where a message goes, so the active
   mode stays visible on the chat screen without the switch. Switching from the
   side panel closes it and opens a new chat in the chosen mode.

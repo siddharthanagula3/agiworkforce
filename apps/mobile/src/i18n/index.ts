@@ -2,15 +2,20 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { getLocales } from 'expo-localization';
 import { I18nManager } from 'react-native';
+import { create } from 'zustand';
+import { mmkvStorage } from '@/lib/mmkv';
 import {
   DEFAULT_LANGUAGE,
+  SELECTABLE_LANGUAGES,
   SUPPORTED_LANGUAGES,
   baseInitOptions,
   isSelectableLanguage,
   languageFor,
 } from '@agiworkforce/i18n';
 
-export { SUPPORTED_LANGUAGES };
+export { SELECTABLE_LANGUAGES, SUPPORTED_LANGUAGES };
+export const LANGUAGE_STORAGE_KEY = 'agiworkforce-language';
+export const DEVICE_LANGUAGE_PREFERENCE = 'device';
 
 export interface LanguageChangeResult {
   language: string;
@@ -35,10 +40,49 @@ void i18n.use(initReactI18next).init({
   react: { useSuspense: false },
 });
 
-export async function syncDeviceLanguage(): Promise<LanguageChangeResult> {
-  const language = getDeviceLanguage();
+export const useLanguagePreferenceStore = create<{ preference: string }>(() => ({
+  preference: DEVICE_LANGUAGE_PREFERENCE,
+}));
+
+export function readStoredLanguagePreference(): string {
+  try {
+    const stored = mmkvStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (
+      typeof stored === 'string' &&
+      (stored === DEVICE_LANGUAGE_PREFERENCE || isSelectableLanguage(stored))
+    ) {
+      return stored;
+    }
+  } catch {
+    return DEVICE_LANGUAGE_PREFERENCE;
+  }
+  return DEVICE_LANGUAGE_PREFERENCE;
+}
+
+function resolvePreference(preference: string): string {
+  return preference === DEVICE_LANGUAGE_PREFERENCE ? getDeviceLanguage() : preference;
+}
+
+export async function restoreStoredLanguage(): Promise<LanguageChangeResult> {
+  const preference = readStoredLanguagePreference();
+  const language = resolvePreference(preference);
+  useLanguagePreferenceStore.setState({ preference });
   if (language !== i18n.language) await i18n.changeLanguage(language);
   return { language, directionChanged: applyLayoutDirection(language) };
+}
+
+export async function setLanguage(preference: string): Promise<LanguageChangeResult | null> {
+  if (preference !== DEVICE_LANGUAGE_PREFERENCE && !isSelectableLanguage(preference)) return null;
+  const language = resolvePreference(preference);
+  await i18n.changeLanguage(language);
+  useLanguagePreferenceStore.setState({ preference });
+  const directionChanged = applyLayoutDirection(language);
+  try {
+    mmkvStorage.setItem(LANGUAGE_STORAGE_KEY, preference);
+  } catch (err) {
+    console.warn('[i18n] language preference was not saved:', err);
+  }
+  return { language, directionChanged };
 }
 
 export function isRtl(code: string = i18n.language): boolean {

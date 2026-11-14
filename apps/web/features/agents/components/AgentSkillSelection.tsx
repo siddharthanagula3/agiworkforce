@@ -107,7 +107,7 @@ export function AgentSkillSelection({
   return (
     <fieldset className="flex min-w-0 flex-col gap-3" disabled={disabled}>
       <legend className="text-sm font-medium text-foreground">Skills</legend>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         Skills are available only when the person chatting has them enabled.
       </p>
       <RadioGroup
@@ -130,7 +130,7 @@ export function AgentSkillSelection({
             className="min-w-0 flex-1 cursor-pointer pointer-coarse:min-h-11"
           >
             <span className="block text-sm font-medium">Use each person's enabled skills</span>
-            <span id={`${id}-inherit-help`} className="block text-sm text-muted-foreground">
+            <span id={`${id}-inherit-help`} className="block text-xs text-muted-foreground">
               Inherit their skills automatically, including ones they enable later.
             </span>
           </Label>
@@ -149,7 +149,7 @@ export function AgentSkillSelection({
             className="min-w-0 flex-1 cursor-pointer pointer-coarse:min-h-11"
           >
             <span className="block text-sm font-medium">Choose individual skills</span>
-            <span id={`${id}-individual-help`} className="block text-sm text-muted-foreground">
+            <span id={`${id}-individual-help`} className="block text-xs text-muted-foreground">
               Keep a fixed selection for this agent.
             </span>
           </Label>
@@ -283,7 +283,7 @@ export function AgentSkillSelection({
                       {choice.description ? (
                         <span
                           id={`${choice.optionId}-description`}
-                          className="mt-0.5 block text-sm text-muted-foreground"
+                          className="mt-0.5 block text-xs text-muted-foreground"
                         >
                           {choice.description}
                         </span>

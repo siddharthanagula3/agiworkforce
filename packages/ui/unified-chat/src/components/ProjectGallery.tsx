@@ -233,8 +233,8 @@ export function ProjectGallery({
       )}
 
       {/* Toolbar, search + new */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+      <div className="flex items-center gap-2 max-md:flex-col max-md:items-stretch">
+        <div className="relative flex-1 max-md:flex-none">
           <Search
             size={14}
             strokeWidth={1.75}
@@ -258,7 +258,7 @@ export function ProjectGallery({
             setCreateError(null);
             setCreating((v) => !v);
           }}
-          className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--chat-text-primary)] px-3.5 py-1.5 text-sm font-medium text-[var(--chat-bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--chat-text-primary)] px-3.5 py-1.5 text-sm font-medium max-md:justify-center text-[var(--chat-bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
         >
           <Plus size={14} strokeWidth={2} aria-hidden="true" />
           New project

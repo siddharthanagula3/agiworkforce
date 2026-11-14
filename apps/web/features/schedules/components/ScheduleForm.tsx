@@ -154,17 +154,8 @@ export function ScheduleForm({
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pe-3">
         <div className="space-y-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <p>
-            Scheduled runs use Cloud and return text. Choose the sources each run can read below.
-          </p>
-          <p>
-            When a run reaches an action your Tool approvals setting asks about, it pauses and
-            notifies you, and continues once you approve or deny it in Run History. Web search and
-            code that the model runs itself are skipped instead when they need approval, and the
-            output says so. Research and media generation are not available.
-          </p>
-          <p>
-            Email and mobile-push alerts for a finished run are account-wide, not per schedule. Turn
-            them on in Settings → Notifications.
+            Scheduled runs use Cloud and return text, without research or media. Approvals pause a
+            run.
           </p>
         </div>
 
@@ -228,8 +219,8 @@ export function ScheduleForm({
               aria-describedby={describedBy('prompt', errors, 'schedule-prompt-helper')}
             />
             <p id="schedule-prompt-helper" className="text-xs text-muted-foreground">
-              Write a self-contained instruction. Recent chats are included only when selected below
-              and Search past chats is on in Settings.
+              Write it to stand alone. Recent chats are used only when selected below and Search
+              past chats is on in Settings.
             </p>
             <FieldError field="prompt" errors={errors} />
           </div>
@@ -339,8 +330,7 @@ export function ScheduleForm({
               aria-describedby={describedBy('scheduledLocal', errors, 'schedule-run-at-helper')}
             />
             <p id="schedule-run-at-helper" className="text-xs text-muted-foreground">
-              Interpreted in the time zone below. Ambiguous or skipped daylight-saving times are
-              rejected.
+              In the time zone below. Ambiguous daylight-saving times are rejected.
             </p>
             <FieldError field="scheduledLocal" errors={errors} />
           </div>
@@ -475,9 +465,8 @@ export function ScheduleForm({
               aria-describedby={describedBy('cronExpression', errors, 'schedule-cron-helper')}
             />
             <p id="schedule-cron-helper" className="text-xs text-muted-foreground">
-              Five fields only: minute, hour, day of month, month, and day of week. Tasks are swept
-              {` ${describeSweepCadence().cadence}`}, so an expression that fires more often than
-              that is rejected.
+              Minute, hour, day of month, month, day of week. Tasks are swept
+              {` ${describeSweepCadence().cadence}`}, so faster ones are rejected.
             </p>
             <FieldError field="cronExpression" errors={errors} />
           </div>
@@ -513,8 +502,7 @@ export function ScheduleForm({
 
         {draft.recurrence === 'event' && (
           <p className="rounded-xl border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
-            This task has no clock schedule. It runs when a trigger fires it, which you add from the
-            schedule once it is saved.
+            Runs when a trigger fires it. Add triggers after saving.
           </p>
         )}
 
@@ -538,8 +526,7 @@ export function ScheduleForm({
             ))}
           </datalist>
           <p id="schedule-timezone-helper" className="text-xs text-muted-foreground">
-            Type a city or region to search the list. A new task starts in this device's time zone,
-            and daylight-saving rules follow the zone you pick.
+            Type a city or region. Daylight saving follows the zone you pick.
           </p>
           <FieldError field="timezone" errors={errors} />
         </div>
@@ -557,7 +544,7 @@ export function ScheduleForm({
               aria-invalid={Boolean(errors.expiresLocal)}
               aria-describedby={describedBy('expiresLocal', errors, 'schedule-end-date-helper')}
             />
-            <p id="schedule-end-date-helper" className="text-sm text-muted-foreground">
+            <p id="schedule-end-date-helper" className="text-xs text-muted-foreground">
               No run starts after this, in the time zone above. Leave it empty to keep repeating.
             </p>
             <FieldError field="expiresLocal" errors={errors} />
@@ -697,8 +684,7 @@ export function ScheduleForm({
                   )}
                 />
                 <p id="schedule-condition-helper" className="text-xs text-muted-foreground">
-                  Optional. The page is read at each occurrence and the run happens only when its
-                  contents differ from the last check. The first check records the baseline.
+                  Optional. Runs only when this page changed since the last check.
                 </p>
                 <FieldError field="conditionUrl" errors={errors} />
               </div>
@@ -708,9 +694,8 @@ export function ScheduleForm({
 
         <fieldset className="space-y-3">
           <legend className="text-sm font-medium">Routine notifications</legend>
-          <p className="text-sm text-muted-foreground">
-            Choose when to notify you. Mobile push and email also follow your account notification
-            preferences.
+          <p className="text-xs text-muted-foreground">
+            Push and email also follow your account notification settings.
           </p>
           {(
             [
@@ -792,8 +777,7 @@ export function ScheduleForm({
                 aria-describedby={describedBy('creditCap', errors, 'schedule-credit-cap-helper')}
               />
               <p id="schedule-credit-cap-helper" className="text-xs text-muted-foreground">
-                The schedule pauses once its runs have used this many credits, counting every model,
-                search and tool charge. A run that starts under the cap finishes.
+                Pauses once runs use this many credits. A run already started finishes.
                 {creditsUsed !== null ? ` It has used ${formatCredits(creditsUsed)} so far.` : ''}
               </p>
               <FieldError field="creditCap" errors={errors} />

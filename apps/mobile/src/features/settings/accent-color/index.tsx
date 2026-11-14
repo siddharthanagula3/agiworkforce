@@ -34,7 +34,7 @@ export default function AccentColorScreen() {
     <SettingsScreenShell title="Accent Color">
       <SettingsInfo
         title="Accent"
-        body="Accent color affects selected controls and highlights. Neutral keeps the AGI default."
+        body="Colors selected controls and highlights. Neutral is the default."
         icon={Palette}
       />
       <SettingsGroup>

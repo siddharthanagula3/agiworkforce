@@ -82,6 +82,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   },
   { url: '/api/uploads/knowledge-file/put', why: 'the browser PUTs to the signed url this issues' },
   {
+    url: '/api/pair/standing',
+    why: 'the Remote Control relay calls this at the address in its SIGNALING_STANDING_URL setting',
+  },
+  {
     url: '/api/download-beta',
     why: 'subscriber beta installer, reached by a link sent outside the product',
   },
@@ -103,6 +107,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   {
     url: '/api/admin/usage-promotions',
     why: 'platform-admin procedure for banked limit resets and time-boxed limit uplifts',
+  },
+  {
+    url: '/api/admin/product-updates',
+    why: 'platform-admin procedure that announces one release note to devices opted in to product updates',
   },
   {
     url: '/api/admin/support-access',

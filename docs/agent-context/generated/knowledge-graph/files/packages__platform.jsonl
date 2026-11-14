@@ -192,6 +192,7 @@
 {"path":"packages/platform/utils/src/__tests__/scheduling-local-input.test.ts","unit":"packages/platform/utils","role":"test","imports":["packages/platform/utils/src/scheduling/local-input.ts","spec:vitest"]}
 {"path":"packages/platform/utils/src/__tests__/secretRedaction.parity.test.ts","unit":"packages/platform/utils","role":"test","imports":["packages/platform/utils/src/secretRedaction.ts","spec:node:fs","spec:vitest"]}
 {"path":"packages/platform/utils/src/__tests__/secretRedaction.redos.test.ts","unit":"packages/platform/utils","role":"test","imports":["packages/platform/utils/src/secretRedaction.ts","spec:node:process","spec:vitest"]}
+{"path":"packages/platform/utils/src/__tests__/sessionEvents.test.ts","unit":"packages/platform/utils","role":"test","imports":["packages/platform/utils/src/remoteControl/sessionEvents.ts","spec:vitest"]}
 {"path":"packages/platform/utils/src/__tests__/signaling.test.ts","unit":"packages/platform/utils","role":"test","imports":["packages/contracts/types","packages/platform/utils/src/signaling.ts","spec:vitest"]}
 {"path":"packages/platform/utils/src/__tests__/uuidv7.test.ts","unit":"packages/platform/utils","role":"test","imports":["packages/platform/utils/src/uuidv7.ts","spec:vitest"]}
 {"path":"packages/platform/utils/src/__tests__/validation.redos-parity.test.ts","unit":"packages/platform/utils","role":"test","imports":["packages/platform/utils/src/validation.ts","spec:vitest"]}

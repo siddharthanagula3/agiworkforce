@@ -299,7 +299,7 @@ export function SkillDetailView({
 
       {editable && onDelete ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
-          <p className="text-sm text-muted-foreground">{SKILL_DELETE_HINT}</p>
+          <p className="text-xs text-muted-foreground">{SKILL_DELETE_HINT}</p>
           <button
             type="button"
             onClick={onDelete}

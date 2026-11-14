@@ -35,6 +35,7 @@ import { StatusStep } from '@/src/features/chat/components/StatusStep';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { formatClock } from '@/src/lib/time';
 import { VoiceOrb } from './VoiceOrb';
+import { VoiceStateGlow } from './VoiceStateGlow';
 import { AudioRoutePicker } from './AudioRoutePicker';
 import { VoiceToolFiles } from './VoiceToolFiles';
 import type { LiveVoiceStatus } from '@/src/features/voice/hooks/useLiveVoiceSession';
@@ -71,6 +72,7 @@ export interface LiveVoiceBarProps {
 const TRANSCRIPT_MAX_HEIGHT = 180;
 const ORB_WIDTH_RATIO = 0.52;
 const ORB_STAGE_HEIGHT_RATIO = 0.7;
+const GLOW_HEIGHT_RATIO = 0.34;
 const APPROVAL_TITLE = 'Waiting for your approval';
 const BACKEND_BUSY_LABEL = 'Working on your request';
 const SLOW_TOOL_SUFFIX = 'is taking longer than usual';
@@ -203,7 +205,7 @@ export function LiveVoiceBar({
   const callElapsedMs = useCallClock(visible, status === 'live' && !paused);
   const insets = useSafeAreaInsets();
   const transcriptRef = useRef<ScrollView>(null);
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [stageHeight, setStageHeight] = useState(0);
   const handleStageLayout = (event: LayoutChangeEvent) =>
     setStageHeight(event.nativeEvent.layout.height);
@@ -239,6 +241,7 @@ export function LiveVoiceBar({
         : muted
           ? 'idle'
           : 'listening';
+  const glowPhase = paused || reconnecting || status === 'error' ? 'idle' : orbPhase;
   const controlStyle = {
     width: 48,
     height: 48,
@@ -255,6 +258,8 @@ export function LiveVoiceBar({
       style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
       accessibilityLiveRegion="polite"
     >
+      <VoiceStateGlow phase={glowPhase} height={Math.round(windowHeight * GLOW_HEIGHT_RATIO)} />
+
       <View
         testID="live-voice-header"
         style={{

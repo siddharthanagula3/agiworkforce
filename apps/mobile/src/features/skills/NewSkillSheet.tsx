@@ -111,7 +111,7 @@ export function NewSkillSheet({
             {editing ? 'Edit skill' : 'New skill'}
           </Text>
           <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
-            A personal skill is only yours. Name it with lowercase letters, numbers and hyphens.
+            Only you can use it. Name it with lowercase letters, numbers and hyphens.
           </Text>
           <TextInput
             value={name}

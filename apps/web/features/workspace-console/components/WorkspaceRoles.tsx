@@ -781,9 +781,8 @@ function DirectoryGroupRoles({ data }: { data: WorkspaceRolesResult }) {
   return (
     <section style={cardStyle} aria-labelledby="workspace-group-roles-heading">
       <CardHeader id="workspace-group-roles-heading" title="Groups">
-        Every member of a group holds the roles checked for that group and any policy exception set
-        for it. Groups created here are yours to name and fill. Groups your identity provider syncs
-        keep the membership the provider sends, and a change made there wins.
+        Members hold their group's roles and exceptions. Synced groups follow your identity
+        provider.
       </CardHeader>
       {result.canManageGroups ? <CreateWorkspaceGroup /> : null}
       <ul className="flex flex-col">

@@ -83,7 +83,15 @@ async function handlePushToken(request: NextRequest) {
 
 const DeleteTokenSchema = z.object({
   deviceId: z.string().uuid(),
+  release: z.literal('device').optional(),
 });
+
+const CLEAR_PUSH_TOKEN_SQL = `update public.mobile_devices
+     set push_token = null, updated_at = now()
+   where id = $1 and user_id = $2`;
+
+const RELEASE_DEVICE_SQL = `delete from public.mobile_devices
+   where id = $1 and user_id = $2`;
 
 async function handleDeletePushToken(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'mobile-push-token');
@@ -94,19 +102,20 @@ async function handleDeletePushToken(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request, userId);
   if (csrfResponse) return csrfResponse;
 
-  const deviceId = new URL(request.url).searchParams.get('deviceId');
-  const parsed = DeleteTokenSchema.safeParse({ deviceId });
+  const searchParams = new URL(request.url).searchParams;
+  const parsed = DeleteTokenSchema.safeParse({
+    deviceId: searchParams.get('deviceId'),
+    release: searchParams.get('release') ?? undefined,
+  });
   if (!parsed.success) {
     throw createError.badRequest('Invalid deviceId', parsed.error.flatten());
   }
 
   try {
-    await db.query(
-      `update public.mobile_devices
-         set push_token = null, updated_at = now()
-       where id = $1 and user_id = $2`,
-      [parsed.data.deviceId, userId],
-    );
+    await db.query(parsed.data.release ? RELEASE_DEVICE_SQL : CLEAR_PUSH_TOKEN_SQL, [
+      parsed.data.deviceId,
+      userId,
+    ]);
   } catch (error) {
     logger.error({ error, userId, deviceId: parsed.data.deviceId }, 'Failed to clear push token');
     throw createError.internal('Failed to clear push token');

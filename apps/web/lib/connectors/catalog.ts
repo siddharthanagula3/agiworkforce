@@ -1,3 +1,4 @@
+import type { ConnectorPersonalSource } from '@agiworkforce/cloud-contracts';
 import {
   resolveConnectorHealth as resolveSharedConnectorHealth,
   type ConnectorHealth,
@@ -67,6 +68,7 @@ interface ConnectorCapabilityBase {
   readonly surfaces: readonly ConnectorSurface[];
   readonly riskClass: ConnectorRiskClass;
   readonly releaseState: ConnectorReleaseState;
+  readonly personalSources?: readonly ConnectorPersonalSource[];
 }
 
 export interface DeclaredActionsConnector extends ConnectorCapabilityBase {
@@ -99,6 +101,7 @@ function mcpConnector(
   id: string,
   authScheme: McpAuthScheme,
   riskClass: ConnectorRiskClass,
+  personalSources?: readonly ConnectorPersonalSource[],
 ): DiscoveredActionsConnector {
   return {
     id,
@@ -111,6 +114,7 @@ function mcpConnector(
     surfaces: CLOUD_WEB_SURFACES,
     riskClass,
     releaseState: 'operator-enabled',
+    ...(personalSources ? { personalSources } : {}),
   };
 }
 
@@ -134,6 +138,7 @@ function firstPartyConnector(
   authScheme: ConnectorAuthScheme,
   riskClass: ConnectorRiskClass,
   supportedActions: readonly [string, ...string[]],
+  personalSources?: readonly ConnectorPersonalSource[],
 ): DeclaredActionsConnector {
   return {
     id,
@@ -146,12 +151,13 @@ function firstPartyConnector(
     surfaces: CLOUD_WEB_SURFACES,
     riskClass,
     releaseState: 'operator-enabled',
+    ...(personalSources ? { personalSources } : {}),
   };
 }
 
 export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapabilityRecord>> = {
-  gmail: mcpConnector('gmail', 'oauth2', 'read-write'),
-  'google-calendar': mcpConnector('google-calendar', 'oauth2', 'read-write'),
+  gmail: mcpConnector('gmail', 'oauth2', 'read-write', ['email']),
+  'google-calendar': mcpConnector('google-calendar', 'oauth2', 'read-write', ['calendar']),
   'google-drive': mcpConnector('google-drive', 'oauth2', 'read-write'),
   'google-contacts': mcpConnector('google-contacts', 'oauth2', 'read-only'),
   notion: mcpConnector('notion', 'oauth2', 'read-write'),
@@ -163,13 +169,13 @@ export const CONNECTOR_CAPABILITIES: Readonly<Record<string, ConnectorCapability
   ]),
   'github-mcp': mcpConnector('github-mcp', 'oauth2', 'read-write'),
   'google-sheets': mcpConnector('google-sheets', 'oauth2', 'read-write'),
-  outlook: firstPartyConnector('outlook', 'oauth2', 'read-write', [
-    'search_mail',
-    'read_mail',
-    'list_events',
-    'send_mail',
-    'create_event',
-  ]),
+  outlook: firstPartyConnector(
+    'outlook',
+    'oauth2',
+    'read-write',
+    ['search_mail', 'read_mail', 'list_events', 'send_mail', 'create_event'],
+    ['email', 'calendar'],
+  ),
   'microsoft-365': mcpConnector('microsoft-365', 'oauth2', 'read-only'),
   onedrive: firstPartyConnector('onedrive', 'oauth2', 'read-only', ['search_files', 'read_file']),
   linear: mcpConnector('linear', 'oauth2', 'read-write'),

@@ -81,7 +81,7 @@ describe('Memory screen header', () => {
 
     fireEvent.press(screen.getByLabelText('Go back'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/(tabs)/settings');
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings');
     expect(mockReplace).not.toHaveBeenCalled();
   });
 

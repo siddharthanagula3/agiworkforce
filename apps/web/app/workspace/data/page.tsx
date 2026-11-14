@@ -16,7 +16,7 @@ export default function WorkspaceDataPage() {
     <ConsolePage
       help={{ docId: 'workspace-policy', label: 'How retention and legal holds work' }}
       title="Data"
-      description="Legal holds suspend retention for their subject. The sweep record below is what you show an auditor instead of asserting that deletion happens."
+      description="Legal holds pause retention. The sweep record shows what was deleted."
     >
       <div className="flex flex-col gap-6">
         <WorkspaceDataControls />

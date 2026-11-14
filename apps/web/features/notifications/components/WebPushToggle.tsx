@@ -119,7 +119,7 @@ export function WebPushToggle() {
     <div className="flex items-center justify-between gap-4">
       <div>
         <p className="text-sm font-medium">Browser notifications</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <Switch
         checked={checked}

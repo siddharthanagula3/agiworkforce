@@ -241,9 +241,7 @@ describe('mobile artifacts and code screens', () => {
     );
 
     expect(getByText(/Ready/)).toBeTruthy();
-    expect(
-      getByText('Local file. Sharing uses the native sheet and does not upload it to AGI cloud.'),
-    ).toBeTruthy();
+    expect(getByText('Local file. Sharing doesn’t upload it to AGI Cloud.')).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(getByLabelText('Share generated file'));

@@ -16,19 +16,24 @@ import { withoutHiddenSharers } from '@/src/features/shared-with-you/hiddenShare
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
-export function SharedWithYouSection() {
+export function SharedWithYouSection({ emptyMessage }: { emptyMessage?: string }) {
   const colors = useThemeColors();
   const router = useRouter();
   const [projects, setProjects] = useState<SharedWithMeProject[]>([]);
   const [otherCount, setOtherCount] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    setFailed(false);
     void fetchProjectSharing(controller.signal)
       .then((fetched) => {
         if (controller.signal.aborted) return;
         const overview = fetched ? withoutHiddenSharers(fetched) : null;
         setProjects(overview ? projectsSharedWithMe(overview) : []);
+        setLoaded(true);
         const resources = overview ? sharedResourcesForMe(overview, API_URL) : null;
         setOtherCount(
           resources
@@ -39,12 +44,34 @@ export function SharedWithYouSection() {
         );
       })
       .catch(() => {
-        if (!controller.signal.aborted) setProjects([]);
+        if (controller.signal.aborted) return;
+        setProjects([]);
+        setFailed(true);
+        setLoaded(true);
       });
     return () => controller.abort();
-  }, []);
+  }, [attempt]);
 
-  if (projects.length === 0 && otherCount === 0) return null;
+  if (projects.length === 0 && otherCount === 0) {
+    if (!emptyMessage || !loaded) return null;
+    return (
+      <View testID="projects-shared-empty" style={{ alignItems: 'center', paddingTop: 48, gap: 8 }}>
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead, textAlign: 'center' }}>
+          {failed ? 'Shared projects could not be loaded.' : emptyMessage}
+        </Text>
+        {failed ? (
+          <Pressable
+            onPress={() => setAttempt((count) => count + 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading shared projects"
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text style={{ color: colors.teal, fontWeight: '600' }}>Retry</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View testID="projects-shared-with-you" style={{ gap: 8, marginTop: 16, marginBottom: 8 }}>

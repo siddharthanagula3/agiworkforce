@@ -48,7 +48,12 @@ import { recordFailure } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 import { fingerprintRequestBody } from '@/lib/server/idempotency';
-import { notifyAgentRunEvent, type AgentRunNotice } from './agent-notification-service';
+import {
+  notifyAgentRunEvent,
+  trackAgentRunOutcome,
+  type AgentRunNotice,
+} from './agent-notification-service';
+import { isPhoneChatReply, notifyChatReplyReady } from './chat-reply-notification-service';
 
 const TERMINAL_STATE_VALUES: string[] = [...TERMINAL_AGENT_TASK_STATES];
 
@@ -126,8 +131,17 @@ interface CloudAgentRunRow extends Record<string, unknown> {
  * `announceScheduleRun` in schedule-service.ts puts around the one other
  * push producer in the app.
  */
-async function announceAgentRunEvent(db: DatabaseAdapter, notice: AgentRunNotice): Promise<void> {
+async function announceAgentRunEvent(
+  db: DatabaseAdapter,
+  notice: AgentRunNotice,
+  run?: CloudAgentRun,
+): Promise<void> {
   try {
+    if (run && isPhoneChatReply(run, notice.event)) {
+      trackAgentRunOutcome(notice);
+      await notifyChatReplyReady(run);
+      return;
+    }
     await notifyAgentRunEvent(db, notice);
   } catch (error) {
     logger.warn({ error, runId: notice.runId }, 'Cloud agent run notification failed');
@@ -823,7 +837,11 @@ export async function appendCloudAgentEvents(
   // Announced after the commit, never inside it: a rolled-back journal write
   // must not leave a push behind, and a push must not hold a transaction open.
   if (notice) {
-    await announceAgentRunEvent(db, { userId: input.userId, runId: input.runId, event: notice });
+    await announceAgentRunEvent(
+      db,
+      { userId: input.userId, runId: input.runId, event: notice },
+      run,
+    );
   }
   return run;
 }
@@ -998,7 +1016,11 @@ export async function transitionCloudAgentRun(
     currentState: rows[0]?.state ?? input.state,
   });
   if (notice) {
-    await announceAgentRunEvent(db, { userId: input.userId, runId: input.runId, event: notice });
+    await announceAgentRunEvent(
+      db,
+      { userId: input.userId, runId: input.runId, event: notice },
+      run,
+    );
   }
   return run;
 }

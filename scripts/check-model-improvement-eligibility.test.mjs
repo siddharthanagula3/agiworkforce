@@ -18,10 +18,17 @@ export default function Privacy() {
 `;
 
 const PRIVACY_SECTION = `
-// 'improveModelTraining' is intentionally absent from TOGGLES: it persisted
-// correctly and had no consumer anywhere.
+// 'improveModelTraining' is retired and never reused.
+const TOGGLES = [{ id: 'allowChatsForModelImprovement' }, { id: 'allowVoiceForModelImprovement' }];
 export function PrivacySection() {
-  return <p>There is no training opt-in, because that data path does not exist.</p>;
+  return <p>We do not use your prompts, responses, files or voice recordings to train or improve AGI-owned models.</p>;
+}
+`;
+
+const CONSENT_READER = `
+export const CHAT_MODEL_IMPROVEMENT_KEY = 'allowChatsForModelImprovement';
+export async function readModelImprovementConsent(db, userId, content) {
+  return false;
 }
 `;
 
@@ -34,6 +41,7 @@ function fixture(extra = {}) {
   };
   write('apps/web/app/privacy/page.tsx', PRIVACY_PAGE);
   write('apps/web/features/settings/sections/PrivacySection.tsx', PRIVACY_SECTION);
+  write('apps/web/lib/server/model-improvement-consent.ts', CONSENT_READER);
   for (const [relative, source] of Object.entries(extra)) write(relative, source);
   return root;
 }
@@ -59,8 +67,8 @@ test('keeps the privacy promise valid across a JSX line wrap', () => {
   const result = run(
     fixture({
       'apps/web/features/settings/sections/PrivacySection.tsx': PRIVACY_SECTION.replace(
-        'no training',
-        'no\ntraining',
+        'to train',
+        'to\ntrain',
       ),
     }),
   );
@@ -113,7 +121,7 @@ test('fails when the privacy page drops the promise the code keeps', () => {
   assert.match(result.output, /no longer states that customer content is not used/);
 });
 
-test('fails when the settings copy stops saying there is no opt-in', () => {
+test('fails when the settings copy stops saying content is not used', () => {
   const root = fixture();
   fs.writeFileSync(
     path.join(root, 'apps/web/features/settings/sections/PrivacySection.tsx'),
@@ -128,7 +136,7 @@ test('keeps the promise when the formatter re-wraps the sentence across lines', 
   const root = fixture();
   fs.writeFileSync(
     path.join(root, 'apps/web/features/settings/sections/PrivacySection.tsx'),
-    "// 'improveModelTraining' is intentionally absent.\nexport function PrivacySection() {\n  return (\n    <p>\n      There is no\n      training opt-in, because that data path does not\n      exist.\n    </p>\n  );\n}\n",
+    "// 'improveModelTraining' is retired.\nexport function PrivacySection() {\n  return (\n    <p>\n      We do not use your prompts, responses, files or voice\n      recordings to train or improve\n      AGI-owned models.\n    </p>\n  );\n}\n",
   );
   fs.writeFileSync(
     path.join(root, 'apps/web/app/privacy/page.tsx'),
@@ -136,6 +144,58 @@ test('keeps the promise when the formatter re-wraps the sentence across lines', 
   );
   const result = run(root);
   assert.equal(result.code, 0);
+});
+
+test('fails when code outside the reader and settings names the consent directly', () => {
+  const result = run(
+    fixture({
+      'apps/web/lib/improve.ts':
+        'export const allowed = (settings) => settings.privacy.allowChatsForModelImprovement === true;\n',
+    }),
+  );
+  assert.equal(result.code, 1);
+  assert.match(
+    result.output,
+    /apps\/web\/lib\/improve\.ts names the model improvement choice directly/,
+  );
+});
+
+for (const outside of [
+  'services/trainer/src/eligible.ts',
+  'packages/ai/datasets/src/eligible.ts',
+  'apps/mobile/src/features/chat/eligible.ts',
+]) {
+  test(`fails when ${outside} reads the consent without the reader`, () => {
+    const result = run(
+      fixture({
+        [outside]:
+          'export const allowed = (settings) => settings.privacy.allowVoiceForModelImprovement === true;\n',
+      }),
+    );
+    assert.equal(result.code, 1);
+    assert.ok(
+      result.output.includes(`${outside} names the model improvement choice directly`),
+      result.output,
+    );
+  });
+}
+
+test('lets the mobile settings screen that writes the choice name it', () => {
+  const result = run(
+    fixture({
+      'apps/mobile/src/features/settings/cloud-privacy/trainingPreferences.ts':
+        "export const CHAT_KEY = 'allowChatsForModelImprovement';\n",
+    }),
+  );
+  assert.equal(result.code, 0, result.output);
+});
+
+test('fails when the fail-closed reader is gone', () => {
+  const root = fixture();
+  fs.rmSync(path.join(root, 'apps/web/lib/server/model-improvement-consent.ts'));
+  const result = run(root);
+  assert.equal(result.code, 1);
+  assert.match(result.output, /no longer exports readModelImprovementConsent/);
 });
 
 test('refuses to pass on an empty tree', () => {

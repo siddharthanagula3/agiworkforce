@@ -203,7 +203,6 @@ const defaultProps = {
   onFile: jest.fn(),
   onOpenCloudAccess: jest.fn(),
   onOpenStyleSelector: jest.fn(),
-  onOpenModelPicker: jest.fn(),
   onOpenProjectPicker: jest.fn(),
   onAttachFromLibrary: jest.fn(),
 };
@@ -524,14 +523,21 @@ describe('AddToChatSheet', () => {
         disabledConnectorIdsByConversation: {},
       });
 
-      const { getByLabelText, findByLabelText } = renderSheet();
+      const { getByLabelText, queryByLabelText, findByText } = renderSheet();
 
       fireEvent(getByLabelText('Web search on'), 'valueChange', false);
       expect(useChatViewStore.getState().features.webSearch).toBe(false);
-      fireEvent(await findByLabelText('Gmail on'), 'valueChange', false);
+
+      const connectors = getByLabelText('Connectors');
+      expect(await findByText('1 on')).toBeTruthy();
+      expect(queryByLabelText('Gmail on')).toBeNull();
+      fireEvent.press(connectors);
+      fireEvent(getByLabelText('Gmail on'), 'valueChange', false);
       expect(useChatViewStore.getState().disabledConnectorIdsByConversation).toEqual({
         'chat-42': ['gmail'],
       });
+      expect(within(getByLabelText('Connectors')).getByText('Off')).toBeTruthy();
+      expect(getByLabelText('Manage connectors')).toBeTruthy();
     });
 
     it('no longer offers AGI Work at a paid tier, the drawer owns it now', () => {
@@ -562,8 +568,8 @@ describe('AddToChatSheet', () => {
 
       expect(queryByText('Temporary chat')).toBeNull();
       expect(queryByText('Web search')).toBeNull();
-      expect(queryByText('Image')).toBeNull();
-      expect(queryByText('Video')).toBeNull();
+      expect(queryByText('Create image')).toBeNull();
+      expect(queryByText('Create video')).toBeNull();
       expect(queryByText('AGI Work')).toBeNull();
       expect(queryByText('Run code')).toBeNull();
       expect(queryByText('Computer use')).toBeNull();
@@ -577,7 +583,7 @@ describe('AddToChatSheet', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] });
       const { getByText } = renderSheet();
-      expect(getByText('Image')).toBeTruthy();
+      expect(getByText('Create image')).toBeTruthy();
     });
 
     it('hides Image below Pro so the option cannot promise a denied request', () => {
@@ -586,7 +592,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Image')).toBeNull();
+      expect(queryByText('Create image')).toBeNull();
     });
 
     it('hides Image when the server capability handshake denies it', () => {
@@ -595,7 +601,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Image')).toBeNull();
+      expect(queryByText('Create image')).toBeNull();
     });
 
     it('hides Video below Max 20x', () => {
@@ -604,10 +610,10 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Video')).toBeNull();
+      expect(queryByText('Create video')).toBeNull();
     });
 
-    it('gives each Output row its file-type icon, like every other row in the sheet', () => {
+    it('folds the file types under one Create file row, each with its file-type icon', () => {
       const features = FEATURES as { codeExecution: boolean };
       const previous = features.codeExecution;
       features.codeExecution = true;
@@ -620,7 +626,9 @@ describe('AddToChatSheet', () => {
       } as never);
 
       try {
-        const { getByLabelText } = renderSheet({ offersOutputFormat: true });
+        const { getByLabelText, queryByLabelText } = renderSheet({ offersOutputFormat: true });
+        expect(queryByLabelText('Document')).toBeNull();
+        fireEvent.press(getByLabelText('Create file'));
         for (const [label, icon] of [
           ['Document', 'icon-FileText'],
           ['Presentation', 'icon-MonitorPlay'],
@@ -628,6 +636,11 @@ describe('AddToChatSheet', () => {
         ] as const) {
           expect(within(getByLabelText(label)).getByTestId(icon)).toBeTruthy();
         }
+
+        fireEvent.press(getByLabelText('Spreadsheet'));
+        expect(within(getByLabelText('Create file')).getByText('Spreadsheet')).toBeTruthy();
+        fireEvent.press(getByLabelText('Spreadsheet, selected'));
+        expect(within(getByLabelText('Create file')).queryByText('Spreadsheet')).toBeNull();
       } finally {
         features.codeExecution = previous;
       }
@@ -658,7 +671,7 @@ describe('AddToChatSheet', () => {
 
       try {
         const { getByText } = renderSheet();
-        expect(getByText('Video')).toBeTruthy();
+        expect(getByText('Create video')).toBeTruthy();
       } finally {
         features.videoGen = false;
       }
@@ -676,8 +689,7 @@ describe('AddToChatSheet', () => {
 
       try {
         const { queryByText } = renderSheet();
-        expect(queryByText('Video')).toBeNull();
-        expect(queryByText('Generate video in this chat')).toBeNull();
+        expect(queryByText('Create video')).toBeNull();
       } finally {
         features.videoGen = false;
       }
@@ -699,7 +711,7 @@ describe('AddToChatSheet', () => {
 
       try {
         const { getByText } = renderSheet();
-        expect(getByText('Video')).toBeTruthy();
+        expect(getByText('Create video')).toBeTruthy();
       } finally {
         features.videoGen = false;
       }
@@ -714,8 +726,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Video')).toBeNull();
-      expect(queryByText('Generate video in this chat')).toBeNull();
+      expect(queryByText('Create video')).toBeNull();
     });
 
     it('hides the Video row when only the image capability is granted', () => {
@@ -724,7 +735,7 @@ describe('AddToChatSheet', () => {
 
       const { queryByText } = renderSheet();
 
-      expect(queryByText('Video')).toBeNull();
+      expect(queryByText('Create video')).toBeNull();
     });
 
     it('updates the selected video-model row immediately after the user picks another model', () => {
@@ -783,7 +794,7 @@ describe('AddToChatSheet', () => {
       const { queryByText } = renderSheet();
 
       expect(queryByText('Web search')).toBeNull();
-      expect(queryByText('Image')).toBeNull();
+      expect(queryByText('Create image')).toBeNull();
     });
 
     it('keeps Web search out of the + sheet when a Cloud generic backend is available', () => {
@@ -837,10 +848,16 @@ describe('AddToChatSheet', () => {
     it('marks the tapped handoff row busy while the sheet closes', () => {
       const { getByText, queryByTestId, getByTestId } = renderSheet();
 
-      expect(queryByTestId('config-link-pending-Model')).toBeNull();
+      expect(queryByTestId('config-link-pending-Choose style')).toBeNull();
       fireEvent.press(getByText('Project'));
       expect(getByTestId('config-link-pending-Project')).toBeTruthy();
-      expect(queryByTestId('config-link-pending-Model')).toBeNull();
+      expect(queryByTestId('config-link-pending-Choose style')).toBeNull();
+    });
+
+    it('leaves the model to the composer', () => {
+      const { queryByLabelText } = renderSheet();
+
+      expect(queryByLabelText('Model')).toBeNull();
     });
 
     it('renders the local-safe config links', () => {

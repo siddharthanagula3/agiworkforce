@@ -275,7 +275,7 @@ export function DirectoryManageView({
                       {action.description ? (
                         <>
                           <span className="block truncate">{action.label}</span>
-                          <span className="block whitespace-normal text-sm text-muted-foreground">
+                          <span className="block whitespace-normal text-xs text-muted-foreground">
                             {action.description}
                           </span>
                         </>

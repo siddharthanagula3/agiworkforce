@@ -1867,6 +1867,7 @@ export function CodeComposer({
 
         <div
           id="chat-composer"
+          data-testid="code-composer-field"
           className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}
         >
           <SlashCommandMenu

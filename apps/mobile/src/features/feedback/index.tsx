@@ -19,7 +19,7 @@ const FEEDBACK_TYPES: Array<{ type: FeedbackType; label: string; icon: typeof Bu
   { type: 'general', label: 'General Feedback', icon: MessageCircle },
 ];
 
-const SETTINGS_RETURN_PATH = '/(app)/(tabs)/settings' as const;
+const SETTINGS_RETURN_PATH = '/(app)/settings' as const;
 const ABOUT_RETURN_PATH = '/(app)/about' as const;
 
 function resolveReturnTo(value: unknown): typeof SETTINGS_RETURN_PATH | typeof ABOUT_RETURN_PATH {

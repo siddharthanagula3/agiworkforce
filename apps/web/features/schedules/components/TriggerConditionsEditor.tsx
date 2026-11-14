@@ -38,8 +38,7 @@ export function TriggerConditionsEditor({
     <fieldset className="space-y-2">
       <legend className="text-sm font-medium text-foreground">Only when</legend>
       <p className="text-xs text-muted-foreground">
-        Optional. Every condition must match for an event to start this task. Text compares without
-        regard to case.
+        Optional. Every condition must match. Text ignores case.
       </p>
       {drafts.map((draft, index) => {
         const rowId = `${idPrefix}-${draft.key}`;

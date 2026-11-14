@@ -114,7 +114,7 @@ describe('CapabilitiesSection', () => {
       .closest('li');
     expect(row?.parentElement).toHaveClass('divide-y');
     expect(row).toHaveTextContent(
-      'Lets AGI run code and create files in a sandbox that can reach only GitHub, npm and PyPI.',
+      'Run code and create files in a sandbox that can reach only GitHub, npm and PyPI.',
     );
   });
 

@@ -237,6 +237,12 @@ describe('host snapshots and live events', () => {
     { type: 'turn-finished', turnId: 'turn-1', outcome: 'interrupted', response: 'Stopped' },
     { type: 'guidance-queued', queuedGuidance: ['Review permissions'] },
     { type: 'guidance-delivered', turnId: 'turn-1', queuedGuidance: [] },
+    {
+      type: 'guidance-delivered',
+      turnId: 'turn-1',
+      queuedGuidance: [],
+      text: 'Review permissions',
+    },
     { type: 'runtime-stopped', message: 'Connection closed' },
   ])('preserves a valid live event %#', (value) => {
     expect(event(value)?.event).toEqual(value);

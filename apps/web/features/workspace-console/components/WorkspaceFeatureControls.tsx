@@ -400,9 +400,8 @@ function PolicyExceptions({ organizationId }: { organizationId: string }) {
           Exceptions
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          Role exceptions apply over the workspace defaults, group exceptions over roles, and a
-          person&rsquo;s exception over both. When someone holds two roles or is in two groups, the
-          stricter setting wins.
+          Personal exceptions beat groups, groups beat roles, roles beat defaults. Ties go to the
+          stricter setting.
         </p>
       </div>
       <ul className="flex flex-col">

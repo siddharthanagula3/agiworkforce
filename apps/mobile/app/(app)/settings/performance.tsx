@@ -64,7 +64,7 @@ type TierNum = 1 | 2 | 3;
 
 function tier1FetchingNote(caps: DeviceCapabilities): string | null {
   if (caps.tier1Status === 'downloadable' || caps.tier1Status === 'downloading') {
-    return 'AICore is fetching its on-device model in the background, this device will move to Tier 1 automatically once it finishes.';
+    return 'AICore is downloading its model. This device moves to Tier 1 when done.';
   }
   return null;
 }
@@ -852,7 +852,7 @@ export default function PerformanceScreen() {
             </>
           ) : (
             <Text style={{ fontSize: typeScale.subhead, color: c.textMuted }}>
-              No local model selected. Download a model to see performance stats.
+              No local model selected. Download one to see stats.
             </Text>
           )}
 
@@ -960,8 +960,7 @@ export default function PerformanceScreen() {
             </Text>
           </View>
           <Text style={{ fontSize: typeScale.footnote, color: c.textMuted, marginBottom: 12 }}>
-            Runs a standard prompt against the selected on-device model, loading it if installed.
-            Successful results are stored for comparison across sessions.
+            Times a standard prompt on the selected on-device model and saves the result.
           </Text>
           <Pressable
             onPress={handleBenchmark}
@@ -1095,7 +1094,7 @@ export default function PerformanceScreen() {
           <ToggleRow
             icon={BarChart2}
             label="Show performance chip in chat"
-            sublabel="Shows tok/s under on-device replies with a measured speed"
+            sublabel="Shows tok/s under on-device replies"
             value={showPerfChip}
             onChange={handleChipToggle}
           />

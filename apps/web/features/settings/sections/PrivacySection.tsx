@@ -10,7 +10,7 @@ import {
   requestTelemetryOptOut,
   setTelemetryConsentCache,
 } from '@/lib/sentry-shared';
-import { isFreeBillingPlanTier } from '@agiworkforce/types';
+import { isFreeBillingPlanTier, PRODUCT_COPYRIGHT_NAME } from '@agiworkforce/types';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import { usePreferenceOwner, usePreferenceView } from '../hooks/use-preference-owner';
 import {
@@ -30,16 +30,16 @@ import { NamedProviderConsentRows } from '../components/NamedProviderConsentRows
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
 
-// 'locationMetadata' and 'improveModelTraining' are intentionally absent from
-// TOGGLES: both persisted correctly but had zero consumers anywhere (no
-// location collection exists to gate; no training-data pipeline exists to
-// gate), a switch that saves but changes nothing is a dead control. Re-add
-// once the underlying feature ships. 'rememberChats' is also absent: it
-// currently promises the opposite of what happens (off does NOT stop
-// cloud-saving; the conversation-save path never reads this preference).
+// 'locationMetadata' is intentionally absent from TOGGLES: it persisted
+// correctly but had zero consumers (no location collection exists to gate),
+// and a switch that saves but changes nothing is a dead control. 'rememberChats' is
+// also absent: it currently promises the opposite of what happens (off does NOT
+// stop cloud-saving; the conversation-save path never reads this preference).
 // Fixing that means gating the save path itself, not this settings screen.
 // do not re-add the switch until that read is wired, or it goes back to
-// actively lying to privacy-conscious users.
+// actively lying to privacy-conscious users. 'improveModelTraining' is retired
+// and never reused: values saved under it were given for a switch with other
+// wording, so they are not consent to the model improvement choices below.
 type ToggleKey = PrivacyKey;
 
 interface ToggleSpec {
@@ -48,27 +48,47 @@ interface ToggleSpec {
   description: string;
   defaultValue: boolean;
   managedOnly?: boolean;
+  ariaLabel?: string;
 }
 
 const TOGGLES: ReadonlyArray<ToggleSpec> = [
   {
     id: 'shareTelemetry',
     label: 'Share crash and error reports',
-    description:
-      'Allow browser error reports and counts of failed requests so we can fix problems faster. Sensitive request fields are removed from error reports before they are sent.',
+    description: 'Send error reports, with sensitive fields removed.',
     defaultValue: false,
   },
   {
     id: 'keepOutOfProviderTraining',
     label: 'Only use models that do not train on your chats',
-    description:
-      'Your requests go only to models whose providers do not train on what you send. On the Free plan this keeps your chats away from free models whose providers’ terms may allow training.',
+    description: 'On Free, this keeps your chats off free models whose terms may allow training.',
     defaultValue: false,
   },
 ];
 
+const MODEL_IMPROVEMENT_HEADING = `Help improve ${PRODUCT_COPYRIGHT_NAME} models`;
+
+const MODEL_IMPROVEMENT_TOGGLES: ReadonlyArray<ToggleSpec> = [
+  {
+    id: 'allowChatsForModelImprovement',
+    label: 'Use my chats',
+    ariaLabel: `Use my chats to improve ${PRODUCT_COPYRIGHT_NAME} models`,
+    description: `Allow ${PRODUCT_COPYRIGHT_NAME} to use your chats to improve its own models.`,
+    defaultValue: false,
+  },
+  {
+    id: 'allowVoiceForModelImprovement',
+    label: 'Use my voice',
+    ariaLabel: `Use my voice recordings to improve ${PRODUCT_COPYRIGHT_NAME} models`,
+    description: `Allow ${PRODUCT_COPYRIGHT_NAME} to use your voice recordings to improve its own models.`,
+    defaultValue: false,
+  },
+];
+
+const MODEL_IMPROVEMENT_NOTE = `Both are off unless you turn them on. Nothing is used for this today. These choices apply only if ${PRODUCT_COPYRIGHT_NAME} starts improving its own models, and they don’t change which providers serve your chats.`;
+
 function defaultPrivacyState(): Record<ToggleKey, boolean> {
-  return TOGGLES.reduce(
+  return [...TOGGLES, ...MODEL_IMPROVEMENT_TOGGLES].reduce(
     (acc, t) => ({ ...acc, [t.id]: t.defaultValue }),
     {} as Record<ToggleKey, boolean>,
   );
@@ -334,6 +354,57 @@ export function PrivacySection() {
     );
   }
 
+  function renderToggle(spec: ToggleSpec) {
+    return (
+      <div
+        key={spec.id}
+        style={{
+          padding: 'var(--space-4) 0',
+          borderBottom: '1px solid var(--settings-border)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 'var(--space-4)',
+          opacity: spec.managedOnly && !hasHostedCloud ? 0.65 : 1,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', flex: 1 }}>
+          <span style={{ fontSize: 14, color: 'var(--text-1)' }}>
+            {spec.label}
+            {spec.managedOnly ? (
+              <span
+                style={{
+                  marginLeft: 'var(--space-2)',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  color: 'var(--text-3)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                {hasHostedCloud ? 'Hosted cloud' : 'Upgrade'}
+              </span>
+            ) : null}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+            {spec.description}
+          </span>
+        </div>
+        <Switch
+          checked={state[spec.id]}
+          disabled={
+            !ready ||
+            !laneCurrent() ||
+            displayed?.busy === true ||
+            (spec.managedOnly && !hasHostedCloud)
+          }
+          onCheckedChange={(checked) => void savePrivacy(spec.id, checked)}
+          aria-label={spec.ariaLabel ?? spec.label}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <div>
@@ -429,8 +500,9 @@ export function PrivacySection() {
           </p>
           <p style={{ margin: 0 }}>
             Cloud conversations are encrypted in transit and at rest. We do not sell your data, and
-            we do not train AGI-owned models on your prompts, responses or files. There is no
-            training opt-in, because that data path does not exist. Cloud requests are routed to the
+            we do not use your prompts, responses, files or voice recordings to train or improve
+            AGI-owned models. The {MODEL_IMPROVEMENT_HEADING} choices below apply only if that
+            changes, and both stay off unless you turn them on. Cloud requests are routed to the
             hosted provider serving the model you selected, and provider-side handling is governed
             by that provider&rsquo;s terms, the current list is at{' '}
             <SettingsPageLink
@@ -479,67 +551,36 @@ export function PrivacySection() {
             shows which parts of the product work. Sensitive request fields are removed before error
             reports are sent. Neither setting controls server operational logs.
           </p>
-          {/*
-            The "opt into model-improvement sharing" paragraph that used to sit
-            here described a control that does not exist: `improveModelTraining`
-            was deliberately removed from TOGGLES above because nothing consumes
-            it. Telling users to opt into a setting they cannot find, for a
-            pipeline that was never built, is worse than saying nothing. Restore
-            copy here only when the toggle and its consumer both ship.
-          */}
         </ExpandableSection>
 
-        {/* Telemetry toggle */}
-        {TOGGLES.map((spec) => (
-          <div
-            key={spec.id}
+        {TOGGLES.map(renderToggle)}
+        <section aria-labelledby="model-improvement-heading">
+          <h2
+            id="model-improvement-heading"
             style={{
-              padding: 'var(--space-4) 0',
-              borderBottom: '1px solid var(--settings-border)',
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: 'var(--space-4)',
-              opacity: spec.managedOnly && !hasHostedCloud ? 0.65 : 1,
+              margin: 0,
+              padding: 'var(--space-4) 0 0',
+              fontSize: 14,
+              fontWeight: 600,
+              color: 'var(--text-1)',
             }}
           >
-            <div
-              style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', flex: 1 }}
-            >
-              <span style={{ fontSize: 14, color: 'var(--text-1)' }}>
-                {spec.label}
-                {spec.managedOnly ? (
-                  <span
-                    style={{
-                      marginLeft: 'var(--space-2)',
-                      fontSize: 14,
-                      fontWeight: 700,
-                      color: 'var(--text-3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                    }}
-                  >
-                    {hasHostedCloud ? 'Hosted cloud' : 'Upgrade'}
-                  </span>
-                ) : null}
-              </span>
-              <span style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.5 }}>
-                {spec.description}
-              </span>
-            </div>
-            <Switch
-              checked={state[spec.id]}
-              disabled={
-                !ready ||
-                !laneCurrent() ||
-                displayed?.busy === true ||
-                (spec.managedOnly && !hasHostedCloud)
-              }
-              onCheckedChange={(checked) => void savePrivacy(spec.id, checked)}
-              aria-label={spec.label}
-            />
-          </div>
-        ))}
+            {MODEL_IMPROVEMENT_HEADING}
+          </h2>
+          {MODEL_IMPROVEMENT_TOGGLES.map(renderToggle)}
+          <p
+            style={{
+              margin: 0,
+              padding: 'var(--space-3) 0 var(--space-4)',
+              borderBottom: '1px solid var(--settings-border)',
+              fontSize: 12,
+              color: 'var(--text-3)',
+              lineHeight: 1.5,
+            }}
+          >
+            {MODEL_IMPROVEMENT_NOTE}
+          </p>
+        </section>
         <ProductAnalyticsConsentRow />
         <MarketingEmailConsentRow />
         <NamedProviderConsentRows />
@@ -563,7 +604,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Shared links
             </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Review and revoke links created from Web conversations.
             </div>
           </div>
@@ -596,7 +637,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Archived chats
             </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Restore archived chats or move them to Recently deleted.
             </div>
           </div>
@@ -629,7 +670,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Recently deleted
             </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Put back a chat you deleted in the last 30 days.
             </div>
           </div>
@@ -675,11 +716,8 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Start new chats as temporary
             </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              No message from a temporary conversation is written to your history, and it never
-              shows up in search. The conversation and any attachment are removed after 30 days.
-              Chats you start inside a project are always saved to it. You can still turn a single
-              chat back on from the composer.
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+              Not saved to history or search, and deleted after 30 days. Project chats are saved.
             </div>
           </div>
           <Switch
@@ -709,7 +747,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Privacy requests
             </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Review your consent record, or ask us to access, correct, or erase your data.
             </div>
           </div>
@@ -754,9 +792,8 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Uploaded files
             </div>
-            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Files you uploaded and media generated for you. Review them, or delete individual
-              items, in your Library.
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+              Files and generated media. Review or delete them in your Library.
             </div>
           </div>
           <a
@@ -787,7 +824,7 @@ export function PrivacySection() {
           style={{
             margin: 0,
             padding: 'var(--space-4) 0',
-            fontSize: 14,
+            fontSize: 12,
             color: 'var(--text-3)',
             lineHeight: 1.55,
           }}
@@ -838,7 +875,7 @@ export function PrivacySection() {
         >
           Danger zone
         </p>
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--text-3)' }}>
+        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
           Permanently deleting your account, including all conversations and billing history, is
           handled from{' '}
           <SettingsSectionLink

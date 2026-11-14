@@ -274,8 +274,7 @@ export function DataExportRow() {
         <div>
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>Export data</div>
           <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-            Get a copy of your account data and the files you stored. When it is ready, you can
-            download it here.
+            Download a copy of your account data and files.
           </div>
         </div>
         <button

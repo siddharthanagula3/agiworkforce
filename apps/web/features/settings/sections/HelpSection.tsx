@@ -70,8 +70,8 @@ export function HelpSection() {
   return (
     <section className="flex flex-col gap-4">
       <div>
-        <h2 className="text-h4 text-[var(--text-1)]">Help</h2>
-        <p className="mt-1 text-sm text-[var(--text-3)]">
+        <h2 className="text-h4 text-[var(--text-1)] max-md:text-h1 max-md:font-medium">Help</h2>
+        <p className="mt-1 text-xs text-[var(--text-3)]">
           Documentation, support, and service status.
         </p>
       </div>

@@ -249,9 +249,9 @@ describe('MessageContentRenderer', () => {
       <View>{renderMarkdownContent(tableContent, lightColors)}</View>,
     );
 
-    expect(getByText('Name')).toHaveStyle({ fontWeight: '500' });
-    expect(getByText('Age')).toHaveStyle({ fontWeight: '500' });
-    expect(getByText('City')).toHaveStyle({ fontWeight: '500' });
+    expect(getByText('Name')).toHaveStyle({ fontWeight: '600' });
+    expect(getByText('Age')).toHaveStyle({ fontWeight: '600' });
+    expect(getByText('City')).toHaveStyle({ fontWeight: '600' });
 
     expect(getByText('Alice')).toHaveStyle({ color: lightColors.textSecondary });
     expect(getByText('30')).toHaveStyle({ color: lightColors.textSecondary });

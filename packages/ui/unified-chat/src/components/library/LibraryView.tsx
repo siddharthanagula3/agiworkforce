@@ -892,7 +892,7 @@ export function LibraryView({
       ) : null}
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)]">
+          <h1 className="font-[var(--chat-font-sans)] text-display text-[var(--chat-text-primary)] max-md:font-medium">
             Library
           </h1>
           {storageUsedBytes !== null ? (
@@ -1642,7 +1642,7 @@ const MENU_PANEL_CLASS =
   'absolute end-0 z-[var(--z-dropdown)] mt-1 min-w-44 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] p-1 shadow-[var(--chat-shadow-lg)]';
 
 const MENU_TRIGGER_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+  'flex h-8 w-8 items-center justify-center rounded-sm border border-[var(--chat-border)] relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-1.5 max-md:pointer-coarse:after:content-[""] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
 
 /**
  * The tile chip stays in the DOM at low emphasis and gains its border and full
@@ -1650,7 +1650,7 @@ const MENU_TRIGGER_CLASS =
  * unreachable on a touch pointer, which has neither.
  */
 const MENU_TRIGGER_OVERLAY_CLASS =
-  'flex h-8 w-8 items-center justify-center rounded-sm border border-transparent bg-[var(--chat-surface-overlay)] text-[var(--chat-text-muted)] group-hover:border-[var(--chat-border)] group-hover:text-[var(--chat-text-primary)] group-focus-within:border-[var(--chat-border)] group-focus-within:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
+  'flex h-8 w-8 items-center justify-center rounded-sm border border-transparent relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-1.5 max-md:pointer-coarse:after:content-[""] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-muted)] group-hover:border-[var(--chat-border)] group-hover:text-[var(--chat-text-primary)] group-focus-within:border-[var(--chat-border)] group-focus-within:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]';
 
 const MENU_ITEM_CLASS =
   'flex w-full min-h-9 items-center gap-2 rounded-sm px-2.5 py-1.5 text-start text-sm text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
@@ -2093,8 +2093,8 @@ function IconToggle({
       onClick={onClick}
       className={
         pressed
-          ? 'flex h-9 w-9 items-center justify-center rounded-md bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
-          : 'flex h-9 w-9 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          ? 'flex h-9 w-9 items-center justify-center rounded-md relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-1 max-md:pointer-coarse:after:content-[""] bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
+          : 'flex h-9 w-9 items-center justify-center rounded-md relative min-h-0 max-md:pointer-coarse:after:absolute max-md:pointer-coarse:after:-inset-1 max-md:pointer-coarse:after:content-[""] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]'
       }
     >
       {children}
@@ -2181,7 +2181,7 @@ function EmptyState({
   const copy = hasQuery
     ? 'Nothing here matches that name. Try a shorter search.'
     : viewDeleted
-      ? 'Deleted files wait here for 30 days, so you can put one back before it is removed for good.'
+      ? 'Deleted files wait here for 30 days before they are removed for good.'
       : 'Files you upload and files your work produces collect here, with your projects.';
   return (
     <div

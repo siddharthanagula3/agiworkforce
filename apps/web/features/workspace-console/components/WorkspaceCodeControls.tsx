@@ -208,8 +208,7 @@ export function WorkspaceCodeControls() {
           Code connections
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          What a Code session may reach outside the workspace. A change applies to the next request
-          a member makes, including one inside a session that is already open.
+          What a Code session may reach outside the workspace. Changes apply on the next request.
         </p>
       </div>
       <ul className="flex flex-col">

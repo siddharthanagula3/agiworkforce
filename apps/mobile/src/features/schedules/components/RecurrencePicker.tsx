@@ -170,8 +170,7 @@ export function RecurrencePicker({
         <Text className="text-sm text-white/40 mt-2 leading-5">{MOBILE_SCHEDULE_CADENCE_NOTE}</Text>
         {!isMobileScheduleRecurrenceSupported(value) ? (
           <Text className="text-sm text-amber-400 mt-2 leading-5">
-            This cadence cannot be edited on Mobile. Choose Once, Daily, Weekly, or Monthly before
-            saving.
+            This cadence cannot be edited on Mobile. Pick Once, Daily, Weekly or Monthly.
           </Text>
         ) : null}
       </View>

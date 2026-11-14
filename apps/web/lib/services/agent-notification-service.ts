@@ -121,6 +121,22 @@ function describeAgentRunEvent(notice: AgentRunNotice): { title: string; body: s
   }
 }
 
+function isTerminalRunEvent(event: AgentRunNotice['event']): boolean {
+  return event === 'completed' || event === 'failed';
+}
+
+export function trackAgentRunOutcome(notice: Pick<AgentRunNotice, 'userId' | 'event'>): void {
+  if (!isTerminalRunEvent(notice.event)) return;
+  trackProductAnalyticsEvent(
+    { userId: notice.userId },
+    {
+      name: 'work_run_finished',
+      surface: 'web',
+      outcome: notice.event === 'completed' ? 'succeeded' : 'failed',
+    },
+  );
+}
+
 export async function notifyAgentRunEvent(
   db: DatabaseAdapter,
   notice: AgentRunNotice,
@@ -132,17 +148,8 @@ export async function notifyAgentRunEvent(
     // toggle and turned off from the same place, so it carries its own consent
     // and is not silenced by a preference set on a phone.
     const { title, body } = describeAgentRunEvent(notice);
-    const terminal = notice.event === 'completed' || notice.event === 'failed';
-    if (terminal) {
-      trackProductAnalyticsEvent(
-        { userId: notice.userId },
-        {
-          name: 'work_run_finished',
-          surface: 'web',
-          outcome: notice.event === 'completed' ? 'succeeded' : 'failed',
-        },
-      );
-    }
+    const terminal = isTerminalRunEvent(notice.event);
+    trackAgentRunOutcome(notice);
     await recordNotification(db, {
       userId: notice.userId,
       category: 'agent_run',

@@ -18,6 +18,7 @@ import type { ResearchStep } from '@agiworkforce/types';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { trackProductEvent } from '@/services/productAnalytics';
+import { useReplyNoticeFocus } from '@/services/conversationFocus';
 import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
 import {
   dispatchHandedOffSend,
@@ -72,6 +73,11 @@ import {
   voiceCaptureErrorMessage,
 } from '@/src/features/voice/hooks/useVoiceConversation';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
+import type { DraftProvenance } from '@/src/features/chat/draftStore';
+import { draftIdentityKey } from '@/src/features/chat/draftIdentity';
+import { useVoiceAttachments } from '@/src/features/voice/hooks/useVoiceAttachments';
+import { useFocusBoundVisibility } from '@/src/features/voice/hooks/useInlineVoiceBar';
+import { useOpeningVoiceTurn } from '@/src/features/voice/hooks/useOpeningVoiceTurn';
 import { speechSettings } from '@/src/features/voice/services/speechSettings';
 import {
   createMessageIdSet,
@@ -227,6 +233,7 @@ export default function ChatScreen() {
     import('@/src/features/chat/components/ChatInput').ChatInputHandle | null
   >(null);
   useComposerAttachmentHandoff(id, chatInputAttachRef);
+  useReplyNoticeFocus(id);
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
   const quotedMessageScopeRef = useRef<ConversationUiActionScope | null>(null);
   const currentConversationScopeRef = useRef<{
@@ -429,7 +436,7 @@ export default function ChatScreen() {
     (
       text: string,
       attachments?: Attachment[],
-      dispatchOptions?: { awaitCompletion?: boolean },
+      dispatchOptions?: { awaitCompletion?: boolean; onAccepted?: () => void },
     ): boolean | Promise<boolean> => {
       if (!id) return false;
       stopSpeaking?.();
@@ -615,6 +622,7 @@ export default function ChatScreen() {
             clearError();
             quotedMessageScopeRef.current = null;
             setQuotedMessage(null);
+            dispatchOptions?.onAccepted?.();
           },
           begin: beginImageGeneration,
           complete: completeImageGeneration,
@@ -689,7 +697,10 @@ export default function ChatScreen() {
       quotedMessageScopeRef.current = null;
       setQuotedMessage(null);
       if (dispatchOptions?.awaitCompletion) {
-        return sendMessage(id, finalText, selectedModel, attachments, sendOptions)
+        return sendMessage(id, finalText, selectedModel, attachments, {
+          ...sendOptions,
+          onAccepted: dispatchOptions.onAccepted,
+        })
           .then((accepted) => {
             if (accepted && skillNameForTurn) clearSelectedSkill();
             return accepted;
@@ -1112,13 +1123,6 @@ export default function ChatScreen() {
     }, STYLE_SHEET_HANDOFF_DELAY_MS);
   }, []);
 
-  const handleSheetModelPicker = useCallback(() => {
-    addToChatRef.current?.close();
-    setTimeout(() => {
-      handleOpenModelPicker();
-    }, STYLE_SHEET_HANDOFF_DELAY_MS);
-  }, [handleOpenModelPicker]);
-
   const handlePaywallChooseModel = useCallback(() => {
     setTimeout(() => {
       handleOpenModelPicker('cloud');
@@ -1140,9 +1144,24 @@ export default function ChatScreen() {
     router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
   }, [handleOpenCloudSignIn, router]);
 
+  const [voiceInlineVisible, setVoiceInlineVisible] = useFocusBoundVisibility(id ?? '');
+  const composerDraftProvenance: DraftProvenance | undefined =
+    conversationExecutionMode === 'local'
+      ? { scope: 'local' }
+      : clerkUserId
+        ? { scope: 'cloud', ownerId: clerkUserId }
+        : undefined;
+  const voiceAttachments = useVoiceAttachments({
+    active: voiceInlineVisible,
+    scopeKey: draftIdentityKey(id ?? '', composerDraftProvenance),
+    composerRef: chatInputAttachRef,
+    onRelease: (items) => chatInputAttachRef.current?.addAttachments(items),
+  });
+  const { activeTarget: activeAttachTarget, beginSend: beginVoiceAttachmentSend } =
+    voiceAttachments;
+
   const handleSheetCamera = useCallback(async () => {
-    const operation =
-      chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    const operation = activeAttachTarget()?.captureAttachmentOperation(conversationExecutionMode);
     await runComposerAttachmentPick(
       operation,
       async (scope) => {
@@ -1176,11 +1195,10 @@ export default function ChatScreen() {
         );
       },
     );
-  }, [conversationExecutionMode]);
+  }, [activeAttachTarget, conversationExecutionMode]);
 
   const handleSheetPasteImage = useCallback(async () => {
-    const operation =
-      chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    const operation = activeAttachTarget()?.captureAttachmentOperation(conversationExecutionMode);
     await runComposerAttachmentPick(
       operation,
       async (scope) => {
@@ -1194,11 +1212,10 @@ export default function ChatScreen() {
         Alert.alert('Paste image', 'The image on the clipboard could not be pasted. Try again.');
       },
     );
-  }, [conversationExecutionMode]);
+  }, [activeAttachTarget, conversationExecutionMode]);
 
   const handleSheetPhotos = useCallback(async () => {
-    const operation =
-      chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    const operation = activeAttachTarget()?.captureAttachmentOperation(conversationExecutionMode);
     await runComposerAttachmentPick(
       operation,
       async (scope) => {
@@ -1218,11 +1235,10 @@ export default function ChatScreen() {
         );
       },
     );
-  }, [conversationExecutionMode]);
+  }, [activeAttachTarget, conversationExecutionMode]);
 
   const handleSheetFile = useCallback(async () => {
-    const operation =
-      chatInputAttachRef.current?.captureAttachmentOperation(conversationExecutionMode);
+    const operation = activeAttachTarget()?.captureAttachmentOperation(conversationExecutionMode);
     await runComposerAttachmentPick(
       operation,
       async (scope) => {
@@ -1244,7 +1260,7 @@ export default function ChatScreen() {
         Alert.alert('Error', 'Failed to pick document. Please try again.');
       },
     );
-  }, [conversationExecutionMode]);
+  }, [activeAttachTarget, conversationExecutionMode]);
 
   const handleSelectVariant = useCallback(
     (messageId: string) => {
@@ -1267,15 +1283,17 @@ export default function ChatScreen() {
     } as Parameters<typeof router.push>[0]);
   }, [id, router]);
 
-  const handleAttachFromLibrary = useCallback((attachment: Attachment) => {
-    chatInputAttachRef.current?.addAttachments([attachment]);
-  }, []);
+  const handleAttachFromLibrary = useCallback(
+    (attachment: Attachment) => {
+      activeAttachTarget()?.addAttachments([attachment]);
+    },
+    [activeAttachTarget],
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const [voiceIntroVisible, setVoiceIntroVisible] = useState(false);
   const [voicePickerVisible, setVoicePickerVisible] = useState(false);
-  const [voiceInlineVisible, setVoiceInlineVisible] = useState(false);
-  const [liveVoiceVisible, setLiveVoiceVisible] = useState(false);
+  const [liveVoiceVisible, setLiveVoiceVisible] = useFocusBoundVisibility(id ?? '');
   const voiceAllowed = useCapability('canUseVoice');
   const keyboard = useKeyboardSafeComposer('screen');
   const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
@@ -1336,7 +1354,13 @@ export default function ChatScreen() {
       return;
     }
     setLiveVoiceVisible(true);
-  }, [conversationExecutionMode, isClerkSignedIn, voiceAllowed]);
+  }, [
+    conversationExecutionMode,
+    isClerkSignedIn,
+    setLiveVoiceVisible,
+    setVoiceInlineVisible,
+    voiceAllowed,
+  ]);
 
   const handleOpenVoiceMode = useCallback(() => {
     Keyboard.dismiss();
@@ -1368,7 +1392,7 @@ export default function ChatScreen() {
   const handleExitInlineVoice = useCallback(() => {
     setVoiceInlineVisible(false);
     requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
-  }, []);
+  }, [setVoiceInlineVisible]);
 
   const handleEnsureVoiceConversation = useCallback(async () => id ?? null, [id]);
 
@@ -1387,20 +1411,18 @@ export default function ChatScreen() {
     startVoiceMode();
   }, [requestedVoiceMode, startVoiceMode]);
 
-  const handleLiveVoiceEnded = useCallback((message: string | null) => {
-    setLiveVoiceVisible(false);
-    if (message) setVoiceFallbackReason(message);
-  }, []);
+  const handleLiveVoiceEnded = useCallback(
+    (message: string | null) => {
+      setLiveVoiceVisible(false);
+      if (message) setVoiceFallbackReason(message);
+    },
+    [setLiveVoiceVisible],
+  );
 
   const handleSwitchLiveVoiceToText = useCallback(() => {
     setLiveVoiceVisible(false);
     requestAnimationFrame(() => chatInputAttachRef.current?.focus?.());
-  }, []);
-
-  const handleVoiceAttach = useCallback(() => {
-    setVoiceInlineVisible(false);
-    handleOpenAddToChat();
-  }, [handleOpenAddToChat]);
+  }, [setLiveVoiceVisible]);
 
   const handleOpenCompare = useCallback(() => {
     router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
@@ -1416,16 +1438,28 @@ export default function ChatScreen() {
       if (!id) throw new Error('No conversation');
       stopSpeaking();
       const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[id] ?? []);
-      const accepted = await handleSend(text, undefined, { awaitCompletion: true });
-      if (!accepted) {
-        throw new Error(useChatStore.getState().error ?? 'Message was not sent. Please try again.');
+      const send = beginVoiceAttachmentSend();
+      try {
+        const accepted = await handleSend(text, send.attachments, {
+          awaitCompletion: true,
+          onAccepted: send.markSent,
+        });
+        if (!accepted) {
+          throw new Error(
+            useChatStore.getState().error ?? 'Message was not sent. Please try again.',
+          );
+        }
+        return (
+          findNewAssistantResponse(
+            useChatStore.getState().messages[id] ?? [],
+            previousMessageIds,
+          ) ?? ''
+        );
+      } finally {
+        send.settle();
       }
-      return (
-        findNewAssistantResponse(useChatStore.getState().messages[id] ?? [], previousMessageIds) ??
-        ''
-      );
     },
-    [handleSend, id, stopSpeaking],
+    [beginVoiceAttachmentSend, handleSend, id, stopSpeaking],
   );
 
   const handleDeleteMessage = useCallback(
@@ -1716,13 +1750,22 @@ export default function ChatScreen() {
     title,
   ]);
 
+  const { openingTurn: openingVoiceTurn, onOpeningTurnStarted } = useOpeningVoiceTurn(
+    id,
+    voiceInlineVisible,
+    setVoiceInlineVisible,
+  );
+
   const {
     phase: inlineVoicePhase,
     muted: inlineVoiceMuted,
     audioLevel: inlineVoiceLevel,
-    toggleMute: inlineToggleMute,
+    handleMicPress: inlineMicPress,
   } = useVoiceConversation({
     enabled: voiceInlineVisible,
+    listenOnEnable: true,
+    openingTurn: openingVoiceTurn,
+    onOpeningTurnStarted,
     pttMode: false,
     hapticsEnabled: useSettingsStore.getState().hapticsEnabled,
     sendMessage: handleVoiceSendMessage,
@@ -2093,13 +2136,7 @@ export default function ChatScreen() {
             initialText={initialPrompt || undefined}
             draftKey={id}
             conversationId={id}
-            draftProvenance={
-              conversationExecutionMode === 'local'
-                ? { scope: 'local' }
-                : clerkUserId
-                  ? { scope: 'cloud', ownerId: clerkUserId }
-                  : undefined
-            }
+            draftProvenance={composerDraftProvenance}
             selectedSkillName={
               conversationExecutionMode === 'cloud' &&
               clerkUserId &&
@@ -2120,7 +2157,6 @@ export default function ChatScreen() {
           onFile={handleSheetFile}
           onOpenCloudAccess={handleOpenCloudSignIn}
           onOpenStyleSelector={handleOpenStyleSelector}
-          onOpenModelPicker={handleSheetModelPicker}
           onOpenProjectPicker={handleSheetProjectPicker}
           onAttachFromLibrary={handleAttachFromLibrary}
           onOpenSkills={handleOpenSkills}
@@ -2151,7 +2187,7 @@ export default function ChatScreen() {
           conversationId={id}
           onSelect={handleModelSelect}
           onOpenCloudAccess={handleOpenCloudSignIn}
-          offerRoutingProfiles
+          showEffort={false}
         />
 
         {/* First-run intro carrying the recording disclosure, then the voice
@@ -2176,9 +2212,12 @@ export default function ChatScreen() {
           audioLevel={inlineVoiceLevel}
           muted={inlineVoiceMuted}
           notice={voiceFallbackReason}
-          onAttach={handleVoiceAttach}
+          attachments={voiceAttachments.attachments}
+          attachmentPrivacyLabel={sendPreviewPresentation.privacyShortLabel}
+          onRemoveAttachment={voiceAttachments.remove}
+          onAttach={handleOpenAddToChat}
           onOpenKeyboard={handleExitInlineVoice}
-          onToggleMic={inlineToggleMute}
+          onToggleMic={inlineMicPress}
           onExit={handleExitInlineVoice}
         />
 

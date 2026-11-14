@@ -113,7 +113,7 @@ describe('Unexecuted cloud MemorySection under a workspace policy', () => {
     mockCapabilities.mockReturnValue(capabilities(false));
     render(<MemorySection />, { wrapper: cloud.wrapper });
 
-    expect(screen.getByText(/workspace has memory turned off/i)).toBeInTheDocument();
+    expect(screen.getByText(/workspace has memory off/i)).toBeInTheDocument();
     expect(screen.getByText(/Workspace → Policy/)).toBeInTheDocument();
   });
 
@@ -138,7 +138,7 @@ describe('Unexecuted cloud MemorySection under a workspace policy', () => {
     expect(explanation).toHaveTextContent('Workspace');
     expect(explanation).toHaveTextContent('Project');
     expect(explanation).toHaveTextContent(/never sees your account facts/i);
-    expect(explanation).toHaveTextContent(/no longer read into any answer/i);
+    expect(explanation).toHaveTextContent(/nothing is saved or read/i);
   });
 
   it('says the history switch saves details on its own, not that it reads old chats', () => {
@@ -156,7 +156,7 @@ describe('Unexecuted cloud MemorySection under a workspace policy', () => {
     mockCapabilities.mockReturnValue(capabilities(true));
     render(<MemorySection />, { wrapper: cloud.wrapper });
 
-    expect(screen.queryByText(/workspace has memory turned off/i)).toBeNull();
+    expect(screen.queryByText(/workspace has memory off/i)).toBeNull();
     for (const label of TOGGLES) {
       expect(screen.getByLabelText(label)).toBeEnabled();
     }

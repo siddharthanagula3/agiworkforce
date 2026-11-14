@@ -136,14 +136,8 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
     });
     await waitFor(() => expect(toggle).toBeEnabled());
     expect(toggle).not.toBeChecked();
-    expect(
-      screen.getByText(
-        /only when you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or add them here/,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Memories saved earlier stay until you delete them/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/from chats, not only when you ask/)).toBeInTheDocument();
+    expect(screen.getByText(/^Remember your .+ from chats/)).toBeInTheDocument();
 
     await user.click(toggle);
 

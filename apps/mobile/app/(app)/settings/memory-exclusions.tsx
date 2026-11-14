@@ -161,7 +161,7 @@ export default function MemoryExclusionsScreen() {
     <SettingsScreenShell title="Never remember" backHref="/(app)/settings/memory">
       <SettingsInfo
         title="Cloud account memory"
-        body="New memories containing these terms aren’t saved; existing ones stay until you delete them."
+        body="New memories with these terms aren’t saved. Existing ones stay."
         icon={Ban}
       />
 
@@ -254,7 +254,7 @@ export default function MemoryExclusionsScreen() {
             marginBottom: 24,
           }}
         >
-          No exclusions yet. Everything the assistant learns is eligible to be remembered.
+          No exclusions yet.
         </Text>
       ) : (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
@@ -322,7 +322,7 @@ export default function MemoryExclusionsScreen() {
               marginBottom: 24,
             }}
           >
-            Turn a source off to keep its memories out of answers without deleting them.
+            Off keeps a source out of answers without deleting it.
           </Text>
         </>
       ) : null}

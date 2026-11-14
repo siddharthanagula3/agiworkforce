@@ -104,9 +104,9 @@ export const COMMUNITY_BADGE: DirectoryBadgeKind = 'community';
 export const UPDATE_BADGE: DirectoryBadgeKind = 'update';
 export const UNREVIEWED_BADGE: DirectoryBadgeKind = 'unreviewed';
 export const DIRECTORY_TRUST_COPY =
-  'Only add skills and plugins from sources you trust. Read the files first; a skill can include instructions or scripts that act on your data.';
+  'Only add skills and plugins you trust. They can carry instructions or scripts that act on your data.';
 export const PLUGIN_UNREVIEWED_NOTE =
-  'You added this plugin yourself, so AGI Workforce has not reviewed it. Read its files before you rely on it.';
+  'You added this yourself, so it is not reviewed. Read its files before relying on it.';
 export const CONNECTED_GLYPH_LABEL = 'Connected';
 export const DIRECTORY_CUSTOM_HEADING = 'Your custom connectors';
 
@@ -178,7 +178,7 @@ export const PLUGIN_SKILLS_TAB_EMPTY = 'This plugin ships no skills the web app 
 export const PLUGIN_CONNECTORS_TAB_EMPTY = 'This plugin needs no connectors.';
 export const PLUGIN_CONNECTORS_HEADING = 'Connectors';
 export const PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE =
-  "Installing a plugin never connects a service by itself. Each connector stays off until you connect it, and the plugin's skills load whether or not it is connected.";
+  'Installing never connects a service. Each connector stays off until you connect it.';
 export const PLUGIN_CONNECTOR_STATUS_LABELS: Record<DirectoryConnectorStatus, string> = {
   connected: 'Connected',
   'not-connected': 'Not connected',
@@ -196,7 +196,7 @@ export const PLUGIN_PUBLISHER_LABEL = 'Publisher';
 export const PLUGIN_PUBLISHER_MORE_PREFIX = 'More from';
 export const PLUGIN_PUBLISHER_WEBSITE_LABEL = 'Website';
 export const PLUGIN_COMMUNITY_NOTE =
-  'Built by its publisher, not by AGI Workforce. Check what it includes before you install it.';
+  'Built by its publisher, not by AGI Workforce. Check what it includes first.';
 export const PLUGIN_PERMISSIONS_HEADING = 'Permissions';
 export const PLUGIN_PERMISSIONS_COPY =
   'What this plugin says it needs. Installing it agrees to these; you can remove it at any time.';
@@ -251,7 +251,7 @@ export const SKILL_NO_PREVIEW_COPY = 'No preview. This file type cannot be previ
 export const SKILL_DOWNLOAD_FILE_LABEL = 'Download file';
 
 export const CONNECTOR_COMMUNITY_NOTICE_SHORT =
-  'Community connectors have passed automated checks only. They may not meet the quality of verified connectors.';
+  'Community connectors pass automated checks only, not a full review.';
 export function connectorNotConnectedCopy(name: string): string {
   return `You're not connected to ${name} yet.`;
 }
@@ -261,14 +261,14 @@ export function connectorAuthorizationPendingCopy(name: string): string {
 }
 
 export function connectorReconnectCopy(name: string): string {
-  return `${name} needs to be reconnected. Its sign-in expired or was revoked, so its tools stop working until you reconnect. Reconnecting signs in again and keeps its settings and tool permissions.`;
+  return `${name} needs reconnecting. Its tools stop until you do; its settings are kept.`;
 }
 
 export const CONNECTOR_REQUIRED_BY_PLUGINS_COPY =
   'This connector is required by the following plugins:';
 
 export const CONNECTOR_TRUST_COPY =
-  'Only use connectors from developers you trust. AGI does not control which tools a developer offers and cannot verify that they work as intended or will not change.';
+  'Only use connectors you trust. AGI cannot verify what their tools do or whether they change.';
 export const CONNECTOR_CATEGORIES_LABEL = 'Categories';
 export const CONNECTOR_MADE_BY_LABEL = 'Made by';
 export const CONNECTOR_AUTHOR_LABEL = 'Author';
@@ -372,7 +372,7 @@ export const CONNECTOR_CARD_ACTION_LABELS: Record<DirectoryConnectableMode, stri
 };
 export const CONNECTOR_DESKTOP_ONLY_LABEL = 'Available on desktop and CLI';
 export const CONNECTOR_DESKTOP_ONLY_COPY =
-  'This connector runs on your own computer, so it connects from the desktop app or the CLI rather than from the browser.';
+  'This connector runs on your computer. Connect it from the desktop app or the CLI.';
 export const CONNECTOR_DESKTOP_DOWNLOAD_LABEL = 'Get the desktop app';
 export const CONNECTOR_NEEDS_SETUP_LABEL = 'Needs setup';
 export const CONNECTOR_UNAVAILABLE_LABEL = 'Not available yet';
@@ -388,8 +388,7 @@ export const DIRECTORY_SEARCH_DEBOUNCE_MS = 250;
 export const PLUGIN_ENABLED_LABEL = 'Enabled';
 export const PLUGIN_ENABLED_HINT = 'Turn this off to keep the plugin installed without using it.';
 export const PLUGIN_UNAVAILABLE_LABEL = 'Not available on this surface';
-export const PLUGIN_UNAVAILABLE_HINT =
-  'This plugin is still installed on your account, but the server no longer runs it here, so it does nothing in a turn.';
+export const PLUGIN_UNAVAILABLE_HINT = 'Still installed, but the server no longer runs it here.';
 export const PLUGIN_CONNECTOR_CONNECTED_LABEL = 'Connected';
 export const PLUGIN_CONNECTOR_MISSING_LABEL = 'Not connected';
 export const PLUGIN_SETTINGS_LOADING_LABEL = 'Loading plugin settings';
@@ -412,7 +411,7 @@ export const BROWSE_SKILLS_ACTION_ID = 'browse-skills';
 export const BROWSE_SKILLS_LABEL = 'Add from the catalog';
 export const BROWSE_SKILLS_DESCRIPTION = 'Ready-made skills you can turn on.';
 export const UPLOAD_SKILL_INTRO =
-  'Zip the skill folder (named the same as the skill, with SKILL.md inside) and upload the .zip or .skill file.';
+  'Zip the skill folder with SKILL.md inside, then upload the .zip or .skill file.';
 export const UPLOAD_SKILL_ACCEPT = '.zip,.skill,.md,application/zip,text/markdown';
 export const UPLOAD_SKILL_FAILED_COPY = 'The skill could not be uploaded.';
 

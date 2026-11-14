@@ -12,7 +12,13 @@ import type { TimeFocusWeekday } from '@agiworkforce/types';
 const EVERY_DAY: readonly TimeFocusWeekday[] = [0, 1, 2, 3, 4, 5, 6];
 
 const base: Pick<NotificationPrefsState, 'categoryEnabled' | 'quietHours'> = {
-  categoryEnabled: { chat_replies: true, tasks: true, product: true },
+  categoryEnabled: {
+    chat_replies: true,
+    tasks: true,
+    scheduled_tasks: true,
+    product_updates: true,
+    product: true,
+  },
   quietHours: {
     enabled: false,
     days: EVERY_DAY,
@@ -27,12 +33,13 @@ const LATE_NIGHT = new Date('2026-07-31T23:00:00Z');
 const SATURDAY_LATE_NIGHT = new Date('2026-08-01T23:00:00Z');
 
 describe('shouldNotifyWithPreferences', () => {
-  it('files every supported event under chat replies, tasks or product', () => {
+  it('files every supported event under its own switch', () => {
     expect(getCategoryForType('chat_message')).toBe('chat_replies');
     expect(getCategoryForType('task_completed')).toBe('tasks');
     expect(getCategoryForType('agent_paused')).toBe('tasks');
-    expect(getCategoryForType('schedule_run')).toBe('tasks');
-    expect(getCategoryForType('schedule_triggered')).toBe('tasks');
+    expect(getCategoryForType('schedule_run')).toBe('scheduled_tasks');
+    expect(getCategoryForType('schedule_triggered')).toBe('scheduled_tasks');
+    expect(getCategoryForType('product_update')).toBe('product_updates');
     expect(getCategoryForType('agent_approval_needed')).toBe('tasks');
     expect(getCategoryForType('agent_failed')).toBe('tasks');
     expect(getCategoryForType('status_update')).toBe('product');
@@ -46,6 +53,20 @@ describe('shouldNotifyWithPreferences', () => {
     const prefs = { ...base, categoryEnabled: { ...base.categoryEnabled, chat_replies: false } };
     expect(shouldNotifyWithPreferences('chat_message', prefs, NOON)).toBe(false);
     expect(shouldNotifyWithPreferences('task_completed', prefs, NOON)).toBe(true);
+  });
+
+  it('mutes scheduled runs alone, leaving approvals and task results on', () => {
+    const prefs = { ...base, categoryEnabled: { ...base.categoryEnabled, scheduled_tasks: false } };
+    expect(shouldNotifyWithPreferences('schedule_run', prefs, NOON)).toBe(false);
+    expect(shouldNotifyWithPreferences('schedule_triggered', prefs, NOON)).toBe(false);
+    expect(shouldNotifyWithPreferences('agent_approval_needed', prefs, NOON)).toBe(true);
+    expect(shouldNotifyWithPreferences('task_completed', prefs, NOON)).toBe(true);
+  });
+
+  it('keeps product updates separate from service status', () => {
+    const prefs = { ...base, categoryEnabled: { ...base.categoryEnabled, product_updates: false } };
+    expect(shouldNotifyWithPreferences('product_update', prefs, NOON)).toBe(false);
+    expect(shouldNotifyWithPreferences('status_update', prefs, NOON)).toBe(true);
   });
 
   it('suppresses a notification whose category toggle is off', () => {
@@ -97,14 +118,20 @@ describe('notification preference defaults and migration', () => {
   };
   const vibrationEnabled = { critical: true, high: false, normal: true, low: false };
 
-  it('defaults chat replies and tasks on and product off', () => {
-    expect(DEFAULT_CATEGORY_ENABLED).toEqual({ chat_replies: true, tasks: true, product: false });
+  it('defaults chat replies, tasks and scheduled tasks on, product updates and status off', () => {
+    expect(DEFAULT_CATEGORY_ENABLED).toEqual({
+      chat_replies: true,
+      tasks: true,
+      scheduled_tasks: true,
+      product_updates: false,
+      product: false,
+    });
     expect(useNotificationPrefsStore.getState().categoryEnabled).toEqual(DEFAULT_CATEGORY_ENABLED);
   });
 
-  it('persists at version 2 through the migration', () => {
+  it('persists at version 3 through the migration', () => {
     const options = useNotificationPrefsStore.persist.getOptions();
-    expect(options.version).toBe(2);
+    expect(options.version).toBe(3);
     expect(options.migrate).toBeDefined();
   });
 
@@ -119,7 +146,13 @@ describe('notification preference defaults and migration', () => {
       1,
     );
     expect(migrated).toEqual({
-      categoryEnabled: { chat_replies: true, tasks: true, product: true },
+      categoryEnabled: {
+        chat_replies: true,
+        tasks: true,
+        scheduled_tasks: true,
+        product_updates: false,
+        product: true,
+      },
       vibrationEnabled,
       quietHours,
       breakReminderMinutes: 45,
@@ -138,6 +171,8 @@ describe('notification preference defaults and migration', () => {
     expect(migrated.categoryEnabled).toEqual({
       chat_replies: chatReplies,
       tasks,
+      scheduled_tasks: tasks,
+      product_updates: false,
       product: false,
     });
   });
@@ -158,7 +193,7 @@ describe('notification preference defaults and migration', () => {
       { categoryEnabled: { approvals: false, errors: false, task_updates: 'yes', status: 1 } },
       1,
     ) as { categoryEnabled: Record<string, boolean> };
-    expect(migrated.categoryEnabled).toEqual({ chat_replies: true, tasks: true, product: false });
+    expect(migrated.categoryEnabled).toEqual(DEFAULT_CATEGORY_ENABLED);
 
     const allMissing = migrateNotificationPrefs({ categoryEnabled: {} }, 1) as {
       categoryEnabled: Record<string, boolean>;
@@ -175,7 +210,13 @@ describe('notification preference defaults and migration', () => {
       0,
     );
     expect(migrated).toEqual({
-      categoryEnabled: { chat_replies: false, tasks: true, product: false },
+      categoryEnabled: {
+        chat_replies: false,
+        tasks: true,
+        scheduled_tasks: true,
+        product_updates: false,
+        product: false,
+      },
       quietHours: {
         enabled: true,
         days: EVERY_DAY,
@@ -186,9 +227,41 @@ describe('notification preference defaults and migration', () => {
     });
   });
 
-  it('leaves a version 2 state and non-object input untouched', () => {
-    const current = { categoryEnabled: { chat_replies: false, tasks: true, product: true } };
-    expect(migrateNotificationPrefs(current, 2)).toBe(current);
+  it.each([true, false])(
+    'starts scheduled tasks from the task and approval switch (%p) when moving to version 3',
+    (tasks) => {
+      const migrated = migrateNotificationPrefs(
+        {
+          categoryEnabled: { chat_replies: false, tasks, product: true },
+          vibrationEnabled,
+          quietHours,
+        },
+        2,
+      );
+      expect(migrated).toEqual({
+        categoryEnabled: {
+          chat_replies: false,
+          tasks,
+          scheduled_tasks: tasks,
+          product_updates: false,
+          product: true,
+        },
+        vibrationEnabled,
+        quietHours,
+      });
+    },
+  );
+
+  it('falls back to the defaults when the version 2 category map is unreadable', () => {
+    const migrated = migrateNotificationPrefs({ categoryEnabled: 'garbled' }, 2) as {
+      categoryEnabled: Record<string, boolean>;
+    };
+    expect(migrated.categoryEnabled).toEqual(DEFAULT_CATEGORY_ENABLED);
+  });
+
+  it('leaves a version 3 state and non-object input untouched', () => {
+    const current = { categoryEnabled: { ...DEFAULT_CATEGORY_ENABLED, chat_replies: false } };
+    expect(migrateNotificationPrefs(current, 3)).toBe(current);
     expect(migrateNotificationPrefs(null, 1)).toBeNull();
   });
 });

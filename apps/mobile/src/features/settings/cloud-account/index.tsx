@@ -67,6 +67,13 @@ import { accountDeletionRefusal } from './accountDeletionRefusal';
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
 import { useCloudProfileStore } from './cloudProfileStore';
+import {
+  activeDeviceAccount,
+  deviceAccountErrorMessage,
+  getDeviceAccountsClerk,
+  planSignOutHandover,
+  readDeviceAccounts,
+} from '@/src/features/accounts/deviceAccounts';
 
 const ORGANIZATION_PATH = '/api/settings/organization';
 
@@ -380,7 +387,17 @@ export default function CloudAccountScreen() {
   const handleSignOut = useCallback(() => {
     const account = captureVisibleAccount();
     if (!account) return;
-    Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
+    const deviceAccounts = readDeviceAccounts(getDeviceAccountsClerk());
+    const signedInAccount = deviceAccounts.multiSession
+      ? activeDeviceAccount(deviceAccounts)
+      : null;
+    const handover = planSignOutHandover(deviceAccounts);
+    const message = signedInAccount
+      ? handover
+        ? `Log out of ${signedInAccount.email} on this device? You will continue as ${handover.next.email}.`
+        : `Log out of ${signedInAccount.email} on this device?`
+      : 'Log out of AGI Cloud on this device?';
+    Alert.alert('Log Out', message, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
@@ -395,8 +412,8 @@ export default function CloudAccountScreen() {
           }
           setLoggingOut(true);
           signOut()
-            .catch(() => {
-              Alert.alert('Sign out failed', 'Please try again.');
+            .catch((error: unknown) => {
+              Alert.alert('Sign out failed', deviceAccountErrorMessage(error, 'sign-out'));
             })
             .finally(() => setLoggingOut(false));
         },

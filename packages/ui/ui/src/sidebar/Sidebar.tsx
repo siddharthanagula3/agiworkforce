@@ -473,7 +473,7 @@ export function Sidebar(props: SidebarProps) {
         onClick={item.onClick}
         aria-current={item.isActive ? 'page' : undefined}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
+          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors pointer-coarse:min-h-11',
           FOCUS_RING,
           item.isActive
             ? 'bg-accent text-foreground'
@@ -585,7 +585,7 @@ export function Sidebar(props: SidebarProps) {
                       aria-label={t('sidebar.toggleSidebar', 'Toggle sidebar')}
                       aria-keyshortcuts={toggleSidebarAriaKeyShortcuts()}
                       className={cn(
-                        'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground',
+                        'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11',
                         FOCUS_RING,
                       )}
                     >
@@ -607,7 +607,7 @@ export function Sidebar(props: SidebarProps) {
                 onClick={onNewChat}
                 aria-label={t('sidebar.newChatAction', 'New chat')}
                 className={cn(
-                  'flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent',
+                  'flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent pointer-coarse:min-h-11',
                   FOCUS_RING,
                 )}
               >
@@ -647,7 +647,7 @@ export function Sidebar(props: SidebarProps) {
             type="button"
             onClick={onOpenSearch}
             className={cn(
-              'flex w-full items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent',
+              'flex w-full items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent pointer-coarse:min-h-11',
               FOCUS_RING,
             )}
           >
@@ -693,7 +693,7 @@ export function Sidebar(props: SidebarProps) {
                     : t('sidebar.archivedCount', 'Archived ({{count}})', { count: archivedCount })
                 }
                 className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                  'flex h-7 w-7 items-center justify-center rounded-md transition-colors pointer-coarse:h-11 pointer-coarse:w-11',
                   FOCUS_RING,
                   // --chat-* rather than --warning-*: this component renders on
                   // desktop too, which loads chat.css but not foundation.css.
@@ -727,7 +727,7 @@ export function Sidebar(props: SidebarProps) {
                           : t('sidebar.collapseProjects', 'Collapse projects')
                       }
                       className={cn(
-                        'flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold text-muted-foreground hover:text-foreground transition-colors',
+                        'flex min-h-6 min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold text-muted-foreground hover:text-foreground transition-colors pointer-coarse:min-h-11',
                         FOCUS_RING,
                       )}
                     >
@@ -758,7 +758,7 @@ export function Sidebar(props: SidebarProps) {
                             onProjectCreate();
                           }}
                           className={cn(
-                            'flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                            'flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [@media(hover:none)]:h-11 [@media(hover:none)]:w-11',
                             FOCUS_RING,
                           )}
                         >
@@ -827,7 +827,7 @@ export function Sidebar(props: SidebarProps) {
                           type="button"
                           onClick={() => setShowAllProjects(true)}
                           className={cn(
-                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:text-foreground',
+                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:text-foreground pointer-coarse:min-h-11 pointer-coarse:text-sm',
                             FOCUS_RING,
                           )}
                         >
@@ -839,7 +839,7 @@ export function Sidebar(props: SidebarProps) {
                           type="button"
                           onClick={() => setShowAllProjects(false)}
                           className={cn(
-                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:text-foreground',
+                            'mt-0.5 w-full rounded-md px-3 py-1.5 text-start text-xs text-muted-foreground transition-colors hover:text-foreground pointer-coarse:min-h-11 pointer-coarse:text-sm',
                             FOCUS_RING,
                           )}
                         >
@@ -880,7 +880,7 @@ export function Sidebar(props: SidebarProps) {
                               toggle();
                             }}
                             className={cn(
-                              'flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                              'flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [@media(hover:none)]:h-11 [@media(hover:none)]:w-11',
                               FOCUS_RING,
                             )}
                           >
@@ -954,7 +954,7 @@ export function Sidebar(props: SidebarProps) {
                       onClick={() => toggleGroup(group)}
                       aria-expanded={isExpanded}
                       className={cn(
-                        'flex w-full items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground',
+                        'flex w-full items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground pointer-coarse:min-h-11',
                         FOCUS_RING,
                       )}
                     >
@@ -986,7 +986,7 @@ export function Sidebar(props: SidebarProps) {
                     onClick={onLoadMoreSessions}
                     disabled={isLoadingMoreSessions}
                     className={cn(
-                      'inline-flex min-h-6 items-center gap-1.5 px-1 text-xs text-primary hover:underline disabled:cursor-default disabled:no-underline disabled:opacity-70',
+                      'inline-flex min-h-6 items-center gap-1.5 px-1 text-xs text-primary hover:underline disabled:cursor-default disabled:no-underline disabled:opacity-70 pointer-coarse:min-h-11 pointer-coarse:text-sm',
                       FOCUS_RING,
                     )}
                   >
@@ -1029,7 +1029,7 @@ export function Sidebar(props: SidebarProps) {
                       type="button"
                       onClick={onRetryLoad}
                       className={cn(
-                        'mt-2 inline-flex min-h-6 items-center px-1 text-xs text-primary hover:underline',
+                        'mt-2 inline-flex min-h-6 items-center px-1 text-xs text-primary hover:underline pointer-coarse:min-h-11 pointer-coarse:text-sm',
                         FOCUS_RING,
                       )}
                     >
@@ -1052,7 +1052,7 @@ export function Sidebar(props: SidebarProps) {
                       type="button"
                       onClick={onNewChat}
                       className={cn(
-                        'mt-2 inline-flex min-h-6 items-center px-1 text-xs text-primary hover:underline',
+                        'mt-2 inline-flex min-h-6 items-center px-1 text-xs text-primary hover:underline pointer-coarse:min-h-11 pointer-coarse:text-sm',
                         FOCUS_RING,
                       )}
                     >
@@ -1081,7 +1081,7 @@ export function Sidebar(props: SidebarProps) {
                 percent: Math.round(budgetPercent),
               })}
               className={cn(
-                'group flex min-h-6 w-full items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-accent',
+                'group flex min-h-6 w-full items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-accent pointer-coarse:min-h-11',
                 FOCUS_RING,
               )}
             >
@@ -1518,7 +1518,7 @@ function ProjectRow({
                 const isActive = session.id === activeSessionId;
                 const href = getSessionHref?.(session);
                 const rowClassName = cn(
-                  'group/projchat flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-start transition-colors',
+                  'group/projchat flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-start transition-colors pointer-coarse:min-h-11',
                   FOCUS_RING,
                   isActive
                     ? 'bg-accent text-foreground'
@@ -1533,7 +1533,7 @@ function ProjectRow({
                         aria-label={t('sidebar.activeConversation', 'Active conversation')}
                       />
                     )}
-                    <span className="flex-1 truncate text-xs">
+                    <span className="flex-1 truncate text-xs pointer-coarse:text-sm">
                       {session.title || t('sidebar.untitledChat', 'Untitled chat')}
                     </span>
                   </>
@@ -1585,7 +1585,7 @@ function ProjectRow({
                     })
                   }
                   className={cn(
-                    'w-full rounded-md px-3 py-1 text-start text-xs text-muted-foreground transition-colors hover:text-muted-foreground',
+                    'w-full rounded-md px-3 py-1 text-start text-xs text-muted-foreground transition-colors hover:text-muted-foreground pointer-coarse:min-h-11 pointer-coarse:text-sm',
                     FOCUS_RING,
                   )}
                 >
@@ -1603,7 +1603,7 @@ function ProjectRow({
                     })
                   }
                   className={cn(
-                    'w-full rounded-md px-3 py-1 text-start text-xs text-muted-foreground transition-colors hover:text-muted-foreground',
+                    'w-full rounded-md px-3 py-1 text-start text-xs text-muted-foreground transition-colors hover:text-muted-foreground pointer-coarse:min-h-11 pointer-coarse:text-sm',
                     FOCUS_RING,
                   )}
                 >

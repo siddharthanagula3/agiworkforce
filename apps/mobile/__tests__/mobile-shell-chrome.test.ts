@@ -209,16 +209,6 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
     expect(appLayout).toMatch(/<Drawer\s+backBehavior="history"/);
   });
 
-  it('keeps secondary controls in a sheet rather than a desktop menu', () => {
-    const sheet = readFileSync(
-      join(MOBILE_ROOT, 'src', 'features', 'shell', 'ShellSecondarySheet.tsx'),
-      'utf8',
-    );
-
-    expect(sheet).toContain("from '@/components/ui/BottomSheet'");
-    expect(sheet).toContain('<BottomSheet');
-  });
-
   it('gives the phone header only the actions a thumb needs', () => {
     const drawer = readFileSync(
       join(MOBILE_ROOT, 'src', 'features', 'drawer', 'components', 'DrawerContent.tsx'),
@@ -241,7 +231,7 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
           ),
     );
 
-    expect(headerActions).toEqual(['Search', 'Organize chats', 'New chat', 'Open profile']);
+    expect(headerActions).toEqual(['Search']);
   });
 
   it('leaves the platform back gesture switched on for every pushed screen', () => {

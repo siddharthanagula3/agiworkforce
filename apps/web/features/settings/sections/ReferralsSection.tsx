@@ -163,10 +163,10 @@ export function ReferralsSection() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-h1 text-foreground">Referrals</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+        <h1 className="text-h1 text-foreground max-md:font-medium">Referrals</h1>
+        <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
           {program
-            ? `Invite friends to ${SITE_NAME}. They get ${program.friendTrialDays} days of ${BILLING_PLAN_PRICING.pro.label} free, and when their first payment goes through you each get ${wholeCredits(program.rewardCredits)}.`
+            ? `Friends get ${program.friendTrialDays} days of ${BILLING_PLAN_PRICING.pro.label} free. You each get ${wholeCredits(program.rewardCredits)} after their first payment.`
             : `Invite friends to ${SITE_NAME} and earn bonus credits when they subscribe.`}
         </p>
       </header>
@@ -206,7 +206,7 @@ export function ReferralsSection() {
                 value={overview.link}
                 aria-label="Invite link"
                 onFocus={(event) => event.currentTarget.select()}
-                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                className="h-9 min-w-0 shrink-0 rounded-md border border-border bg-background px-3 text-sm text-foreground pointer-coarse:h-11 sm:flex-1 sm:shrink"
               />
               <div className="flex gap-2">
                 <Button type="button" size="sm" onClick={() => void copyLink(overview.link ?? '')}>

@@ -337,7 +337,7 @@ function accountUrlPreset(connectorId: unknown): CustomConnectorPreset | null {
   return {
     name: connector.name,
     urlFormat: connector.urlFormat,
-    hint: `Paste the URL of your ${connector.name} MCP server. ${connector.name} does not register clients on its own, so sign in with an OAuth client your administrator created, with the redirect URI below, or with a personal access token as the bearer token.`,
+    hint: `Paste your ${connector.name} MCP server URL. Sign in with an admin OAuth client or a personal access token.`,
     documentationUrl: connector.documentationUrl,
   };
 }
@@ -882,7 +882,7 @@ export function useConnectorsSettingsAdapter({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground">{CONNECTOR_ACCOUNT_SWITCH_LABEL}</p>
-            <p className="text-sm text-muted-foreground">{CONNECTOR_ACCOUNT_SWITCH_HINT}</p>
+            <p className="text-xs text-muted-foreground">{CONNECTOR_ACCOUNT_SWITCH_HINT}</p>
           </div>
           <Switch
             aria-label={`${CONNECTOR_ACCOUNT_SWITCH_LABEL}: ${name}`}

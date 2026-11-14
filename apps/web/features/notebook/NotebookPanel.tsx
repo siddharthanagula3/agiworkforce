@@ -188,7 +188,7 @@ export function NotebookPanel({
               } at ${new Date(lastRun.finishedAt).toLocaleTimeString()}${
                 lastRun.completed ? '' : ', stopped at the first error'
               }.`
-            : 'Cells you run by hand build on whatever ran before them. Run all executes every code cell from the top in one recorded run.'}
+            : 'Cells build on what ran before them. Run all runs every cell from the top.'}
       </p>
 
       <div className={styles['cells']}>

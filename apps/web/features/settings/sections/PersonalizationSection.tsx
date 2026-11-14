@@ -450,7 +450,7 @@ export function PersonalizationSection() {
           <h2 id="personalization-characteristics-heading" className="text-h3 text-foreground">
             Characteristics
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Adjust these on top of your response style.
           </p>
         </div>
@@ -497,7 +497,7 @@ export function PersonalizationSection() {
             }}
           />
         </div>
-        <p id="personalization-instructions-hint" className="text-sm text-muted-foreground">
+        <p id="personalization-instructions-hint" className="text-xs text-muted-foreground">
           {instructionsEnabled
             ? 'AGI keeps these in mind in every chat.'
             : 'Off. Your instructions are kept and not sent to the model.'}
@@ -536,7 +536,7 @@ export function PersonalizationSection() {
             </label>
             <span
               id="personalization-preferred-name-hint"
-              className="text-sm text-muted-foreground"
+              className="text-xs text-muted-foreground"
             >
               Leave empty to skip names.
             </span>
@@ -577,7 +577,7 @@ export function PersonalizationSection() {
           >
             More about you
           </label>
-          <p id="personalization-about-you-hint" className="text-sm text-muted-foreground">
+          <p id="personalization-about-you-hint" className="text-xs text-muted-foreground">
             Interests, values or background AGI should keep in mind.
           </p>
           <textarea
@@ -679,7 +679,7 @@ function SelectRow({
           {label}
         </label>
         {hint && (
-          <span id={hintId} className="text-sm text-muted-foreground">
+          <span id={hintId} className="text-xs text-muted-foreground">
             {hint}
           </span>
         )}

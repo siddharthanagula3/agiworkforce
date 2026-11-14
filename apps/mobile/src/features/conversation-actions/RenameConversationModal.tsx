@@ -26,7 +26,13 @@ import type {
  * three `Alert` buttons, which dropped Delete and Cancel from a Cloud chat's
  * five-action menu.
  */
-export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
+export function ActionMenuSheet({
+  menu,
+  dismissLabel = 'Dismiss chat actions',
+}: {
+  menu: ConversationMenuState;
+  dismissLabel?: string;
+}) {
   const colors = useThemeColors();
   const { height } = useWindowDimensions();
   const pendingRef = useRef<(() => void) | null>(null);
@@ -61,7 +67,7 @@ export function ActionMenuSheet({ menu }: { menu: ConversationMenuState }) {
       <PressableBox
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         onPress={menu.close}
-        accessibilityLabel="Dismiss chat actions"
+        accessibilityLabel={dismissLabel}
         accessibilityRole="button"
         accessible={false}
       >

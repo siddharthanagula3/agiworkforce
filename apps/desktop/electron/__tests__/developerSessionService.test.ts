@@ -1828,6 +1828,44 @@ describe('developer session runtime', () => {
     ).toEqual([0, 1]);
   });
 
+  it('carries the model thinking through as sequenced reasoning deltas without a signature', async () => {
+    const { service, children, events } = await loadService();
+
+    await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'plan it' });
+    const notify = (sequence: number, event: Record<string, unknown>): void => {
+      children[0]?.notify('turn/agent_event', {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: thread.id,
+        turnId: 'turn-1',
+        sequence,
+        emittedAtMs: sequence,
+        event,
+      });
+    };
+
+    notify(0, { type: 'reasoning-delta', delta: 'Checking which file ', signature: 'sig-1' });
+    notify(1, { type: 'reasoning-delta', delta: '' });
+    notify(2, { type: 'reasoning-delta' });
+    notify(3, { type: 'reasoning-delta', delta: 'holds the rule' });
+
+    expect(events.map((entry) => entry.event)).toEqual([
+      {
+        type: 'reasoning-delta',
+        threadId: thread.id,
+        turnId: 'turn-1',
+        delta: 'Checking which file ',
+        sequence: 0,
+      },
+      {
+        type: 'reasoning-delta',
+        threadId: thread.id,
+        turnId: 'turn-1',
+        delta: 'holds the rule',
+        sequence: 3,
+      },
+    ]);
+  });
+
   it('carries the queue, the command line, each changed file and the turn diff through', async () => {
     const { service, children, events } = await loadService();
 

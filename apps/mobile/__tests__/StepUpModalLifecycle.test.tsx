@@ -5,12 +5,17 @@ import type { StepUpChallenge, StepUpSession } from '../src/features/auth/servic
 
 const mockGrant = jest.fn();
 const mockSignOut = jest.fn();
+const mockSignOutAllAccounts = jest.fn();
 jest.mock('../src/features/auth/services/stepUp', () => ({
   requestStepUpGrant: (...args: unknown[]) => mockGrant(...args),
 }));
 jest.mock('../src/features/auth/store', () => ({
-  useAuthStore: (selector: (state: { signOut: typeof mockSignOut }) => unknown) =>
-    selector({ signOut: mockSignOut }),
+  useAuthStore: (
+    selector: (state: {
+      signOut: typeof mockSignOut;
+      signOutAllAccounts: typeof mockSignOutAllAccounts;
+    }) => unknown,
+  ) => selector({ signOut: mockSignOut, signOutAllAccounts: mockSignOutAllAccounts }),
 }));
 jest.mock('../src/ui/theme', () => ({ useThemeColors: () => ({}) }));
 jest.mock('../src/ui/theme/tokens', () => ({ dialogPadding: 16, typeScale: {} }));
@@ -81,6 +86,31 @@ const flush = async () => {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGrant.mockResolvedValue({ kind: 'granted', token: 'fixture-grant' });
+});
+
+test('Sign in again ends every account on the phone and never leaves a rejection unhandled', async () => {
+  mockSignOutAllAccounts.mockRejectedValue(new Error('sign-out failed'));
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  const cancelled = jest.fn();
+  const challenge = fixture(1, {
+    startVerification: async () => ({ status: 'needs_first_factor', supportedFirstFactors: [] }),
+  });
+  const view = render(
+    <StepUpModal challenge={challenge} onCancel={cancelled} onSatisfied={jest.fn()} />,
+  );
+  await flush();
+
+  fireEvent.press(view.getByText('Sign in again'));
+  await flush();
+
+  expect(cancelled).toHaveBeenCalledTimes(1);
+  expect(mockSignOutAllAccounts).toHaveBeenCalledTimes(1);
+  expect(mockSignOut).not.toHaveBeenCalled();
+  expect(warn).toHaveBeenCalledWith(
+    '[StepUpModal] sign-out for a fresh sign-in failed:',
+    expect.any(Error),
+  );
+  warn.mockRestore();
 });
 
 test('an unmounted verification completion cannot mint a token or satisfy the replacement', async () => {

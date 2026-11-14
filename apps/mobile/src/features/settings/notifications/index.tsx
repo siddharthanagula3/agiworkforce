@@ -14,12 +14,14 @@ import {
   Bell,
   BellOff,
   Bot,
+  CalendarClock,
   CheckSquare,
   ChevronRight,
   Info,
   MessageSquare,
   Moon,
   Clock,
+  Sparkles,
   Vibrate,
   X,
 } from 'lucide-react-native';
@@ -36,6 +38,7 @@ import {
   enablePushNotifications,
   getPushDeliveryStatus,
   getPushRegistrationIssue,
+  useNotificationCenter,
   type PushDeliveryStatus,
   type PushRegistrationIssue,
 } from '@/services/notifications';
@@ -81,6 +84,14 @@ function getCategories(c: ColorScheme): CategoryMeta[] {
     tasks: {
       icon: CheckSquare,
       iconColor: c.agentWarning,
+    },
+    scheduled_tasks: {
+      icon: CalendarClock,
+      iconColor: c.agentWarning,
+    },
+    product_updates: {
+      icon: Sparkles,
+      iconColor: c.teal,
     },
     product: {
       icon: Info,
@@ -315,7 +326,7 @@ const PERMISSION_COPY: Record<
 > = {
   granted: {
     title: 'Your device is delivering notifications',
-    body: 'The settings below decide which of them AGI actually sends.',
+    body: 'Choose below which ones AGI sends.',
   },
   undetermined: {
     title: 'Turn on notifications',
@@ -330,11 +341,11 @@ const PERMISSION_COPY: Record<
 const REGISTRATION_ISSUE_COPY: Record<PushRegistrationIssue, { title: string; body: string }> = {
   device_token: {
     title: 'AGI Cloud alerts cannot reach this device',
-    body: 'This device could not get a push address, so AGI Cloud alerts won’t arrive here.',
+    body: 'This device couldn’t get a push address.',
   },
   server: {
     title: 'AGI Cloud alerts cannot reach this device',
-    body: 'AGI Cloud could not register this device, so its alerts won’t arrive here yet.',
+    body: 'AGI Cloud couldn’t register this device yet.',
   },
 };
 
@@ -407,6 +418,7 @@ export default function NotificationPreferencesScreen() {
     setBreakReminderMinutes,
   } = useNotificationPrefsStore();
   const CATEGORIES = getCategories(colors);
+  const { unreadCount } = useNotificationCenter();
   const timeFocusSync = useTimeFocusSync();
   const agentActivityPush = useAgentActivityPushSync();
   const pushTimeFocus = timeFocusSync.push;
@@ -510,6 +522,40 @@ export default function NotificationPreferencesScreen() {
 
   return (
     <SettingsScreenShell title="Notification Preferences">
+      <View className="mt-3">
+        <Card>
+          <Pressable
+            testID="notifications.open-recent"
+            onPress={() =>
+              router.push('/(app)/notifications' as unknown as Parameters<typeof router.push>[0])
+            }
+            accessibilityRole="link"
+            accessibilityLabel={
+              unreadCount > 0
+                ? `Recent notifications. ${unreadCount} unread`
+                : 'Recent notifications'
+            }
+            className="flex-row items-center justify-between py-3 px-1 rounded-lg"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+            })}
+          >
+            <View className="flex-row items-center gap-3 flex-1 mr-3">
+              <Bell size={18} color={colors.textPrimary} />
+              <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                Recent notifications
+              </Text>
+            </View>
+            {unreadCount > 0 ? (
+              <Text className="text-sm font-medium mr-1" style={{ color: colors.textSecondary }}>
+                {unreadCount} unread
+              </Text>
+            ) : null}
+            <ChevronRight size={17} color={colors.textMuted} />
+          </Pressable>
+        </Card>
+      </View>
+
       <View className="mt-3 mb-2">
         <Text
           className="text-sm uppercase mb-3"
@@ -617,7 +663,7 @@ export default function NotificationPreferencesScreen() {
       </Card>
       <Text className="text-sm mt-2 px-1" style={{ color: colors.textMuted }}>
         {agentActivityPush.status === 'local'
-          ? 'Switch to AGI Cloud to control agent run push, local mode has no cloud agents to notify you.'
+          ? 'Switch to AGI Cloud to control agent run alerts.'
           : agentActivityPush.status === 'loading'
             ? 'Loading your account settings…'
             : agentActivityPush.status === 'saving'
@@ -625,8 +671,8 @@ export default function NotificationPreferencesScreen() {
               : agentActivityPush.status === 'error'
                 ? (agentActivityPush.error ?? 'Could not reach your account settings.')
                 : pushPermission === 'denied'
-                  ? 'Saved to your account, but this device stays silent until notifications are allowed in Settings.'
-                  : 'Applied by the server before it sends, on every device on this account.'}
+                  ? 'Saved, but this device stays silent until notifications are allowed.'
+                  : 'Applies on every device on this account.'}
       </Text>
 
       {agentActivityPush.canRetry ? (
@@ -781,8 +827,7 @@ export default function NotificationPreferencesScreen() {
               }}
             >
               <Text className="text-sm leading-5" style={{ color: colors.textMuted }}>
-                Critical notifications (agent failures, emergency stops, approval requests) always
-                bypass quiet hours.
+                Agent failures, emergency stops and approval requests still come through.
               </Text>
             </View>
           </>
@@ -827,14 +872,14 @@ export default function NotificationPreferencesScreen() {
             with, so they stay on this device only. */}
       <Text className="text-sm mt-2 px-1" style={{ color: colors.textMuted }}>
         {timeFocusSync.status === 'local'
-          ? 'Saved on this device. Switch to AGI Cloud to share quiet hours with web and desktop.'
+          ? 'Saved on this device. Use AGI Cloud to share with web and desktop.'
           : timeFocusSync.status === 'loading'
             ? 'Loading your account settings…'
             : timeFocusSync.status === 'saving'
               ? 'Saving to your account…'
               : timeFocusSync.status === 'error'
                 ? (timeFocusSync.error ?? 'Could not reach your account settings.')
-                : 'Synced with your account, the same schedule applies on web and desktop.'}
+                : 'Synced with web and desktop.'}
       </Text>
 
       {/* Vibration is a per-channel Android setting. iOS gives an app no way to
@@ -871,8 +916,7 @@ export default function NotificationPreferencesScreen() {
           </Card>
           {channelOverridden ? (
             <Text className="text-sm mt-2 px-1" style={{ color: colors.textMuted }}>
-              Your device has turned vibration off for one of these channels, which overrides the
-              switches above.
+              Device settings turned vibration off for a channel, overriding these switches.
             </Text>
           ) : null}
         </>

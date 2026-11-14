@@ -121,7 +121,7 @@ describe('renderMarkdownContent table cells', () => {
     expect(getByText('plain')).toBeTruthy();
   });
 
-  it('puts a wide table in a horizontal scroller with bounded column widths', () => {
+  it('wraps a long cell inside the message instead of pushing the table off the screen', () => {
     const wideTable = [
       '| Feature | Notes | Owner | Status |',
       '| --- | --- | --- | --- |',
@@ -129,6 +129,24 @@ describe('renderMarkdownContent table cells', () => {
     ].join('\n');
 
     const { getByText } = renderMarkdown(wideTable);
+
+    const cell = getByText('a'.repeat(200));
+    expect(ancestorWithProp(cell, 'horizontal')).toBeUndefined();
+    expect(ancestorStyleNumber(cell, 'width')).toBeUndefined();
+    expect(ancestorStyleNumber(cell, 'flexGrow')).toBeGreaterThan(
+      ancestorStyleNumber(getByText('short'), 'flexGrow') ?? Infinity,
+    );
+  });
+
+  it('puts a table with too many columns in a horizontal scroller with bounded column widths', () => {
+    const columns = Array.from({ length: 12 }, (_, index) => `Column number ${index + 1}`);
+    const manyColumns = [
+      `| ${columns.join(' | ')} |`,
+      `| ${columns.map(() => '---').join(' | ')} |`,
+      `| ${'a'.repeat(200)} | short | ${columns.slice(2).join(' | ')} |`,
+    ].join('\n');
+
+    const { getByText } = renderMarkdown(manyColumns);
 
     const cell = getByText('a'.repeat(200));
     expect(ancestorWithProp(cell, 'horizontal')).toBe(true);

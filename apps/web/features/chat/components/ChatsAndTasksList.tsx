@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Archive,
@@ -50,6 +50,7 @@ const FILTER_ORDER: readonly ChatsAndTasksFilter[] = ['all', 'chats', 'tasks'];
 const RELATIVE_TIME_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const PILL = 'h-9 rounded-full px-4';
+const SEARCH_AUTOFOCUS_QUERY = '(pointer: fine)';
 
 export function formatListTime(updatedAt: string, now: number = Date.now()): string {
   const date = new Date(updatedAt);
@@ -232,6 +233,13 @@ export function ChatsAndTasksList() {
     });
   }, [confirm, deleteConversation, runBulk, selectedRows]);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia(SEARCH_AUTOFOCUS_QUERY).matches) return;
+    searchInputRef.current?.focus({ preventScroll: true });
+  }, []);
+
   const openConversation = useCallback((id: string) => router.push(conversationHref(id)), [router]);
 
   const now = Date.now();
@@ -245,7 +253,9 @@ export function ChatsAndTasksList() {
     <div className="mx-auto w-full max-w-3xl">
       {dialog}
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="min-w-0 flex-1 text-2xl font-semibold text-foreground">Chats and tasks</h1>
+        <h1 className="min-w-0 flex-1 text-2xl font-semibold text-foreground max-md:basis-full max-md:text-[28px] max-md:font-medium max-md:leading-[1.2]">
+          Chats and tasks
+        </h1>
         <div className="flex shrink-0 items-center gap-2">
           {rows.length > 0 && (
             <Button
@@ -287,7 +297,7 @@ export function ChatsAndTasksList() {
       <SearchInput
         aria-label="Search chats and tasks"
         placeholder="Search chats and tasks"
-        autoFocus
+        ref={searchInputRef}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         containerClassName="mt-6"

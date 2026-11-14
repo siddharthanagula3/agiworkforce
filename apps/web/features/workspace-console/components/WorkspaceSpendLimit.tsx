@@ -75,10 +75,8 @@ function requestError(message: string, status: number): Error {
 
 const ENFORCEMENT_COPY: Record<Enforcement, string> = {
   off: 'Recorded only. Nothing acts on the cap.',
-  notify:
-    'Crossing the cap is recorded and reported. No turn is refused, use this to watch a budget before deciding to enforce it.',
-  block:
-    'Managed turns are refused once the cap is reached. Enforcement is eventual rather than exact: the decision is cached briefly, so the workspace can overshoot by roughly a minute of spend.',
+  notify: 'Crossing the cap is reported, but no turn is refused.',
+  block: 'Managed turns stop at the cap, up to about a minute of spend late.',
 };
 
 export function WorkspaceSpendLimit() {

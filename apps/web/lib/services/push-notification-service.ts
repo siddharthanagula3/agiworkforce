@@ -8,7 +8,11 @@ import { recordNotificationDelivery, type NotificationChannel } from '@/lib/obse
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendWebPushToUser } from './web-push-service';
 import { QuietHoursUnreadableError, heldByQuietHours } from './quiet-hours-service';
-import { MobilePushPreferencesSchema, mobilePushWantsEvent } from '@agiworkforce/cloud-contracts';
+import {
+  MobilePushPreferencesSchema,
+  isOptInPushEvent,
+  mobilePushWantsEvent,
+} from '@agiworkforce/cloud-contracts';
 import {
   isDateWithinQuietHours,
   isQuietHoursExemptNotification,
@@ -31,6 +35,7 @@ export interface PushDeliveryResult {
   invalidated: number;
   error?: string;
   deferred?: boolean;
+  transportFailures?: number;
 }
 
 interface ExpoTicket {
@@ -57,9 +62,10 @@ export function deviceAcceptsNotice(
   now: Date,
   quietHoursType: string | undefined = notificationType,
 ): boolean {
-  if (preferences === null || preferences === undefined) return true;
+  const optIn = isOptInPushEvent(notificationType);
+  if (preferences === null || preferences === undefined) return !optIn;
   const parsed = MobilePushPreferencesSchema.safeParse(preferences);
-  if (!parsed.success) return true;
+  if (!parsed.success) return !optIn;
   if (!mobilePushWantsEvent(parsed.data, notificationType)) return false;
   if (isQuietHoursExemptNotification(quietHoursType)) return true;
   const { quietHours } = normalizeTimeFocusPreferences(
@@ -125,6 +131,7 @@ async function sendExpoPushToUser(
   if (tokens.length === 0) return { sent: 0, invalidated: 0 };
 
   let sent = 0;
+  let transportFailures = 0;
   const invalid: string[] = [];
 
   for (const batch of chunk(tokens, MAX_TOKENS_PER_REQUEST)) {
@@ -148,6 +155,7 @@ async function sendExpoPushToUser(
 
       if (!response.ok) {
         logger.warn({ status: response.status, userId }, '[push] Expo rejected the batch');
+        transportFailures += 1;
         continue;
       }
 
@@ -165,16 +173,22 @@ async function sendExpoPushToUser(
       });
     } catch (error) {
       logger.warn({ error, userId }, '[push] send failed');
+      transportFailures += 1;
     } finally {
       clearTimeout(timeout);
     }
   }
 
   await invalidateTokens(invalid);
-  return { sent, invalidated: invalid.length };
+  return {
+    sent,
+    invalidated: invalid.length,
+    ...(transportFailures > 0 ? { transportFailures } : {}),
+  };
 }
 
 const NO_DELIVERY: PushDeliveryResult = { sent: 0, invalidated: 0 };
+const TRANSPORT_THREW: PushDeliveryResult = { sent: 0, invalidated: 0, transportFailures: 1 };
 
 function recordPushDelivery(
   channel: NotificationChannel,
@@ -199,7 +213,7 @@ async function settle(
     return await delivery;
   } catch (error) {
     logger.warn({ error, transport }, '[push] transport threw instead of reporting');
-    return NO_DELIVERY;
+    return TRANSPORT_THREW;
   }
 }
 
@@ -320,9 +334,11 @@ async function fanOutPush(
   recordPushDelivery('push_web', toWeb, web);
 
   const error = expo.error ?? web.error;
+  const transportFailures = (expo.transportFailures ?? 0) + (web.transportFailures ?? 0);
   return {
     sent: expo.sent + web.sent,
     invalidated: expo.invalidated + web.invalidated,
     ...(error ? { error } : {}),
+    ...(transportFailures > 0 ? { transportFailures } : {}),
   };
 }

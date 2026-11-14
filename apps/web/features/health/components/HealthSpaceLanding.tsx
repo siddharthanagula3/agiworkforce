@@ -75,9 +75,8 @@ export function HealthSpaceLanding() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold text-foreground">Health</h1>
         <p className="text-sm text-muted-foreground">
-          Your other chats never use anything from Health: its chats, files, connected health
-          records and memories stay out of them. Health chats only use models that keep your chats
-          out of training.
+          Health stays out of your other chats, and only uses models that keep chats out of
+          training.
         </p>
       </header>
       {state.kind === 'loading' ? (

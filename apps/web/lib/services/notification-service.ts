@@ -90,6 +90,20 @@ export async function insertNotification(
   return rows.length > 0 ? 'inserted' : 'duplicate';
 }
 
+export async function withdrawNotification(
+  db: DatabaseAdapter,
+  userId: string,
+  dedupeKey: string,
+): Promise<boolean> {
+  const rows = await db.query<{ id: string }>(
+    `delete from public.notifications
+      where user_id = $1 and dedupe_key = $2
+      returning id`,
+    [userId, dedupeKey],
+  );
+  return rows.length > 0;
+}
+
 export async function recordNotification(
   db: DatabaseAdapter,
   input: NotificationInput,

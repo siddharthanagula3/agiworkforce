@@ -141,7 +141,7 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
     calendar: {
       kind: 'calendar',
       label: 'Calendar',
-      description: 'Optional. Used when you ask about your schedule or confirm an event in a chat.',
+      description: 'Used when you ask about your schedule or confirm an event.',
       icon: CalendarDays,
       applicableLevels: ['denied', 'allow_always'],
       getStatus: getCalendarStatus,
@@ -150,7 +150,7 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
     reminders: {
       kind: 'reminders',
       label: 'Reminders',
-      description: 'Used only when you create a reminder or confirm one in a chat; never read.',
+      description: 'Used only to add reminders you create or confirm; never read.',
       icon: ListChecks,
       applicableLevels: ['denied', 'allow_always'],
       levelLabels: { allow_always: 'Read & write' },

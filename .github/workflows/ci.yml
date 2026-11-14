@@ -1315,6 +1315,7 @@ jobs:
             public-first-viewport.spec.ts \
             public-header-scroll.spec.ts \
             public-identity-pages.spec.ts \
+            public-ledger-phone-width.spec.ts \
             public-mockup-restoration.spec.ts \
             public-notify-landing.spec.ts \
             public-openapi-bundle.spec.ts \

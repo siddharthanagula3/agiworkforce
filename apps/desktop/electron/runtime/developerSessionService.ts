@@ -227,8 +227,8 @@ export interface DeveloperSessionConfiguration {
   workspaceConsentAtMs?: (root: WorkspaceRoot) => number | null;
   accountBridge?: DeveloperAccountBridge;
   spawn?: SpawnDeveloperRuntime;
-  /** Whether a page is there to answer the agent's questions. */
-  answersUserInput?: () => boolean;
+  /** Whether a page, or a phone with the session open, is there to answer the agent's questions. */
+  answersUserInput?: (rootId: string, threadId: string) => boolean;
 }
 
 let emit: DeveloperSessionEmitter = () => undefined;
@@ -237,7 +237,7 @@ let mayRunIn: (root: WorkspaceRoot) => boolean = () => false;
 let spawnRuntime: SpawnDeveloperRuntime = nodeSpawn as SpawnDeveloperRuntime;
 let workspaceConsentAtMs: (root: WorkspaceRoot) => number | null = () => null;
 let accountBridge: DeveloperAccountBridge | null = null;
-let answersUserInput: () => boolean = () => true;
+let answersUserInput: (rootId: string, threadId: string) => boolean = () => true;
 let accountSyncError: string | null = null;
 let accountSyncChain: Promise<void> = Promise.resolve();
 let cachedStatus: { binary: string; status: DeveloperRuntimeStatus } | null = null;
@@ -733,6 +733,11 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   const publish = (event: DeveloperSessionEvent) =>
     emit(server.root.id, { ...event, ...(sequence === undefined ? {} : { sequence }) });
 
+  if (event['type'] === 'reasoning-delta') {
+    const delta = readString(event, 'delta');
+    if (delta) publish({ type: 'reasoning-delta', threadId, turnId, delta });
+    return;
+  }
   if (event['type'] === 'approval-resolved') {
     const requestId = readString(event, 'approvalId');
     const decisions = {
@@ -904,7 +909,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     const requestId = readString(params, 'requestId');
     const question = readString(params, 'question');
     if (!requestId || !question) return;
-    if (!answersUserInput()) {
+    if (!answersUserInput(server.root.id, threadId)) {
       void requestOrNull(server, 'userInput/respond', {
         threadId,
         turnId,

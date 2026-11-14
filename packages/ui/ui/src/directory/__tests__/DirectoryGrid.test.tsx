@@ -441,13 +441,15 @@ describe('DirectoryGrid card type and badge placement', () => {
     badges: ['community'],
   };
 
-  it('sets every card line at 14px or larger', () => {
+  it('sets every card line at 14px or larger except the 12px description', () => {
     const { container } = renderGrid({
       entries: [{ ...community, statusLabel: 'Needs setup', error: 'Failed', isNew: true }],
       onInstall: vi.fn(),
     });
-    expect(container.querySelector('.text-xs')).toBeNull();
-    expect(screen.getByText('Roadmaps').className).toContain('text-sm');
+    const small = container.querySelectorAll('.text-xs');
+    expect(small).toHaveLength(1);
+    expect(small[0]?.textContent).toBe('Roadmaps');
+    expect(screen.getByText('Roadmaps').className).toContain('text-xs');
   });
 
   it('shows the Community chip beside the add control, not in the publisher line', () => {

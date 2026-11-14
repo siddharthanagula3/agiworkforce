@@ -690,6 +690,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
               {...sharedSidebarProps}
               collapsed={false}
               width={MOBILE_NAV_DRAWER_WIDTH}
+              className="max-w-full"
               onToggleCollapse={() => setMobileNavOpen(false)}
             />
           </SheetContent>

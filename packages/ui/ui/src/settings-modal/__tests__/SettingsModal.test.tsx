@@ -737,11 +737,15 @@ describe('SettingsModal nav (web IA)', () => {
    * only, Skills, Connectors, Plugins and Memory ran on from the Settings
    * entries with nothing marking where one group ended.
    */
-  it('keeps the group headings at phone width', () => {
+  it('keeps the group headings that divide the phone strip, but not one before its first entry', () => {
     renderModal();
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
 
-    for (const label of within(nav).getAllByTestId(NAV_GROUP_LABEL_TESTID)) {
+    const [first, ...rest] = within(nav).getAllByTestId(NAV_GROUP_LABEL_TESTID);
+    expect(first!.className.split(/\s+/)).toContain('max-md:hidden');
+    expect(first!.className).toContain('md:block');
+    expect(rest.length).toBeGreaterThan(0);
+    for (const label of rest) {
       expect(label.className).not.toContain('hidden');
       expect(label.className).toContain('whitespace-nowrap');
       expect(label.className).toContain('shrink-0');
@@ -1089,7 +1093,7 @@ describe('Connectors pane (table)', () => {
 
     expect(screen.getByText('Add custom connector')).toBeTruthy();
     expect(screen.getByText('Beta')).toBeTruthy();
-    expect(screen.getByText(/Only use connectors from developers you trust/)).toBeTruthy();
+    expect(screen.getByText(/Only use connectors you trust/)).toBeTruthy();
 
     // Add stays disabled until name + a valid https URL are supplied.
     const addBtn = screen.getByRole('button', { name: 'Add' });
@@ -1211,12 +1215,12 @@ describe('Connectors pane (table)', () => {
 
     fireEvent.click(within(row).getByRole('button', { name: 'My MCP' }));
     expect(screen.getAllByText('Unverified').length).toBeGreaterThan(0);
-    expect(screen.getByText(/AGI has not reviewed this server/)).toBeTruthy();
+    expect(screen.getByText(/Added by URL and not reviewed/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     fireEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add custom connector' }));
-    expect(screen.getByText(/AGI has not reviewed this server/)).toBeTruthy();
+    expect(screen.getByText(/Added by URL and not reviewed/)).toBeTruthy();
   });
 });
 
@@ -1224,9 +1228,7 @@ describe('Skills pane (table)', () => {
   it('renders a Skill/Author table with honest author labels', () => {
     renderModal({ activeSection: 'skills' });
     expect(
-      screen.getByText(
-        'Bundled, portable instruction sets for focused workflows. Select one in chat with / or @, or download its SKILL.md.',
-      ),
+      screen.getByText('Instruction sets for focused work. Use one in chat with / or @.'),
     ).toBeTruthy();
     expect(screen.queryByText(/Desktop app|\.agiworkforce\/skills/)).toBeNull();
     expect(screen.getByRole('columnheader', { name: 'Skill' })).toBeTruthy();
@@ -1424,5 +1426,106 @@ describe('Customize panels render the directory', () => {
       },
     });
     expect(screen.getByPlaceholderText('Search plugins')).toBeTruthy();
+  });
+});
+
+describe('SettingsModal on a phone', () => {
+  function stubPointer(coarse: boolean) {
+    vi.mocked(window.matchMedia).mockImplementation(
+      (query: string) =>
+        ({
+          matches: coarse && query === '(pointer: coarse)',
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        }) as MediaQueryList,
+    );
+  }
+
+  afterEach(() => {
+    stubPointer(false);
+  });
+
+  it('opens without focusing the search field on a touch screen, so no keyboard covers the page', async () => {
+    stubPointer(true);
+    renderModal({ activeSection: 'general' });
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+
+    await waitFor(() => expect(document.activeElement).toBe(dialog));
+    expect(document.activeElement).not.toBe(
+      screen.getByRole('searchbox', { name: 'Search settings' }),
+    );
+  });
+
+  it('still moves focus into the dialog with a mouse and keyboard', async () => {
+    stubPointer(false);
+    renderModal({ activeSection: 'general' });
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    expect(document.activeElement).not.toBe(dialog);
+  });
+
+  it('fills the whole phone screen and keeps the desktop frame from md up', () => {
+    renderModal();
+    const classes = screen.getByRole('dialog', { name: 'Settings' }).className.split(/\s+/);
+
+    expect(classes).toContain('h-[100dvh]');
+    expect(classes).toContain('max-md:max-h-none');
+    expect(classes).toContain('md:h-[min(94vh,680px)]');
+    expect(classes).toContain('md:rounded-xl');
+  });
+
+  it('puts the title and a 44px close button in one 48px row on phones', () => {
+    renderModal();
+    const title = screen.getByRole('heading', { name: 'Settings' });
+    const close = screen.getByRole('button', { name: 'Close settings' });
+    const titleClasses = title.className.split(/\s+/);
+    const closeClasses = close.className.split(/\s+/);
+
+    expect(titleClasses).toEqual(expect.arrayContaining(['max-md:h-12', 'max-md:items-center']));
+    expect(closeClasses).toEqual(
+      expect.arrayContaining(['h-8', 'w-8', 'max-md:h-11', 'max-md:w-11', 'max-md:top-0.5']),
+    );
+    expect(screen.getAllByRole('button', { name: 'Close settings' })).toHaveLength(1);
+  });
+
+  it('grows the hit area of the shared switch with a pseudo-element, never its track', () => {
+    renderModal();
+    const classes = screen.getByRole('dialog', { name: 'Settings' }).className.split(/\s+/);
+
+    expect(classes).toContain('pointer-coarse:[&_[role=switch][data-state]]:after:-inset-y-2.5');
+    expect(classes.some((name) => /\[role=switch\].*:(min-)?[hw]-/.test(name))).toBe(false);
+  });
+
+  it('centres the active entry in the strip when the strip scrolls sideways', () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const props = {
+      open: true,
+      onClose: vi.fn(),
+      onSectionChange: vi.fn(),
+      sectionContent: {},
+      navGroups: SETTINGS_NAV_GROUPS_WEB,
+      adapter,
+    };
+    const { rerender } = render(<SettingsModal {...props} activeSection="general" />);
+    const strip = screen.getByTestId('settings-nav-scroll-region');
+    Object.defineProperty(strip, 'scrollWidth', { configurable: true, value: 1200 });
+    Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 390 });
+    strip.scrollLeft = 0;
+    strip.getBoundingClientRect = () => ({ left: 0, width: 390 }) as DOMRect;
+    const billing = within(strip).getByRole('button', { name: /Billing/ });
+    billing.getBoundingClientRect = () => ({ left: 600, width: 90 }) as DOMRect;
+    scrollIntoView.mockClear();
+
+    rerender(<SettingsModal {...props} activeSection="billing" />);
+
+    expect(strip.scrollLeft).toBe(600 - (390 - 90) / 2);
+    expect(scrollIntoView).not.toHaveBeenCalled();
   });
 });

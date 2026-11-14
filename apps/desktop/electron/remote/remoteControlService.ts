@@ -41,6 +41,7 @@ import { shownValue } from '../runtime/dialogText';
 import { showNativeMessage } from '../runtime/nativeSurface';
 import {
   answerDeveloperApproval,
+  answerDeveloperUserInput,
   interruptDeveloperTurn,
   listDeveloperSessions,
   readDeveloperSessionActivity,
@@ -243,6 +244,10 @@ export function configureRemoteControl(
         requireRemoteAccess(answer.rootId);
         return answerRemoteApproval(answer);
       },
+      answerQuestion: async (answer) => {
+        requireRemoteAccess(answer.rootId);
+        await answerDeveloperUserInput(answer);
+      },
       readDiff: async (rootId, paths) => {
         requireRemoteAccess(rootId);
         const root = getRoot(rootId);
@@ -443,6 +448,14 @@ export function startRemoteControl(
 
 export function stopRemoteControl(): RemoteControlState {
   return host?.stop() ?? { ...IDLE_REMOTE_CONTROL_STATE };
+}
+
+/**
+ * Whether the paired phone has this session open. The agent's questions are
+ * kept waiting for it then, as they are for a window on this computer.
+ */
+export function phoneWatchesSession(rootId: string, threadId: string): boolean {
+  return host !== null && remoteRefusal(rootId) === null && host.phoneWatches(rootId, threadId);
 }
 
 export function relayDeveloperSessionEvent(rootId: string, event: DeveloperSessionEvent): void {

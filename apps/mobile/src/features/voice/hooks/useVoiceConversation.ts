@@ -8,6 +8,7 @@ import {
   activeSpeechLanguage,
   autoListenEnabled,
 } from '@/src/features/voice/services/speechSettings';
+import type { VoiceHandoff } from '@/src/features/voice/services/voiceHandoff';
 import type {
   VoiceOutputHandle,
   VoiceOutputOptions,
@@ -18,6 +19,9 @@ export type VoiceConversationPhase = 'idle' | 'listening' | 'thinking' | 'speaki
 
 export interface UseVoiceConversationOptions {
   enabled: boolean;
+  listenOnEnable?: boolean;
+  openingTurn?: VoiceHandoff | null;
+  onOpeningTurnStarted?: () => void;
   pttMode?: boolean;
   hapticsEnabled: boolean;
   sendMessage: (text: string) => Promise<string | null | undefined>;
@@ -73,6 +77,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   const speechRef = useRef<VoiceOutputHandle | null>(null);
   const sessionRef = useRef(0);
   const startListeningRef = useRef<() => void>(() => {});
+  const openingReplyRef = useRef<Promise<string | null | undefined> | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
@@ -98,6 +103,8 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   }, []);
 
   const respondToText = useCallback(async (text: string): Promise<boolean> => {
+    const openingReply = openingReplyRef.current;
+    openingReplyRef.current = null;
     const turnOptions = optionsRef.current;
     const owner = turnOptions.speechOwner;
     if (!activeRef.current || turnInFlightRef.current || !owner?.isCurrent()) return false;
@@ -122,7 +129,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
 
     let aiResponse: string | null | undefined;
     try {
-      aiResponse = await turnOptions.sendMessage(trimmed);
+      aiResponse = await (openingReply ?? turnOptions.sendMessage(trimmed));
     } catch (err) {
       if (current()) {
         const message =
@@ -157,8 +164,11 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     if (!current() || speechRef.current !== speech) return true;
     speechRef.current = null;
     setAudioLevel(0);
-    if (outcome.status === 'done' && autoListenRef.current) startListeningRef.current();
-    else setPhase('idle');
+    if (outcome.status === 'done' && autoListenRef.current && !mutedRef.current) {
+      startListeningRef.current();
+    } else {
+      setPhase('idle');
+    }
     return true;
   }, []);
 
@@ -288,11 +298,9 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     [hapticTap, processTranscript, stopListeningAndProcess],
   );
 
-  useEffect(() => {
-    startListeningRef.current = () => {
-      void startListening();
-    };
-  }, [startListening]);
+  startListeningRef.current = () => {
+    void startListening();
+  };
 
   const handleOrbPress = useCallback(() => {
     if (phase === 'idle') {
@@ -337,6 +345,20 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     }
   }, [muted, hapticTap, cancelCapture]);
 
+  const handleMicPress = useCallback(() => {
+    if (mutedRef.current) {
+      setMuted(false);
+      mutedRef.current = false;
+      hapticTap();
+    } else if (phase !== 'idle') {
+      toggleMute();
+      return;
+    }
+    if (phase !== 'idle') return;
+    autoListenRef.current = autoListenEnabled();
+    void startListening();
+  }, [hapticTap, phase, startListening, toggleMute]);
+
   const endConversation = useCallback(async () => {
     sessionRef.current += 1;
     turnInFlightRef.current = null;
@@ -378,6 +400,16 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
       mutedRef.current = false;
       setAudioLevel(0);
       setTranscriptPreview('');
+      const openingTurn = optionsRef.current.openingTurn;
+      if (openingTurn) {
+        autoListenRef.current = autoListenEnabled();
+        openingReplyRef.current = openingTurn.reply;
+        optionsRef.current.onOpeningTurnStarted?.();
+        void respondToText(openingTurn.text);
+      } else if (optionsRef.current.listenOnEnable) {
+        autoListenRef.current = autoListenEnabled();
+        startListeningRef.current();
+      }
     } else {
       activeRef.current = false;
       void endConversation();
@@ -386,7 +418,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
       activeRef.current = false;
       void endConversation();
     };
-  }, [options.enabled, options.speechOwner, endConversation]);
+  }, [options.enabled, options.speechOwner, endConversation, respondToText]);
 
   return {
     phase,
@@ -398,6 +430,7 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
     handleOrbPressIn,
     handleOrbPressOut,
     toggleMute,
+    handleMicPress,
     endConversation,
   };
 }

@@ -31,10 +31,12 @@ const mockTurnOffTwoFactor = jest.fn();
 const mockStartSetup = jest.fn();
 const mockCopySecret = jest.fn();
 const mockWithStepUp = jest.fn();
+const mockSignOut = jest.fn();
 let mockAuthState = {
   isClerkLoaded: true,
   isClerkSignedIn: true,
   clerkUserId: 'account-a' as string | null,
+  signOut: mockSignOut,
 };
 
 jest.mock('expo-clipboard', () => ({
@@ -240,6 +242,7 @@ describe('Mobile Account Security screen', () => {
       isClerkLoaded: true,
       isClerkSignedIn: true,
       clerkUserId: 'account-a',
+      signOut: mockSignOut,
     };
     mockFetchStatus.mockResolvedValue({ twoFactorEnabled: true, backupCodesReady: true });
     mockFetchSessionTimeout.mockResolvedValue(60);
@@ -481,6 +484,7 @@ describe('Mobile Account Security screen', () => {
       isClerkLoaded: true,
       isClerkSignedIn: false,
       clerkUserId: null,
+      signOut: mockSignOut,
     };
     const screen = render(<AccountSecurityScreen />);
 
@@ -493,6 +497,32 @@ describe('Mobile Account Security screen', () => {
     expect(mockFetchStatus).not.toHaveBeenCalled();
     expect(mockFetchAccountSessions).not.toHaveBeenCalled();
   });
+  it('does not report a failure when every session was revoked but this phone could not end its own', async () => {
+    mockRevokeAll.mockResolvedValue(undefined);
+    mockSignOut.mockRejectedValue(new Error('session already revoked'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<AccountSecurityScreen />);
+    await waitFor(() => expect(screen.getByText('Log out of all devices')).toBeTruthy());
+    fireEvent.press(screen.getByText('Log out of all devices'));
+    const confirm = alertSpy.mock.calls
+      .at(-1)?.[2]
+      ?.find((button) => button.text === 'Log out everywhere');
+
+    await act(async () => {
+      confirm?.onPress?.();
+    });
+
+    await waitFor(() => expect(mockSignOut).toHaveBeenCalledTimes(1));
+    expect(mockRevokeAll).toHaveBeenCalledTimes(1);
+    expect(alertSpy).not.toHaveBeenCalledWith(
+      'Could not log out of all devices',
+      expect.anything(),
+    );
+    alertSpy.mockRestore();
+    warn.mockRestore();
+  });
+
   it('rejects an old revoke-all confirmation after A to B to A', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     const screen = render(<AccountSecurityScreen />);

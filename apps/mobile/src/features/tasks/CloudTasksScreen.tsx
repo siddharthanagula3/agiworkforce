@@ -52,7 +52,7 @@ const SCREEN_TITLE = 'AGI Work';
 const SCREEN_SUBTITLE = 'AGI Cloud';
 const SCOPE_NOTE = `Every agent run on your AGI Cloud account; paired desktops are in ${MOBILE_REMOTE_SCREEN_LABEL}.`;
 const BACKGROUND_ALERTS_OFF_NOTE =
-  'Background approval alerts are off, so a task that pauses while the app is closed will wait silently.';
+  'Approval alerts are off. Paused tasks wait silently while the app is closed.';
 
 function Header({ onBack, onOpenSchedules }: { onBack: () => void; onOpenSchedules?: () => void }) {
   const colors = useThemeColors();
@@ -273,7 +273,7 @@ function EmptyState({ filtered }: { filtered: boolean }) {
         {filtered ? 'No tasks match this filter' : 'No Cloud tasks yet'}
       </Text>
       <Text style={{ color: colors.textMuted, textAlign: 'center', lineHeight: 20, marginTop: 7 }}>
-        Start an AGI work or research turn on any surface. Its durable run shows up here.
+        AGI Work and research runs from any device show up here.
       </Text>
     </View>
   );

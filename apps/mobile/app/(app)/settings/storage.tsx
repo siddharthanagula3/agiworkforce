@@ -26,7 +26,7 @@ import { SettingsScreenShell } from '@/src/features/settings/Common';
 import type { InstalledModel } from '@/storage/types';
 
 const STORAGE_RETURN_PATHS = [
-  '/(app)/(tabs)/settings',
+  '/(app)/settings',
   '/(app)/settings/data-controls',
   '/(app)/settings/general',
 ] as const;
@@ -331,7 +331,7 @@ export default function StorageManagerScreen() {
                 Download over cellular
               </Text>
               <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
-                Off means model downloads wait for Wi-Fi. Models are several gigabytes.
+                Off waits for Wi-Fi. Models are several gigabytes.
               </Text>
             </View>
             <Switch
@@ -369,7 +369,7 @@ export default function StorageManagerScreen() {
             </View>
           ) : installedModels.length === 0 ? (
             <Text className="text-sm" style={{ color: c.textMuted }}>
-              No models downloaded. Download a model from Settings → General → Models.
+              No models downloaded. Get one in Settings → General → Models.
             </Text>
           ) : (
             installedModels.map((model, idx) => (

@@ -9,6 +9,7 @@ import {
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
+import { announceReplyReadyInBackground } from '@/services/replyReadyNotice';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import {
@@ -159,14 +160,12 @@ import type {
 } from '@/types/chat';
 import {
   RESPONSE_STYLE_GUIDANCE,
-  autoAliasForRoutingProfile,
   getModelMetadataById,
   isAutoModeModelId,
   isTerminalToolStatus,
   type ResearchDeliverableSpec,
   type ResearchSourceRequest,
   type ResearchStep,
-  type RoutingProfileChoice,
 } from '@agiworkforce/types';
 import {
   hasResearchSourceChoice,
@@ -203,7 +202,6 @@ import {
   uploadWithRetry,
 } from '@/src/features/chat/upload/uploadAttachment';
 import { isConversationTemporary } from '@/src/features/chat/upload/uploadContext';
-import { speedFirstSlots } from '@agiworkforce/routing';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
@@ -1499,7 +1497,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     let executionModel = requestedModel;
     let routingReason: string | undefined;
-    let appliedRoutingProfile: RoutingProfileChoice | undefined;
     if (FEATURES.auth && executionMode === 'cloud') {
       const { isClerkLoaded, isClerkSignedIn } = useAuthStore.getState();
       if (isClerkLoaded && !isClerkSignedIn) {
@@ -1566,13 +1563,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
         executionModel = requestedModel;
       } else {
-        const routingProfile = useModelStore.getState().routingProfile;
-        const routingProfileAlias =
-          requestedModel === DEFAULT_AUTO_MODE_ID
-            ? autoAliasForRoutingProfile(routingProfile)
-            : null;
         const route = resolveMobileCloudDispatch({
-          selection: routingProfileAlias ?? requestedModel,
+          selection: requestedModel,
           message: content,
           subscriptionTier: useTierStore.getState().tier,
           history: historyMessagesForConversation(conversationId, executionMode).map((message) => ({
@@ -1584,12 +1576,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             type: attachment.mimeType.startsWith('image/') ? 'image' : 'document',
           })),
           currentModelKey:
-            !routingProfileAlias && conversation?.model && !isAutoModeModelId(conversation.model)
+            conversation?.model && !isAutoModeModelId(conversation.model)
               ? conversation.model
               : undefined,
-          ...(routingProfileAlias && routingProfile === 'speed'
-            ? { preferSlots: speedFirstSlots() }
-            : {}),
         });
 
         if (route.status === 'unavailable') {
@@ -1610,7 +1599,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
         executionModel = route.modelKey;
         routingReason = route.reason;
-        if (routingProfileAlias) appliedRoutingProfile = routingProfile;
       }
       const imageRefusal = imageLimitRefusal(executionModel, attachments);
       if (imageRefusal) {
@@ -2384,6 +2372,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
         if (parsedFinal.content.trim()) {
           captureCompletedLocalMemory();
+          void announceReplyReadyInBackground(conversationId);
         }
         return true;
       }
@@ -2891,6 +2880,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             if (turnStreamError === undefined && finalContent.trim()) {
               captureCompletedLocalMemory();
+              if (!cloudAgentRun) void announceReplyReadyInBackground(conversationId);
             }
           },
 

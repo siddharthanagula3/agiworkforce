@@ -222,7 +222,7 @@ export default function ArchivedChatsScreen() {
       router.back();
       return;
     }
-    router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const handleRefresh = useCallback(() => {
@@ -512,7 +512,7 @@ export default function ArchivedChatsScreen() {
                   maxWidth: 280,
                 }}
               >
-                Chats you archive appear here, and you can restore them any time.
+                Chats you archive appear here to restore any time.
               </Text>
             </View>
           </Card>

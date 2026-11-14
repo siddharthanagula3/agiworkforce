@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getRoutingSlotModel,
   NOTEBOOK_TEMPLATE_ID,
@@ -96,8 +96,12 @@ vi.mock('@/features/notebook/NotebookPanel', () => ({
 }));
 
 vi.mock('./components/CodeUsageDashboard', () => ({
-  CodeUsageDashboard: ({ planTier }: { planTier: string | null }) => (
-    <div data-testid="code-usage-dashboard" data-plan-tier={planTier ?? ''} />
+  CodeUsageDashboard: ({ planTier, linkOnly }: { planTier: string | null; linkOnly?: boolean }) => (
+    <div
+      data-testid="code-usage-dashboard"
+      data-plan-tier={planTier ?? ''}
+      data-link-only={String(Boolean(linkOnly))}
+    />
   ),
 }));
 
@@ -820,6 +824,70 @@ describe('CloudCodePage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('code-usage-dashboard')).toHaveAttribute('data-plan-tier', 'pro'),
     );
+  });
+
+  it('keeps the full usage card on a wide screen', async () => {
+    render(<CloudCodePage api={createApi()} />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('code-usage-dashboard')).toHaveAttribute('data-link-only', 'false'),
+    );
+  });
+
+  describe('on a phone', () => {
+    const wideWidth = window.innerWidth;
+    const originalMatchMedia = window.matchMedia;
+
+    beforeEach(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+      window.matchMedia = ((query: string) => ({
+        matches: query.includes('max-width'),
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+      })) as typeof window.matchMedia;
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: wideWidth });
+      window.matchMedia = originalMatchMedia;
+    });
+
+    it('puts the button that opens the Code drawer before the title in the app header', async () => {
+      render(<CloudCodePage api={createApi()} />);
+
+      const slot = await screen.findByTestId('code-app-bar');
+      const drawerButton = within(slot).getByRole('button', { name: 'Cloud sessions' });
+      expect(slot.firstElementChild).toBe(drawerButton);
+      expect(drawerButton).toHaveAttribute('aria-expanded', 'false');
+      expect(drawerButton).toHaveAttribute('aria-controls', 'code-rail-drawer');
+      expect(slot).toHaveTextContent('Code');
+    });
+
+    it('swaps the usage card for a link to the usage page', async () => {
+      render(<CloudCodePage api={createApi()} />);
+
+      await screen.findByRole('heading', { name: "What's up next, Ada?" });
+      await waitFor(() =>
+        expect(screen.getByTestId('code-usage-dashboard')).toHaveAttribute(
+          'data-link-only',
+          'true',
+        ),
+      );
+    });
+
+    it('does not put the composer in focus when the home opens', async () => {
+      render(<CloudCodePage api={createApi()} />);
+
+      const composer = await screen.findByRole('textbox', {
+        name: 'Describe a task or ask a question',
+      });
+      expect(composer).not.toHaveFocus();
+    });
   });
 
   it('opens the microphone on the first press with no notice in between', async () => {
@@ -3327,7 +3395,7 @@ describe('the environment the composer starts a session in', () => {
     const permissions = await screen.findByText('Permissions: Auto');
     expect(permissions).toHaveAttribute(
       'title',
-      'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
+      'Edits files without asking. Asks before commands and git hook or MCP changes.',
     );
     expect(screen.queryByRole('button', { name: 'Approval mode' })).not.toBeInTheDocument();
     expect(screen.queryByText('Ask before every action')).not.toBeInTheDocument();

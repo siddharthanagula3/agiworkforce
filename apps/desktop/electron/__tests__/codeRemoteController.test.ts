@@ -133,6 +133,7 @@ beforeEach(() => {
     startTurn: vi.fn(async () => ({ turnId: 'turn-guided' })),
     interruptTurn: vi.fn(async () => true),
     answerApproval: vi.fn(async () => ({ status: 'applied' as const })),
+    answerQuestion: vi.fn(async () => undefined),
     readDiff: vi.fn(async () => GIT_DIFF),
     now: () => NOW,
   };
@@ -500,6 +501,7 @@ describe('remote control of a developer session', () => {
       turnId: 'turn-1',
       requestId: 'q-1',
       question: 'Keep the old flag?',
+      answerable: true,
     });
 
     await controller.handleSessionEvent('root-1', {
@@ -1028,6 +1030,7 @@ describe('remote control of a developer session', () => {
     expect(lastEvent('guidance-delivered')).toMatchObject({
       turnId: 'turn-guided',
       queuedGuidance: [],
+      text: 'skip the docs',
     });
   });
 
@@ -1496,5 +1499,380 @@ describe('a snapshot replaces the turn and approvals the controller remembered',
       activeTurnId: 'turn-7',
       partialResponse: 'Editing retry.ts',
     });
+  });
+});
+
+describe('what the phone needs to show a session as a conversation', () => {
+  const CHOICE_ASKED: DeveloperSessionEvent = {
+    type: 'approval-requested',
+    threadId: 'thread-1',
+    turnId: 'turn-7',
+    requestId: 'ask-1',
+    kind: 'question',
+    summary: 'Choose a base branch',
+    detail: '',
+    command: null,
+    riskLevel: null,
+    reversible: null,
+    question: { question: 'Which branch should I rebase onto?', options: ['main', 'release'] },
+  };
+
+  async function attached() {
+    const controller = createCodeRemoteController(deps);
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+    sent = [];
+    return controller;
+  }
+
+  function answer(
+    controller: ReturnType<typeof createCodeRemoteController>,
+    questionRequestId: string,
+    value: string | null,
+  ) {
+    return controller.handleControl(
+      'code.question.respond',
+      request('answer', {
+        rootId: 'root-1',
+        threadId: 'thread-1',
+        turnId: 'turn-7',
+        questionRequestId,
+        answer: value,
+      }),
+    );
+  }
+
+  function snapshot() {
+    return parseRemoteCodeSnapshot(
+      sent.filter((entry) => entry.action === 'code.session.snapshot').at(-1)?.payload,
+    );
+  }
+
+  it('says which turn ran each tool, live and in the snapshot', async () => {
+    const controller = await attached();
+    await controller.handleSessionEvent('root-1', {
+      type: 'tool-started',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      toolCallId: 'call-9',
+      name: 'shell',
+      summary: 'pnpm test',
+    });
+    await controller.handleSessionEvent('root-1', {
+      type: 'tool-finished',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      toolCallId: 'call-9',
+      name: 'shell',
+      output: 'ok',
+      isError: false,
+    });
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+
+    expect(snapshot()?.tools).toEqual([
+      {
+        toolCallId: 'call-9',
+        name: 'shell',
+        summary: 'pnpm test',
+        state: 'done',
+        output: 'ok',
+        turnId: 'turn-7',
+      },
+    ]);
+  });
+
+  it('says which turn each message belongs to where the computer recorded one', async () => {
+    deps.readActivity = vi.fn(async () =>
+      activity({
+        transcript: {
+          session: session(),
+          messages: [
+            { role: 'user', text: 'make retries back off', turnId: 'turn-6' },
+            { role: 'assistant', text: 'Done.', turnId: 'turn-6' },
+            { role: 'user', text: 'an older message with no turn' },
+          ],
+          truncated: false,
+          activeTurn: null,
+        },
+      }),
+    );
+    await attached().then((controller) =>
+      controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      ),
+    );
+
+    expect(snapshot()?.messages).toEqual([
+      { role: 'user', text: 'make retries back off', turnId: 'turn-6' },
+      { role: 'assistant', text: 'Done.', turnId: 'turn-6' },
+      { role: 'user', text: 'an older message with no turn' },
+    ]);
+  });
+
+  it('relays thinking as it arrives and keeps it for a phone that joins later', async () => {
+    const controller = await attached();
+    await controller.handleSessionEvent('root-1', {
+      type: 'reasoning-delta',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      delta: 'The backoff is linear. ',
+    });
+    await controller.handleSessionEvent('root-1', {
+      type: 'reasoning-delta',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      delta: 'Make it exponential.',
+    });
+    expect(lastEvent('thinking-delta')).toEqual({
+      type: 'thinking-delta',
+      turnId: 'turn-7',
+      delta: 'Make it exponential.',
+    });
+
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+    expect(snapshot()?.thinking).toEqual([
+      { turnId: 'turn-7', text: 'The backoff is linear. Make it exponential.' },
+    ]);
+  });
+
+  it('keeps thinking for the newest turns only', async () => {
+    const controller = await attached();
+    for (let turn = 0; turn < REMOTE_CODE_LIMITS.thinkingTurns + 2; turn += 1) {
+      await controller.handleSessionEvent('root-1', {
+        type: 'reasoning-delta',
+        threadId: 'thread-1',
+        turnId: `turn-${turn}`,
+        delta: `thought ${turn}`,
+      });
+    }
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+
+    const kept = snapshot()?.thinking ?? [];
+    expect(kept).toHaveLength(REMOTE_CODE_LIMITS.thinkingTurns);
+    expect(kept.at(-1)?.turnId).toBe(`turn-${REMOTE_CODE_LIMITS.thinkingTurns + 1}`);
+  });
+
+  it('never relays a secret that appears in thinking', async () => {
+    const controller = await attached();
+    const secret = `sk-ant-${'a'.repeat(40)}`;
+    await controller.handleSessionEvent('root-1', {
+      type: 'reasoning-delta',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      delta: `The key is ${secret}`,
+    });
+
+    expect(lastEvent('thinking-delta')).toBeDefined();
+    expect(JSON.stringify(sent)).not.toContain(secret);
+  });
+
+  it('shows a choice the agent asks as a question with its options, not as an approval', async () => {
+    const controller = await attached();
+    await controller.handleSessionEvent('root-1', CHOICE_ASKED);
+
+    expect(lastEvent('approval-requested')).toBeUndefined();
+    expect(lastEvent('user-input-requested')).toEqual({
+      type: 'user-input-requested',
+      turnId: 'turn-7',
+      requestId: 'ask-1',
+      question: 'Which branch should I rebase onto?',
+      options: ['main', 'release'],
+      answerable: true,
+    });
+  });
+
+  it('answers a choice through the approval it was asked through, carrying the option', async () => {
+    const controller = await attached();
+    await controller.handleSessionEvent('root-1', CHOICE_ASKED);
+    await answer(controller, 'ask-1', 'release');
+
+    expect(deps.answerApproval).toHaveBeenCalledWith({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      requestId: 'ask-1',
+      decision: 'approve_once',
+      note: 'release',
+    });
+    expect(deps.answerQuestion).not.toHaveBeenCalled();
+  });
+
+  it('denies a choice the phone dismisses', async () => {
+    const controller = await attached();
+    await controller.handleSessionEvent('root-1', CHOICE_ASKED);
+    await answer(controller, 'ask-1', null);
+
+    expect(deps.answerApproval).toHaveBeenCalledWith({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      requestId: 'ask-1',
+      decision: 'deny',
+    });
+  });
+
+  it('clears a choice once it is answered and tells the phone', async () => {
+    const controller = await attached();
+    await controller.handleSessionEvent('root-1', CHOICE_ASKED);
+    await controller.handleSessionEvent('root-1', {
+      type: 'approval-answered',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      requestId: 'ask-1',
+      decision: 'approve_once',
+      approved: true,
+    });
+
+    expect(lastEvent('user-input-answered')).toEqual({
+      type: 'user-input-answered',
+      requestId: 'ask-1',
+    });
+    expect(lastEvent('approval-answered')).toBeUndefined();
+  });
+
+  it('shows a phone that joins mid-choice the choice, and no approval for it', async () => {
+    deps.readActivity = vi.fn(async () =>
+      activity({
+        transcript: {
+          session: session({ status: 'running' }),
+          messages: [],
+          truncated: false,
+          activeTurn: {
+            turnId: 'turn-7',
+            partialResponse: '',
+            approvals: [
+              {
+                requestId: 'ask-1',
+                kind: 'question',
+                summary: 'Choose a base branch',
+                detail: '',
+                command: null,
+                riskLevel: null,
+                reversible: null,
+                question: { question: 'Which branch?', options: ['main', 'release'] },
+              },
+            ],
+            questions: [],
+          },
+        },
+        activeTurn: {
+          turnId: 'turn-7',
+          partialResponse: '',
+          pendingApprovals: [{ requestId: 'ask-1', summary: 'Choose a base branch', detail: '' }],
+        },
+      }),
+    );
+    const controller = createCodeRemoteController(deps);
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+
+    expect(snapshot()).toMatchObject({
+      status: 'awaiting_approval',
+      pendingApprovals: [],
+      pendingQuestions: [
+        {
+          turnId: 'turn-7',
+          requestId: 'ask-1',
+          question: 'Which branch?',
+          options: ['main', 'release'],
+          answerable: true,
+        },
+      ],
+    });
+  });
+
+  it('hands a typed answer to the question the agent is waiting on', async () => {
+    const controller = await attached();
+    await controller.handleSessionEvent('root-1', {
+      type: 'user-input-requested',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      requestId: 'q-1',
+      question: 'Which port?',
+    });
+    await answer(controller, 'q-1', '8080');
+
+    expect(deps.answerQuestion).toHaveBeenCalledWith({
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      requestId: 'q-1',
+      answer: '8080',
+    });
+    expect(deps.answerApproval).not.toHaveBeenCalled();
+  });
+
+  it('ignores an answer to a question that is not waiting', async () => {
+    const controller = await attached();
+    await answer(controller, 'q-gone', '8080');
+
+    expect(deps.answerQuestion).not.toHaveBeenCalled();
+    expect(deps.answerApproval).not.toHaveBeenCalled();
+  });
+
+  it('tells the phone to answer at the computer when the host cannot take typed answers', async () => {
+    delete deps.answerQuestion;
+    const controller = await attached();
+    await controller.handleSessionEvent('root-1', {
+      type: 'user-input-requested',
+      threadId: 'thread-1',
+      turnId: 'turn-7',
+      requestId: 'q-1',
+      question: 'Which port?',
+    });
+
+    expect(lastEvent('user-input-requested')).toEqual({
+      type: 'user-input-requested',
+      turnId: 'turn-7',
+      requestId: 'q-1',
+      question: 'Which port?',
+    });
+  });
+
+  it('counts the sub-tasks still queued or running', async () => {
+    deps.readActivity = vi.fn(async () =>
+      activity({
+        transcript: {
+          session: session(),
+          messages: [],
+          truncated: false,
+          activeTurn: null,
+          childTasks: [
+            { id: 'c-1', parentSessionId: 'thread-1', title: 'Audit', state: 'running' },
+            { id: 'c-2', parentSessionId: 'thread-1', title: 'Tests', state: 'queued' },
+            { id: 'c-3', parentSessionId: 'thread-1', title: 'Docs', state: 'completed' },
+          ],
+        },
+      }),
+    );
+    const controller = createCodeRemoteController(deps);
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+
+    expect(snapshot()?.runningTasks).toBe(2);
+  });
+
+  it('knows whether a phone has a session open', async () => {
+    const controller = await attached();
+    expect(controller.isAttached('root-1', 'thread-1')).toBe(true);
+    expect(controller.isAttached('root-1', 'thread-2')).toBe(false);
+    controller.detach();
+    expect(controller.isAttached('root-1', 'thread-1')).toBe(false);
   });
 });

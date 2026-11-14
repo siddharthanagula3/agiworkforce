@@ -109,7 +109,7 @@ export default function AboutScreen() {
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    else router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const openWebPage = useCallback(async (url: string) => {

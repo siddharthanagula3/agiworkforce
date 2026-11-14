@@ -4,8 +4,8 @@ use agiworkforce_app_server::{
 use agiworkforce_protocol::agent_events::{
     AgentEvent, AgentEventApprovalDecision, AgentEventApprovalResolved, AgentEventArtifactProduced,
     AgentEventCommandStarted, AgentEventError, AgentEventFileChangeKind, AgentEventFileChanged,
-    AgentEventProgressStatus, AgentEventProgressUpdate, AgentEventSource, AgentEventSourceList,
-    AgentEventStop, AgentEventStopReason, AgentEventToolExecutionEnd,
+    AgentEventProgressStatus, AgentEventProgressUpdate, AgentEventReasoningDelta, AgentEventSource,
+    AgentEventSourceList, AgentEventStop, AgentEventStopReason, AgentEventToolExecutionEnd,
     AgentEventToolExecutionQueued, AgentEventToolExecutionStart, AgentEventTurnDiff,
 };
 use agiworkforce_protocol::developer_session::{
@@ -3906,11 +3906,18 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     ),
                 );
                 let turn_config = turn_config_pinned_to_session_route(&task_config, &agent);
-                let (result, reconnects) =
-                    crate::cloud::connectors::collecting(crate::mcp::collect_sign_in_required(
+                let (result, reconnects) = crate::cloud::connectors::collecting(
+                    crate::mcp::collect_sign_in_required(models::forwarding_reasoning(
+                        reasoning_delta_callback(
+                            task_thread_id.clone(),
+                            task_turn_id.clone(),
+                            task_event_sequence.clone(),
+                            task_notifications.clone(),
+                        ),
                         agent.send(&turn_config, &input.text, on_chunk),
-                    ))
-                    .await;
+                    )),
+                )
+                .await;
                 for reconnect in reconnects {
                     if let Ok(notification) = AppServerNotification::new(
                         agiworkforce_protocol::developer_session::method::MCP_AUTH_REQUIRED,
@@ -6374,6 +6381,26 @@ fn output_delta_callback(
     })
 }
 
+fn reasoning_delta_callback(
+    thread_id: String,
+    turn_id: String,
+    sequence: Arc<StdMutex<u64>>,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> models::ReasoningSink {
+    Arc::new(move |delta: &str| {
+        emit_agent_event(
+            &thread_id,
+            &turn_id,
+            &sequence,
+            &notifications,
+            AgentEvent::ReasoningDelta(AgentEventReasoningDelta {
+                delta: delta.to_string(),
+                signature: None,
+            }),
+        );
+    })
+}
+
 /// The only way to obtain a turn's `on_chunk`, so the continuation sink it
 /// also installs is not a separate statement a later edit can drop.
 fn install_output_deltas(
@@ -8732,6 +8759,55 @@ mod tests {
         assert_eq!(started.params["event"]["type"], "tool-execution-start");
         assert_eq!(completed.params["sequence"], 1);
         assert_eq!(completed.params["event"]["type"], "tool-execution-end");
+    }
+
+    #[tokio::test]
+    async fn reasoning_reaches_the_client_as_an_agent_event_in_turn_order_without_a_signature() {
+        use crate::tui::app_event::TuiAppEvent;
+
+        let (notifications, mut receiver) = broadcast::channel(4);
+        let sequence = Arc::new(StdMutex::new(0));
+        let reasoning = reasoning_delta_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            sequence.clone(),
+            notifications.clone(),
+        );
+        let tools = tool_event_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            sequence,
+            notifications,
+            Arc::default(),
+        );
+
+        reasoning("Checking which file ");
+        tools(TuiAppEvent::ToolStarted {
+            call_id: "tool-1".to_string(),
+            name: "read_file".to_string(),
+            summary: "Reading AGENTS.md".to_string(),
+            input: serde_json::json!({ "path": "AGENTS.md" }),
+        });
+        reasoning("holds the rule");
+
+        let first = receiver.recv().await.expect("first reasoning notification");
+        let tool = receiver.recv().await.expect("tool notification");
+        let second = receiver
+            .recv()
+            .await
+            .expect("second reasoning notification");
+        assert_eq!(first.method, "turn/agent_event");
+        assert_eq!(first.params["sessionId"], "thread-1");
+        assert_eq!(first.params["turnId"], "turn-1");
+        assert_eq!(first.params["sequence"], 0);
+        assert_eq!(
+            first.params["event"],
+            serde_json::json!({ "type": "reasoning-delta", "delta": "Checking which file " })
+        );
+        assert_eq!(tool.params["sequence"], 1);
+        assert_eq!(second.params["sequence"], 2);
+        assert_eq!(second.params["event"]["delta"], "holds the rule");
+        assert!(second.params["event"].get("signature").is_none());
     }
 
     #[tokio::test]

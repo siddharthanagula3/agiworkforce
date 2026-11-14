@@ -176,6 +176,22 @@ describe('every app header is one fixed row above the content it heads', () => {
     expect(offenders.map(label)).toEqual([]);
   });
 
+  it('starts every shell header at the same inline padding on a phone, so the navigation button does not move between screens', () => {
+    const phoneStart = (site: HeaderSite): string | undefined => {
+      const tokens = site.tokens.always;
+      const pick = (prefix: string) =>
+        tokens.find((token) => token.startsWith(`${prefix}ps-`)) ??
+        tokens.find((token) => token.startsWith(`${prefix}px-`));
+      return (pick('max-md:') ?? pick(''))?.replace(/^max-md:/, '').replace(/^p[sx]-/, '');
+    };
+    const shells = rows.filter((site) =>
+      ['features/chat/pages/WebChatPage.tsx', 'shared/components/layout/WebAppShell.tsx'].includes(
+        site.file,
+      ),
+    );
+    expect(new Set(shells.map(phoneStart))).toEqual(new Set(['2']));
+  });
+
   it('keeps every header row in the flow, so it can never be painted over anchored content', () => {
     const offenders = rows.filter((site) =>
       allTokens(site.tokens).some((token) => OUT_OF_FLOW.has(token)),

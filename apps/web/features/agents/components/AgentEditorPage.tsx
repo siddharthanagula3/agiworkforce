@@ -361,25 +361,28 @@ export function AgentEditorPage({
 
   return (
     <div className="min-h-full bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6 max-md:pt-6">
         {saving ? (
-          <span aria-disabled="true" className="w-fit text-sm text-muted-foreground">
+          <span
+            aria-disabled="true"
+            className="w-fit text-sm text-muted-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center"
+          >
             Agents
           </span>
         ) : (
           <Link
             href={AGENTS_HREF}
-            className="w-fit text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+            className="w-fit text-sm text-muted-foreground hover:text-foreground pointer-coarse:inline-flex pointer-coarse:min-h-11 pointer-coarse:items-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
           >
             Agents
           </Link>
         )}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3 max-md:flex-col max-md:items-start">
             <AgentAvatar icon={draft.icon} accentColor={draft.accentColor} size="lg" />
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <h1 className="truncate text-[24px] font-medium text-foreground">
+                <h1 className="truncate text-[24px] font-medium text-foreground max-md:text-[28px] max-md:leading-[1.2]">
                   {agent ? agent.name : 'New agent'}
                 </h1>
                 {agent ? (
@@ -412,8 +415,7 @@ export function AgentEditorPage({
         </header>
         {agent && !agent.isOwner ? (
           <p className="text-sm text-muted-foreground">
-            {agent.ownerName ?? 'A teammate'} built this agent. You can chat with it; only its owner
-            can change it.
+            {agent.ownerName ?? 'A teammate'} built this agent. Only its owner can change it.
           </p>
         ) : null}
 

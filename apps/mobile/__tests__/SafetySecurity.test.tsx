@@ -157,9 +157,7 @@ describe('Safety & Security settings', () => {
 
     expect(getByText('Reduce sensitive content')).toBeTruthy();
     expect(
-      getByText(
-        'Filter clearly explicit and harmful requests before they reach Local or Cloud models.',
-      ),
+      getByText('Filters clearly explicit and harmful requests in Local and Cloud chats.'),
     ).toBeTruthy();
 
     fireEvent.press(getByRole('switch', { name: 'Reduce sensitive content. Off' }));
@@ -172,9 +170,7 @@ describe('Safety & Security settings', () => {
     const { getByText, getByRole } = render(<SafetySecurityScreen />);
     const safetySwitch = getByRole('switch', { name: 'Reduce sensitive content. On' });
 
-    expect(
-      getByText('Required by age settings. It stays on while minor-safe mode is active.'),
-    ).toBeTruthy();
+    expect(getByText('Required by age settings while minor-safe mode is on.')).toBeTruthy();
     expect(safetySwitch.props.accessibilityState).toEqual({ checked: true, disabled: true });
 
     fireEvent.press(safetySwitch);
