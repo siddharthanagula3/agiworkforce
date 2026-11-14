@@ -1,13 +1,22 @@
-import { render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 
 jest.mock('../MathBlock', () => ({ MathBlock: () => null }));
 jest.mock('../CodeBlockCopyButton', () => ({ CodeBlockCopyButton: () => null }));
 
-import { renderMarkdownContent } from '../MessageContentRenderer';
+const mockExportSourceFile = jest.fn();
+const mockShareFile = jest.fn();
+jest.mock('@/services/fileCreation', () => ({
+  exportSourceFile: (...args: unknown[]) => mockExportSourceFile(...args),
+  shareFile: (...args: unknown[]) => mockShareFile(...args),
+}));
 
-function renderMarkdown(content: string) {
-  return render(<>{renderMarkdownContent(content)}</>);
+import { renderMarkdownContent } from '../MessageContentRenderer';
+import { useCodePreferences } from '@/src/features/settings/code/store';
+import { colors as defaultColors } from '@/src/ui/theme';
+
+function renderMarkdown(content: string, options?: Parameters<typeof renderMarkdownContent>[2]) {
+  return render(<>{renderMarkdownContent(content, undefined, options)}</>);
 }
 
 function rowPaddingLeft(node: ReactTestInstance): number | undefined {
@@ -155,5 +164,103 @@ describe('renderMarkdownContent table cells', () => {
     expect(cellWidth).toBeGreaterThanOrEqual(120);
     expect(cellWidth).toBeLessThanOrEqual(260);
     expect(ancestorStyleNumber(getByText('short'), 'width')).toBeGreaterThanOrEqual(120);
+  });
+});
+
+describe('renderMarkdownContent diff fences', () => {
+  const diff = [
+    '```diff',
+    '-return price + quantity;',
+    '+return price * quantity;',
+    ' context',
+    '```',
+  ].join('\n');
+
+  afterEach(() => {
+    act(() => useCodePreferences.setState({ wrapLongLines: false }));
+  });
+
+  it('paints added and removed lines with the readable diff pairs', () => {
+    const { getAllByTestId, getByText } = renderMarkdown(diff);
+
+    const added = getAllByTestId('markdown-diff-line-added');
+    const removed = getAllByTestId('markdown-diff-line-removed');
+    expect(added).toHaveLength(1);
+    expect(removed).toHaveLength(1);
+    expect(getAllByTestId('markdown-diff-line-context')).toHaveLength(1);
+    expect(added[0]).toHaveStyle({ backgroundColor: defaultColors.diffAddedFill });
+    expect(removed[0]).toHaveStyle({ backgroundColor: defaultColors.diffRemovedFill });
+    expect(getByText('+return price * quantity;')).toHaveStyle({
+      color: defaultColors.diffAddedText,
+    });
+    expect(getByText('-return price + quantity;')).toHaveStyle({
+      color: defaultColors.diffRemovedText,
+    });
+  });
+
+  it('names each changed line for a screen reader', () => {
+    const { getAllByTestId } = renderMarkdown(diff);
+
+    expect(getAllByTestId('markdown-diff-line-added')[0]?.props.accessibilityLabel).toBe(
+      'Added line: +return price * quantity;',
+    );
+    expect(getAllByTestId('markdown-diff-line-removed')[0]?.props.accessibilityLabel).toBe(
+      'Removed line: -return price + quantity;',
+    );
+  });
+
+  it('treats patch and udiff fences as diffs', () => {
+    const { getAllByTestId } = renderMarkdown('```patch\n+added\n```\n\n```udiff\n-gone\n```');
+
+    expect(getAllByTestId('markdown-diff-line-added')).toHaveLength(1);
+    expect(getAllByTestId('markdown-diff-line-removed')).toHaveLength(1);
+  });
+
+  it('scrolls long diff lines sideways until the wrap setting is on', () => {
+    const { getByTestId, rerender } = renderMarkdown(diff);
+    expect(getByTestId('markdown-diff').props.horizontal).toBe(true);
+
+    act(() => useCodePreferences.setState({ wrapLongLines: true }));
+    rerender(<>{renderMarkdownContent(diff)}</>);
+
+    expect(getByTestId('markdown-diff').props.horizontal).toBeUndefined();
+  });
+});
+
+describe('renderMarkdownContent code download', () => {
+  beforeEach(() => {
+    mockExportSourceFile.mockReset();
+    mockShareFile.mockReset();
+  });
+
+  it('saves a finished code block as a source file with its language extension', async () => {
+    mockExportSourceFile.mockResolvedValue({ uri: 'file:///exports/code.py' });
+    mockShareFile.mockResolvedValue(undefined);
+    const { getByLabelText } = renderMarkdown('```python\nprint("hi")\n```');
+
+    fireEvent.press(getByLabelText('Download code'));
+
+    await waitFor(() => expect(mockShareFile).toHaveBeenCalledWith('file:///exports/code.py'));
+    expect(mockExportSourceFile).toHaveBeenCalledWith('print("hi")', 'code', 'py');
+  });
+
+  it('names a diff download with the diff extension', async () => {
+    mockExportSourceFile.mockResolvedValue({ uri: 'file:///exports/code.diff' });
+    mockShareFile.mockResolvedValue(undefined);
+    const { getByLabelText } = renderMarkdown('```diff\n+added\n```');
+
+    fireEvent.press(getByLabelText('Download code'));
+
+    await waitFor(() =>
+      expect(mockExportSourceFile).toHaveBeenCalledWith('+added', 'code', 'diff'),
+    );
+  });
+
+  it('offers no download while the code block is still streaming', () => {
+    const { queryByLabelText } = renderMarkdown('```python\nprint("hi")\n```', {
+      highlightCode: false,
+    });
+
+    expect(queryByLabelText('Download code')).toBeNull();
   });
 });

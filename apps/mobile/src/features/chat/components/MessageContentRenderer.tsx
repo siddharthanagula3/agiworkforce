@@ -26,6 +26,7 @@ import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { Download, Square, SquareCheck } from 'lucide-react-native';
 import { exportSourceFile, shareFile } from '@/services/fileCreation';
 import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
+import { artifactSourceExtension } from '@/src/features/chat/utils/artifactExport';
 
 const MIN_TABLE_COLUMN_WIDTH = 48;
 const MAX_TABLE_COLUMN_WIDTH = 260;
@@ -727,6 +728,72 @@ function renderTextSegment(
 }
 
 const PLAIN_TEXT_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['text', 'txt', 'plaintext']);
+const DIFF_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['diff', 'patch', 'udiff']);
+const CODE_LINE_STYLE = { fontSize: typeScale.footnote, lineHeight: 19, fontFamily: 'Menlo' };
+
+type DiffLineKind = 'added' | 'removed' | 'context';
+
+const DIFF_LINE_LABELS: Record<DiffLineKind, string> = {
+  added: 'Added line: ',
+  removed: 'Removed line: ',
+  context: '',
+};
+
+function diffLineKind(line: string): DiffLineKind {
+  if (line.startsWith('+')) return 'added';
+  if (line.startsWith('-')) return 'removed';
+  return 'context';
+}
+
+function diffLineFill(kind: DiffLineKind, colors: ColorScheme): string {
+  if (kind === 'added') return colors.diffAddedFill;
+  if (kind === 'removed') return colors.diffRemovedFill;
+  return colors.transparent;
+}
+
+function diffLineInk(kind: DiffLineKind, colors: ColorScheme): string {
+  if (kind === 'added') return colors.diffAddedText;
+  if (kind === 'removed') return colors.diffRemovedText;
+  return colors.textPrimary;
+}
+
+function DiffCodeLines({ code, colors }: { code: string; colors: ColorScheme }) {
+  return (
+    <CodeLinesScroller
+      showsIndicator
+      testID="markdown-diff"
+      style={{ paddingTop: 2, paddingBottom: 10 }}
+      contentContainerStyle={{ flexGrow: 1 }}
+    >
+      <View style={{ flexGrow: 1 }}>
+        {code.split('\n').map((line, lineIdx) => {
+          const kind = diffLineKind(line);
+          return (
+            <View
+              key={`${lineIdx}-${line}`}
+              accessible
+              accessibilityLabel={`${DIFF_LINE_LABELS[kind]}${line}`}
+              testID={`markdown-diff-line-${kind}`}
+              style={{ paddingHorizontal: 12, backgroundColor: diffLineFill(kind, colors) }}
+            >
+              <Text style={{ ...CODE_LINE_STYLE, color: diffLineInk(kind, colors) }} selectable>
+                {line || ' '}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </CodeLinesScroller>
+  );
+}
+
+function downloadCodeBlock(code: string, fenceLanguage: string | undefined): void {
+  void exportSourceFile(code, 'code', artifactSourceExtension(fenceLanguage))
+    .then((result) => shareFile(result.uri))
+    .catch(() => {
+      Alert.alert('Download failed', 'Could not save this code as a file. Try again.');
+    });
+}
 
 function renderCodeCard(
   key: string,
@@ -736,21 +803,15 @@ function renderCodeCard(
   renderColors: ColorScheme,
 ): React.ReactElement {
   const languageLabel = fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
-  const codeTokens: SyntaxToken[] = highlightCode
-    ? tokenizeCode(codeContent, fenceLanguage)
-    : [{ text: codeContent, type: 'plain' }];
+  const isDiff = DIFF_FENCE_LANGUAGES.has(fenceLanguage?.toLowerCase() ?? '');
+  const codeTokens: SyntaxToken[] =
+    highlightCode && !isDiff
+      ? tokenizeCode(codeContent, fenceLanguage)
+      : [{ text: codeContent, type: 'plain' }];
   const wrapsLongLines =
     !fenceLanguage || PLAIN_TEXT_FENCE_LANGUAGES.has(fenceLanguage.toLowerCase());
   const codeText = (
-    <Text
-      style={{
-        fontSize: typeScale.footnote,
-        lineHeight: 19,
-        fontFamily: 'Menlo',
-        color: renderColors.textPrimary,
-      }}
-      selectable
-    >
+    <Text style={{ ...CODE_LINE_STYLE, color: renderColors.textPrimary }} selectable>
       {codeTokens.map((token, tokenIdx) =>
         token.type === 'plain' ? (
           token.text
@@ -798,15 +859,36 @@ function renderCodeCard(
         >
           {languageLabel}
         </Text>
-        <CodeBlockCopyButton code={codeContent} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          {highlightCode ? (
+            <Pressable
+              onPress={() => downloadCodeBlock(codeContent, fenceLanguage)}
+              hitSlop={11}
+              accessibilityRole="button"
+              accessibilityLabel="Download code"
+              style={{
+                padding: 4,
+                borderRadius: 4,
+                backgroundColor: renderColors.neutralSurface,
+              }}
+            >
+              <Download size={14} color={renderColors.textMuted} />
+            </Pressable>
+          ) : null}
+          <CodeBlockCopyButton code={codeContent} />
+        </View>
       </View>
-      <CodeLinesScroller
-        alwaysWrap={wrapsLongLines}
-        showsIndicator
-        style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}
-      >
-        {codeText}
-      </CodeLinesScroller>
+      {isDiff ? (
+        <DiffCodeLines code={codeContent} colors={renderColors} />
+      ) : (
+        <CodeLinesScroller
+          alwaysWrap={wrapsLongLines}
+          showsIndicator
+          style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}
+        >
+          {codeText}
+        </CodeLinesScroller>
+      )}
     </View>
   );
 }
