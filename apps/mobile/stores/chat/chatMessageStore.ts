@@ -705,7 +705,7 @@ export const useChatMessageStore = create<MessageState>()(
         const localConversation = get().conversations.find((c) => c.id === id);
         if (!localConversation) {
           const cloudStore = getCloudStore();
-          cloudStore.getState().patchCloudConversation(id, { title });
+          cloudStore.getState().patchCloudConversation(id, { title, userTitlePending: true });
           if (
             shouldSyncConversationRemote(
               cloudStore.getState().conversations.find((c) => c.id === id),
