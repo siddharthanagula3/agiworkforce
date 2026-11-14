@@ -609,12 +609,14 @@
 
   [data-design='agi'] .agi-ds-btn-row > .agi-ds-link,
   [data-design='agi'] .agi-ds-availability-links > .agi-ds-link,
+  [data-design='agi'] .agi-ds-card > .agi-ds-link,
   [data-design='agi'] .agi-ds-scrollfeature .agi-ds-prose > .agi-ds-link {
     position: relative;
   }
 
   [data-design='agi'] .agi-ds-btn-row > .agi-ds-link::before,
   [data-design='agi'] .agi-ds-availability-links > .agi-ds-link::before,
+  [data-design='agi'] .agi-ds-card > .agi-ds-link::before,
   [data-design='agi'] .agi-ds-scrollfeature .agi-ds-prose > .agi-ds-link::before {
     content: '';
     position: absolute;
