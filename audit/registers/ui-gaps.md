@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 48e9d80cd854c0c7db00107277841aed892a9eca97946163d48e71ba3c4b127e -->
+<!-- ui-gaps-csv-sha256: 19d609d84b3f40b32060dd8263f6509c5a4e1869bcda3132533efbd1696a6326 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -33,8 +33,8 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  175 |
-| In Progress |   10 |
+| Open        |  174 |
+| In Progress |   11 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |  128 |
@@ -1650,7 +1650,7 @@ The terminal reachability defect is fixed with a bottom dock, but the remaining 
 
 **Evidence**
 
-DesktopShellV3.tsx now mounts TerminalWorkspace in the conventional bottom dock. ExecutionSidecar, ExecutionDashboard, BrowserPanel, FilesPanel, and git review components remain contextual to their respective execution or review owners; no shared panel-state or run-artifact contract unifies them.
+DesktopShellV3.tsx now mounts TerminalWorkspace in the conventional bottom dock. ExecutionSidecar, ExecutionDashboard, BrowserPanel, FilesPanel, and git review components remain contextual to their respective execution or review owners; no shared panel-state or run-artifact contract unifies them. The public Electron Desktop has two more right panes in a local Code session, Browser (built in October, on main since 2026-11-13) and iOS Simulator (added 2026-11-13). Each has its own owner (apps/desktop/electron/browserPane.ts and apps/desktop/electron/runtime/simulatorService.ts) and its own button in apps/web/features/code/components/LocalSessionPanel.tsx; one pane docks at a time and the terminal stays in the bottom dock, so this is still not one shared rail.
 
 **Suggested fix**
 
@@ -2175,15 +2175,15 @@ Not planned until a typed vocabulary contract defines normalization, limits, per
 
 **Gap**
 
-Existing browser views, execution automation, system link opening, and the Chrome extension are separate capabilities. Desktop has no single cookie jar, autofill store, download manager, clear-data operation, or navigation-control policy to back the reference settings.
+Existing browser views, execution automation, system link opening, and the Chrome extension are separate capabilities. Desktop has no single cookie jar, autofill store, download manager, clear-data operation, or navigation-control policy to back the reference settings. Since 2026-11-13 main carries one owner for pages shown inside the Electron Desktop: the browser pane keeps them in a profile of its own that persists, asks before loading each new site, refuses every permission request, and has a settings section that lists allowed and blocked sites and clears the pane's data. There is still no autofill store, no download manager and no downloads-location contract.
 
 **Evidence**
 
-BrowserViewer, BrowserPanel, execution browser events, and the extension use different stores and trust boundaries. Repository searches find no Desktop-owned browsing-data inventory, cookie clear command, downloads-location contract, or browser autofill manager.
+BrowserViewer, BrowserPanel, execution browser events, and the extension use different stores and trust boundaries. Repository searches find no Desktop-owned browsing-data inventory, cookie clear command, downloads-location contract, or browser autofill manager. apps/desktop/electron/browserPane.ts owns the pane session (the persist:agi-browser-pane partition, permission and device handlers that refuse, a per-site allow and block list, a clear-data command, no download rule) and apps/web/features/desktop-host/components/BrowserPaneSettings.tsx is its settings section.
 
 **Suggested fix**
 
-Not planned until a dedicated browser service owns session isolation, storage, control enablement, navigation destination, clear-data scopes, downloads, autofill, retention, and audit semantics.
+Partly built: the pane has a site list and a clear-data command with a settings section. Still to decide and build: a download rule, retention, autofill and audit semantics. Cookie import waits on the owner (audit/decisions/founder-decisions.md).
 
 **Reference screenshot(s)**
 
@@ -4539,22 +4539,22 @@ Add session-state auto-classification and model-switch-on-flag toggles to the Ag
 
 ### GAP-197, No iOS Simulator integration or pull-request automation settings for AGI Code
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** In Progress
+- **Owner:** Desktop
 - **Surface/type:** desktop · missing-control
 - **Reference:** Claude · macOS desktop · Claude Code settings > Mobile simulators + Pull requests
 
 **Gap**
 
-Reference offers an iOS Simulator toggle (agent drives the simulator, takes screenshots) and a Pull requests section: branch prefix field, create-PR-automatically toggle, autofix-PR-on-CI-failure toggle, and auto-archive-session-after-PR-merge toggle. agiworkforce's coding agent settings have none of these.
+Reference offers an iOS Simulator toggle (agent drives the simulator, takes screenshots) and a Pull requests section: branch prefix field, create-PR-automatically toggle, autofix-PR-on-CI-failure toggle, and auto-archive-session-after-PR-merge toggle. agiworkforce's coding agent settings have none of these. Since 2026-11-13 the Electron Desktop has an iOS Simulator pane in a local Code session on macOS: device picker, start and shut down, live screen, Home, screenshot, recording with a timer, mark up and add to chat, appearance, a clean status bar, clipboard both ways, zoom, expand and a floating card. It is gated by the simulator.control permission. Still missing: the agent driving the simulator, tap and type from the pane, rotate, the settings toggle, and every pull-request automation setting.
 
 **Evidence**
 
-grep -i 'ios simulator' across apps/ found only an unrelated mobile ChatInput.tsx match; grep -i 'pull request' across apps/desktop found only git/mcp API code, no settings UI
+grep -i 'ios simulator' across apps/ found only an unrelated mobile ChatInput.tsx match; grep -i 'pull request' across apps/desktop found only git/mcp API code, no settings UI 2026-11-13: apps/desktop/electron/runtime/simulatorService.ts (xcrun simctl only), the simulator_* commands in apps/desktop/electron/runtime/dispatcher.ts, apps/web/features/code/components/LocalSimulatorPane.tsx and their tests. The service was run against a live simulator inside an Electron process on 2026-11-13 (frames, screenshot, recording, appearance, clean status bar, Home, shut down, start); the pane screen has not been seen in the built app.
 
 **Suggested fix**
 
-Add Mobile simulators and Pull requests sections to AgiCode settings with the four PR-automation toggles and a branch-prefix text field.
+Decide how tap and type reach the simulator and whether the agent may drive it (audit/decisions/founder-decisions.md), then add the settings toggle. The Pull requests settings section is untouched and still to build.
 
 **Reference screenshot(s)**
 

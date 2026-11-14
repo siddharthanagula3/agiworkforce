@@ -12230,6 +12230,11 @@
     "boosted_importance": [
       "crates/agiworkforce-agent-core/src/memory.rs"
     ],
+    "bootSimulator": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
     "BOT_CHALLENGE_ENFORCEMENT_ENV_VAR": [
       "apps/web/lib/security/bot-challenge-routes.ts"
     ],
@@ -16152,6 +16157,9 @@
       "apps/cli/src/tier_cache.rs",
       "apps/desktop/src-tauri/src/features/speech/dictation/mod.rs",
       "apps/desktop/src-tauri/src/sys/commands/mod.rs"
+    ],
+    "CAPTURE_ANNOTATOR_COPY": [
+      "apps/web/features/code/capture-annotator.ts"
     ],
     "capture_before": [
       "apps/desktop/src-tauri/src/automation/computer_use/session.rs"
@@ -27142,6 +27150,9 @@
     "configureSandboxParent": [
       "infrastructure/sandbox/configure.mjs"
     ],
+    "configureSimulator": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
     "ConfigUse": [
       "crates/agiworkforce-worktree/src/config_guard.rs"
     ],
@@ -31182,6 +31193,11 @@
     ],
     "copySharedChatInto": [
       "apps/mobile/src/features/shared-links/continueSharedChat.ts"
+    ],
+    "copySimulatorClipboard": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
     ],
     "CopyStatus": [
       "apps/mobile/src/shared/hooks/useCopyAction.ts"
@@ -36927,6 +36943,11 @@
     ],
     "DeleteShortcutMessage": [
       "apps/extension/src/types.ts"
+    ],
+    "deleteSimulatorCapture": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
     ],
     "deleteSiteAndData": [
       "apps/mobile/src/features/sites/service.ts"
@@ -49598,6 +49619,9 @@
       "packages/ui/ui/src/directory/highlight.ts",
       "packages/ui/ui/src/directory/index.ts"
     ],
+    "fileFromDataUrl": [
+      "apps/web/features/code/hooks/use-simulator.ts"
+    ],
     "FileHash": [
       "apps/cli/src/sync.rs"
     ],
@@ -51803,6 +51827,12 @@
       "packages/platform/utils/src/format.ts",
       "packages/platform/utils/src/index.ts"
     ],
+    "formatCaptureSize": [
+      "apps/web/features/code/simulator-pane.ts"
+    ],
+    "formatCaptureTime": [
+      "apps/web/features/code/simulator-pane.ts"
+    ],
     "formatCatalogPrice": [
       "apps/web/features/billing/lib/plan-display.ts"
     ],
@@ -51922,6 +51952,9 @@
     ],
     "formatDurationMs": [
       "apps/web/features/admin/lib/operator-format.ts"
+    ],
+    "formatElapsed": [
+      "apps/web/features/code/simulator-pane.ts"
     ],
     "formatEpochMs": [
       "apps/web/features/admin/lib/operator-format.ts"
@@ -61474,6 +61507,9 @@
     "hourlyCronMinute": [
       "apps/web/lib/legal/published-cron-schedules.ts"
     ],
+    "House": [
+      "packages/ui/icons/src/glyphs/Media.tsx"
+    ],
     "hover": [
       "apps/desktop/src-tauri/src/automation/browser/dom_operations.rs",
       "apps/extension/src/features/computer-use/cdpDriver.ts"
@@ -64678,6 +64714,7 @@
       "scripts/lib/workspace-policy-enforcement.mjs"
     ],
     "invokeDesktopRuntime": [
+      "apps/web/features/desktop-host/lib/runtime-client.ts",
       "packages/client/client-runtime/src/electronRuntime.ts",
       "packages/client/client-runtime/src/index.ts"
     ],
@@ -67996,6 +68033,26 @@
     "isSignInOwedForEndedSession": [
       "apps/mobile/src/features/auth/services/endedSession.ts"
     ],
+    "isSimulatorAppearance": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "isSimulatorCaptureId": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "isSimulatorCommand": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "isSimulatorStatusBar": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "isSimulatorUdid": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
     "isSingleUse": [
       "apps/desktop/electron/runtime/permissionCore.ts"
     ],
@@ -69662,6 +69719,9 @@
     ],
     "LatestBlock": [
       "apps/web/features/marketing/components/FlagshipSections.tsx"
+    ],
+    "LatestCapture": [
+      "apps/web/features/code/hooks/use-simulator.ts"
     ],
     "latestConversationImageAssetId": [
       "apps/web/lib/server/media-assets.ts"
@@ -73525,6 +73585,12 @@
       "packages/ui/unified-chat/src/components/LocalByokHandoffDialog.tsx",
       "packages/ui/unified-chat/src/index.ts"
     ],
+    "LocalCaptureAnnotator": [
+      "apps/web/features/code/components/LocalCaptureAnnotator.tsx"
+    ],
+    "LocalCaptureAnnotatorProps": [
+      "apps/web/features/code/components/LocalCaptureAnnotator.tsx"
+    ],
     "LocalChangesPanel": [
       "apps/web/features/code/components/LocalChangesPanel.tsx"
     ],
@@ -74277,6 +74343,12 @@
       "crates/agiworkforce-protocol/bindings/LocalShellStatus.ts",
       "crates/agiworkforce-protocol/src/models.rs",
       "packages/contracts/types/src/generated/protocol/LocalShellStatus.ts"
+    ],
+    "LocalSimulatorPane": [
+      "apps/web/features/code/components/LocalSimulatorPane.tsx"
+    ],
+    "LocalSimulatorPaneProps": [
+      "apps/web/features/code/components/LocalSimulatorPane.tsx"
     ],
     "localSkippedFilesLine": [
       "apps/web/features/code/local-code.ts"
@@ -89103,6 +89175,10 @@
     "onShellIdentityReported": [
       "apps/desktop/electron/shellIdentity.ts"
     ],
+    "onSimulatorChanged": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
     "onWorkspaceChanged": [
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/runtime-client.ts"
@@ -95186,6 +95262,9 @@
     "PICTURE_NEEDLE": [
       "apps/web/features/chat/lib/__tests__/picture-fixtures.ts"
     ],
+    "PictureInPicture": [
+      "packages/ui/icons/src/glyphs/Media.tsx"
+    ],
     "PictureMetadataError": [
       "apps/mobile/src/features/media/image-metadata.ts"
     ],
@@ -99023,6 +99102,11 @@
     ],
     "PressPage": [
       "apps/web/app/press/page.tsx"
+    ],
+    "pressSimulatorHome": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
     ],
     "prev": [
       "apps/cli/src/design_system.rs"
@@ -105875,6 +105959,27 @@
     ],
     "readSignInScreenAction": [
       "apps/desktop/electron/signInScreen.ts"
+    ],
+    "readSimulatorCapture": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
+    "readSimulatorDevices": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "readSimulatorFrame": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
+    "readSimulatorSettings": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
+    "readSimulatorStatus": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
     ],
     "readSingleSkillFromArchive": [
       "apps/web/features/plugins/server/directory/archive.ts"
@@ -115871,6 +115976,11 @@
     "revealInFileManager": [
       "apps/desktop/electron/runtime/appsService.ts"
     ],
+    "revealSimulatorCapture": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
     "revealWorkspacePath": [
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/runtime-client.ts"
@@ -121079,6 +121189,9 @@
     "SCREEN_STEP_COMMANDS": [
       "apps/desktop/electron/runtime/dispatcher.ts"
     ],
+    "screenAlt": [
+      "apps/web/features/code/simulator-pane.ts"
+    ],
     "ScreenAnalysis": [
       "apps/desktop/src-tauri/src/automation/computer_use/mod.rs",
       "apps/desktop/src-tauri/src/automation/computer_use/types.rs"
@@ -121151,6 +121264,12 @@
     "SCREENSHOTS": [
       "apps/mobile/scripts/screenshots/catalog.ts",
       "apps/mobile/scripts/screenshots/pipeline.ts"
+    ],
+    "screenStale": [
+      "apps/web/features/code/simulator-pane.ts"
+    ],
+    "screenWaiting": [
+      "apps/web/features/code/simulator-pane.ts"
     ],
     "SCRIPT_RE": [
       "apps/cli/src/features/exec/tools/common/mod.rs"
@@ -123395,6 +123514,11 @@
     "sendChromeHeartbeatIfDue": [
       "apps/extension/src/features/cloud-bridge/deviceHeartbeat.ts"
     ],
+    "sendClipboardToSimulator": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
     "sendCloudApprovalResume": [
       "apps/desktop/src/api/cloudApi.ts"
     ],
@@ -125168,6 +125292,16 @@
     ],
     "setSignedIn": [
       "apps/mobile/services/notifications.ts"
+    ],
+    "setSimulatorAppearance": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
+    "setSimulatorStatusBar": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
     ],
     "setSkillInstallOverride": [
       "apps/web/lib/services/skill-install-service.ts"
@@ -127124,6 +127258,14 @@
     "shutdownOtel": [
       "services/signaling-server/src/otel.ts"
     ],
+    "shutdownSimulator": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
+    "shutDownSimulator": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
     "siblingGroup": [
       "apps/web/features/chat/lib/messageThread.ts",
       "packages/contracts/cloud-contracts/src/message-thread.ts"
@@ -127605,6 +127747,12 @@
     "SimctlDeviceListing": [
       "apps/mobile/scripts/screenshots/pipeline.ts"
     ],
+    "SimctlOutput": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "SimctlRecording": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
     "SIMPLE_CHAT_MAX_CHARS": [
       "packages/ai/routing/src/index.ts",
       "packages/ai/routing/src/task-family.ts"
@@ -127614,6 +127762,142 @@
     ],
     "simulateAdminPolicyChange": [
       "apps/web/lib/services/organization-policy-service.ts"
+    ],
+    "SIMULATOR_APPEARANCES": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_CAPTURE_KINDS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_CAPTURE_LIMIT": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_CLIPBOARD_TEXT_LIMIT": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_COMMANDS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_FRAME_INTERVAL_MS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_PANE_COPY": [
+      "apps/web/features/code/simulator-pane.ts"
+    ],
+    "SIMULATOR_RECORDING_LIMIT_MS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_STATUS_BARS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_UNAVAILABLE_MESSAGES": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SIMULATOR_UNAVAILABLE_REASONS": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorAppearance": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorBusy": [
+      "apps/web/features/code/hooks/use-simulator.ts"
+    ],
+    "SimulatorCapture": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorCaptureImage": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorCaptureKind": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorClipboardResult": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorCommand": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorDevice": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "simulatorFrame": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "SimulatorFrame": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorLoad": [
+      "apps/web/features/code/hooks/use-simulator.ts"
+    ],
+    "simulatorPaneSupported": [
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
+    "SimulatorRecording": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "simulatorRecordingActive": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "SimulatorRefusal": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "SimulatorRefused": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "simulatorRuntimeLabel": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "simulatorSettings": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "SimulatorSettings": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorState": [
+      "apps/web/features/code/hooks/use-simulator.ts"
+    ],
+    "simulatorStatus": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "SimulatorStatus": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "SimulatorStatusBar": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
+    ],
+    "simulatorSupported": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "SimulatorTools": [
+      "apps/desktop/electron/runtime/simulatorService.ts"
+    ],
+    "SimulatorUnavailableReason": [
+      "packages/contracts/local-runtime/src/index.ts",
+      "packages/contracts/local-runtime/src/simulator.ts"
     ],
     "single_attempt": [
       "apps/desktop/src-tauri/src/sys/api/client.rs"
@@ -129369,6 +129653,9 @@
     "smart_commit": [
       "apps/desktop/src-tauri/src/features/terminal/ai_assistant.rs"
     ],
+    "Smartphone": [
+      "packages/ui/icons/src/glyphs/Media.tsx"
+    ],
     "smoothVoiceLevel": [
       "apps/mobile/src/features/voice/components/VoiceOrb.tsx"
     ],
@@ -130844,6 +131131,11 @@
     "startServerSpeech": [
       "apps/mobile/src/features/voice/services/serverSpeech.ts"
     ],
+    "startSimulatorRecording": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
+    ],
     "startSkillCapture": [
       "apps/desktop/electron/runtime/skillCapture.ts",
       "apps/web/features/skill-recorder/lib/skill-capture-client.ts"
@@ -131134,6 +131426,9 @@
     ],
     "StatusBarAlignment": [
       "apps/extension-vscode/src/__tests__/__mocks__/vscode.ts"
+    ],
+    "StatusFailure": [
+      "apps/web/features/code/hooks/use-simulator.ts"
     ],
     "statusLabel": [
       "apps/web/features/models/lib/model-presentation.ts"
@@ -131553,6 +131848,11 @@
     ],
     "stopSharingProject": [
       "apps/mobile/src/features/projects/projectSharing.ts"
+    ],
+    "stopSimulatorRecording": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
     ],
     "stopSkillCapture": [
       "apps/desktop/electron/runtime/skillCapture.ts",
@@ -134950,6 +135250,11 @@
     ],
     "takeScheduleDraft": [
       "apps/extension/src/features/side-panel/schedulesSection.ts"
+    ],
+    "takeSimulatorScreenshot": [
+      "apps/desktop/electron/runtime/simulatorService.ts",
+      "apps/web/features/desktop-host/index.ts",
+      "apps/web/features/desktop-host/lib/simulator-client.ts"
     ],
     "takeSnapshot": [
       "packages/tools/browser-tool/src/snapshot.ts"
@@ -145579,6 +145884,12 @@
     ],
     "useSimpleModeStore": [
       "apps/desktop/src/stores/ui.ts"
+    ],
+    "useSimulator": [
+      "apps/web/features/code/hooks/use-simulator.ts"
+    ],
+    "UseSimulatorOptions": [
+      "apps/web/features/code/hooks/use-simulator.ts"
     ],
     "useSiteActions": [
       "apps/web/features/sites/hooks/useSiteActions.ts"

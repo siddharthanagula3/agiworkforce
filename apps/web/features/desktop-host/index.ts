@@ -131,6 +131,26 @@ export {
   type BrowserHandoff,
   type BrowserHandoffOutcome,
 } from './lib/browser-handoff';
+export {
+  bootSimulator,
+  copySimulatorClipboard,
+  deleteSimulatorCapture,
+  onSimulatorChanged,
+  pressSimulatorHome,
+  readSimulatorCapture,
+  readSimulatorFrame,
+  readSimulatorSettings,
+  readSimulatorStatus,
+  revealSimulatorCapture,
+  sendClipboardToSimulator,
+  setSimulatorAppearance,
+  setSimulatorStatusBar,
+  shutdownSimulator,
+  simulatorPaneSupported,
+  startSimulatorRecording,
+  stopSimulatorRecording,
+  takeSimulatorScreenshot,
+} from './lib/simulator-client';
 export { downloadInWindow } from './lib/in-window-download';
 export { useDesktopDeepLinks } from './hooks/use-desktop-deep-links';
 export { useDesktopExternalLinks } from './hooks/use-desktop-external-links';

@@ -2,7 +2,7 @@ import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   APPLICATION_COMMANDS,
   BROWSER_PAIRING_COMMANDS,
@@ -26,6 +26,8 @@ import {
   SSH_ENVIRONMENT_COMMANDS,
   PERMISSION_COMMANDS,
   REMOTE_CONTROL_COMMANDS,
+  SIMULATOR_COMMANDS,
+  SIMULATOR_UNAVAILABLE_MESSAGES,
   SHELL_COMMANDS,
   SKILL_CAPTURE_COMMANDS,
   WINDOW_LAYOUT_COMMANDS,
@@ -243,6 +245,57 @@ vi.mock('../runtime/appsService', () => ({
   openWithDefaultApplication,
   revealInFileManager,
 }));
+const SIMULATOR_STATUS = {
+  available: true,
+  unavailableReason: null,
+  devices: [],
+  recording: null,
+  captures: [],
+};
+const simulator = vi.hoisted(() => {
+  class SimulatorRefused extends Error {
+    readonly reason: string;
+    constructor(reason: string, message: string) {
+      super(message);
+      this.reason = reason;
+    }
+  }
+  const status = {
+    available: true,
+    unavailableReason: null,
+    devices: [],
+    recording: null,
+    captures: [],
+  };
+  const settings = { appearance: 'light', statusBar: 'live' };
+  return {
+    SimulatorRefused,
+    bootSimulator: vi.fn(async (..._args: unknown[]) => status),
+    copySimulatorClipboard: vi.fn(async (..._args: unknown[]) => ({ characters: 3 })),
+    deleteSimulatorCapture: vi.fn(async (..._args: unknown[]) => status),
+    pressSimulatorHome: vi.fn(async (..._args: unknown[]) => true),
+    readSimulatorCapture: vi.fn(async (..._args: unknown[]) => ({
+      dataUrl: 'data:image/png;base64,AAAA',
+      name: 'x.png',
+    })),
+    revealSimulatorCapture: vi.fn(async (..._args: unknown[]) => true),
+    sendClipboardToSimulator: vi.fn(async (..._args: unknown[]) => ({ characters: 3 })),
+    setSimulatorAppearance: vi.fn(async (..._args: unknown[]) => settings),
+    setSimulatorStatusBar: vi.fn(async (..._args: unknown[]) => settings),
+    shutdownSimulator: vi.fn(async (..._args: unknown[]) => status),
+    simulatorFrame: vi.fn(async (..._args: unknown[]) => ({
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      takenAtMs: 1,
+    })),
+    simulatorSettings: vi.fn(async (..._args: unknown[]) => settings),
+    simulatorStatus: vi.fn(async (..._args: unknown[]) => status),
+    simulatorSupported: vi.fn(() => true),
+    startSimulatorRecording: vi.fn(async (..._args: unknown[]) => status),
+    stopSimulatorRecording: vi.fn(async (..._args: unknown[]) => status),
+    takeSimulatorScreenshot: vi.fn(async (..._args: unknown[]) => ({ id: 'capture' })),
+  };
+});
+vi.mock('../runtime/simulatorService', () => simulator);
 vi.mock('../runtime/clipboardService', () => ({ readClipboard, readImagePng: vi.fn() }));
 vi.mock('../runtime/filesystemService', () => ({
   OPEN_FILE_FOR_CHECKED_READ: 0,
@@ -456,6 +509,7 @@ const window = {
 } as unknown as Parameters<typeof dispatch>[0];
 
 beforeEach(() => {
+  simulator.simulatorSupported.mockReturnValue(true);
   vi.clearAllMocks();
   resetApprovalConfirmations();
   resetNativeQuestions();
@@ -3345,6 +3399,231 @@ describe('skill capture', () => {
  * what this shell answers. A name listed there with no case behind it, or a
  * case added without listing it, is the drift this holds shut.
  */
+const PHONE = 'A1B2C3D4-0000-4000-8000-000000000001';
+const CAPTURE_ID = '0b9e6c1a-2f4d-4a3b-9c8d-1e2f3a4b5c6d';
+
+describe('the iOS Simulator commands', () => {
+  const GATED: Array<[string, Record<string, unknown>, Mock, unknown[]]> = [
+    ['simulator_status', {}, simulator.simulatorStatus, []],
+    ['simulator_boot', { udid: PHONE }, simulator.bootSimulator, [PHONE]],
+    ['simulator_shutdown', { udid: PHONE }, simulator.shutdownSimulator, [PHONE]],
+    ['simulator_frame', { udid: PHONE }, simulator.simulatorFrame, [PHONE]],
+    ['simulator_settings', { udid: PHONE }, simulator.simulatorSettings, [PHONE]],
+    [
+      'simulator_set_appearance',
+      { udid: PHONE, appearance: 'dark' },
+      simulator.setSimulatorAppearance,
+      [PHONE, 'dark'],
+    ],
+    [
+      'simulator_set_status_bar',
+      { udid: PHONE, statusBar: 'clean' },
+      simulator.setSimulatorStatusBar,
+      [PHONE, 'clean'],
+    ],
+    ['simulator_home', { udid: PHONE }, simulator.pressSimulatorHome, [PHONE]],
+    ['simulator_screenshot', { udid: PHONE }, simulator.takeSimulatorScreenshot, [PHONE]],
+    ['simulator_record_start', { udid: PHONE }, simulator.startSimulatorRecording, [PHONE]],
+    ['simulator_clipboard_get', { udid: PHONE }, simulator.copySimulatorClipboard, [PHONE]],
+    ['simulator_clipboard_send', { udid: PHONE }, simulator.sendClipboardToSimulator, [PHONE]],
+    ['simulator_capture_read', { id: CAPTURE_ID }, simulator.readSimulatorCapture, [CAPTURE_ID]],
+    [
+      'simulator_capture_reveal',
+      { id: CAPTURE_ID },
+      simulator.revealSimulatorCapture,
+      [CAPTURE_ID],
+    ],
+    [
+      'simulator_capture_delete',
+      { id: CAPTURE_ID },
+      simulator.deleteSimulatorCapture,
+      [CAPTURE_ID],
+    ],
+  ];
+  const STOP: [string, Record<string, unknown>, Mock, unknown[]] = [
+    'simulator_record_stop',
+    {},
+    simulator.stopSimulatorRecording,
+    [],
+  ];
+
+  const SUPPORTED = 'simulator_supported';
+
+  it('are each covered here', () => {
+    expect(new Set([SUPPORTED, ...[...GATED, STOP].map(([command]) => command)])).toEqual(
+      new Set(SIMULATOR_COMMANDS),
+    );
+  });
+
+  it('says whether this build can run the simulator without asking for anything', async () => {
+    getPermissionState.mockReturnValue('denied');
+
+    expect(await dispatch(window, SUPPORTED, {})).toEqual({ ok: true, value: true });
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(commandGates(SUPPORTED)).toEqual(['none']);
+  });
+
+  it.each(GATED)(
+    '%s asks for simulator.control, and stops on a refusal',
+    async (command, args, service) => {
+      getPermissionState.mockReturnValue('prompt');
+      requestPermission.mockResolvedValue('denied');
+
+      const response = await dispatch(window, command, args);
+
+      expect(requestPermission).toHaveBeenCalledWith(
+        window,
+        'simulator.control',
+        { kind: 'global' },
+        expect.any(String),
+      );
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: 'permission-denied', capability: 'simulator.control' },
+      });
+      expect(service).not.toHaveBeenCalled();
+      expect(commandGates(command)).toEqual(['session']);
+    },
+  );
+
+  it.each(GATED)('%s does not ask again once refused for good', async (command, args, service) => {
+    getPermissionState.mockReturnValue('denied');
+
+    const response = await dispatch(window, command, args);
+
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ ok: false, error: { code: 'permission-denied' } });
+    expect(service).not.toHaveBeenCalled();
+  });
+
+  it.each(GATED)(
+    '%s runs once allowed, with the arguments it checked',
+    async (command, args, service, expected) => {
+      getPermissionState.mockReturnValue('prompt');
+      requestPermission.mockResolvedValue('granted');
+
+      const response = await dispatch(window, command, args);
+
+      expect(response).toMatchObject({ ok: true });
+      expect(service).toHaveBeenCalledOnce();
+      expect(service).toHaveBeenCalledWith(...expected);
+      expect(consumeSingleUse).toHaveBeenCalledWith('simulator.control', { kind: 'global' });
+    },
+  );
+
+  it('stops a recording without asking for anything', async () => {
+    getPermissionState.mockReturnValue('denied');
+
+    const response = await dispatch(window, STOP[0], {});
+
+    expect(response).toEqual({ ok: true, value: SIMULATOR_STATUS });
+    expect(simulator.stopSimulatorRecording).toHaveBeenCalledOnce();
+    expect(requestPermission).not.toHaveBeenCalled();
+    expect(commandGates(STOP[0])).toEqual(['none']);
+  });
+
+  it('refuses an appearance or status bar that is not one of the listed values', async () => {
+    for (const appearance of [undefined, 'auto', 'Dark', 1]) {
+      expect(
+        await dispatch(window, 'simulator_set_appearance', { udid: PHONE, appearance }),
+        String(appearance),
+      ).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    }
+    for (const statusBar of [undefined, 'override', 'Clean', 0]) {
+      expect(
+        await dispatch(window, 'simulator_set_status_bar', { udid: PHONE, statusBar }),
+        String(statusBar),
+      ).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    }
+    expect(simulator.setSimulatorAppearance).not.toHaveBeenCalled();
+    expect(simulator.setSimulatorStatusBar).not.toHaveBeenCalled();
+  });
+
+  it.each([...GATED, STOP])(
+    '%s answers unsupported-platform, and asks nothing, off macOS',
+    async (command, args, service) => {
+      simulator.simulatorSupported.mockReturnValue(false);
+      getPermissionState.mockReturnValue('prompt');
+
+      const response = await dispatch(window, command, args);
+
+      expect(response).toEqual({
+        ok: false,
+        error: {
+          code: 'unsupported-platform',
+          message: SIMULATOR_UNAVAILABLE_MESSAGES['unsupported-platform'],
+        },
+      });
+      expect(requestPermission).not.toHaveBeenCalled();
+      expect(getPermissionState).not.toHaveBeenCalled();
+      expect(service).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['unsupported', 'unsupported-platform'],
+    ['unavailable', 'runtime-unavailable'],
+    ['busy', 'conflict'],
+    ['not-found', 'not-found'],
+    ['invalid', 'invalid-arguments'],
+    ['failed', 'io-error'],
+  ])(
+    'answers a %s refusal with the code %s and the message of the service',
+    async (reason, code) => {
+      simulator.bootSimulator.mockRejectedValueOnce(
+        new simulator.SimulatorRefused(reason, 'The simulator said no.'),
+      );
+
+      const response = await dispatch(window, 'simulator_boot', { udid: PHONE });
+
+      expect(response).toEqual({ ok: false, error: { code, message: 'The simulator said no.' } });
+    },
+  );
+
+  it('answers a synchronous refusal of a frame the same way', async () => {
+    simulator.simulatorFrame.mockImplementationOnce(() => {
+      throw new simulator.SimulatorRefused('invalid', '"udid" must be a simulator identifier.');
+    });
+
+    expect(await dispatch(window, 'simulator_frame', { udid: 'x' })).toMatchObject({
+      ok: false,
+      error: { code: 'invalid-arguments' },
+    });
+  });
+
+  it('answers a failure it does not know with a generic message, never the cause', async () => {
+    simulator.simulatorStatus.mockRejectedValueOnce(new Error('/Users/me/secret path leaked'));
+
+    const response = await dispatch(window, 'simulator_status', {});
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'io-error' } });
+    expect(JSON.stringify(response)).not.toContain('secret');
+  });
+
+  it('stops a recording when simulator.control is revoked, before the grant goes', async () => {
+    const response = await dispatch(window, 'permission_revoke', {
+      capability: 'simulator.control',
+      scope: { kind: 'global' },
+    });
+
+    expect(response).toEqual({ ok: true, value: REVIEW });
+    expect(simulator.stopSimulatorRecording).toHaveBeenCalledOnce();
+    expect(revokePermission).toHaveBeenCalledWith('simulator.control', { kind: 'global' });
+    expect(simulator.stopSimulatorRecording.mock.invocationCallOrder[0]).toBeLessThan(
+      revokePermission.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it('leaves a recording alone when another permission is revoked', async () => {
+    await dispatch(window, 'permission_revoke', {
+      capability: 'computer.use',
+      scope: { kind: 'global' },
+    });
+
+    expect(simulator.stopSimulatorRecording).not.toHaveBeenCalled();
+  });
+});
+
 describe('the commands the contract lists', () => {
   const LISTED = new Set<string>([
     ...WORKSPACE_COMMANDS,
@@ -3363,6 +3642,7 @@ describe('the commands the contract lists', () => {
     ...DEVELOPER_SESSION_COMMANDS,
     ...STORAGE_COMMANDS,
     ...BROWSER_PANE_COMMANDS,
+    ...SIMULATOR_COMMANDS,
     ...DEVICE_STEP_TOOLS.map(deviceStepCommand),
     DEVICE_REGISTRY_PROFILE_COMMAND,
   ]);

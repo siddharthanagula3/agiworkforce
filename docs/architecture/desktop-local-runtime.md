@@ -300,7 +300,7 @@ minute and three Cancels quiet the rest of that kind (`nativeQuestions.ts`).
 | PTY terminal                          | ✅ user-only shell from the CLI's `terminal/*`, sandboxed, network off; line runner before it  |
 | Embedded browser and CDP tools        | ⚠️ browser pane for local addresses and approved sites; agent tools use the paired Chrome      |
 | Computer use                          | ✅ opt-in; session grant, a native yes per run, asked per app                                  |
-| iOS simulator, Android emulator       | ❌ not started                                                                                 |
+| iOS simulator, Android emulator       | ⚠️ iOS on macOS through `simctl`: screen, captures, settings; no tap or type; no Android       |
 | Worktree isolation, parallel sessions | ✅ worktrees the CLI makes, admitted per run                                                   |
 | Local MCP                             | ✅ project servers, each launch approved in main                                               |
 | Scheduled tasks                       | ✅ local routines: a scheduled prompt in an approved folder, run as a developer session        |

@@ -21,6 +21,7 @@ import {
   Globe,
   PanelLeft,
   PanelsTopLeft,
+  Smartphone,
   Square,
   TerminalSquare,
   Minimize2,
@@ -78,6 +79,7 @@ import {
   openWorkspaceInEditor,
   useDeveloperCapabilities,
   browserPaneSupported,
+  simulatorPaneSupported,
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import { getModelMetadata } from '@shared/config/llm';
@@ -123,6 +125,7 @@ import {
   nextCycledAgentMode,
   type LocalFailureAction,
 } from '../local-code';
+import { SIMULATOR_PANE_COPY } from '../simulator-pane';
 import {
   useLocalSession,
   type LocalMessage,
@@ -139,6 +142,7 @@ import { LocalTerminalDock } from './LocalTerminal';
 import { useShowTerminal } from '../use-show-terminal';
 import { LocalFilesPanel } from './LocalFilesPanel';
 import { LocalBrowserPanel } from './LocalBrowserPanel';
+import { LocalSimulatorPane } from './LocalSimulatorPane';
 import { LocalExtensionsControl } from './LocalExtensionsControl';
 import { LocalMemoryControl } from './LocalMemoryControl';
 import { LocalModelChip } from './LocalModelChip';
@@ -419,6 +423,16 @@ export function LocalSessionPanel({
       cancelled = true;
     };
   }, []);
+  const [simulatorAvailable, setSimulatorAvailable] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void simulatorPaneSupported().then((supported) => {
+      if (!cancelled) setSimulatorAvailable(supported);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const canChooseMode = !remoteSsh && capabilities.has('agent_mode');
   const canChooseEffort = capabilities.has('reasoning_effort');
   const canAttachFiles = !remoteSsh && capabilities.has('context_files');
@@ -472,6 +486,13 @@ export function LocalSessionPanel({
   const [browserOpen, setBrowserOpen] = useState(false);
   const [browserAddress, setBrowserAddress] = useState<string | null>(null);
   const [browserKey, setBrowserKey] = useState(0);
+  const [simulatorOpen, setSimulatorOpen] = useState(false);
+  const [simulatorExpanded, setSimulatorExpanded] = useState(false);
+  const [simulatorFloating, setSimulatorFloating] = useState(false);
+  const simulatorDocked = simulatorOpen && !simulatorFloating;
+  const closeDockedSimulator = () => {
+    if (!simulatorFloating) setSimulatorOpen(false);
+  };
   const [filesDirty, setFilesDirty] = useState(false);
   const [filesFocusKey, setFilesFocusKey] = useState(0);
   useEffect(() => {
@@ -522,6 +543,7 @@ export function LocalSessionPanel({
       return;
     }
     setBrowserOpen(false);
+    closeDockedSimulator();
     if (changesOpen) closeChanges(() => setReviewOpen(true));
     else if (filesOpen) closeFiles(() => setReviewOpen(true));
     else setReviewOpen(true);
@@ -534,6 +556,7 @@ export function LocalSessionPanel({
     const show = () => {
       setReviewOpen(false);
       setBrowserOpen(false);
+      closeDockedSimulator();
       setChangesOpen(true);
     };
     if (filesOpen) closeFiles(show);
@@ -543,6 +566,7 @@ export function LocalSessionPanel({
     const show = () => {
       setReviewOpen(false);
       setBrowserOpen(false);
+      closeDockedSimulator();
       setFilesOpen(true);
       if (focusSearch) setFilesFocusKey((key) => key + 1);
     };
@@ -560,6 +584,7 @@ export function LocalSessionPanel({
   const openBrowser = (address: string | null) => {
     const show = () => {
       setReviewOpen(false);
+      closeDockedSimulator();
       setBrowserAddress(address);
       setBrowserKey((key) => key + 1);
       setBrowserOpen(true);
@@ -572,8 +597,33 @@ export function LocalSessionPanel({
     if (browserOpen) setBrowserOpen(false);
     else openBrowser(null);
   };
+  const dockSimulator = (dock: () => void) => {
+    const show = () => {
+      setReviewOpen(false);
+      setBrowserOpen(false);
+      dock();
+    };
+    if (changesOpen) closeChanges(show);
+    else if (filesOpen) closeFiles(show);
+    else show();
+  };
+  const toggleSimulator = () => {
+    if (simulatorOpen) setSimulatorOpen(false);
+    else if (simulatorFloating) setSimulatorOpen(true);
+    else dockSimulator(() => setSimulatorOpen(true));
+  };
+  const toggleSimulatorFloating = () => {
+    if (simulatorFloating) {
+      dockSimulator(() => setSimulatorFloating(false));
+      return;
+    }
+    setSimulatorExpanded(false);
+    setSimulatorFloating(true);
+  };
+  const simulatorFillsBody = simulatorDocked && simulatorExpanded;
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const sidePanelOpen = shortcutsOpen || changesOpen || filesOpen || reviewOpen || browserOpen;
+  const sidePanelOpen =
+    shortcutsOpen || changesOpen || filesOpen || reviewOpen || browserOpen || simulatorDocked;
   const toggleSidePanel = () => {
     if (!sidePanelOpen) {
       setShortcutsOpen(true);
@@ -583,6 +633,7 @@ export function LocalSessionPanel({
       setShortcutsOpen(false);
       setReviewOpen(false);
       setBrowserOpen(false);
+      closeDockedSimulator();
     };
     if (changesOpen) closeChanges(hide);
     else if (filesOpen) closeFiles(hide);
@@ -647,7 +698,8 @@ export function LocalSessionPanel({
         ]
       : []),
   ];
-  const showShortcuts = shortcutsOpen && !changesOpen && !filesOpen && !reviewOpen && !browserOpen;
+  const showShortcuts =
+    shortcutsOpen && !changesOpen && !filesOpen && !reviewOpen && !browserOpen && !simulatorDocked;
   const folder = localFolderName(session.cwd, group.name);
   const toggleReviewRef = useRef(toggleReview);
   toggleReviewRef.current = toggleReview;
@@ -857,6 +909,16 @@ export function LocalSessionPanel({
     images.addFiles(pictures);
   };
 
+  const attachCapture = (file: File) => {
+    setSimulatorExpanded(false);
+    if (images.attachments.length >= DEVELOPER_TURN_LIMITS.images) {
+      setComposerNotice(LOCAL_CODE_COPY.tooManyImages(DEVELOPER_TURN_LIMITS.images));
+      return;
+    }
+    setComposerNotice(null);
+    images.addFiles([file]);
+  };
+
   const sendTextToAgent = (text: string) => {
     const message: LocalMessage = { text, images: [], contextFiles: [] };
     if (running) state.enqueue(message);
@@ -943,6 +1005,18 @@ export function LocalSessionPanel({
               onClick={toggleBrowser}
             >
               <Globe size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+            </button>
+          )}
+          {!remoteSsh && simulatorAvailable && (
+            <button
+              type="button"
+              className={`${styles['headerButton']} ${simulatorOpen ? styles['headerButtonActive'] : ''}`}
+              aria-label={SIMULATOR_PANE_COPY.pane}
+              aria-pressed={simulatorOpen}
+              title={SIMULATOR_PANE_COPY.pane}
+              onClick={toggleSimulator}
+            >
+              <Smartphone size={HEADER_GLYPH_SIZE} aria-hidden="true" />
             </button>
           )}
           <button
@@ -1168,8 +1242,10 @@ export function LocalSessionPanel({
         </div>
       </header>
 
-      <div className={styles['body']}>
-        <div className={styles['column']}>
+      <div
+        className={`${styles['body']} ${simulatorOpen && simulatorFloating ? styles['bodyFloatHost'] : ''}`}
+      >
+        <div className={`${styles['column']} ${simulatorFillsBody ? styles['columnHidden'] : ''}`}>
           <div className={styles['scroll']} data-testid="local-code-scroll">
             <div className={styles['center']}>
               {state.loading && (
@@ -1663,6 +1739,16 @@ export function LocalSessionPanel({
             address={browserAddress}
             addressKey={browserKey}
             onClose={() => setBrowserOpen(false)}
+          />
+        )}
+        {!remoteSsh && simulatorAvailable && simulatorOpen && (
+          <LocalSimulatorPane
+            expanded={simulatorExpanded}
+            onToggleExpanded={() => setSimulatorExpanded((expanded) => !expanded)}
+            floating={simulatorFloating}
+            onToggleFloating={toggleSimulatorFloating}
+            onClose={() => setSimulatorOpen(false)}
+            {...(canPasteImages ? { onAttachImage: attachCapture } : {})}
           />
         )}
         {filesOpen && (

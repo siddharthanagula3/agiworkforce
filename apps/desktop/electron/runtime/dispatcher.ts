@@ -35,6 +35,9 @@ import {
   isDeveloperThreadRevertRestore,
   isDeveloperWorktreeStart,
   isPermissionScope,
+  isSimulatorAppearance,
+  isSimulatorCommand,
+  isSimulatorStatusBar,
   isSystemPermissionKind,
   localPreviewOrigin,
   localPreviewUrl,
@@ -57,6 +60,7 @@ import {
   type DeveloperSessionGroup,
   type DeveloperSessionList,
   type DeveloperThreadRevertRequest,
+  SIMULATOR_UNAVAILABLE_MESSAGES,
   type PermissionScope,
   type RefusableApplication,
   type ShellPolicy,
@@ -128,6 +132,26 @@ import {
   setBrowserPaneBounds,
   stepBrowserPane,
 } from '../browserPane';
+import {
+  SimulatorRefused,
+  bootSimulator,
+  copySimulatorClipboard,
+  deleteSimulatorCapture,
+  pressSimulatorHome,
+  readSimulatorCapture,
+  revealSimulatorCapture,
+  sendClipboardToSimulator,
+  setSimulatorAppearance,
+  setSimulatorStatusBar,
+  shutdownSimulator,
+  simulatorFrame,
+  simulatorSettings,
+  simulatorStatus,
+  simulatorSupported,
+  startSimulatorRecording,
+  stopSimulatorRecording,
+  takeSimulatorScreenshot,
+} from './simulatorService';
 import { WORKSPACE_PICKER_COPY, grantPickedRoot } from './workspacePicker';
 import {
   ComputerUseRefused,
@@ -1054,6 +1078,9 @@ function requireCheckpointSections(args: Args): DeveloperCheckpointSectionsReque
 const COMPUTER_USE_REASON =
   'The agent moves the pointer, clicks and types on this Mac as if you were doing it, and reads the screen to decide where. It can reach anything already open, including apps and pages you are signed into.';
 
+const SIMULATOR_REASON =
+  'The iOS Simulator pane starts and shuts down simulators on this Mac, shows their screen, saves screenshots and recordings of it, changes their appearance and status bar, and moves text between their clipboard and yours.';
+
 /** Capabilities scoped to the session rather than to one folder. */
 const GLOBAL_CAPABILITY_BY_COMMAND: Record<
   string,
@@ -1078,6 +1105,21 @@ const GLOBAL_CAPABILITY_BY_COMMAND: Record<
     reason:
       'Remote Control lets a phone you pair read and steer coding sessions on this computer and answer the agent’s approval requests. You are asked again to allow the phone itself before it connects.',
   },
+  simulator_status: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_boot: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_shutdown: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_frame: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_settings: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_set_appearance: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_set_status_bar: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_home: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_screenshot: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_record_start: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_clipboard_get: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_clipboard_send: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_capture_read: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_capture_reveal: { capability: 'simulator.control', reason: SIMULATOR_REASON },
+  simulator_capture_delete: { capability: 'simulator.control', reason: SIMULATOR_REASON },
 };
 
 /**
@@ -1203,6 +1245,7 @@ async function revokeGrant(
   }
   if (capability === 'computer.use') stopScreenControl();
   if (capability === 'host.remote') stopRemoteControl();
+  if (capability === 'simulator.control') await stopSimulatorRecording();
   const saved = revokePermission(capability, scope);
   emitRuntimeEvent(window, { kind: 'permission-changed', capability, scope });
   if (saved === false) throw new PermissionNotSaved(PERMISSION_NOT_SAVED);
@@ -2434,6 +2477,50 @@ async function execute(
     case 'browser_pane_clear_data':
       await clearBrowserPaneData();
       return true;
+    case 'simulator_supported':
+      return simulatorSupported();
+    case 'simulator_status':
+      return simulatorStatus();
+    case 'simulator_boot':
+      return bootSimulator(args['udid']);
+    case 'simulator_shutdown':
+      return shutdownSimulator(args['udid']);
+    case 'simulator_frame':
+      return simulatorFrame(args['udid']);
+    case 'simulator_settings':
+      return simulatorSettings(args['udid']);
+    case 'simulator_set_appearance': {
+      const appearance = args['appearance'];
+      if (!isSimulatorAppearance(appearance)) {
+        throw new InvalidArguments('"appearance" must be light or dark.');
+      }
+      return setSimulatorAppearance(args['udid'], appearance);
+    }
+    case 'simulator_set_status_bar': {
+      const statusBar = args['statusBar'];
+      if (!isSimulatorStatusBar(statusBar)) {
+        throw new InvalidArguments('"statusBar" must be live or clean.');
+      }
+      return setSimulatorStatusBar(args['udid'], statusBar);
+    }
+    case 'simulator_home':
+      return pressSimulatorHome(args['udid']);
+    case 'simulator_screenshot':
+      return takeSimulatorScreenshot(args['udid']);
+    case 'simulator_record_start':
+      return startSimulatorRecording(args['udid']);
+    case 'simulator_record_stop':
+      return stopSimulatorRecording();
+    case 'simulator_clipboard_get':
+      return copySimulatorClipboard(args['udid']);
+    case 'simulator_clipboard_send':
+      return sendClipboardToSimulator(args['udid']);
+    case 'simulator_capture_read':
+      return readSimulatorCapture(args['id']);
+    case 'simulator_capture_reveal':
+      return revealSimulatorCapture(args['id']);
+    case 'simulator_capture_delete':
+      return deleteSimulatorCapture(args['id']);
     case 'desktop_storage_read':
       return readStorageUsage(storageEnvironment());
     case 'desktop_storage_clean': {
@@ -3011,9 +3098,23 @@ const REFUSAL_CODES: Record<PathRefusalReason, DesktopRuntimeErrorCode> = {
   'io-error': 'io-error',
 };
 
+const SIMULATOR_REFUSAL_CODES: Readonly<
+  Record<SimulatorRefused['reason'], DesktopRuntimeErrorCode>
+> = {
+  unsupported: 'unsupported-platform',
+  unavailable: 'runtime-unavailable',
+  invalid: 'invalid-arguments',
+  'not-found': 'not-found',
+  busy: 'conflict',
+  failed: 'io-error',
+};
+
 function toFailure(error: unknown): DesktopRuntimeResponse<never> {
   if (error instanceof PathRefused) {
     return runtimeFailure(REFUSAL_CODES[error.reason], error.message);
+  }
+  if (error instanceof SimulatorRefused) {
+    return runtimeFailure(SIMULATOR_REFUSAL_CODES[error.reason], error.message);
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
   if (error instanceof PermissionNotSaved) return runtimeFailure('io-error', error.message);
@@ -3150,6 +3251,8 @@ const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   'shell_cancel',
   'shell_policy_read',
   'shell_policy_write',
+  'simulator_record_stop',
+  'simulator_supported',
   'skill_capture_discard',
   'skill_capture_save',
   'skill_capture_start',
@@ -3211,6 +3314,12 @@ export async function dispatch(
   try {
     if (localInferenceCommands.has(command)) {
       return runtimeFailure('unsupported-platform', LOCAL_INFERENCE_UNSUPPORTED);
+    }
+    if (isSimulatorCommand(command) && !simulatorSupported()) {
+      return runtimeFailure(
+        'unsupported-platform',
+        SIMULATOR_UNAVAILABLE_MESSAGES['unsupported-platform'],
+      );
     }
 
     if (

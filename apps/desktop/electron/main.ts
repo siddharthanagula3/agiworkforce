@@ -234,6 +234,7 @@ import {
 import { configureDictationBarBridge, openDictationBar } from './dictationBar';
 import { createDictationElsewhere } from './dictationElsewhere';
 import { closeLocalPreview } from './previewWindow';
+import { configureSimulator, shutDownSimulator } from './runtime/simulatorService';
 import { getPreferences, getShortcuts, saveSettings, saveSettingsDurably } from './settingsStore';
 import {
   changeGarnishShortcuts,
@@ -2605,6 +2606,10 @@ if (!hasSingleInstanceLock) {
     syncLaunchAtLogin();
     applyGarnishShortcuts();
 
+    configureSimulator({
+      onChange: (status) => sendRuntimeEvent({ kind: 'simulator-changed', status }),
+    });
+
     configureRemoteControl(
       (state) => {
         sendRuntimeEvent({ kind: 'remote-control-changed', state });
@@ -2725,6 +2730,7 @@ if (!hasSingleInstanceLock) {
 
   app.on('will-quit', () => {
     closeLocalPreview();
+    shutDownSimulator();
     dictationElsewhere.closeAll();
     workKeeper.release();
     stopLocalRoutines();

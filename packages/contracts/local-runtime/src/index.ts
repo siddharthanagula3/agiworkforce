@@ -576,3 +576,38 @@ export {
   TERMINAL_MIN_SIZE,
   TERMINAL_WRITE_LIMIT,
 } from './developer-sessions';
+
+export {
+  SIMULATOR_APPEARANCES,
+  SIMULATOR_CAPTURE_KINDS,
+  SIMULATOR_CAPTURE_LIMIT,
+  SIMULATOR_CLIPBOARD_TEXT_LIMIT,
+  SIMULATOR_COMMANDS,
+  SIMULATOR_FRAME_INTERVAL_MS,
+  SIMULATOR_RECORDING_LIMIT_MS,
+  SIMULATOR_STATUS_BARS,
+  SIMULATOR_UNAVAILABLE_MESSAGES,
+  SIMULATOR_UNAVAILABLE_REASONS,
+  isSimulatorAppearance,
+  isSimulatorCaptureId,
+  isSimulatorCommand,
+  isSimulatorStatusBar,
+  isSimulatorUdid,
+  readSimulatorDevices,
+  simulatorRuntimeLabel,
+} from './simulator';
+export type {
+  SimulatorAppearance,
+  SimulatorCapture,
+  SimulatorCaptureImage,
+  SimulatorCaptureKind,
+  SimulatorClipboardResult,
+  SimulatorCommand,
+  SimulatorDevice,
+  SimulatorFrame,
+  SimulatorRecording,
+  SimulatorSettings,
+  SimulatorStatus,
+  SimulatorStatusBar,
+  SimulatorUnavailableReason,
+} from './simulator';

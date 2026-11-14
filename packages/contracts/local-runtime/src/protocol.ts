@@ -8,6 +8,7 @@ import type { BrowserPaneState } from './browser-pane';
 import type { ComputerUseStatus } from './computer-use';
 import type { DeveloperSessionEvent } from './developer-sessions';
 import type { RemoteControlState } from './remote-control';
+import type { SimulatorStatus } from './simulator';
 import type { DesktopCapability, PermissionScope } from './capabilities';
 
 export const DESKTOP_RUNTIME_CHANNEL = 'agi:desktop-runtime';
@@ -127,6 +128,7 @@ export type DesktopRuntimeEvent =
   | { kind: 'computer-use-handed-back' }
   | { kind: 'browser-sign-in-expired' }
   | { kind: 'browser-pane'; state: BrowserPaneState }
+  | { kind: 'simulator-changed'; status: SimulatorStatus }
   | {
       kind: 'developer-terminal';
       rootId: string;

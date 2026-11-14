@@ -88,3 +88,24 @@ export const Volume2 = createIcon(
     <path d="m18.5 6 2.5 6-2.5 6" />
   </>,
 );
+
+export const Smartphone = createIcon(
+  'Smartphone',
+  <>
+    <path d="M8.5 3h7L17 4.5v15L15.5 21h-7L7 19.5v-15z" />
+    <path d="M10.5 17.5h3" />
+  </>,
+);
+
+export const House = createIcon(
+  'House',
+  <path d="M4 11 12 4l8 7v8.5L18.5 21h-4v-6h-5v6h-4L4 19.5z" />,
+);
+
+export const PictureInPicture = createIcon(
+  'PictureInPicture',
+  <>
+    <path d="M4.5 4h15L21 5.5v13L19.5 20h-15L3 18.5v-13z" />
+    <path d="M12 12h6v5h-6z" />
+  </>,
+);
