@@ -206,7 +206,7 @@ export function LiveArtifactsView() {
       className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-6 px-4 pt-6 pb-8 sm:px-6 sm:py-12"
     >
       <header className="flex flex-col gap-1">
-        <h1 className="text-h2 text-foreground max-md:text-[28px] max-md:font-medium max-md:leading-[1.2]">
+        <h1 className="text-h2 text-foreground max-md:text-display max-md:font-medium">
           Live artifacts
         </h1>
         <p className="text-sm text-muted-foreground">

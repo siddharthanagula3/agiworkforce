@@ -253,7 +253,7 @@ export function ChatsAndTasksList() {
     <div className="mx-auto w-full max-w-3xl">
       {dialog}
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="min-w-0 flex-1 text-2xl font-semibold text-foreground max-md:basis-full max-md:text-[28px] max-md:font-medium max-md:leading-[1.2]">
+        <h1 className="min-w-0 flex-1 text-2xl font-semibold text-foreground max-md:basis-full max-md:text-display max-md:font-medium">
           Chats and tasks
         </h1>
         <div className="flex shrink-0 items-center gap-2">

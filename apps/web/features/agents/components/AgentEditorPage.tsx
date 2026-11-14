@@ -382,7 +382,7 @@ export function AgentEditorPage({
             <AgentAvatar icon={draft.icon} accentColor={draft.accentColor} size="lg" />
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <h1 className="truncate text-[24px] font-medium text-foreground max-md:text-[28px] max-md:leading-[1.2]">
+                <h1 className="truncate text-[24px] font-medium text-foreground max-md:text-display">
                   {agent ? agent.name : 'New agent'}
                 </h1>
                 {agent ? (

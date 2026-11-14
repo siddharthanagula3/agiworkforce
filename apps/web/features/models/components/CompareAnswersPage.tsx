@@ -217,7 +217,7 @@ export function CompareAnswersPage({ requestedModelIds }: CompareAnswersPageProp
         Models
       </Link>
       <header className="mt-2">
-        <h1 className="text-h2 text-foreground max-md:text-[28px] max-md:font-medium max-md:leading-[1.2]">
+        <h1 className="text-h2 text-foreground max-md:text-display max-md:font-medium">
           Compare answers
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">

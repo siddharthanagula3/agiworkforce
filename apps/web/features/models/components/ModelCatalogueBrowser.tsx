@@ -132,9 +132,7 @@ export function ModelCatalogueBrowser({
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
       <header>
-        <h1 className="text-h2 text-foreground max-md:text-[28px] max-md:font-medium max-md:leading-[1.2]">
-          Models
-        </h1>
+        <h1 className="text-h2 text-foreground max-md:text-display max-md:font-medium">Models</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {`${entries.length} models from ${developers.length} developers${planLabel ? ` on ${planLabel}` : ''}.`}
         </p>

@@ -222,7 +222,7 @@ function SitesPageView({ lease }: { lease: PublicationLease | null }) {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <header className="flex items-start justify-between gap-4 max-md:flex-wrap max-md:items-center max-md:gap-y-2">
           <div className="flex min-w-0 flex-col gap-2 max-md:contents">
-            <h1 className="text-h2 text-[var(--chat-text-primary)] max-md:text-[28px] max-md:font-medium max-md:leading-[1.2]">
+            <h1 className="text-h2 text-[var(--chat-text-primary)] max-md:text-display max-md:font-medium">
               Sites
             </h1>
             <p className="max-w-2xl text-sm text-[var(--chat-text-secondary)] max-md:order-last max-md:basis-full">
