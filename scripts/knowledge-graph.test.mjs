@@ -228,6 +228,39 @@ test('graph indexes every tracked file, route, import, and migration', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('a path alias target substitutes the captured text verbatim, at every star', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledge-graph-alias-'));
+  const files = {
+    'package.json': JSON.stringify({ name: 'fixture-root' }),
+    'apps/web/package.json': JSON.stringify({ name: '@agiworkforce/web' }),
+    'apps/web/tsconfig.json': JSON.stringify({
+      compilerOptions: {
+        baseUrl: '.',
+        paths: { '@dollar/*': ['./lib/*'], '@twice/*': ['./lib/*/*'] },
+      },
+    }),
+    'apps/web/lib/a$&b.ts': 'export const dollar = 1;\n',
+    'apps/web/lib/dir/dir.ts': 'export const twice = 1;\n',
+    'apps/web/app/use.ts':
+      'import { dollar } from "@dollar/a$&b";\nimport { twice } from "@twice/dir";\nexport const both = [dollar, twice];\n',
+  };
+  for (const [rel, content] of Object.entries(files)) {
+    const dest = path.join(root, rel);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, content);
+  }
+  const graph = buildKnowledgeGraph(root, {
+    trackedFiles: Object.keys(files),
+    workspaceGlobs: ['apps/*'],
+    cargoMembers: [],
+    dependencyGraph: { typescript: { edges: [] }, rust: { edges: [] } },
+  });
+  const user = graph.files.find((file) => file.path === 'apps/web/app/use.ts');
+  assert.ok(user.imports.includes('apps/web/lib/a$&b.ts'));
+  assert.ok(user.imports.includes('apps/web/lib/dir/dir.ts'));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('rendering folds opaque paths into one record per directory and keeps the rest', () => {
   const graph = {
     manifest: { schemaVersion: 1 },
