@@ -484,14 +484,14 @@ function OwnedTwoFactorEnrollment({
           )}
           Authenticator app
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs">
           {status === null
             ? 'Your current authenticator status has not been confirmed.'
             : enabled
-              ? 'Two-factor authentication is on. Every sign-in asks for a code from your authenticator app, and so does turning it off or replacing your backup codes.'
+              ? 'On. Sign-in, turning it off and new backup codes need an authenticator code.'
               : enrollmentAvailable
-                ? 'Add a time-based one-time code (TOTP) from an authenticator app. Every sign-in then asks for a code from it.'
-                : 'Authenticator apps and backup codes are temporarily unavailable. Your password, passkeys and the codes we email you still protect your account.'}
+                ? 'Add codes from an authenticator app. Every sign-in then asks for one.'
+                : 'Authenticator apps are temporarily unavailable. Password, passkeys and email codes still protect you.'}
         </CardDescription>
       </CardHeader>
 

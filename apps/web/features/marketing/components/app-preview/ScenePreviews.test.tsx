@@ -575,7 +575,7 @@ describe('memory settings', () => {
       'md:h-[min(94vh,680px)] md:w-[min(96vw,860px)]',
       'md:w-[220px]',
       '<div ref={paneRef} className="mx-auto w-full max-w-[672px]">',
-      "?.scrollIntoView({ block: 'nearest' });",
+      "item.scrollIntoView({ block: 'nearest' });",
     ]);
     expectSource('apps/web/features/settings/sections/PersonalizationSection.tsx', [
       '<MemorySection />',

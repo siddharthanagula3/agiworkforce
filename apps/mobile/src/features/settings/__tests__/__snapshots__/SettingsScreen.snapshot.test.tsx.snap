@@ -116,6 +116,186 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
       <View
         style={
           {
+            "marginBottom": 16,
+          }
+        }
+      >
+        <View
+          accessibilityLabel="Chat execution mode"
+          accessibilityRole="tablist"
+          style={
+            {
+              "alignItems": "center",
+              "alignSelf": "stretch",
+              "backgroundColor": "#1a1a1a",
+              "borderColor": "#333",
+              "borderRadius": 999,
+              "borderWidth": 1,
+              "flexDirection": "row",
+              "padding": 3,
+            }
+          }
+          testID="chat.mode-toggle"
+        >
+          <View
+            accessibilityHint="Switches to Local Mode without Cloud context"
+            accessibilityLabel="Local Mode"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": true,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            hitSlop={
+              {
+                "bottom": 3,
+                "top": 3,
+              }
+            }
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "backgroundColor": undefined,
+                "borderColor": undefined,
+                "borderRadius": 999,
+                "borderWidth": 1,
+                "flex": 1,
+                "flexDirection": "row",
+                "gap": 6,
+                "height": 38,
+                "justifyContent": "center",
+                "minWidth": 44,
+              }
+            }
+            testID="chat.mode-toggle.local"
+          >
+            <View
+              color="#fff"
+              size={16}
+              testID="icon-Cpu"
+            />
+            <Text
+              maxFontSizeMultiplier={1.4}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flexShrink": 1,
+                  "fontSize": 15,
+                  "fontWeight": "600",
+                  "includeFontPadding": false,
+                }
+              }
+            >
+              Local
+            </Text>
+          </View>
+          <View
+            accessibilityHint="Opens AGI Cloud access"
+            accessibilityLabel="AGI Cloud, sign in required"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": false,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            hitSlop={
+              {
+                "bottom": 3,
+                "top": 3,
+              }
+            }
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "backgroundColor": undefined,
+                "borderColor": undefined,
+                "borderRadius": 999,
+                "borderWidth": 1,
+                "flex": 1,
+                "flexDirection": "row",
+                "gap": 6,
+                "height": 38,
+                "justifyContent": "center",
+                "minWidth": 44,
+              }
+            }
+            testID="chat.mode-toggle.cloud"
+          >
+            <View
+              color="#777"
+              size={16}
+              testID="icon-Cloud"
+            />
+            <Text
+              maxFontSizeMultiplier={1.4}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#777",
+                  "flexShrink": 1,
+                  "fontSize": 15,
+                  "fontWeight": "500",
+                  "includeFontPadding": false,
+                }
+              }
+            >
+              Cloud
+            </Text>
+          </View>
+        </View>
+      </View>
+      <View
+        style={
+          {
             "marginBottom": 24,
           }
         }
@@ -222,463 +402,6 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             >
               Local mode active
             </Text>
-          </View>
-        </View>
-      </View>
-      <View
-        style={
-          {
-            "marginBottom": 24,
-          }
-        }
-      >
-        <Text
-          accessibilityRole="header"
-          style={
-            {
-              "color": "#777",
-              "fontSize": 14,
-              "fontWeight": "600",
-              "marginBottom": 8,
-              "paddingHorizontal": 2,
-            }
-          }
-        >
-          Account
-        </Text>
-        <View
-          style={
-            {
-              "backgroundColor": "#1a1a1a",
-              "borderRadius": 24,
-              "overflow": "hidden",
-            }
-          }
-        >
-          <View
-            accessibilityHint="Opens Email"
-            accessibilityLabel="Email. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#aaa"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-UserRound"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-account-email"
-            >
-              Email
-            </Text>
-            <Text
-              maxFontSizeMultiplier={2}
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#777",
-                  "flexShrink": 1,
-                  "fontSize": 14,
-                  "textAlign": "right",
-                }
-              }
-            >
-              Sign in
-            </Text>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityHint="Opens Account Security"
-            accessibilityLabel="Account Security. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#aaa"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-Shield"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-account-security"
-            >
-              Account Security
-            </Text>
-            <Text
-              maxFontSizeMultiplier={2}
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#777",
-                  "flexShrink": 1,
-                  "fontSize": 14,
-                  "textAlign": "right",
-                }
-              }
-            >
-              Sign in
-            </Text>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityHint="Opens Subscription"
-            accessibilityLabel="Subscription. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#aaa"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-CreditCard"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-account-subscription"
-            >
-              Subscription
-            </Text>
-            <Text
-              maxFontSizeMultiplier={2}
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#777",
-                  "flexShrink": 1,
-                  "fontSize": 14,
-                  "textAlign": "right",
-                }
-              }
-            >
-              Sign in
-            </Text>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityHint="Opens Shared Links"
-            accessibilityLabel="Shared Links. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#aaa"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-Share2"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-account-shared-links"
-            >
-              Shared Links
-            </Text>
-            <Text
-              maxFontSizeMultiplier={2}
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#777",
-                  "flexShrink": 1,
-                  "fontSize": 14,
-                  "textAlign": "right",
-                }
-              }
-            >
-              Sign in
-            </Text>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityHint="Opens Workspace"
-            accessibilityLabel="Workspace. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 0,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#aaa"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-Users"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-workspace"
-            >
-              Workspace
-            </Text>
-            <Text
-              maxFontSizeMultiplier={2}
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#777",
-                  "flexShrink": 1,
-                  "fontSize": 14,
-                  "textAlign": "right",
-                }
-              }
-            >
-              Sign in
-            </Text>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
           </View>
         </View>
       </View>
@@ -1696,6 +1419,77 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens AGI Code"
+            accessibilityLabel="AGI Code"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#aaa"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-Code2"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "fontSize": 15,
+                }
+              }
+              testID="settings-row-label-code"
+            >
+              AGI Code
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
             accessibilityHint="Opens Data Controls"
             accessibilityLabel="Data Controls"
             accessibilityRole="button"
@@ -1760,513 +1554,6 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             >
               Data Controls
             </Text>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-        </View>
-      </View>
-      <View
-        style={
-          {
-            "marginBottom": 24,
-          }
-        }
-      >
-        <Text
-          accessibilityRole="header"
-          style={
-            {
-              "color": "#777",
-              "fontSize": 14,
-              "fontWeight": "600",
-              "marginBottom": 8,
-              "paddingHorizontal": 2,
-            }
-          }
-        >
-          Cloud
-        </Text>
-        <View
-          style={
-            {
-              "backgroundColor": "#1a1a1a",
-              "borderRadius": 24,
-              "overflow": "hidden",
-            }
-          }
-        >
-          <View
-            accessibilityHint="Opens Reflect"
-            accessibilityLabel="Reflect. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#f59e0b"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-Sparkles"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-reflect"
-            >
-              Reflect
-            </Text>
-            <View
-              style={
-                {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 14,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Sign in
-              </Text>
-            </View>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityHint="Opens Archived Chats"
-            accessibilityLabel="Archived Chats. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#f59e0b"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-Archive"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-archived-chats"
-            >
-              Archived Chats
-            </Text>
-            <View
-              style={
-                {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 14,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Sign in
-              </Text>
-            </View>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityHint="Opens Privacy"
-            accessibilityLabel="Privacy. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#f59e0b"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-LockKeyhole"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-privacy"
-            >
-              Privacy
-            </Text>
-            <View
-              style={
-                {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 14,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Sign in
-              </Text>
-            </View>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityHint="Opens Usage"
-            accessibilityLabel="Usage. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 1,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#f59e0b"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-Database"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-usage"
-            >
-              Usage
-            </Text>
-            <View
-              style={
-                {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 14,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Sign in
-              </Text>
-            </View>
-            <View
-              color="#777"
-              size={17}
-              testID="icon-ChevronRight"
-            />
-          </View>
-          <View
-            accessibilityHint="Opens Connectors"
-            accessibilityLabel="Connectors. Sign in"
-            accessibilityRole="button"
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onBlur={[Function]}
-            onClick={[Function]}
-            onFocus={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "alignItems": "center",
-                "borderBottomColor": "#333",
-                "borderBottomWidth": 0,
-                "flexDirection": "row",
-                "gap": 12,
-                "minHeight": 50,
-                "paddingHorizontal": 14,
-              }
-            }
-          >
-            <View
-              color="#f59e0b"
-              size={19}
-              strokeWidth={1.8}
-              testID="icon-Link2"
-            />
-            <Text
-              numberOfLines={1}
-              style={
-                {
-                  "color": "#fff",
-                  "flexGrow": 1,
-                  "flexShrink": 0,
-                  "fontSize": 15,
-                }
-              }
-              testID="settings-row-label-connectors"
-            >
-              Connectors
-            </Text>
-            <View
-              style={
-                {
-                  "backgroundColor": "#f59e0b14",
-                  "borderColor": "#f59e0b2D",
-                  "borderRadius": 999,
-                  "borderWidth": 1,
-                  "paddingHorizontal": 8,
-                  "paddingVertical": 2,
-                }
-              }
-            >
-              <Text
-                style={
-                  {
-                    "color": "#f59e0b",
-                    "fontSize": 14,
-                    "fontWeight": "700",
-                  }
-                }
-              >
-                Sign in
-              </Text>
-            </View>
             <View
               color="#777"
               size={17}

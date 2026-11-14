@@ -449,7 +449,7 @@ describe('UsageSection stated in credits', () => {
     expect(await screen.findByText('Credit balances')).toBeTruthy();
     expect(
       screen.getByText(
-        'Once a plan limit is reached, bonus credits are used first, soonest to expire, then purchased credits.',
+        'Past a plan limit, bonus credits go first, soonest to expire, then bought credits.',
       ),
     ).toBeTruthy();
     expect(screen.getByText('60 credits')).toBeTruthy();

@@ -114,7 +114,14 @@ export const useChatCloudMessageStore = create<CloudMessageState>()(
               ...(c.unread === undefined && local?.unread ? { unread: true } : {}),
             };
             if (dirtyIds.includes(c.id)) {
-              if (local) return { ...base, ...local, serverVersion };
+              if (local) {
+                return {
+                  ...base,
+                  ...local,
+                  ...(local.userTitlePending === true ? {} : { title: base.title }),
+                  serverVersion,
+                };
+              }
             }
             return base;
           });

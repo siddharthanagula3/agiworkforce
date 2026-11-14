@@ -59,6 +59,12 @@ const SOURCE_EXTENSIONS: Readonly<Record<string, string>> = {
   lua: 'lua',
   r: 'r',
   mermaid: 'mmd',
+  markdown: 'md',
+  md: 'md',
+  mdx: 'mdx',
+  diff: 'diff',
+  udiff: 'diff',
+  patch: 'patch',
 };
 
 const MARKDOWN_LANGUAGES = new Set(['markdown', 'md', 'mdx']);

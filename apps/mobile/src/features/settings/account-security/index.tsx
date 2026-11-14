@@ -341,7 +341,12 @@ export default function AccountSecurityScreen() {
                   return revokeAllAccountSessions(headers, account);
                 });
                 if (!current()) return;
-                await signOut();
+                await signOut().catch((signOutError: unknown) => {
+                  console.warn(
+                    '[AccountSecurity] local sign-out after revoking every session failed:',
+                    signOutError,
+                  );
+                });
               } catch (revokeError) {
                 if (!current() || isStepUpCancelled(revokeError)) return;
                 Alert.alert(
@@ -516,7 +521,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Sign-in methods"
-        body="Add or remove sign-in methods in Security settings on the web."
+        body="Add or remove sign-in methods on the web."
         icon={Fingerprint}
       />
       <SettingsGroup>
@@ -684,7 +689,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Device protection"
-        body="AGI App Lock uses the Face ID, Touch ID, or passcode already enrolled on this device."
+        body="App Lock uses this device’s Face ID, Touch ID or passcode."
         icon={Fingerprint}
       />
       <SettingsGroup>
@@ -701,7 +706,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Recent security activity"
-        body="Sign-ins and account changes recorded for this account, newest first."
+        body="Sign-ins and account changes, newest first."
         icon={History}
       />
       <SettingsGroup>
@@ -740,7 +745,7 @@ export default function AccountSecurityScreen() {
         <SettingsGroup>
           <SettingsSwitchRow
             label="Lockdown mode"
-            description="Blocks connectors, web access, code execution and Deep Research in every chat."
+            description="Blocks connectors, web access, code execution and Deep Research."
             icon={Lock}
             value={lockdown}
             onValueChange={(next) => void preferences.changeLockdown(next)}
@@ -763,7 +768,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Managed on the web"
-        body="Manage passkeys and security keys in Security settings on the web."
+        body="Add or remove passkeys and security keys on the web."
         icon={ShieldCheck}
       />
     </SettingsScreenShell>

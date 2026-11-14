@@ -23,7 +23,7 @@ import {
 import { View, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
-import { BarChart3, Coins, RefreshCw } from 'lucide-react-native';
+import { BarChart3, Coins, Info, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -321,7 +321,7 @@ function bonusRow(bonus: ManagedUsageCredits['bonus']): { value: string; detail:
   if (bonus.remaining <= 0) {
     return {
       value: 'None',
-      detail: 'Credits from referrals and promotions show here with the date they expire.',
+      detail: 'Referral and promotion credits show here with their expiry date.',
     };
   }
   return {
@@ -356,7 +356,7 @@ function CreditBalancesCard({ credits }: { credits: ManagedUsageCredits }) {
   return (
     <SectionCard
       title="Credit balances"
-      note="Once a plan limit is reached, bonus credits are used first, soonest to expire, then purchased credits."
+      note="Past a plan limit, bonus credits go first, soonest expiring, then purchased."
     >
       <DetailRow
         label="Included in your plan"
@@ -587,7 +587,7 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
   return (
     <SectionCard
       title="Where your usage went"
-      note={`Settled usage by ${HISTORY_UNIT[granularity]}. Requests still settling are not counted yet.`}
+      note={`Settled usage by ${HISTORY_UNIT[granularity]}. Pending requests aren’t counted yet.`}
     >
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {HISTORY_OPTIONS.map((option) => {
@@ -661,6 +661,16 @@ function UsageHistoryCard({ accountKey }: { accountKey: string }) {
   );
 }
 
+const METERS_EXPLAINER = 'Meters refill when they reset. Larger models and tools use more.';
+const LIMIT_REACHED_EXPLAINER =
+  'At a limit, Cloud replies pause until reset. Local mode keeps working.';
+
+function UsageLimitsExplainer({ body }: { body: string }) {
+  return (
+    <SettingsInfo testID="usage.limits-explainer" title="How limits work" body={body} icon={Info} />
+  );
+}
+
 export default function CloudUsageScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -728,6 +738,7 @@ export default function CloudUsageScreen() {
           body="Usage resets every 5 hours, week and month, and varies by model and task."
           icon={BarChart3}
         />
+        <UsageLimitsExplainer body={LIMIT_REACHED_EXPLAINER} />
       </SettingsScreenShell>
     );
   }
@@ -797,7 +808,7 @@ export default function CloudUsageScreen() {
     >
       <SettingsInfo
         title="Plan usage"
-        body="See how much of your plan's included usage you've used this period."
+        body="How much of your plan you’ve used this period."
         icon={BarChart3}
       />
 
@@ -1079,6 +1090,9 @@ export default function CloudUsageScreen() {
               <AllowancesCard resource={allowances} />
               <StorageCard resource={allowances} />
               {accountKey ? <UsageHistoryCard accountKey={accountKey} /> : null}
+              {NATIVE_PURCHASES_AVAILABLE ? null : (
+                <UsageLimitsExplainer body={`${METERS_EXPLAINER} ${LIMIT_REACHED_EXPLAINER}`} />
+              )}
             </>
           )}
         </>

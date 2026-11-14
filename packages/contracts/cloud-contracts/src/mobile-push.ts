@@ -30,10 +30,19 @@ export const MobilePushPreferencesSchema = z.object({
 });
 export type MobilePushPreferences = z.infer<typeof MobilePushPreferencesSchema>;
 
+export const MOBILE_PRODUCT_UPDATE_EVENT_TYPE = 'product_update';
+
+export const MOBILE_PUSH_OPT_IN_EVENT_TYPES: readonly string[] = [MOBILE_PRODUCT_UPDATE_EVENT_TYPE];
+
+export function isOptInPushEvent(eventType: string | undefined): boolean {
+  return eventType !== undefined && MOBILE_PUSH_OPT_IN_EVENT_TYPES.includes(eventType);
+}
+
 export function mobilePushWantsEvent(
   preferences: MobilePushPreferences,
   eventType: string | undefined,
 ): boolean {
   if (!eventType) return true;
+  if (isOptInPushEvent(eventType)) return preferences.eventTypes[eventType] === true;
   return preferences.eventTypes[eventType] !== false;
 }

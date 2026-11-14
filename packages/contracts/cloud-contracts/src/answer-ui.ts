@@ -24,10 +24,71 @@ import { isAllowedMapSearchProviderUrl } from './map-urls';
 
 export const ANSWER_UI_ID_PATTERN = /^[a-z][a-z0-9_]*$/;
 
-const HTML_TAG_PATTERN = /<\/?[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>|<!--[\s\S]*?-->/i;
+const LESS_THAN = 60;
+const GREATER_THAN = 62;
+const SLASH = 47;
+const HYPHEN = 45;
+const WHITESPACE = /\s/;
+
+function isAsciiLetter(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isTagNameCode(code: number): boolean {
+  return isAsciiLetter(code) || (code >= 48 && code <= 57) || code === HYPHEN;
+}
+
+function htmlTagEnd(value: string, start: number): number {
+  let index = start + 1;
+  if (value.charCodeAt(index) === SLASH) index += 1;
+  if (!isAsciiLetter(value.charCodeAt(index))) return -1;
+  index += 1;
+  while (isTagNameCode(value.charCodeAt(index))) index += 1;
+  const next = value.charCodeAt(index);
+  if (next === GREATER_THAN) return index + 1;
+  if (next === SLASH) return value.charCodeAt(index + 1) === GREATER_THAN ? index + 2 : -1;
+  if (!WHITESPACE.test(value.charAt(index))) return -1;
+  index += 1;
+  while (index < value.length) {
+    const code = value.charCodeAt(index);
+    if (code === LESS_THAN) return -1;
+    if (code === GREATER_THAN) return index + 1;
+    index += 1;
+  }
+  return -1;
+}
+
+function* answerUiHtmlRanges(value: string): Generator<readonly [number, number]> {
+  let commentsClose = true;
+  let index = value.indexOf('<');
+  while (index !== -1) {
+    let end = htmlTagEnd(value, index);
+    if (end === -1 && commentsClose && value.startsWith('<!--', index)) {
+      const close = value.indexOf('-->', index + 4);
+      if (close === -1) commentsClose = false;
+      else end = close + 3;
+    }
+    if (end === -1) {
+      index = value.indexOf('<', index + 1);
+    } else {
+      yield [index, end];
+      index = value.indexOf('<', end);
+    }
+  }
+}
 
 export function containsAnswerUiHtml(value: string): boolean {
-  return HTML_TAG_PATTERN.test(value);
+  return !answerUiHtmlRanges(value).next().done;
+}
+
+export function removeAnswerUiHtml(value: string): string {
+  let kept = '';
+  let last = 0;
+  for (const [start, end] of answerUiHtmlRanges(value)) {
+    kept += value.slice(last, start);
+    last = end;
+  }
+  return last === 0 ? value : kept + value.slice(last);
 }
 
 function safeText(max: number) {

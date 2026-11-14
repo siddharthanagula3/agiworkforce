@@ -12,7 +12,7 @@ export default function WorkspaceIdentityPage() {
     <ConsolePage
       help={{ docId: 'workspace-administration', label: 'How directory provisioning works' }}
       title="Identity"
-      description="How people authenticate into this workspace, and how your directory keeps membership current."
+      description="How people sign in, and how your directory keeps membership current."
     >
       <WorkspaceIdentityPanels />
     </ConsolePage>

@@ -386,8 +386,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               lineHeight: 1.55,
             }}
           >
-            Drop a file here or click Upload to add context files. Images, PDFs, text, and JSON are
-            supported.
+            Drop a file or click Upload. Images, PDFs, text and JSON work.
           </p>
         </div>
       )}

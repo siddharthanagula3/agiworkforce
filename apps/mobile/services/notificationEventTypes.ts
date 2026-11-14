@@ -18,6 +18,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'schedule_run',
   'companion_connected',
   'chat_message',
+  'product_update',
 ] as const;
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];

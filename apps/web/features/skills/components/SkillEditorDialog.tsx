@@ -168,8 +168,7 @@ export function SkillEditorDialog({
           <DialogHeader>
             <DialogTitle>{editorTitle}</DialogTitle>
             <DialogDescription>
-              A skill is a set of instructions the model follows once your prompt matches its
-              description.
+              Instructions the model follows when your prompt matches the description.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -269,8 +268,7 @@ export function SkillEditorDialog({
               >
                 <p className="text-sm font-medium text-foreground">Share with your workspace</p>
                 <p className="text-xs text-muted-foreground">
-                  Publishes the saved version of this skill to the workspace, where every member can
-                  add it from Skills. Publish again after you change it.
+                  Every member can add the saved version from Skills. Publish again after changes.
                 </p>
                 {workspaceShare.error ? (
                   <p role="alert" className="text-xs text-danger">

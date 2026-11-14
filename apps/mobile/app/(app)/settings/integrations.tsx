@@ -77,7 +77,7 @@ function SectionHeader({ title, colors }: { title: string; colors: ColorScheme }
 
 export default function IntegrationsScreen() {
   const router = useRouter();
-  const handleBack = useGoBack('/(app)/(tabs)/settings');
+  const handleBack = useGoBack('/(app)/settings');
   const colors = useThemeColors();
 
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>('undetermined');
@@ -180,10 +180,6 @@ export default function IntegrationsScreen() {
         <View>
           <SectionHeader title="Permissions" colors={colors} />
 
-          <Text className="text-sm leading-5 mb-4" style={{ color: colors.textMuted }}>
-            Fine-grained permission controls for device features used in AI context injection.
-          </Text>
-
           {isChecking && (
             <View className="flex-row items-center justify-center py-6">
               <LoadingIndicator size="small" />
@@ -224,7 +220,7 @@ export default function IntegrationsScreen() {
                 </View>
                 <Separator className="mb-3" />
                 <Text className="text-sm leading-5" style={{ color: colors.textMuted }}>
-                  Lets AGI use your upcoming events to suggest better times for tasks.
+                  Lets AGI suggest times around your upcoming events.
                 </Text>
               </Card>
 

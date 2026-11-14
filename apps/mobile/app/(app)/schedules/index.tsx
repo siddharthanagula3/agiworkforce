@@ -29,15 +29,19 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useTierStore } from '@/src/features/billing/store';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
-import { sortSchedules, type ScheduleSort } from '@/src/features/schedules/sort';
+import {
+  matchesScheduleFilter,
+  sortSchedules,
+  type ScheduleSort,
+  type ScheduleStatusFilter,
+} from '@/src/features/schedules/sort';
 
-const SCHEDULE_FILTERS = [
+const SCHEDULE_FILTERS: readonly { key: ScheduleStatusFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'active', label: 'Active' },
   { key: 'paused', label: 'Paused' },
-] as const;
-
-type ScheduleFilter = (typeof SCHEDULE_FILTERS)[number]['key'];
+  { key: 'completed', label: 'Completed' },
+];
 
 const LOCKED_TITLE = NATIVE_PURCHASES_AVAILABLE
   ? 'Scheduled tasks require Basic'
@@ -59,16 +63,14 @@ export default function SchedulesScreen() {
     useScheduleStore();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<ScheduleFilter>('all');
+  const [filter, setFilter] = useState<ScheduleStatusFilter>('all');
   const [sort, setSort] = useState<ScheduleSort>('next-run');
   const [sortOpen, setSortOpen] = useState(false);
 
   const visibleSchedules = useMemo(
     () =>
       sortSchedules(
-        filter === 'all'
-          ? schedules
-          : schedules.filter((schedule) => schedule.isActive === (filter === 'active')),
+        schedules.filter((schedule) => matchesScheduleFilter(schedule, filter)),
         sort,
       ),
     [filter, schedules, sort],
@@ -241,8 +243,7 @@ export default function SchedulesScreen() {
           >
             <Text className="text-sm font-medium text-amber-300">{LOCKED_TITLE}</Text>
             <Text className="mt-1 text-sm leading-5 text-white/50">
-              Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause
-              or delete them.
+              Upgrade to run unattended Cloud work. You can still pause or delete tasks.
             </Text>
           </PressableBox>
         ) : (
@@ -272,11 +273,9 @@ export default function SchedulesScreen() {
         >
           {SCHEDULE_FILTERS.map((item) => {
             const selected = item.key === filter;
-            const count =
-              item.key === 'all'
-                ? schedules.length
-                : schedules.filter((schedule) => schedule.isActive === (item.key === 'active'))
-                    .length;
+            const count = schedules.filter((schedule) =>
+              matchesScheduleFilter(schedule, item.key),
+            ).length;
             return (
               <PressableBox
                 key={item.key}
@@ -364,7 +363,9 @@ export default function SchedulesScreen() {
           <Text className="text-center text-sm text-white/50">
             {filter === 'active'
               ? 'No active schedules. Resume one to run it again.'
-              : 'No paused schedules.'}
+              : filter === 'completed'
+                ? 'No completed schedules.'
+                : 'No paused schedules.'}
           </Text>
         </View>
       ) : (
@@ -500,7 +501,7 @@ function EmptyState({
         </Text>
         <Text className="text-white/50 text-center text-sm mb-6 leading-5">
           {canCreateSchedule
-            ? 'Create recurring AI tasks that run during the daily AGI Cloud scheduling window.'
+            ? 'Recurring tasks that run in the daily AGI Cloud scheduling window.'
             : NATIVE_PURCHASES_AVAILABLE
               ? 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'
               : 'Free Cloud chat remains available.'}

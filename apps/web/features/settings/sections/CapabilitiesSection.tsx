@@ -23,7 +23,7 @@ export function CapabilitiesSection() {
     <li className="flex items-center justify-between gap-4 py-4">
       <div className="min-w-0 max-w-xl">
         <p className="text-base text-foreground">{title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
       </div>
       {control}
     </li>
@@ -32,8 +32,8 @@ export function CapabilitiesSection() {
   return (
     <div className="space-y-8">
       <div>
-        <PaneTitle>Capabilities</PaneTitle>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <PaneTitle className="max-md:font-medium">Capabilities</PaneTitle>
+        <p className="mt-1 text-xs text-muted-foreground">
           Control what AGI can do in your conversations.
         </p>
         {/* A failed load must not read 'Synced to your account' while the
@@ -79,7 +79,7 @@ export function CapabilitiesSection() {
         <ul className="divide-y divide-border">
           {row(
             'Cloud code execution and file creation',
-            'Lets AGI run code and create files in a sandbox that can reach only GitHub, npm and PyPI.',
+            'Run code and create files in a sandbox that can reach only GitHub, npm and PyPI.',
             <Switch
               aria-label="Cloud code execution and file creation"
               checked={settings.cloudCodeExecution}

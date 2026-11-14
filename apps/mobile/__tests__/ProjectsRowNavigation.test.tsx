@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Alert, Modal } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockSetActiveProject = jest.fn();
 const mockDeleteProject = jest.fn();
+const mockSetProjectPinned = jest.fn();
+const mockSetProjectArchived = jest.fn();
 
 const mockProject = {
   id: 'project-1',
@@ -84,6 +86,8 @@ jest.mock('../src/features/projects/store', () => ({
       updateProject: jest.Mock;
       deleteProject: jest.Mock;
       setActiveProject: jest.Mock;
+      setProjectPinned: jest.Mock;
+      setProjectArchived: jest.Mock;
     }) => unknown,
   ) =>
     selector({
@@ -93,6 +97,8 @@ jest.mock('../src/features/projects/store', () => ({
       updateProject: jest.fn(),
       deleteProject: mockDeleteProject,
       setActiveProject: mockSetActiveProject,
+      setProjectPinned: mockSetProjectPinned,
+      setProjectArchived: mockSetProjectArchived,
     }),
 }));
 
@@ -104,16 +110,28 @@ jest.mock('../stores/projects/cloudProjectStore', () => ({
 
 import ProjectsTabScreen from '../app/(app)/(tabs)/projects';
 
-type AlertButton = { text?: string; onPress?: () => void };
+function dismissSheets(screen: ReturnType<typeof render>) {
+  act(() => {
+    for (const sheet of screen.UNSAFE_getAllByType(Modal)) {
+      (sheet.props.onDismiss as (() => void) | undefined)?.();
+    }
+  });
+}
 
-function longPressButtons(): AlertButton[] {
-  return ((Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] ?? []) as AlertButton[];
+function menuLabels(screen: ReturnType<typeof render>): string[] {
+  return screen
+    .getAllByTestId(/^conversation-action-/)
+    .map((node) => String(node.props.accessibilityLabel));
+}
+
+function choose(screen: ReturnType<typeof render>, key: string) {
+  fireEvent.press(screen.getByTestId(`conversation-action-${key}`));
+  dismissSheets(screen);
 }
 
 describe('Projects tab row navigation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
   });
 
   it('opens the project detail route on tap instead of only toggling active', () => {
@@ -128,42 +146,70 @@ describe('Projects tab row navigation', () => {
     expect(mockSetActiveProject).not.toHaveBeenCalled();
   });
 
-  it('offers Open / Set active / Rename / Delete on long press', () => {
-    const { getByLabelText } = render(<ProjectsTabScreen />);
+  it('offers Open, Set active, Pin, Rename and Delete on long press in Local', () => {
+    const screen = render(<ProjectsTabScreen />);
 
-    fireEvent(getByLabelText('Project: Launch demo'), 'longPress');
+    fireEvent(screen.getByLabelText('Project: Launch demo'), 'longPress');
 
-    expect(longPressButtons().map((button) => button.text)).toEqual([
-      'Open',
-      'Set active',
-      'Rename',
-      'Delete',
-      'Cancel',
-    ]);
+    expect(menuLabels(screen)).toEqual(['Open', 'Set active', 'Pin', 'Rename', 'Delete', 'Cancel']);
   });
 
   it('keeps set-active reachable from the long-press sheet', () => {
-    const { getByLabelText } = render(<ProjectsTabScreen />);
+    const screen = render(<ProjectsTabScreen />);
 
-    fireEvent(getByLabelText('Project: Launch demo'), 'longPress');
-    longPressButtons()
-      .find((button) => button.text === 'Set active')
-      ?.onPress?.();
+    fireEvent(screen.getByLabelText('Project: Launch demo'), 'longPress');
+    choose(screen, 'active');
 
     expect(mockSetActiveProject).toHaveBeenCalledWith('project-1');
   });
 
   it('opens the project from the long-press sheet too', () => {
-    const { getByLabelText } = render(<ProjectsTabScreen />);
+    const screen = render(<ProjectsTabScreen />);
 
-    fireEvent(getByLabelText('Project: Launch demo'), 'longPress');
-    longPressButtons()
-      .find((button) => button.text === 'Open')
-      ?.onPress?.();
+    fireEvent(screen.getByLabelText('Project: Launch demo'), 'longPress');
+    choose(screen, 'open');
 
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/projects/[id]',
       params: { id: 'project-1' },
     });
+  });
+
+  it('pins the project from the long-press sheet', () => {
+    const screen = render(<ProjectsTabScreen />);
+
+    fireEvent(screen.getByLabelText('Project: Launch demo'), 'longPress');
+    choose(screen, 'pin');
+
+    expect(mockSetProjectPinned).toHaveBeenCalledWith('project-1', true);
+  });
+
+  it('renames from the long-press sheet in the project editor', () => {
+    const screen = render(<ProjectsTabScreen />);
+
+    fireEvent(screen.getByLabelText('Project: Launch demo'), 'longPress');
+    choose(screen, 'rename');
+
+    expect(screen.getByText('Edit Project')).toBeTruthy();
+    expect(screen.getByLabelText('Project name').props.value).toBe('Launch demo');
+  });
+
+  it('names the consequence before deleting and deletes only after confirming', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    const screen = render(<ProjectsTabScreen />);
+
+    fireEvent(screen.getByLabelText('Project: Launch demo'), 'longPress');
+    choose(screen, 'delete');
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Delete project?',
+      '"Launch demo" is deleted from this device. It cannot be restored.',
+      expect.any(Array),
+    );
+    expect(mockDeleteProject).not.toHaveBeenCalled();
+
+    const buttons = alertSpy.mock.calls.at(-1)?.[2] ?? [];
+    act(() => buttons.find((button) => button.text === 'Delete')?.onPress?.());
+    expect(mockDeleteProject).toHaveBeenCalledWith('project-1');
   });
 });

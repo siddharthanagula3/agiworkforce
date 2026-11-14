@@ -74,7 +74,7 @@ describe('ConnectorCallLog', () => {
     render(<ConnectorCallLog connectorId="github" />);
 
     await screen.findByText('create_issue');
-    expect(screen.getByText(/marks it as not responding/)).toBeInTheDocument();
+    expect(screen.getByText(/mark it as not responding/)).toBeInTheDocument();
   });
 
   it('says an unused connector has nothing to show, rather than staying blank', async () => {

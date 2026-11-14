@@ -17,6 +17,19 @@ export type VoiceOrbPhase = 'idle' | 'listening' | 'thinking' | 'speaking';
 
 const AMPLITUDE_DURATION_MS = 110;
 
+export interface VoiceOrbPalette {
+  start: string;
+  mid: string;
+  end: string;
+}
+
+export function voiceOrbPalette(phase: VoiceOrbPhase): VoiceOrbPalette {
+  if (phase === 'speaking') {
+    return { start: colors.brandAmber, mid: colors.brandAmber, end: colors.voiceOrbEnd };
+  }
+  return { start: colors.voiceOrbStart, mid: colors.voiceOrbMid, end: colors.voiceOrbEnd };
+}
+
 const LEVEL_HISTORY_WEIGHT = 0.75;
 
 /**
@@ -98,6 +111,7 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
     transform: [{ scale: scale.value * 1.45 }],
   }));
 
+  const palette = voiceOrbPalette(phase);
   const radius = size / 2;
   const box = glow ? Math.round(size * 1.7) : size;
 
@@ -115,7 +129,7 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
               width: size,
               height: size,
               borderRadius: radius,
-              backgroundColor: colors.voiceOrbMid,
+              backgroundColor: palette.mid,
             },
             haloStyle,
           ]}
@@ -125,9 +139,9 @@ export function VoiceOrb({ phase, audioLevel = 0, size = 104, glow = false }: Vo
         <Svg width={size} height={size} accessibilityRole="image" accessibilityLabel="">
           <Defs>
             <LinearGradient id="voiceOrbFill" x1="0%" y1="0%" x2="0%" y2="100%">
-              <Stop offset="0%" stopColor={colors.voiceOrbStart} stopOpacity="1" />
-              <Stop offset="55%" stopColor={colors.voiceOrbMid} stopOpacity="1" />
-              <Stop offset="100%" stopColor={colors.voiceOrbEnd} stopOpacity="1" />
+              <Stop offset="0%" stopColor={palette.start} stopOpacity="1" />
+              <Stop offset="55%" stopColor={palette.mid} stopOpacity="1" />
+              <Stop offset="100%" stopColor={palette.end} stopOpacity="1" />
             </LinearGradient>
           </Defs>
           <Circle cx={radius} cy={radius} r={radius} fill="url(#voiceOrbFill)" />

@@ -4,6 +4,7 @@ import {
   BarChart3,
   Box,
   HardDrive,
+  Languages,
   MessageSquareDashed,
   Smartphone,
   SpellCheck,
@@ -34,7 +35,8 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { getModelReasoning } from '@agiworkforce/types';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import '@/src/i18n';
+import { languageFor } from '@agiworkforce/i18n';
+import { DEVICE_LANGUAGE_PREFERENCE, useLanguagePreferenceStore } from '@/src/i18n';
 
 export default function GeneralSettingsScreen() {
   const router = useRouter();
@@ -48,6 +50,11 @@ export default function GeneralSettingsScreen() {
   const selectedModel = useModelStore((s) => s.selectedModel);
   const subscriptionTier = useTierStore((s) => s.tier);
   const colors = useThemeColors();
+  const languagePreference = useLanguagePreferenceStore((s) => s.preference);
+  const languageValue =
+    languagePreference === DEVICE_LANGUAGE_PREFERENCE
+      ? 'Match device'
+      : (languageFor(languagePreference)?.nativeName ?? 'Match device');
   const defaultEffort = useDefaultEffort();
   const defaultModelReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
   const defaultEffortSteps = useMemo(
@@ -59,10 +66,18 @@ export default function GeneralSettingsScreen() {
     <SettingsScreenShell title={t('settings:general')}>
       <SettingsInfo
         title="Local defaults"
-        body="These controls affect this device only. AGI Cloud settings are managed separately."
+        body="These apply to this device only, not AGI Cloud."
         icon={Smartphone}
       />
       <SettingsGroup>
+        <SettingsRow
+          label="App language"
+          icon={Languages}
+          value={languageValue}
+          onPress={() =>
+            router.push('/(app)/settings/app-language' as Parameters<typeof router.push>[0])
+          }
+        />
         <SettingsSwitchRow
           label={t('settings:autoCorrectSpelling')}
           icon={SpellCheck}

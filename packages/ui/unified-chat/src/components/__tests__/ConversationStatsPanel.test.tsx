@@ -96,6 +96,6 @@ describe('ConversationStatsPanel', () => {
         messages={[reply('a1', { inputTokens: 10, outputTokens: 2 }), reply('a2')]}
       />,
     );
-    expect(screen.getByTestId('stats-panel').textContent).toContain('floor');
+    expect(screen.getByTestId('stats-panel').textContent).toContain('this total is a minimum');
   });
 });

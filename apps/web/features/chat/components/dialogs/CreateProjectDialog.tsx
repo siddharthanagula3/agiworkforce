@@ -246,8 +246,7 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
               aria-hidden="true"
             />
             <p className="text-xs leading-5 text-muted-foreground">
-              Projects keep chats, files, and custom instructions in one place. Use them for ongoing
-              work, or just to keep things tidy.
+              Keep chats, files and custom instructions in one place.
             </p>
           </div>
         </div>

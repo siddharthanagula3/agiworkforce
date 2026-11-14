@@ -41,7 +41,7 @@ const sessionRowStyle = {
 } as const;
 
 const sessionLabelStyle = { margin: 0, fontSize: 14, color: 'var(--text-1)' } as const;
-const sessionHintStyle = { margin: 0, fontSize: 14, color: 'var(--text-3)' } as const;
+const sessionHintStyle = { margin: 0, fontSize: 12, color: 'var(--text-3)' } as const;
 
 function SessionsPanel() {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -228,9 +228,8 @@ export function SecuritySection({
         >
           Security
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Sign-in methods, passkeys, Advanced Account Security, two-factor authentication, session
-          timeout, password, and sessions.
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+          Sign-in methods, two-factor, passkeys, password and sessions.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="account-security" label="How account security works" />

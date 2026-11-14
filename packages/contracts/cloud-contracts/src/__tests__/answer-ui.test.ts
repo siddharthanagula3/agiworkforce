@@ -10,7 +10,7 @@ import {
   answerUiControls,
   type AnswerUiCardBody,
 } from '@agiworkforce/types';
-import { AnswerUiCardBodySchema } from '../answer-ui';
+import { AnswerUiCardBodySchema, containsAnswerUiHtml, removeAnswerUiHtml } from '../answer-ui';
 import { parseInteractiveCardDelta, readPersistedInteractiveCards } from '../interactive-cards';
 
 const PIN_URL = 'https://www.google.com/maps/search/?api=1&query=Blue+Bottle+Coffee';
@@ -355,5 +355,81 @@ describe('answer UI templates and messages', () => {
     ['an action the card does not have', 'nope', {}],
   ])('refuses %s', (_label, actionId, values) => {
     expect(composeAnswerUiMessage(budgetBody(), actionId, values).ok).toBe(false);
+  });
+});
+
+describe('answer UI html detection', () => {
+  it.each([
+    '<b>',
+    '</b>',
+    '<br/>',
+    '<br />',
+    '<A-1>',
+    '<img src=x onerror=alert(1)>',
+    '<a\thref="x">',
+    '<a\nhref="x"/>',
+    'text <i>x</i> text',
+    '<!-- note -->',
+    '<!---->',
+    '<!--a-->b',
+    'a < b <b>',
+    '<a <b>',
+    '<a\u00a0x>',
+  ])('finds markup in %j', (value) => {
+    expect(containsAnswerUiHtml(value)).toBe(true);
+  });
+
+  it.each([
+    '',
+    'plain text',
+    'a < b and c > d',
+    '<>',
+    '</>',
+    '< b>',
+    '<1a>',
+    '<//a>',
+    '<a/ >',
+    '<a',
+    '<a x',
+    '<a x <b',
+    '<a/',
+    '<!-->',
+    '<!--',
+    '<!-- never closed',
+    '<!- - -->',
+    '<a-b_c>',
+    '<\u212a>',
+  ])('leaves %j alone', (value) => {
+    expect(containsAnswerUiHtml(value)).toBe(false);
+  });
+
+  it('removes tags and comments and keeps the text between them', () => {
+    expect(removeAnswerUiHtml('a <b>bold</b> <!-- c --> d')).toBe('a bold  d');
+    expect(removeAnswerUiHtml('no markup')).toBe('no markup');
+    expect(removeAnswerUiHtml('<scr<b>ipt>')).toBe('<script>');
+    expect(removeAnswerUiHtml('<!<!-- x -->-- y -->')).toBe('<!-- y -->');
+  });
+
+  it.each([
+    ['unclosed comment openers', '<!--'.repeat(25_000)],
+    ['unclosed tags', '<a '.repeat(33_000)],
+    ['bare angle brackets', '<'.repeat(100_000)],
+    ['a long attribute run', `<a ${'x '.repeat(50_000)}`],
+    ['a long tag name', `<${'a'.repeat(100_000)}`],
+    ['interleaved openers', '<a <!-- '.repeat(12_000)],
+  ])('answers %s of 100000 characters in linear time', (_label, value) => {
+    const started = performance.now();
+    expect(containsAnswerUiHtml(value)).toBe(false);
+    expect(removeAnswerUiHtml(value)).toBe(value);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
+  it('rejects a card whose text hides markup behind a long prefix', () => {
+    const hidden = `${'<!--'.repeat(400)}<i>x</i>`;
+    const result = AnswerUiCardBodySchema.safeParse({
+      blocks: [{ type: 'text', id: 't', markdown: hidden }],
+    });
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error?.issues)).toContain('html is not allowed');
   });
 });

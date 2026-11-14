@@ -86,10 +86,9 @@ export function ReflectSection({ active = true }: { active?: boolean } = {}) {
     <div className="space-y-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-h1 text-foreground">Reflect</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            See patterns in how you use AGI, without scores or judgment. Your recap is built only
-            when you open this page.
+          <h1 className="text-h1 text-foreground max-md:font-medium">Reflect</h1>
+          <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+            Patterns in how you use AGI, without scores. Built only when you open this page.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -136,9 +135,8 @@ export function ReflectSection({ active = true }: { active?: boolean } = {}) {
       {memoryRequired ? (
         <div className="rounded-xl border border-border/50 bg-muted/20 p-6">
           <h2 className="text-h4 text-foreground">Memory is off</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Reflect uses the same account chat history controls as Memory. Turn on Memory and Save
-            memories from chats to create a recap.
+          <p className="mt-2 text-xs text-muted-foreground">
+            Turn on Memory and Save memories from chats to create a recap.
           </p>
           <SettingsSectionLink
             section="personalization"
@@ -360,9 +358,8 @@ export function ReflectSection({ active = true }: { active?: boolean } = {}) {
       ) : null}
 
       <p className="text-xs leading-5 text-muted-foreground">
-        Temporary Chats and Work runs are excluded. Reflect returns activity statistics, broad topic
-        labels and the titles of chats you kept working on to the browser, not message text, and
-        viewing it does not use model quota.
+        Excludes Temporary Chats and Work runs. Shows stats, topics and chat titles, never message
+        text, and uses no quota.
       </p>
     </div>
   );

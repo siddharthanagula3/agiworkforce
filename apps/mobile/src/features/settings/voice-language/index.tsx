@@ -230,7 +230,7 @@ export default function VoiceLanguageScreen() {
   const emptyInventoryTitle =
     inventory === 'failed' ? "Couldn't load installed voices" : 'No installed voices returned';
   const emptyInventoryDetail = keepsChosenVoice
-    ? 'Your chosen voice is kept but cannot be checked right now. Choose System default to stop using it.'
+    ? 'Your voice is kept but can’t be checked now. Choose System default to stop.'
     : 'AGI uses the device default.';
 
   const visibleSystemVoices = useMemo(() => voices.slice(0, 12), [voices]);
@@ -296,7 +296,7 @@ export default function VoiceLanguageScreen() {
 
       <SettingsInfo
         title="Speaking style"
-        body="Choose an AGI voice preset or a system voice installed on this device."
+        body="An AGI preset or a voice installed on this device."
         icon={Volume2}
       />
 

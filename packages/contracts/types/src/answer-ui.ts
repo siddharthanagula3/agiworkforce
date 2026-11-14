@@ -643,15 +643,39 @@ export type AnswerUiTemplatePart =
   | { kind: 'ref'; id: string }
   | { kind: 'expression'; source: string; expression: AnswerUiExpression | null };
 
-const TEMPLATE_SLOT_RE = /\{\s*(=?)\s*([^{}]*?)\s*\}/g;
 const TEMPLATE_REF_RE = /^[a-z][a-z0-9_]*$/i;
+
+interface AnswerUiTemplateSlot {
+  start: number;
+  end: number;
+  computed: '' | '=';
+  inner: string;
+}
+
+function* answerUiTemplateSlots(template: string): Generator<AnswerUiTemplateSlot> {
+  let open = -1;
+  for (let index = 0; index < template.length; index += 1) {
+    const character = template[index];
+    if (character === '{') {
+      open = index;
+    } else if (character === '}' && open !== -1) {
+      const body = template.slice(open + 1, index).trimStart();
+      const computed = body.startsWith('=') ? '=' : '';
+      yield {
+        start: open,
+        end: index + 1,
+        computed,
+        inner: body.slice(computed.length).trim(),
+      };
+      open = -1;
+    }
+  }
+}
 
 export function parseAnswerUiTemplate(template: string): AnswerUiTemplatePart[] {
   const parts: AnswerUiTemplatePart[] = [];
   let last = 0;
-  for (const match of template.matchAll(TEMPLATE_SLOT_RE)) {
-    const [whole, computed, inner = ''] = match;
-    const start = match.index ?? 0;
+  for (const { start, end, computed, inner } of answerUiTemplateSlots(template)) {
     const isRef = computed === '' && TEMPLATE_REF_RE.test(inner);
     if (!isRef && computed !== '=') continue;
     if (start > last) parts.push({ kind: 'text', text: template.slice(last, start) });
@@ -660,7 +684,7 @@ export function parseAnswerUiTemplate(template: string): AnswerUiTemplatePart[] 
         ? { kind: 'ref', id: inner.toLowerCase() }
         : { kind: 'expression', source: inner, expression: parseAnswerUiExpression(inner) },
     );
-    last = start + whole.length;
+    last = end;
   }
   if (last < template.length) parts.push({ kind: 'text', text: template.slice(last) });
   return parts;

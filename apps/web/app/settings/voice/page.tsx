@@ -1,11 +1,7 @@
 'use client';
 
-import { VoiceSection } from '@/features/settings/sections/VoiceSection';
+import { SettingsModalRedirect } from '@/features/settings/components/SettingsModalRedirect';
 
 export default function VoiceSettingsPage() {
-  return (
-    <div className="mx-auto w-full max-w-3xl px-gutter-compact py-10 sm:px-gutter-regular md:px-gutter-wide">
-      <VoiceSection />
-    </div>
-  );
+  return <SettingsModalRedirect section="voice" />;
 }

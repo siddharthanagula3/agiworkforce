@@ -481,11 +481,11 @@ describe('the skills list grouped like the leaders', () => {
     fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: /^Upload a skill/ }));
     expect(
       screen.getByText(
-        'Zip the skill folder (named the same as the skill, with SKILL.md inside) and upload the .zip or .skill file.',
+        'Zip the skill folder with SKILL.md inside, then upload the .zip or .skill file.',
       ),
     ).toBeTruthy();
     expect(screen.getByTestId('upload-trust-notice').textContent).toBe(
-      'Only add skills and plugins from sources you trust. Read the files first; a skill can include instructions or scripts that act on your data.',
+      'Only add skills and plugins you trust. They can carry instructions or scripts that act on your data.',
     );
     expect(screen.getByLabelText('Choose file').getAttribute('accept')).toContain('.skill');
   });

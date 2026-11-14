@@ -4,6 +4,7 @@ import { act, render, screen, fireEvent, waitFor, within } from '@testing-librar
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import userEvent from '@testing-library/user-event';
 import { ChatComposerNew, VIDEO_MODELS, type ComposerProjectPicker } from './ChatComposerNew';
+import { PHONE_TOUCH_HIT_AREA_CLASS } from './touchHitArea';
 import { IMAGE_MODELS } from '../../lib/imageGenerationOptions';
 import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 import { RESEARCH_MIN_CONTEXT_WINDOW } from '@features/chat/lib/research-capability-gate';
@@ -322,6 +323,15 @@ describe('ChatComposerNew', () => {
   it('renders the message textarea', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeInTheDocument();
+  });
+
+  it('marks its outer box for layout checks and gives its phone icon buttons a 44px touch area', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    const composer = screen.getByTestId('chat-composer');
+    expect(composer).toHaveClass('chat-composer-container');
+    expect(composer).toContainElement(screen.getByRole('textbox', { name: /message input/i }));
+    const plus = screen.getByRole('button', { name: /add attachments and tools/i });
+    for (const token of PHONE_TOUCH_HIT_AREA_CLASS.split(' ')) expect(plus).toHaveClass(token);
   });
 
   it('keeps an empty first-paint composer compact when layout reports a stale large scrollHeight', () => {

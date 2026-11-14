@@ -21,9 +21,7 @@ export default function ConnectionsSettingsPage() {
       signInLabel="Sign in to see your connections"
       secondary={{ href: '/connectors/mcp-directory', label: 'Browse the MCP directory' }}
     >
-      Which services you have connected, the tools each one may run and the permission you gave them
-      are all part of your account, so this page needs you signed in. The directory of remote MCP
-      servers you can connect is public.
+      Your connections and their permissions are part of your account. The MCP directory is public.
     </SignedOutSurface>
   );
 }

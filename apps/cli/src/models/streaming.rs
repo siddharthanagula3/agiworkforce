@@ -82,6 +82,26 @@ fn routing_profile() -> Option<&'static str> {
     ROUTING_PROFILE.try_with(|profile| *profile).ok()
 }
 
+pub(crate) type ReasoningSink = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
+
+tokio::task_local! {
+    static REASONING_SINK: ReasoningSink;
+}
+
+pub(crate) async fn forwarding_reasoning<F: std::future::Future>(
+    sink: ReasoningSink,
+    future: F,
+) -> F::Output {
+    REASONING_SINK.scope(sink, future).await
+}
+
+fn forward_reasoning(text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    let _ = REASONING_SINK.try_with(|sink| sink(text));
+}
+
 fn with_search_nudge(messages: &[Message]) -> Vec<Message> {
     let mut nudged = messages.to_vec();
     if let Some(last_user) = nudged
@@ -776,7 +796,9 @@ async fn run_spec_observing(
         stream_event_handler(on_chunk, pause, &mut resolved_model, thinking.as_mut());
     let outcome = stream_chat(client, spec, &req, &mut on_event).await;
     drop(on_event);
-    if let Some(rest) = thinking.as_mut().map(InlineThinking::finish) {
+    if let Some(thinking) = thinking.as_mut() {
+        let rest = thinking.finish();
+        forward_reasoning(&thinking.take_thought());
         if !rest.is_empty() {
             on_chunk(&rest);
         }
@@ -796,6 +818,7 @@ async fn run_spec_observing(
 struct InlineThinking {
     held: String,
     inside: bool,
+    thought: String,
 }
 
 const THINKING_OPEN: &str = "<thinking>";
@@ -822,7 +845,9 @@ impl InlineThinking {
                 THINKING_OPEN
             };
             if let Some(at) = self.held.find(tag) {
-                if !self.inside {
+                if self.inside {
+                    self.thought.push_str(&self.held[..at]);
+                } else {
                     visible.push_str(&self.held[..at]);
                 }
                 self.held.drain(..at + tag.len());
@@ -831,7 +856,9 @@ impl InlineThinking {
             }
             let keep = partial_tag_len(&self.held, tag);
             let cut = self.held.len() - keep;
-            if !self.inside {
+            if self.inside {
+                self.thought.push_str(&self.held[..cut]);
+            } else {
                 visible.push_str(&self.held[..cut]);
             }
             self.held.drain(..cut);
@@ -841,12 +868,17 @@ impl InlineThinking {
 
     fn finish(&mut self) -> String {
         let rest = if self.inside {
+            self.thought.push_str(&self.held);
             String::new()
         } else {
             std::mem::take(&mut self.held)
         };
         self.held.clear();
         rest
+    }
+
+    fn take_thought(&mut self) -> String {
+        std::mem::take(&mut self.thought)
     }
 }
 
@@ -870,12 +902,14 @@ fn stream_event_handler<'a>(
         StreamEvent::TextDelta { text } => match thinking.as_deref_mut() {
             Some(thinking) => {
                 let visible = thinking.push(&text);
+                forward_reasoning(&thinking.take_thought());
                 if !visible.is_empty() {
                     on_chunk(&visible);
                 }
             }
             None => on_chunk(&text),
         },
+        StreamEvent::ReasoningDelta { text } => forward_reasoning(&text),
         StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
             notify_quota_warning(&data)
         }
@@ -1019,6 +1053,7 @@ async fn run_managed_cloud(
         .await;
         drop(on_event);
         let rest = thinking.finish();
+        forward_reasoning(&thinking.take_thought());
         if !rest.is_empty() {
             on_chunk(&rest);
         }
@@ -1481,6 +1516,97 @@ mod tests {
             untouched.text,
             "<thinking>kept for direct providers</thinking>"
         );
+    }
+
+    fn reasoning_recorder() -> (ReasoningSink, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let recorder = seen.clone();
+        let sink: ReasoningSink = std::sync::Arc::new(move |delta: &str| {
+            recorder.lock().unwrap().push(delta.to_string());
+        });
+        (sink, seen)
+    }
+
+    fn answer_recorder() -> (StreamCallback, std::sync::Arc<std::sync::Mutex<String>>) {
+        let shown = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let recorder = shown.clone();
+        let on_chunk: StreamCallback = Box::new(move |chunk: &str| {
+            recorder.lock().unwrap().push_str(chunk);
+        });
+        (on_chunk, shown)
+    }
+
+    #[tokio::test]
+    async fn a_providers_reasoning_reaches_the_turns_sink_and_never_the_answer() {
+        let (sink, seen) = reasoning_recorder();
+        let (mut on_chunk, shown) = answer_recorder();
+        forwarding_reasoning(sink, async {
+            let mut resolved_model = None;
+            let mut on_event = stream_event_handler(&mut on_chunk, None, &mut resolved_model, None);
+            on_event(StreamEvent::ReasoningDelta {
+                text: "Comparing the two ".to_string(),
+            });
+            on_event(StreamEvent::ReasoningDelta {
+                text: "configs".to_string(),
+            });
+            on_event(StreamEvent::TextDelta {
+                text: "Use the second.".to_string(),
+            });
+        })
+        .await;
+
+        assert_eq!(*seen.lock().unwrap(), ["Comparing the two ", "configs"]);
+        assert_eq!(*shown.lock().unwrap(), "Use the second.");
+    }
+
+    #[tokio::test]
+    async fn the_gateways_inline_reasoning_reaches_the_turns_sink_as_it_streams() {
+        let (sink, seen) = reasoning_recorder();
+        let (mut on_chunk, shown) = answer_recorder();
+        forwarding_reasoning(sink, async {
+            let mut resolved_model = None;
+            let mut thinking = InlineThinking::default();
+            {
+                let mut on_event = stream_event_handler(
+                    &mut on_chunk,
+                    None,
+                    &mut resolved_model,
+                    Some(&mut thinking),
+                );
+                for text in ["<thin", "king>Checking ", "the tests</th", "inking>Done."] {
+                    on_event(StreamEvent::TextDelta {
+                        text: text.to_string(),
+                    });
+                }
+            }
+            assert!(thinking.finish().is_empty());
+            assert!(thinking.take_thought().is_empty());
+        })
+        .await;
+
+        assert_eq!(seen.lock().unwrap().concat(), "Checking the tests");
+        assert_eq!(*shown.lock().unwrap(), "Done.");
+    }
+
+    #[test]
+    fn reasoning_outside_a_forwarding_turn_goes_nowhere() {
+        let (mut on_chunk, shown) = answer_recorder();
+        let mut resolved_model = None;
+        let mut on_event = stream_event_handler(&mut on_chunk, None, &mut resolved_model, None);
+        on_event(StreamEvent::ReasoningDelta {
+            text: "private".to_string(),
+        });
+        drop(on_event);
+        assert!(shown.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn reasoning_cut_off_by_the_end_of_the_stream_is_still_reasoning() {
+        let mut thinking = InlineThinking::default();
+        assert_eq!(thinking.push("<thinking>half a thought </thi"), "");
+        assert_eq!(thinking.take_thought(), "half a thought ");
+        assert_eq!(thinking.finish(), "");
+        assert_eq!(thinking.take_thought(), "</thi");
     }
     use axum::{
         http::header,

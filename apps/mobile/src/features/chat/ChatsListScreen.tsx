@@ -324,13 +324,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
     if (!isSearching) return searchOnly ? [] : groupHistory(filteredHistory);
     return [
       searchSection('Chats', 'chat', globalResults.chats),
-      searchSection('Go to', 'destination', searchMobileDestinations(query)),
+      searchSection('Go to', 'destination', searchMobileDestinations(query, appMode)),
       searchSection('Projects', 'project', globalResults.projects),
       searchSection('Files', 'file', globalResults.files),
       searchSection('Library', 'library', globalResults.library),
       searchSection('Artifacts', 'artifact', globalResults.artifacts),
     ].filter((section): section is ChatsListSection => section !== null);
-  }, [filteredHistory, globalResults, isSearching, query, searchOnly]);
+  }, [appMode, filteredHistory, globalResults, isSearching, query, searchOnly]);
 
   const openFilter = useCallback(() => {
     const option = (value: ChatListFilter) => ({
@@ -715,7 +715,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                   }}
                 >
                   {searchOnly && !isSearching
-                    ? 'Find chats, projects, files, library images, and artifacts in this mode.'
+                    ? 'Search chats, projects, files, images and artifacts in this mode.'
                     : isSearching
                       ? `Nothing in ${appMode === 'cloud' ? PRIVACY_MODE_DISPLAY.managed.label : 'Local Mode'} matches “${query.trim()}”.`
                       : filter === 'all'

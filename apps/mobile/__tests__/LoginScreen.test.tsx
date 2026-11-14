@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React, { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Alert, Platform, Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
   FREE_PLAN_TRAINING_SIGNUP_NOTICE,
@@ -89,7 +89,7 @@ jest.mock('@/lib/v1FeatureFlags', () => ({
 
 jest.mock('expo-linking', () => ({
   createURL: (path: string, options?: { queryParams?: Record<string, string> }) => {
-    const base = `agiworkforce://${path.replace(/^\//, '')}`;
+    const base = `agiworkforce:///${path.replace(/^\//, '')}`;
     const query = new URLSearchParams(options?.queryParams).toString();
     return query ? `${base}?${query}` : base;
   },
@@ -429,7 +429,7 @@ describe('LoginScreen', () => {
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
         strategy: 'oauth_google',
-        redirectUrl: 'agiworkforce://login?postAuthIntent=cloud-schedules',
+        redirectUrl: 'agiworkforce:///login?postAuthIntent=cloud-schedules',
       }),
     );
   });
@@ -522,6 +522,21 @@ describe('LoginScreen', () => {
     expect(screen.getByTestId('mobile-sign-in-email')).toBeTruthy();
   });
 
+  it('does not check or start native Apple authentication on Android even when configured', () => {
+    process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS = 'google,github,apple';
+    const platform = jest.replaceProperty(Platform, 'OS', 'android');
+    try {
+      const screen = render(<LoginScreen />);
+      expect(screen.queryByTestId('mobile-sign-in-apple')).toBeNull();
+      fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+      expect(screen.queryByTestId('mobile-sign-up-apple')).toBeNull();
+      expect(mockAppleAvailable).not.toHaveBeenCalled();
+      expect(mockStartAppleAuthenticationFlow).not.toHaveBeenCalled();
+    } finally {
+      platform.restore();
+    }
+  });
+
   it('creates a legally accepted email sign-up and verifies its code', async () => {
     mockVerifyEmailCode.mockImplementationOnce(async () => {
       mockSignUp.status = 'complete';
@@ -576,7 +591,7 @@ describe('LoginScreen', () => {
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
         strategy: 'oauth_google',
-        redirectUrl: 'agiworkforce://login?postAuthIntent=cloud-models',
+        redirectUrl: 'agiworkforce:///login?postAuthIntent=cloud-models',
       }),
     );
   });
@@ -952,6 +967,37 @@ describe('LoginScreen', () => {
       expect(signOut).toHaveBeenCalledTimes(1);
       expect(mockReplace).toHaveBeenCalledWith('/(app)');
     } finally {
+      useAuthStore.setState({ signOut: originalSignOut });
+    }
+  });
+
+  it('says so when logging out from the failure screen does not finish', async () => {
+    mockIsSignedIn = true;
+    mockUserId = 'person-a';
+    const signOut = jest.fn(async () => {
+      throw new Error('session removal failed');
+    });
+    const originalSignOut = useAuthStore.getState().signOut;
+    useAuthStore.setState({ signOut });
+    useTermsAcceptanceStore.setState({
+      userId: 'person-a',
+      status: 'error',
+      error: 'AGI Cloud could not verify this device session. Retry, or continue in Local Mode.',
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    try {
+      const screen = render(<LoginScreen />);
+      fireEvent.press(screen.getByTestId('mobile-terms-sign-out'));
+      await waitFor(() =>
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Log out failed',
+          expect.stringMatching(/try again/i),
+        ),
+      );
+      expect(signOut).toHaveBeenCalledTimes(1);
+    } finally {
+      alertSpy.mockRestore();
       useAuthStore.setState({ signOut: originalSignOut });
     }
   });

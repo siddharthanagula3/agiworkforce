@@ -776,7 +776,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
         <>
           <SettingsInfo
             title="Connected to AGI Cloud"
-            body="Review this connection and choose how each of its tools runs."
+            body="Choose how each of its tools runs."
             icon={ShieldCheck}
           />
 
@@ -860,8 +860,8 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 }}
               >
                 {keyCredentialsPath
-                  ? `${connectorName} tools will not run until it has a working key. Replace its API key below.`
-                  : `${connectorName} tools will not run until it is connected again. Disconnect it here, then add it again.`}
+                  ? `${connectorName} needs a working key to run. Replace it below.`
+                  : `${connectorName} needs reconnecting. Disconnect it here, then add it again.`}
               </Text>
             </View>
           ) : null}
@@ -987,7 +987,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
 
           <SectionHeading
             title="Tool permissions"
-            body="Choose how each tool runs. Tools you leave unset follow your Action approvals setting."
+            body="Unset tools follow your Action approvals setting."
           />
 
           {toolsLoading ? (

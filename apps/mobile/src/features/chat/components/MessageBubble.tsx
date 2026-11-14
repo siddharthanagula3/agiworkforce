@@ -25,6 +25,7 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  ArrowRight,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
@@ -493,6 +494,7 @@ interface MessageBubbleProps {
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
+  onContinueMessage?: (messageId: string) => void;
   onBranch?: (messageId: string) => void;
   onScheduleMessage?: (messageId: string) => void;
   onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
@@ -560,6 +562,7 @@ export const MessageBubble = memo(function MessageBubble({
   onEditImageArea,
   onDeleteImageConversation,
   onRetryWithModel,
+  onContinueMessage,
   onBranch,
   onScheduleMessage,
   variant,
@@ -1873,6 +1876,39 @@ export const MessageBubble = memo(function MessageBubble({
                   })
                 }
               />
+            ) : null}
+
+            {onContinueMessage && !isStreamingRow ? (
+              <PressableBox
+                onPress={() => onContinueMessage(message.id)}
+                accessibilityRole="button"
+                accessibilityLabel="Continue generating this response"
+                testID="continue-generating"
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  alignSelf: 'flex-start',
+                  gap: 6,
+                  minHeight: 44,
+                  marginTop: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: radii.md,
+                  borderWidth: 1,
+                  borderColor: themeColors.border,
+                  backgroundColor: themeColors.neutralSurface,
+                }}
+              >
+                <ArrowRight size={14} color={themeColors.textPrimary} />
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    fontWeight: '600',
+                    color: themeColors.textPrimary,
+                  }}
+                >
+                  Continue generating
+                </Text>
+              </PressableBox>
             ) : null}
 
             {provenance && (

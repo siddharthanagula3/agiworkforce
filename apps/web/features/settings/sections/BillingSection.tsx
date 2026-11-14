@@ -704,7 +704,7 @@ export function BillingSection() {
         >
           Billing
         </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           Your plan, credits, and payment details.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
@@ -1201,7 +1201,7 @@ export function BillingSection() {
             >
               Keep going after a usage limit
             </p>
-            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 14, color: 'var(--text-3)' }}>
+            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 12, color: 'var(--text-3)' }}>
               {overageAvailableCredits > 0
                 ? `Spend your credits when a usage limit stops you. ${formatCreditsShared(overageAvailableCredits, { maximumFractionDigits: CREDIT_FRACTION_DIGITS })} available.`
                 : 'Spend your credits when a usage limit stops you. Buy credits above to use this.'}

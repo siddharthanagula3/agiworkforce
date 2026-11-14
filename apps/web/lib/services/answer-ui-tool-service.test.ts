@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import { containsAnswerUiHtml, parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import {
   ANSWER_UI_CARD_KIND,
   INTERACTIVE_CARD_MAX_SERIALIZED_LENGTH,
@@ -133,6 +133,67 @@ describe('render_answer_ui input repair', () => {
       'https://t.test/b.png',
     ]);
     expect(blockOf(body, 'actions').buttons.map((button) => button.label)).toEqual(['Docs']);
+  });
+
+  it.each([
+    [
+      'a split script element',
+      'Hi <scr<script>x</script>ipt>alert(1)</scr<script>x</script>ipt>!',
+      'Hi alert(1)!',
+    ],
+    ['a split tag', 'a <<b>b>c', 'a c'],
+    ['a split comment', 'a <!<!-- x -->-- y -->b', 'a b'],
+    [
+      'a nested split script element',
+      `Hi ${'<scr<script>x</script>ipt>'.repeat(3)}y${'</scr<script>x</script>ipt>'.repeat(3)}`,
+      'Hi y',
+    ],
+    ['an upper case style element', 'a <STYLE>p{}</Style >b', 'a b'],
+    ['a template element', 'a <template><b>x</b></template>b', 'a b'],
+    ['a comparison beside a tag', 'a < b <b>x</b>', 'a < b x'],
+    [
+      'a tag whose attributes hide a split style element',
+      '<a onclick=evil() <sty<style></style>le>></style>',
+      null,
+    ],
+    [
+      'a tag with a javascript link around a split script element',
+      '<a href="javascript:evil()" <scr<script></script>ipt>></script>click',
+      'click',
+    ],
+    [
+      'tags nested past the pass limit',
+      '<b <s<s<s<s<s<s<s<s<style></style>tyle>tyle></style>tyle></style>tyle></style>tyle></style>tyle></style>tyle></style>tyle></style>></style>',
+      '‹b >',
+    ],
+    [
+      'tags nested deeper than the pass limit',
+      `x ${'<a '.repeat(40)}${'>'.repeat(40)} y`,
+      `x ${'‹a '.repeat(32)}${'>'.repeat(32)} y`,
+    ],
+  ])('strips %s as the earlier code did', (_label, input, expected) => {
+    const { body } = render({
+      blocks: [
+        { type: 'text', text: 'ok' },
+        { type: 'text', text: input },
+      ],
+    });
+    const markdowns = body.blocks.flatMap((block) =>
+      block.type === 'text' ? [block.markdown] : [],
+    );
+    expect(markdowns).toEqual(expected === null ? ['ok'] : ['ok', expected]);
+  });
+
+  it.each([
+    ['unclosed script elements', '<script '.repeat(12_000)],
+    ['unclosed comment openers', '<!--'.repeat(25_000)],
+    ['unclosed tags', '<a '.repeat(33_000)],
+    ['script closers followed by spaces', `<script>${'</script '.repeat(12_000)}`],
+  ])('cleans %s of 100000 characters in linear time', (_label, input) => {
+    const started = performance.now();
+    const { body } = render({ blocks: [{ type: 'text', text: `ok ${input}` }] });
+    expect(containsAnswerUiHtml(blockOf(body, 'text').markdown)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 
   it('removes template slots that name no control rather than failing', () => {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BarChart3 } from 'lucide-react';
+import { BarChart3, ChevronRight } from 'lucide-react';
 import { EmptyState, Spinner, Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import {
   formatCredits,
@@ -127,7 +127,13 @@ function Models({ rows }: { rows: readonly AccountUsageBreakdownRow[] }) {
   );
 }
 
-export function CodeUsageDashboard({ planTier }: { planTier: string | null }) {
+export function CodeUsageDashboard({
+  planTier,
+  linkOnly = false,
+}: {
+  planTier: string | null;
+  linkOnly?: boolean;
+}) {
   const metered = planTier !== null && !isFreeBillingPlanTier(planTier);
   const [tab, setTab] = useState<CodeUsageTab>('overview');
   const [range, setRange] = useState<CodeUsageRange>(DEFAULT_RANGE);
@@ -135,7 +141,7 @@ export function CodeUsageDashboard({ planTier }: { planTier: string | null }) {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
 
   useEffect(() => {
-    if (!metered) return;
+    if (!metered || linkOnly) return;
     const controller = new AbortController();
     setState({ status: 'loading' });
     const query = new URLSearchParams({
@@ -159,9 +165,25 @@ export function CodeUsageDashboard({ planTier }: { planTier: string | null }) {
       }
     })();
     return () => controller.abort();
-  }, [metered, range, attempt]);
+  }, [metered, linkOnly, range, attempt]);
 
   if (!metered) return null;
+
+  if (linkOnly) {
+    return (
+      <Link
+        href={CODE_ROUTES.usage}
+        data-testid="code-usage-link"
+        className="mt-6 flex min-h-11 items-center justify-between gap-3 rounded-xl border border-border px-4 text-left text-sm text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="truncate">{COPY.label}</span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+      </Link>
+    );
+  }
 
   const history =
     state.status === 'ready' && state.history.totals.requests > 0 ? state.history : null;

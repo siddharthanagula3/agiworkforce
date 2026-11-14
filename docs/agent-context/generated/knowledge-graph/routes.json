@@ -686,6 +686,17 @@
     {
       "surface": "mobile",
       "kind": "page",
+      "url": "/settings/app-language",
+      "file": "apps/mobile/app/(app)/settings/app-language.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "app-language"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
       "url": "/settings/appearance",
       "file": "apps/mobile/app/(app)/settings/appearance.tsx",
       "segments": [
@@ -780,6 +791,17 @@
         "(app)",
         "settings",
         "cloud-usage"
+      ]
+    },
+    {
+      "surface": "mobile",
+      "kind": "page",
+      "url": "/settings/code",
+      "file": "apps/mobile/app/(app)/settings/code.tsx",
+      "segments": [
+        "(app)",
+        "settings",
+        "code"
       ]
     },
     {
@@ -1050,12 +1072,11 @@
     },
     {
       "surface": "mobile",
-      "kind": "page",
+      "kind": "layout",
       "url": "/settings",
-      "file": "apps/mobile/app/(app)/(tabs)/settings.tsx",
+      "file": "apps/mobile/app/(app)/settings/_layout.tsx",
       "segments": [
         "(app)",
-        "(tabs)",
         "settings"
       ]
     },
@@ -2082,6 +2103,20 @@
       ],
       "methods": [
         "GET"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/admin/product-updates",
+      "file": "apps/web/app/api/admin/product-updates/route.ts",
+      "segments": [
+        "api",
+        "admin",
+        "product-updates"
+      ],
+      "methods": [
+        "POST"
       ]
     },
     {

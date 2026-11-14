@@ -239,6 +239,18 @@ function setConversationUnread(id: string, unread: boolean): void {
   }
 }
 
+function hasPartialAssistantText(message: ChatMessage): boolean {
+  return message.role === 'assistant' && message.content.trim().length > 0;
+}
+
+function stoppedByAppExit(message: ChatMessage): ChatMessage {
+  return {
+    ...message,
+    isStreaming: false,
+    metadata: { ...message.metadata, finishReason: 'stopped' },
+  };
+}
+
 export const useChatMessageStore = create<MessageState>()(
   persist(
     (set, get) => ({
@@ -693,7 +705,7 @@ export const useChatMessageStore = create<MessageState>()(
         const localConversation = get().conversations.find((c) => c.id === id);
         if (!localConversation) {
           const cloudStore = getCloudStore();
-          cloudStore.getState().patchCloudConversation(id, { title });
+          cloudStore.getState().patchCloudConversation(id, { title, userTitlePending: true });
           if (
             shouldSyncConversationRemote(
               cloudStore.getState().conversations.find((c) => c.id === id),
@@ -1547,7 +1559,9 @@ export const useChatMessageStore = create<MessageState>()(
         const messages: Record<string, ChatMessage[]> = {};
         for (const [id, msgs] of Object.entries(state.messages)) {
           if (conversationIds.has(id)) {
-            messages[id] = msgs.filter((m) => !m.isStreaming).map(resolveInterruptedGeneration);
+            messages[id] = msgs
+              .filter((m) => !m.isStreaming || hasPartialAssistantText(m))
+              .map((m) => resolveInterruptedGeneration(m.isStreaming ? stoppedByAppExit(m) : m));
           }
         }
         return { conversations, messages, currentConversationId: state.currentConversationId };

@@ -55,6 +55,7 @@ import {
   type ConnectorDirectoryEntry,
   type ConnectorDirectoryListResponse,
   type ConnectorDirectoryQuery,
+  type ConnectorPersonalSource,
   type SaveConnectorCredentialRequest,
 } from '@agiworkforce/cloud-contracts';
 
@@ -205,6 +206,20 @@ export async function browseConnectorListings(
   const parsed = ListingPageSchema.safeParse(await api.get<unknown>(listingHref(filter)));
   if (!parsed.success) throw new ConnectorResponseError(INVALID_LISTING);
   return parsed.data;
+}
+
+export async function browsePersonalSourceListings(
+  source: ConnectorPersonalSource,
+): Promise<ConnectorListing[]> {
+  const params = new URLSearchParams({
+    personalSource: source,
+    limit: String(CONNECTOR_DIRECTORY_MAX_LIMIT),
+  });
+  const parsed = ListingPageSchema.safeParse(
+    await api.get<unknown>(`${CONNECTOR_DIRECTORY_PATH}?${params.toString()}`),
+  );
+  if (!parsed.success) throw new ConnectorResponseError(INVALID_LISTING);
+  return parsed.data.entries.filter((entry) => entry.personalSources?.includes(source));
 }
 
 export async function fetchConnectorListing(id: string): Promise<ConnectorListing | null> {

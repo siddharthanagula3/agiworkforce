@@ -7,7 +7,13 @@ import type {
 } from './types';
 import { detectCapabilities } from './capabilities';
 import { tier1Generate } from './tier1';
-import { tier2Generate, tier2LoadModel, tier2LoadedPresetName, tier2Release } from './tier2';
+import {
+  tier2AssertPresetDownloaded,
+  tier2Generate,
+  tier2LoadModel,
+  tier2LoadedPresetName,
+  tier2Release,
+} from './tier2';
 import { tier3Generate, tier3LoadModel, tier3LoadedModelPath, tier3Release } from './tier3';
 import { getDefaultModel, getModelById, getSystemModelForTier1Runtime } from './catalog';
 import type { ExecutorchPreset } from '@agiworkforce/types';
@@ -174,7 +180,10 @@ export async function loadLocalModel(
   const ref = normalizeModelRef(modelPathOrId, modelId);
   if (tier === 2) {
     const preset = resolvePreset(ref.modelId);
-    if (preset) await tier2LoadModel(preset);
+    if (preset) {
+      await tier2AssertPresetDownloaded(preset);
+      await tier2LoadModel(preset);
+    }
   } else if (tier === 3 && ref.modelPath) {
     await tier3LoadModel(ref.modelPath, ref.modelId);
   }

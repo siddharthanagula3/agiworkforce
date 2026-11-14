@@ -26,18 +26,17 @@ const BENEFITS: ContinuityBenefit[] = [
   {
     icon: ListChecks,
     title: 'Start and steer tasks from your phone',
-    description: 'Send work to Managed Cloud, answer follow-ups, and review results from mobile.',
+    description: 'Send work, answer follow-ups and review results.',
   },
   {
     icon: Globe2,
     title: 'Check in from any signed-in surface',
-    description: 'The same Cloud task is available on your phone, browser, and desktop app.',
+    description: 'The same task on your phone, browser and desktop.',
   },
   {
     icon: Clock3,
     title: 'Work continues when the app is closed',
-    description:
-      'Managed Cloud keeps the run alive and a completion notification can deep-link you back to the result.',
+    description: 'A notification takes you back to the result when it’s done.',
   },
 ];
 
@@ -188,8 +187,7 @@ export default function ContinuityOnboardingScreen() {
               textAlign: 'center',
             }}
           >
-            Managed Cloud tasks stay attached to your AGI account, so you can leave this device
-            without ending the run.
+            Tasks stay on your AGI account, so leaving this device won’t end them.
           </Text>
         </View>
 

@@ -44,7 +44,7 @@ nothing is left.
 
 - Done when: The selector highlights a short list of recommended models for the user.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -54,7 +54,7 @@ nothing is left.
 
 - Done when: Models show which inputs they accept (e.g. images, audio) as badges.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |

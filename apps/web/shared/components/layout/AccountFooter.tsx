@@ -64,7 +64,9 @@ export function AccountFooter({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
+                  <p className="truncate text-[13px] font-medium text-foreground pointer-coarse:text-sm">
+                    {displayName}
+                  </p>
                   <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={isFreeTier} />
                 </div>
                 {email && <p className="truncate text-caption text-muted-foreground">{email}</p>}

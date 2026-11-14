@@ -15,6 +15,7 @@ import {
   LifeBuoy,
   BookOpen,
   Activity,
+  Scale,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
@@ -23,6 +24,8 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { SUPPORT_EMAIL } from '@/src/features/support/contact';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import pkg from '../../package.json';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'unknown';
@@ -106,10 +109,13 @@ function platformDisplayName(os: string): string {
 export default function AboutScreen() {
   const c = useThemeColors();
   const router = useRouter();
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const isCloudMode = useChatAppModeStore((s) => s.appMode) === 'cloud';
+  const canOpenSupportTickets = isClerkSignedIn && isCloudMode;
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    else router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const openWebPage = useCallback(async (url: string) => {
@@ -255,6 +261,12 @@ export default function AboutScreen() {
               router.push('/(app)/legal/licenses' as Parameters<typeof router.push>[0])
             }
           />
+          <Separator />
+          <LinkRow
+            icon={Scale}
+            label="EU AI Act Transparency"
+            onPress={() => router.push('/legal/article-50' as Parameters<typeof router.push>[0])}
+          />
         </Card>
 
         <Card style={{ padding: 14 }}>
@@ -304,12 +316,16 @@ export default function AboutScreen() {
               </Text>
             </View>
           </Pressable>
-          <Separator />
-          <LinkRow
-            icon={LifeBuoy}
-            label="Contact Support"
-            onPress={() => router.push('/(app)/support' as Parameters<typeof router.push>[0])}
-          />
+          {canOpenSupportTickets ? (
+            <>
+              <Separator />
+              <LinkRow
+                icon={LifeBuoy}
+                label="Contact Support"
+                onPress={() => router.push('/(app)/support' as Parameters<typeof router.push>[0])}
+              />
+            </>
+          ) : null}
           <Separator />
           <LinkRow
             icon={Mail}

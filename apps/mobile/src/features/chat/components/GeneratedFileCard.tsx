@@ -249,7 +249,7 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
       </View>
       {presentation.localOnly ? (
         <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-          Local file. Sharing uses the native sheet and does not upload it to AGI cloud.
+          Local file. Sharing doesn’t upload it to AGI Cloud.
         </Text>
       ) : null}
       {onOpenSourceSession && presentation.sourceSessionLabel ? (

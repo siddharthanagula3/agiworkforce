@@ -382,7 +382,7 @@ export function FollowUpSuggestions({
                 'group/pill inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5',
                 'pointer-coarse:min-h-11',
                 'border border-border/40 bg-card/50 backdrop-blur-sm',
-                'text-xs font-medium text-muted-foreground',
+                'text-xs font-medium text-muted-foreground max-md:text-sm',
                 'transition-all duration-quick',
                 'hover:border-primary/30 hover:bg-primary/5 hover:text-foreground hover:shadow-e1',
                 'active:scale-[0.97]',

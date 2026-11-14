@@ -37,7 +37,7 @@ import { LIVE_VOICE_REASONING, type LiveVoiceReasoning } from '@features/chat/li
 const LABEL = {
   title: 'Voice settings',
   description:
-    'Choose the spoken voice, the intelligence this chat uses for typed replies, how much the voice reasons, its language and its speaking pace.',
+    'Choose the voice, its reasoning, language and pace, and the intelligence for typed replies.',
   voice: 'Voice',
   previous: 'Previous voice',
   next: 'Next voice',
@@ -77,7 +77,7 @@ const ITEM_CLASS =
   'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
 
 const ROUND_CONTROL_CLASS =
-  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40';
+  'flex h-9 min-h-0 w-9 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-secondary)] pointer-coarse:h-11 pointer-coarse:w-11 transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40';
 
 interface PickerOption {
   id: string;
@@ -173,7 +173,7 @@ export interface VoicePickerOption {
 }
 
 const DOT_CLASS =
-  'h-3 w-3 rounded-full p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--chat-surface-elevated)]';
+  'h-3 min-h-0 w-3 rounded-full p-0 transition-colors pointer-coarse:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--chat-surface-elevated)]';
 
 export interface VoiceCarouselProps {
   voices: readonly VoicePickerOption[];
@@ -234,7 +234,7 @@ export function VoiceCarousel({ voices, voiceUri, onVoiceChange }: VoiceCarousel
       ) : null}
 
       {voices.length > 1 && voices.length <= VOICE_CAROUSEL_DOTS_MAX && (
-        <div className="flex justify-center gap-1.5" data-testid="voice-carousel-dots">
+        <div className="flex flex-wrap justify-center gap-1.5" data-testid="voice-carousel-dots">
           {voices.map((voice, index) => (
             <button
               key={voice.voiceURI}

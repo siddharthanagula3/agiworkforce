@@ -72,10 +72,8 @@ export function LockdownModePanel() {
             Refuse connector tools and web tools
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            AGI stops offering connector tools to the model, and web search, page fetch, code
-            execution and Deep Research stay off, so a web page, document, or connector response
-            cannot talk it into calling one. Your connectors stay connected and your per-tool
-            choices are kept for when you turn this off.
+            Turns off connector tools, web search, code execution and Deep Research. Connectors stay
+            connected.
           </p>
           {enabled ? (
             <p className="mt-2 text-xs font-medium text-[var(--chat-accent-primary-text)]">

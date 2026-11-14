@@ -18,7 +18,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 const CONFLICTS_PATH = '/api/memory/conflicts';
 const CONTROL_HEIGHT = 30;
 const CONFLICT_RULE =
-  'When two memories disagree, a pinned memory wins, then one you added over one learned from a chat, then the newer one. The replaced one is kept here so you can switch back.';
+  'Pinned wins, then ones you added, then the newest. Replaced memories stay here.';
 const LOAD_FAILED_MESSAGE = 'Could not load replaced memories. Try again later.';
 const RESTORE_FAILED_MESSAGE = 'Could not switch back to that memory. Try again.';
 

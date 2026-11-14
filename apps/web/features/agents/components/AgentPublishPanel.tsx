@@ -209,8 +209,7 @@ export function AgentPublishPanel({
           </div>
         ) : !inWorkspace ? (
           <p className="text-sm text-muted-foreground">
-            Agents in your personal space stay private. Switch to a workspace and create the agent
-            there to share it with its members.
+            Personal agents stay private. Create it in a workspace to share it.
           </p>
         ) : (
           <>

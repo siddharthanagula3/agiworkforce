@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ query: vi.fn(), sendPush: vi.fn(), record: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  sendPush: vi.fn(),
+  record: vi.fn(),
+  track: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
@@ -12,11 +17,21 @@ vi.mock('../notification-service', () => ({
 vi.mock('../push-notification-service', () => ({
   sendPushToUser: (...args: unknown[]) => mocks.sendPush(...args),
 }));
+vi.mock('@/lib/server/product-analytics', async (importOriginal) => ({
+  ...(await importOriginal<ProductAnalyticsModule>()),
+  trackProductAnalyticsEvent: (...args: unknown[]) => mocks.track(...args),
+}));
+
+type ProductAnalyticsModule = typeof import('@/lib/server/product-analytics');
 
 import type { AgentRunNotificationEvent } from '../agent-notification-service';
 
-const { notifyAgentRunEvent, notifyResearchReportSettled, AGENT_PUSH_PREFERENCE_KEY } =
-  await import('../agent-notification-service');
+const {
+  notifyAgentRunEvent,
+  notifyResearchReportSettled,
+  trackAgentRunOutcome,
+  AGENT_PUSH_PREFERENCE_KEY,
+} = await import('../agent-notification-service');
 
 const callerDb = { query: mocks.query } as never;
 
@@ -36,6 +51,34 @@ beforeEach(() => {
   mocks.sendPush.mockResolvedValue({ sent: 1, invalidated: 0 });
   mocks.record.mockResolvedValue({ recorded: true });
   preferences({});
+});
+
+describe('trackAgentRunOutcome', () => {
+  it.each([
+    ['completed', 'succeeded'],
+    ['failed', 'failed'],
+  ] as const)('records a %s run as %s', (event, outcome) => {
+    trackAgentRunOutcome({ userId: 'user-1', event });
+
+    expect(mocks.track).toHaveBeenCalledTimes(1);
+    expect(mocks.track).toHaveBeenCalledWith(
+      { userId: 'user-1' },
+      { name: 'work_run_finished', surface: 'web', outcome },
+    );
+  });
+
+  it('records nothing while a run is only waiting on the user', () => {
+    trackAgentRunOutcome({ userId: 'user-1', event: 'approval_required' });
+    trackAgentRunOutcome({ userId: 'user-1', event: 'input_required' });
+
+    expect(mocks.track).not.toHaveBeenCalled();
+  });
+
+  it('is recorded once when a finished run is announced', async () => {
+    await notifyAgentRunEvent(callerDb, { ...notice, event: 'completed', toolName: null });
+
+    expect(mocks.track).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('notifyAgentRunEvent, in-app feed', () => {

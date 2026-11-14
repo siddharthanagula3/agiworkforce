@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { Mic } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
 
+import { PHONE_TOUCH_HIT_AREA_CLASS } from './touchHitArea';
+
 const LABEL = {
   start: 'Start voice input',
   unsupported: 'Voice input not supported in this browser',
@@ -72,6 +74,7 @@ export function VoiceInputButton({
         className={cn(
           'relative flex h-8 min-h-0 w-8 touch-manipulation items-center justify-center rounded-full transition-all duration-quick sm:h-9 sm:w-9',
           'border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+          PHONE_TOUCH_HIT_AREA_CLASS,
           !isSupported && 'cursor-not-allowed opacity-40',
           disabled && 'cursor-not-allowed opacity-50',
         )}

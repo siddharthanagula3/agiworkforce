@@ -169,8 +169,7 @@ function PluginPolicySection({
           Plugins
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          Checked when a member installs a plugin, from the directory, a marketplace or an upload.
-          Approving any plugin makes the approved list the only plugins members can install.
+          Approving any plugin limits members to the approved list.
         </p>
       </div>
       <div className="flex flex-col gap-4 px-5 py-4">
@@ -262,9 +261,8 @@ function McpHostPolicySection({
           MCP server hosts
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          Limits which hosts a custom or shared MCP connector may reach. Checked when the connector
-          is added and every time it connects. Use *.example.com to approve every subdomain. With no
-          hosts listed, any public host is allowed.
+          Hosts custom MCP connectors may reach. *.example.com covers subdomains. None listed allows
+          any public host.
         </p>
       </div>
       <div className="flex flex-col gap-2 px-5 py-4">
@@ -335,10 +333,8 @@ function WebDomainPolicySection({
           Websites
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          Limits the sites web search and page fetching read for everyone in this workspace, in
-          chat, Research, scheduled tasks and Slack. A site includes its subdomains. Allowing any
-          site makes the allowed list the only sites that are read, and a blocked site is never
-          read. Voice sessions do not search the web while a site rule is set.
+          Sites web search may read, subdomains included. Allowing any limits reads to that list.
+          Voice won't search while a rule is set.
         </p>
       </div>
       <div className="flex flex-col gap-4 px-5 py-4">
@@ -673,11 +669,8 @@ export function WorkspaceConnectorPolicy() {
             Catalog connectors
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            The badge shows what a member will actually get after every rule resolves. Approving
-            none leaves them all available, restriction is something you state. For each connector,
-            choose whether its read-only and write tools always run, need approval each time or are
-            blocked, for everyone in the workspace. A member can make a tool stricter for
-            themselves, never looser.
+            Set whether each connector's tools run, need approval or are blocked. Members can only
+            make them stricter.
           </p>
         </div>
 
@@ -786,8 +779,8 @@ export function WorkspaceConnectorPolicy() {
         >
           <p className="max-w-xl text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             {restricted
-              ? 'Applied where the tool catalog is assembled, the one path chat, scheduled tasks, and cloud agent runs all share, and when a plugin is installed. A blocked connector is never offered to the model, so it cannot be called from any of them.'
-              : 'No restriction is in force. Members may use any integration and install any plugin, including custom endpoints.'}
+              ? 'A blocked connector is never offered to the model in chat, schedules or agent runs.'
+              : 'No restriction. Members may use any integration or plugin, custom ones included.'}
           </p>
           <div className="flex items-center gap-3">
             {update.isError ? (

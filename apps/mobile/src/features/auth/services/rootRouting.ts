@@ -14,6 +14,7 @@ export interface RootRouteInput {
   onboardingDone: boolean;
   ageGateConfirmed: boolean;
   signInOwedForEndedSession: boolean;
+  addingAccount?: boolean;
 }
 
 export type RootRedirect =
@@ -58,6 +59,7 @@ export function resolveRootRedirect(input: RootRouteInput): RootRedirect | null 
     return null;
   }
   if (inAuthGroup) {
+    if (input.addingAccount && onboardingDone && screen === 'login') return null;
     return onboardingDone ? { pathname: APP_PATH } : firstRunGate;
   }
   if (inPublic) {

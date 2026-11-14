@@ -68,6 +68,7 @@ console step.
 | Expo account               | `agiautomationllc`, project `38f0941c-88a7-468a-9750-fcd8b357ff4c`; the production environment has the three `EXPO_PUBLIC_*` values               |
 | App Store Connect          | app record "AGI Mobile", Apple ID `6787526447`, bundle `com.agiworkforce.app`, team `D2PR62RLT4` (last confirmed 2026-10-21)                      |
 | Sign in with Apple         | enabled in production Clerk (2026-10-19); the release check refuses an iOS build whose provider list lacks `apple`                                |
+| Increased Memory Limit     | requested by the app's entitlement for on-device models (2026-11-11); `eas build` enables the capability on the App ID itself, nothing to click   |
 | Google Play upload account | `play-publisher@agi-mobile-release.iam.gserviceaccount.com` exists; it has no access until step 3.2                                               |
 | Public pages               | `/privacy`, `/terms`, `/support`, `/privacy/requests`, `/subprocessors`, `/trust` and the Apple link file all answer 200 on `agiworkforce.com`    |
 | Store builds               | none has ever succeeded: three Android production builds on 2026-10-17 and 18 failed or were cancelled, and no iOS store build has been attempted |

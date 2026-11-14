@@ -25,6 +25,15 @@ jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({ push: mockRouterPush, replace: jest.fn(), back: jest.fn() }),
 }));
+jest.mock('react-native-webrtc', () => ({
+  RTCPeerConnection: jest.fn(),
+  RTCSessionDescription: jest.fn(),
+  RTCIceCandidate: jest.fn(),
+}));
+jest.mock('@/src/features/companion/remote-code/service', () => ({
+  listCodeSessions: jest.fn(),
+  startCodeSession: jest.fn(),
+}));
 
 import {
   NewCloudCodeSessionSheet,

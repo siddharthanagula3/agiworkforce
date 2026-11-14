@@ -81,6 +81,7 @@
 {"path":"audit/live-check/chat-rendering-2026-10-30.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/live-check/chrome-assistant-parity-2026-11-03.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/live-check/codex-live-verification-queue.md","unit":"audit","role":"doc","unparsed":"oversize"}
+{"path":"audit/live-check/mobile-feature-gaps-2026-11-13.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/live-check/neon-free-plan-readiness.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/live-check/seo-ai-visibility.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/live-check/skills-connectors-plugins-integration.md","unit":"audit","role":"doc","unparsed":"notCode"}

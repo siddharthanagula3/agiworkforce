@@ -47,6 +47,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { AgiMark } from '@shared/components/agi/AgiMark';
+import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
 import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
@@ -133,6 +134,7 @@ const HEADER_GLYPH_SIZE = 16;
 const NOTICE_GLYPH_SIZE = 16;
 const DEFAULT_SESSION_TITLE_WORDS = 6;
 const GREETING_MARK_SIZE = 28;
+const CODE_RAIL_DRAWER_ID = 'code-rail-drawer';
 const GREETING_NAME_SLOT = '{name}';
 const UPGRADE_PLAN_SLOT = '{plan}';
 const UPGRADE_PATH = '/upgrade';
@@ -251,6 +253,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [railDrawerOpen, setRailDrawerOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(false);
+  const phone = useShellLayout().tier === 'compact';
   const [localEditorDirty, setLocalEditorDirty] = useState(false);
   const [localSession, publishLocalSession] = useState<LocalDeveloperSession | null>(null);
   const [localPrompt, setLocalPrompt] = useState('');
@@ -1667,18 +1670,19 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
 
   const narrowHeaderSlot = narrow ? (
-    <div className={styles['appBarSlot']}>
-      <span className={styles['appBarTitle']}>{CODE_COPY.surface}</span>
+    <div className={styles['appBarSlot']} data-testid="code-app-bar">
       <button
         ref={railTriggerRef}
         type="button"
-        className={styles['headerButton']}
+        className={styles['appBarButton']}
         aria-label={CODE_COPY.recents}
         aria-expanded={railDrawerOpen}
+        aria-controls={CODE_RAIL_DRAWER_ID}
         onClick={() => setRailDrawerOpen(true)}
       >
         <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
       </button>
+      <span className={styles['appBarTitle']}>{CODE_COPY.surface}</span>
     </div>
   ) : null;
 
@@ -1730,6 +1734,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         {narrow && !pane && (
           <Sheet open={railDrawerOpen} onOpenChange={setRailDrawerOpen}>
             <SheetContent
+              id={CODE_RAIL_DRAWER_ID}
               side="left"
               className="w-[290px] max-w-[85vw] gap-0 overflow-y-auto p-0"
               onCloseAutoFocus={(event) => {
@@ -1955,7 +1960,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                       </div>
                     </div>
                   ) : (
-                    <div className={styles['greetingArea']}>
+                    <div className={styles['greetingArea']} data-testid="code-home">
                       <div className={styles['center']}>
                         <h1 className={styles['greeting']}>
                           <AgiMark size={GREETING_MARK_SIZE} spinning={busy} />
@@ -1970,26 +1975,31 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                         {showSetupLinks && (
                           <nav className={styles['setupLinks']} aria-label={CODE_COPY.setupLabel}>
                             <span className={styles['setupLabel']}>{CODE_COPY.setupLabel}</span>
-                            <Link href={CODE_ROUTES.cli} className={styles['setupChip']}>
-                              <TerminalSquare size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
-                              {CODE_COPY.setupTerminal}
-                            </Link>
-                            <Link
-                              href={CODE_ROUTES.editorExtension}
-                              className={styles['setupChip']}
-                            >
-                              <Code2 size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
-                              {CODE_COPY.setupEditor}
-                            </Link>
-                            <ContinueOnDesktop
-                              label={CODE_COPY.setupDesktop}
-                              fallbackHref={CODE_ROUTES.desktop}
-                              glyphSize={NOTICE_GLYPH_SIZE}
-                              className={styles['setupChip']}
-                            />
+                            <div className={styles['setupChips']} data-testid="code-setup-chips">
+                              <Link href={CODE_ROUTES.cli} className={styles['setupChip']}>
+                                <TerminalSquare size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+                                {CODE_COPY.setupTerminal}
+                              </Link>
+                              <Link
+                                href={CODE_ROUTES.editorExtension}
+                                className={styles['setupChip']}
+                              >
+                                <Code2 size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+                                {CODE_COPY.setupEditor}
+                              </Link>
+                              <ContinueOnDesktop
+                                label={CODE_COPY.setupDesktop}
+                                fallbackHref={CODE_ROUTES.desktop}
+                                glyphSize={NOTICE_GLYPH_SIZE}
+                                className={styles['setupChip']}
+                              />
+                            </div>
                           </nav>
                         )}
-                        <CodeUsageDashboard planTier={availability?.planTier ?? null} />
+                        <CodeUsageDashboard
+                          planTier={availability?.planTier ?? null}
+                          linkOnly={phone}
+                        />
                       </div>
                     </div>
                   )}

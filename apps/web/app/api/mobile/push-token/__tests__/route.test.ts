@@ -37,6 +37,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 
 import { POST, DELETE } from '../route';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 const DEVICE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -48,10 +49,10 @@ function makePostRequest(body: unknown) {
   }) as never;
 }
 
-function makeDeleteRequest(deviceId?: string) {
-  const url = deviceId
-    ? `http://localhost:3000/api/mobile/push-token?deviceId=${deviceId}`
-    : 'http://localhost:3000/api/mobile/push-token';
+function makeDeleteRequest(deviceId?: string, release?: string) {
+  const url = new URL('http://localhost:3000/api/mobile/push-token');
+  if (deviceId) url.searchParams.set('deviceId', deviceId);
+  if (release) url.searchParams.set('release', release);
   return new Request(url, { method: 'DELETE' }) as never;
 }
 
@@ -144,6 +145,28 @@ describe('DELETE /api/mobile/push-token', () => {
       DEVICE_ID,
       'user-1',
     ]);
+  });
+
+  it('releases the caller’s own device row on its own scoped connection', async () => {
+    mockNeonQuery.mockResolvedValueOnce([]);
+
+    const res = await DELETE(makeDeleteRequest(DEVICE_ID, 'device'));
+
+    expect(res.status).toBe(200);
+    expect(getNeonDb).not.toHaveBeenCalled();
+    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockNeonQuery.mock.calls[0]!;
+    expect(String(sql)).toMatch(
+      /delete from public\.mobile_devices\s+where id = \$1 and user_id = \$2/,
+    );
+    expect(params).toEqual([DEVICE_ID, 'user-1']);
+  });
+
+  it('rejects a release value it does not know', async () => {
+    const res = await DELETE(makeDeleteRequest(DEVICE_ID, 'everything'));
+
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
   it('returns 400 when deviceId is missing', async () => {

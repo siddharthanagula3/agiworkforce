@@ -11,6 +11,8 @@ import {
 import { Mic } from '@agiworkforce/icons';
 import { Button, Spinner, Textarea } from '@agiworkforce/ui';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
+import { WebAppShell } from '@shared/components/layout/WebAppShell';
+import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import { useDictation } from '@features/chat/hooks/use-dictation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { readBrowserPairing, type BrowserPairing } from '../lib/browser-pairing';
@@ -28,12 +30,12 @@ const DICTATE_LABEL = 'Start voice input';
 
 const HEADING = 'Your computer';
 const INTRO =
-  'Send a task to Desktop on your own computer. It runs there as a chat that can use the folders, apps and browser you allowed on that computer, and the answer comes back here.';
+  'Run a task in Desktop on your computer, with the folders, apps and browser you allowed there.';
 const COMPUTERS_HEADING = 'Computers on your account';
 const NO_COMPUTERS = 'No computer with Desktop is linked to this account yet.';
 const NEEDS_UPDATE = 'update Desktop on it to send tasks';
 const HOW_TO_CONNECT =
-  'On that computer, open Desktop and go to Settings, Capabilities, Remote Control. Choose Pair a phone, then Copy link for a browser, and open the link here or paste it below.';
+  'In Desktop, open Settings, Capabilities, Remote Control, Pair a phone, then Copy link for a browser. Paste it below.';
 const LINK_LABEL = 'Pairing link';
 const LINK_PLACEHOLDER = 'Paste the link copied on your computer';
 const LINK_INVALID = 'That is not a pairing link from Desktop. Copy it again on your computer.';
@@ -283,12 +285,12 @@ export function RemoteComputerPage() {
   });
 
   return (
-    <main
-      id="main-content"
-      className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 text-foreground"
-    >
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-10 text-foreground">
       <header className="flex flex-col gap-2">
-        <Link href={CODE_PATH} className="text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href={CODE_PATH}
+          className="inline-flex items-center self-start text-sm text-muted-foreground hover:text-foreground pointer-coarse:min-h-11"
+        >
           Code
         </Link>
         <h1 className="text-2xl font-semibold">{HEADING}</h1>
@@ -364,6 +366,7 @@ export function RemoteComputerPage() {
                 type="button"
                 variant="outline"
                 size="icon"
+                className="pointer-coarse:h-11 pointer-coarse:w-11"
                 aria-label={DICTATE_LABEL}
                 onClick={dictation.start}
               >
@@ -470,6 +473,15 @@ export function RemoteComputerPage() {
           </ul>
         </section>
       ) : null}
-    </main>
+    </div>
+  );
+}
+
+export function RemoteComputerScreen() {
+  const phone = useShellLayout().tier === 'compact';
+  return (
+    <WebAppShell rail={phone}>
+      <RemoteComputerPage />
+    </WebAppShell>
   );
 }

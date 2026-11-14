@@ -45,7 +45,7 @@ const ACCESS_LABELS: Readonly<Record<OrgMemberProjectAccess, string>> = {
 
 const EDIT_NOT_ALLOWED_LABEL = 'Can edit (their role can only view)';
 const EDIT_NOT_ALLOWED_NOTE =
-  'People whose workspace role can only view, such as Viewer, can be given Can view but not Can edit. Change their role to Member to let them edit.';
+  'Viewers can only get Can view. Change their role to Member to let them edit.';
 
 type OverviewMember = OrgSharedOverview['members'][number];
 

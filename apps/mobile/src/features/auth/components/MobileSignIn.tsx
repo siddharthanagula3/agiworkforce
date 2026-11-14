@@ -35,10 +35,12 @@ WebBrowser.maybeCompleteAuthSession();
 type SignInStep = 'email' | 'password' | 'code';
 
 export function MobileSignIn({
+  addingAccount = false,
   onNativeFallback,
   onSignUp,
   postAuthIntent,
 }: {
+  addingAccount?: boolean;
   onNativeFallback: () => void;
   onSignUp: () => void;
   postAuthIntent?: PostAuthIntent | null;
@@ -323,7 +325,9 @@ export function MobileSignIn({
             }}
           >
             {step === 'email'
-              ? 'Welcome back'
+              ? addingAccount
+                ? 'Add an account'
+                : 'Welcome back'
               : step === 'password'
                 ? 'Enter your password'
                 : 'Check your email'}

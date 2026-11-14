@@ -238,8 +238,8 @@ export interface DeveloperSessionConfiguration {
   workspaceConsentAtMs?: (root: WorkspaceRoot) => number | null;
   accountBridge?: DeveloperAccountBridge;
   spawn?: SpawnDeveloperRuntime;
-  /** Whether a page is there to answer the agent's questions. */
-  answersUserInput?: () => boolean;
+  /** Whether a page, or a phone with the session open, is there to answer the agent's questions. */
+  answersUserInput?: (rootId: string, threadId: string) => boolean;
   /** The folder the user chose for new worktrees; empty keeps the CLI's default. */
   worktreesRoot?: () => string;
   /** What a terminal the user opened printed, or that it ended. */
@@ -259,7 +259,7 @@ let mayRunIn: (root: WorkspaceRoot) => boolean = () => false;
 let spawnRuntime: SpawnDeveloperRuntime = nodeSpawn as SpawnDeveloperRuntime;
 let workspaceConsentAtMs: (root: WorkspaceRoot) => number | null = () => null;
 let accountBridge: DeveloperAccountBridge | null = null;
-let answersUserInput: () => boolean = () => true;
+let answersUserInput: (rootId: string, threadId: string) => boolean = () => true;
 let worktreesRoot: () => string = () => '';
 let terminalEmit: (event: DeveloperTerminalEvent) => void = () => undefined;
 const terminalRoots = new Map<string, string>();
@@ -827,6 +827,11 @@ function agentEvent(server: RunningServer, params: Record<string, unknown>): voi
   const publish = (event: DeveloperSessionEvent) =>
     emit(server.root.id, { ...event, ...(sequence === undefined ? {} : { sequence }) });
 
+  if (event['type'] === 'reasoning-delta') {
+    const delta = readString(event, 'delta');
+    if (delta) publish({ type: 'reasoning-delta', threadId, turnId, delta });
+    return;
+  }
   if (event['type'] === 'approval-resolved') {
     const requestId = readString(event, 'approvalId');
     const decisions = {
@@ -1021,7 +1026,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     const question = readString(params, 'question');
     if (!requestId || !question) return;
     server.activeTurns.add(turnId);
-    if (!answersUserInput()) {
+    if (!answersUserInput(server.root.id, threadId)) {
       void requestOrNull(server, 'userInput/respond', {
         threadId,
         turnId,

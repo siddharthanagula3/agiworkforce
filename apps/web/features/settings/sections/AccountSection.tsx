@@ -165,7 +165,7 @@ const rowLabelStyle: CSSProperties = {
 };
 
 const rowHintStyle: CSSProperties = {
-  fontSize: 14,
+  fontSize: 12,
   color: 'var(--text-3)',
   margin: 'var(--space-1) 0 0',
 };
@@ -504,15 +504,15 @@ export function AccountSection({
                 hint={
                   deleteBlockedByPlan ? (
                     <span data-testid="delete-account-plan-note">
-                      {`A payment for your ${livePlanLabel} plan is still being collected. You can delete your account once it is settled.`}
+                      {`A ${livePlanLabel} payment is still being collected. You can delete once it settles.`}
                     </span>
                   ) : endingPaidPlan ? (
                     <span data-testid="delete-account-plan-note">
-                      {`Your ${livePlanLabel} plan is already cancelled. Deleting your account ends it when erasure runs${livePlanEnds ? ` instead of on ${livePlanEnds}` : ''}, and the unused time is not refunded. You can cancel the deletion before the cancellation deadline.`}
+                      {`Deleting ends your cancelled ${livePlanLabel} plan at erasure${livePlanEnds ? `, not ${livePlanEnds}` : ''}. Unused time is not refunded.`}
                     </span>
                   ) : renewingStore ? (
                     <span data-testid="delete-account-plan-note">
-                      {`Your ${livePlanLabel} plan is billed by ${STORE_BILLING_NAME[renewingStore]}, and deleting your account does not cancel it. ${STORE_BILLING_NAME[renewingStore]} keeps charging you until you `}
+                      {`Deleting does not cancel your ${livePlanLabel} plan. ${STORE_BILLING_NAME[renewingStore]} keeps charging until you `}
                       <a
                         href={STORE_SUBSCRIPTION_MANAGEMENT_URL[renewingStore]}
                         target="_blank"
@@ -525,10 +525,10 @@ export function AccountSection({
                     </span>
                   ) : renewingPlanSource === 'stripe' ? (
                     <span data-testid="delete-account-plan-note">
-                      {`Deleting your account stops your ${livePlanLabel} plan from renewing. It ends when erasure runs${livePlanEnds ? ` instead of on ${livePlanEnds}` : ''}, and the unused time is not refunded. Cancelling the deletion turns renewal back on.`}
+                      {`Deleting stops your ${livePlanLabel} plan renewing and ends it at erasure${livePlanEnds ? `, not ${livePlanEnds}` : ''}. Unused time is not refunded.`}
                     </span>
                   ) : (
-                    'Schedule permanent account deletion. You can cancel before the cancellation deadline.'
+                    'Schedule permanent account deletion. You can cancel before the deadline.'
                   )
                 }
               >
@@ -590,7 +590,7 @@ export function AccountSection({
                 label="User ID"
                 value={userId}
                 copyLabel="Copy user ID"
-                hint="Your account identifier. Share with support when reporting issues."
+                hint="Share this with support when reporting a problem."
               />
             </div>
 
@@ -612,7 +612,7 @@ export function AccountSection({
                   label="Organization ID"
                   value={organizationId}
                   copyLabel="Copy organization ID"
-                  hint="Identifies your workspace. Support will ask for this before anything workspace-wide."
+                  hint="Support asks for this before workspace-wide changes."
                 />
               </div>
             ) : null}
@@ -855,7 +855,7 @@ export function AccountSection({
             <p
               style={{
                 padding: 'var(--space-3) 0 0',
-                fontSize: 14,
+                fontSize: 12,
                 color: 'var(--text-3)',
                 margin: 0,
               }}

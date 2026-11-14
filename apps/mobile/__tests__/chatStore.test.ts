@@ -1,6 +1,12 @@
 import { Alert } from 'react-native';
 import { act, waitFor } from '@testing-library/react-native';
 
+const mockAnnounceReplyReady = jest.fn(async (_conversationId: string) => false);
+jest.mock('../services/replyReadyNotice', () => ({
+  announceReplyReadyInBackground: (conversationId: string) =>
+    mockAnnounceReplyReady(conversationId),
+}));
+
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => null),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -1016,6 +1022,43 @@ describe('chatStore, streaming state', () => {
       expect(state.streamingReasoning).toBe('');
     });
 
+    it('offers a reply notice when a Cloud reply with no server run finishes', async () => {
+      seedCloudConversation();
+      mockAnnounceReplyReady.mockClear();
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onDelta({ content: 'Hello' });
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Hi', CLOUD_MODEL);
+      });
+
+      expect(mockAnnounceReplyReady).toHaveBeenCalledTimes(1);
+      expect(mockAnnounceReplyReady).toHaveBeenCalledWith(CONV_ID);
+    });
+
+    it('leaves the reply notice to the server when the Cloud turn ran as a server run', async () => {
+      seedCloudConversation();
+      mockAnnounceReplyReady.mockClear();
+      const runId = '0190a000-0000-7000-8000-000000000098';
+      mockStreamChat.mockImplementation(async (_body, callbacks) => {
+        callbacks.onRunReference?.({
+          runId,
+          runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+          lastSequence: -1,
+        });
+        callbacks.onDelta({ content: 'Hello' });
+        callbacks.onDone();
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Hi', CLOUD_MODEL);
+      });
+
+      expect(mockAnnounceReplyReady).not.toHaveBeenCalled();
+    });
+
     it('accumulates streaming content via onDelta', async () => {
       seedCloudConversation();
       mockStreamChat.mockImplementation(
@@ -1653,6 +1696,7 @@ describe('chatStore, streaming state', () => {
         conversationId: CONV_ID,
         includeSensitiveTopics: false,
       });
+      expect(mockAnnounceReplyReady).toHaveBeenCalledWith(CONV_ID);
     });
 
     it('does not capture durable facts when local generation fails', async () => {

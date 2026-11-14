@@ -901,7 +901,7 @@ export function ModelSelector({
                                 {description ? (
                                   <p
                                     data-testid="model-description"
-                                    className="mt-0.5 truncate text-sm text-[var(--chat-text-secondary)]"
+                                    className="mt-0.5 truncate text-xs text-[var(--chat-text-secondary)]"
                                   >
                                     {description}
                                   </p>

@@ -36,32 +36,30 @@ const CLEAR_FAILED_MESSAGE =
 const CONTROL_HEIGHT = 32;
 const EXPORT_FAILED_MESSAGE = 'Your memories could not be exported. Try again.';
 const WORKSPACE_MEMORY_OFF_NOTICE =
-  'Your workspace has memory turned off, so none of these settings apply until an owner or admin turns it back on in Workspace → Policy.';
+  'Your workspace has memory off. An owner or admin can turn it on in Workspace → Policy.';
 
 const MEMORY_SCOPE_EXPLANATION: ReadonlyArray<{ scope: string; meaning: string }> = [
   {
     scope: 'Account',
-    meaning:
-      'Read in every personal chat, on every device you sign in to. This is where a fact lands unless a project claims it.',
+    meaning: 'Read in every personal chat on every device, unless a project claims it.',
   },
   {
     scope: 'Workspace',
-    meaning:
-      'A memory written inside a workspace stays inside it. Nothing you record at work is read in a personal chat, and nothing personal is read at work.',
+    meaning: 'Stays in that workspace. Work and personal memories never mix.',
   },
   {
     scope: 'Project',
     meaning:
-      'Read only in that project. A project set to use its own memory only never sees your account facts, so a project can hold a standing brief, the decisions and background a long project accumulates, without any of it leaking into an unrelated chat.',
+      'Read only in that project. A project on its own memory never sees your account facts.',
   },
 ];
 
-const SENSITIVE_TOPICS_DESCRIPTION = `Let AGI remember your ${SENSITIVE_MEMORY_SUBJECTS} from chats. While this is off, AGI is designed to keep these only when you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or add them here. Memories saved earlier stay until you delete them.`;
+const SENSITIVE_TOPICS_DESCRIPTION = `Remember your ${SENSITIVE_MEMORY_SUBJECTS} from chats, not only when you ask.`;
 
 const NEEDS_PERSISTENT_MEMORY_HINT = 'Turn on persistent memory to change this.';
 
 const MEMORY_DISABLED_CONTRACT =
-  'Turning persistent memory off stops both halves: nothing new is saved, and the memories you already have are no longer read into any answer. They are kept until you delete them.';
+  'When off, nothing is saved or read. Existing memories stay until you delete them.';
 
 async function downloadMemoryExport(
   controller: CloudMemoryController,
@@ -114,13 +112,13 @@ function memoryRow(title: string, description: string, control: ReactNode, hint?
     >
       <div style={{ minWidth: 0 }}>
         <p style={{ fontSize: 16, color: 'var(--text-1)', margin: 0 }}>{title}</p>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
           {description}
         </p>
         {hint ? (
           <p
             id={hint.id}
-            style={{ fontSize: 14, color: 'var(--text-2)', margin: 'var(--space-1) 0 0' }}
+            style={{ fontSize: 12, color: 'var(--text-2)', margin: 'var(--space-1) 0 0' }}
           >
             {hint.text}
           </p>
@@ -238,7 +236,7 @@ function OwnedMemorySection({
         <h2 id="memory-heading" className="mb-1 text-h3 text-foreground">
           Memory
         </h2>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           Facts saved in your selected Cloud workspace. Device-local and offline memories are
           separate and are not shown or uploaded here.
         </p>
@@ -481,13 +479,13 @@ function OwnedMemorySection({
               <dt style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
                 {entry.scope}
               </dt>
-              <dd style={{ fontSize: 14, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
+              <dd style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
                 {entry.meaning}
               </dd>
             </div>
           ))}
         </dl>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
           {MEMORY_DISABLED_CONTRACT}
         </p>
       </section>

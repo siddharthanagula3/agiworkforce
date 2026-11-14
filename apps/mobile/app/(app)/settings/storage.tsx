@@ -16,6 +16,7 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import {
   deleteDownloadedModel,
   getModelStorageBytes,
+  MODEL_BUSY_REMOVAL_MESSAGE,
   modelRemovalUnsupportedReason,
 } from '@/services/modelDownload';
 import { wipeAllLocalData, type DsarExportProgress } from '@/services/dsarExport';
@@ -26,7 +27,7 @@ import { SettingsScreenShell } from '@/src/features/settings/Common';
 import type { InstalledModel } from '@/storage/types';
 
 const STORAGE_RETURN_PATHS = [
-  '/(app)/(tabs)/settings',
+  '/(app)/settings',
   '/(app)/settings/data-controls',
   '/(app)/settings/general',
 ] as const;
@@ -155,10 +156,12 @@ export default function StorageManagerScreen() {
                     ? { status: 'ready', value: prev.value.filter((m) => m.id !== model.id) }
                     : prev,
                 );
-              } catch {
+              } catch (error) {
                 Alert.alert(
                   'Model removal failed',
-                  'Could not remove the model. Refresh Storage and try again.',
+                  error instanceof Error && error.name === 'ModelRemovalError'
+                    ? MODEL_BUSY_REMOVAL_MESSAGE
+                    : 'Could not remove the model. Refresh Storage and try again.',
                 );
                 return;
               }
@@ -331,7 +334,7 @@ export default function StorageManagerScreen() {
                 Download over cellular
               </Text>
               <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
-                Off means model downloads wait for Wi-Fi. Models are several gigabytes.
+                Off waits for Wi-Fi. Models are several gigabytes.
               </Text>
             </View>
             <Switch
@@ -369,7 +372,7 @@ export default function StorageManagerScreen() {
             </View>
           ) : installedModels.length === 0 ? (
             <Text className="text-sm" style={{ color: c.textMuted }}>
-              No models downloaded. Download a model from Settings → General → Models.
+              No models downloaded. Get one in Settings → General → Models.
             </Text>
           ) : (
             installedModels.map((model, idx) => (

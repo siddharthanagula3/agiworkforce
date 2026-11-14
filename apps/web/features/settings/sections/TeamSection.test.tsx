@@ -1176,9 +1176,7 @@ describe('TeamSection', () => {
       render(<TeamSection />);
 
       expect(screen.getByTestId('team-premium-seats')).toHaveTextContent('1 of 3');
-      expect(
-        screen.getByText(/A Standard seat is \$25\/month and a Premium seat is \$125\/month\./),
-      ).toBeVisible();
+      expect(screen.getByText(/Standard is \$25\/month, Premium \$125\/month\./)).toBeVisible();
     });
 
     it('shows no seat types on a workspace that has none to assign', () => {

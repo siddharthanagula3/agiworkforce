@@ -94,6 +94,7 @@ import {
 } from './runtime/developerSessionService';
 import {
   configureRemoteControl,
+  phoneWatchesSession,
   relayDeveloperSessionEvent,
   remoteControlActive,
   remoteControlState,
@@ -2663,7 +2664,8 @@ if (!hasSingleInstanceLock) {
       workspaceConsentAtMs: (root) => agentConsentAt(root.id),
       accountBridge: { readShellIdentity, approveDeviceCode },
       spawn: spawnTrackedDeveloperRuntime,
-      answersUserInput: windowAnswersUserInput,
+      answersUserInput: (rootId, threadId) =>
+        windowAnswersUserInput() || phoneWatchesSession(rootId, threadId),
       worktreesRoot: () => getPreferences().worktreeLocation,
       onTerminalEvent: (event) => sendRuntimeEvent({ kind: 'developer-terminal', ...event }),
     });

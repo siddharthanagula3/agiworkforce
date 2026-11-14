@@ -120,8 +120,7 @@ function LibrarySignInRequired() {
       <Lock className="h-6 w-6 text-[var(--chat-text-muted)]" aria-hidden />
       <h1 className="text-h3 text-[var(--chat-text-primary)]">Sign in to see your library</h1>
       <p className="max-w-sm text-sm text-[var(--chat-text-muted)]">
-        Files and artifacts are stored against your account. Nothing here is lost, it is just not
-        readable until you sign in.
+        Your files and artifacts are safe. Sign in to see them.
       </p>
       <Button size="sm" asChild>
         <a href={SIGN_IN_PATH}>Sign in</a>

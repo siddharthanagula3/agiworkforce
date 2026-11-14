@@ -29,7 +29,7 @@ export default function NotificationCategoryDetailScreen({
       <SettingsScreenShell title="Notification" backHref="/(app)/settings/notifications">
         <SettingsInfo
           title="Notification category not found"
-          body="Return to Notification Preferences and choose a category from the current list."
+          body="Go back and choose a category from the list."
           icon={Bell}
         />
       </SettingsScreenShell>
@@ -40,22 +40,18 @@ export default function NotificationCategoryDetailScreen({
 
   return (
     <SettingsScreenShell title={copy.label} backHref="/(app)/settings/notifications">
-      <SettingsInfo
-        title="Delivery channels"
-        body={`${copy.description}. Choose the channels that have a real delivery path in this app.`}
-        icon={Bell}
-      />
+      <SettingsInfo title="Delivery channels" body={`${copy.description}.`} icon={Bell} />
 
       <SettingsGroup>
         <SettingsSwitchRow
           label="Push notifications"
-          description="Show this category through device or companion push delivery."
+          description="Push to this device or a paired companion."
           icon={Bell}
           value={categoryEnabled[category]}
           onValueChange={(enabled) => setCategoryEnabled(category, enabled)}
         />
         <View
-          accessibilityLabel="Email notifications. Unavailable"
+          accessibilityLabel={`Email notifications. ${copy.emailSetOnWeb ? 'On the web' : 'Unavailable'}`}
           style={{
             minHeight: 76,
             paddingHorizontal: 14,
@@ -78,20 +74,24 @@ export default function NotificationCategoryDetailScreen({
                 marginTop: 3,
               }}
             >
-              No account email sender exists for this category.
+              {copy.emailSetOnWeb
+                ? 'Set in your account settings on the web.'
+                : 'Not available for this category.'}
             </Text>
           </View>
           <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, fontWeight: '600' }}>
-            Unavailable
+            {copy.emailSetOnWeb ? 'On the web' : 'Unavailable'}
           </Text>
         </View>
       </SettingsGroup>
 
-      <SettingsInfo
-        title="No email for this category"
-        body="AGI does not send email for these notifications, so there is no email setting to change."
-        icon={Mail}
-      />
+      {copy.emailSetOnWeb ? null : (
+        <SettingsInfo
+          title="No email for this category"
+          body="AGI doesn’t email these notifications."
+          icon={Mail}
+        />
+      )}
     </SettingsScreenShell>
   );
 }

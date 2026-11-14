@@ -42,13 +42,13 @@ export function runtimeHelpText(
 ): string {
   if (runtimeCount === 0) return CODE_COPY.emptyRuntimeCatalogue;
   if (!selectedRuntime?.agentCommand) {
-    return 'Pick a coding agent to have its CLI already installed in the workspace, or an environment to drive yourself. This cannot be changed after the session is created.';
+    return 'Pick an agent to preinstall, or an environment to drive yourself. It can’t be changed later.';
   }
   const headless = headlessHarnessCommand(selectedRuntime.id);
   if (!headless) {
-    return `The workspace starts with ${selectedRuntime.name} installed, but an agent turn runs the generic tool-calling loop rather than ${selectedRuntime.name} directly; run \`${selectedRuntime.agentCommand}\` yourself in the terminal to use it as a harness. This cannot be changed after the session is created.`;
+    return `${selectedRuntime.name} comes installed, but turns use the generic tool-calling loop. Run \`${selectedRuntime.agentCommand}\` in the terminal to use it. It can’t be changed later.`;
   }
-  return `The workspace starts with ${selectedRuntime.name} installed. An agent turn runs it headlessly as \`${headless}\`, capped at ${HARNESS_BUDGET_MINUTES} minutes; run it yourself in the terminal to drive it interactively, then use ${CODE_COPY.commitAction} to publish the result. This cannot be changed after the session is created.`;
+  return `${selectedRuntime.name} comes installed and runs as \`${headless}\`, capped at ${HARNESS_BUDGET_MINUTES} minutes a turn. It can’t be changed later.`;
 }
 
 export interface HarnessModelChoice {

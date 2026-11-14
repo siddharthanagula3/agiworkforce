@@ -253,6 +253,72 @@ describe('Schedules screen Cloud boundary', () => {
     expect(queryByText('Weekly rollup')).toBeNull();
   });
 
+  it('filters the list to completed schedules by their finished status', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const base = {
+      prompt: 'Summarize inbox',
+      model: 'test-model-fixture',
+      recurrence: 'once' as const,
+      cronExpression: undefined,
+      scheduledAt: null,
+      timeOfDay: '09:00',
+      timezone: 'UTC',
+      lastRunAt: null,
+      nextRunAt: null,
+      lastRunStatus: null,
+      createdAt: '2026-07-17T09:00:00.000Z',
+      updatedAt: '2026-07-17T09:00:00.000Z',
+    };
+    useScheduleStore.setState({
+      schedules: [
+        { ...base, id: 's-active', name: 'Morning briefing', isActive: true, status: 'active' },
+        { ...base, id: 's-paused', name: 'Weekly rollup', isActive: false, status: 'paused' },
+        { ...base, id: 's-done', name: 'One time reminder', isActive: false, status: 'completed' },
+      ],
+    });
+
+    const { getByLabelText, getByText, queryByText } = render(<SchedulesScreen />);
+
+    fireEvent.press(getByLabelText('Filter schedules: Completed'));
+    expect(getByText('One time reminder')).toBeTruthy();
+    expect(queryByText('Morning briefing')).toBeNull();
+    expect(queryByText('Weekly rollup')).toBeNull();
+
+    fireEvent.press(getByLabelText('Filter schedules: Paused'));
+    expect(getByText('Weekly rollup')).toBeTruthy();
+    expect(queryByText('One time reminder')).toBeNull();
+  });
+
+  it('says so when no schedule has completed', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useScheduleStore.setState({
+      schedules: [
+        {
+          id: 's-active',
+          name: 'Morning briefing',
+          prompt: 'Summarize inbox',
+          model: 'test-model-fixture',
+          recurrence: 'daily' as const,
+          cronExpression: undefined,
+          scheduledAt: null,
+          timeOfDay: '09:00',
+          timezone: 'UTC',
+          lastRunAt: null,
+          nextRunAt: null,
+          lastRunStatus: null,
+          createdAt: '2026-07-17T09:00:00.000Z',
+          updatedAt: '2026-07-17T09:00:00.000Z',
+          isActive: true,
+          status: 'active',
+        },
+      ],
+    });
+
+    const { getByLabelText, getByText } = render(<SchedulesScreen />);
+    fireEvent.press(getByLabelText('Filter schedules: Completed'));
+    expect(getByText('No completed schedules.')).toBeTruthy();
+  });
+
   it('sorts scheduled tasks by next run or recently created without losing the filter', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const base = {

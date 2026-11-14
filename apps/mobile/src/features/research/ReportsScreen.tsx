@@ -421,7 +421,7 @@ export function ReportsScreen() {
             No reports yet
           </Text>
           <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
-            Turn on Research in the composer and ask a question. Finished runs are saved here.
+            Turn on Research in the composer and ask. Reports appear here.
           </Text>
         </View>
       ) : (

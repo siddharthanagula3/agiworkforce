@@ -1,5 +1,9 @@
 import { whenMmkvReady } from '@/lib/mmkv';
 
+export interface ClearCloudAccountOptions {
+  keepUnsentWork?: boolean;
+}
+
 function runTeardownStep(label: string, step: () => void): void {
   try {
     step();
@@ -8,7 +12,21 @@ function runTeardownStep(label: string, step: () => void): void {
   }
 }
 
-function clearLocalCloudAccountStateNow(): void {
+function clearUnsentCloudWorkNow(): void {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  runTeardownStep('offline Cloud sends', () => {
+    const { clearAccountScopedOfflineQueue } = require('@/services/offlineQueue');
+    clearAccountScopedOfflineQueue();
+  });
+
+  runTeardownStep('Cloud composer drafts', () => {
+    const { clearAccountScopedDrafts } = require('@/src/features/chat/draftStore');
+    clearAccountScopedDrafts();
+  });
+  /* eslint-enable @typescript-eslint/no-require-imports */
+}
+
+function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOptions): void {
   /* eslint-disable @typescript-eslint/no-require-imports */
   let cloudConversationIds: string[] = [];
   let cloudProjectIds: string[] = [];
@@ -71,15 +89,7 @@ function clearLocalCloudAccountStateNow(): void {
     clearAccountScopedArtifactState();
   });
 
-  runTeardownStep('offline Cloud sends', () => {
-    const { clearAccountScopedOfflineQueue } = require('@/services/offlineQueue');
-    clearAccountScopedOfflineQueue();
-  });
-
-  runTeardownStep('Cloud composer drafts', () => {
-    const { clearAccountScopedDrafts } = require('@/src/features/chat/draftStore');
-    clearAccountScopedDrafts();
-  });
+  if (!keepUnsentWork) clearUnsentCloudWorkNow();
 
   runTeardownStep('composer handoff', () => {
     const { clearComposerHandoff } = require('@/src/features/chat/composerHandoff');
@@ -208,12 +218,29 @@ function clearLocalCloudAccountStateNow(): void {
   /* eslint-enable @typescript-eslint/no-require-imports */
 }
 
-export function clearLocalCloudAccountState(): void {
-  clearLocalCloudAccountStateNow();
+function runNowAndOnceStorageIsReady(teardown: () => void): void {
+  teardown();
 
   let registrationComplete = false;
   whenMmkvReady(() => {
-    if (registrationComplete) clearLocalCloudAccountStateNow();
+    if (registrationComplete) teardown();
   });
   registrationComplete = true;
+}
+
+export function clearLocalCloudAccountState(options: ClearCloudAccountOptions = {}): void {
+  runNowAndOnceStorageIsReady(() => clearLocalCloudAccountStateNow(options));
+}
+
+export function clearUnsentCloudWork(): void {
+  runNowAndOnceStorageIsReady(clearUnsentCloudWorkNow);
+}
+
+export function hasQueuedCloudSends(): boolean {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { offlineQueue } = require('@/services/offlineQueue');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return (offlineQueue.getQueue() as { provenance: { scope: string } }[]).some(
+    (entry) => entry.provenance.scope === 'cloud',
+  );
 }

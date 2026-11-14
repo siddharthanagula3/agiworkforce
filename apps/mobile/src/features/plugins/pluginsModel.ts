@@ -22,8 +22,7 @@ export const PLUGIN_SCAN_VERDICT_COPY: Readonly<
   block: 'Blocked. It cannot be installed.',
 };
 
-export const PLUGIN_SCAN_NONE_COPY =
-  'Not scanned. Scans run on plugins you upload or create and on registry versions.';
+export const PLUGIN_SCAN_NONE_COPY = 'Not scanned.';
 
 export const PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE =
   'Each connector stays off until you connect it yourself.';
@@ -32,7 +31,7 @@ export const PLUGIN_PERMISSIONS_COPY =
   'What this plugin says it needs. Installing it agrees to these; you can remove it at any time.';
 
 export const PLUGIN_COMMUNITY_NOTE =
-  'Built by its publisher, not by AGI Workforce. Check what it includes before you install it.';
+  'Built by its publisher, not AGI Workforce. Check it before installing.';
 
 export type PluginInstallIndex = ReadonlyMap<string, PluginInstallationWire>;
 

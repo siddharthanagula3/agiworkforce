@@ -121,7 +121,7 @@ function DialogContent({
         {!hideCloseButton && (
           <DialogPrimitive.Close
             aria-label={closeLabel}
-            className="absolute end-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:pointer-events-none"
+            className="absolute end-4 top-4 inline-flex h-8 min-h-0 w-8 items-center justify-center rounded-full border pointer-coarse:end-2.5 pointer-coarse:top-2.5 pointer-coarse:h-11 pointer-coarse:w-11 border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:pointer-events-none"
           >
             <X className="h-4 w-4" aria-hidden="true" />
             <span className="sr-only">{closeLabel}</span>

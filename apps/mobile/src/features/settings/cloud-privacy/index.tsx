@@ -13,7 +13,7 @@ import { ExternalLink, FileText, EyeOff } from 'lucide-react-native';
 import { View } from 'react-native';
 import { ChineseHqProviderConsentGroup } from './ChineseHqProviderConsentGroup';
 import { ProductAnalyticsConsentGroup } from './ProductAnalyticsConsentGroup';
-import { ProviderTrainingOptOutGroup } from './ProviderTrainingOptOutGroup';
+import { TrainingPreferenceGroups } from './TrainingPreferenceGroups';
 import { UsOnlyRoutingGroup } from './UsOnlyRoutingGroup';
 
 const PRIVACY_ITEMS = [
@@ -178,7 +178,7 @@ export default function CloudPrivacyScreen() {
         </Text>
       </View>
 
-      <ProviderTrainingOptOutGroup />
+      <TrainingPreferenceGroups />
 
       <UsOnlyRoutingGroup />
 

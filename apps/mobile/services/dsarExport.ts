@@ -424,7 +424,7 @@ export async function exportAllUserData(
 
 export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): Promise<void> {
   const { useAuthStore } = await import('@/src/features/auth/store');
-  await useAuthStore.getState().signOut();
+  await useAuthStore.getState().signOutAllAccounts();
 
   const { closeDb, getDb } = await import('@/storage/db');
 

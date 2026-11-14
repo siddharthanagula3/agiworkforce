@@ -999,8 +999,10 @@
     @apply transition-colors;
   }
 
+  /* A control whose shape is its meaning is left out: a switch, checkbox,
+     radio or slider thumb stretched to this height stops looking like one. */
   @media (max-width: 640px) {
-    button,
+    button:not(:where([role='switch'], [role='checkbox'], [role='radio'], [role='slider'])),
     [role='button'] {
       min-height: 40px; /* Touch-friendly on mobile */
     }
@@ -1018,7 +1020,6 @@
     input[type='text'],
     input[type='search'] {
       min-height: 40px;
-      font-size: 16px; /* Prevent zoom-on-focus on iOS */
     }
   }
 
@@ -1063,6 +1064,42 @@
     background: linear-gradient(90deg, transparent 0%, hsl(var(--muted)) 50%, transparent 100%);
     background-size: 200% 100%;
     animation: shimmer 2s infinite;
+  }
+}
+
+/* iOS Safari zooms the page when a focused field's text is under 16px and does
+   not zoom back out. Unlayered and !important so that no utility, module class
+   or inline style can bring the zoom back on a touch device. */
+@media (pointer: coarse) {
+  input:not(
+    :where(
+      [type='checkbox'],
+      [type='radio'],
+      [type='range'],
+      [type='file'],
+      [type='color'],
+      [type='button'],
+      [type='submit'],
+      [type='reset'],
+      [type='image'],
+      [type='hidden']
+    )
+  ),
+  textarea,
+  select {
+    font-size: max(1rem, 16px) !important;
+  }
+
+  /* At that size a long placeholder no longer fits a narrow field; end it with
+     an ellipsis instead of cutting a word in half. */
+  input {
+    text-overflow: ellipsis;
+  }
+
+  /* A touch screen has no keys to press, and the hint takes the room the
+     label beside it needs. */
+  :is(button, a, [role='menuitem'], [role='option']) kbd {
+    display: none;
   }
 }
 
@@ -1936,6 +1973,12 @@ html[data-contrast='more'] *:focus-visible {
     background-color var(--agi-dur-hover) var(--agi-ease-expo),
     border-color var(--agi-dur-hover) var(--agi-ease-expo),
     color var(--agi-dur-hover) var(--agi-ease-expo);
+}
+
+@media (max-width: 359px) {
+  [data-design='agi'] .agi-ds-btn {
+    padding-inline: var(--agi-space-2);
+  }
 }
 
 [data-design='agi'] .agi-ds-btn[data-variant='primary'] {

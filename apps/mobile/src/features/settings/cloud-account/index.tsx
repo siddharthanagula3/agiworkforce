@@ -34,8 +34,10 @@ import {
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
+  CloudAccountRequired,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
+import { beginCloudPostAuthIntentForDestination } from '@/src/features/auth/services/postAuthIntent';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
@@ -67,6 +69,13 @@ import { accountDeletionRefusal } from './accountDeletionRefusal';
 import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
 import { useCloudProfileStore } from './cloudProfileStore';
+import {
+  activeDeviceAccount,
+  deviceAccountErrorMessage,
+  getDeviceAccountsClerk,
+  planSignOutHandover,
+  readDeviceAccounts,
+} from '@/src/features/accounts/deviceAccounts';
 
 const ORGANIZATION_PATH = '/api/settings/organization';
 
@@ -89,6 +98,27 @@ function parseOrganizationId(body: unknown): string | null {
 }
 
 export default function CloudAccountScreen() {
+  const router = useRouter();
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+
+  if (!isClerkLoaded || !isClerkSignedIn) {
+    return (
+      <SettingsScreenShell title="Account">
+        <CloudAccountRequired
+          isLoading={!isClerkLoaded}
+          onSignIn={() =>
+            router.push(beginCloudPostAuthIntentForDestination('/(app)/settings/cloud-account'))
+          }
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  return <SignedInCloudAccount />;
+}
+
+function SignedInCloudAccount() {
   const colors = useThemeColors();
   const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);
@@ -380,7 +410,17 @@ export default function CloudAccountScreen() {
   const handleSignOut = useCallback(() => {
     const account = captureVisibleAccount();
     if (!account) return;
-    Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
+    const deviceAccounts = readDeviceAccounts(getDeviceAccountsClerk());
+    const signedInAccount = deviceAccounts.multiSession
+      ? activeDeviceAccount(deviceAccounts)
+      : null;
+    const handover = planSignOutHandover(deviceAccounts);
+    const message = signedInAccount
+      ? handover
+        ? `Log out of ${signedInAccount.email} on this device? You will continue as ${handover.next.email}.`
+        : `Log out of ${signedInAccount.email} on this device?`
+      : 'Log out of AGI Cloud on this device?';
+    Alert.alert('Log Out', message, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log Out',
@@ -395,8 +435,8 @@ export default function CloudAccountScreen() {
           }
           setLoggingOut(true);
           signOut()
-            .catch(() => {
-              Alert.alert('Sign out failed', 'Please try again.');
+            .catch((error: unknown) => {
+              Alert.alert('Sign out failed', deviceAccountErrorMessage(error, 'sign-out'));
             })
             .finally(() => setLoggingOut(false));
         },

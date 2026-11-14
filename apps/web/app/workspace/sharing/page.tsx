@@ -12,7 +12,7 @@ export default function WorkspaceSharingPage() {
     <ConsolePage
       help={{ docId: 'sharing-conversations', label: 'How sharing works' }}
       title="Sharing"
-      description="Projects, conversations, artifacts and connectors this workspace shares, and the access level each grant carries."
+      description="What this workspace shares, and the access level of each grant."
     >
       <OrganizationSharingSection />
     </ConsolePage>

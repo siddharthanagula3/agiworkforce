@@ -125,7 +125,7 @@ describe('long content', () => {
       expect(cell.className).not.toContain('wrap-anywhere');
       expect(cell.className).not.toContain('break-all');
       expect(cell.className).toContain('break-words');
-      expect(cell.className).toContain('min-w-24');
+      expect(cell.className).toContain('min-w-18');
     }
     expect(screen.getByRole('region', { name: 'Table' }).className).toContain('overflow-x-auto');
   });
@@ -173,6 +173,47 @@ describe('tables', () => {
     const container = renderMarkdown(TABLE);
     expect(container.querySelector('td')?.className).toContain('align-top');
     expect(container.querySelector('th')?.className).toContain('align-top');
+  });
+
+  it('keeps every word whole, so a narrow screen scrolls the table rather than splitting words', () => {
+    const container = renderMarkdown(TABLE);
+
+    for (const cell of container.querySelectorAll('th, td')) {
+      const classes = cell.className.split(/\s+/);
+      expect(classes).toContain('break-words');
+      expect(classes).toContain('min-w-18');
+      expect(classes).not.toContain('wrap-anywhere');
+    }
+  });
+
+  it('lets only a token too long to keep whole break anywhere, above a readable floor', () => {
+    const longToken = 'a'.repeat(25);
+    const longestWord = 'b'.repeat(24);
+    const container = renderMarkdown(
+      `| Key | Value |\n| --- | --- |\n| ${longestWord} | see ${longToken} here |`,
+    );
+
+    const [word, token] = Array.from(container.querySelectorAll('td'), (cell) =>
+      cell.className.split(/\s+/),
+    );
+    expect(word).toContain('break-words');
+    expect(word).not.toContain('wrap-anywhere');
+    expect(token).toContain('wrap-anywhere');
+    expect(token).toContain('min-w-36');
+    expect(token).not.toContain('break-words');
+  });
+
+  it('makes a link and inline code inside a cell follow the rule of the cell', () => {
+    const container = renderMarkdown(
+      '| Name | Where |\n| --- | --- |\n| [Read the guide](https://example.com) | `store.ts` |',
+    );
+
+    const [link, code] = Array.from(container.querySelectorAll('td'));
+    expect(link?.querySelector('a')?.className).toContain('wrap-anywhere');
+    expect(link?.className).toContain('[&_a]:[overflow-wrap:inherit]');
+    expect(link?.className.split(/\s+/)).toContain('break-words');
+    expect(code?.querySelector('code')).not.toBeNull();
+    expect(code?.className).toContain('[&_code]:[overflow-wrap:inherit]');
   });
 });
 

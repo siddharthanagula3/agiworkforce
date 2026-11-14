@@ -354,8 +354,8 @@ function ProjectSettingsSession({
                     </span>
                     <span className="text-caption text-muted-foreground">
                       {usesAccountInstructions
-                        ? 'Chats here also follow your profile and Instructions for AGI from Settings > General, alongside this project\u2019s instructions.'
-                        : 'Chats here follow only this project\u2019s instructions. Your name, work, about you and Instructions for AGI are left out.'}
+                        ? 'Chats here also follow your profile and Instructions for AGI.'
+                        : 'Chats here follow only this project\u2019s instructions.'}
                     </span>
                   </span>
                 </label>
@@ -395,7 +395,7 @@ function ProjectSettingsSession({
                     <span className="text-caption text-muted-foreground">
                       {usesGlobalMemory
                         ? 'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.'
-                        : 'Chats here use only this project\u2019s memories. Nothing from your other chats is included.'}
+                        : 'Chats here use only this project\u2019s memories.'}
                     </span>
                   </span>
                 </label>
@@ -409,7 +409,7 @@ function ProjectSettingsSession({
                 Files
               </p>
               <p className="text-xs text-muted-foreground">
-                Upload documents that provide context for all conversations in this project.
+                Context for every chat in this project.
               </p>
               <KnowledgeFilesPanel projectId={project.id} />
             </div>

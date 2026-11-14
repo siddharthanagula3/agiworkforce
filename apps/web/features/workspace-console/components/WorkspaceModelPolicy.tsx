@@ -193,9 +193,8 @@ export function WorkspaceModelPolicy() {
             Providers
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Blocking a provider blocks every model it serves, unless you approve a specific model
-            below. Approving no providers at all leaves them all available, restriction is something
-            you say, not something an empty list implies.
+            Blocking a provider blocks its models unless you approve one below. None approved leaves
+            all available.
           </p>
         </div>
         <ul className="divide-y" style={{ borderColor: 'var(--settings-border)' }}>
@@ -384,7 +383,7 @@ export function WorkspaceModelPolicy() {
         >
           <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             {restricted
-              ? 'This workspace restricts models. The rule is checked after auto-routing resolves, so a blocked model cannot be reached by asking for Auto.'
+              ? 'Models are restricted. Auto never reaches a blocked model.'
               : 'No restriction is in force. Every model in the catalog is available to members.'}
           </p>
           <div className="flex items-center gap-3">

@@ -126,6 +126,16 @@ function overview(): ProjectSharingOverview {
   };
 }
 
+function nothingShared(): ProjectSharingOverview {
+  return {
+    ...overview(),
+    sharedProjects: [],
+    sharedConversations: [],
+    sharedArtifacts: [],
+    sharedConnectors: [],
+  };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockStorage.clear();
@@ -158,6 +168,35 @@ describe('projects shared with the member', () => {
       params: { id: 'p-edit' },
     });
     expect(screen.queryByText('Board pack')).toBeNull();
+  });
+
+  it('stays hidden when nothing is shared and no empty message is asked for', async () => {
+    (api.get as jest.Mock).mockResolvedValue(nothingShared());
+    render(<SharedWithYouSection />);
+
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(screen.queryByTestId('projects-shared-empty')).toBeNull();
+    expect(screen.queryByTestId('projects-shared-with-you')).toBeNull();
+  });
+
+  it('shows the empty message once loading finishes when nothing is shared', async () => {
+    (api.get as jest.Mock).mockResolvedValue(nothingShared());
+    render(<SharedWithYouSection emptyMessage="Nothing is shared with you yet." />);
+
+    expect(await screen.findByText('Nothing is shared with you yet.')).toBeTruthy();
+  });
+
+  it('offers a retry instead of the empty message when shared projects cannot load', async () => {
+    (api.get as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+    (api.get as jest.Mock).mockResolvedValue(overview());
+    render(<SharedWithYouSection emptyMessage="Nothing is shared with you yet." />);
+
+    expect(await screen.findByText('Shared projects could not be loaded.')).toBeTruthy();
+    expect(screen.queryByText('Nothing is shared with you yet.')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Retry loading shared projects'));
+
+    expect(await screen.findByLabelText('Roadmap, shared by Dana. Can edit')).toBeTruthy();
   });
 
   it('opens a shared project read-only with what is shared', async () => {

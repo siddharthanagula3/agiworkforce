@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Web surface maintainers
-Last updated: 2026-11-11
+Last updated: 2026-11-13
 
 `pnpm --filter @agiworkforce/web test:e2e` runs the specs in this directory
 against a server Playwright starts from `playwright.config.ts`. That server is
@@ -71,5 +71,30 @@ pnpm exec playwright test e2e/matrix --project=chromium
 per public source file against `public-typography-source.baseline.json` and
 fails when a file exceeds its number or falls below it; in the second case
 lower the number, so the improvement cannot be spent again.
+
+## The phone layout check
+
+`phone-layout-rules.spec.ts` opens every signed-in and public screen in a touch
+phone 390 and 320 pixels wide and measures the rules of `D-2026-11-13-07` in
+`docs/decisions/2026-11-13-founder-decisions.md`: no sideways scroll, the 16
+pixel gutter, no text under 12 pixels, fields at 16 pixels, button labels on one
+line, 44 pixel icon buttons, switches that keep their shape, no field focused
+on load, dialogs that fill the screen, the app header, and the message box at
+the bottom. It also opens the navigation drawer, the plus menu and the model
+picker. One case plants a fault of each kind, so a rule that stops seeing its
+fault fails the run.
+
+It signs in through `qa-capability-harness`, so it is not in the push gate. Run
+it against a compiled local server:
+
+```
+PLAYWRIGHT_REUSE_RUNNING_SERVER=1 PLAYWRIGHT_BASE_URL=http://localhost:3000 \
+QA_RENDER_EVIDENCE_DIR=<folder> \
+pnpm exec playwright test e2e/phone-layout-rules.spec.ts
+```
+
+With `QA_RENDER_EVIDENCE_DIR` set it writes one picture per screen and a
+`findings.json` per width. A new screen goes into `SCREENS` or `PUBLIC_SCREENS`
+in the spec. The run takes about twelve minutes.
 
 `visual/README.md` covers the separate screenshot capture and compare harness.

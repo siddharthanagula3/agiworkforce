@@ -20,6 +20,7 @@ import {
 import { useUser } from '@clerk/expo';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
+import { deviceAccountErrorMessage } from '@/src/features/accounts/deviceAccounts';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -115,7 +116,14 @@ export default function ProfileScreen() {
   const handleSignOut = useCallback(() => {
     Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: signOut },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: () =>
+          void signOut().catch((error: unknown) => {
+            Alert.alert('Log out failed', deviceAccountErrorMessage(error, 'sign-out'));
+          }),
+      },
     ]);
   }, [signOut]);
 
@@ -290,7 +298,7 @@ export default function ProfileScreen() {
                   lineHeight: 19,
                 }}
               >
-                Cloud profile, chats, memory, and account settings stay separate from Local Mode.
+                Your Cloud profile, chats and memory stay separate from Local Mode.
               </Text>
             </View>
           </View>

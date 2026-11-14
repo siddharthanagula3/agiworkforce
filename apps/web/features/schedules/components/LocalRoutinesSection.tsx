@@ -178,8 +178,7 @@ export function LocalRoutinesSection() {
         <div>
           <h2 className="text-base font-medium">On this computer</h2>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Runs while the Desktop app is open. The selected model may still run in the cloud.
-            Interrupted runs are kept for review.
+            Runs while the Desktop app is open. The model may still run in the cloud.
           </p>
         </div>
         <Button
@@ -289,8 +288,7 @@ export function LocalRoutinesSection() {
           <DialogHeader>
             <DialogTitle>New local routine</DialogTitle>
             <DialogDescription>
-              The app will ask for permission at this computer. Tool approvals remain enabled, and
-              local routines never fall back to a cloud routine.
+              Tool approvals stay on, and it never falls back to a cloud routine.
             </DialogDescription>
           </DialogHeader>
           <form

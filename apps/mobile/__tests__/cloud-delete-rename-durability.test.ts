@@ -261,7 +261,9 @@ describe('cloud conversation rename durability', () => {
   it('applyConversationDeltas preserves a dirty rename, but a remote DELETE still wins', () => {
     seedCloud('c1', 'Old');
     useCloudSyncStateStore.getState().markConversationDirty('c1');
-    useChatCloudMessageStore.getState().patchCloudConversation('c1', { title: 'New' });
+    useChatCloudMessageStore
+      .getState()
+      .patchCloudConversation('c1', { title: 'New', userTitlePending: true });
 
     applyConversationDeltas([convDelta('c1', 'Old', null)]);
     expect(convTitle('c1')).toBe('New');
