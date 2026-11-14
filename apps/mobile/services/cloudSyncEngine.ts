@@ -101,6 +101,7 @@ const conversationPort: ConversationStorePort = {
       model: c.model,
       projectId: c.projectId,
       serverVersion: c.serverVersion,
+      ...(c.userTitlePending === true ? { userTitlePending: true } : {}),
     };
   },
   insert: (record) => {
@@ -540,10 +541,14 @@ async function push(account: CloudAccountEpoch): Promise<void> {
     for (const applied of res.applied.conversations) {
       const sent = sentConversationById.get(applied.id);
       const latest = conversationPort.get(applied.id);
-      if (latest) conversationPort.patch(applied.id, { serverVersion: applied.server_version });
-      if (!latest || (sent && conversationSyncContentMatches(sent, latest))) {
-        resolvedConversationIds.add(applied.id);
+      const settled = !latest || (sent && conversationSyncContentMatches(sent, latest));
+      if (latest) {
+        conversationPort.patch(applied.id, {
+          serverVersion: applied.server_version,
+          ...(settled ? { userTitlePending: false } : {}),
+        });
       }
+      if (settled) resolvedConversationIds.add(applied.id);
     }
     for (const applied of res.applied.messages) {
       const ref = buildableRefs.find((candidate) => candidate.messageId === applied.id);
@@ -565,8 +570,8 @@ async function push(account: CloudAccountEpoch): Promise<void> {
         resolvedConversationIds.add(conflict.id);
         continue;
       }
-      const needsLegacyRebase = sent?.serverVersion === undefined;
-      if (sent && latest && (needsLegacyRebase || !conversationSyncContentMatches(sent, latest))) {
+      const needsRebase = sent?.serverVersion === undefined || sent.userTitlePending === true;
+      if (sent && latest && (needsRebase || !conversationSyncContentMatches(sent, latest))) {
         conversationPort.patch(conflict.id, {
           ...latest,
           serverVersion: conflict.current.server_version,

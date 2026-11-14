@@ -33,7 +33,7 @@ export function describeCloudScheduleSweep(): { cadence: string; window: string 
     : { cadence: `every ${hours} hours`, window: `${hours}-hour` };
 }
 
-export const MOBILE_SCHEDULE_CADENCE_NOTE = `Schedules are checked ${describeCloudScheduleSweep().cadence}. The selected time is a preference, and delivery can occur later in the ${describeCloudScheduleSweep().window} Cloud window.`;
+export const MOBILE_SCHEDULE_CADENCE_NOTE = `Schedules are checked ${describeCloudScheduleSweep().cadence}, so a run can start later in the ${describeCloudScheduleSweep().window} Cloud window.`;
 
 export function isMobileScheduleRecurrenceSupported(
   recurrence: unknown,

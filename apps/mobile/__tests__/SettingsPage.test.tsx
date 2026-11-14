@@ -91,12 +91,16 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-import SettingsTabScreen from '../app/(app)/(tabs)/settings';
+import SettingsTabScreen from '../app/(app)/settings/index';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useTierStore } from '../src/features/billing/store';
 import { useAuthStore } from '../src/features/auth/store';
+import {
+  CLOUD_CHAT_POST_AUTH_INTENT,
+  POST_AUTH_INTENT_PARAM,
+} from '../src/features/auth/services/postAuthIntent';
 
 describe('Settings page', () => {
   beforeEach(() => {
@@ -130,6 +134,7 @@ describe('Settings page', () => {
   });
 
   it('renders the new settings information architecture', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
     expect(getByText('Settings')).toBeTruthy();
@@ -155,6 +160,7 @@ describe('Settings page', () => {
   });
 
   it('keeps each row label at its own width so a long value truncates instead of hiding it', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const screen = render(<SettingsTabScreen />);
     const label = screen.getByTestId('settings-row-label-account-email');
 
@@ -162,7 +168,16 @@ describe('Settings page', () => {
     expect(label).not.toHaveStyle({ flex: 1 });
   });
 
-  it('opens Remote control from Settings and names the paired computer', () => {
+  it('keeps Remote control out of Settings in Local', () => {
+    const screen = render(<SettingsTabScreen />);
+
+    expect(screen.queryByText('Remote control')).toBeNull();
+    expect(screen.queryByText('Connections')).toBeNull();
+    expect(screen.getByText('Device')).toBeTruthy();
+  });
+
+  it('opens Remote control from Settings in Cloud and names the paired computer', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const screen = render(<SettingsTabScreen />);
 
     expect(screen.getByLabelText('Connections. Not paired')).toBeTruthy();
@@ -182,7 +197,7 @@ describe('Settings page', () => {
 
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/settings/storage',
-      params: { returnTo: '/(app)/(tabs)/settings' },
+      params: { returnTo: '/(app)/settings' },
     });
   });
 
@@ -252,6 +267,7 @@ describe('Settings page', () => {
   });
 
   it('always offers the workspace screen rather than gating it on a local plan guess', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });
     useTierStore.setState({
       tier: 'free',
@@ -274,6 +290,7 @@ describe('Settings page', () => {
   });
 
   it('draws the account state in one style across all five Account rows', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
     for (const label of [
@@ -288,6 +305,7 @@ describe('Settings page', () => {
   });
 
   it('shows cloud rows as sign-in-gated instead of live account controls', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
@@ -299,6 +317,7 @@ describe('Settings page', () => {
   });
 
   it('shows cloud rows as cloud-gated after invite redemption', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });
     useWaitlistStore.setState({ cloudUnlocked: true });
     const { getByLabelText, getAllByText, queryByText } = render(<SettingsTabScreen />);
@@ -309,6 +328,7 @@ describe('Settings page', () => {
   });
 
   it('does not route to sign-in again after cloud access is unlocked', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });
     useWaitlistStore.setState({ cloudUnlocked: true });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -322,6 +342,7 @@ describe('Settings page', () => {
   });
 
   it('reaches Personalization and Memory once each, with no Local or Cloud duplicate', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });
     useWaitlistStore.setState({ cloudUnlocked: true });
     const { getByLabelText } = render(<SettingsTabScreen />);
@@ -347,6 +368,7 @@ describe('Settings page', () => {
   });
 
   it('routes a signed-out cloud row tap to sign-in (public alpha, no invite/waitlist gate)', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
     fireEvent.press(getByLabelText('Reflect. Sign in'));
@@ -363,6 +385,7 @@ describe('Settings page', () => {
   });
 
   it('opens the existing Shared Links and Device Integrations screens from Settings', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
@@ -374,6 +397,7 @@ describe('Settings page', () => {
   });
 
   it('routes every signed-out subscription surface to sign-in instead of account data', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText, queryAllByLabelText } = render(<SettingsTabScreen />);
 
     expect(queryAllByLabelText(/^Billing/)).toHaveLength(0);
@@ -470,6 +494,7 @@ describe('Settings page', () => {
   });
 
   it('gives Privacy its own icon rather than the Account Security shield', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText } = render(<SettingsTabScreen />);
     const lucide = jest.requireMock('lucide-react-native');
     const usesIcon = (label: string, icon: unknown) =>
@@ -489,6 +514,7 @@ describe('Settings page', () => {
   });
 
   it('shows a spinner in place of the Subscription value until the first plan refresh lands', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });
     useTierStore.setState({ isRefreshing: true, lastRefreshedAt: null } as never);
     const loading = render(<SettingsTabScreen />);
@@ -510,6 +536,7 @@ describe('Settings page', () => {
   });
 
   it('never names a plan the account was not confirmed to hold', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useAuthStore.setState({ isClerkSignedIn: true });
     useTierStore.setState({ isRefreshing: false, lastRefreshedAt: null } as never);
     const unconfirmed = render(<SettingsTabScreen />);
@@ -527,5 +554,76 @@ describe('Settings page', () => {
   it('renders version in About row', () => {
     const { getByText } = render(<SettingsTabScreen />);
     expect(getByText('v2.1.0')).toBeTruthy();
+  });
+
+  it('lists only this device in Local and adds the account in Cloud', () => {
+    const local = render(<SettingsTabScreen />);
+
+    expect(local.getByText('Device')).toBeTruthy();
+    expect(local.getByText('Assistant')).toBeTruthy();
+    expect(local.getByText('Support')).toBeTruthy();
+    expect(local.queryByText('Account')).toBeNull();
+    expect(local.queryByText('Subscription')).toBeNull();
+    expect(local.queryByText('Connectors')).toBeNull();
+    expect(local.queryByText('Customize')).toBeNull();
+    local.unmount();
+
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const cloud = render(<SettingsTabScreen />);
+
+    expect(cloud.getByText('Device')).toBeTruthy();
+    expect(cloud.getByText('Assistant')).toBeTruthy();
+    expect(cloud.getByText('Account')).toBeTruthy();
+    expect(cloud.getByText('Subscription')).toBeTruthy();
+    expect(cloud.getByText('Connectors')).toBeTruthy();
+  });
+
+  it('switches the list between Local and Cloud once Cloud is unlocked', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const screen = render(<SettingsTabScreen />);
+
+    fireEvent.press(screen.getByTestId('chat.mode-toggle.cloud'));
+
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    expect(screen.getByText('Account')).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('chat.mode-toggle.local'));
+
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(screen.queryByText('Account')).toBeNull();
+  });
+
+  it('sends a signed-out Cloud tap to sign-in and keeps the Local list', () => {
+    const screen = render(<SettingsTabScreen />);
+
+    fireEvent.press(screen.getByTestId('chat.mode-toggle.cloud'));
+
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
+    });
+    expect(screen.queryByText('Account')).toBeNull();
+  });
+
+  it('keeps Log Out in the Local list while Clerk still holds a session', () => {
+    mockClerkState.user = { primaryEmailAddress: { emailAddress: 'owner@example.com' } };
+    const { getByText, queryByText } = render(<SettingsTabScreen />);
+
+    expect(queryByText('Account')).toBeNull();
+    expect(getByText('Log Out')).toBeTruthy();
+  });
+
+  it('opens Customize from the Cloud section', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    fireEvent.press(getByLabelText('Customize. Cloud'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/customize');
   });
 });

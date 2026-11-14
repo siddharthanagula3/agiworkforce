@@ -52,8 +52,7 @@ export function SitesEmptyState() {
       <Globe className="h-6 w-6 text-[var(--chat-text-muted)]" aria-hidden="true" />
       <h2 className="text-base font-medium text-[var(--chat-text-primary)]">No sites yet</h2>
       <p className="max-w-md text-sm text-[var(--chat-text-secondary)]">
-        Ask AGI to build an app, then Publish it from the artifact panel. Every app you publish
-        shows up here with its link, who can open it, and the data it keeps.
+        Ask AGI to build an app, then Publish it from the artifact panel.
       </p>
       <Button asChild size="sm" className="mt-1 pointer-coarse:min-h-11">
         <Link href={NEW_CHAT_PATH}>Start a chat</Link>
@@ -218,15 +217,16 @@ function SitesPageView({ lease }: { lease: PublicationLease | null }) {
   return (
     <section
       data-design="agi"
-      className="min-h-full bg-background px-gutter-compact py-8 text-foreground sm:px-gutter-regular sm:py-12 lg:px-gutter-wide"
+      className="min-h-full bg-background px-gutter-compact pt-6 pb-8 text-foreground sm:px-gutter-regular sm:py-12 lg:px-gutter-wide"
     >
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <header className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-2">
-            <h1 className="text-h2 text-[var(--chat-text-primary)]">Sites</h1>
-            <p className="max-w-2xl text-sm text-[var(--chat-text-secondary)]">
-              Browse your publications by creation date. Search and updated-date sorting apply to
-              this page only.
+        <header className="flex items-start justify-between gap-4 max-md:flex-wrap max-md:items-center max-md:gap-y-2">
+          <div className="flex min-w-0 flex-col gap-2 max-md:contents">
+            <h1 className="text-h2 text-[var(--chat-text-primary)] max-md:text-display max-md:font-medium">
+              Sites
+            </h1>
+            <p className="max-w-2xl text-sm text-[var(--chat-text-secondary)] max-md:order-last max-md:basis-full">
+              Your published apps. Search and sorting apply to this page only.
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">

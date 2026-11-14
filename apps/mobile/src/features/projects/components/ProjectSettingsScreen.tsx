@@ -29,10 +29,8 @@ import { toUserMessage } from '@/services/userMessage';
 const MEMORY_MAX_CHARS = 500;
 
 export const PROJECT_MEMORY_SCOPE_COPY = {
-  global:
-    'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.',
-  projectOnly:
-    'Chats here use only this project’s memories. Nothing from your other chats is included.',
+  global: 'Uses your account memories. What’s learned here stays in this project.',
+  projectOnly: 'Uses only this project’s memories, nothing from your other chats.',
 } as const;
 
 function SectionLabel({ children }: { children: string }) {

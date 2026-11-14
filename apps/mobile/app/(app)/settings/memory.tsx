@@ -56,12 +56,12 @@ import {
 const FILTER_CATEGORIES = ['All', 'Pinned'] as const;
 
 function describeMemoryScope(isCloud: boolean, workspaceName: string | null | undefined): string {
-  if (!isCloud) return 'Stored on this device only, outside any account or workspace.';
+  if (!isCloud) return 'Stored on this device only.';
   if (workspaceName === undefined) return 'Saved to your AGI Cloud account.';
   if (workspaceName === null) {
-    return 'Your personal memories. Memories saved in a workspace stay in that workspace.';
+    return 'Personal memories. Workspace memories stay in their workspace.';
   }
-  return `Memories for the ${workspaceName} workspace. They are never read in your personal chats.`;
+  return `${workspaceName} workspace memories, never used in personal chats.`;
 }
 
 function formatCount(n: number): string {
@@ -76,7 +76,7 @@ type AccountMemoryCapability =
 
 export default function MemoryScreen() {
   const router = useRouter();
-  const goBack = useGoBack('/(app)/(tabs)/settings');
+  const goBack = useGoBack('/(app)/settings');
   const colors = useThemeColors();
   const currentIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);

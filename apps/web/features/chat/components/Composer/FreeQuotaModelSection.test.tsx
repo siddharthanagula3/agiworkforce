@@ -39,7 +39,7 @@ const experientialKeys = chatKeys.filter((key) => offerings[key]!.provider === '
 const experientialKey = experientialKeys[0]!;
 const DATA_USE_NOTE = /providers have not said they keep prompts out of training/;
 const PROMOTION_DESCRIPTION =
-  'Free promotion · text chat · provider quota applies These models get only your messages, not your instructions or memory: their providers have not said they keep prompts out of training.';
+  'Free promotion · text chat · provider quota applies Only your messages are sent. These providers have not said they keep prompts out of training.';
 const imageKeys = Object.entries(offerings)
   .filter(
     ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol === 'image-sync',

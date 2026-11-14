@@ -13,6 +13,9 @@ import { ServiceNoticesBanner } from '@/src/features/service-notices/ServiceNoti
 export { default as ErrorBoundary } from './error';
 
 const HIDDEN = { drawerItemStyle: { display: 'none' as const } };
+// The settings pages sit on a native stack whose edge swipe goes Back; the
+// drawer's own edge swipe would claim the same drag.
+const SETTINGS_STACK = { ...HIDDEN, swipeEnabled: false };
 
 export default function AppLayout() {
   const colors = useThemeColors();
@@ -92,15 +95,7 @@ export default function AppLayout() {
         <Drawer.Screen name="schedules/create" options={HIDDEN} />
         <Drawer.Screen name="schedules/runs" options={HIDDEN} />
 
-        <Drawer.Screen name="settings/index" options={HIDDEN} />
-        <Drawer.Screen name="settings/account-security" options={HIDDEN} />
-        <Drawer.Screen name="settings/memory" options={HIDDEN} />
-        <Drawer.Screen name="settings/integrations" options={HIDDEN} />
-        <Drawer.Screen name="settings/notifications" options={HIDDEN} />
-        <Drawer.Screen name="settings/notifications/[category]" options={HIDDEN} />
-        <Drawer.Screen name="settings/personalization" options={HIDDEN} />
-        <Drawer.Screen name="settings/capabilities" options={HIDDEN} />
-        <Drawer.Screen name="settings/auto-approve" options={HIDDEN} />
+        <Drawer.Screen name="settings" options={SETTINGS_STACK} />
 
         <Drawer.Screen name="notifications/index" options={HIDDEN} />
 

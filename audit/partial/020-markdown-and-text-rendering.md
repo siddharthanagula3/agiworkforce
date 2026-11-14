@@ -10,11 +10,10 @@ nothing is left.
 
 - Done when: GFM task items (- [ ] / - [x]) render as checkboxes reflecting their state.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
@@ -22,11 +21,10 @@ nothing is left.
 
 - Done when: A bare URL in the answer (https://…, www.…) becomes a clickable link.
 - Wave: 3
-- Already works on: web, desktop, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 
 ## S20.14: Footnotes where supported.
 

@@ -151,8 +151,7 @@ export function WorkspaceBillingSummary() {
         </div>
         <div className="flex flex-col gap-3 px-5 py-4">
           <p className="text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            Payment method, invoices, and plan changes are handled in billing settings. This page
-            shows only what the workspace consumes, so the two cannot drift apart.
+            Payment, invoices and plan changes are in billing settings.
           </p>
           <div className="flex flex-wrap gap-2">
             <Link

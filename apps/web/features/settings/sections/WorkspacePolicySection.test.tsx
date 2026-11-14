@@ -125,7 +125,7 @@ describe('WorkspacePolicySection security controls', () => {
     });
     renderSection();
     expect(screen.getByLabelText('Require multi-factor authentication')).toBeDisabled();
-    expect(screen.getByText(/availability could not be confirmed/i)).toBeInTheDocument();
+    expect(screen.getByText(/Could not confirm authenticator setup/i)).toBeInTheDocument();
     expect(
       screen.queryByText(/members cannot set up an authenticator app yet/i),
     ).not.toBeInTheDocument();
@@ -154,7 +154,9 @@ describe('WorkspacePolicySection security controls', () => {
 
     const toggle = screen.getByLabelText('Allow memory');
     expect(toggle).not.toBeChecked();
-    expect(screen.getByText(/memory is off for the workspace/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Off for every member, whatever their personal setting/i),
+    ).toBeInTheDocument();
 
     await user.click(toggle);
     await user.click(screen.getByRole('button', { name: /save policy/i }));
@@ -201,13 +203,9 @@ describe('WorkspacePolicySection security controls', () => {
     mockOverview.mockReturnValue(overview({ policy: policy({ retentionEnforced: false }) }));
     renderSection();
 
+    expect(screen.getByText(/Nothing is deleted until enforced below/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/nothing is deleted until enforce retention below is on, on any plan/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /off\. nothing is deleted until this is on, whatever the window above says/i,
-      ),
+      screen.getByText(/off\. nothing is deleted\. turning it on starts permanent deletion/i),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Enforce the retention window')).not.toBeChecked();
   });
@@ -217,11 +215,9 @@ describe('WorkspacePolicySection security controls', () => {
     renderSection();
 
     expect(
-      screen.getByText(/a nightly sweep permanently deletes workspace conversations/i),
+      screen.getByText(/Each night, chats idle for .+ days are permanently deleted/i),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/off\. nothing is deleted until this is on/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/off\. nothing is deleted\. turning it on/i)).not.toBeInTheDocument();
   });
 
   it('toggles zero data retention only', async () => {

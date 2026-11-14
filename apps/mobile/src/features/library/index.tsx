@@ -36,7 +36,7 @@ import {
   accentColorForKind,
   mergeMobileArtifactsForGallery,
 } from '@/src/features/artifacts/store';
-import type { MobileArtifact } from '@/src/features/artifacts/types';
+import type { MobileArtifact, MobileArtifactKind } from '@/src/features/artifacts/types';
 import { ImageFullScreen } from '@/src/features/chat/components/ImageFullScreen';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -82,8 +82,29 @@ const SORT_LABELS: Record<LibrarySort, string> = {
   size: 'Size',
 };
 
+type ArtifactKindFilter = 'code' | 'charts' | 'research';
+
 type LibraryFilter =
-  'all' | 'images' | 'videos' | 'documents' | 'uploads' | 'generated' | 'artifacts';
+  | 'all'
+  | 'images'
+  | 'videos'
+  | 'documents'
+  | 'uploads'
+  | 'generated'
+  | 'artifacts'
+  | ArtifactKindFilter;
+
+const ARTIFACT_KIND_FOR_FILTER: Record<ArtifactKindFilter, MobileArtifactKind> = {
+  code: 'code',
+  charts: 'chart',
+  research: 'research',
+};
+
+function artifactKindForFilter(filter: LibraryFilter): MobileArtifactKind | null {
+  return filter in ARTIFACT_KIND_FOR_FILTER
+    ? ARTIFACT_KIND_FOR_FILTER[filter as ArtifactKindFilter]
+    : null;
+}
 
 const GENERATION_FILTERS: ReadonlySet<LibraryFilter> = new Set(['all', 'images', 'videos']);
 
@@ -241,8 +262,9 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
 
   const rows = useMemo<LibraryRow[]>(() => {
     const normalizedQuery = search.trim().toLocaleLowerCase();
+    const artifactKind = artifactKindForFilter(filter);
     const assetRows: LibraryRow[] =
-      filter === 'artifacts' && !showDeleted
+      (filter === 'artifacts' || artifactKind) && !showDeleted
         ? []
         : library.assets
             .filter((asset) => {
@@ -262,6 +284,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       filter === 'generated'
         ? []
         : artifacts
+            .filter((artifact) => !artifactKind || artifact.kind === artifactKind)
             .filter(
               (artifact) =>
                 !normalizedQuery ||
@@ -714,7 +737,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             paddingBottom: 12,
           }}
         >
-          Recently deleted. Files are erased 30 days after you delete them. Long press to restore.
+          Recently deleted. Erased after 30 days. Long press to restore.
         </Text>
       ) : null}
 
@@ -756,6 +779,17 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             label="Artifacts"
             active={filter === 'artifacts'}
             onPress={() => setFilter('artifacts')}
+          />
+          <FilterChip label="Code" active={filter === 'code'} onPress={() => setFilter('code')} />
+          <FilterChip
+            label="Charts"
+            active={filter === 'charts'}
+            onPress={() => setFilter('charts')}
+          />
+          <FilterChip
+            label="Research"
+            active={filter === 'research'}
+            onPress={() => setFilter('research')}
           />
         </ScrollView>
       ) : null}
@@ -1071,7 +1105,13 @@ function LibraryEmptyState({
                   ? 'Files you attach or generate will appear here for reuse'
                   : filter === 'artifacts'
                     ? 'Artifacts you create in conversations will appear here'
-                    : 'Images, videos, files, and artifacts from your account will appear here';
+                    : filter === 'code'
+                      ? 'Code you create in conversations will appear here'
+                      : filter === 'charts'
+                        ? 'Charts you create in conversations will appear here'
+                        : filter === 'research'
+                          ? 'Research you create in conversations will appear here'
+                          : 'Your images, videos, files and artifacts will appear here';
   return (
     <View testID="library-empty-state" className="flex-1 items-center justify-center py-20 px-8">
       <View

@@ -123,7 +123,7 @@ export default function ReflectScreen() {
       router.back();
       return;
     }
-    router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const handleRefresh = useCallback(async () => {
@@ -633,8 +633,8 @@ export default function ReflectScreen() {
                   marginTop: 14,
                 }}
               >
-                Activity, topic, and behavior patterns use the {recap.sampledConversationCount} most
-                recent eligible conversations in this range. The conversation total is exact.
+                Patterns use your {recap.sampledConversationCount} most recent chats in this range.
+                The chat total is exact.
               </Text>
             )}
           </>

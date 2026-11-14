@@ -11,10 +11,12 @@ import {
   Archive,
   Baby,
   Bell,
+  BookOpen,
   Brain,
   CalendarDays,
   ChevronRight,
   CircleHelp,
+  Code2,
   CreditCard,
   Database,
   HardDrive,
@@ -50,6 +52,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { planCheckOf } from '@/src/features/billing/planCheck';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -58,6 +61,8 @@ import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
+import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import {
   confirmMobileDiagnosticsShare,
   shareMobileDiagnostics,
@@ -65,6 +70,16 @@ import {
 import { useCloudProfilePhoto } from '@/src/features/settings/cloud-account/useCloudProfilePhoto';
 import { useCloudProfileStore } from '@/src/features/settings/cloud-account/cloudProfileStore';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
+import {
+  activeDeviceAccount,
+  deviceAccountErrorMessage,
+  planSignOutHandover,
+} from '@/src/features/accounts/deviceAccounts';
+import { useDeviceAccounts } from '@/src/features/accounts/useDeviceAccounts';
+import {
+  AccountSwitchOverlay,
+  DeviceAccountsCard,
+} from '@/src/features/accounts/components/DeviceAccountsCard';
 
 function remoteConnectionLabel(status: ConnectionStatus): string {
   switch (status) {
@@ -101,6 +116,7 @@ interface SettingsRow {
 
 interface SettingsSection {
   title?: string;
+  scope?: 'cloud';
   rows: SettingsRow[];
 }
 
@@ -384,8 +400,16 @@ export default function SettingsTabScreen() {
   const { colors, isDark } = useTheme();
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const insets = useSafeAreaInsets();
-  const appMode = useChatAppModeStore((s) => s.appMode);
+  const { appMode, cloudUnlocked, switchToLocal, switchToCloud } = useAppModeSwitch();
   const isCloud = appMode === 'cloud';
+  const selectMode = useCallback(
+    (mode: 'local' | 'cloud') => () => {
+      if (mode === appMode) return;
+      if (mode === 'cloud') switchToCloud();
+      else switchToLocal();
+    },
+    [appMode, switchToCloud, switchToLocal],
+  );
   const localThemeMode = useLocalSettingsStore((s) => s.themeMode);
   const cloudThemeMode = useCloudSettingsStore((s) => s.themeMode);
   const themeMode = isCloud ? cloudThemeMode : localThemeMode;
@@ -404,6 +428,8 @@ export default function SettingsTabScreen() {
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const hasClerkSession = clerkUser != null;
+  const deviceAccounts = useDeviceAccounts();
+  const signedInAccount = deviceAccounts.multiSession ? activeDeviceAccount(deviceAccounts) : null;
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const push = useCallback(
@@ -431,11 +457,24 @@ export default function SettingsTabScreen() {
   );
 
   const handleSignOut = useCallback(() => {
-    Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
+    const handover = planSignOutHandover(deviceAccounts);
+    const message = signedInAccount
+      ? handover
+        ? `Log out of ${signedInAccount.email} on this device? You will continue as ${handover.next.email}.`
+        : `Log out of ${signedInAccount.email} on this device?`
+      : 'Log out of AGI Cloud on this device?';
+    Alert.alert('Log Out', message, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => void signOut() },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: () =>
+          void signOut().catch((error: unknown) => {
+            Alert.alert('Log out failed', deviceAccountErrorMessage(error, 'sign-out'));
+          }),
+      },
     ]);
-  }, [signOut]);
+  }, [deviceAccounts, signOut, signedInAccount]);
 
   const handleExportDiagnostics = useCallback(() => {
     void confirmMobileDiagnosticsShare()
@@ -459,6 +498,7 @@ export default function SettingsTabScreen() {
     () => [
       {
         title: 'Account',
+        scope: 'cloud',
         rows: [
           {
             key: 'account-email',
@@ -576,7 +616,7 @@ export default function SettingsTabScreen() {
             onPress: () =>
               router.push({
                 pathname: '/(app)/settings/storage',
-                params: { returnTo: '/(app)/(tabs)/settings' },
+                params: { returnTo: '/(app)/settings' },
               } as Parameters<typeof router.push>[0]),
           },
         ],
@@ -585,6 +625,7 @@ export default function SettingsTabScreen() {
         ? [
             {
               title: 'Remote control',
+              scope: 'cloud' as const,
               rows: [
                 {
                   key: 'remote',
@@ -622,6 +663,12 @@ export default function SettingsTabScreen() {
             onPress: push('/(app)/settings/capabilities'),
           },
           {
+            key: 'code',
+            label: CLOUD_CODE_SCREEN_TITLE,
+            icon: Code2,
+            onPress: push('/(app)/settings/code'),
+          },
+          {
             key: 'data-controls',
             label: 'Data Controls',
             icon: Database,
@@ -631,7 +678,20 @@ export default function SettingsTabScreen() {
       },
       {
         title: 'Cloud',
+        scope: 'cloud',
         rows: [
+          ...(FEATURES.skills
+            ? [
+                {
+                  key: 'customize',
+                  label: 'Customize',
+                  icon: BookOpen,
+                  tag: cloudAccessTag,
+                  tone: 'cloud' as const,
+                  onPress: push('/(app)/customize'),
+                },
+              ]
+            : []),
           {
             key: 'reflect',
             label: 'Reflect',
@@ -684,7 +744,7 @@ export default function SettingsTabScreen() {
             onPress: () =>
               router.push({
                 pathname: '/(app)/feedback',
-                params: { returnTo: '/(app)/(tabs)/settings' },
+                params: { returnTo: '/(app)/settings' },
               } as Parameters<typeof router.push>[0]),
           },
           {
@@ -720,7 +780,10 @@ export default function SettingsTabScreen() {
                   label: 'Log Out',
                   icon: LogOut,
                   tone: 'danger' as const,
-                  hint: 'Signs you out on this device',
+                  value: signedInAccount?.email,
+                  hint: signedInAccount
+                    ? `Signs ${signedInAccount.email} out on this device`
+                    : 'Signs you out on this device',
                   onPress: handleSignOut,
                 },
               ],
@@ -747,14 +810,19 @@ export default function SettingsTabScreen() {
       billingLoading,
       planValue,
       clerkUser,
+      signedInAccount,
     ],
+  );
+  const visibleSections = useMemo(
+    () => sections.filter((section) => isCloud || section.scope !== 'cloud'),
+    [isCloud, sections],
   );
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }}>
       {/* The header sits outside the ScrollView so the close control stays
-          pinned; inside it, X scrolled away for most of this ~30-row list and
-          the tab bar is hidden on this route, leaving no visible way out. */}
+          pinned; inside it, X scrolled away for most of this ~30-row list,
+          leaving no visible way out. */}
       <View
         style={{
           paddingHorizontal: 16,
@@ -811,12 +879,23 @@ export default function SettingsTabScreen() {
           paddingBottom: 36,
         }}
       >
-        <ProfileHeader onPress={push('/(app)/profile')} />
+        <View style={{ marginBottom: 16 }}>
+          <ModeToggle
+            mode={appMode}
+            cloudUnlocked={cloudUnlocked}
+            onTapLocal={selectMode('local')}
+            onTapCloud={selectMode('cloud')}
+          />
+        </View>
 
-        {sections.map((section, index) => (
+        <ProfileHeader onPress={push('/(app)/profile')} />
+        {isCloud ? <DeviceAccountsCard accounts={deviceAccounts} /> : null}
+
+        {visibleSections.map((section, index) => (
           <SectionCard key={section.title ?? `section-${index}`} section={section} />
         ))}
       </ScrollView>
+      <AccountSwitchOverlay />
     </SafeAreaView>
   );
 }

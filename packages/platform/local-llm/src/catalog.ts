@@ -2,7 +2,7 @@ import type { OnDeviceModel } from '@agiworkforce/types';
 import type { DeviceCapabilities } from './types';
 
 const ET_URL_PREFIX = 'https://huggingface.co/software-mansion/react-native-executorch';
-const ET_VERSION_TAG = 'resolve/v0.8.0';
+const ET_VERSION_TAG = 'resolve/v0.10.0';
 
 const QWEN3_VL_2B_GGUF_URL =
   'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf';
@@ -20,7 +20,7 @@ const CATALOG: OnDeviceModel[] = [
     displayName: 'AGI Standard',
     family: 'qwen3',
     paramCountB: 4.0,
-    fileSizeBytes: 2_147_483_648, // ~2 GB Q4
+    fileSizeBytes: 2_693_078_056,
     supportedRuntimes: ['executorch', 'llama-rn'],
     contextWindow: 262_144,
     capabilities: {
@@ -35,7 +35,7 @@ const CATALOG: OnDeviceModel[] = [
     shipsInV1: true,
     executorchPreset: {
       modelName: 'qwen3-4b-quantized',
-      modelSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/qwen-3-4B/quantized/qwen3_4b_8da4w.pte`,
+      modelSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/4b/xnnpack/qwen_3_4b_xnnpack_8da4w.pte`,
       tokenizerSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/tokenizer.json`,
       tokenizerConfigSource: `${ET_URL_PREFIX}-qwen-3/${ET_VERSION_TAG}/tokenizer_config.json`,
     },
@@ -102,14 +102,14 @@ const CATALOG: OnDeviceModel[] = [
     license: 'LFM Open License v1.0 (free commercial use capped at $10M annual revenue)',
     role: 'premium-vision-pack',
     shipsInV1: false,
-    downloadUrl: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/lfm2_5_vl_450m_8da4w_xnnpack.pte`,
+    downloadUrl: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/vl_450m/xnnpack/lfm_2_5_vl_450m_xnnpack_8da4w.pte`,
     checksum: 'c3aeead4499cb1c19de48d4216f3b2e9216b27770d768ea4650dbcaa1a998a9b',
     format: 'pte',
     executorchPreset: {
       modelName: 'lfm2.5-vl-450m-quantized',
-      modelSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/lfm2_5_vl_450m_8da4w_xnnpack.pte`,
-      tokenizerSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/tokenizer.json`,
-      tokenizerConfigSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/tokenizer_config.json`,
+      modelSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/vl_450m/xnnpack/lfm_2_5_vl_450m_xnnpack_8da4w.pte`,
+      tokenizerSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/vl_450m/tokenizer.json`,
+      tokenizerConfigSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/vl_450m/tokenizer_config.json`,
       capabilities: ['vision'],
       generationConfig: { temperature: 0.1, minP: 0.15, repetitionPenalty: 1.05 },
     },
@@ -138,7 +138,7 @@ const CATALOG: OnDeviceModel[] = [
     displayName: 'AGI Lite',
     family: 'llama3.2',
     paramCountB: 1.0,
-    fileSizeBytes: 1_181_116_006, // ~1.1 GB SpinQuant variant
+    fileSizeBytes: 1_145_912_797,
     supportedRuntimes: ['executorch', 'llama-rn'],
     contextWindow: 131_072,
     capabilities: {
@@ -154,7 +154,7 @@ const CATALOG: OnDeviceModel[] = [
     liteMode: true,
     executorchPreset: {
       modelName: 'llama-3.2-1b-spinquant',
-      modelSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/llama-3.2-1B/spinquant/llama3_2_spinquant.pte`,
+      modelSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/1b/xnnpack/llama_3_2_1b_xnnpack_spinquant.pte`,
       tokenizerSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/tokenizer.json`,
       tokenizerConfigSource: `${ET_URL_PREFIX}-llama-3.2/${ET_VERSION_TAG}/tokenizer_config.json`,
     },
@@ -169,7 +169,7 @@ const CATALOG: OnDeviceModel[] = [
     contextWindow: 4_096, // Apple FM public context cap (Wave 1-2 budgeting task #30)
     capabilities: {
       text: true,
-      visionIn: true,
+      visionIn: false,
       audioIn: false,
       toolCalls: true,
       structuredOutput: true,
@@ -188,7 +188,7 @@ const CATALOG: OnDeviceModel[] = [
     contextWindow: 4_000, // ML Kit Prompt API input guidance; device runtime owns the model
     capabilities: {
       text: true,
-      visionIn: true,
+      visionIn: false,
       audioIn: false,
       toolCalls: false,
       structuredOutput: false,

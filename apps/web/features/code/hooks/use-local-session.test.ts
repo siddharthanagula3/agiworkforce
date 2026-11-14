@@ -139,6 +139,27 @@ describe('one local session', () => {
     expect(result.current.turn.outcome).toBeNull();
   });
 
+  it('leaves the model thinking out of the reply', async () => {
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.send('Reply with exactly: desktop leg ok');
+    });
+    send({ type: 'output-delta', threadId: 'thread-1', turnId: 'turn-1', delta: 'desktop ' });
+    send({
+      type: 'reasoning-delta',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      delta: 'The user wants an exact echo',
+      sequence: 0,
+    });
+    send({ type: 'output-delta', threadId: 'thread-1', turnId: 'turn-1', delta: 'leg ok' });
+
+    expect(result.current.turn.reply).toBe('desktop leg ok');
+    expect(result.current.turn.tools).toEqual([]);
+  });
+
   it('keeps a failed turn on screen instead of clearing it away', async () => {
     const { result } = renderHook(() => useLocalSession(session));
     await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());

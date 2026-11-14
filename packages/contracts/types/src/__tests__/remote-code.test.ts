@@ -65,6 +65,42 @@ describe('remote code requests', () => {
     ).toMatchObject({ approvalRequestId: 'ap-1', approved: true });
   });
 
+  it('accepts an answer to a question, and a dismissal, but not an empty or oversized answer', () => {
+    const base = {
+      version: 1,
+      requestId: 'req-1',
+      sentAt: SENT_AT,
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      questionRequestId: 'q-1',
+    };
+    expect(
+      parseRemoteCodeRequest('code.question.respond', { ...base, answer: ' release ' }),
+    ).toEqual({
+      ...base,
+      action: 'code.question.respond',
+      answer: 'release',
+    });
+    expect(parseRemoteCodeRequest('code.question.respond', { ...base, answer: null })).toEqual({
+      ...base,
+      action: 'code.question.respond',
+      answer: null,
+    });
+    expect(parseRemoteCodeRequest('code.question.respond', { ...base, answer: '  ' })).toBeNull();
+    expect(parseRemoteCodeRequest('code.question.respond', base)).toBeNull();
+    expect(
+      parseRemoteCodeRequest('code.question.respond', {
+        ...base,
+        answer: 'x'.repeat(REMOTE_CODE_LIMITS.answerLength + 1),
+      }),
+    ).toBeNull();
+    const { questionRequestId: _questionRequestId, ...unnamed } = base;
+    expect(
+      parseRemoteCodeRequest('code.question.respond', { ...unnamed, answer: 'main' }),
+    ).toBeNull();
+  });
+
   it('ignores actions it does not own and payloads on another protocol version', () => {
     expect(parseRemoteCodeRequest('dispatch.task.create', { version: 1 })).toBeNull();
     expect(
@@ -170,6 +206,81 @@ describe('host messages the phone accepts', () => {
     expect(parseRemoteCodeSnapshot(older)).toEqual({ ...older, pendingQuestions: [], tools: [] });
     expect(
       parseRemoteCodeSnapshot({ ...snapshot, pendingQuestions: [{ requestId: 'q-1' }] }),
+    ).toBeNull();
+  });
+
+  it('reads the turn of a message and of a tool, thinking and the running task count', () => {
+    const richer = {
+      ...snapshot,
+      messages: [{ role: 'assistant', text: 'Done.', turnId: 'turn-1' }],
+      tools: [
+        {
+          toolCallId: 'call-1',
+          name: 'shell',
+          summary: 'pnpm test',
+          state: 'done',
+          output: 'ok',
+          turnId: 'turn-1',
+        },
+      ],
+      thinking: [{ turnId: 'turn-1', text: 'Check the backoff first.' }],
+      runningTasks: 3,
+    };
+    expect(parseRemoteCodeSnapshot(richer)).toEqual(richer);
+    expect(parseRemoteCodeSnapshot({ ...richer, runningTasks: -1 })).toBeNull();
+    expect(
+      parseRemoteCodeSnapshot({ ...richer, messages: [{ role: 'user', text: 'go', turnId: 7 }] }),
+    ).toBeNull();
+    expect(
+      parseRemoteCodeSnapshot({
+        ...richer,
+        thinking: [{ turnId: 'turn-1', text: 'x'.repeat(REMOTE_CODE_LIMITS.thinkingLength + 1) }],
+      }),
+    ).toBeNull();
+  });
+
+  it('reads the options of a question and whether the phone may answer it', () => {
+    const asked = {
+      ...snapshot,
+      pendingQuestions: [
+        {
+          turnId: 'turn-1',
+          requestId: 'q-1',
+          question: 'Which branch?',
+          options: ['main', 'release'],
+          answerable: true,
+        },
+      ],
+    };
+    expect(parseRemoteCodeSnapshot(asked)?.pendingQuestions).toEqual(asked.pendingQuestions);
+    expect(parseRemoteCodeSnapshot(snapshot)?.pendingQuestions).toEqual([
+      { turnId: 'turn-1', requestId: 'q-1', question: 'Which branch?' },
+    ]);
+    expect(
+      parseRemoteCodeSnapshot({
+        ...snapshot,
+        pendingQuestions: [
+          {
+            ...asked.pendingQuestions[0],
+            options: Array.from({ length: REMOTE_CODE_LIMITS.questionOptions + 1 }, () => 'x'),
+          },
+        ],
+      }),
+    ).toBeNull();
+  });
+
+  it('reads thinking as it arrives', () => {
+    const thought = {
+      action: 'code.session.event',
+      version: 1,
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      event: { type: 'thinking-delta', turnId: 'turn-1', delta: 'Check the backoff.' },
+      sentAt: SENT_AT,
+    };
+    expect(parseRemoteCodeEvent(thought)).toEqual(thought);
+    expect(
+      parseRemoteCodeEvent({ ...thought, event: { type: 'thinking-delta', delta: 'no turn' } }),
     ).toBeNull();
   });
 

@@ -12,7 +12,7 @@ export default function WorkspaceBillingPage() {
     <ConsolePage
       help={{ docId: 'billing-and-plans', label: 'How plans and billing work' }}
       title="Billing"
-      description="What this workspace is on and what it consumes. Payment and invoices are handled in billing settings."
+      description="This workspace's plan and usage. Payment and invoices are in billing settings."
     >
       <WorkspaceBillingSummary />
     </ConsolePage>

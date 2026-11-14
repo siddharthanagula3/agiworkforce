@@ -6,6 +6,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import {
   classifyExternalLink,
   getSystemIntentPrompt,
+  isValidExternalHttpUrl,
 } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
@@ -152,6 +153,7 @@ const INLINE_RULES: ReadonlyArray<readonly [InlineRule, string]> = [
   ['citation', String.raw`\[(\d{1,3})\](?!\()`],
   ['url', String.raw`<(https?:\/\/[^\s<>]+)>`],
   ['url', String.raw`(?<![A-Za-z0-9_/])(https?:\/\/[^\s<>\]]+)`],
+  ['url', String.raw`(?<![A-Za-z0-9_/@.-])(www\.[^\s<>\]]+)`],
   ...HTML_INLINE_TAGS.map(
     (tag) => [`html:${tag}`, `<${tag}>(.+?)</${tag}>`] as readonly [InlineRule, string],
   ),
@@ -254,6 +256,12 @@ function trimAutolink(url: string): string {
     break;
   }
   return url.slice(0, end);
+}
+
+function autolinkHref(url: string): string | null {
+  const href = url.startsWith('www.') ? `https://${url}` : url;
+  if (!isValidExternalHttpUrl(href)) return null;
+  return new URL(href).hostname.includes('.') ? href : null;
 }
 
 export function openAssistantLink(url: string): void {
@@ -448,8 +456,14 @@ export function renderInlineMarkdown(
       case 'url': {
         const bare = !match[0].startsWith('<');
         const url = bare ? trimAutolink(first) : first;
+        const label = restoreEscapes(url);
+        const href = url ? autolinkHref(label) : null;
+        if (!href) {
+          parts.push(restoreEscapes(match[0]));
+          break;
+        }
         if (bare) consumed = url.length;
-        parts.push(link(restoreEscapes(url), restoreEscapes(url)));
+        parts.push(link(label, href));
         break;
       }
       default: {

@@ -12,7 +12,7 @@ export default function WorkspaceMcpPage() {
     <ConsolePage
       help={{ docId: 'mcp-connections', label: 'How MCP servers work' }}
       title="MCP servers"
-      description="Servers this workspace publishes to every member, so nobody has to configure the same connection twice. Retiring one takes it away from everyone."
+      description="Servers published to every member. Retiring one removes it for everyone."
     >
       <WorkspaceMcpServers />
     </ConsolePage>

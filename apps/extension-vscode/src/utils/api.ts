@@ -175,10 +175,11 @@ function waitUnlessCancelled(
       reject(cancelledRequestError());
       return;
     }
+    const boundedWaitMs = waitMs < MAX_RETRY_AFTER_MS ? waitMs : MAX_RETRY_AFTER_MS;
     const timer = setTimeout(() => {
       listener.dispose();
       resolve();
-    }, waitMs);
+    }, boundedWaitMs);
     const listener = cancellation.onCancellationRequested(() => {
       clearTimeout(timer);
       listener.dispose();

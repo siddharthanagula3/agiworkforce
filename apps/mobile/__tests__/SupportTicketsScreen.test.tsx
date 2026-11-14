@@ -186,7 +186,7 @@ describe('SupportTicketsScreen ticket history', () => {
     mockListSupportTickets.mockResolvedValueOnce({ tickets: [], nextOffset: null });
     const screen = render(<SupportTicketsScreen />);
 
-    expect(await screen.findByText(/also by email to your account address/)).toBeTruthy();
+    expect(await screen.findByText(/Support replies here and by email/)).toBeTruthy();
     expect(screen.queryByText(/not emailed/i)).toBeNull();
   });
 

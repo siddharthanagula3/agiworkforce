@@ -33,16 +33,14 @@ import {
   activateCloudAccount,
   hasCloudAccountOwner,
   invalidateCloudAccount,
+  recordedCloudAccountOwnerId,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
   isSignInOwedForEndedSession,
   oweSignInForEndedSession,
   settleSignInForEndedSession,
 } from '@/src/features/auth/services/endedSession';
-import {
-  beginPushTokenAccountSession,
-  clearPushTokenAccountSession,
-} from '@/src/features/auth/services/pushTokenAccountLifecycle';
+import { usePushTokenAccountRegistration } from '@/src/features/auth/hooks/usePushTokenAccountRegistration';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { clearBiometricFlag, hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
@@ -63,9 +61,9 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import * as Crypto from 'expo-crypto';
 import { setUuidV7RandomSource } from '@agiworkforce/utils/uuidv7';
 import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '@/services/cloudSyncEngine';
-import { clearAuthSession, getAuthToken } from '@/services/authSession';
+import { clearAuthSession } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
-import { syncDeviceLanguage } from '@/src/i18n';
+import { restoreStoredLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
 import {
   parseSharedFilesParam,
@@ -82,9 +80,7 @@ export { default as ErrorBoundary } from './error';
 
 setUuidV7RandomSource((byteCount) => Crypto.getRandomBytes(byteCount));
 import {
-  registerForPushNotifications,
   setupNotificationListeners,
-  setPushAccountContext,
   handleInitialNotification,
   setNavigatorReady,
   setSignedIn,
@@ -96,6 +92,7 @@ import {
   CLOUD_SIGN_IN_RETURN_PATH,
   resolveRootRedirect,
 } from '@/src/features/auth/services/rootRouting';
+import { isCloudAccountAdditionOpenFor } from '@/src/features/auth/services/accountAddition';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { ToastHost } from '@/src/shared/components/Toast';
 import { CloudSyncErrorNotice } from '@/src/features/edge-cases/components/CloudSyncErrorNotice';
@@ -104,6 +101,7 @@ import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
 import { registerAppTransactionForAccount } from '@/src/features/age-assurance/appTransaction';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
 import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
+import { useLocalModelMemoryRelease } from '@/src/features/model-picker/useLocalModelMemoryRelease';
 import '../global.css';
 
 holdLaunchSplash();
@@ -164,6 +162,7 @@ function ClerkTokenBridge() {
         void useTermsAcceptanceStore.getState().verify(userId);
       }
       if (termsUserId !== userId || termsStatus !== 'accepted') {
+        if (recordedCloudAccountOwnerId() !== userId) useRolloutStore.getState().clear();
         if (useAuthStore.getState().isClerkSignedIn) {
           invalidateCloudAccount();
           clearLocalCloudAccountState();
@@ -178,6 +177,7 @@ function ClerkTokenBridge() {
       const owner = activateCloudAccount(userId);
       if (owner.changed) {
         clearLocalCloudAccountState();
+        useRolloutStore.getState().clear();
         startCloudSyncLoop();
       }
       setCloudAccess(true);
@@ -283,6 +283,7 @@ export default function RootLayout() {
       themeMode === 'dark' ? 'dark' : themeMode === 'light' ? 'light' : 'unspecified',
     );
   }, [themeMode]);
+  useLocalModelMemoryRelease();
   const { isUnlocked, isCovered, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
   const resetAppLock = useCallback(() => {
@@ -312,10 +313,10 @@ export default function RootLayout() {
     setStorageStatus('pending');
     initMmkvEncryption()
       .then(async () => {
-        const language = await syncDeviceLanguage();
+        const language = await restoreStoredLanguage();
         if (language.directionChanged) {
-          void reloadAppAsync('Apply device language direction').catch((err) => {
-            console.warn('[RootLayout] device language direction reload failed:', err);
+          void reloadAppAsync('Apply app language direction').catch((err) => {
+            console.warn('[RootLayout] app language direction reload failed:', err);
             setStorageStatus('ready');
           });
           return;
@@ -403,42 +404,7 @@ export default function RootLayout() {
     return removeListeners;
   }, [isInitialized]);
 
-  useEffect(() => {
-    if (
-      !FEATURES.auth ||
-      !FEATURES.cloudChat ||
-      !isClerkSignedIn ||
-      !clerkUserId ||
-      !isInitialized
-    ) {
-      if (isInitialized && (!isClerkSignedIn || !clerkUserId)) {
-        setPushAccountContext(null);
-        void clearPushTokenAccountSession().catch((err) => {
-          console.warn('[RootLayout] Push-token account cleanup failed:', err);
-        });
-      }
-      return;
-    }
-
-    let disposed = false;
-    void beginPushTokenAccountSession(clerkUserId, getAuthToken)
-      .then(async (accountContext) => {
-        if (!accountContext || disposed || !accountContext.isCurrent()) return;
-        if (!isCloud) return;
-        setPushAccountContext(accountContext);
-        await registerForPushNotifications(accountContext);
-      })
-      .catch((err) => {
-        if (!disposed) {
-          console.warn('[RootLayout] Push notification setup failed:', err);
-        }
-      });
-
-    return () => {
-      disposed = true;
-      setPushAccountContext(null);
-    };
-  }, [isClerkSignedIn, clerkUserId, isCloud, isInitialized]);
+  usePushTokenAccountRegistration({ isClerkSignedIn, clerkUserId, isCloud, isInitialized });
 
   // Polling for cloud approvals has nothing to poll outside Cloud Mode, and
   // nothing to report when the user has turned background alerts off
@@ -493,6 +459,7 @@ export default function RootLayout() {
       onboardingDone: Boolean(storage.getString('onboarding-done')),
       ageGateConfirmed: isAgeGateConfirmed(),
       signInOwedForEndedSession: isSignInOwedForEndedSession(),
+      addingAccount: isCloudAccountAdditionOpenFor(clerkUserId),
     });
     if (redirect?.pathname === CLOUD_SIGN_IN_RETURN_PATH) settleSignInForEndedSession();
     if (redirect) {

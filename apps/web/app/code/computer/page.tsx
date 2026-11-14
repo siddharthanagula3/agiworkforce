@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { RemoteComputerPage } from '@/features/remote-dispatch';
+import { RemoteComputerScreen } from '@/features/remote-dispatch';
 
 export const metadata: Metadata = {
   title: { absolute: 'Your computer · Code' },
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function CodeComputerRoute() {
-  return <RemoteComputerPage />;
+  return <RemoteComputerScreen />;
 }

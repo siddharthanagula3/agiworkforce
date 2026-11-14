@@ -76,12 +76,8 @@ export function WorkspaceIdentityPanels() {
           What deprovisioning does
         </p>
         <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          Deactivating or deleting a user at your identity provider removes their membership and, in
-          the same request, revokes the device tokens and workspace API keys this workspace issued
-          them, plus their browser sessions if they were working in this workspace. Chat, Work and
-          Code stop here on Desktop, Mobile, CLI, VS Code and Chrome. Their personal account and any
-          other workspace they belong to are untouched, and anything that could not be reached is
-          recorded on the directory log above.
+          Removing a user at your identity provider ends their membership, tokens, keys and sessions
+          here. Their other accounts are untouched.
         </p>
       </div>
       <div style={noticeStyle}>

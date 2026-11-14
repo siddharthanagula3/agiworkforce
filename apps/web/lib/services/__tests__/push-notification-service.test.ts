@@ -130,21 +130,33 @@ describe('sendPushToUser, dead tokens', () => {
 });
 
 describe('sendPushToUser, never throws', () => {
-  it('survives a provider outage', async () => {
+  it('survives a provider outage and says the request never got through', async () => {
     mocks.fetch.mockRejectedValue(new Error('network down'));
 
     await expect(sendPushToUser('user-1', { title: 'x', body: 'y' })).resolves.toEqual({
       sent: 0,
       invalidated: 0,
+      transportFailures: 1,
     });
   });
 
-  it('survives a non-200 from Expo', async () => {
+  it('survives a non-200 from Expo and says the request never got through', async () => {
     mocks.fetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
 
-    await expect(sendPushToUser('user-1', { title: 'x', body: 'y' })).resolves.toMatchObject({
+    await expect(sendPushToUser('user-1', { title: 'x', body: 'y' })).resolves.toEqual({
       sent: 0,
+      invalidated: 0,
+      transportFailures: 1,
     });
+  });
+
+  it('reports no transport failure for a push the provider accepted', async () => {
+    expoReturns([{ status: 'ok' }]);
+
+    const result = await sendPushToUser('user-1', { title: 'x', body: 'y' });
+
+    expect(result.sent).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty('transportFailures');
   });
 
   it('reports a token-lookup failure instead of throwing', async () => {
@@ -520,6 +532,39 @@ describe('device push preferences', () => {
     await expect(getPushTokensForUser('user-1', 'task_completed', noon)).resolves.toEqual([
       TOKEN_B,
     ]);
+  });
+
+  it('sends a product update only to a device that turned it on', () => {
+    const optedIn = devicePreferences({ eventTypes: { product_update: true } });
+    const optedOut = devicePreferences({ eventTypes: { product_update: false } });
+    const olderApp = devicePreferences({ eventTypes: { task_completed: true } });
+    expect(deviceAcceptsNotice(optedIn, 'product_update', noon)).toBe(true);
+    expect(deviceAcceptsNotice(optedOut, 'product_update', noon)).toBe(false);
+    expect(deviceAcceptsNotice(olderApp, 'product_update', noon)).toBe(false);
+    expect(deviceAcceptsNotice(null, 'product_update', noon)).toBe(false);
+    expect(deviceAcceptsNotice({ garbage: true }, 'product_update', noon)).toBe(false);
+  });
+
+  it('holds a product update inside quiet hours even when it is on', () => {
+    const quiet = devicePreferences({
+      eventTypes: { product_update: true },
+      quietHours: {
+        enabled: true,
+        days: [0, 1, 2, 3, 4, 5, 6],
+        startTime: '11:00',
+        endTime: '13:00',
+        timezone: 'UTC',
+      },
+    });
+    expect(deviceAcceptsNotice(quiet, 'product_update', noon)).toBe(false);
+  });
+
+  it('lets a device mute scheduled runs alone', () => {
+    const scheduledOff = devicePreferences({
+      eventTypes: { schedule_run: false, task_completed: true, agent_approval_needed: true },
+    });
+    expect(deviceAcceptsNotice(scheduledOff, 'schedule_run', noon)).toBe(false);
+    expect(deviceAcceptsNotice(scheduledOff, 'task_completed', noon)).toBe(true);
   });
 });
 

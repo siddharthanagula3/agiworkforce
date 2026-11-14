@@ -531,7 +531,7 @@ function OwnedSignInMethodsPanel({
       >
         Sign-in methods
       </h2>
-      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--text-3)' }}>
+      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
         Every way you can sign in to this account. Keep at least one you can still reach.
       </p>
 

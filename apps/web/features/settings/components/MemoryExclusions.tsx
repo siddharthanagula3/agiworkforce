@@ -161,10 +161,8 @@ function OwnedMemoryExclusions({ owner }: { owner: PreferenceOwner | null }) {
         >
           Never remember
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-          New memories containing any of these terms are discarded before they are saved. Matching
-          is case-insensitive. This applies to <strong>new</strong> memories only, anything already
-          saved stays until you delete it below.
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+          New memories with these terms are discarded. Existing memories stay until you delete them.
         </p>
       </div>
 
@@ -296,9 +294,8 @@ function OwnedMemoryExclusions({ owner }: { owner: PreferenceOwner | null }) {
         >
           Where memories come from
         </h2>
-        <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-          Suppress a source to keep its memories out of every answer. They stay saved and stay
-          listed below, and suppressing automatic capture also stops new ones being written.
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+          Suppressed sources stay saved but are kept out of answers.
         </p>
       </div>
 

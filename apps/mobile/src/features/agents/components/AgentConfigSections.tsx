@@ -365,7 +365,7 @@ export function AgentConfigSections({
           editable={!disabled}
           keyboardType="number-pad"
           placeholder="No limit"
-          hint="Each person can send this agent up to this many messages a day. Chats stop at the limit until midnight UTC."
+          hint="Messages each person can send this agent a day. Resets at midnight UTC."
           onChangeText={(text) => onChange({ dailyTurnLimit: parseAgentDailyTurnLimit(text) })}
         />
       </SectionCard>
@@ -374,7 +374,7 @@ export function AgentConfigSections({
         {connectorsReleased() ? (
           <SelectionField
             legend="Connectors"
-            help="The agent uses only the connectors turned on here, and only ones the person chatting has connected."
+            help="Only connectors on here that the person chatting has connected."
             allLabel="Every connector the person has connected"
             emptyCopy="No connectors are connected."
             list={choices.connectors}

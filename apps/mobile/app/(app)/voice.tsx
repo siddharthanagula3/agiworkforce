@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { VoiceOrb } from '@/src/features/voice/components/VoiceOrb';
+import { VoiceStateGlow } from '@/src/features/voice/components/VoiceStateGlow';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
@@ -46,6 +47,8 @@ import {
   type VoiceConversationPhase as Phase,
 } from '@/src/features/voice/hooks/useVoiceConversation';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+
+const VOICE_GLOW_HEIGHT = 320;
 
 const PHASE_LABEL: Record<Phase, string> = {
   idle: 'Tap to speak',
@@ -379,6 +382,7 @@ export default function VoiceScreen() {
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" />
       <DarkGradientBg />
+      <VoiceStateGlow phase={muted ? 'idle' : phase} height={VOICE_GLOW_HEIGHT} />
 
       <PressableBox
         onPress={handleClose}

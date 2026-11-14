@@ -1,14 +1,20 @@
 import {
+  CLOUD_CODE_SESSION_STATE_LABELS,
+  CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
+  MOBILE_CODE_SCREEN_LABEL,
   cloudCodeRepositoryLabel,
   diffPaths,
   type CloudCodeChangeState,
   type CloudCodeSession,
   type CloudCodeSessionState,
+  type CloudCodeSessionStatusFilter,
   type CloudCodeTurnMode,
   type CloudCodeTurnStepBound,
+  type RemoteCodeSessionStatus,
+  type RemoteCodeSessionSummary,
 } from '@agiworkforce/types';
 
-export const CLOUD_CODE_SCREEN_TITLE = 'AGI Code';
+export const CLOUD_CODE_SCREEN_TITLE = MOBILE_CODE_SCREEN_LABEL;
 
 type CloudCodeBadgeTone = 'gray' | 'blue' | 'red';
 
@@ -21,6 +27,192 @@ export const CLOUD_CODE_STATE_BADGE_COLORS: Readonly<
   failed: 'red',
   closed: 'gray',
 };
+
+export const CLOUD_CODE_SESSION_VIEWS = [
+  'open',
+  'running',
+  'ready',
+  'provisioning',
+  'failed',
+  'closed',
+  'archived',
+  'all',
+] as const;
+export type CloudCodeSessionView = (typeof CLOUD_CODE_SESSION_VIEWS)[number];
+
+export const CLOUD_CODE_DEFAULT_SESSION_VIEW: CloudCodeSessionView = 'open';
+
+export const CLOUD_CODE_SESSION_VIEW_LABELS: Readonly<Record<CloudCodeSessionView, string>> = {
+  open: CLOUD_CODE_SESSION_STATUS_FILTER_LABELS.open,
+  running: 'Running',
+  ready: CLOUD_CODE_SESSION_STATE_LABELS.ready,
+  provisioning: CLOUD_CODE_SESSION_STATE_LABELS.provisioning,
+  failed: CLOUD_CODE_SESSION_STATE_LABELS.failed,
+  closed: CLOUD_CODE_SESSION_STATUS_FILTER_LABELS.closed,
+  archived: CLOUD_CODE_SESSION_STATUS_FILTER_LABELS.archived,
+  all: CLOUD_CODE_SESSION_STATUS_FILTER_LABELS.all,
+};
+
+const CLOUD_CODE_VIEW_STATUS_FILTERS: Readonly<
+  Record<CloudCodeSessionView, CloudCodeSessionStatusFilter>
+> = {
+  open: 'open',
+  running: 'open',
+  ready: 'open',
+  provisioning: 'open',
+  failed: 'open',
+  closed: 'closed',
+  archived: 'archived',
+  all: 'all',
+};
+
+const CLOUD_CODE_VIEW_STATES: Readonly<
+  Partial<Record<CloudCodeSessionView, CloudCodeSessionState>>
+> = {
+  running: 'running',
+  ready: 'ready',
+  provisioning: 'provisioning',
+  failed: 'failed',
+};
+
+export function cloudCodeViewStatusFilter(
+  view: CloudCodeSessionView,
+): CloudCodeSessionStatusFilter {
+  return CLOUD_CODE_VIEW_STATUS_FILTERS[view];
+}
+
+export function cloudCodeSessionInView(
+  session: Pick<CloudCodeSession, 'state'>,
+  view: CloudCodeSessionView,
+): boolean {
+  const state = CLOUD_CODE_VIEW_STATES[view];
+  return state === undefined || session.state === state;
+}
+
+export const CLOUD_CODE_SESSION_SORTS = ['recent', 'oldest'] as const;
+export type CloudCodeSessionSort = (typeof CLOUD_CODE_SESSION_SORTS)[number];
+
+export const CLOUD_CODE_DEFAULT_SESSION_SORT: CloudCodeSessionSort = 'recent';
+
+export const CLOUD_CODE_SESSION_SORT_LABELS: Readonly<Record<CloudCodeSessionSort, string>> = {
+  recent: 'Most recent',
+  oldest: 'Oldest first',
+};
+
+function sessionTime(session: Pick<CloudCodeSession, 'updatedAt'>): number {
+  const time = Date.parse(session.updatedAt);
+  return Number.isNaN(time) ? 0 : time;
+}
+
+export function sortCloudCodeSessions<T extends Pick<CloudCodeSession, 'id' | 'updatedAt'>>(
+  sessions: readonly T[],
+  sort: CloudCodeSessionSort,
+): T[] {
+  const direction = sort === 'recent' ? -1 : 1;
+  return [...sessions].sort(
+    (a, b) => direction * (sessionTime(a) - sessionTime(b)) || a.id.localeCompare(b.id),
+  );
+}
+
+export function matchesSearchTerms(
+  query: string,
+  fields: ReadonlyArray<string | null | undefined>,
+): boolean {
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return true;
+  const haystack = fields
+    .filter((field): field is string => Boolean(field))
+    .join('\n')
+    .toLowerCase();
+  return terms.every((term) => haystack.includes(term));
+}
+
+export function cloudCodeSessionMatchesQuery(
+  session: Pick<
+    CloudCodeSession,
+    'title' | 'repositoryUrl' | 'repositoryBranch' | 'workingBranch' | 'baseBranch'
+  >,
+  query: string,
+): boolean {
+  return matchesSearchTerms(query, [
+    session.title,
+    session.repositoryUrl ? cloudCodeRepositoryLabel(session.repositoryUrl) : null,
+    session.repositoryBranch,
+    session.workingBranch,
+    session.baseBranch,
+  ]);
+}
+
+export function visibleCloudCodeSessions(
+  sessions: readonly CloudCodeSession[],
+  options: { view: CloudCodeSessionView; sort: CloudCodeSessionSort; query: string },
+): CloudCodeSession[] {
+  return sortCloudCodeSessions(
+    sessions.filter(
+      (session) =>
+        cloudCodeSessionInView(session, options.view) &&
+        cloudCodeSessionMatchesQuery(session, options.query),
+    ),
+    options.sort,
+  );
+}
+
+export type CodeListEntry =
+  | { kind: 'cloud'; id: string; updatedAt: string; session: CloudCodeSession }
+  | { kind: 'computer'; id: string; updatedAt: string; session: RemoteCodeSessionSummary };
+
+const COMPUTER_SESSION_VIEWS: Readonly<
+  Record<RemoteCodeSessionStatus, CloudCodeSessionView | null>
+> = {
+  running: 'running',
+  idle: 'ready',
+  awaiting_approval: 'failed',
+  failed: 'failed',
+  unknown: null,
+};
+
+export function computerCodeSessionInView(
+  session: Pick<RemoteCodeSessionSummary, 'status'>,
+  view: CloudCodeSessionView,
+): boolean {
+  if (view === 'open' || view === 'all') return true;
+  return COMPUTER_SESSION_VIEWS[session.status] === view;
+}
+
+export function computerCodeSessionMatchesQuery(
+  session: Pick<RemoteCodeSessionSummary, 'title' | 'folder' | 'branch'>,
+  query: string,
+): boolean {
+  return matchesSearchTerms(query, [session.title, session.folder, session.branch]);
+}
+
+export function visibleCodeListEntries(
+  cloudSessions: readonly CloudCodeSession[],
+  computerSessions: readonly RemoteCodeSessionSummary[],
+  options: { view: CloudCodeSessionView; sort: CloudCodeSessionSort; query: string },
+): CodeListEntry[] {
+  const cloud = visibleCloudCodeSessions(cloudSessions, options).map((session): CodeListEntry => ({
+    kind: 'cloud',
+    id: `cloud:${session.id}`,
+    updatedAt: session.updatedAt,
+    session,
+  }));
+  // A computer can relay the account's cloud sessions too; the cloud list owns those.
+  const computer = computerSessions
+    .filter(
+      (session) =>
+        session.location !== 'cloud' &&
+        computerCodeSessionInView(session, options.view) &&
+        computerCodeSessionMatchesQuery(session, options.query),
+    )
+    .map((session): CodeListEntry => ({
+      kind: 'computer',
+      id: `computer:${JSON.stringify([session.rootId, session.threadId])}`,
+      updatedAt: session.updatedAt,
+      session,
+    }));
+  return sortCloudCodeSessions([...cloud, ...computer], options.sort);
+}
 
 export const CLOUD_CODE_CHANGE_STATE_LABELS: Readonly<Record<CloudCodeChangeState, string>> = {
   added: 'Added',

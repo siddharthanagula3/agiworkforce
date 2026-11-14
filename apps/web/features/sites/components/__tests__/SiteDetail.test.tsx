@@ -499,7 +499,7 @@ describe('SiteDetail', () => {
     await openDataTab();
 
     expect(await screen.findByTestId('site-data-unsupported')).toHaveTextContent(
-      'This site does not save data.',
+      'Only apps built as HTML or React can save data between visits.',
     );
   });
 });

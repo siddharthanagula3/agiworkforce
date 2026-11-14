@@ -36,12 +36,19 @@ import {
 import { Text } from '@/components/ui/Text';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendPreview } from './SendPreview';
+import { VoiceIntroHint, dismissVoiceIntroHint } from './VoiceIntroHint';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
 import { SendButton } from './SendButton';
 import { useComposerAttachmentScope } from '../useComposerAttachmentScope';
 import type { ComposerAttachmentOperation } from '../utils/runComposerAttachmentPick';
 import { ComposerFullScreenEditor } from './ComposerFullScreenEditor';
 import { ModelSelectorButton } from './ModelSelectorButton';
+import { ComposerEffortButton, ComposerEffortPanel, useComposerEffort } from './ComposerEffort';
+import {
+  COMPOSER_ACTION_CIRCLE_SIZE,
+  COMPOSER_CONTROL_SIZE,
+  COMPOSER_PLUS_SIZE,
+} from './composerMetrics';
 import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { FileMentionPalette } from './FileMentionPalette';
 import { trailingMention, withoutTrailingMention } from '@/src/features/chat/utils/fileMention';
@@ -85,6 +92,7 @@ import {
   clearDraft,
   type DraftProvenance,
 } from '@/src/features/chat/draftStore';
+import { draftIdentityKey } from '@/src/features/chat/draftIdentity';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import {
   cleanupVoiceDictation,
@@ -153,7 +161,7 @@ interface ChatInputProps {
   selectedSkillName?: string;
   onClearSelectedSkill?: () => void;
   exhaustedUsageRecovery?: WorkUsageRecovery | null;
-  onStackedChange?: (stacked: boolean) => void;
+  onMultilineChange?: (multiline: boolean) => void;
 }
 
 export function ChatInput({
@@ -178,7 +186,7 @@ export function ChatInput({
   selectedSkillName,
   onClearSelectedSkill,
   exhaustedUsageRecovery = null,
-  onStackedChange,
+  onMultilineChange,
 }: ChatInputProps) {
   const voiceAllowed = useCapability('canUseVoice');
   const [text, setText] = useState(() =>
@@ -203,14 +211,12 @@ export function ChatInput({
   const sendPendingRef = useRef(false);
   const heldSendRef = useRef<string | null>(null);
   const [sendHeld, setSendHeld] = useState(false);
+  const [effortOpenForModel, setEffortOpenForModel] = useState<string | null>(null);
   const queuedFollowUpsRef = useRef<QueuedFollowUp[]>(queuedFollowUps);
   queuedFollowUpsRef.current = queuedFollowUps;
   const queuedFollowUpSeqRef = useRef(0);
   const wasStreamingRef = useRef(isStreaming === true);
-  const draftIdentity =
-    draftProvenance?.scope === 'cloud'
-      ? `${draftKey ?? ''}:cloud:${draftProvenance.ownerId}`
-      : `${draftKey ?? ''}:${draftProvenance?.scope ?? 'unowned'}`;
+  const draftIdentity = draftIdentityKey(draftKey, draftProvenance);
   const previousDraftIdentityRef = useRef(draftIdentity);
   const previousDraftTargetRef = useRef<{ key?: string; provenance?: DraftProvenance }>({
     key: draftKey,
@@ -242,6 +248,7 @@ export function ChatInput({
     selectedModelMetadata?.capabilities.vision === false &&
     attachments.some((attachment) => attachment.mimeType.startsWith('image/'));
   const mediaMode = useChatViewStore((s) => s.mediaMode);
+  const composerEffort = useComposerEffort(selectedModel, conversationId);
   const workMode = useChatViewStore((s) => s.workMode);
   const runCodeOn = useChatViewStore(
     (s) => s.runCodeByConversation[s.styleConversationId ?? NEW_CHAT_STYLE_KEY] === true,
@@ -737,13 +744,20 @@ ${current}`
   }, [text]);
 
   const hasContent = text.trim().length > 0 || attachments.length > 0;
-  const stacked = isMultiline && !isRecording && !isTranscribing;
+  const dictating = isRecording || isTranscribing;
+  const effortValue =
+    appMode === 'cloud' && mediaMode === 'text' && composerEffort.steps.length > 1
+      ? composerEffort.value
+      : undefined;
+  const effortPanelOpen =
+    effortValue !== undefined && !dictating && effortOpenForModel === selectedModel;
+  const multiline = isMultiline && !dictating && !effortPanelOpen;
 
   useEffect(() => {
-    onStackedChange?.(stacked);
-  }, [onStackedChange, stacked]);
+    onMultilineChange?.(multiline);
+  }, [onMultilineChange, multiline]);
 
-  useEffect(() => () => onStackedChange?.(false), [onStackedChange]);
+  useEffect(() => () => onMultilineChange?.(false), [onMultilineChange]);
 
   const showCommandPalette = text.startsWith('/') && !isStreaming;
   const mentionQuery = appMode === 'cloud' && isClerkSignedIn ? trailingMention(text) : null;
@@ -798,6 +812,15 @@ ${current}`
     Keyboard.dismiss();
     onOpenAddToChat?.();
   }, [hapticsEnabled, onOpenAddToChat]);
+
+  const handleEffortPress = useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    setEffortOpenForModel(selectedModel);
+  }, [hapticsEnabled, selectedModel]);
+
+  const handleEffortDone = useCallback(() => setEffortOpenForModel(null), []);
 
   const handleExpandEditor = useCallback(() => {
     if (hapticsEnabled) {
@@ -955,9 +978,9 @@ ${current}`
         onSelectCommand={handleSelectCommand}
       />
 
-      {/* Model and Connectors live in the "+" sheet (AddToChatSheet), not as a
-          secondary chip row above the composer -- founder decision 2026-07-29.
-          Connectors was already in that sheet, so the old row duplicated it. */}
+      {/* Connectors live in the "+" sheet (AddToChatSheet) and the model on the
+          composer's controls row, not in a secondary chip row above the
+          composer -- founder decisions 2026-07-29 and 2026-11-12. */}
       {activeToolStatuses.length > 0 && !isRecording && !isTranscribing ? (
         <View
           style={{
@@ -1072,25 +1095,23 @@ ${current}`
         </View>
       ) : null}
 
-      {/* Main composer row -- [+] outside-left, single-line pill with the
-          mic inside its right edge, circular send/stop/voice button
-          outside-right. Matches the ChatGPT mobile composer structure.
-          While dictating, the SAME row morphs in place into the reference's
-          four controls (IMG_0686): cancel (X), a live waveform, a stop square,
-          and an outboard send arrow. Nothing overlays the composer. */}
+      {/* Main composer -- a card with the text on top and one controls row
+          underneath: [+], the model, effort, the mic and send. ChatGPT, Claude and
+          Perplexity all rest in this shape (founder's screenshots, 2026-11-12).
+          While dictating, the card morphs in place into the reference's four
+          controls (IMG_0686): cancel (X), a live waveform, a stop square, and
+          an outboard send arrow. Nothing overlays the composer. */}
       <View
         style={{
           flexDirection: 'row',
-          alignItems: stacked ? 'flex-end' : 'center',
+          alignItems: 'center',
           gap: 8,
         }}
       >
-        {/* Left button -- [+] Add to Chat, or cancel-dictation while recording.
-            While stacked it moves inside the card, onto the controls row.
-            Cancel is enabled for the WHOLE dictation, transcribing included
+        {/* Cancel is enabled for the WHOLE dictation, transcribing included
             (IMG_0687): it was previously disabled the moment capture stopped,
             which stranded a mis-heard long dictation with no way out. */}
-        {stacked ? null : isRecording || isTranscribing ? (
+        {dictating ? (
           <PressableBox
             onPress={handleDictationCancel}
             style={{
@@ -1110,30 +1131,28 @@ ${current}`
           </PressableBox>
         ) : null}
 
-        {/* Pill -- text input + mic, inside the rounded border. When stacked it
-            becomes a card: square-ish corners, text on its own full-width row,
-            and a controls row underneath. */}
         <View
           style={{
             flex: 1,
-            flexDirection: stacked ? 'column' : 'row',
-            alignItems: stacked ? 'stretch' : 'center',
+            flexDirection: dictating ? 'row' : 'column',
+            alignItems: dictating ? 'center' : 'stretch',
             backgroundColor: themeColors.surfaceElevated,
-            borderRadius: stacked ? radii['2xl'] : radii.full,
+            borderRadius: dictating ? radii.full : radii['2xl'],
             borderWidth: 1,
             borderColor: themeColors.composerBorder,
-            paddingLeft: stacked ? 16 : 6,
-            paddingRight: stacked ? 10 : 6,
-            paddingVertical: stacked ? 10 : 3,
+            paddingLeft: dictating ? 6 : 16,
+            paddingRight: dictating ? 6 : 10,
+            paddingTop: dictating ? 3 : 12,
+            paddingBottom: dictating ? 3 : 4,
             minHeight: 44,
           }}
         >
           {/* Expand to a full-screen editor. Pinned inside the card's top-right
-              corner and shown only while stacked, matching the reference's
-              appearance threshold (IMG_0672), a one-line pill has nothing to
-              expand. The stacked TextInput reserves room for it on the right so
-              the first line never runs underneath the glyph. */}
-          {stacked ? (
+              corner and shown only once the text wraps, matching the
+              reference's appearance threshold (IMG_0672), one line has nothing
+              to expand. The wrapped TextInput reserves room for it on the right
+              so the first line never runs underneath the glyph. */}
+          {multiline ? (
             <PressableBox
               onPress={handleExpandEditor}
               style={{
@@ -1152,31 +1171,6 @@ ${current}`
               accessibilityRole="button"
             >
               <Maximize2 size={16} color={themeColors.textMuted} />
-            </PressableBox>
-          ) : null}
-
-          {/* [+] sits INSIDE the pill on the left, matching ChatGPT
-              (IMG_0674, references-2/voice-03). It previously sat outside as a
-              separate 40pt circle, which is Claude's arrangement, not
-              ChatGPT's, and the founder chose ChatGPT style. Hidden while the
-              pill is showing recording/transcribing state, and while stacked,
-              where the plus moves to the controls row beneath the text. */}
-          {onOpenAddToChat && !stacked && !isRecording && !isTranscribing ? (
-            <PressableBox
-              testID="chat.composer.plus"
-              onPress={handlePlusPress}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: radii.full,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              accessibilityLabel="Add to chat"
-              accessibilityHint="Opens attachment, mode, and feature options"
-              accessibilityRole="button"
-            >
-              <Plus size={20} color={themeColors.textMuted} />
             </PressableBox>
           ) : null}
 
@@ -1233,17 +1227,27 @@ ${current}`
             </View>
           ) : null}
 
+          {effortPanelOpen && effortValue ? (
+            <ComposerEffortPanel
+              steps={composerEffort.steps}
+              value={effortValue}
+              onChange={composerEffort.select}
+              onDone={handleEffortDone}
+            />
+          ) : null}
+
           <TextInput
             ref={inputRef}
             testID="chat.composer.input"
             style={{
-              ...(stacked ? { alignSelf: 'stretch', paddingRight: 44 } : { flex: 1, minWidth: 0 }),
+              alignSelf: 'stretch',
+              paddingRight: multiline ? 44 : 0,
               color: themeColors.textPrimary,
               ...chatTypography.body,
               paddingVertical: 0,
-              minHeight: stacked ? 44 : 24,
+              minHeight: multiline ? 44 : 24,
               maxHeight: 160,
-              display: isRecording || isTranscribing ? 'none' : 'flex',
+              display: dictating || effortPanelOpen ? 'none' : 'flex',
             }}
             placeholder={placeholder}
             placeholderTextColor={themeColors.textMuted}
@@ -1267,63 +1271,64 @@ ${current}`
           />
 
           {/* Kept mounted while recording -- VoiceInputButton owns the live
-              capture session; unmounting it mid-recording would kill it. That
-              also rules out moving it between parents when the layout stacks,
-              so the controls row below re-parents nothing: this wrapper simply
-              becomes a full-width row that hosts [+] alongside the mic. */}
+              capture session; unmounting it mid-recording would kill it, so
+              the controls row hides during dictation instead of unmounting
+              and its other controls render around the mic without moving it. */}
           <View
             testID="chat.composer.mic"
-            style={{
-              display: isRecording || isTranscribing ? 'none' : 'flex',
-              ...(stacked
-                ? {
+            style={
+              dictating || effortPanelOpen
+                ? { display: 'none' }
+                : {
                     flexDirection: 'row',
                     alignItems: 'center',
-                    gap: 8,
-                    marginTop: 8,
-                    marginLeft: -6,
+                    gap: 4,
+                    marginTop: 4,
+                    marginLeft: -12,
+                    marginRight: -6,
                   }
-                : null),
-            }}
+            }
           >
-            {stacked ? (
+            {dictating ? null : (
               <>
                 {onOpenAddToChat ? (
                   <PressableBox
-                    testID="chat.composer.plus.stacked"
+                    testID="chat.composer.plus"
                     onPress={handlePlusPress}
-                    style={{
-                      width: 44,
-                      height: 44,
+                    style={({ pressed }) => ({
+                      width: COMPOSER_CONTROL_SIZE,
+                      height: COMPOSER_CONTROL_SIZE,
                       borderRadius: radii.full,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: themeColors.inputSurface,
-                    }}
+                      backgroundColor: pressed ? themeColors.surfaceHover : themeColors.transparent,
+                    })}
                     accessibilityLabel="Add to chat"
                     accessibilityHint="Opens attachment, mode, and feature options"
                     accessibilityRole="button"
                   >
-                    <Plus size={18} color={themeColors.textMuted} />
+                    <Plus
+                      size={COMPOSER_PLUS_SIZE}
+                      strokeWidth={1.75}
+                      color={themeColors.textSecondary}
+                    />
                   </PressableBox>
                 ) : null}
-                {/* The model answering this chat, on the control row beside [+]
-                    - Claude's arrangement (IMG_0730); ChatGPT puts the same
-                    text-only label next to the mic (IMG_0689). It lives here
-                    rather than in a chip row above the composer, which the
-                    founder rejected on 2026-07-29, and rather than in the
-                    compact pill, where it would eat the single-line input's
-                    width, the exact complaint the restack fixed. */}
-                {/* Hidden in a media mode: the model is fixed by the registry
-                    slot for that output kind, so a picker here would imply a
-                    choice that does not apply to this turn. The MediaModeChip
-                    above names the model instead. */}
+                {/* The model answering this chat, beside [+] as Claude and
+                    Perplexity place it, and the only way to the model picker
+                    (founder, 2026-11-12). Not a chip row above the composer,
+                    which the founder rejected on 2026-07-29. Hidden in a media
+                    mode: the model is fixed by the registry slot for that
+                    output kind, and the MediaModeChip above names it. */}
                 {onOpenModelPicker && mediaMode === 'text' ? (
                   <ModelSelectorButton onPress={onOpenModelPicker} />
                 ) : null}
                 <View style={{ flex: 1 }} />
+                {effortValue ? (
+                  <ComposerEffortButton effort={effortValue} onPress={handleEffortPress} />
+                ) : null}
               </>
-            ) : null}
+            )}
             {voiceAllowed ? (
               <VoiceInputButton
                 controlRef={voiceControlRef}
@@ -1341,17 +1346,77 @@ ${current}`
                 disabled={isStreaming}
               />
             ) : null}
+            {dictating ? null : (
+              <>
+                {/* Queue, not send: firing a second turn now would abort the
+                    one still streaming. Kept beside the stop button so ending
+                    the reply stays one tap away. */}
+                {canQueueFollowUp ? (
+                  <View testID="chat.composer.queue">
+                    <SendButton
+                      state="queued"
+                      onPress={handleSend}
+                      accessibilityLabel="Queue message"
+                    />
+                  </View>
+                ) : null}
+                <View testID="chat.composer.send">
+                  {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
+                    <VoiceIntroHint />
+                  ) : null}
+                  {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
+                    <PressableBox
+                      onPress={() => {
+                        dismissVoiceIntroHint();
+                        onOpenVoiceMode();
+                      }}
+                      style={{
+                        width: COMPOSER_CONTROL_SIZE,
+                        height: COMPOSER_CONTROL_SIZE,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      accessibilityLabel="Start voice mode"
+                      accessibilityHint="Opens hands-free voice conversation"
+                      accessibilityRole="button"
+                    >
+                      <View
+                        style={{
+                          width: COMPOSER_ACTION_CIRCLE_SIZE,
+                          height: COMPOSER_ACTION_CIRCLE_SIZE,
+                          borderRadius: radii.full,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: themeColors.textPrimary,
+                        }}
+                      >
+                        <AudioLines size={18} color={themeColors.surfaceElevated} />
+                      </View>
+                    </PressableBox>
+                  ) : (
+                    <SendButton
+                      state={sendButtonState}
+                      onPress={handleSendButtonPress}
+                      disabled={(!hasContent || usageBlocked) && !isStreaming}
+                      {...(sendHeld
+                        ? { accessibilityLabel: 'Sending when the upload finishes' }
+                        : {})}
+                    />
+                  )}
+                </View>
+              </>
+            )}
           </View>
         </View>
 
-        {/* Right controls -- while dictating this is a PAIR, the second half of
-            the reference's four-control row (IMG_0686). The stop square ends
-            capture and drops the transcript into the composer for review; the
-            outboard arrow stops, transcribes and SENDS in one tap, so a spoken
-            message no longer needs a stop-then-review-then-send round trip.
-            While the transcript resolves the stop slot turns into a spinner and
-            send dims (IMG_0687); cancel (left) stays live. */}
-        {isRecording || isTranscribing ? (
+        {/* While dictating, the second half of the reference's four-control
+            row (IMG_0686). The stop square ends capture and drops the
+            transcript into the composer for review; the outboard arrow stops,
+            transcribes and SENDS in one tap, so a spoken message no longer
+            needs a stop-then-review-then-send round trip. While the transcript
+            resolves the stop slot turns into a spinner and send dims
+            (IMG_0687); cancel (left) stays live. */}
+        {dictating ? (
           <>
             {isTranscribing ? (
               <View
@@ -1411,49 +1476,7 @@ ${current}`
               <ArrowUp size={18} color={themeColors.surfaceElevated} />
             </PressableBox>
           </>
-        ) : (
-          <>
-            {/* Queue, not send: firing a second turn now would abort the one
-                still streaming. Kept beside the stop button so ending the reply
-                stays one tap away. */}
-            {canQueueFollowUp ? (
-              <View testID="chat.composer.queue">
-                <SendButton
-                  state="queued"
-                  onPress={handleSend}
-                  accessibilityLabel="Queue message"
-                />
-              </View>
-            ) : null}
-            <View testID="chat.composer.send">
-              {sendButtonState === 'idle' && !hasContent && onOpenVoiceMode ? (
-                <PressableBox
-                  onPress={onOpenVoiceMode}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: radii.full,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: themeColors.textPrimary,
-                  }}
-                  accessibilityLabel="Start voice mode"
-                  accessibilityHint="Opens hands-free voice conversation"
-                  accessibilityRole="button"
-                >
-                  <AudioLines size={18} color={themeColors.surfaceElevated} />
-                </PressableBox>
-              ) : (
-                <SendButton
-                  state={sendButtonState}
-                  onPress={handleSendButtonPress}
-                  disabled={(!hasContent || usageBlocked) && !isStreaming}
-                  {...(sendHeld ? { accessibilityLabel: 'Sending when the upload finishes' } : {})}
-                />
-              )}
-            </View>
-          </>
-        )}
+        ) : null}
       </View>
 
       {/* Full-screen editing of the same draft. Rendered from the composer (not

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isClassifiedDestination } from '@/src/features/shell/destinationScope';
 
 const appRoot = join(__dirname, '..', 'app', '(app)');
 const layoutSource = readFileSync(join(appRoot, '_layout.tsx'), 'utf8');
@@ -72,6 +73,25 @@ describe('authenticated drawer route contract', () => {
         route,
         exists: candidates.some((candidate) => existsSync(candidate)),
       }).toMatchObject({ route, exists: true });
+    }
+  });
+
+  it('classifies every drawer primary destination as on the device or Cloud', () => {
+    const drawerRoutes = Array.from(
+      drawerSource.matchAll(/route: '(\/\(app\)\/[^']+)'/g),
+      (match) => match[1],
+    );
+
+    expect(drawerRoutes).toContain('/(app)/cloud-code');
+    expect(drawerRoutes).not.toContain('/(app)/companion');
+    expect(isClassifiedDestination('/(app)/companion')).toBe(true);
+    expect(drawerSource).not.toMatch(/cloud: true/);
+
+    for (const route of drawerRoutes) {
+      expect({ route, classified: isClassifiedDestination(route) }).toEqual({
+        route,
+        classified: true,
+      });
     }
   });
 });

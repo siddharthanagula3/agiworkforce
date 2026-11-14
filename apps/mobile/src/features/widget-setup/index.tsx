@@ -133,7 +133,7 @@ export default function WidgetSetupScreen() {
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    else router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const isIOS = Platform.OS === 'ios';

@@ -88,6 +88,10 @@
       "serves": "platform_only",
       "reason": "Counts of activity, no row a tenant owns."
     },
+    "apps/web/app/api/admin/product-updates/route.ts": {
+      "serves": "platform_only",
+      "reason": "Starts one release note announcement. It reads the public release notes and no tenant row."
+    },
     "apps/web/app/api/admin/releases/route.ts": {
       "serves": "platform_only",
       "reason": "The release ledger."

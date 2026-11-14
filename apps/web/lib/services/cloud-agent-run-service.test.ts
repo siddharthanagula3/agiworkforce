@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 // cases keep asserting storage behaviour against a mocked database only.
 vi.mock('./agent-notification-service', () => ({
   notifyAgentRunEvent: vi.fn(async () => ({ pushed: false })),
+  trackAgentRunOutcome: vi.fn(),
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';

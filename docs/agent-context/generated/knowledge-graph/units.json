@@ -2551,16 +2551,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1685,
+      "files": 1762,
       "roles": {
         "asset": 4,
-        "config": 11,
+        "config": 12,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 913,
+        "source": 956,
         "style": 1,
-        "test": 705
+        "test": 738
       }
     },
     {
@@ -2615,7 +2615,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8378,
+      "files": 8394,
       "roles": {
         "asset": 57,
         "config": 93,
@@ -2623,9 +2623,9 @@
         "generated": 2,
         "migration": 746,
         "other": 37,
-        "source": 3545,
+        "source": 3550,
         "style": 35,
-        "test": 3812
+        "test": 3823
       }
     },
     {
@@ -2642,11 +2642,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 357,
+      "files": 358,
       "roles": {
         "asset": 20,
         "config": 37,
-        "doc": 285,
+        "doc": 286,
         "other": 6,
         "source": 6,
         "test": 3
@@ -2694,11 +2694,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 229,
+      "files": 245,
       "roles": {
         "asset": 1,
-        "config": 19,
-        "doc": 163,
+        "config": 21,
+        "doc": 177,
         "generated": 45,
         "other": 1
       }
@@ -4268,12 +4268,12 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 962,
+      "files": 963,
       "roles": {
         "config": 29,
         "generated": 629,
         "source": 174,
-        "test": 130
+        "test": 131
       }
     },
     {
@@ -4541,11 +4541,11 @@
         "apps/mobile"
       ],
       "lanes": [],
-      "files": 22,
+      "files": 24,
       "roles": {
         "config": 3,
-        "source": 10,
-        "test": 9
+        "source": 11,
+        "test": 10
       }
     },
     {
@@ -4666,11 +4666,11 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 76,
+      "files": 77,
       "roles": {
         "config": 5,
         "source": 42,
-        "test": 29
+        "test": 30
       }
     },
     {
@@ -4949,6 +4949,7 @@
         "./composer-editor",
         "./composer-editor.css",
         "./continuation-seam",
+        "./continue-generation",
         "./ime-composition",
         "./markdown-document",
         "./math-markup",

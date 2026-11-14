@@ -50,7 +50,7 @@ const SUBHEADING_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foregrou
 const NOTE_CLASS = 'px-3 py-2 text-xs leading-5 text-muted-foreground';
 const LIMITED_NOTE_CLASS = 'px-3 py-2 text-sm leading-5 text-muted-foreground';
 const PROMOTIONAL_DATA_USE =
-  'These models get only your messages, not your instructions or memory: their providers have not said they keep prompts out of training.';
+  'Only your messages are sent. These providers have not said they keep prompts out of training.';
 
 type PendingAvailability = 'loading' | 'error' | 'unlisted';
 type RowScope = 'list' | 'search';

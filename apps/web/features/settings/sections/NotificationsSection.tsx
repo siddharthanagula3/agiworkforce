@@ -67,7 +67,7 @@ const EVENTS: ReadonlyArray<EventSpec> = [
     heading: 'Security alerts',
     subheading: 'Always shown in-app, including quiet hours.',
     detail:
-      'Includes sign-in, password, email, two-factor and device changes. Security alerts are sent during quiet hours. Email is optional unless Advanced Account Security requires it.',
+      'Sign-in, password, email, two-factor and device changes. Advanced Account Security needs email.',
     channels: [{ id: 'emailSecurityAlerts', channel: 'Email' }],
   },
   {
@@ -122,16 +122,6 @@ function offeredEvents(statuses: SurfaceStatusMap): EventSpec[] {
     ),
   }));
 }
-
-const SELECT_STYLE = {
-  height: 32,
-  borderRadius: 'var(--radius-md)',
-  border: '1px solid var(--settings-border)',
-  background: 'var(--bg-base)',
-  color: 'var(--text-1)',
-  fontSize: 13,
-  padding: '0 var(--space-2)',
-} as const;
 
 export function NotificationsSection({
   surfaceStatus = SURFACE_STATUS,
@@ -355,7 +345,8 @@ function OwnedNotificationsSection({
         {!owner || loading || saving || saveError || hasChanged ? (
           <SaveStatusLine
             failed={saveError !== null}
-            style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}
+            className={styles['helper']}
+            style={{ margin: 0 }}
           >
             {!owner
               ? 'Sign in to load account preferences.'
@@ -392,27 +383,20 @@ function OwnedNotificationsSection({
           return (
             <section key={event.heading} aria-label={event.heading} className={styles['row']}>
               <div data-testid="notification-description" className={styles['description']}>
-                <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{event.heading}</div>
-                <div
-                  id={`${browserStatusId}-description-${index}`}
-                  style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}
-                >
+                <div className={styles['heading']}>{event.heading}</div>
+                <div id={`${browserStatusId}-description-${index}`} className={styles['helper']}>
                   {event.subheading}
                 </div>
                 {event.detail ? (
-                  <details
-                    style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-2)' }}
-                  >
-                    <summary className="cursor-pointer text-[var(--text-1)]">
-                      Delivery details
-                    </summary>
+                  <details className={styles['details']}>
+                    <summary className={styles['summary']}>Delivery details</summary>
                     <p style={{ margin: 'var(--space-1) 0 0' }}>{event.detail}</p>
                   </details>
                 ) : null}
                 {event.link ? (
                   <SettingsPageLink
                     href={event.link.href}
-                    className="underline underline-offset-4"
+                    className="underline underline-offset-4 max-md:py-1"
                     style={{
                       display: 'inline-block',
                       fontSize: 14,
@@ -427,7 +411,7 @@ function OwnedNotificationsSection({
               <select
                 aria-label={event.heading}
                 aria-describedby={`${browserStatusId}-description-${index}${event.channels.some((channel) => channel.browserDependent) ? ` ${browserStatusId}` : ''}`}
-                className={`${styles['control']} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                className={`${styles['control']} ${styles['select']} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
                 data-notification-control
                 disabled={!editable}
                 value={value}
@@ -435,7 +419,6 @@ function OwnedNotificationsSection({
                   const option = options.find((o) => o.value === changeEvent.target.value);
                   if (option) void setEventChannels(event, option.ids);
                 }}
-                style={SELECT_STYLE}
               >
                 {options.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -459,12 +442,10 @@ function AgentRunRow({ browserStatusId }: { browserStatusId: string }) {
   return (
     <section aria-label={AGENT_RUN_HEADING} className={styles['row']}>
       <div className={styles['description']}>
-        <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{AGENT_RUN_HEADING}</div>
-        <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-          {unavailable ? description : AGENT_RUN_SCOPE_NOTE}
-        </div>
-        <details style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-2)' }}>
-          <summary className="cursor-pointer text-[var(--text-1)]">Delivery details</summary>
+        <div className={styles['heading']}>{AGENT_RUN_HEADING}</div>
+        <div className={styles['helper']}>{unavailable ? description : AGENT_RUN_SCOPE_NOTE}</div>
+        <details className={styles['details']}>
+          <summary className={styles['summary']}>Delivery details</summary>
           <p style={{ margin: 'var(--space-1) 0 0' }}>
             Enable separately in each browser. Alerts show run status, not run output.
           </p>

@@ -1,4 +1,7 @@
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
+import type { MobileChatAppMode } from '@/src/features/chat/store/appModeStore';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
+import { isShownInMode } from '@/src/features/shell/destinationScope';
 import type { MobileGlobalSearchResult } from './mobileGlobalSearch';
 
 export interface MobileDestination {
@@ -37,15 +40,18 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
   { route: '/(app)/tasks', title: 'Tasks', section: 'Go to', keywords: ['work', 'runs'] },
   {
     route: '/(app)/cloud-code',
-    title: 'AGI Code sessions',
+    title: `${CLOUD_CODE_SCREEN_TITLE} sessions`,
     section: 'Go to',
-    keywords: ['code', 'repository', 'agi code'],
-  },
-  {
-    route: '/(app)/companion',
-    title: 'Remote',
-    section: 'Go to',
-    keywords: ['desktop', 'pair', 'computer'],
+    keywords: [
+      'code',
+      'repository',
+      'agi code',
+      'remote',
+      'computer',
+      'pair',
+      'desktop',
+      'devices',
+    ],
   },
   {
     route: '/(app)/connectors',
@@ -159,6 +165,20 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
     keywords: ['web search', 'code', 'images', 'tools'],
   },
   {
+    route: '/(app)/settings/code',
+    title: `${CLOUD_CODE_SCREEN_TITLE} settings`,
+    section: 'Settings',
+    keywords: [
+      'wrap',
+      'wrap long lines',
+      'wrap lines',
+      'long lines',
+      'diff',
+      'code blocks',
+      'coding',
+    ],
+  },
+  {
     route: '/(app)/settings/account-security',
     title: 'Account security',
     section: 'Settings',
@@ -204,13 +224,17 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
   },
 ];
 
-export function searchMobileDestinations(query: string): MobileGlobalSearchResult[] {
+export function searchMobileDestinations(
+  query: string,
+  appMode: MobileChatAppMode,
+): MobileGlobalSearchResult[] {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return [];
   return MOBILE_DESTINATIONS.filter(
     (destination) =>
-      destination.title.toLocaleLowerCase().includes(needle) ||
-      destination.keywords.some((keyword) => keyword.includes(needle)),
+      isShownInMode(destination.route, appMode) &&
+      (destination.title.toLocaleLowerCase().includes(needle) ||
+        destination.keywords.some((keyword) => keyword.includes(needle))),
   ).map((destination) => ({
     id: destination.route,
     title: destination.title,

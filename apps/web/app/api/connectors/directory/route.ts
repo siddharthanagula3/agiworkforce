@@ -21,7 +21,7 @@ import {
   isConnectableNow,
 } from '@/lib/connectors/directory/snapshot-view';
 import { isEligibleForListing, isInDefaultListing } from '@/lib/connectors/directory/listing';
-import { toDirectoryEntryView } from '@/lib/connectors/directory/view';
+import { personalSourcesOf, toDirectoryEntryView } from '@/lib/connectors/directory/view';
 import type { DirectoryBadge, DirectoryRecord } from '@/lib/connectors/directory/types';
 
 export const runtime = 'nodejs';
@@ -60,6 +60,9 @@ function matchesFilters(record: DirectoryRecord, query: ConnectorDirectoryQuery)
   if (query.connectable && record.connectable !== query.connectable) return false;
   if (query.connectableOnly && !isConnectableNow(record)) return false;
   if (query.authMode && record.authMode !== query.authMode) return false;
+  if (query.personalSource && !personalSourcesOf(record)?.includes(query.personalSource)) {
+    return false;
+  }
   return true;
 }
 

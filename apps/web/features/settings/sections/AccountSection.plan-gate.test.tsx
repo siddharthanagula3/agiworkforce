@@ -124,7 +124,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
     expect(trigger).toHaveAttribute('aria-describedby', 'delete-account-hint');
     expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
       new RegExp(
-        `Deleting your account stops your ${PRO_LABEL} plan from renewing\\. It ends when erasure runs instead of on .+, and the unused time is not refunded\\. Cancelling the deletion turns renewal back on\\.`,
+        `Deleting stops your ${PRO_LABEL} plan renewing and ends it at erasure, not .+\\. Unused time is not refunded\\.`,
       ),
     );
     expect(screen.queryByRole('link', { name: 'Billing' })).toBeNull();
@@ -141,7 +141,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
 
       await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
       expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
-        `Your ${PRO_LABEL} plan is billed by ${storeName}, and deleting your account does not cancel it. ${storeName} keeps charging you until you cancel it there.`,
+        `Deleting does not cancel your ${PRO_LABEL} plan. ${storeName} keeps charging until you cancel it there.`,
       );
       expect(screen.getByRole('link', { name: 'cancel it there' })).toHaveAttribute(
         'href',
@@ -157,7 +157,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
     await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
     expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
       new RegExp(
-        `Your ${PRO_LABEL} plan is already cancelled\\. Deleting your account ends it when erasure runs instead of on .+, and the unused time is not refunded\\.`,
+        `Deleting ends your cancelled ${PRO_LABEL} plan at erasure, not .+\\. Unused time is not refunded\\.`,
       ),
     );
   });
@@ -168,7 +168,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
 
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
     expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
-      `A payment for your ${PRO_LABEL} plan is still being collected.`,
+      `A ${PRO_LABEL} payment is still being collected.`,
     );
   });
 
@@ -180,7 +180,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
     expect(trigger).toBeDisabled();
     expect(trigger.style.color).toBe('var(--text-disabled)');
     expect(screen.getByTestId('delete-account-plan-note')).toHaveTextContent(
-      `A payment for your ${PRO_LABEL} plan is still being collected.`,
+      `A ${PRO_LABEL} payment is still being collected.`,
     );
   });
 

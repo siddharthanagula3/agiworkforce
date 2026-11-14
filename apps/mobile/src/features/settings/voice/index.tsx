@@ -391,7 +391,7 @@ export default function VoiceSettingsScreen() {
         />
         <ToggleRow
           label="Start with Voice"
-          description="Open AGI in a voice conversation when the app launches."
+          description="Open AGI in a voice conversation at launch."
           value={startWithVoice}
           onValueChange={setStartWithVoice}
           icon={AudioLines}

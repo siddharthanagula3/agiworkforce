@@ -66,9 +66,7 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        new RegExp(
-          `Local and BYOK activity is not included in these ${CLOUD.toLowerCase()} totals`,
-        ),
+        new RegExp(`Settled ${CLOUD} usage only. Local and BYOK activity is not included`),
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/never reaches our infrastructure/)).not.toBeInTheDocument();

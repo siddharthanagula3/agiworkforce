@@ -278,6 +278,7 @@
       "./math-markup": "universal",
       "./assistant-fence": "universal",
       "./assistant-fence-edits": "universal",
+      "./continue-generation": "universal",
       "./continuation-seam": "universal",
       "./shiki-highlighter": "universal",
       "./agi-work-progress": "universal",

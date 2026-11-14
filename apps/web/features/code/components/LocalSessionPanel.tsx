@@ -1280,8 +1280,7 @@ export function LocalSessionPanel({
 
               {remoteSsh && (
                 <div className={styles['notice']} role="status">
-                  This session runs over SSH in Ask mode. Review files and run tests through the
-                  agent. The host file editor and interactive terminal are unavailable.
+                  Runs over SSH in Ask mode, without the file editor or interactive terminal.
                 </div>
               )}
 

@@ -119,6 +119,7 @@ export type {
   DeveloperMcpServerAwaitingApproval,
   DeveloperRuntimeCapability,
   DeveloperTurnSteer,
+  DeveloperApprovalQuestion,
   DeveloperUserInputAnswer,
   DeveloperUserInputRequest,
   DeveloperCheckpointSectionsRequest,

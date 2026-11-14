@@ -98,7 +98,7 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-import SettingsTabScreen from '../app/(app)/(tabs)/settings';
+import SettingsTabScreen from '../app/(app)/settings/index';
 import ProfileScreen from '../app/(app)/profile';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';

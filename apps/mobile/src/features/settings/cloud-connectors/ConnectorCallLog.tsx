@@ -89,7 +89,7 @@ export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
         </View>
       ) : calls.length === 0 ? (
         <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
-          This connector has not been called yet, so there is nothing to show.
+          Not called yet.
         </Text>
       ) : (
         calls.map((call) => {

@@ -25,6 +25,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { useRouter } from 'expo-router';
 import { api, apiFetch } from '@/services/api';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { StudyScreen } from '@/src/features/study/StudyScreen';
 import { StudyModeBanner, STUDY_MODE_OFF_NOTE } from '@/src/features/study/StudyModeBanner';
 
@@ -97,10 +98,20 @@ describe('StudyScreen', () => {
 
   it('asks a Local Mode user to switch to Cloud instead of starting', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
     render(<StudyScreen />);
     expect(screen.queryByTestId('study-start')).toBeNull();
     fireEvent.press(screen.getByLabelText('Switch to Cloud mode'));
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+  });
+
+  it('sends a signed-out Local Mode user to sign in instead of switching', () => {
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useWaitlistStore.setState({ cloudUnlocked: false });
+    render(<StudyScreen />);
+    fireEvent.press(screen.getByLabelText('Switch to Cloud mode'));
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(useRouter().push).toHaveBeenCalled();
   });
 });
 

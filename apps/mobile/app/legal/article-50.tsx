@@ -12,7 +12,7 @@
  * canonical EU source.
  *
  * Title: "EU AI Act, Article 50"
- * Linked from: /legal route in the drawer + privacy policy footer.
+ * Linked from: About, Resources.
  */
 import { ScrollView, View, Linking } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';

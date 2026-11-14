@@ -399,6 +399,35 @@ describe('offline queue account provenance', () => {
     },
   );
 
+  it('keeps a queued Cloud prompt while no Cloud account is active, as during a switch', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    offlineQueueModule.offlineQueue.enqueue({
+      conversationId: 'cloud-conversation-a',
+      content: 'Account A prompt',
+      model: AUTO_MODEL_ID,
+      provenance: CLOUD_A_PROVENANCE,
+    });
+    offlineQueueModule.offlineQueue.enqueue({
+      conversationId: 'local-conversation',
+      content: 'Local prompt',
+      model: 'local-model',
+      provenance: LOCAL_PROVENANCE,
+    });
+    mockActiveCloudOwnerId = null;
+    mockActiveCloudEpoch += 1;
+    const send = jest.fn().mockResolvedValue(undefined);
+
+    await offlineQueueModule.offlineQueue.processQueue(send);
+    useChatAppModeStore.setState({ appMode: 'local' });
+    await offlineQueueModule.offlineQueue.processQueue(send);
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]![0]).toEqual(expect.objectContaining({ content: 'Local prompt' }));
+    expect(offlineQueueModule.offlineQueue.getQueue().map((entry) => entry.content)).toEqual([
+      'Account A prompt',
+    ]);
+  });
+
   it('does not retry a Cloud entry when its account becomes stale in the send failure path', async () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     offlineQueueModule.offlineQueue.enqueue({
@@ -495,6 +524,19 @@ describe('composer draft account provenance', () => {
     expect(draftStore.getDraft('local-conversation', LOCAL_PROVENANCE)).toBe('Local draft');
     expect(mockMmkv.has('composer-draft:cloud-conversation')).toBe(false);
     expect(mockMmkv.has('composer-draft:legacy-conversation')).toBe(false);
+  });
+
+  it('keeps a Cloud draft that a composer saves while no Cloud account is active', () => {
+    draftStore.setDraft('cloud-conversation', 'Account A draft', CLOUD_A_PROVENANCE);
+    mockActiveCloudOwnerId = null;
+    mockActiveCloudEpoch += 1;
+
+    draftStore.setDraft('cloud-conversation', '', CLOUD_A_PROVENANCE);
+    draftStore.setDraft('cloud-conversation', 'Written during the switch', CLOUD_A_PROVENANCE);
+
+    mockActiveCloudOwnerId = 'user-a';
+    mockActiveCloudEpoch += 1;
+    expect(draftStore.getDraft('cloud-conversation', CLOUD_A_PROVENANCE)).toBe('Account A draft');
   });
 
   it('does not expose a Cloud draft to a different active account', () => {

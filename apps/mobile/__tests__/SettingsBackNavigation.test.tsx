@@ -126,7 +126,7 @@ const SUB_SCREENS: Array<{
   Screen: () => React.JSX.Element;
   deepLinkFallback: string;
 }> = [
-  { name: 'Voice', Screen: VoiceSettingsScreen, deepLinkFallback: '/(app)/(tabs)/settings' },
+  { name: 'Voice', Screen: VoiceSettingsScreen, deepLinkFallback: '/(app)/settings' },
   {
     name: 'Permissions',
     Screen: PermissionsScreen,
@@ -135,7 +135,7 @@ const SUB_SCREENS: Array<{
   {
     name: 'Notification Preferences',
     Screen: NotificationPreferencesScreen,
-    deepLinkFallback: '/(app)/(tabs)/settings',
+    deepLinkFallback: '/(app)/settings',
   },
 ];
 

@@ -25,7 +25,7 @@ let mockChatInputDraftProvenance:
 let mockChatInputOnOpenCompare: (() => void) | undefined;
 let mockChatInputSelectedSkillName: string | undefined;
 let mockChatInputExhaustedUsageRecovery: string | null | undefined;
-let mockChatInputOnStackedChange: ((stacked: boolean) => void) | undefined;
+let mockChatInputOnMultilineChange: ((multiline: boolean) => void) | undefined;
 let mockChatInputSendPreview: { providerMode?: string } | undefined;
 let mockUsageSnapshot: Record<string, unknown> | null = null;
 
@@ -77,6 +77,12 @@ jest.mock('@/stores/chatStore', () => ({
     }),
 }));
 
+jest.mock('@/src/features/voice/services/voiceInput', () => ({
+  ...jest.requireActual('@/src/features/voice/services/voiceInput'),
+  isCapturing: jest.fn().mockReturnValue(false),
+  startCaptureSession: jest.fn(),
+}));
+
 jest.mock('@/hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ isOnline: true, isReconnecting: false, queueSize: 0 }),
 }));
@@ -102,7 +108,7 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
         onOpenCompare?: () => void;
         selectedSkillName?: string;
         exhaustedUsageRecovery?: string | null;
-        onStackedChange?: (stacked: boolean) => void;
+        onMultilineChange?: (multiline: boolean) => void;
         sendPreview?: { providerMode?: string };
       },
       ref: React.Ref<unknown>,
@@ -113,7 +119,7 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
       mockChatInputOnOpenCompare = props.onOpenCompare;
       mockChatInputSelectedSkillName = props.selectedSkillName;
       mockChatInputExhaustedUsageRecovery = props.exhaustedUsageRecovery;
-      mockChatInputOnStackedChange = props.onStackedChange;
+      mockChatInputOnMultilineChange = props.onMultilineChange;
       mockChatInputSendPreview = props.sendPreview;
       return <View testID="chat-input" />;
     }),
@@ -204,6 +210,7 @@ import { useTierStore } from '../src/features/billing/store';
 import { useAuthStore } from '../src/features/auth/store';
 import { DEFAULT_LOCAL_MODEL_ID } from '../src/features/model-picker/service';
 import { generateImage, getGeneratedImageUri } from '../src/features/image/services/imagegen';
+import { startCaptureSession } from '../src/features/voice/services/voiceInput';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -223,6 +230,7 @@ import {
 
 const mockGenerateImage = generateImage as jest.Mock;
 const mockGetGeneratedImageUri = getGeneratedImageUri as jest.Mock;
+const mockStartCapture = startCaptureSession as jest.Mock;
 
 describe('Chat tab new chat', () => {
   beforeEach(() => {
@@ -236,9 +244,14 @@ describe('Chat tab new chat', () => {
     mockChatInputOnOpenCompare = undefined;
     mockChatInputSelectedSkillName = undefined;
     mockChatInputExhaustedUsageRecovery = undefined;
-    mockChatInputOnStackedChange = undefined;
+    mockChatInputOnMultilineChange = undefined;
     mockChatInputSendPreview = undefined;
     mockUsageSnapshot = null;
+    mockStartCapture.mockResolvedValue({
+      result: new Promise(() => {}),
+      stop: jest.fn().mockResolvedValue(undefined),
+      cancel: jest.fn().mockResolvedValue(undefined),
+    });
     __resetStartWithVoiceLaunchForTests();
     useLocalSettingsStore.setState({ startWithVoice: false });
     useSettingsStore.setState({ voiceEnabled: true, voiceOnboardingSeen: true });
@@ -348,6 +361,8 @@ describe('Chat tab new chat', () => {
 
     await waitFor(() => expect(first.getByTestId('voice-inline-bar')).toBeTruthy());
     expect(first.getByLabelText('Exit voice mode')).toBeTruthy();
+    await waitFor(() => expect(first.getByLabelText('Mute microphone')).toBeTruthy());
+    expect(mockStartCapture).toHaveBeenCalledTimes(1);
     first.unmount();
 
     const second = render(<ChatTabScreen />);
@@ -366,14 +381,14 @@ describe('Chat tab new chat', () => {
     expect(screen.queryByTestId('voice-inline-bar')).toBeNull();
   });
 
-  it('hides the greeting while the composer is stacked', () => {
+  it('hides the greeting while the composer text wraps', () => {
     const screen = render(<ChatTabScreen />);
     expect(screen.getByTestId('chat.new-chat.greeting')).toBeTruthy();
 
-    act(() => mockChatInputOnStackedChange?.(true));
+    act(() => mockChatInputOnMultilineChange?.(true));
     expect(screen.queryByTestId('chat.new-chat.greeting')).toBeNull();
 
-    act(() => mockChatInputOnStackedChange?.(false));
+    act(() => mockChatInputOnMultilineChange?.(false));
     expect(screen.getByTestId('chat.new-chat.greeting')).toBeTruthy();
   });
 

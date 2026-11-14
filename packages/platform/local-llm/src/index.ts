@@ -17,7 +17,11 @@ export {
   tier2Release,
   tier2IsVisionReady,
   executorchVlmPresetInfo,
+  tier2IsPresetDownloaded,
+  tier2AssertPresetDownloaded,
+  Tier2ModelNotDownloadedError,
   _setLLMModuleForTesting,
+  _setPresetDownloadedCheckForTesting,
   type Tier2LoadOptions,
 } from './tier2';
 export {

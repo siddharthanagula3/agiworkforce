@@ -3,6 +3,7 @@ import type { PushPreferenceGroup } from '@/stores/notificationPrefsStore';
 export interface PushPreferenceGroupCopy {
   label: string;
   description: string;
+  emailSetOnWeb?: true;
 }
 
 export const PUSH_PREFERENCE_GROUP_COPY: Record<PushPreferenceGroup, PushPreferenceGroupCopy> = {
@@ -12,10 +13,19 @@ export const PUSH_PREFERENCE_GROUP_COPY: Record<PushPreferenceGroup, PushPrefere
   },
   tasks: {
     label: 'Task and approval updates',
-    description: 'Approval requests, finished or failed tasks, and scheduled runs',
+    description: 'Approval requests and finished or failed tasks',
+  },
+  scheduled_tasks: {
+    label: 'Scheduled tasks',
+    description: 'When a scheduled task runs, finishes or needs you',
+    emailSetOnWeb: true,
+  },
+  product_updates: {
+    label: 'Product updates',
+    description: 'New features and tips',
   },
   product: {
-    label: 'Product',
+    label: 'Service status',
     description: 'Service status and connection info',
   },
 };

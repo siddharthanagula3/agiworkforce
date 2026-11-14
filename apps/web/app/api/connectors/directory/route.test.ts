@@ -334,6 +334,49 @@ describe('GET /api/connectors/directory', () => {
     ]);
   });
 
+  it('filters to connectors that read one personal source and tags each entry', async () => {
+    const internal = (id: string, name: string) =>
+      directoryRecord({
+        id,
+        name,
+        publisher: name,
+        description: `${name} connector.`,
+        categories: ['Communication'],
+        remotes: [{ url: `https://mcp.example.com/${id}`, transport: 'streamable-http' }],
+        authMode: 'oauth',
+        connectable: 'connect',
+        sourceRegistry: 'internal',
+        badge: 'first-party',
+        monogram: name.slice(0, 1),
+      });
+    mocks.getSnapshotView.mockResolvedValue(
+      view([
+        internal('gmail', 'Gmail'),
+        internal('google-calendar', 'Google Calendar'),
+        internal('outlook', 'Outlook'),
+        internal('slack', 'Slack'),
+      ]),
+    );
+
+    const email = await (await GET(request('?personalSource=email'))).json();
+    expect(email.entries.map((entry: { id: string }) => entry.id).sort()).toEqual([
+      'gmail',
+      'outlook',
+    ]);
+    const calendar = await (await GET(request('?personalSource=calendar'))).json();
+    expect(calendar.entries.map((entry: { id: string }) => entry.id).sort()).toEqual([
+      'google-calendar',
+      'outlook',
+    ]);
+    const outlook = email.entries.find((entry: { id: string }) => entry.id === 'outlook');
+    expect(outlook.personalSources).toEqual(['email', 'calendar']);
+  });
+
+  it('rejects a personal source outside the fixed set', async () => {
+    const response = await GET(request('?personalSource=files'));
+    expect(response.status).toBe(400);
+  });
+
   it('paginates with a limit and hands back an offset cursor for the next page', async () => {
     const first = await GET(request('?limit=2'));
     const firstBody = await first.json();

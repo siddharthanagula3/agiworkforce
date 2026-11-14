@@ -73,13 +73,12 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
           disabled={!value}
           aria-label={copyLabel}
           title="Copy"
+          className="h-[34px] w-[34px] pointer-coarse:h-11 pointer-coarse:w-11"
           style={{
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 34,
-            height: 34,
             padding: 0,
             background: 'transparent',
             border: '1px solid var(--settings-border)',
@@ -93,7 +92,7 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
       </div>
-      <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 'var(--space-2) 0 0' }}>{hint}</p>
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-2) 0 0' }}>{hint}</p>
     </>
   );
 }

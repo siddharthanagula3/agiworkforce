@@ -1786,6 +1786,27 @@ describe('a refusal from the account API is not a sign-out', () => {
       expect(bearers).toHaveLength(2);
       expect(tokens.join('')).toBe('Back');
     });
+
+    it('never waits longer than the retry ceiling however long the server asks', async () => {
+      const secrets = await signedIn();
+      const bearers = answerChat(
+        { status: 503, headers: { 'retry-after': '86400' }, body: '{}' },
+        { status: 200, body: sse('Back') },
+      );
+      const pending = streamChatCompletion(
+        secrets,
+        [{ role: 'user', content: 'hi' }],
+        { onToken: () => undefined, onDone: () => undefined },
+        cancellation,
+      );
+
+      await vi.advanceTimersByTimeAsync(29_000);
+      expect(bearers).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      await pending;
+      expect(bearers).toHaveLength(2);
+    });
   });
 });
 

@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   ChevronDown,
   FileJson,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '../cn';
@@ -39,7 +40,13 @@ import type { SettingsNavField, SettingsNavGroupResolved, SettingsNavKey } from 
 import { ConnectorLogo } from './ConnectorLogo';
 import { DirectoryPanel } from '../directory';
 import type { DirectoryAdapter } from '../directory';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../primitives/Dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from '../primitives/Dialog';
 import { SearchInput } from '../primitives/SearchInput';
 import { useConfirm } from '../primitives/ConfirmDialog';
 import {
@@ -51,6 +58,21 @@ const ADD_CUSTOM_CONNECTOR_LABEL = 'Add custom connector';
 const BROWSE_CONNECTORS_LABEL = 'Browse connectors';
 const CONNECTORS_ADD_MENU_LABEL = 'Add';
 const DIRECTORY_SEARCH_SELECTOR = 'input[type="search"]';
+const COARSE_POINTER_QUERY = '(pointer: coarse)';
+
+function prefersSoftKeyboard(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia(COARSE_POINTER_QUERY).matches;
+}
+
+function scrollNavItemIntoView(region: HTMLElement, item: HTMLElement) {
+  if (region.scrollWidth <= region.clientWidth) {
+    item.scrollIntoView({ block: 'nearest' });
+    return;
+  }
+  const regionBox = region.getBoundingClientRect();
+  const itemBox = item.getBoundingClientRect();
+  region.scrollLeft += itemBox.left - regionBox.left - (regionBox.width - itemBox.width) / 2;
+}
 
 const UNKNOWN_VERSION_PLACEHOLDER = '\u2013';
 
@@ -404,7 +426,7 @@ function ConnectorDetail({
         </p>
       )}
 
-      <p className="text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">{connector.description}</p>
 
       {isUnverifiedCustomConnector(connector) && (
         <p className="flex items-start gap-1.5 text-xs text-warning-text">
@@ -623,7 +645,7 @@ function AddCustomConnectorForm({
             Beta
           </span>
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           Connect a remote MCP server to give the assistant new tools.{' '}
           {adapter?.openHref ? (
             <button
@@ -645,7 +667,7 @@ function AddCustomConnectorForm({
           )}
         </p>
         {preset ? (
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">
             {preset.hint}{' '}
             <a
               href={preset.documentationUrl}
@@ -850,7 +872,7 @@ function AddCustomConnectorForm({
               >
                 {clientSecretWithoutId
                   ? 'Enter the OAuth Client ID that goes with this secret.'
-                  : 'Only needed when the server does not register clients on its own. Leave the bearer token empty to sign in with OAuth.'}
+                  : 'Only for servers that do not register clients. Leave the token empty for OAuth.'}
               </span>
               {adapter?.customConnectorOAuthRedirectUri ? (
                 <p className="flex flex-col gap-1 text-caption text-muted-foreground">
@@ -870,8 +892,7 @@ function AddCustomConnectorForm({
           className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground"
           aria-hidden="true"
         />
-        Only use connectors from developers you trust. Custom connectors can read the conversation
-        context you share with their tools.
+        Only use connectors you trust. They can read the chat context you share with their tools.
       </p>
 
       {error && (
@@ -1090,7 +1111,7 @@ function ConnectorsPanel({
       {/* Header */}
       <div>
         <h2 className="text-h4 text-foreground">Connectors</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           Connect your tools and give the assistant access to your apps.
         </p>
       </div>
@@ -1257,8 +1278,7 @@ function ConnectorsPanel({
                 <div>
                   <p className="text-sm font-medium text-foreground">Connect your first tool</p>
                   <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
-                    Add a trusted remote MCP server now, or browse the directory to see which
-                    branded connectors your deployment can enable.
+                    Add a trusted MCP server, or browse the directory.
                   </p>
                 </div>
                 <button
@@ -1393,10 +1413,10 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
     <div className="flex flex-col gap-4">
       <div>
         <h2 className="text-h4 text-foreground">Skills</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           {canAuthor
-            ? 'Portable instruction sets for focused workflows. Select one in chat with / or @, write your own, or download a bundled SKILL.md.'
-            : 'Bundled, portable instruction sets for focused workflows. Select one in chat with / or @, or download its SKILL.md.'}
+            ? 'Instruction sets for focused work. Use one in chat with / or @, or write your own.'
+            : 'Instruction sets for focused work. Use one in chat with / or @.'}
         </p>
       </div>
 
@@ -1625,7 +1645,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
     <div className="flex flex-col gap-4">
       <div>
         <h2 className="text-h4 text-foreground">Plugins</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground">
           Add reviewed skill packs now, with more community integrations coming later.
         </p>
       </div>
@@ -2079,6 +2099,7 @@ export function SettingsModal({
   } | null>(null);
   const [customConnectorOpen, setCustomConnectorOpen] = useState(Boolean(openCustomConnector));
   const paneRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setCustomConnectorOpen(Boolean(openCustomConnector));
@@ -2138,9 +2159,8 @@ export function SettingsModal({
 
   useEffect(() => {
     if (!navScrollNode) return;
-    navScrollNode
-      .querySelector<HTMLElement>('[aria-current="page"]')
-      ?.scrollIntoView({ block: 'nearest' });
+    const item = navScrollNode.querySelector<HTMLElement>('[aria-current="page"]');
+    if (item) scrollNavItemIntoView(navScrollNode, item);
   }, [activeSection, navScrollNode]);
 
   useEffect(() => {
@@ -2256,6 +2276,12 @@ export function SettingsModal({
     );
   }
 
+  const keepKeyboardClosedOnOpen = (event: Event) => {
+    if (!prefersSoftKeyboard()) return;
+    event.preventDefault();
+    dialogRef.current?.focus({ preventScroll: true });
+  };
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen) return;
     confirmNavigation(() => {
@@ -2282,20 +2308,21 @@ export function SettingsModal({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        hideCloseButton={false}
-        closeLabel={t('modal.close', 'Close settings')}
+        ref={dialogRef}
+        hideCloseButton
         aria-describedby={undefined}
+        onOpenAutoFocus={keepKeyboardClosedOnOpen}
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={keepOpenForMenuEscape}
-        className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-border/60 bg-background p-0 shadow-e4 md:h-[min(94vh,680px)] md:w-[min(96vw,860px)] md:flex-row md:rounded-xl"
+        className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-border/60 bg-background p-0 shadow-e4 max-md:max-h-none max-md:border-0 md:h-[min(94vh,680px)] md:w-[min(96vw,860px)] md:flex-row md:rounded-xl pointer-coarse:[&_[role=switch][data-state]]:relative pointer-coarse:[&_[role=switch][data-state]]:after:absolute pointer-coarse:[&_[role=switch][data-state]]:after:inset-x-0 pointer-coarse:[&_[role=switch][data-state]]:after:-inset-y-2.5 pointer-coarse:[&_[role=switch][data-state]]:after:content-[''] pointer-coarse:[&_select]:min-h-11"
       >
         <nav
           aria-label={t('modal.navigation', 'Settings navigation')}
-          className="relative flex w-full shrink-0 flex-col border-b border-border/60 py-3 md:w-[220px] md:border-b-0 md:border-e md:pb-5 md:pt-7"
+          className="relative flex w-full shrink-0 flex-col border-b border-border/60 py-3 max-md:pt-0 md:w-[220px] md:border-b-0 md:border-e md:pb-5 md:pt-7"
         >
           {/* Title */}
-          <DialogTitle className="mb-3 px-4 pe-12 text-base font-semibold text-foreground md:pe-4">
+          <DialogTitle className="mb-3 px-4 pe-12 text-base font-semibold text-foreground max-md:mb-1 max-md:flex max-md:h-12 max-md:items-center md:pe-4">
             {title ?? t('modal.title', 'Settings')}
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -2336,7 +2363,10 @@ export function SettingsModal({
                     {group.label && (
                       <div
                         data-testid={NAV_GROUP_LABEL_TESTID}
-                        className="flex shrink-0 items-center whitespace-nowrap px-3 pb-1 pt-1 text-sm font-medium text-muted-foreground md:block"
+                        className={cn(
+                          'flex shrink-0 items-center whitespace-nowrap px-3 pb-1 pt-1 text-sm font-medium text-muted-foreground md:block',
+                          gi === 0 && 'max-md:hidden',
+                        )}
                       >
                         {group.label}
                       </div>
@@ -2402,6 +2432,13 @@ export function SettingsModal({
             {renderSection()}
           </div>
         </section>
+        <DialogClose
+          aria-label={t('modal.close', 'Close settings')}
+          data-testid="settings-modal-close"
+          className="absolute end-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-accent hover:text-foreground focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background disabled:pointer-events-none max-md:end-1 max-md:top-0.5 max-md:h-11 max-md:w-11"
+        >
+          <X className="h-4 w-4 max-md:h-5 max-md:w-5" aria-hidden="true" />
+        </DialogClose>
       </DialogContent>
     </Dialog>
   );

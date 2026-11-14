@@ -75,7 +75,7 @@ function stopUnfinishedAnswer(state: CompareStreamState): CompareStreamState {
 }
 
 const ONE_ANSWER_AT_A_TIME_NOTE =
-  'Your plan runs one answer at a time, so the second answer starts when the first finishes.';
+  'Your plan runs one answer at a time, so the second waits for the first.';
 
 function runsOneAnswerAtATime(tier: string): boolean {
   const limit = getPlanMaxConcurrentTurns(tier);

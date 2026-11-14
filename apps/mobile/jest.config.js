@@ -20,6 +20,10 @@ module.exports = {
       '<rootDir>/../../packages/contracts/trust-boundaries/src/index',
     '^@agiworkforce/unified-chat/assistant-fence$':
       '<rootDir>/../../packages/ui/unified-chat/src/components/markdown/assistantFence.ts',
+    '^@agiworkforce/unified-chat/continue-generation$':
+      '<rootDir>/../../packages/ui/unified-chat/src/lib/continue-generation.ts',
+    '^@agiworkforce/unified-chat/continuation-seam$':
+      '<rootDir>/../../packages/ui/unified-chat/src/lib/continuation-seam.ts',
     '^expo-audio$': '<rootDir>/__mocks__/expo-audio.js',
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',

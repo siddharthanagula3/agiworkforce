@@ -278,7 +278,7 @@ export default function AgentDetailScreen() {
                 style={{ backgroundColor: colors.accentSurface }}
               >
                 <Text className="flex-1 text-sm" style={{ color: colors.textSecondary }}>
-                  Your computer is not connected, so this agent cannot be controlled from here.
+                  Your computer isn’t connected, so you can’t control this agent.
                 </Text>
                 <PressableBox
                   onPress={handleReconnect}

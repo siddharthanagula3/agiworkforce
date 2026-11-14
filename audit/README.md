@@ -35,6 +35,12 @@ is the cross-surface execution queue added on 2026-11-02. Platform and applicati
 maintainers own it. It closes when each pending lifecycle check has reproducible
 acceptance evidence or a decision in its existing feature owner; it does not
 replace feature statuses in the capability ledger.
+[`live-check/mobile-feature-gaps-2026-11-13.md`](live-check/mobile-feature-gaps-2026-11-13.md)
+is owned by Mobile + product (founder). It lists the features that most of the four
+competitor iPhone apps have and the mobile app lacks or has in part, found by the
+feature comparison in `docs/research/mobile-layout-2026-11-12/`. A row is deleted
+when its feature ships, a founder call when its answer is recorded, and the file
+when its lists are empty; existing rows of `registers/ui-gaps.csv` keep their gaps.
 The [Chrome assistant live parity audit](live-check/chrome-assistant-parity-2026-11-03.md)
 is owned by Extension + product maintainers. It tracks the current-page,
 context-sharing and execution gaps found against the installed browser assistants;

@@ -363,7 +363,7 @@ describe('Web conversation data settings', () => {
     render(<SharedLinksSection />);
 
     expect(await screen.findByText('No shared links shown')).toBeInTheDocument();
-    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    expect(screen.getByText(/This list may be incomplete/)).toBeInTheDocument();
     expect(screen.queryByText('No shared links')).toBeNull();
   });
 
@@ -392,7 +392,7 @@ describe('Web conversation data settings', () => {
     render(<SharedLinksSection />);
 
     await screen.findByText('Shared planning');
-    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    expect(screen.getByText(/This list may be incomplete/)).toBeInTheDocument();
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     expect(open).toHaveBeenCalledWith(shareUrl, '_blank', 'noopener,noreferrer');
@@ -408,7 +408,7 @@ describe('Web conversation data settings', () => {
       'share-token',
       expect.objectContaining({ session, assertCurrent: expect.any(Function) }),
     );
-    expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
+    expect(screen.getByText(/This list may be incomplete/)).toBeInTheDocument();
     expect(screen.queryByText('No shared links')).toBeNull();
     expect(mocks.listShares).toHaveBeenCalledTimes(1);
   });
@@ -461,9 +461,7 @@ describe('Web conversation data settings', () => {
       );
 
     render(<PrivacySection />);
-    expect(
-      screen.getByText(/get a copy of your account data and the files you stored/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Download a copy of your account data and files/i)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Export data' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
 

@@ -82,9 +82,7 @@ describe('Voice & Language, installed voice inventory', () => {
 
     expect(await findByText("Couldn't load installed voices")).toBeTruthy();
     expect(
-      queryByText(
-        'Your chosen voice is kept but cannot be checked right now. Choose System default to stop using it.',
-      ),
+      queryByText('Your voice is kept but can’t be checked now. Choose System default to stop.'),
     ).toBeTruthy();
     expect(queryByText('AGI uses the device default.')).toBeNull();
     expect(getByLabelText('System default voice').props.accessibilityState).toEqual({

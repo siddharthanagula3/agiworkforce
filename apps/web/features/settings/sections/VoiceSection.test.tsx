@@ -49,6 +49,7 @@ describe('VoiceSection', () => {
     expect(screen.getByRole('combobox', { name: 'Dictation language' })).toBeInTheDocument();
     expect(screen.queryByText(/not available/i)).toBeNull();
     expect(screen.queryByText(/Bring Your Own Key/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Learn about BYOK' })).toBeNull();
     expect(screen.queryByText(/loading/i)).toBeNull();
     expect(document.querySelector('[style*="border-radius: var(--radius-lg)"]')).toBeNull();
   });

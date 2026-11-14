@@ -3,6 +3,7 @@ import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
+let mockUnreadCount = 0;
 const mockNavigate = jest.fn();
 
 jest.mock('expo-router', () => ({
@@ -27,6 +28,7 @@ jest.mock('@/services/notifications', () => ({
   enablePushNotifications: jest.fn().mockResolvedValue('granted'),
   getPushDeliveryStatus: jest.fn().mockResolvedValue('granted'),
   getPushRegistrationIssue: jest.fn().mockReturnValue(null),
+  useNotificationCenter: () => ({ unreadCount: mockUnreadCount }),
 }));
 
 jest.mock('@/services/notificationChannels', () => ({
@@ -56,6 +58,7 @@ jest.mock('lucide-react-native', () => {
     Bell: icon,
     BellOff: icon,
     Bot: icon,
+    CalendarClock: icon,
     CheckSquare: icon,
     ChevronRight: icon,
     Clock: icon,
@@ -64,6 +67,7 @@ jest.mock('lucide-react-native', () => {
     Mail: icon,
     MessageSquare: icon,
     Moon: icon,
+    Sparkles: icon,
     Vibrate: icon,
     X: icon,
   };
@@ -90,6 +94,8 @@ describe('notification category settings', () => {
         categoryEnabled: {
           chat_replies: true,
           tasks: true,
+          scheduled_tasks: true,
+          product_updates: false,
           product: false,
         },
         vibrationEnabled: {
@@ -115,13 +121,25 @@ describe('notification category settings', () => {
 
     expect(screen.getByLabelText('Chat replies. Push')).toBeTruthy();
     expect(screen.getByLabelText('Task and approval updates. Push')).toBeTruthy();
-    expect(screen.getByLabelText('Product. Off')).toBeTruthy();
+    expect(screen.getByLabelText('Scheduled tasks. Push')).toBeTruthy();
+    expect(screen.getByLabelText('Product updates. Off')).toBeTruthy();
+    expect(screen.getByLabelText('Service status. Off')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Task and approval updates. Push'));
 
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/settings/notifications/[category]',
       params: { category: 'tasks' },
     });
+  });
+
+  it('opens the list of recent notifications, which no longer has a side panel row', async () => {
+    mockUnreadCount = 3;
+    const screen = render(<NotificationPreferencesScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Recent notifications. 3 unread'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/notifications');
+    mockUnreadCount = 0;
   });
 
   it('labels the break reminder as a once-a-day threshold, not a repeating interval', async () => {
@@ -163,10 +181,10 @@ describe('notification category settings', () => {
     expect(row).toBeDisabled();
     fireEvent.press(row);
     expect(mockPush).not.toHaveBeenCalled();
-    expect(screen.getAllByText('Blocked')).toHaveLength(3);
+    expect(screen.getAllByText('Blocked')).toHaveLength(5);
     expect(
       await screen.findByText(
-        'Saved to your account, but this device stays silent until notifications are allowed in Settings.',
+        'Saved, but this device stays silent until notifications are allowed.',
       ),
     ).toBeTruthy();
   });
@@ -188,7 +206,7 @@ describe('notification category settings', () => {
     ['approvals', 'tasks', 'Task and approval updates'],
     ['task_updates', 'tasks', 'Task and approval updates'],
     ['errors', 'tasks', 'Task and approval updates'],
-    ['status', 'product', 'Product'],
+    ['status', 'product', 'Service status'],
   ] as const)('opens the %s link from the old taxonomy on %s', (legacy, current, label) => {
     const screen = render(<NotificationCategoryDetailScreen category={legacy} />);
 
@@ -201,6 +219,29 @@ describe('notification category settings', () => {
       current === 'product',
     );
     expect(useNotificationPrefsStore.getState().categoryEnabled).not.toHaveProperty(legacy);
+  });
+
+  it('opens the scheduled tasks switch on its own, leaving task and approval updates on', () => {
+    const screen = render(<NotificationCategoryDetailScreen category="scheduled_tasks" />);
+
+    expect(screen.getByText('Scheduled tasks')).toBeTruthy();
+    expect(screen.getByLabelText('Email notifications. On the web')).toBeTruthy();
+    expect(screen.queryByText('No email for this category')).toBeNull();
+
+    fireEvent(screen.getByRole('switch'), 'valueChange', false);
+
+    expect(useNotificationPrefsStore.getState().categoryEnabled.scheduled_tasks).toBe(false);
+    expect(useNotificationPrefsStore.getState().categoryEnabled.tasks).toBe(true);
+  });
+
+  it('turns product updates on from their own page', () => {
+    const screen = render(<NotificationCategoryDetailScreen category="product_updates" />);
+
+    expect(screen.getByText('Product updates')).toBeTruthy();
+    fireEvent(screen.getByRole('switch'), 'valueChange', true);
+
+    expect(useNotificationPrefsStore.getState().categoryEnabled.product_updates).toBe(true);
+    expect(useNotificationPrefsStore.getState().categoryEnabled.product).toBe(false);
   });
 
   it('rejects an unknown dynamic category without mutating preferences', () => {

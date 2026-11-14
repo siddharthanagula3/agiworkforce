@@ -22,6 +22,7 @@ function productionConfig(overrides = {}) {
       associatedDomains: ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com'],
       entitlements: {
         'com.apple.developer.declared-age-range': true,
+        'com.apple.developer.kernel.increased-memory-limit': true,
         'com.apple.security.application-groups': [CANONICAL_IDENTITY.appGroup],
       },
       ...overrides.ios,

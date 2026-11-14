@@ -5,6 +5,7 @@ import {
   containsAnswerUiHtml,
   isAnswerUiHttpsUrl,
   parseInteractiveCardDelta,
+  removeAnswerUiHtml,
 } from '@agiworkforce/cloud-contracts';
 import {
   ANSWER_UI_CARD_KIND,
@@ -251,14 +252,63 @@ function withoutControlCharacters(value: string): string {
   }
   return kept;
 }
-const HTML_TAGS = /<\/?[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>|<!--[\s\S]*?-->/gi;
+const DANGEROUS_ELEMENT_NAMES = ['script', 'style', 'iframe', 'object', 'embed', 'template'];
+const MAX_STRIP_PASSES = 8;
+const WHITESPACE = /\s/;
 
-const DANGEROUS_ELEMENTS = /<(script|style|iframe|object|embed|template)\b[\s\S]*?<\/\1\s*>/gi;
+function asciiLowerCase(value: string): string {
+  return value.replace(/[A-Z]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) + 32));
+}
+
+function isWordCode(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    code === 95 ||
+    (code >= 97 && code <= 122)
+  );
+}
+
+function dangerousElementEnd(folded: string, start: number, unclosed: Set<string>): number {
+  const name = DANGEROUS_ELEMENT_NAMES.find((candidate) => folded.startsWith(candidate, start + 1));
+  if (!name || unclosed.has(name)) return -1;
+  const afterName = start + 1 + name.length;
+  if (isWordCode(folded.charCodeAt(afterName))) return -1;
+  const closing = `</${name}`;
+  let close = folded.indexOf(closing, afterName);
+  while (close !== -1) {
+    let index = close + closing.length;
+    while (index < folded.length && WHITESPACE.test(folded.charAt(index))) index += 1;
+    if (folded.charAt(index) === '>') return index + 1;
+    close = folded.indexOf(closing, close + 1);
+  }
+  unclosed.add(name);
+  return -1;
+}
+
+function removeDangerousElements(value: string): string {
+  const folded = asciiLowerCase(value);
+  const unclosed = new Set<string>();
+  let kept = '';
+  let last = 0;
+  let index = folded.indexOf('<');
+  while (index !== -1) {
+    const end = dangerousElementEnd(folded, index, unclosed);
+    if (end === -1) {
+      index = folded.indexOf('<', index + 1);
+    } else {
+      kept += value.slice(last, index);
+      last = end;
+      index = folded.indexOf('<', end);
+    }
+  }
+  return last === 0 ? value : kept + value.slice(last);
+}
 
 function stripHtml(value: string): string {
-  let current = value.replace(DANGEROUS_ELEMENTS, '');
-  for (let pass = 0; pass < 8 && containsAnswerUiHtml(current); pass += 1) {
-    current = current.replace(HTML_TAGS, '');
+  let current = removeDangerousElements(value);
+  for (let pass = 0; pass < MAX_STRIP_PASSES && containsAnswerUiHtml(current); pass += 1) {
+    current = removeAnswerUiHtml(current);
   }
   return containsAnswerUiHtml(current) ? current.replace(/</g, '‹') : current;
 }

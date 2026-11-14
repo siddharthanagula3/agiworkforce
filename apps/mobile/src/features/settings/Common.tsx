@@ -16,7 +16,7 @@ import { HelpArticleLink, type MobileHelpArticleId } from '@/src/features/suppor
 export function SettingsScreenShell({
   title,
   children,
-  backHref = '/(app)/(tabs)/settings',
+  backHref = '/(app)/settings',
   help,
   refreshControl,
   overlay,

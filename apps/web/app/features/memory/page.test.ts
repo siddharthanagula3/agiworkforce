@@ -71,8 +71,8 @@ describe('/features/memory states the limits the code enforces', () => {
   });
 
   it('describes the import the web settings pane offers', () => {
-    expect(importDialog).toContain(
-      'Send the prompt below to your other assistant, then paste its reply here to review before anything is saved.',
+    expect(importDialog).toMatch(
+      /Send the prompt below to your other assistant, then paste its reply to review before\s+saving\./,
     );
     expect(importDialog).toContain("IMPORT_FILE_ACCEPT = '.txt,.json,text/plain,application/json'");
     expect(page).toContain(

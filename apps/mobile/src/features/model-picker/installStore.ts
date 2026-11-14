@@ -10,7 +10,13 @@ import {
   isMultimodalModel,
   tier2LoadModel,
 } from '@agiworkforce/local-llm';
-import type { OnDeviceModel } from '@agiworkforce/types';
+import type { ExecutorchPreset, OnDeviceModel } from '@agiworkforce/types';
+import {
+  cancelExecutorchPresetDownload,
+  deleteExecutorchPresetFiles,
+  liveInstalledModels,
+  releaseExecutorchPreset,
+} from '@/services/executorchModels';
 import {
   assertDownloadAllowed,
   cancelDownload,
@@ -50,6 +56,7 @@ export function installFailureMessage(error: unknown): string {
 }
 
 const installAttempts = new Map<string, symbol>();
+const installPresets = new Map<string, ExecutorchPreset>();
 
 export interface ModelInstallObserver {
   onProgress?: (downloaded: number, total: number, speedBps: number) => void;
@@ -258,10 +265,11 @@ export const useModelInstallStore = create<ModelInstallState>()(
       },
 
       hydrateInstalledModels: async () => {
-        const [installed, caps] = await Promise.all([
+        const [recorded, caps] = await Promise.all([
           listInstalledModels().catch(() => []),
           getCapabilities().catch(() => null),
         ]);
+        const installed = await liveInstalledModels(recorded).catch(() => recorded);
         const systemModel = getSystemModelForTier1Runtime(caps?.tier1Runtime ?? null);
         const readySystemModelIds = systemModel ? [systemModel.id] : [];
         const installedModelIds = installed.map((model) => model.id);
@@ -318,7 +326,10 @@ export const useModelInstallStore = create<ModelInstallState>()(
           return;
         }
 
-        const existing = await getInstalledModel(model.id).catch(() => null);
+        const recordedModel = await getInstalledModel(model.id).catch(() => null);
+        const existing = recordedModel
+          ? ((await liveInstalledModels([recordedModel]).catch(() => [recordedModel]))[0] ?? null)
+          : null;
         if (existing) {
           set((state) => ({
             installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
@@ -338,15 +349,15 @@ export const useModelInstallStore = create<ModelInstallState>()(
           throw new Error(error);
         }
 
-        const cancellable = !preset;
         const inFlight = get().jobs[model.id]?.status === 'downloading';
         const attempt = (inFlight && installAttempts.get(model.id)) || Symbol(model.id);
         installAttempts.set(model.id, attempt);
+        if (preset) installPresets.set(model.id, preset);
         const ownsJob = (): boolean => installAttempts.get(model.id) === attempt;
         set((state) => ({
           jobs: {
             ...state.jobs,
-            [model.id]: { status: 'downloading', progress: 0.01, cancellable },
+            [model.id]: { status: 'downloading', progress: 0.01, cancellable: true },
           },
         }));
 
@@ -358,7 +369,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
               [model.id]: {
                 status: 'downloading',
                 progress: Math.max(0.01, clampProgress(progress)),
-                cancellable,
+                cancellable: true,
               },
             },
           }));
@@ -368,15 +379,32 @@ export const useModelInstallStore = create<ModelInstallState>()(
 
         try {
           if (preset) {
-            await tier2LoadModel(preset, reportProgress, {
-              ensureDownloadAllowed: () =>
-                assertDownloadAllowed({
-                  wifiOnly,
-                  requiredBytes: model.fileSizeBytes ?? catalogModel?.fileSizeBytes ?? 0,
-                }),
-            });
-            const record = installedRecordFor(model);
-            await recordInstalledModel(record);
+            try {
+              await tier2LoadModel(preset, reportProgress, {
+                ensureDownloadAllowed: async () => {
+                  await assertDownloadAllowed({
+                    wifiOnly,
+                    requiredBytes: model.fileSizeBytes ?? catalogModel?.fileSizeBytes ?? 0,
+                  });
+                  if (!ownsJob())
+                    throw new ModelDownloadError('cancelled', 'Download was cancelled.');
+                },
+              });
+            } catch (error) {
+              if (ownsJob()) throw error;
+              await deleteExecutorchPresetFiles(preset).catch(() => undefined);
+              throw new ModelDownloadError('cancelled', 'Download was cancelled.');
+            }
+            if (!ownsJob()) {
+              try {
+                releaseExecutorchPreset(preset);
+              } catch {
+                // A reply is already running on the loaded model, so it cannot be released yet.
+              }
+              await deleteExecutorchPresetFiles(preset).catch(() => undefined);
+              throw new ModelDownloadError('cancelled', 'Download was cancelled.');
+            }
+            await recordInstalledModel(installedRecordFor(model));
           } else {
             await installGgufModel(
               catalogModel!,
@@ -425,7 +453,12 @@ export const useModelInstallStore = create<ModelInstallState>()(
       cancelModelDownload: (modelId) => {
         const job = get().jobs[modelId];
         if (job?.status !== 'downloading' || !job.cancellable) return;
-        cancelDownload(modelId);
+        const preset = installPresets.get(modelId);
+        if (preset) {
+          void cancelExecutorchPresetDownload(preset);
+        } else {
+          cancelDownload(modelId);
+        }
         installAttempts.delete(modelId);
         set((state) => {
           const { [modelId]: _removed, ...rest } = state.jobs;

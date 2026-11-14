@@ -172,7 +172,7 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
           }
         }
       >
-        Your device has not been asked yet. Nothing is accessed until you allow it.
+        Nothing is accessed until you allow it.
       </Text>
       <View
         accessibilityLabel="Allow Camera"
@@ -1078,7 +1078,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                   }
                 }
               >
-                Optional. Used when you ask about your schedule or confirm an event in a chat.
+                Used when you ask about your schedule or confirm an event.
               </Text>
             </View>
             <View
@@ -1213,7 +1213,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                   }
                 }
               >
-                Used only when you create a reminder or confirm one in a chat; never read.
+                Used only to add reminders you create or confirm; never read.
               </Text>
             </View>
             <View

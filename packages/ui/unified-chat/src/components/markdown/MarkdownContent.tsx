@@ -529,6 +529,28 @@ const MarkdownListItem = ({
 type MarkdownTableAlignment = React.ComponentPropsWithoutRef<'td'>['align'];
 type MarkdownTableTextAlign = React.CSSProperties['textAlign'];
 
+const TABLE_LONG_TOKEN_LENGTH = 24;
+const TABLE_WORD_CELL_CLASS = 'min-w-18 break-words';
+const TABLE_LONG_TOKEN_CELL_CLASS = 'min-w-36 wrap-anywhere';
+const TABLE_INLINE_WRAP_CLASS = '[&_a]:[overflow-wrap:inherit] [&_code]:[overflow-wrap:inherit]';
+
+/**
+ * A column is never narrower than its longest word: `wrap-anywhere` counts
+ * every letter as a place to break when the browser sizes a column, so a
+ * narrow screen squeezed short columns until words split mid-word. Whole words
+ * make a table that cannot fit scroll inside its own region instead. Only a
+ * token too long to keep whole (a link, a path, a hash) may break anywhere,
+ * above a floor wide enough to read.
+ */
+function markdownTableWrapClass(children: React.ReactNode): string {
+  const longestToken = reactNodeText(children)
+    .split(/\s+/)
+    .reduce((longest, token) => Math.max(longest, token.length), 0);
+  return longestToken > TABLE_LONG_TOKEN_LENGTH
+    ? TABLE_LONG_TOKEN_CELL_CLASS
+    : TABLE_WORD_CELL_CLASS;
+}
+
 function markdownTableAlignmentClass(
   align: MarkdownTableAlignment,
   textAlign: MarkdownTableTextAlign,
@@ -552,7 +574,9 @@ const MarkdownTableCell = ({
   return (
     <td
       className={cn(
-        'min-w-24 border border-border px-3 py-2 align-top break-words',
+        'border border-border px-3 py-2 align-top',
+        markdownTableWrapClass(children),
+        TABLE_INLINE_WRAP_CLASS,
         markdownTableAlignmentClass(align, style?.textAlign),
       )}
     >
@@ -572,7 +596,9 @@ const MarkdownTableHeader = ({
 }) => (
   <th
     className={cn(
-      'sticky top-0 z-[var(--z-content-raised)] min-w-24 border border-border bg-muted px-3 py-2 align-top font-semibold break-words',
+      'sticky top-0 z-[var(--z-content-raised)] border border-border bg-muted px-3 py-2 align-top font-semibold',
+      markdownTableWrapClass(children),
+      TABLE_INLINE_WRAP_CLASS,
       markdownTableAlignmentClass(align, style?.textAlign),
     )}
   >

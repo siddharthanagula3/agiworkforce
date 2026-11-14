@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 
 const navigationState = vi.hoisted(() => ({ pathname: '/workspace' }));
 
@@ -128,11 +128,30 @@ describe('WorkspaceConsoleShell', () => {
     expect(document.activeElement).toBe(updatedDisclosure);
   });
 
+  it('gives every console state a phone-only row that leads back to chat', () => {
+    const states = [
+      { role: 'owner' as const },
+      { role: 'member' as const },
+      { role: null, organizationId: null },
+      { role: null, organizationId: null, membershipUnavailable: true },
+    ];
+    for (const state of states) {
+      const { unmount } = shell(state);
+      const row = screen.getByTestId('workspace-phone-top-row');
+      expect(row.className).toContain('h-12');
+      expect(row.className).toContain('md:hidden');
+      const back = within(row).getByRole('link', { name: 'Back to chat' });
+      expect(back).toHaveAttribute('href', '/chat');
+      expect(back.className).toContain('h-11');
+      unmount();
+    }
+  });
+
   it('preserves the desktop sidebar width and row layout', () => {
     const { container } = shell();
 
-    const frame = container.firstElementChild;
     const aside = container.querySelector('aside');
+    const frame = aside?.parentElement;
     expect(frame?.className).toContain('md:flex-row');
     expect(aside?.className).toContain('md:w-60');
   });

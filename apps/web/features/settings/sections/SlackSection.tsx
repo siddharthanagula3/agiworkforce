@@ -426,9 +426,8 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
         >
           Slack app
         </h1>
-        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Message AGI in Slack, or mention it in a channel, and it answers in the thread as the app.
-          Each person links their own account, so answers use their plan, settings and approvals.
+        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 12 }}>
+          AGI answers in Slack threads, using each person&apos;s own plan and settings.
         </p>
       </div>
 
@@ -510,7 +509,7 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
           <Card
             id="settings-slack-approvals-heading"
             title="Waiting for your approval"
-            description="When a Slack answer needs a tool that asks first, it waits here. Nothing runs until you decide."
+            description="Slack answers that need a tool wait here. Nothing runs until you decide."
           >
             {data.approvals.length === 0 ? (
               <EmptyRow>Nothing is waiting for you.</EmptyRow>
@@ -531,7 +530,7 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
           <Card
             id="settings-slack-links-heading"
             title="Your Slack accounts"
-            description="Slack accounts that AGI answers as you. To link one, send the app a message in Slack and follow the link it sends back."
+            description="Accounts AGI answers as you. To link one, message the app in Slack."
           >
             {data.links.length === 0 ? (
               <EmptyRow>No Slack accounts are linked yet.</EmptyRow>
@@ -579,7 +578,7 @@ function SlackSettingsContent({ view }: { view: SlackSettingsView }) {
           <Card
             id="settings-slack-workspaces-heading"
             title="Slack workspaces you added"
-            description="Add the app to a Slack workspace, then invite it to channels with /invite. Anyone there can link their own account."
+            description="Add the app, then /invite it to channels. Anyone there can link their account."
             action={
               data.available ? (
                 <Button asChild size="sm">

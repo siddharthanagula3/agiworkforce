@@ -43,6 +43,7 @@ import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
 import { ImageMaskDialog, type ImageMaskResult } from './ImageMaskDialog';
 import { ComposerFooter } from './ComposerFooter';
+import { PHONE_TOUCH_HIT_AREA_CLASS, WORK_MODE_SEGMENT_HIT_AREA_CLASS } from './touchHitArea';
 import { WorkUsageCard } from '../WorkUsageCard';
 import { freeQuotaSelection, promotionalChatToolConflict } from '../../lib/free-quota-selection';
 import { useFreeModelPromotion } from '@features/chat/hooks/use-free-model-promotion';
@@ -4868,6 +4869,7 @@ const ChatComposerNewComponent = ({
   // keyboard on a browser that does not resize the layout viewport for it.
   return (
     <div
+      data-testid="chat-composer"
       className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-[var(--z-content-sticky)] bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none"
       style={
         softKeyboardInset > 0 ? { transform: `translateY(-${softKeyboardInset}px)` } : undefined
@@ -5950,6 +5952,7 @@ const ChatComposerNewComponent = ({
                     disabled={composerDisabled}
                     className={cn(
                       'relative flex h-8 min-h-0 w-8 items-center justify-center rounded-full transition-colors sm:h-9 sm:w-9',
+                      PHONE_TOUCH_HIT_AREA_CLASS,
                       hasOverflowActive
                         ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                         : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -6180,7 +6183,8 @@ const ChatComposerNewComponent = ({
                             defaultValue: WORK_MODE_TITLES[mode],
                           })}
                           className={cn(
-                            'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors @[44rem]:h-7 @[44rem]:w-auto @[44rem]:px-2.5',
+                            'relative flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors @[44rem]:h-7 @[44rem]:w-auto @[44rem]:px-2.5',
+                            WORK_MODE_SEGMENT_HIT_AREA_CLASS,
                             workMode === mode
                               ? 'bg-background text-foreground shadow-e1'
                               : 'text-muted-foreground hover:text-foreground',

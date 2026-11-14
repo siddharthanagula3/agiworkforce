@@ -18,11 +18,14 @@ import {
  * the ChatGPT and Claude apps. They group push event types; the account feed
  * files its rows under the shared NOTIFICATION_CATEGORIES instead.
  */
-export type PushPreferenceGroup = 'chat_replies' | 'tasks' | 'product';
+export type PushPreferenceGroup =
+  'chat_replies' | 'tasks' | 'scheduled_tasks' | 'product_updates' | 'product';
 
 export const DEFAULT_CATEGORY_ENABLED: Readonly<Record<PushPreferenceGroup, boolean>> = {
   chat_replies: true,
   tasks: true,
+  scheduled_tasks: true,
+  product_updates: false,
   product: false,
 };
 
@@ -72,10 +75,13 @@ export function getCategoryForType(type: NotificationEventType): PushPreferenceG
     case 'agent_failed':
     case 'emergency_stop_triggered':
     case 'agent_paused':
-    case 'schedule_run':
-    case 'schedule_triggered':
     case 'companion_connected':
       return 'tasks';
+    case 'schedule_run':
+    case 'schedule_triggered':
+      return 'scheduled_tasks';
+    case 'product_update':
+      return 'product_updates';
     case 'status_update':
     case 'heartbeat_info':
       return 'product';
@@ -95,10 +101,32 @@ export function migrateLegacyCategoryEnabled(
     const value = source[key];
     return typeof value === 'boolean' ? value : LEGACY_CATEGORY_DEFAULTS[key];
   };
+  const tasks = flag('approvals') || flag('task_updates') || flag('errors');
   return {
     chat_replies: flag('task_updates'),
-    tasks: flag('approvals') || flag('task_updates') || flag('errors'),
+    tasks,
+    scheduled_tasks: tasks,
+    product_updates: DEFAULT_CATEGORY_ENABLED.product_updates,
     product: flag('status'),
+  };
+}
+
+export function addSeparatedPushGroups(current: unknown): Record<PushPreferenceGroup, boolean> {
+  if (current === null || typeof current !== 'object' || Array.isArray(current)) {
+    return { ...DEFAULT_CATEGORY_ENABLED };
+  }
+  const source = current as Partial<Record<PushPreferenceGroup, unknown>>;
+  const flag = (key: PushPreferenceGroup): boolean => {
+    const value = source[key];
+    return typeof value === 'boolean' ? value : DEFAULT_CATEGORY_ENABLED[key];
+  };
+  return {
+    chat_replies: flag('chat_replies'),
+    tasks: flag('tasks'),
+    scheduled_tasks:
+      typeof source.scheduled_tasks === 'boolean' ? source.scheduled_tasks : flag('tasks'),
+    product_updates: flag('product_updates'),
+    product: flag('product'),
   };
 }
 
@@ -123,6 +151,9 @@ export function migrateNotificationPrefs(persisted: unknown, version: number): u
   }
   if (version < 2) {
     state = { ...state, categoryEnabled: migrateLegacyCategoryEnabled(state['categoryEnabled']) };
+  }
+  if (version < 3) {
+    state = { ...state, categoryEnabled: addSeparatedPushGroups(state['categoryEnabled']) };
   }
   return state;
 }
@@ -206,7 +237,7 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
     {
       name: 'notification-prefs-store',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 2,
+      version: 3,
       migrate: (persisted, version) =>
         migrateNotificationPrefs(persisted, version) as NotificationPrefsState,
       skipHydration: true,

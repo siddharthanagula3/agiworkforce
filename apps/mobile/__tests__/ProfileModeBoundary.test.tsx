@@ -1,9 +1,13 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { useUser } from '@clerk/expo';
+
+let mockClerkInstance: Record<string, unknown> | null = null;
 
 jest.mock('@clerk/expo', () => ({
   useUser: jest.fn().mockReturnValue({ user: null, isLoaded: true }),
+  getClerkInstance: () => mockClerkInstance,
 }));
 
 const mockReplace = jest.fn();
@@ -70,6 +74,7 @@ jest.mock('../services/authSession', () => ({
 
 import ProfileScreen from '../app/(app)/profile';
 import { useAuthStore } from '../src/features/auth/store';
+import * as pushTokenAccountLifecycle from '../src/features/auth/services/pushTokenAccountLifecycle';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatStore } from '../stores/chatStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
@@ -138,6 +143,7 @@ function resetStores() {
 describe('Profile mode boundary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockClerkInstance = null;
     resetStores();
   });
 
@@ -245,5 +251,57 @@ describe('Profile mode boundary', () => {
     fireEvent.press(getByText('Account Security'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
+  });
+
+  it('says so when logging out of this account does not finish', async () => {
+    const signedIn = (id: string, userId: string) => ({
+      id,
+      status: 'active',
+      user: { id: userId, primaryEmailAddress: { emailAddress: `${userId}@example.com` } },
+      publicUserData: { identifier: `${userId}@example.com`, userId },
+    });
+    const first = signedIn('sess_a', 'user_a');
+    const second = signedIn('sess_b', 'user_b');
+    const clerk = {
+      __internal_environment: { authConfig: { singleSessionMode: false } },
+      session: first as typeof first | null,
+      client: { signedInSessions: [first, second] },
+      setActive: jest.fn(async ({ session }: { session: string }) => {
+        clerk.session = session === second.id ? second : first;
+      }),
+      signOut: jest.fn(async () => {
+        throw new Error('session removal failed');
+      }),
+    };
+    mockClerkInstance = clerk;
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'user_a' });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const releaseSpy = jest
+      .spyOn(pushTokenAccountLifecycle, 'releasePushDeviceForAccountChange')
+      .mockResolvedValue(undefined);
+
+    try {
+      const { getByText } = render(<ProfileScreen />);
+      fireEvent.press(getByText('Log Out'));
+      const confirm = (alertSpy.mock.calls[0]![2] as { text: string; onPress?: () => void }[]).find(
+        (button) => button.text === 'Log Out',
+      )!;
+      await act(async () => {
+        confirm.onPress?.();
+      });
+
+      await waitFor(() =>
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Log out failed',
+          expect.stringMatching(/try again/i),
+        ),
+      );
+      expect(clerk.setActive).toHaveBeenCalledWith({ session: 'sess_b' });
+      expect(clerk.signOut).toHaveBeenCalledWith({ sessionId: 'sess_a' });
+    } finally {
+      alertSpy.mockRestore();
+      releaseSpy.mockRestore();
+    }
   });
 });

@@ -258,8 +258,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
           </View>
           {hasLegacyCadence ? (
             <Text className="mb-2.5 text-sm leading-5 text-amber-400">
-              Cadence not editable on Mobile, use Once, Daily, Weekly, or Monthly, or edit this
-              schedule on Web.
+              Edit this cadence on Web, or switch to Once, Daily, Weekly or Monthly.
             </Text>
           ) : null}
           {schedule.pausedReason === 'approval_required' ? (

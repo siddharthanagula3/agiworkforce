@@ -235,7 +235,7 @@ export function SitesScreen() {
                 }
                 body={
                   page?.cursor === null && page.list.nextCursor === null && !failure
-                    ? 'Open an artifact in a Cloud chat and publish it to give it a link people can open.'
+                    ? 'Publish an artifact from a Cloud chat to get a link people can open.'
                     : 'Pull to refresh the first page or use the available page controls.'
                 }
               />

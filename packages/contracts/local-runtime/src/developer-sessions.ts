@@ -390,6 +390,8 @@ export const DEVELOPER_FILE_CHANGE_LABELS: Record<DeveloperFileChange, string> =
 type DeveloperSessionEventBody =
   | { type: 'turn-started'; threadId: string; turnId: string }
   | { type: 'output-delta'; threadId: string; turnId: string; delta: string; index?: number }
+  /** What the model thought before or between its replies, where the provider sends it. */
+  | { type: 'reasoning-delta'; threadId: string; turnId: string; delta: string }
   | {
       type: 'turn-finished';
       threadId: string;
@@ -501,6 +503,7 @@ export type DeveloperSessionEvent = DeveloperSessionEventBody & { sequence?: num
 export const DEVELOPER_SESSION_EVENT_MESSAGE_KINDS = Object.freeze({
   'turn-started': 'status',
   'output-delta': 'text',
+  'reasoning-delta': 'text',
   'turn-finished': 'status',
   'tool-queued': 'tool_call',
   'tool-started': 'tool_call',

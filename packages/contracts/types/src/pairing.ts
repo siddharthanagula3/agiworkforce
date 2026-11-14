@@ -14,14 +14,21 @@ export type PairingStatus =
   'generating' | 'waiting' | 'connecting' | 'paired' | 'expired' | 'failed' | 'disconnected';
 
 /**
- * The name mobile gives the screen a user pairs from.
- *
- * Desktop's pairing card told people to "open Desktop Companion on your
- * phone", a screen with no such name, mobile calls it Remote in the drawer
- * and in the screen header. Both surfaces read this constant so the
- * instruction cannot drift from the label again.
+ * The name mobile gives the pairing page in its header and in the links that
+ * open it. The page is reached from the coding screen, so an instruction that
+ * tells someone where to start pairing names `MOBILE_CODE_SCREEN_LABEL` and
+ * `MOBILE_ADD_DEVICE_LABEL` instead.
  */
 export const MOBILE_REMOTE_SCREEN_LABEL = 'Remote';
+
+/**
+ * Where pairing starts on the phone: the coding screen in the side panel and
+ * the control on it, in the words mobile shows. Mobile labels both from these
+ * and every pairing instruction on the computer reads them, so an instruction
+ * cannot keep naming a place the phone no longer has.
+ */
+export const MOBILE_CODE_SCREEN_LABEL = 'AGI Code';
+export const MOBILE_ADD_DEVICE_LABEL = 'Add device';
 
 /**
  * The two pairing codes the product issues, and the only place either one is

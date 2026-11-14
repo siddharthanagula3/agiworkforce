@@ -5,6 +5,8 @@ jest.mock('@/services/fileCreation', () => ({
   shareFile: jest.fn().mockResolvedValue(undefined),
 }));
 
+const HIDDEN_OK = { includeHiddenElements: true } as const;
+
 let mockAccountOwned = true;
 jest.mock('@/src/features/auth/services/accountScopedUiState', () => ({
   captureAccountScopedUiState: () => ({ scope: 'cloud', account: { ownerId: 'user_a', epoch: 1 } }),
@@ -488,5 +490,42 @@ describe('the turn-based fallback states why it is not live', () => {
       </SafeAreaProvider>,
     );
     expect(queryByTestId('voice-inline-notice')).toBeNull();
+  });
+});
+
+describe('the live bar shows its state by glow and takes no attachments', () => {
+  it('glows in the listening colour while the microphone is open', () => {
+    const { queryByTestId, getByTestId } = renderLiveBar();
+    expect(queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeTruthy();
+    expect(queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeNull();
+    expect(getByTestId('live-voice-status').props.children).toBe('Listening');
+  });
+
+  it('glows in a different colour while the assistant speaks', () => {
+    const { queryByTestId, getByTestId } = renderLiveBar({ assistantSpeaking: true });
+    expect(queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeTruthy();
+    expect(queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeNull();
+    expect(getByTestId('live-voice-status').props.children).toBe(
+      'Speaking, talk any time to interrupt',
+    );
+  });
+
+  it('does not glow while muted, paused, reconnecting or stopped', () => {
+    for (const props of [
+      { muted: true },
+      { paused: true },
+      { reconnecting: true },
+      { status: 'error' as const },
+    ]) {
+      const view = renderLiveBar(props);
+      expect(view.queryByTestId('voice-state-glow-listening', HIDDEN_OK)).toBeNull();
+      expect(view.queryByTestId('voice-state-glow-speaking', HIDDEN_OK)).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it('offers no add control, because the live session carries audio only from here', () => {
+    const { queryByLabelText } = renderLiveBar();
+    expect(queryByLabelText('Add attachment')).toBeNull();
   });
 });

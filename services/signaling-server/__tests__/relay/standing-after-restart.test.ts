@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -91,7 +91,7 @@ function nextAccount(): string {
 }
 
 function randomCode(): string {
-  return [...randomBytes(12)].map((byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('');
+  return Array.from({ length: 12 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('');
 }
 
 function storedBeforeTheRestart(): { code: string; desktopToken: string } {

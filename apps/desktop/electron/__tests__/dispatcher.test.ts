@@ -303,6 +303,7 @@ const startRemoteControl = vi.fn((args: Record<string, unknown>) => ({ status: '
 vi.mock('../remote/remoteControlService', () => ({
   APPROVAL_CONFIRM_TIMEOUT_MS: 120_000,
   configureRemoteControl: vi.fn(),
+  phoneWatchesSession: () => false,
   relayDeveloperSessionEvent: vi.fn(),
   remoteControlActive: () => false,
   remoteControlAvailable: () => true,

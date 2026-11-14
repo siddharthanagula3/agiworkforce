@@ -259,8 +259,21 @@ test('a package link from the generated attribution is data, and a lookalike is 
       'utf8',
     ),
   );
-  assert.ok(fields.includes('http://github.com/brix/crypto-js'));
-  assert.ok(fields.some((field) => field.includes('http://github.com/productiontype/Newsreader')));
+  const attributedLinks = fields
+    .flatMap((field) => field.split(/[\s()]+/))
+    .flatMap((token) => {
+      try {
+        return [new URL(token)];
+      } catch {
+        return [];
+      }
+    });
+  const isAttributedLink = (host, pathname) =>
+    attributedLinks.some(
+      (link) => link.protocol === 'http:' && link.host === host && link.pathname === pathname,
+    );
+  assert.ok(isAttributedLink('github.com', '/brix/crypto-js'));
+  assert.ok(isAttributedLink('github.com', '/productiontype/Newsreader'));
 
   const attributed = bytecodeDirectory(
     `${CLEAN_BUNDLE}var LINKS=${JSON.stringify(fields.filter((field) => field.includes('http://')))};`,

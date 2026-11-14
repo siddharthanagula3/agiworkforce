@@ -56,4 +56,27 @@ describe('toDirectoryEntryView', () => {
     expect(view.authorName).toBe('Notion');
     expect(view.websiteUrl).toBe('https://notion.so');
   });
+
+  it('names the personal sources an internal connector reads', () => {
+    expect(toDirectoryEntryView(record({ id: 'gmail' })).personalSources).toEqual(['email']);
+    expect(toDirectoryEntryView(record({ id: 'google-calendar' })).personalSources).toEqual([
+      'calendar',
+    ]);
+    expect(toDirectoryEntryView(record({ id: 'outlook' })).personalSources).toEqual([
+      'email',
+      'calendar',
+    ]);
+  });
+
+  it('leaves the field out for connectors that read neither mail nor calendars', () => {
+    expect(toDirectoryEntryView(record({ id: 'notion' }))).not.toHaveProperty('personalSources');
+    expect(toDirectoryEntryView(record({ id: 'microsoft-365' }))).not.toHaveProperty(
+      'personalSources',
+    );
+  });
+
+  it('never tags an outside registry entry, even one that reuses an internal id', () => {
+    const view = toDirectoryEntryView(record({ id: 'gmail', sourceRegistry: 'mcp-registry' }));
+    expect(view).not.toHaveProperty('personalSources');
+  });
 });

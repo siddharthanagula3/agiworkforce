@@ -8,6 +8,8 @@ import {
   readProductLink,
 } from '@/src/features/notifications/productLinks';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
+import { API_URL } from '@/lib/constants';
+import { isConversationOpenInForeground } from './conversationFocus';
 import { notificationAllowedOnceReadable, vibrationAllowed } from './notificationGate';
 import {
   immediateNotificationTrigger,
@@ -40,11 +42,18 @@ export interface NotificationData {
   [key: string]: unknown;
 }
 
+function isReplyForOpenConversation(data: NotificationData | undefined): boolean {
+  return data?.type === 'chat_message' && isConversationOpenInForeground(data.conversationId);
+}
+
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
 
-    if (data?.type && !(await notificationAllowedOnceReadable(data.type))) {
+    if (
+      isReplyForOpenConversation(data) ||
+      (data?.type && !(await notificationAllowedOnceReadable(data.type)))
+    ) {
       return {
         shouldShowBanner: false,
         shouldShowList: false,
@@ -227,6 +236,7 @@ export async function scheduleLocalNotification(opts: {
   threadId?: string;
   /** The one approval this notification is about. */
   approvalId?: string;
+  conversationId?: string;
 }): Promise<void> {
   const priority = opts.priority ?? inferPriority(opts.type);
 
@@ -238,6 +248,7 @@ export async function scheduleLocalNotification(opts: {
     ...(opts.rootId ? { rootId: opts.rootId } : {}),
     ...(opts.threadId ? { threadId: opts.threadId } : {}),
     ...(opts.approvalId ? { approvalId: opts.approvalId } : {}),
+    ...(opts.conversationId ? { conversationId: opts.conversationId } : {}),
   };
 
   const content: Notifications.NotificationContentInput = {
@@ -270,6 +281,28 @@ const ALLOWED_ROUTE_PREFIXES: ReadonlyArray<{ prefix: string; flag: FeatureKey |
 ];
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LOCAL_CONVERSATION_ID = /^conv_\d+_[a-z0-9]+$/;
+const RELEASE_NOTE_SLUG = /^[a-z0-9-]{1,64}$/;
+
+function readConversationId(data: NotificationData): string | null {
+  const id = data.conversationId;
+  return typeof id === 'string' && (CONVERSATION_ID.test(id) || LOCAL_CONVERSATION_ID.test(id))
+    ? id
+    : null;
+}
+
+export function releaseNoteUrl(data: NotificationData): string | null {
+  const release = data.release;
+  if (typeof release !== 'string' || !RELEASE_NOTE_SLUG.test(release)) return null;
+  return `${API_URL.replace(/\/+$/, '')}/release-notes/${release}?from=mobile`;
+}
+
+function openConversation(conversationId: string): void {
+  safeNavigate({
+    pathname: '/(app)/chat/[id]',
+    params: { id: conversationId },
+  } as Parameters<typeof router.push>[0]);
+}
 
 function isAllowedRoute(route: string): boolean {
   return ALLOWED_ROUTE_PREFIXES.some(
@@ -371,6 +404,12 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
 
   notificationCenterStore.add(response.notification);
 
+  const localConversationId = data.type === 'chat_message' ? readConversationId(data) : null;
+  if (localConversationId && LOCAL_CONVERSATION_ID.test(localConversationId)) {
+    openConversation(localConversationId);
+    return;
+  }
+
   // Local Mode is the app's own front door, so a tap never lands on a sign-in
   // wall. Whatever the notification was about, the app opens (MOBILE-052).
   if (!_isSignedIn) {
@@ -448,11 +487,8 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
       break;
 
     case 'chat_message':
-      if (typeof data.conversationId === 'string' && CONVERSATION_ID.test(data.conversationId)) {
-        safeNavigate({
-          pathname: '/(app)/chat/[id]',
-          params: { id: data.conversationId },
-        } as Parameters<typeof router.push>[0]);
+      if (readConversationId(data)) {
+        openConversation(readConversationId(data) as string);
       } else if (data.route && typeof data.route === 'string') {
         if (isAllowedRoute(data.route)) {
           safeNavigate(data.route as Parameters<typeof router.push>[0]);
@@ -469,6 +505,18 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     case 'heartbeat_info':
       safeNavigate({ pathname: '/(app)/notifications' as const });
       break;
+
+    case 'product_update': {
+      const url = releaseNoteUrl(data);
+      if (url) {
+        void import('@/lib/safeOpenURL').then(({ openUntrustedUrlInAppBrowser }) =>
+          openUntrustedUrlInAppBrowser(url),
+        );
+      } else {
+        safeNavigate({ pathname: '/(app)/notifications' as const });
+      }
+      break;
+    }
 
     default:
       safeNavigate({ pathname: '/(app)' as const });
@@ -646,7 +694,10 @@ export function setupNotificationListeners(
 
   lifetime.subscriptions.push(
     Notifications.addNotificationReceivedListener((notification) => {
-      if (isCurrent()) notificationCenterStore.add(notification);
+      const data = notification.request.content.data as NotificationData | undefined;
+      if (isCurrent() && !isReplyForOpenConversation(data)) {
+        notificationCenterStore.add(notification);
+      }
     }),
     Notifications.addNotificationResponseReceivedListener((response) => {
       if (isCurrent()) handleNotificationResponse(response);

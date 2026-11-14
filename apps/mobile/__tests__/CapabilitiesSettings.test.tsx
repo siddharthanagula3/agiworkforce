@@ -121,8 +121,7 @@ describe('Capabilities settings screen', () => {
     mockMemoryEntries.length = 0;
   });
 
-  const WEB_SEARCH_LABEL =
-    'Web search. Let Cloud models search the web when they need current information.';
+  const WEB_SEARCH_LABEL = 'Web search. Let Cloud models search the web for current information.';
 
   it('lets a long capability title wrap instead of truncating', () => {
     const { getByText } = render(<CapabilitiesScreen />);
@@ -142,26 +141,22 @@ describe('Capabilities settings screen', () => {
     expect(getByLabelText(WEB_SEARCH_LABEL)).toBeTruthy();
     expect(
       getByLabelText(
-        'Code execution and file creation. Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.',
+        'Code execution and file creation. Run code in a sandbox and create documents, sheets, slides and PDFs.',
       ),
     ).toBeTruthy();
     expect(
-      getByLabelText(
-        'Deep research. Allow supported Cloud models to run multi-step research with citations.',
-      ),
+      getByLabelText('Deep research. Multi-step research with citations in Cloud chats.'),
     ).toBeTruthy();
     expect(
       getByLabelText('Image generation. Allow eligible Cloud chats to create generated images.'),
     ).toBeTruthy();
     expect(
-      getByLabelText(
-        'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop',
-      ),
+      getByLabelText('Cross-device continuity. Managed Cloud tasks across mobile, web and desktop'),
     ).toBeTruthy();
     expect(queryAllByRole('switch')).toHaveLength(4);
     expect(
       getByLabelText(
-        'Code execution and file creation. Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.',
+        'Code execution and file creation. Run code in a sandbox and create documents, sheets, slides and PDFs.',
       ),
     ).toBeDisabled();
     expect(getByLabelText(WEB_SEARCH_LABEL)).toBeDisabled();
@@ -173,14 +168,12 @@ describe('Capabilities settings screen', () => {
   it('navigates status rows to real settings surfaces', () => {
     const { getByLabelText } = render(<CapabilitiesScreen />);
 
-    fireEvent.press(getByLabelText('Memory. View and manage local memory saved on this device'));
+    fireEvent.press(getByLabelText('Memory. Saved on this device'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
 
     fireEvent.press(
-      getByLabelText(
-        'Cross-device continuity. See how Managed Cloud tasks continue across mobile, web, and desktop',
-      ),
+      getByLabelText('Cross-device continuity. Managed Cloud tasks across mobile, web and desktop'),
     );
     expect(mockPush).toHaveBeenCalledWith('/(app)/continuity');
   });
@@ -205,9 +198,7 @@ describe('Capabilities settings screen', () => {
 
     const { getByLabelText, queryByLabelText } = render(<CapabilitiesScreen />);
 
-    expect(
-      getByLabelText('Local Mode. Chat is set to AGI Cloud, so new chats run on our servers. Off'),
-    ).toBeTruthy();
+    expect(getByLabelText('Local Mode. New chats run on AGI Cloud servers. Off')).toBeTruthy();
     expect(queryByLabelText('Local Mode. Private chat runs on this device. Active')).toBeNull();
   });
 
@@ -218,9 +209,7 @@ describe('Capabilities settings screen', () => {
       expect(queryByText(stale)).toBeNull();
     }
     expect(getByLabelText('Artifacts. Open generated previews and files from chat')).toBeTruthy();
-    expect(
-      getByLabelText('Desktop control. Run desktop workflows through paired Desktop sessions'),
-    ).toBeTruthy();
+    expect(getByLabelText('Desktop control. Run workflows on your paired desktop')).toBeTruthy();
   });
 
   it('says on screen why a locked Cloud switch cannot be changed', () => {
@@ -254,9 +243,7 @@ describe('Capabilities settings screen', () => {
 
   it('dates the Memory row from the newest stored memory and claims nothing when empty', () => {
     const { getByLabelText, unmount } = render(<CapabilitiesScreen />);
-    expect(
-      getByLabelText('Memory. View and manage local memory saved on this device'),
-    ).toBeTruthy();
+    expect(getByLabelText('Memory. Saved on this device')).toBeTruthy();
     unmount();
 
     mockMemoryEntries.push({
@@ -268,11 +255,7 @@ describe('Capabilities settings screen', () => {
     });
 
     const second = render(<CapabilitiesScreen />);
-    expect(
-      second.getByLabelText(
-        'Memory. View and manage local memory saved on this device. Updated 2 days ago',
-      ),
-    ).toBeTruthy();
+    expect(second.getByLabelText('Memory. Saved on this device. Updated 2 days ago')).toBeTruthy();
   });
 
   it('updates the persisted send-path preferences inline after Cloud unlock', () => {
@@ -280,10 +263,10 @@ describe('Capabilities settings screen', () => {
 
     const { getByLabelText } = render(<CapabilitiesScreen />);
     const codeSwitch = getByLabelText(
-      'Code execution and file creation. Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.',
+      'Code execution and file creation. Run code in a sandbox and create documents, sheets, slides and PDFs.',
     );
     const researchSwitch = getByLabelText(
-      'Deep research. Allow supported Cloud models to run multi-step research with citations.',
+      'Deep research. Multi-step research with citations in Cloud chats.',
     );
     const imageSwitch = getByLabelText(
       'Image generation. Allow eligible Cloud chats to create generated images.',

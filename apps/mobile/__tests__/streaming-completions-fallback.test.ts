@@ -122,6 +122,35 @@ describe('completions stream fallback (RN null response.body)', () => {
     });
   });
 
+  it('names a continuation as one, so the gateway does not budget it as a fresh turn', async () => {
+    const { streamChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: null,
+      text: async () => SSE,
+    } as unknown as Response);
+
+    const { callbacks } = makeCallbacks();
+    await streamChat(
+      {
+        model: MODEL_ID,
+        messages: [{ role: 'user', content: 'hi' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000031',
+      },
+      callbacks,
+      undefined,
+      { purpose: 'continue' },
+    );
+
+    const init = guardedFetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      'agi.chat.mobile.continue.0190a000-0000-7000-8000-000000000031',
+    );
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('purpose');
+  });
+
   it('reports a response-handler failure instead of treating it as malformed SSE', async () => {
     if (!FREE_CHAT_MODEL_ID) throw new Error('Expected a provider-funded Free chat offering.');
     const { streamFreeQuotaChat } = await loadStreamingService();

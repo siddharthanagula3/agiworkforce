@@ -156,7 +156,7 @@ export function AddCustomConnectorModal({
             Add custom MCP connector
           </Text>
           <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
-            Connect a remote MCP server by its HTTPS URL. Its tools become available to the model.
+            Add a remote MCP server by its HTTPS URL to use its tools in chat.
           </Text>
 
           <TextInput

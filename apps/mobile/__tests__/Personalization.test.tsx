@@ -223,7 +223,7 @@ describe('Personalization page', () => {
 
     fireEvent.press(getByLabelText('Save personalization settings'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/(tabs)/settings');
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings');
     expect(mockBack).not.toHaveBeenCalled();
   });
 

@@ -386,8 +386,8 @@ export default function MemoryImportScreen() {
               </Text>
               <Text className="text-sm leading-5" style={{ color: colors.textSecondary }}>
                 {isCloud
-                  ? 'Only the memories you import are saved to your AGI Cloud account.'
-                  : 'The text is read on this device and the memories stay here. Nothing is uploaded.'}
+                  ? 'Only the memories you import are saved.'
+                  : 'Read on this device. Nothing is uploaded.'}
               </Text>
             </View>
           </Animated.View>
@@ -395,7 +395,7 @@ export default function MemoryImportScreen() {
 
         {suspended && (
           <Text style={{ fontSize: typeScale.body, color: colors.textSecondary }}>
-            Return to the original mode to continue this import. Its destination has not changed.
+            Switch back to the original mode to continue this import.
           </Text>
         )}
         {!suspended && !destinationAvailable && (
@@ -407,8 +407,7 @@ export default function MemoryImportScreen() {
         {!suspended && step === 'compose' && (
           <View>
             <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
-              Ask your other assistant to list what it remembers about you, one per line, and paste
-              it here.
+              Paste what your other assistant remembers about you, one per line.
             </Text>
 
             <Text

@@ -306,6 +306,7 @@ async function expectPendingCount(count: number): Promise<void> {
 async function clearPending(): Promise<void> {
   dropFiles([imageFile(8, 'image/png', 'reset.png')]);
   await settled(() => {
+    expect(attachmentBar().querySelector('.sp-attachment-retention')).toBeNull();
     expect(attachmentBar().querySelector('.sp-attachment-thumb')).not.toBeNull();
   });
   await settled(async () => {

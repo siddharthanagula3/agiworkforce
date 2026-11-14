@@ -158,7 +158,7 @@ export default function WorkspaceScreen() {
       router.back();
       return;
     }
-    router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
+    router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const handleRefresh = useCallback(async () => {

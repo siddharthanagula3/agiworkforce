@@ -307,8 +307,7 @@ export function AgentManagePanel({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Paused agents take no new chats or routine runs until you resume them. Export writes a
-        Markdown agent file that Claude Code and this product can import.
+        Paused agents take no new chats or runs. Export makes a Markdown agent file.
       </p>
       {agent.organizationId && members.length > 0 ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">

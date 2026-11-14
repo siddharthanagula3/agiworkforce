@@ -138,10 +138,7 @@ function AgentFilesSection({ agent }: { agent: ManagedCloudAgent }) {
   );
 
   return (
-    <SectionCard
-      title="Knowledge"
-      description="Files the agent can read in every chat. Text is extracted when you add a file."
-    >
+    <SectionCard title="Knowledge" description="Files the agent can read in every chat.">
       {files === null && !failed ? <MetaText>Loading files…</MetaText> : null}
       {failed ? <ErrorBanner message="Could not load the files." onRetry={retry} /> : null}
       {files?.length === 0 ? <MetaText>No files yet.</MetaText> : null}
@@ -236,7 +233,7 @@ function AgentPublishSection({
   return (
     <SectionCard
       title="Publish"
-      description="People you share with use the published version. Saving keeps a draft until you publish."
+      description="Others use the published version. Saving keeps a draft until you publish."
     >
       <MetaText>{agentStateLabel(agent)}</MetaText>
       <TextField

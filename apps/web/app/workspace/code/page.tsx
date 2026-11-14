@@ -11,7 +11,7 @@ export default function WorkspaceCodePage() {
   return (
     <ConsolePage
       title="Code"
-      description="What a coding session in this workspace may connect to, what it may reach on the network, and how long its transcript is kept."
+      description="What coding sessions may connect to and reach, and how long transcripts are kept."
     >
       <WorkspaceCodeControls />
     </ConsolePage>

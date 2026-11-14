@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`ChatInput expand to full-screen editor matches the composer snapshot in both layouts: compact (stacked=false) 1`] = `
+exports[`ChatInput expand to full-screen editor matches the composer snapshot in both layouts: resting 1`] = `
 <View
   className="px-4 pt-2"
   style={
@@ -31,70 +31,21 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
     <View
       style={
         {
-          "alignItems": "center",
+          "alignItems": "stretch",
           "backgroundColor": "#1a1a1a",
           "borderColor": "#333",
-          "borderRadius": 9999,
+          "borderRadius": 24,
           "borderWidth": 1,
           "flex": 1,
-          "flexDirection": "row",
+          "flexDirection": "column",
           "minHeight": 44,
-          "paddingLeft": 6,
-          "paddingRight": 6,
-          "paddingVertical": 3,
+          "paddingBottom": 4,
+          "paddingLeft": 16,
+          "paddingRight": 10,
+          "paddingTop": 12,
         }
       }
     >
-      <View
-        accessibilityHint="Opens attachment, mode, and feature options"
-        accessibilityLabel="Add to chat"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "borderRadius": 9999,
-            "height": 44,
-            "justifyContent": "center",
-            "width": 44,
-          }
-        }
-        testID="chat.composer.plus"
-      >
-        <View
-          color="#888"
-          size={20}
-          testID="icon-Plus"
-        />
-      </View>
       <TextInput
         accessibilityHint="Type your message to the AI assistant"
         accessibilityLabel="Message input"
@@ -112,15 +63,15 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
         spellCheck={true}
         style={
           {
+            "alignSelf": "stretch",
             "color": "#fff",
             "display": "flex",
-            "flex": 1,
             "fontSize": 16,
             "fontWeight": "400",
             "lineHeight": 26,
             "maxHeight": 160,
             "minHeight": 24,
-            "minWidth": 0,
+            "paddingRight": 0,
             "paddingVertical": 0,
           }
         }
@@ -130,11 +81,140 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
       <View
         style={
           {
-            "display": "flex",
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 4,
+            "marginLeft": -12,
+            "marginRight": -6,
+            "marginTop": 4,
           }
         }
         testID="chat.composer.mic"
       >
+        <View
+          accessibilityHint="Opens attachment, mode, and feature options"
+          accessibilityLabel="Add to chat"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "transparent",
+              "borderRadius": 9999,
+              "height": 44,
+              "justifyContent": "center",
+              "width": 44,
+            }
+          }
+          testID="chat.composer.plus"
+        >
+          <View
+            color="#bbb"
+            size={28}
+            strokeWidth={1.75}
+            testID="icon-Plus"
+          />
+        </View>
+        <View
+          accessibilityHint="Opens the model picker"
+          accessibilityLabel="Model: Fixture Model"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "transparent",
+              "borderRadius": 9999,
+              "flexDirection": "row",
+              "flexShrink": 1,
+              "gap": 5,
+              "minHeight": 44,
+              "minWidth": 44,
+              "paddingHorizontal": 6,
+            }
+          }
+          testID="chat.composer.model"
+        >
+          <Text
+            className="text-sm text-white "
+            numberOfLines={1}
+            style={
+              {
+                "color": "#bbb",
+                "flexShrink": 1,
+                "fontSize": 15,
+                "fontWeight": "500",
+                "includeFontPadding": false,
+                "lineHeight": 20,
+              }
+            }
+          >
+            Fixture Model
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "flex": 1,
+            }
+          }
+        />
         <View
           accessibilityLabel="Voice input"
           accessibilityState={
@@ -172,67 +252,118 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
             Mic
           </Text>
         </View>
-      </View>
-    </View>
-    <View
-      testID="chat.composer.send"
-    >
-      <View
-        accessibilityHint="Opens hands-free voice conversation"
-        accessibilityLabel="Start voice mode"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "backgroundColor": "#fff",
-            "borderRadius": 9999,
-            "height": 44,
-            "justifyContent": "center",
-            "width": 44,
-          }
-        }
-      >
         <View
-          color="#1a1a1a"
-          size={18}
-          testID="icon-AudioLines"
-        />
+          testID="chat.composer.send"
+        >
+          <View
+            accessibilityLabel="Tip: tap the voice button to talk instead of typing"
+            accessibilityRole="text"
+            accessible={true}
+            pointerEvents="none"
+            style={
+              {
+                "backgroundColor": "#1a1a1a",
+                "borderColor": "#444",
+                "borderRadius": 9999,
+                "borderWidth": 1,
+                "bottom": 52,
+                "height": 36,
+                "justifyContent": "center",
+                "paddingHorizontal": 14,
+                "position": "absolute",
+                "right": 0,
+              }
+            }
+            testID="chat.composer.voice-hint"
+          >
+            <Text
+              className="text-sm text-white "
+              numberOfLines={1}
+              style={
+                [
+                  {
+                    "color": "#fff",
+                    "fontSize": 14,
+                    "fontWeight": "500",
+                  },
+                  {
+                    "lineHeight": 18,
+                  },
+                ]
+              }
+            >
+              Try voice
+            </Text>
+          </View>
+          <View
+            accessibilityHint="Opens hands-free voice conversation"
+            accessibilityLabel="Start voice mode"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "height": 44,
+                "justifyContent": "center",
+                "width": 44,
+              }
+            }
+          >
+            <View
+              style={
+                {
+                  "alignItems": "center",
+                  "backgroundColor": "#fff",
+                  "borderRadius": 9999,
+                  "height": 36,
+                  "justifyContent": "center",
+                  "width": 36,
+                }
+              }
+            >
+              <View
+                color="#1a1a1a"
+                size={18}
+                testID="icon-AudioLines"
+              />
+            </View>
+          </View>
+        </View>
       </View>
     </View>
   </View>
 </View>
 `;
 
-exports[`ChatInput expand to full-screen editor matches the composer snapshot in both layouts: stacked (stacked=true) 1`] = `
+exports[`ChatInput expand to full-screen editor matches the composer snapshot in both layouts: wrapped 1`] = `
 <View
   className="px-4 pt-2"
   style={
@@ -254,7 +385,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
   <View
     style={
       {
-        "alignItems": "flex-end",
+        "alignItems": "center",
         "flexDirection": "row",
         "gap": 8,
       }
@@ -271,9 +402,10 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
           "flex": 1,
           "flexDirection": "column",
           "minHeight": 44,
+          "paddingBottom": 4,
           "paddingLeft": 16,
           "paddingRight": 10,
-          "paddingVertical": 10,
+          "paddingTop": 12,
         }
       }
     >
@@ -366,11 +498,11 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
         style={
           {
             "alignItems": "center",
-            "display": "flex",
             "flexDirection": "row",
-            "gap": 8,
-            "marginLeft": -6,
-            "marginTop": 8,
+            "gap": 4,
+            "marginLeft": -12,
+            "marginRight": -6,
+            "marginTop": 4,
           }
         }
         testID="chat.composer.mic"
@@ -411,24 +543,25 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "#242424",
+              "backgroundColor": "transparent",
               "borderRadius": 9999,
               "height": 44,
               "justifyContent": "center",
               "width": 44,
             }
           }
-          testID="chat.composer.plus.stacked"
+          testID="chat.composer.plus"
         >
           <View
-            color="#888"
-            size={18}
+            color="#bbb"
+            size={28}
+            strokeWidth={1.75}
             testID="icon-Plus"
           />
         </View>
         <View
           accessibilityHint="Opens the model picker"
-          accessibilityLabel="Model: Fixture Model, reasoning effort Balanced"
+          accessibilityLabel="Model: Fixture Model"
           accessibilityRole="button"
           accessibilityState={
             {
@@ -481,28 +614,14 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
               {
                 "color": "#bbb",
                 "flexShrink": 1,
-                "fontSize": 14,
+                "fontSize": 15,
                 "fontWeight": "500",
                 "includeFontPadding": false,
-                "lineHeight": 16,
+                "lineHeight": 20,
               }
             }
           >
             Fixture Model
-          </Text>
-          <Text
-            className="text-sm text-white "
-            numberOfLines={1}
-            style={
-              {
-                "color": "#888",
-                "fontSize": 14,
-                "includeFontPadding": false,
-                "lineHeight": 16,
-              }
-            }
-          >
-            Balanced
           </Text>
         </View>
         <View
@@ -549,48 +668,48 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
             Mic
           </Text>
         </View>
-      </View>
-    </View>
-    <View
-      testID="chat.composer.send"
-    >
-      <View
-        accessibilityLabel="Send message"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": false,
-            "expanded": undefined,
-            "selected": undefined,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        testID="send-button"
-      >
-        <Text>
-          Send
-        </Text>
+        <View
+          testID="chat.composer.send"
+        >
+          <View
+            accessibilityLabel="Send message"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            testID="send-button"
+          >
+            <Text>
+              Send
+            </Text>
+          </View>
+        </View>
       </View>
     </View>
   </View>

@@ -169,7 +169,7 @@ function SupportTicketList() {
     <SettingsScreenShell title="Support" backHref="/(app)/about">
       <SettingsInfo
         title="Raise a ticket"
-        body="Describe what went wrong. The support team replies here, and also by email to your account address."
+        body="Describe the problem. Support replies here and by email."
         icon={LifeBuoy}
       />
       {composing ? (

@@ -209,7 +209,7 @@ describe('version 1 without in-app purchases', () => {
     expect(NATIVE_PURCHASES_AVAILABLE).toBe(false);
   });
 
-  it('drawer: a Free account sees no Upgrade row, a paid account keeps Usage remaining', () => {
+  it('drawer: a Free account sees no Upgrade row and a paid account sees no usage row', () => {
     useTierStore.setState({ tier: 'free' });
     useCloudUsageStore.setState({ ownerId: OWNER, error: null, snapshot: usageSnapshot() });
     const upgradeLabel = resources.en.common.navUpgrade;
@@ -231,16 +231,20 @@ describe('version 1 without in-app purchases', () => {
     const paid = render(
       <DrawerContent {...({ navigation: { closeDrawer: mockCloseDrawer } } as never)} />,
     );
-    expect(paid.getByLabelText(/Usage remaining/)).toBeTruthy();
+    expect(paid.queryByLabelText(/Usage remaining/)).toBeNull();
     expect(pushedBilling()).toBe(false);
   });
 
-  it('usage screen: Free shows the plan block only, with no Upgrade, meters or help link', async () => {
+  it('usage screen: Free shows the plan block and how limits work, with no Upgrade, meters or help link', async () => {
     const screen = render(<CloudUsageScreen />);
 
     await waitFor(() => expect(screen.getByText('Free plan')).toBeTruthy());
     expect(
       screen.getByText('Usage resets every 5 hours, week and month, and varies by model and task.'),
+    ).toBeTruthy();
+    expect(screen.getByText('How limits work')).toBeTruthy();
+    expect(
+      screen.getByText('At a limit, Cloud replies pause until reset. Local mode keeps working.'),
     ).toBeTruthy();
     expect(screen.queryByText(/upgrade/i)).toBeNull();
     expect(screen.queryByLabelText('Upgrade')).toBeNull();
@@ -250,7 +254,7 @@ describe('version 1 without in-app purchases', () => {
     expect(pushedBilling()).toBe(false);
   });
 
-  it('usage screen: a paid account has no help link and no Buy credits row', async () => {
+  it('usage screen: a paid account sees how limits work, with no help link and no Buy credits row', async () => {
     mockFetchUsageSnapshot.mockResolvedValue(
       usageSnapshot({ planTier: 'pro', hasUsageRemaining: true }),
     );
@@ -262,6 +266,12 @@ describe('version 1 without in-app purchases', () => {
     });
     expect(screen.queryByText('How usage and credits work')).toBeNull();
     expect(screen.queryByText('Buy credits')).toBeNull();
+    expect(screen.getByText('How limits work')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Meters refill when they reset. Larger models and tools use more. At a limit, Cloud replies pause until reset. Local mode keeps working.',
+      ),
+    ).toBeTruthy();
     expect(pushedBilling()).toBe(false);
   });
 

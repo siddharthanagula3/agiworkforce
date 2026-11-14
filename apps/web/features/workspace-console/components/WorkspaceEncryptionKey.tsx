@@ -143,8 +143,7 @@ function DescriptorForm({
         </label>
       </div>
       <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-        The key is checked before anything is sealed with it: the workspace must be allowed to
-        encrypt and decrypt with it, and every failed check is listed if it is not.
+        The key's encrypt and decrypt access is checked before use, and any failures are listed.
       </p>
       <div>
         <button

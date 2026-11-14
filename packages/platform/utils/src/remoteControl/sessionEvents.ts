@@ -66,6 +66,10 @@ function agentEvent(params: Record<string, unknown>): DeveloperSessionEvent | nu
   const event = params['event'];
   if (!threadId || !turnId || !isRecord(event)) return null;
 
+  if (event['type'] === 'reasoning-delta') {
+    const delta = readString(event, 'delta');
+    return delta ? { type: 'reasoning-delta', threadId, turnId, delta } : null;
+  }
   if (event['type'] === 'turn-diff') {
     return {
       type: 'turn-diff',

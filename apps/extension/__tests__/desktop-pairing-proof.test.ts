@@ -254,6 +254,16 @@ async function settled(predicate: () => boolean): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 5));
 }
 
+async function advanceUntilCounted(count: () => number, target: number): Promise<void> {
+  for (let step = 0; step < 200 && count() < target; step += 1) {
+    const before = count();
+    await vi.advanceTimersByTimeAsync(61_000);
+    const deadline = performance.now() + 250;
+    while (count() === before && performance.now() < deadline)
+      await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
 function clearStore(store: Record<string, unknown>): void {
   for (const key of Object.keys(store)) delete store[key];
 }
@@ -369,18 +379,14 @@ describe('command pickup after Desktop has been away', () => {
     await startWorker();
     await settled(() => polls >= 1);
 
-    for (let step = 0; step < 200 && polls < 3; step += 1) {
-      await vi.advanceTimersByTimeAsync(61_000);
-      await new Promise<void>((resolve) => setImmediate(resolve));
-    }
+    await advanceUntilCounted(() => polls, 3);
     const whileAway = polls;
     expect(whileAway).toBeGreaterThanOrEqual(3);
     expect(harness.localStore['agi_paired_desktop']).toMatchObject({ token: PAIR_TOKEN });
     expect(harness.ports[0]?.disconnect).not.toHaveBeenCalled();
 
     desktopRunning = true;
-    await vi.advanceTimersByTimeAsync(61_000);
-    await settled(() => polls > whileAway);
+    await advanceUntilCounted(() => polls, whileAway + 1);
     expect(polls).toBeGreaterThan(whileAway);
     const resumed = polls;
     await vi.advanceTimersByTimeAsync(10_000);

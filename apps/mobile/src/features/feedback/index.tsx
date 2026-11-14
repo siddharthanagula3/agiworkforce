@@ -1,5 +1,13 @@
 import { useState, useCallback, useMemo } from 'react';
-import { View, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import {
+  View,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -10,6 +18,8 @@ import { api } from '@/services/api';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { SUPPORT_EMAIL } from '@/src/features/support/contact';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 
@@ -19,8 +29,15 @@ const FEEDBACK_TYPES: Array<{ type: FeedbackType; label: string; icon: typeof Bu
   { type: 'general', label: 'General Feedback', icon: MessageCircle },
 ];
 
-const SETTINGS_RETURN_PATH = '/(app)/(tabs)/settings' as const;
+const SETTINGS_RETURN_PATH = '/(app)/settings' as const;
 const ABOUT_RETURN_PATH = '/(app)/about' as const;
+
+export function feedbackMailtoUrl(type: FeedbackType, message: string): string {
+  const label = FEEDBACK_TYPES.find((entry) => entry.type === type)?.label ?? 'Feedback';
+  const subject = encodeURIComponent(label);
+  const body = encodeURIComponent(message);
+  return `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+}
 
 function resolveReturnTo(value: unknown): typeof SETTINGS_RETURN_PATH | typeof ABOUT_RETURN_PATH {
   if (value === ABOUT_RETURN_PATH) return ABOUT_RETURN_PATH;
@@ -59,12 +76,22 @@ export default function FeedbackScreen() {
   const [type, setType] = useState<FeedbackType>('general');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const sendsByEmail = useChatAppModeStore((s) => s.appMode) !== 'cloud';
   const canSubmit = !sending && Boolean(message.trim());
 
   const handleSubmit = useCallback(async () => {
     const trimmed = message.trim();
     if (!trimmed) {
       Alert.alert('Empty Feedback', 'Please describe your feedback before submitting.');
+      return;
+    }
+
+    if (sendsByEmail) {
+      try {
+        await Linking.openURL(feedbackMailtoUrl(type, trimmed));
+      } catch {
+        Alert.alert('No email app', `Send your feedback to ${SUPPORT_EMAIL}.`);
+      }
       return;
     }
 
@@ -86,7 +113,7 @@ export default function FeedbackScreen() {
     } finally {
       setSending(false);
     }
-  }, [appeal, type, message, router, returnTo]);
+  }, [appeal, type, message, router, returnTo, sendsByEmail]);
 
   const handleBack = useGoBack(returnTo);
 
@@ -251,7 +278,10 @@ export default function FeedbackScreen() {
             onPress={handleSubmit}
             disabled={!canSubmit}
             accessibilityRole="button"
-            accessibilityLabel={sending ? 'Sending feedback' : 'Submit feedback'}
+            accessibilityLabel={
+              sending ? 'Sending feedback' : sendsByEmail ? 'Email feedback' : 'Submit feedback'
+            }
+            accessibilityHint={sendsByEmail ? 'Opens your email app' : undefined}
             accessibilityState={{ disabled: !canSubmit }}
             style={{ width: '100%' }}
           >
@@ -280,7 +310,7 @@ export default function FeedbackScreen() {
                     fontWeight: '600',
                   }}
                 >
-                  {sending ? 'Sending...' : 'Submit Feedback'}
+                  {sending ? 'Sending...' : sendsByEmail ? 'Email Feedback' : 'Submit Feedback'}
                 </Text>
               </View>
             )}

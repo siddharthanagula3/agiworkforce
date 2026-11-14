@@ -268,7 +268,7 @@ export default function ScanScreen() {
             className="text-center text-sm mt-2 leading-5"
             style={{ color: c.cameraOverlayTextMuted }}
           >
-            Allow camera access to scan and extract text from documents, signs, and screens.
+            Allow camera access to scan and extract text.
           </Text>
           <View style={styles.permissionButtons}>
             <PressableBox

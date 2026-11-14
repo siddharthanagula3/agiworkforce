@@ -42,7 +42,7 @@ type LoadState =
 
 const LOAD_FAILED_MESSAGE = 'Check your connection and try again.';
 const INCOMPLETE_LIST_MESSAGE =
-  'This list may not include every link you shared. Older links stay open until they expire.';
+  'Some older links may be missing. They stay open until they expire.';
 const REVOKE_FAILED_MESSAGE =
   'Could not confirm whether the link was revoked. Refresh the list before trying again.';
 

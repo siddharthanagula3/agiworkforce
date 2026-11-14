@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Alert, Share, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Check, ChevronRight, Copy, Share2, TriangleAlert } from 'lucide-react-native';
@@ -32,7 +32,7 @@ function firstLine(output: string): string {
   return output.split('\n')[0]?.trim() ?? '';
 }
 
-function Disclosure({
+export function CodeDisclosure({
   label,
   expanded,
   failed,
@@ -71,7 +71,7 @@ function Disclosure({
   );
 }
 
-function OutputBlock({ text, failed }: { text: string; failed: boolean }) {
+export function CodeOutputBlock({ text, failed }: { text: string; failed: boolean }) {
   const colors = useThemeColors();
 
   return (
@@ -103,7 +103,7 @@ function StepRow({ step }: { step: CloudCodeAgentStep }) {
 
   return (
     <View>
-      <Disclosure
+      <CodeDisclosure
         label={step.label ?? step.toolName}
         expanded={expanded}
         failed={step.isError}
@@ -114,7 +114,9 @@ function StepRow({ step }: { step: CloudCodeAgentStep }) {
           {summary}
         </Text>
       ) : null}
-      {expanded && step.output ? <OutputBlock text={step.output} failed={step.isError} /> : null}
+      {expanded && step.output ? (
+        <CodeOutputBlock text={step.output} failed={step.isError} />
+      ) : null}
     </View>
   );
 }
@@ -127,7 +129,7 @@ function CommandRow({ entry }: { entry: CloudCodeTerminalEntry }) {
 
   return (
     <View>
-      <Disclosure
+      <CodeDisclosure
         label={entry.command}
         expanded={expanded}
         failed={failed}
@@ -140,8 +142,8 @@ function CommandRow({ entry }: { entry: CloudCodeTerminalEntry }) {
       ) : null}
       {expanded ? (
         <View style={{ gap: 6 }}>
-          {entry.stdout ? <OutputBlock text={entry.stdout} failed={false} /> : null}
-          {entry.stderr ? <OutputBlock text={entry.stderr} failed /> : null}
+          {entry.stdout ? <CodeOutputBlock text={entry.stdout} failed={false} /> : null}
+          {entry.stderr ? <CodeOutputBlock text={entry.stderr} failed /> : null}
           <Text
             variant="mono"
             style={{
@@ -164,7 +166,7 @@ function CommandGroup({ entries }: { entries: CloudCodeTerminalEntry[] }) {
 
   return (
     <View>
-      <Disclosure
+      <CodeDisclosure
         label={cloudCodeCommandRanLabel(entries.length)}
         expanded={expanded}
         failed={false}
@@ -205,7 +207,7 @@ export function CloudCodeTaskBubble({ text }: { text: string }) {
   );
 }
 
-function ReplyActionButton({
+export function CodeReplyActionButton({
   label,
   icon: Icon,
   color,
@@ -229,7 +231,7 @@ function ReplyActionButton({
   );
 }
 
-function ReplyActions({ text }: { text: string }) {
+export function CodeReplyActions({ text, extra }: { text: string; extra?: ReactNode }) {
   const colors = useThemeColors();
   const { status, copy } = useCopyAction();
   const copyColor =
@@ -252,18 +254,19 @@ function ReplyActions({ text }: { text: string }) {
       accessibilityLabel={CLOUD_CODE_REPLY_COPY.actions}
       style={{ flexDirection: 'row', alignItems: 'center', marginLeft: -10 }}
     >
-      <ReplyActionButton
+      <CodeReplyActionButton
         label={copyControlLabel(status, CLOUD_CODE_REPLY_COPY.copy)}
         icon={status === 'copied' ? Check : status === 'failed' ? TriangleAlert : Copy}
         color={copyColor}
         onPress={() => void copy(text)}
       />
-      <ReplyActionButton
+      <CodeReplyActionButton
         label={CLOUD_CODE_REPLY_COPY.share}
         icon={Share2}
         color={colors.textMuted}
         onPress={() => void share()}
       />
+      {extra}
     </View>
   );
 }
@@ -290,7 +293,7 @@ function Reply({
           {CLOUD_CODE_STOP_REASON_LABELS[stopReason]}
         </Text>
       ) : null}
-      {text.trim() ? <ReplyActions text={text} /> : null}
+      {text.trim() ? <CodeReplyActions text={text} /> : null}
     </View>
   );
 }

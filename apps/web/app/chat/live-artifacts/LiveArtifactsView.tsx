@@ -203,12 +203,14 @@ export function LiveArtifactsView() {
   return (
     <section
       data-design="agi"
-      className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 sm:py-12"
+      className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-6 px-4 pt-6 pb-8 sm:px-6 sm:py-12"
     >
       <header className="flex flex-col gap-1">
-        <h1 className="text-h2 text-foreground">Live artifacts</h1>
+        <h1 className="text-h2 text-foreground max-md:text-display max-md:font-medium">
+          Live artifacts
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Artifacts that refresh with current data from your connected apps each time you open them.
+          Artifacts that refresh with data from your connected apps.
         </p>
       </header>
 
@@ -237,7 +239,7 @@ export function LiveArtifactsView() {
         <>
           {state.artifacts.length === 0 ? (
             <p className="text-sm text-muted-foreground" data-testid="live-artifacts-empty">
-              No live artifacts yet. Open an artifact that reads your connected apps and allow it.
+              No live artifacts yet. Allow an artifact that reads your connected apps.
             </p>
           ) : null}
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Live artifacts">

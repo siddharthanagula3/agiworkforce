@@ -69,7 +69,7 @@ export default function SafetySecurityScreen() {
     <SettingsScreenShell title="Safety & Security">
       <SettingsInfo
         title="Content safeguards"
-        body="Choose stricter safeguards independently from device access and operating-system permissions."
+        body="Stricter filtering, separate from device lock and permissions."
         icon={EyeOff}
       />
       <SettingsGroup>
@@ -77,8 +77,8 @@ export default function SafetySecurityScreen() {
           label="Reduce sensitive content"
           description={
             minorMode
-              ? 'Required by age settings. It stays on while minor-safe mode is active.'
-              : 'Filter clearly explicit and harmful requests before they reach Local or Cloud models.'
+              ? 'Required by age settings while minor-safe mode is on.'
+              : 'Filters clearly explicit and harmful requests in Local and Cloud chats.'
           }
           icon={EyeOff}
           value={strictContentFilterEnabled}

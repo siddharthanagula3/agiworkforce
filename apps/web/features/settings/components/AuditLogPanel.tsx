@@ -79,7 +79,7 @@ export function AuditLogPanel() {
             onClick={() => void logsQuery.refetch()}
             disabled={logsQuery.isFetching}
             aria-label="Refresh security activity"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 pointer-coarse:h-11 pointer-coarse:w-11"
           >
             {logsQuery.isFetching ? (
               <AgiMark spinning className="h-3.5 w-3.5" aria-hidden="true" />
@@ -141,7 +141,7 @@ export function AuditLogPanel() {
             onClick={() => setOffset((value) => Math.max(0, value - PAGE_SIZE))}
             disabled={offset === 0 || logsQuery.isFetching}
             aria-label="Previous security activity page"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11"
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -150,7 +150,7 @@ export function AuditLogPanel() {
             onClick={() => setOffset((value) => value + PAGE_SIZE)}
             disabled={!hasMore || logsQuery.isFetching}
             aria-label="Next security activity page"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11"
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
           </button>
