@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { citationPublisherDomain, isRoutingRedirectUrl } from '../citationPublisher';
+import {
+  CITATION_SNIPPET_MAX_CHARS,
+  citationPublishedLabel,
+  citationPublisherDomain,
+  citationRetrievedLabel,
+  citationSnippet,
+  isRoutingRedirectUrl,
+} from '../citationPublisher';
 
 const GROUNDING_REDIRECT =
   'https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQF8x2Kq';
@@ -81,5 +88,40 @@ describe('isRoutingRedirectUrl', () => {
     ['garbage', 'not a url'],
   ])('does not treat %s as a router', (_label, url) => {
     expect(isRoutingRedirectUrl(url)).toBe(false);
+  });
+});
+
+describe('citation hover labels', () => {
+  const dateLabel = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+
+  it('collapses whitespace and caps the snippet at the shared length', () => {
+    expect(citationSnippet({ snippet: '  one\n\n two  ' })).toBe('one two');
+    expect(citationSnippet({ snippet: '   ' })).toBeUndefined();
+    const long = citationSnippet({ snippet: 'word '.repeat(80) });
+    expect(long?.endsWith('\u2026')).toBe(true);
+    expect(long?.length).toBeLessThanOrEqual(CITATION_SNIPPET_MAX_CHARS + 1);
+    expect(CITATION_SNIPPET_MAX_CHARS).toBe(180);
+  });
+
+  it('formats a parseable published date and keeps a short relative phrase', () => {
+    expect(citationPublishedLabel({ publishedDate: '2026-03-04T12:00:00Z' })).toBe(
+      dateLabel('2026-03-04T12:00:00Z'),
+    );
+    expect(citationPublishedLabel({ publishedDate: '3 days ago' })).toBe('3 days ago');
+    expect(citationPublishedLabel({ publishedDate: 'x'.repeat(40) })).toBeUndefined();
+    expect(citationPublishedLabel({})).toBeUndefined();
+  });
+
+  it('labels when the page was retrieved, only for a real instant', () => {
+    expect(citationRetrievedLabel({ retrievedAt: '2026-05-06T08:00:00Z' })).toBe(
+      `Retrieved ${dateLabel('2026-05-06T08:00:00Z')}`,
+    );
+    expect(citationRetrievedLabel({ retrievedAt: 'yesterday' })).toBeUndefined();
+    expect(citationRetrievedLabel({})).toBeUndefined();
   });
 });

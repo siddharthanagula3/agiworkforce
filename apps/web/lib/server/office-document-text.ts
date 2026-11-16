@@ -20,6 +20,30 @@ export const MAX_OFFICE_TEXT_CHARS = MAX_FILE_TEXT_CHARS;
 const MAX_SHEET_ROWS = 5_000;
 const MAX_SLIDES = 200;
 
+/**
+ * How an archive is sized before anything inflates. `all-members` counts every
+ * member's declared size, as project knowledge and chat have always done;
+ * `text-parts` counts only the XML parts text is read from, so a deck heavy
+ * with media is still read and its media are never inflated; `per-member`
+ * leaves the total to a caller that checks each member as it reads it.
+ */
+export type OfficeArchiveSizing = 'all-members' | 'text-parts' | 'per-member';
+
+export interface OfficeDocumentTextOptions {
+  maxSlides?: number;
+  maxSheetRows?: number;
+  maxChars?: number;
+  sizing?: OfficeArchiveSizing;
+  /** Filled in by a presentation read: the slides past `maxSlides` that were left unread. */
+  coverage?: { slidesOmitted: number };
+}
+
+const TEXT_PART = /\.(?:xml|rels)$/i;
+
+export function isOfficeTextPart(path: string): boolean {
+  return TEXT_PART.test(path);
+}
+
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const PPTX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -85,15 +109,15 @@ export function officeDocumentKind(fileName: string, mimeType: string): OfficeDo
   return null;
 }
 
-function boundText(value: string): string {
+function boundText(value: string, maxChars: number): string {
   const normalized = value
     .replace(/\r\n?/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return truncateExtractedText(normalized, MAX_OFFICE_TEXT_CHARS);
+  return truncateExtractedText(normalized, maxChars);
 }
 
-function decodeXmlEntities(value: string): string {
+export function decodeXmlEntities(value: string): string {
   return value
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -145,12 +169,16 @@ function htmlToText(html: string): string {
   return lines.join('\n');
 }
 
-interface BoundedZip {
+export interface BoundedZip {
   zip: JSZip;
   budget: DecompressionBudget;
 }
 
-async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
+export async function openOfficeArchive(
+  data: Buffer,
+  filename: string,
+  sizing: OfficeArchiveSizing = 'all-members',
+): Promise<BoundedZip> {
   if (isEncryptedOfficeContainer(data)) {
     throw new OfficeDocumentUnreadableError(filename, 'encrypted');
   }
@@ -174,8 +202,13 @@ async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
   try {
     budget.admitMembers(entries.length);
     let declared = 0;
-    for (const entry of entries) declared += declaredMemberSize(entry);
-    if (declared > budget.ceiling) throw new DecompressionLimitError('total_bytes');
+    for (const entry of entries) {
+      if (sizing === 'text-parts' && !isOfficeTextPart(entry.name)) continue;
+      declared += declaredMemberSize(entry);
+    }
+    if (sizing !== 'per-member' && declared > budget.ceiling) {
+      throw new DecompressionLimitError('total_bytes');
+    }
   } catch (error) {
     if (error instanceof DecompressionLimitError) {
       throw new OfficeDocumentUnreadableError(filename, 'archive_bomb');
@@ -186,21 +219,70 @@ async function readZip(data: Buffer, filename: string): Promise<BoundedZip> {
   return { zip, budget };
 }
 
-async function entryText(bounded: BoundedZip, path: string): Promise<string | null> {
+export async function officeArchiveEntryText(
+  bounded: BoundedZip,
+  path: string,
+): Promise<string | null> {
   const entry = bounded.zip.file(path);
   if (!entry) return null;
   const bytes = await readArchiveMember(entry, bounded.budget);
   return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
 }
 
-function xmlTextRuns(xml: string, tag: string): string {
-  return [...xml.matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'g'))]
-    .map((match) => decodeXmlEntities(match[1] ?? ''))
-    .join('');
+function isWordCharacter(code: number): boolean {
+  return (
+    (code >= 0x30 && code <= 0x39) ||
+    (code >= 0x41 && code <= 0x5a) ||
+    (code >= 0x61 && code <= 0x7a) ||
+    code === 0x5f
+  );
 }
 
-async function extractDocx(data: Buffer, filename: string): Promise<string> {
-  const bounded = await readZip(data, filename);
+/**
+ * The bodies `<tag\b[^>]*>([\s\S]*?)</tag>` would match, found by index scans:
+ * once an opener has no closing tag after it, no later one has either, so the
+ * scan stops where the pattern would rescan the rest of the XML per opener.
+ */
+function* xmlElementBodies(xml: string, tag: string): Generator<string> {
+  const open = `<${tag}`;
+  const close = `</${tag}>`;
+  let position = 0;
+  for (;;) {
+    const start = xml.indexOf(open, position);
+    if (start === -1) return;
+    const nameEnd = start + open.length;
+    if (nameEnd >= xml.length || isWordCharacter(xml.charCodeAt(nameEnd))) {
+      position = start + 1;
+      continue;
+    }
+    const tagEnd = xml.indexOf('>', nameEnd);
+    if (tagEnd === -1) return;
+    const closeAt = xml.indexOf(close, tagEnd + 1);
+    if (closeAt === -1) return;
+    yield xml.slice(tagEnd + 1, closeAt);
+    position = closeAt + close.length;
+  }
+}
+
+export function xmlTextRuns(xml: string, tag: string): string {
+  let text = '';
+  for (const body of xmlElementBodies(xml, tag)) text += decodeXmlEntities(body);
+  return text;
+}
+
+function slideParagraphs(xml: string): string[] {
+  return [...xmlElementBodies(xml, 'a:p')].map((body) =>
+    xmlTextRuns(body, 'a:t').replace(/\s+/g, ' ').trim(),
+  );
+}
+
+async function extractDocx(
+  data: Buffer,
+  filename: string,
+  sizing: OfficeArchiveSizing,
+): Promise<string> {
+  const bounded = await openOfficeArchive(data, filename, sizing);
+  const textPartsOnly = sizing === 'text-parts';
   try {
     const accepted = new JSZip();
     const comment =
@@ -208,6 +290,7 @@ async function extractDocx(data: Buffer, filename: string): Promise<string> {
         ? bounded.zip.comment
         : undefined;
     for (const entry of Object.values(bounded.zip.files)) {
+      if (textPartsOnly && !entry.dir && !isOfficeTextPart(entry.name)) continue;
       const bytes = entry.dir ? new Uint8Array() : await readArchiveMember(entry, bounded.budget);
       accepted.file(entry.name, bytes, {
         dir: entry.dir,
@@ -224,7 +307,12 @@ async function extractDocx(data: Buffer, filename: string): Promise<string> {
       compression: 'STORE',
       comment,
     });
-    const result = await mammoth.convertToHtml({ buffer });
+    const result = await mammoth.convertToHtml(
+      { buffer },
+      textPartsOnly
+        ? { convertImage: mammoth.images.imgElement(() => Promise.resolve({ src: '' })) }
+        : undefined,
+    );
     return htmlToText(result.value);
   } catch (error) {
     if (
@@ -263,12 +351,17 @@ interface Sheet {
   omitted: boolean;
 }
 
-async function readXlsxSheets(data: Buffer, filename: string): Promise<Sheet[]> {
-  const bounded = await readZip(data, filename);
-  const workbook = await entryText(bounded, 'xl/workbook.xml');
+async function readXlsxSheets(
+  data: Buffer,
+  filename: string,
+  maxSheetRows: number = MAX_SHEET_ROWS,
+  sizing: OfficeArchiveSizing = 'all-members',
+): Promise<Sheet[]> {
+  const bounded = await openOfficeArchive(data, filename, sizing);
+  const workbook = await officeArchiveEntryText(bounded, 'xl/workbook.xml');
   if (!workbook) throw new OfficeDocumentUnreadableError(filename);
 
-  const relationships = (await entryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
+  const relationships = (await officeArchiveEntryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
   const targetByRelationshipId = new Map<string, string>();
   for (const match of relationships.matchAll(/<Relationship\b[^>]*>/g)) {
     const id = /Id="([^"]+)"/.exec(match[0])?.[1];
@@ -276,7 +369,7 @@ async function readXlsxSheets(data: Buffer, filename: string): Promise<Sheet[]> 
     if (id && target) targetByRelationshipId.set(id, target.replace(/^\/?xl\//, ''));
   }
 
-  const sharedStringsXml = (await entryText(bounded, 'xl/sharedStrings.xml')) ?? '';
+  const sharedStringsXml = (await officeArchiveEntryText(bounded, 'xl/sharedStrings.xml')) ?? '';
   const sharedStrings = [...sharedStringsXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((match) =>
     xmlTextRuns(match[1] ?? '', 't'),
   );
@@ -291,14 +384,14 @@ async function readXlsxSheets(data: Buffer, filename: string): Promise<Sheet[]> 
     const relationshipId = /r:id="([^"]+)"/.exec(sheetMatch[0])?.[1];
     const target = relationshipId ? targetByRelationshipId.get(relationshipId) : undefined;
     const sheetXml =
-      (target ? await entryText(bounded, `xl/${target}`) : null) ??
-      (await entryText(bounded, `xl/worksheets/sheet${sheetIndex}.xml`));
+      (target ? await officeArchiveEntryText(bounded, `xl/${target}`) : null) ??
+      (await officeArchiveEntryText(bounded, `xl/worksheets/sheet${sheetIndex}.xml`));
     if (!sheetXml) continue;
 
     const rows: SheetRow[] = [];
     let omitted = false;
     for (const rowMatch of sheetXml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
-      if (rows.length >= MAX_SHEET_ROWS) {
+      if (rows.length >= maxSheetRows) {
         omitted = true;
         break;
       }
@@ -345,8 +438,13 @@ function sheetCellText(cell: SheetCell): string {
   return `${cell.column}: =${cell.formula}${cell.value ? ` (${cell.value})` : ''}`;
 }
 
-async function extractXlsx(data: Buffer, filename: string): Promise<string> {
-  const sheets = await readXlsxSheets(data, filename);
+async function extractXlsx(
+  data: Buffer,
+  filename: string,
+  maxSheetRows: number,
+  sizing: OfficeArchiveSizing,
+): Promise<string> {
+  const sheets = await readXlsxSheets(data, filename, maxSheetRows, sizing);
   return sheets
     .map((sheet) => {
       const rows = sheet.rows.map(
@@ -411,34 +509,29 @@ export async function extractSpreadsheetTable(
   }
 }
 
-async function extractPptx(data: Buffer, filename: string): Promise<string> {
-  const bounded = await readZip(data, filename);
-  const slidePaths = Object.keys(bounded.zip.files)
+async function extractPptx(
+  data: Buffer,
+  filename: string,
+  maxSlides: number,
+  sizing: OfficeArchiveSizing,
+  coverage?: { slidesOmitted: number },
+): Promise<string> {
+  const bounded = await openOfficeArchive(data, filename, sizing);
+  const allSlidePaths = Object.keys(bounded.zip.files)
     .filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
-    .sort((a, b) => rowNumber(a) - rowNumber(b))
-    .slice(0, MAX_SLIDES);
+    .sort((a, b) => rowNumber(a) - rowNumber(b));
+  const slidePaths = allSlidePaths.slice(0, maxSlides);
   if (slidePaths.length === 0) throw new OfficeDocumentUnreadableError(filename);
+  if (coverage) coverage.slidesOmitted = allSlidePaths.length - slidePaths.length;
 
   const sections: string[] = [];
   for (const [index, path] of slidePaths.entries()) {
-    const slideXml = (await entryText(bounded, path)) ?? '';
-    const lines = [...slideXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
-      .map((match) =>
-        xmlTextRuns(match[1] ?? '', 'a:t')
-          .replace(/\s+/g, ' ')
-          .trim(),
-      )
-      .filter(Boolean);
+    const slideXml = (await officeArchiveEntryText(bounded, path)) ?? '';
+    const lines = slideParagraphs(slideXml).filter(Boolean);
     const slideNumber = rowNumber(path);
     const notesXml =
-      (await entryText(bounded, `ppt/notesSlides/notesSlide${slideNumber}.xml`)) ?? '';
-    const notes = [...notesXml.matchAll(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g)]
-      .map((match) =>
-        xmlTextRuns(match[1] ?? '', 'a:t')
-          .replace(/\s+/g, ' ')
-          .trim(),
-      )
-      .filter((line) => line && line !== String(slideNumber));
+      (await officeArchiveEntryText(bounded, `ppt/notesSlides/notesSlide${slideNumber}.xml`)) ?? '';
+    const notes = slideParagraphs(notesXml).filter((line) => line && line !== String(slideNumber));
     sections.push(
       [
         `## Slide ${index + 1}`,
@@ -454,15 +547,23 @@ export async function extractOfficeDocumentText(
   data: Buffer,
   fileName: string,
   kind: OfficeDocumentKind,
+  options: OfficeDocumentTextOptions = {},
 ): Promise<string> {
+  const sizing = options.sizing ?? 'all-members';
   try {
     const text =
       kind === 'docx'
-        ? await extractDocx(data, fileName)
+        ? await extractDocx(data, fileName, sizing)
         : kind === 'xlsx'
-          ? await extractXlsx(data, fileName)
-          : await extractPptx(data, fileName);
-    return boundText(text);
+          ? await extractXlsx(data, fileName, options.maxSheetRows ?? MAX_SHEET_ROWS, sizing)
+          : await extractPptx(
+              data,
+              fileName,
+              options.maxSlides ?? MAX_SLIDES,
+              sizing,
+              options.coverage,
+            );
+    return boundText(text, options.maxChars ?? MAX_OFFICE_TEXT_CHARS);
   } catch (error) {
     if (error instanceof DecompressionLimitError) {
       throw new OfficeDocumentUnreadableError(fileName, 'archive_bomb');

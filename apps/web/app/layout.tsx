@@ -17,6 +17,7 @@ import { SupportWidgetEntry } from '@/features/support/components/SupportWidgetE
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
 import { BrowserIdentityBoundary } from './BrowserIdentityBoundary';
+import { EmbeddedPageProvider } from '@shared/components/layout/EmbeddedPage';
 import { OG_IMAGE, SITE_LEGAL_NAME, SITE_NAME, SITE_URL } from '@/lib/seo/site';
 import {
   organizationSchema,
@@ -174,25 +175,27 @@ export default async function RootLayout({
          * row on /cookies in the same change, not a silent re-enable.
          */}
         <BrowserIdentityBoundary>
-          <SkipLinks />
-          {/*
-           * No landmark here. Each route owns its `main`: the marketing pages
-           * render `<main id="main-content">`, `WebAppShell` and the chat
-           * column carry `role="main"` with the same id. A wrapper landmark
-           * at this level sat around the sidebar navigation and doubled
-           * every page that already had one.
-           */}
-          <Providers nonce={nonce}>{children}</Providers>
-          {/*
-           * The banner is the only thing that can turn analytics on, and
-           * `AnalyticsConsentGate` is the only thing that may mount GA4, as the
-           * /cookies policy promises ("Analytics is opt-in"). The single switch
-           * for that position is `ANALYTICS_REQUIRES_CONSENT` in
-           * shared/lib/cookie-consent.ts.
-           */}
-          <CookieConsent />
-          <SupportWidgetEntry />
-          {gaTrackingId && <AnalyticsConsentGate trackingId={gaTrackingId} nonce={nonce} />}
+          <EmbeddedPageProvider>
+            <SkipLinks />
+            {/*
+             * No landmark here. Each route owns its `main`: the marketing pages
+             * render `<main id="main-content">`, `WebAppShell` and the chat
+             * column carry `role="main"` with the same id. A wrapper landmark
+             * at this level sat around the sidebar navigation and doubled
+             * every page that already had one.
+             */}
+            <Providers nonce={nonce}>{children}</Providers>
+            {/*
+             * The banner is the only thing that can turn analytics on, and
+             * `AnalyticsConsentGate` is the only thing that may mount GA4, as the
+             * /cookies policy promises ("Analytics is opt-in"). The single switch
+             * for that position is `ANALYTICS_REQUIRES_CONSENT` in
+             * shared/lib/cookie-consent.ts.
+             */}
+            <CookieConsent />
+            <SupportWidgetEntry />
+            {gaTrackingId && <AnalyticsConsentGate trackingId={gaTrackingId} nonce={nonce} />}
+          </EmbeddedPageProvider>
         </BrowserIdentityBoundary>
       </body>
     </html>

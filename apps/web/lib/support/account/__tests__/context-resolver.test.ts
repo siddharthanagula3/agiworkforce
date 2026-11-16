@@ -111,6 +111,47 @@ describe('resolveSupportAccountContext', () => {
     expect(context.plan.subscriptionSource).toBe('stripe');
   });
 
+  describe('plan period end', () => {
+    const PERIOD_END = '2026-12-01T00:00:00.000Z';
+
+    it('gives a purchased plan its period end', async () => {
+      mocks.getSubscription.mockResolvedValue({
+        plan_tier: 'pro',
+        status: 'active',
+        current_period_end: new Date(PERIOD_END),
+        cancel_at_period_end: false,
+        stripe_subscription_id: 'sub_1',
+      });
+      const context = await resolveSupportAccountContext(callerDb, USER);
+      expect(context.plan.subscriptionSource).toBe('stripe');
+      expect(context.plan.currentPeriodEnd).toBe(PERIOD_END);
+    });
+
+    it('gives a granted plan no period end, since nothing enforces it', async () => {
+      mocks.getSubscription.mockResolvedValue({
+        plan_tier: 'pro',
+        status: 'active',
+        current_period_end: new Date(PERIOD_END),
+        cancel_at_period_end: false,
+      });
+      const context = await resolveSupportAccountContext(callerDb, USER);
+      expect(context.plan.subscriptionSource).toBe('manual');
+      expect(context.plan.currentPeriodEnd).toBeNull();
+    });
+
+    it('gives a granted plan that is set to end its end date', async () => {
+      mocks.getSubscription.mockResolvedValue({
+        plan_tier: 'pro',
+        status: 'active',
+        current_period_end: new Date(PERIOD_END),
+        cancel_at_period_end: true,
+      });
+      const context = await resolveSupportAccountContext(callerDb, USER);
+      expect(context.plan.subscriptionSource).toBe('manual');
+      expect(context.plan.currentPeriodEnd).toBe(PERIOD_END);
+    });
+  });
+
   it('reports only percentages for usage', async () => {
     const context = await resolveSupportAccountContext(callerDb, USER);
     expect(context.usage).toEqual({

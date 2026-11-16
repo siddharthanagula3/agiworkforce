@@ -8,6 +8,7 @@ import {
   type BillingPlanCapability,
   type BillingPlanTier,
 } from '@agiworkforce/types';
+import { STATUTORY_RECORD_RETENTION_DAYS } from '@/lib/billing/financial-record-retention';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import {
@@ -57,6 +58,7 @@ const FACT_TOKENS: Readonly<Record<string, string>> = Object.freeze({
   'AVAILABILITY.connectorApps': connectorsReleased() ? '' : CONNECTORS_COMING_SOON_DETAIL,
   'SURFACES.names': joinSurfaceNames(SURFACE_IDS.map((surface) => SURFACE_NAMES[surface])),
   'CONTACT.email': CONTACT_EMAIL,
+  'RETENTION.statutoryRecordYears': String(Math.round(STATUTORY_RECORD_RETENTION_DAYS / 365.25)),
 });
 
 const TOKEN_PATTERN = /\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g;

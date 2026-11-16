@@ -5,12 +5,18 @@ import { View, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { HardDrive, Trash2, Download, FileDown, AlertTriangle, Signal } from 'lucide-react-native';
-import { cacheDirectory, deleteAsync, getFreeDiskStorageAsync } from 'expo-file-system/legacy';
+import {
+  cacheDirectory,
+  deleteAsync,
+  getFreeDiskStorageAsync,
+  getTotalDiskCapacityAsync,
+} from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
 import { Separator } from '@/components/ui/Separator';
 import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { listInstalledModels, deleteInstalledModel } from '@/storage/installedModels';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import {
@@ -22,7 +28,10 @@ import {
 import { wipeAllLocalData, type DsarExportProgress } from '@/services/dsarExport';
 import { resetLocalInMemoryState } from '@/src/features/settings/data-controls/localDataSnapshot';
 import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { StorageScopeNotice } from '@/src/features/settings/StorageScopeNotice';
+import { StorageMeterBar } from '@/src/features/settings/StorageMeterBar';
+import { StorageBreakdownCard } from '@/src/features/settings/StorageBreakdownCard';
 import { SettingsScreenShell } from '@/src/features/settings/Common';
 import type { InstalledModel } from '@/storage/types';
 
@@ -35,13 +44,6 @@ type StorageReturnPath = (typeof STORAGE_RETURN_PATHS)[number];
 
 function isStorageReturnPath(value: string | undefined): value is StorageReturnPath {
   return STORAGE_RETURN_PATHS.includes(value as StorageReturnPath);
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 type Reading<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'failed' };
@@ -57,7 +59,55 @@ function readingOf<T>(result: PromiseSettledResult<T>): Reading<T> {
 function formatReading(reading: Reading<number>): string {
   if (reading.status === 'loading') return 'Measuring…';
   if (reading.status === 'failed') return 'Unavailable';
-  return formatBytes(reading.value);
+  return formatAttachmentSize(reading.value);
+}
+
+function AgiStorageSummary({
+  models,
+  cache,
+  capacity,
+}: {
+  models: Reading<number>;
+  cache: Reading<number>;
+  capacity: Reading<number>;
+}) {
+  const c = useThemeColors();
+  if (models.status === 'failed' || cache.status === 'failed') return null;
+  const textStyle = { color: c.textPrimary, fontSize: typeScale.body, fontWeight: '600' as const };
+  if (models.status !== 'ready' || cache.status !== 'ready') {
+    return (
+      <Text testID="storage-agi-summary" style={textStyle}>
+        Measuring…
+      </Text>
+    );
+  }
+  const agiBytes = models.value + cache.value;
+  if (capacity.status !== 'ready') {
+    return (
+      <Text testID="storage-agi-summary" style={textStyle}>
+        {`AGI uses ${formatAttachmentSize(agiBytes)} on this phone`}
+      </Text>
+    );
+  }
+  const summary = `AGI uses ${formatAttachmentSize(agiBytes)} of ${formatAttachmentSize(capacity.value)} on this phone`;
+  return (
+    <View style={{ gap: 8 }}>
+      <Text
+        testID="storage-agi-summary"
+        accessible={false}
+        importantForAccessibility="no"
+        style={textStyle}
+      >
+        {summary}
+      </Text>
+      <StorageMeterBar
+        testID="storage-agi-meter"
+        usedBytes={agiBytes}
+        totalBytes={capacity.value}
+        label={summary}
+      />
+    </View>
+  );
 }
 
 function exportStageLabel(stage: DsarExportProgress['stage']): string {
@@ -90,6 +140,7 @@ export default function StorageManagerScreen() {
   const [modelStorageBytes, setModelStorageBytes] = useState<Reading<number>>(LOADING);
   const [cacheBytes, setCacheBytes] = useState<Reading<number>>(LOADING);
   const [freeBytes, setFreeBytes] = useState<number | null>(null);
+  const [capacityBytes, setCapacityBytes] = useState<Reading<number>>(LOADING);
   const latestLoad = useRef(0);
 
   const allowCellularDownloads = useModelInstallStore((s) => s.allowCellularDownloads);
@@ -101,6 +152,9 @@ export default function StorageManagerScreen() {
 
   const loadStorageInfo = useCallback(async (): Promise<boolean> => {
     const load = ++latestLoad.current;
+    void Promise.allSettled([getTotalDiskCapacityAsync()]).then(([diskCapacityBytes]) => {
+      if (load === latestLoad.current) setCapacityBytes(readingOf(diskCapacityBytes));
+    });
     const [installed, modelBytes, measuredCache, diskFreeBytes] = await Promise.allSettled([
       listInstalledModels(),
       getModelStorageBytes(),
@@ -124,6 +178,7 @@ export default function StorageManagerScreen() {
     setModels(LOADING);
     setModelStorageBytes(LOADING);
     setCacheBytes(LOADING);
+    setCapacityBytes(LOADING);
     void loadStorageInfo();
   }, [loadStorageInfo]);
 
@@ -273,6 +328,12 @@ export default function StorageManagerScreen() {
   return (
     <SettingsScreenShell title="Storage" backHref={backHref} overlay={wipeOverlay}>
       <View style={{ gap: 16 }}>
+        <AgiStorageSummary
+          models={displayedModelStorageBytes}
+          cache={cacheBytes}
+          capacity={capacityBytes}
+        />
+
         <StorageScopeNotice />
 
         <Card>
@@ -318,13 +379,15 @@ export default function StorageManagerScreen() {
                   className="text-sm font-medium"
                   style={{ color: c.textPrimary }}
                 >
-                  {formatBytes(freeBytes)}
+                  {formatAttachmentSize(freeBytes)}
                 </Text>
               </View>
             )}
             {deviceReadFailed ? retryButton : null}
           </View>
         </Card>
+
+        <StorageBreakdownCard />
 
         <Card>
           <View className="flex-row items-center gap-3">
@@ -356,7 +419,7 @@ export default function StorageManagerScreen() {
             </View>
             {installedModels.length > 0 && (
               <Text className="text-sm" style={{ color: c.textMuted }}>
-                Estimated {formatBytes(totalModelBytes)}
+                Estimated {formatAttachmentSize(totalModelBytes)}
               </Text>
             )}
           </View>
@@ -384,7 +447,7 @@ export default function StorageManagerScreen() {
                       {model.display_name}
                     </Text>
                     <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
-                      {model.runtime} · Estimated {formatBytes(model.size_bytes ?? 0)}
+                      {model.runtime} · Estimated {formatAttachmentSize(model.size_bytes ?? 0)}
                     </Text>
                   </View>
                   <Pressable

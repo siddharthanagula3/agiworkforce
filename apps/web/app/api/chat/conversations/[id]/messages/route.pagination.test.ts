@@ -90,6 +90,21 @@ describe('GET /api/chat/conversations/[id]/messages', () => {
     expect(params[1]).toBe(3);
   });
 
+  it('returns an answer stored with citation markup without it', async () => {
+    mocks.query.mockResolvedValueOnce([{ id: CONVERSATION_ID }]).mockResolvedValueOnce([
+      {
+        ...messageRow(1),
+        role: 'assistant',
+        content: 'Starship flew again. \uE200cite\uE202turn620734view2\uE201\n\nNext.',
+      },
+    ]);
+
+    const response = await GET(request(), context);
+    const body = (await response.json()) as { messages: Array<{ content: string }> };
+
+    expect(body.messages[0]?.content).toBe('Starship flew again. \n\nNext.');
+  });
+
   it('applies the cursor predicate in the same order as the sort', async () => {
     mocks.query
       .mockResolvedValueOnce([{ id: CONVERSATION_ID }])

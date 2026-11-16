@@ -99,6 +99,37 @@ describe('GET /api/library', () => {
     });
   });
 
+  it('offers a small thumbnail for a stored picture so drawing the grid is not a download', async () => {
+    const pictureId = '44444444-4444-4444-8444-444444444444';
+    const deletedId = '55555555-5555-4555-8555-555555555555';
+    mockQuery.mockResolvedValue([
+      makeRow({
+        id: pictureId,
+        kind: 'image',
+        mime_type: 'image/png',
+        metadata: { filename: 'chart.png', origin: 'uploaded' },
+      }),
+      makeRow(),
+      makeRow({
+        id: deletedId,
+        kind: 'image',
+        mime_type: 'image/jpeg',
+        metadata: { filename: 'old.jpg', origin: 'uploaded' },
+        deleted_at: '2026-07-02T00:00:00.000Z',
+      }),
+    ]);
+
+    const body = await parsedBody(await GET(makeRequest()));
+
+    const byId = new Map(body.items.map((item) => [item.id, item]));
+    expect(byId.get(pictureId)).toMatchObject({
+      uri: `/api/files/${pictureId}`,
+      thumbnail_uri: `/api/files/${pictureId}/thumbnail`,
+    });
+    expect(byId.get(ASSET_ID)?.thumbnail_uri).toBeUndefined();
+    expect(byId.get(deletedId)?.thumbnail_uri).toBeUndefined();
+  });
+
   it('scopes organization listing to the server-resolved active membership', async () => {
     const organizationId = '33333333-3333-4333-8333-333333333333';
     mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
@@ -277,6 +308,107 @@ describe('GET /api/library', () => {
       expect(res.status, query).toBe(400);
     }
     expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  describe('storage breakdown', () => {
+    const BREAKDOWN_MARKER = 'documents_bytes';
+    const DOCUMENT_BYTES = 38_797_312;
+    const IMAGE_BYTES = 303_038_464;
+
+    function breakdownCall(): [string, unknown[]] | undefined {
+      return mockQuery.mock.calls.find(([sql]) => String(sql).includes(BREAKDOWN_MARKER)) as
+        [string, unknown[]] | undefined;
+    }
+
+    function answerBreakdownWith(rows: Array<Record<string, unknown>>) {
+      mockQuery.mockImplementation(async (sql: string) =>
+        sql.includes(BREAKDOWN_MARKER) ? rows : [],
+      );
+    }
+
+    it('returns the bytes of documents and of images beside the storage meter', async () => {
+      answerBreakdownWith([{ documents_bytes: String(DOCUMENT_BYTES), images_bytes: IMAGE_BYTES }]);
+
+      const res = await GET(makeRequest());
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.storage_documents_bytes).toBe(DOCUMENT_BYTES);
+      expect(body.storage_images_bytes).toBe(IMAGE_BYTES);
+    });
+
+    it('reports zero for a kind the account has none of', async () => {
+      answerBreakdownWith([{ documents_bytes: '0', images_bytes: '0' }]);
+
+      const body = await (await GET(makeRequest())).json();
+
+      expect(body.storage_documents_bytes).toBe(0);
+      expect(body.storage_images_bytes).toBe(0);
+    });
+
+    it('sums only the live, non-temporary rows of the signed-in account and workspace', async () => {
+      const organizationId = '33333333-3333-4333-8333-333333333333';
+      mockGetUserScopedDb.mockResolvedValue({
+        db: { query: mockQuery },
+        userId: 'user-owner',
+        organizationId,
+      });
+      answerBreakdownWith([{ documents_bytes: 1, images_bytes: 2 }]);
+
+      await GET(makeRequest());
+
+      const call = breakdownCall();
+      expect(call).toBeDefined();
+      const [sql, params] = call as [string, unknown[]];
+      expect(sql).toContain('m.user_id = $1');
+      expect(sql).toContain('m.organization_id is not distinct from $2::uuid');
+      expect(sql).toContain('not m.temporary_chat');
+      expect(sql).toContain('m.deleted_at is null');
+      expect(params).toEqual(['user-owner', organizationId]);
+    });
+
+    it('counts pictures by mime type as well as kind, and leaves videos out of documents', async () => {
+      answerBreakdownWith([{ documents_bytes: 1, images_bytes: 2 }]);
+
+      await GET(makeRequest());
+
+      const [sql] = breakdownCall() as [string, unknown[]];
+      expect(sql).toContain("m.kind = 'image' or lower(m.mime_type) like 'image/%'");
+      expect(sql).toContain("m.kind = 'video' or lower(m.mime_type) like 'video/%'");
+    });
+
+    it('leaves the breakdown out when the sums could not be read, so no wrong size is shown', async () => {
+      mockQuery.mockImplementation(async (sql: string) => {
+        if (sql.includes(BREAKDOWN_MARKER)) throw new Error('connection terminated');
+        return [];
+      });
+
+      const res = await GET(makeRequest());
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).not.toHaveProperty('storage_documents_bytes');
+      expect(body).not.toHaveProperty('storage_images_bytes');
+    });
+
+    it('leaves the breakdown out when a sum is not a number', async () => {
+      answerBreakdownWith([{ documents_bytes: null, images_bytes: 'abc' }]);
+
+      const body = await (await GET(makeRequest())).json();
+
+      expect(body).not.toHaveProperty('storage_documents_bytes');
+      expect(body).not.toHaveProperty('storage_images_bytes');
+    });
+
+    it('does not repeat the sums for later pages or for the recently deleted bin', async () => {
+      answerBreakdownWith([{ documents_bytes: 1, images_bytes: 2 }]);
+
+      for (const query of ['?offset=25', '?deleted=true']) {
+        const body = await (await GET(makeRequest(query))).json();
+        expect(body, query).not.toHaveProperty('storage_documents_bytes');
+      }
+      expect(breakdownCall()).toBeUndefined();
+    });
   });
 
   it('reports a failed library read as a server error, not an empty library', async () => {

@@ -7,6 +7,7 @@ import {
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { applyAssistantFenceEdit } from '@agiworkforce/unified-chat/assistant-fence-edits';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { stripCitationMarkup } from '@agiworkforce/provider-protocol';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -146,7 +147,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     }
     if (message.busy)
       throw createError.conflict('Wait for this response to finish before editing.');
-    const content = applyAssistantFenceEdit(message.content, patch.fenceEdit);
+    const content = applyAssistantFenceEdit(stripCitationMarkup(message.content), patch.fenceEdit);
     if (content === null) {
       throw createError.conflict('This block changed. Reopen the chat before saving your edit.');
     }
@@ -172,7 +173,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({
       ok: true,
-      content: saved.content,
+      content: stripCitationMarkup(saved.content),
       editRevision: saved.edit_revision,
     });
   }

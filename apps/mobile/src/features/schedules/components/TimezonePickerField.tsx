@@ -5,6 +5,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { dialogPadding, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { PageSheetSafeArea } from '@/src/features/chat/components/ModalSafeArea';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 interface TimezonePickerFieldProps {
@@ -90,83 +91,85 @@ export function TimezonePickerField({
         accessibilityViewIsModal
         onRequestClose={() => setOpen(false)}
       >
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
-          <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <Text
-                accessibilityRole="header"
-                style={{
-                  flex: 1,
-                  color: colors.textPrimary,
-                  fontSize: typeScale.headline,
-                  fontWeight: '600',
-                }}
-              >
-                Time zone
-              </Text>
-              <Pressable
-                onPress={() => setOpen(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Close time zones"
-                style={{
-                  minWidth: 44,
-                  minHeight: 44,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <X size={18} color={colors.textMuted} />
-              </Pressable>
-            </View>
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search time zones"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityLabel="Search time zones"
-              style={{
-                minHeight: 44,
-                paddingHorizontal: 12,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: colors.border,
-                color: colors.textPrimary,
-                marginBottom: 8,
-              }}
-            />
-            <FlatList
-              data={filtered}
-              keyExtractor={(zone) => zone}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => choose(item)}
-                  accessibilityRole="button"
-                  accessibilityLabel={item.replace(/_/g, ' ')}
-                  accessibilityState={{ selected: item === value }}
+        <PageSheetSafeArea style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
+            <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <Text
+                  accessibilityRole="header"
                   style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    minHeight: 44,
-                    paddingVertical: 8,
-                    gap: 8,
+                    flex: 1,
+                    color: colors.textPrimary,
+                    fontSize: typeScale.headline,
+                    fontWeight: '600',
                   }}
                 >
-                  <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
-                    {item.replace(/_/g, ' ')}
-                    {item === deviceTimezone ? '  (this device)' : ''}
-                  </Text>
-                  <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
-                    {zoneOffsetLabel(item)}
-                  </Text>
-                  {item === value ? <Check size={16} color={colors.teal} /> : null}
+                  Time zone
+                </Text>
+                <Pressable
+                  onPress={() => setOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close time zones"
+                  style={{
+                    minWidth: 44,
+                    minHeight: 44,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X size={18} color={colors.textMuted} />
                 </Pressable>
-              )}
-            />
-          </View>
-        </KeyboardAvoidingView>
+              </View>
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search time zones"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                accessibilityLabel="Search time zones"
+                style={{
+                  minHeight: 44,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  color: colors.textPrimary,
+                  marginBottom: 8,
+                }}
+              />
+              <FlatList
+                data={filtered}
+                keyExtractor={(zone) => zone}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <Pressable
+                    onPress={() => choose(item)}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.replace(/_/g, ' ')}
+                    accessibilityState={{ selected: item === value }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      minHeight: 44,
+                      paddingVertical: 8,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}>
+                      {item.replace(/_/g, ' ')}
+                      {item === deviceTimezone ? '  (this device)' : ''}
+                    </Text>
+                    <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+                      {zoneOffsetLabel(item)}
+                    </Text>
+                    {item === value ? <Check size={16} color={colors.teal} /> : null}
+                  </Pressable>
+                )}
+              />
+            </View>
+          </KeyboardAvoidingView>
+        </PageSheetSafeArea>
       </Modal>
     </View>
   );

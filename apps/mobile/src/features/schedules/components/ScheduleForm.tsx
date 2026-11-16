@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { ChevronDown } from 'lucide-react-native';
@@ -11,11 +11,16 @@ import { RecurrencePicker } from './RecurrencePicker';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import { useThemeColors } from '@/src/ui/theme';
+import { spacing } from '@/src/ui/theme/tokens';
 import type { CreateScheduleInput, Schedule, RecurrenceType } from '../store';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
-import { isoToZonedDateInput, isoToZonedTimeInput, zonedDateAndTimeToIso } from '../timing';
+import {
+  isoToZonedDateInput,
+  isoToZonedTimeInput,
+  scheduleTimingProblem,
+  zonedDateAndTimeToIso,
+} from '../timing';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
-import { useUnsavedChangesGuard } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { TimezonePickerField } from './TimezonePickerField';
 import { ScheduleAccessSection } from './ScheduleAccessSection';
 
@@ -26,6 +31,7 @@ interface ScheduleFormProps {
   onDelete?: () => void;
   isLoading?: boolean;
   submitError?: string | null;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 function getDeviceTimezone(): string {
@@ -43,6 +49,7 @@ export function ScheduleForm({
   onDelete,
   isLoading = false,
   submitError,
+  onDirtyChange,
 }: ScheduleFormProps) {
   const colors = useThemeColors();
   const isEditing = Boolean(initialData?.id);
@@ -90,7 +97,10 @@ export function ScheduleForm({
   ]);
   const [initialDraft] = useState(draft);
   const [submittedDraft, setSubmittedDraft] = useState<string | null>(null);
-  useUnsavedChangesGuard(draft !== initialDraft && draft !== submittedDraft);
+  const dirty = draft !== initialDraft && draft !== submittedDraft;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const validate = useCallback((): {
     valid: boolean;
@@ -124,7 +134,7 @@ export function ScheduleForm({
             newErrors.scheduledAt = 'Choose a date and time in the future';
           }
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Enter a valid date and time';
+          const message = scheduleTimingProblem(error);
           if (message.includes('timezone')) newErrors.timezone = message;
           else newErrors.scheduledAt = message;
         }
@@ -227,28 +237,21 @@ export function ScheduleForm({
         </View>
 
         <View className="mb-4">
-          <Text className="text-sm text-white/70 mb-1.5">Prompt</Text>
-          <View
-            className={`rounded-lg bg-surface-elevated border ${
-              errors.prompt ? 'border-red-500' : 'border-white/10'
-            } p-3`}
-          >
-            <Input
-              placeholder="What should the AI do?"
-              value={prompt}
-              onChangeText={(text) => {
-                setPrompt(text);
-                if (errors.prompt) setErrors((e) => ({ ...e, prompt: '' }));
-              }}
-              multiline
-              numberOfLines={4}
-              className="min-h-[80px] border-0 bg-transparent p-0"
-              textAlignVertical="top"
-            />
-          </View>
-          {errors.prompt ? (
-            <Text className="text-sm text-red-400 mt-1">{errors.prompt}</Text>
-          ) : null}
+          <Input
+            label="Prompt"
+            placeholder="What should the AI do?"
+            value={prompt}
+            onChangeText={(text) => {
+              setPrompt(text);
+              if (errors.prompt) setErrors((e) => ({ ...e, prompt: '' }));
+            }}
+            error={errors.prompt || undefined}
+            multiline
+            numberOfLines={4}
+            className="min-h-[80px]"
+            style={{ height: 'auto', paddingVertical: spacing.md }}
+            textAlignVertical="top"
+          />
           <View
             accessibilityLabel="Schedules use saved prompt text only"
             className="mt-3 rounded-lg border border-white/10 bg-surface-elevated p-3"

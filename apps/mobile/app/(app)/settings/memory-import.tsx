@@ -15,6 +15,7 @@ import {
   CheckSquare,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Button } from '@/components/ui/Button';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -348,7 +349,7 @@ export default function MemoryImportScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="flex-row items-center px-4 h-12">
+      <View className="flex-row items-center px-4 min-h-12">
         <Pressable
           accessibilityLabel="Go back"
           accessibilityRole="button"
@@ -360,7 +361,12 @@ export default function MemoryImportScreen() {
         >
           <ArrowLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
+        <Text
+          variant="subheading"
+          className="ml-2 flex-1"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          style={{ color: colors.textPrimary }}
+        >
           Import Memories
         </Text>
       </View>
@@ -421,6 +427,7 @@ export default function MemoryImportScreen() {
                 const active = option === source;
                 return (
                   <Pressable
+                    hitSlop={{ top: 4, bottom: 4 }}
                     key={option}
                     onPress={() => handleSourceChange(option)}
                     disabled={!canEdit}

@@ -134,6 +134,7 @@ jest.mock('../src/features/cloud-code/useCloudCodeSessions', () => ({
 }));
 
 import { CloudCodeSessionsScreen } from '../src/features/cloud-code/CloudCodeSessionsScreen';
+import { useCodePreferences } from '../src/features/settings/code/store';
 
 function shownTitles(screen: ReturnType<typeof render>) {
   return screen
@@ -147,6 +148,7 @@ function search(screen: ReturnType<typeof render>, text: string) {
 
 afterEach(() => {
   mockSessions = ALL_SESSIONS;
+  useCodePreferences.setState({ groupSessionsByRepository: false });
 });
 
 describe('AGI Code sessions search', () => {
@@ -218,7 +220,7 @@ describe('AGI Code sessions sort', () => {
     const screen = render(<CloudCodeSessionsScreen />);
     expect(screen.queryByLabelText('Oldest first')).toBeNull();
 
-    fireEvent.press(screen.getByLabelText('Sort sessions: Most recent'));
+    fireEvent.press(screen.getByLabelText('View and sort sessions: Most recent'));
     expect(screen.getByLabelText('Most recent').props.accessibilityState).toMatchObject({
       checked: true,
     });
@@ -231,12 +233,12 @@ describe('AGI Code sessions sort', () => {
       'Add billing page',
     ]);
     expect(screen.queryByLabelText('Oldest first')).toBeNull();
-    expect(screen.getByLabelText('Sort sessions: Oldest first')).toBeTruthy();
+    expect(screen.getByLabelText('View and sort sessions: Oldest first')).toBeTruthy();
   });
 
   it('keeps the sort while searching', () => {
     const screen = render(<CloudCodeSessionsScreen />);
-    fireEvent.press(screen.getByLabelText('Sort sessions: Most recent'));
+    fireEvent.press(screen.getByLabelText('View and sort sessions: Most recent'));
     fireEvent.press(screen.getByLabelText('Oldest first'));
 
     search(screen, 'acme/web');
@@ -317,5 +319,127 @@ describe('AGI Code sessions state filter', () => {
     screen.rerender(<CloudCodeSessionsScreen />);
 
     expect(screen.getByText('No sessions match this filter')).toBeTruthy();
+  });
+});
+
+describe('AGI Code sessions grouped by repository', () => {
+  function openMenu(screen: ReturnType<typeof render>) {
+    fireEvent.press(screen.getByLabelText(/^View and sort sessions/));
+  }
+
+  function turnOn(screen: ReturnType<typeof render>) {
+    openMenu(screen);
+    fireEvent.press(screen.getByLabelText('Group by repository'));
+  }
+
+  function headings(screen: ReturnType<typeof render>) {
+    return screen
+      .queryAllByText(/^(acme\/web|acme\/api|No repository)$/)
+      .map((node) => node.props.children as string);
+  }
+
+  it('holds a View section with Group by repository and a Sort section', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+    openMenu(screen);
+
+    expect(screen.getByText('View')).toBeTruthy();
+    expect(screen.getByText('Sort')).toBeTruthy();
+    expect(screen.getByLabelText('Group by repository').props.accessibilityState).toMatchObject({
+      checked: false,
+    });
+    expect(screen.getByLabelText('Most recent')).toBeTruthy();
+    expect(screen.getByLabelText('Oldest first')).toBeTruthy();
+  });
+
+  it('stays a flat list until it is turned on', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+
+    expect(headings(screen)).toEqual([]);
+  });
+
+  it('shows one section per repository, newest section first, and No repository last', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+
+    turnOn(screen);
+
+    expect(headings(screen)).toEqual(['acme/api', 'acme/web', 'No repository']);
+    expect(shownTitles(screen)).toEqual([
+      'Add billing page',
+      'Refactor auth',
+      'Fix parser',
+      'Write docs',
+    ]);
+    expect(screen.queryByLabelText('Group by repository')).toBeNull();
+    expect(
+      screen.getByLabelText('View and sort sessions: Most recent, grouped by repository'),
+    ).toBeTruthy();
+  });
+
+  it('keeps the chosen sort inside each section', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+    turnOn(screen);
+
+    openMenu(screen);
+    fireEvent.press(screen.getByLabelText('Oldest first'));
+
+    expect(headings(screen)).toEqual(['acme/api', 'acme/web', 'No repository']);
+    expect(shownTitles(screen)).toEqual([
+      'Add billing page',
+      'Fix parser',
+      'Refactor auth',
+      'Write docs',
+    ]);
+  });
+
+  it('applies the search and the state filter before grouping and hides empty sections', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+    turnOn(screen);
+
+    search(screen, 'acme/web');
+    expect(headings(screen)).toEqual(['acme/web']);
+
+    search(screen, '');
+    fireEvent.press(screen.getByLabelText('Filter sessions: Running'));
+    expect(headings(screen)).toEqual(['acme/web']);
+    expect(shownTitles(screen)).toEqual(['Fix parser']);
+  });
+
+  it('says nothing matches when grouping leaves no sections', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+    turnOn(screen);
+
+    search(screen, 'zzz');
+
+    expect(headings(screen)).toEqual([]);
+    expect(screen.getByText('No sessions match your search')).toBeTruthy();
+  });
+
+  it('turns off again from the same menu', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+    turnOn(screen);
+    openMenu(screen);
+    expect(screen.getByLabelText('Group by repository').props.accessibilityState).toMatchObject({
+      checked: true,
+    });
+
+    fireEvent.press(screen.getByLabelText('Group by repository'));
+
+    expect(headings(screen)).toEqual([]);
+    expect(shownTitles(screen)).toEqual([
+      'Add billing page',
+      'Refactor auth',
+      'Fix parser',
+      'Write docs',
+    ]);
+  });
+
+  it('stays grouped when the screen is opened again', () => {
+    const first = render(<CloudCodeSessionsScreen />);
+    turnOn(first);
+    first.unmount();
+
+    const second = render(<CloudCodeSessionsScreen />);
+
+    expect(headings(second)).toEqual(['acme/api', 'acme/web', 'No repository']);
   });
 });

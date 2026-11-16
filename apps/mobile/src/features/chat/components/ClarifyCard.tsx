@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Check } from 'lucide-react-native';
 import {
@@ -19,6 +19,9 @@ import {
   clarifyCardAcceptsResponse,
   clarifyResponseDeadlineMs,
 } from '@/src/features/chat/utils/clarifyCard';
+import { useAnswerDraft } from './answerDraftStore';
+import { useRevealFocusedField } from './cards/ChatScrollIntoView';
+import { useReportUnsavedAnswerEdit } from './AssistantDraftScope';
 
 const SUBMISSION_FAILURE_MESSAGE =
   "Couldn't send that answer, the questions are still waiting for you.";
@@ -42,20 +45,54 @@ function expiredReason(reason: 'checkpoint_gone' | 'turn_failed' | 'superseded')
   return ': they were superseded by a newer message.';
 }
 
+function OtherAnswerInput({
+  value,
+  editable,
+  header,
+  onChangeText,
+}: {
+  value: string;
+  editable: boolean;
+  header: string;
+  onChangeText: (text: string) => void;
+}) {
+  const container = useRef<View>(null);
+  const revealOnFocus = useRevealFocusedField(container);
+  return (
+    <View ref={container} collapsable={false}>
+      <Input
+        value={value}
+        editable={editable}
+        maxLength={CLARIFY_OTHER_MAX_LENGTH}
+        onChangeText={onChangeText}
+        onFocus={revealOnFocus.onFocus}
+        onBlur={revealOnFocus.onBlur}
+        placeholder="Something else…"
+        accessibilityLabel={`Other answer for ${header}`}
+      />
+    </View>
+  );
+}
+
 export function ClarifyCard({
   card,
   body,
   canRespond,
   onRespond,
+  messageId,
 }: {
   card: InteractiveCard;
   body: ClarifyCardBody;
   canRespond: boolean;
   onRespond?: (cardId: string, payload: InteractiveCardResponsePayload) => Promise<boolean>;
+  messageId?: string;
 }) {
   const colors = useThemeColors();
-  const [draft, setDraft] = useState<Draft>(() => emptyDraft(body.questions));
+  const [initialDraft] = useState<Draft>(() => emptyDraft(body.questions));
+  const draftKey = `clarify\u0000${card.cardId}`;
+  const [draft, setDraft] = useAnswerDraft(draftKey, initialDraft);
   const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [, setElapsedDeadlines] = useState(0);
   const deadlineMs = clarifyResponseDeadlineMs(card);
@@ -75,34 +112,45 @@ export function ClarifyCard({
     return new Map(body.state.answers.map((a) => [a.questionId, a]));
   }, [body.state]);
 
-  const toggleOption = useCallback((question: ClarifyQuestion, optionId: string) => {
-    setDraft((prev) => {
-      const current = prev[question.id] ?? { optionIds: [], otherText: '' };
-      const selected = current.optionIds.includes(optionId);
-      const optionIds = question.multiSelect
-        ? selected
-          ? current.optionIds.filter((id) => id !== optionId)
-          : [...current.optionIds, optionId]
-        : selected
-          ? []
-          : [optionId];
-      return { ...prev, [question.id]: { optionIds, otherText: '' } };
-    });
-  }, []);
+  const toggleOption = useCallback(
+    (question: ClarifyQuestion, optionId: string) => {
+      setDraft((prev) => {
+        const current = prev[question.id] ?? { optionIds: [], otherText: '' };
+        const selected = current.optionIds.includes(optionId);
+        const optionIds = question.multiSelect
+          ? selected
+            ? current.optionIds.filter((id) => id !== optionId)
+            : [...current.optionIds, optionId]
+          : selected
+            ? []
+            : [optionId];
+        return { ...prev, [question.id]: { optionIds, otherText: '' } };
+      });
+    },
+    [setDraft],
+  );
 
-  const setOtherText = useCallback((questionId: string, text: string) => {
-    setDraft((prev) => ({
-      ...prev,
-      [questionId]: { optionIds: [], otherText: text.slice(0, CLARIFY_OTHER_MAX_LENGTH) },
-    }));
-  }, []);
+  const setOtherText = useCallback(
+    (questionId: string, text: string) => {
+      setDraft((prev) => ({
+        ...prev,
+        [questionId]: { optionIds: [], otherText: text.slice(0, CLARIFY_OTHER_MAX_LENGTH) },
+      }));
+    },
+    [setDraft],
+  );
 
-  const canSubmit =
-    interactive &&
-    body.questions.some((q) => {
-      const entry = draft[q.id];
-      return (entry?.optionIds.length ?? 0) > 0 || (entry?.otherText.trim().length ?? 0) > 0;
-    });
+  const hasAnswers = body.questions.some((q) => {
+    const entry = draft[q.id];
+    return (entry?.optionIds.length ?? 0) > 0 || (entry?.otherText.trim().length ?? 0) > 0;
+  });
+  const canSubmit = interactive && hasAnswers;
+  const draftScope = useMemo(() => (messageId ? { messageId } : null), [messageId]);
+  useReportUnsavedAnswerEdit(
+    draftScope,
+    draftKey,
+    hasAnswers && !submitting && !sent && clarifyCardAcceptsResponse(card),
+  );
 
   const send = useCallback(
     (payload: InteractiveCardResponsePayload) => {
@@ -111,7 +159,8 @@ export function ClarifyCard({
       setSubmissionError(null);
       void onRespond(card.cardId, payload)
         .then((ok) => {
-          if (!ok) setSubmissionError(SUBMISSION_FAILURE_MESSAGE);
+          if (ok) setSent(true);
+          else setSubmissionError(SUBMISSION_FAILURE_MESSAGE);
         })
         .finally(() => setSubmitting(false));
     },
@@ -207,6 +256,7 @@ export function ClarifyCard({
                         }}
                         accessibilityLabel={option.label}
                         accessibilityHint={option.description || undefined}
+                        hitSlop={{ top: 4, bottom: 4 }}
                         style={({ pressed }) => ({
                           minHeight: 36,
                           paddingHorizontal: 12,
@@ -234,13 +284,11 @@ export function ClarifyCard({
                   })}
                 </View>
                 {question.isOther ? (
-                  <Input
+                  <OtherAnswerInput
                     value={entry.otherText}
                     editable={interactive && !submitting}
-                    maxLength={CLARIFY_OTHER_MAX_LENGTH}
+                    header={question.header}
                     onChangeText={(text) => setOtherText(question.id, text)}
-                    placeholder="Something else…"
-                    accessibilityLabel={`Other answer for ${question.header}`}
                   />
                 ) : null}
               </>

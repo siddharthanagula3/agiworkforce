@@ -5,6 +5,7 @@ import { Minimize2 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { useDismissOnScreenBlur } from '@/src/features/artifacts/useDismissOnScreenBlur';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SendButton } from './SendButton';
@@ -43,6 +44,8 @@ export function ComposerFullScreenEditor({
     back: collapse,
     close: collapse,
   });
+
+  useDismissOnScreenBlur(visible, onClose);
 
   if (!visible) return null;
 

@@ -1,9 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ObjectStore } from '@agiworkforce/object-storage';
+import {
+  ObjectStorageTimeoutError,
+  objectStorageBackoffMs,
+  resolveObjectStorageRetryPolicy,
+  type ObjectStore,
+} from '@agiworkforce/object-storage';
 type ScanModule0 = typeof import('./object-storage-runtime');
+
+type ObjectStorageModule = typeof import('@agiworkforce/object-storage');
 
 const headMock = vi.hoisted(() => vi.fn());
 const getStreamMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@agiworkforce/object-storage', async (importOriginal) => {
+  const actual = await importOriginal<ObjectStorageModule>();
+  return { ...actual, objectStorageBackoffMs: vi.fn(actual.objectStorageBackoffMs) };
+});
 
 vi.mock('./object-storage-runtime', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -118,6 +130,42 @@ describe('getBoundedPrivateObject', () => {
 
     await expect(getBoundedPrivateObject(KEY, MAX_BYTES)).resolves.toBeNull();
     expect(getStreamMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('bounded read retry', () => {
+  it('waits the package backoff before reopening a stream that failed mid-read', async () => {
+    vi.useFakeTimers();
+    try {
+      const bytes = new Uint8Array([7, 8]);
+      headMock.mockResolvedValue({ contentLength: bytes.byteLength });
+      const failing = new ReadableStream<Uint8Array>({
+        pull() {
+          throw new ObjectStorageTimeoutError(1_000);
+        },
+      });
+      getStreamMock
+        .mockResolvedValueOnce({ body: failing })
+        .mockResolvedValueOnce({ body: webStreamOf([bytes]) });
+
+      const result = getBoundedPrivateObject(KEY, MAX_BYTES);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(getStreamMock).toHaveBeenCalledTimes(1);
+      expect(objectStorageBackoffMs).toHaveBeenCalledTimes(1);
+      expect(objectStorageBackoffMs).toHaveBeenCalledWith(resolveObjectStorageRetryPolicy(), 1);
+      const delay = vi.mocked(objectStorageBackoffMs).mock.results[0]?.value as number;
+      expect(delay).toBeGreaterThan(0);
+
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(getStreamMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(getStreamMock).toHaveBeenCalledTimes(2);
+
+      await expect(result).resolves.toMatchObject({ data: Buffer.from(bytes) });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

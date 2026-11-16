@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash, randomUUID } from 'crypto';
 type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
+type MediaStorageModule = typeof import('@/lib/server/media-storage');
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -58,9 +60,11 @@ interface AssetRow {
 }
 const assetRows = new Map<string, AssetRow>();
 
-vi.mock('@/lib/server/media-storage', async () => {
+vi.mock('@/lib/server/media-storage', async (importOriginal) => {
   const { randomUUID: uuid } = await import('crypto');
+  const actual = await importOriginal<MediaStorageModule>();
   return {
+    isSealedPrivateChatAttachmentPathname: actual.isSealedPrivateChatAttachmentPathname,
     isMediaStorageConfigured: () => true,
     isGeneratedMediaStorageConfigured: () => true,
     isImageStorageConfigured: () => true,
@@ -136,6 +140,7 @@ vi.mock('@/lib/server/media-assets', async () => {
     },
     getMediaAssetById: async (id: string) => assetRows.get(id) ?? null,
     latestConversationImageAssetId: async () => null,
+    listScannedChatFileAssets: async () => [],
   };
 });
 

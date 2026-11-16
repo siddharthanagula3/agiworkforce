@@ -1,11 +1,23 @@
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
-jest.mock('expo-image', () => ({ Image: () => null }));
+const mockExpoImage = jest.fn();
+jest.mock('expo-image', () => ({
+  Image: (props: Record<string, unknown>) => {
+    mockExpoImage(props);
+    return null;
+  },
+}));
 jest.mock('lucide-react-native', () => ({
+  AlertCircle: () => null,
   Download: () => null,
   Film: () => null,
   Play: () => null,
+  RotateCcw: () => null,
+}));
+const mockUseGeneratedImageSource = jest.fn();
+jest.mock('@/src/features/image/hooks/useGeneratedImageSource', () => ({
+  useGeneratedImageSource: (...args: unknown[]) => mockUseGeneratedImageSource(...args),
 }));
 jest.mock('@/components/ui/PressableBox', () => ({
   PressableBox: jest.requireActual('react-native').Pressable,
@@ -51,6 +63,7 @@ const video = (url: string) => <GeneratedVideo videoUrl={url} width={240} />;
 describe('GeneratedVideo operation ownership', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseGeneratedImageSource.mockReturnValue({ source: null, status: 'invalid' });
     mockShare.mockResolvedValue(undefined);
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
@@ -159,5 +172,97 @@ describe('GeneratedVideo operation ownership', () => {
     await act(async () => {
       sharing.resolve(undefined);
     });
+  });
+});
+
+describe('GeneratedVideo tile', () => {
+  const storedPoster = '/api/files/44444444-4444-4444-8444-444444444444';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockShare.mockResolvedValue(undefined);
+    mockUseGeneratedImageSource.mockReturnValue({
+      source: {
+        uri: `https://agiworkforce.com${storedPoster}`,
+        headers: { Authorization: 'Bearer t' },
+      },
+      status: 'ready',
+    });
+  });
+
+  it('loads a stored poster with the session headers', () => {
+    render(
+      <GeneratedVideo
+        videoUrl="https://example.com/a.mp4"
+        thumbnailUrl={storedPoster}
+        width={240}
+      />,
+    );
+
+    expect(mockUseGeneratedImageSource).toHaveBeenCalledWith(storedPoster, true);
+    expect(mockExpoImage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({ headers: { Authorization: 'Bearer t' } }),
+      }),
+    );
+  });
+
+  it('shapes the tile to a portrait poster', () => {
+    const screen = render(
+      <GeneratedVideo
+        videoUrl="https://example.com/a.mp4"
+        thumbnailUrl={storedPoster}
+        width={240}
+      />,
+    );
+    const tile = () => screen.getByLabelText('Play generated video').props.style;
+    expect(tile()).toEqual(expect.objectContaining({ width: 240, height: 135 }));
+
+    act(() => {
+      (mockExpoImage.mock.calls.at(-1)![0].onLoad as (event: unknown) => void)({
+        source: { width: 1080, height: 1920 },
+      });
+    });
+
+    expect(tile().width).toBe(240);
+    expect(tile().height).toBeCloseTo(426.67, 1);
+  });
+
+  it('keeps a failed state with Retry and Save after a failed play', async () => {
+    mockPrepare.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(player('a'));
+    const screen = render(video('https://example.com/a.mp4'));
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Play generated video'));
+    });
+
+    expect(screen.getByTestId('generated-video-failed')).toBeTruthy();
+    expect(screen.getByLabelText('Save video')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Video could not play. Retry'));
+    });
+    expect(screen.queryByTestId('generated-video-failed')).toBeNull();
+    expect(mockModal).toHaveBeenLastCalledWith(
+      expect.objectContaining({ player: player('a'), visible: true }),
+    );
+  });
+
+  it('shows the failed state when the player cannot play, and saves from inside the player', async () => {
+    mockPrepare.mockResolvedValue(player('a'));
+    const screen = render(video('https://example.com/a.mp4'));
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Play generated video'));
+    });
+
+    await act(async () => {
+      (mockModal.mock.calls.at(-1)![0] as { onSave: () => void }).onSave();
+    });
+    expect(mockShare).toHaveBeenCalledWith(player('a').videoUri, expect.anything());
+
+    act(() =>
+      (mockModal.mock.calls.at(-1)![0] as { onPlaybackError: () => void }).onPlaybackError(),
+    );
+    expect(screen.getByTestId('generated-video-failed')).toBeTruthy();
+    expect(mockModal).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false }));
   });
 });

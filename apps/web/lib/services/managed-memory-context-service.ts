@@ -391,8 +391,15 @@ export function workspaceMemoryPredicate(paramIndex: number, alias = ''): string
 export const DELETED_MEMORY_ASSIGNMENTS =
   "is_deleted = true, content = '', category = null, import_key = null, updated_at = now()";
 
+/**
+ * "My favorite color is teal" and "The user's favorite color is teal." are one
+ * statement: the person's own words and the model's third-person restatement of
+ * them must reach the same key, or one remember turn stores both.
+ */
 function memoryContentKeySql(expression: string): string {
-  return `btrim(regexp_replace(lower(${expression}), '[^[:alnum:]]+', ' ', 'g'))`;
+  const words = `btrim(regexp_replace(lower(${expression}), '[^[:alnum:]]+', ' ', 'g'))`;
+  const possessive = `regexp_replace(${words}, '^(the user s|user s) ', 'my ')`;
+  return `regexp_replace(${possessive}, '^(the user is|user is|i m) ', 'i am ')`;
 }
 
 function memoryRankSql(alias: string): string {

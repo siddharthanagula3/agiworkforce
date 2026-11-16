@@ -43,6 +43,17 @@ jest.mock('expo-notifications', () => ({
   AndroidNotificationVisibility: { PUBLIC: 1, PRIVATE: 0, SECRET: -1 },
 }));
 
+const mockFeatures = { companion: true };
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return {
+    ...actual,
+    FEATURES: new Proxy(actual.FEATURES, {
+      get: (target, key) => (key === 'companion' ? mockFeatures.companion : target[key]),
+    }),
+  };
+});
+
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { extra: { eas: { projectId: 'fake' } } } },
@@ -79,18 +90,24 @@ jest.mock('@/lib/mmkv', () => ({
 
 import {
   setNavigatorReady,
+  setPushTypeReceivedListener,
   setSignedIn,
   setupNotificationListeners,
 } from '../services/notifications';
 import { AGENT_APPROVAL_REVIEW_ACTION_IDENTIFIER } from '../services/notificationCategories';
+import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
 
 beforeAll(() => {
+  setPushTypeReceivedListener((type) =>
+    useNotificationPrefsStore.getState().notePushTypeReceived(type),
+  );
   setupNotificationListeners(null);
   setNavigatorReady(true);
 });
 
 beforeEach(() => {
   mockRouterPush.mockReset();
+  mockFeatures.companion = true;
 });
 
 function fireNotification(
@@ -288,5 +305,118 @@ describe('handleNotificationResponse, no dead-end deep links', () => {
     fireNotification({ type: 'schedule_run', taskId: 'task-1' });
     expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/schedules' });
     expect(mockRouterPush).not.toHaveBeenCalledWith({ pathname: '/(app)' });
+  });
+
+  it('opens a new chat from the usage limit reset push the web backend sends', () => {
+    signIn();
+    fireNotification({ type: 'usage_limit_reset', url: '/chat' });
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/(tabs)/chat' });
+    expect(mockRouterPush).not.toHaveBeenCalledWith({ pathname: '/(app)' });
+  });
+});
+
+describe('handleNotificationResponse, Remote Control hidden in this build', () => {
+  beforeEach(() => {
+    setSignedIn(true);
+    mockFeatures.companion = false;
+  });
+
+  it('opens the in-app notifications list for an approval that names no session', () => {
+    fireNotification({ type: 'agent_approval_needed' });
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/notifications' });
+    expect(mockRouterPush).not.toHaveBeenCalledWith({ pathname: '/(app)/companion' });
+  });
+
+  it('opens the in-app notifications list for a desktop session notification', () => {
+    fireNotification({ type: 'companion_connected' });
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/notifications' });
+  });
+
+  it('does not open a hidden code-session or agent screen for an approval', () => {
+    fireNotification({
+      type: 'agent_approval_needed',
+      rootId: 'root-1',
+      threadId: 'thread-1',
+      approvalId: 'req-9',
+    });
+    fireNotification({ type: 'approval_pending_escalation', agentId: 'agent-7' });
+    expect(mockRouterPush).toHaveBeenCalledTimes(2);
+    expect(mockRouterPush).toHaveBeenNthCalledWith(1, { pathname: '/(app)/notifications' });
+    expect(mockRouterPush).toHaveBeenNthCalledWith(2, { pathname: '/(app)/notifications' });
+  });
+
+  it('still opens the cloud run an approval push names', () => {
+    fireNotification({ type: 'agent_approval_needed', runId: 'run-1' });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(app)/tasks',
+      params: { runId: 'run-1' },
+    });
+  });
+});
+
+describe('handleNotificationResponse, research and AGI Code notices', () => {
+  const RESEARCH_CONVERSATION = '0190a000-0000-7000-8000-000000000456';
+
+  beforeAll(async () => {
+    await useNotificationPrefsStore.persist.rehydrate();
+  });
+
+  beforeEach(() => {
+    setSignedIn(true);
+    mockFeatures.companion = false;
+    useNotificationPrefsStore.setState({ announcedPushGroups: [] });
+  });
+
+  it('opens the conversation that holds a finished research report', () => {
+    fireNotification({
+      type: 'research_completed',
+      route: '/(app)/reports',
+      target: 'research',
+      targetId: 'report-1',
+      conversationId: RESEARCH_CONVERSATION,
+      runId: 'run-1',
+    });
+    expect(mockRouterPush).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).toHaveBeenCalledWith(`/(app)/open/chat/${RESEARCH_CONVERSATION}`);
+  });
+
+  it('opens the reports list when the research notice names no conversation', () => {
+    fireNotification({
+      type: 'research_completed',
+      route: '/(app)/reports',
+      target: 'research',
+      targetId: 'report-1',
+    });
+    expect(mockRouterPush).toHaveBeenCalledWith('/(app)/reports');
+
+    mockRouterPush.mockReset();
+    fireNotification({ type: 'research_completed' });
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/reports' });
+  });
+
+  for (const type of [
+    'code_session_completed',
+    'code_session_failed',
+    'code_session_needs_input',
+  ]) {
+    it(`opens the AGI Code session a ${type} push names`, () => {
+      fireNotification({ type, priority: 'high', codeSessionId: 'session-1' });
+      expect(mockRouterPush).toHaveBeenCalledWith('/(app)/cloud-code/session-1');
+    });
+
+    it(`opens the AGI Code sessions list when a ${type} push names no session`, () => {
+      fireNotification({ type });
+      expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/(app)/cloud-code' });
+    });
+  }
+
+  it('shows the research and AGI Code switches once their first notice is opened', () => {
+    fireNotification({ type: 'task_completed', runId: 'run-1' });
+    expect(useNotificationPrefsStore.getState().announcedPushGroups).toEqual([]);
+
+    fireNotification({ type: 'code_session_failed', codeSessionId: 'session-1' });
+    fireNotification({ type: 'research_completed', target: 'research', targetId: 'report-1' });
+
+    expect(useNotificationPrefsStore.getState().announcedPushGroups).toEqual(['code', 'research']);
   });
 });

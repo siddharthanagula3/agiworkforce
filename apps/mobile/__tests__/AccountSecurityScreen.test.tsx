@@ -24,11 +24,17 @@ const mockChangeAccountPassword = jest.fn();
 const mockSetAppMode = jest.fn();
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 let mockOwnerId = 'account-a';
+let mockClerkPasskeys: { id: string; name: string | null }[] = [];
+let mockStepUpModal: React.ReactElement | null = null;
 let mockEpoch = 1;
 const mockEpochListeners = new Set<() => void>();
 const mockRevokeAll = jest.fn();
 const mockTurnOffTwoFactor = jest.fn();
 const mockStartSetup = jest.fn();
+const mockFetchSignInMethods = jest.fn();
+const mockFetchSignInKeys = jest.fn();
+const mockRemoveSignInKey = jest.fn();
+const mockScrollTo = jest.fn();
 const mockCopySecret = jest.fn();
 const mockWithStepUp = jest.fn();
 const mockSignOut = jest.fn();
@@ -44,7 +50,7 @@ jest.mock('expo-clipboard', () => ({
 }));
 
 jest.mock('../src/features/auth/hooks/useStepUp', () => ({
-  useStepUp: () => ({ withStepUp: mockWithStepUp, modal: null }),
+  useStepUp: () => ({ withStepUp: mockWithStepUp, modal: mockStepUpModal }),
 }));
 
 jest.mock('expo-router', () => ({
@@ -111,7 +117,14 @@ jest.mock('../src/features/chat/store/appModeStore', () => ({
 }));
 
 jest.mock('@clerk/expo', () => ({
-  useUser: () => ({ user: { id: mockOwnerId, passwordEnabled: true, reload: mockReloadUser } }),
+  useUser: () => ({
+    user: {
+      id: mockOwnerId,
+      passwordEnabled: true,
+      reload: mockReloadUser,
+      passkeys: mockClerkPasskeys,
+    },
+  }),
   useSession: () => ({ session: null }),
 }));
 
@@ -140,28 +153,47 @@ jest.mock('../src/features/settings/account-security/service', () => ({
   verifyAuthenticatorCode: jest.fn(),
   regenerateBackupCodes: jest.fn(),
   turnOffTwoFactor: (...args: unknown[]) => mockTurnOffTwoFactor(...args),
-  fetchSignInMethods: jest.fn(async () => ({
-    identities: [],
-    keys: [{ id: 'key-1', name: 'Work laptop', kind: 'passkey' }],
-  })),
+  fetchSignInMethods: (...args: unknown[]) => mockFetchSignInMethods(...args),
+  fetchSignInKeys: (...args: unknown[]) => mockFetchSignInKeys(...args),
+  removeSignInKey: (...args: unknown[]) => mockRemoveSignInKey(...args),
 }));
 
 jest.mock('../src/features/settings/Common', () => {
   const { Pressable, Text, View } = require('react-native');
+  const { useEffect } = require('react');
   return {
-    SettingsScreenShell: ({ title, children }: { title: string; children: React.ReactNode }) => (
-      <View>
-        <Text>{title}</Text>
-        {children}
-      </View>
-    ),
+    SettingsScreenShell: ({
+      title,
+      children,
+      scrollRef,
+    }: {
+      title: string;
+      children: React.ReactNode;
+      scrollRef?: { current: unknown };
+    }) => {
+      useEffect(() => {
+        if (scrollRef)
+          scrollRef.current = { scrollTo: (...args: unknown[]) => mockScrollTo(...args) };
+      }, [scrollRef]);
+      return (
+        <View>
+          <Text>{title}</Text>
+          {children}
+        </View>
+      );
+    },
     SettingsInfo: ({ title, body }: { title: string; body: string }) => (
       <View>
         <Text>{title}</Text>
         <Text>{body}</Text>
       </View>
     ),
-    SettingsGroup: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    SettingsGroup: ({ children, footnote }: { children: React.ReactNode; footnote?: string }) => (
+      <View>
+        {children}
+        {footnote ? <Text>{footnote}</Text> : null}
+      </View>
+    ),
     SettingsRow: ({
       label,
       value,
@@ -221,6 +253,11 @@ jest.mock('../src/features/settings/Common', () => {
 jest.mock('@/src/features/siri', () => ({ AskFromSiriSetting: () => null }));
 
 import { ownerHandler } from '../test-utils/ownerProps';
+import { ApiHttpError } from '../services/apiErrors';
+import { StepUpCancelledError } from '../src/features/auth/services/stepUp';
+
+const WORK_LAPTOP_KEY = { id: 'key-1', name: 'Work laptop', kind: 'passkey' } as const;
+const HARDWARE_KEY = { id: 'key-2', name: 'Desk key', kind: 'security_key' } as const;
 
 const AccountSecurityScreen = require('../src/features/settings/account-security')
   .default as typeof import('../src/features/settings/account-security').default;
@@ -230,6 +267,8 @@ describe('Mobile Account Security screen', () => {
     jest.clearAllMocks();
     mockAppMode = 'cloud';
     mockOwnerId = 'account-a';
+    mockClerkPasskeys = [];
+    mockStepUpModal = null;
     mockEpoch = 1;
     mockEpochListeners.clear();
     mockModeListeners.clear();
@@ -238,6 +277,12 @@ describe('Mobile Account Security screen', () => {
     mockSaveLockdown.mockResolvedValue(undefined);
     mockReloadUser.mockResolvedValue(undefined);
     mockWithStepUp.mockImplementation(async (_action, _resource, send) => send({}));
+    mockFetchSignInMethods.mockResolvedValue({
+      identities: [{ id: 'identity-1', provider: 'clerk', lastAuthenticatedAt: null }],
+      keys: { state: 'listed', items: [WORK_LAPTOP_KEY] },
+    });
+    mockFetchSignInKeys.mockResolvedValue({ state: 'listed', items: [WORK_LAPTOP_KEY] });
+    mockRemoveSignInKey.mockResolvedValue(undefined);
     mockAuthState = {
       isClerkLoaded: true,
       isClerkSignedIn: true,
@@ -277,7 +322,10 @@ describe('Mobile Account Security screen', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy());
     expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
-    await waitFor(() => expect(screen.getByLabelText('Work laptop. Passkey')).toBeTruthy());
+    await waitFor(() =>
+      expect(screen.getByLabelText('Passkeys and security keys. 1')).toBeTruthy(),
+    );
+    expect(screen.queryByLabelText('Work laptop. Passkey')).toBeNull();
     expect(screen.getByLabelText('Add or remove a sign-in method. Web')).toBeTruthy();
 
     expect(screen.queryByLabelText('Open Web security. Web')).toBeNull();
@@ -287,13 +335,20 @@ describe('Mobile Account Security screen', () => {
 
     expect(mockOpenInAppBrowser).toHaveBeenNthCalledWith(
       1,
-      'https://agiworkforce.com/settings/security',
+      'https://agiworkforce.com/settings/security?from=mobile',
     );
     expect(mockOpenInAppBrowser).toHaveBeenNthCalledWith(
       2,
-      'https://agiworkforce.com/settings/account',
+      'https://agiworkforce.com/settings/account?from=mobile',
     );
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/safety-security');
+  });
+
+  it('names the account sign-in for the reader, never the sign-in vendor', async () => {
+    const screen = render(<AccountSecurityScreen />);
+
+    await waitFor(() => expect(screen.getByText('AGI account')).toBeTruthy());
+    expect(screen.queryByText('Clerk')).toBeNull();
   });
 
   it('does not fetch Cloud security state while the app is in Local Mode', () => {
@@ -849,5 +904,381 @@ describe('Mobile Account Security screen', () => {
     expect(alertSpy).toHaveBeenCalledTimes(2);
     expect(mockRevokeAccountSession).not.toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  describe('passkeys and security keys', () => {
+    const openKeysPage = async (screen: ReturnType<typeof render>) => {
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 1'));
+      return screen.findByLabelText('Remove Work laptop');
+    };
+
+    const confirmRemoval = async (alertSpy: jest.SpyInstance) => {
+      const buttons = alertSpy.mock.calls.at(-1)?.[2] as
+        { text: string; onPress?: () => void }[] | undefined;
+      await act(async () => {
+        buttons?.find((button) => button.text === 'Remove')?.onPress?.();
+      });
+    };
+
+    it('shows one row with the key count and the phishing footnote in place of the key rows', async () => {
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [WORK_LAPTOP_KEY, HARDWARE_KEY] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      expect(await screen.findByLabelText('Passkeys and security keys. 2')).toBeTruthy();
+      expect(
+        screen.getByText(
+          'Use passkeys or security keys to sign in. They resist phishing better than passwords.',
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText('Work laptop')).toBeNull();
+      expect(screen.queryByText('Desk key')).toBeNull();
+    });
+
+    it('lists each key with its kind and keeps adding on the Web', async () => {
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [WORK_LAPTOP_KEY, HARDWARE_KEY] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 2'));
+
+      expect(await screen.findByLabelText('Work laptop. Passkey')).toBeTruthy();
+      expect(screen.getByLabelText('Desk key. Security key')).toBeTruthy();
+      expect(screen.getByLabelText('Remove Desk key')).toBeTruthy();
+      fireEvent.press(screen.getByLabelText('Add a passkey or security key. Web'));
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/settings/security?from=mobile',
+      );
+    });
+
+    it('says so when there are no keys yet', async () => {
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 0'));
+
+      expect(await screen.findByText('No passkeys or security keys yet.')).toBeTruthy();
+      expect(screen.getByLabelText('Add a passkey or security key. Web')).toBeTruthy();
+    });
+
+    it('asks before removing, then removes through step-up and refreshes the list', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        'Remove Work laptop?',
+        'It can no longer sign in to your account.',
+        [
+          expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
+          expect.objectContaining({ text: 'Remove', style: 'destructive' }),
+        ],
+      );
+      expect(mockWithStepUp).not.toHaveBeenCalled();
+      mockFetchSignInKeys.mockResolvedValue({ state: 'listed', items: [] });
+      await confirmRemoval(alertSpy);
+
+      expect(mockWithStepUp).toHaveBeenCalledWith(
+        'account_security.change',
+        'key-1',
+        expect.any(Function),
+      );
+      expect(mockRemoveSignInKey).toHaveBeenCalledWith(
+        'key-1',
+        {},
+        { ownerId: 'account-a', epoch: 1 },
+      );
+      expect(await screen.findByText('No passkeys or security keys yet.')).toBeTruthy();
+      alertSpy.mockRestore();
+    });
+
+    it('removes nothing when the prompt is cancelled', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      const buttons = alertSpy.mock.calls.at(-1)?.[2];
+      await act(async () => {
+        buttons?.find((button) => button.text === 'Cancel')?.onPress?.();
+      });
+
+      expect(mockWithStepUp).not.toHaveBeenCalled();
+      expect(mockRemoveSignInKey).not.toHaveBeenCalled();
+      alertSpy.mockRestore();
+    });
+
+    it('shows the server message when the last required key cannot be removed', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const message =
+        'Keep at least 2 passkeys or security keys, including one that works across devices. Add another one before removing this one.';
+      mockRemoveSignInKey.mockRejectedValue(new ApiHttpError(message, 409, 'conflict'));
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      await confirmRemoval(alertSpy);
+
+      expect(alertSpy).toHaveBeenLastCalledWith('Could not remove Work laptop', message);
+      expect(mockFetchSignInKeys).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Remove Work laptop')).toBeTruthy();
+      alertSpy.mockRestore();
+    });
+
+    it('refreshes the list without an error when the key is already gone', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      mockRemoveSignInKey.mockRejectedValue(
+        new ApiHttpError('That passkey or security key was not found.', 404, 'not_found'),
+      );
+      mockFetchSignInKeys.mockResolvedValue({ state: 'listed', items: [] });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      await confirmRemoval(alertSpy);
+
+      expect(await screen.findByText('No passkeys or security keys yet.')).toBeTruthy();
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      alertSpy.mockRestore();
+    });
+
+    it('stays quiet when the step-up confirmation is cancelled', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      mockWithStepUp.mockRejectedValue(new StepUpCancelledError());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      await confirmRemoval(alertSpy);
+
+      expect(mockRemoveSignInKey).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      expect(screen.getByLabelText('Remove Work laptop')).toBeTruthy();
+      alertSpy.mockRestore();
+    });
+
+    it('offers a retry when the keys could not be listed', async () => {
+      mockFetchSignInMethods.mockResolvedValue({ identities: [], keys: { state: 'failed' } });
+      const screen = render(<AccountSecurityScreen />);
+      const row = await screen.findByLabelText('Passkeys and security keys. Unavailable · Retry');
+      mockFetchSignInKeys.mockResolvedValue({ state: 'listed', items: [WORK_LAPTOP_KEY] });
+      fireEvent.press(row);
+
+      expect(await screen.findByLabelText('Passkeys and security keys. 1')).toBeTruthy();
+      expect(mockFetchSignInKeys).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides the row for an account its organization manages', async () => {
+      mockFetchSignInMethods.mockResolvedValue({ identities: [], keys: { state: 'unavailable' } });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(mockFetchSignInMethods).toHaveBeenCalled());
+      await screen.findByLabelText('Add or remove a sign-in method. Web');
+      expect(screen.queryByText('Passkeys and security keys')).toBeNull();
+      expect(
+        screen.queryByText(
+          'Use passkeys or security keys to sign in. They resist phishing better than passwords.',
+        ),
+      ).toBeNull();
+    });
+
+    it('sends an account that must verify first to the Web instead of listing keys', async () => {
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'verification_required' },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. Web'));
+
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/settings/security?from=mobile',
+      );
+    });
+
+    it('counts and lists the passkeys already on the account, read-only, with the web to manage them', async () => {
+      mockClerkPasskeys = [
+        { id: 'pk_web_1', name: 'Home Mac' },
+        { id: 'pk_web_2', name: null },
+      ];
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [WORK_LAPTOP_KEY] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 3'));
+
+      expect(await screen.findByLabelText('Work laptop. Passkey')).toBeTruthy();
+      expect(screen.getByLabelText('Home Mac. Passkey')).toBeTruthy();
+      expect(screen.getByLabelText('Passkey. Passkey')).toBeTruthy();
+      expect(screen.queryByLabelText('Remove Home Mac')).toBeNull();
+      fireEvent.press(screen.getByLabelText('Manage Home Mac on the web'));
+      expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+        'https://agiworkforce.com/settings/security?from=mobile',
+      );
+    });
+
+    it('does not say there are no keys when only the account passkeys exist', async () => {
+      mockClerkPasskeys = [{ id: 'pk_web_1', name: 'Home Mac' }];
+      mockFetchSignInMethods.mockResolvedValue({
+        identities: [],
+        keys: { state: 'listed', items: [] },
+      });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Passkeys and security keys. 1'));
+
+      expect(await screen.findByLabelText('Home Mac. Passkey')).toBeTruthy();
+      expect(screen.queryByText('No passkeys or security keys yet.')).toBeNull();
+    });
+
+    it('closes the page and gives the step-up prompt back to the screen when the keys become unavailable', async () => {
+      const { Text } = require('react-native');
+      mockStepUpModal = <Text>Step-up prompt</Text>;
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await openKeysPage(screen));
+      expect(screen.getAllByText('Step-up prompt')).toHaveLength(1);
+
+      mockFetchSignInKeys.mockResolvedValue({ state: 'unavailable' });
+      await confirmRemoval(alertSpy);
+
+      await waitFor(() => expect(screen.queryByLabelText('Remove Work laptop')).toBeNull());
+      expect(screen.queryByText('Passkeys and security keys')).toBeNull();
+      expect(screen.getAllByText('Step-up prompt')).toHaveLength(1);
+      alertSpy.mockRestore();
+    });
+
+    it('does not show the keys row in Local Mode', () => {
+      mockAppMode = 'local';
+      const screen = render(<AccountSecurityScreen />);
+
+      expect(screen.queryByText('Passkeys and security keys')).toBeNull();
+    });
+  });
+
+  describe('security recommendation', () => {
+    it('recommends reviewing devices when another device is signed in, and scrolls to them', async () => {
+      const screen = render(<AccountSecurityScreen />);
+
+      expect(await screen.findByText('Security recommendations')).toBeTruthy();
+      expect(screen.getByText('Review where you’re logged in')).toBeTruthy();
+      expect(screen.getByText('Log out of devices you don’t recognize')).toBeTruthy();
+      expect(screen.getByTestId('security-recommendation-dot')).toBeTruthy();
+      fireEvent(screen.getByTestId('account-sessions-section'), 'layout', {
+        nativeEvent: { layout: { x: 0, y: 640, width: 390, height: 300 } },
+      });
+      fireEvent.press(
+        screen.getByLabelText(
+          'Review where you’re logged in. Log out of devices you don’t recognize',
+        ),
+      );
+
+      expect(mockScrollTo).toHaveBeenCalledWith({ y: 632, animated: true });
+    });
+
+    it('stays hidden while the devices load', async () => {
+      mockFetchAccountSessions.mockReturnValue(new Promise(() => undefined));
+      const screen = render(<AccountSecurityScreen />);
+
+      await screen.findByLabelText('Devices. Checking…');
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+
+    it('stays hidden when the devices could not be loaded', async () => {
+      mockFetchAccountSessions.mockRejectedValue(new Error('offline'));
+      const screen = render(<AccountSecurityScreen />);
+
+      await screen.findByLabelText('Devices. Unavailable · Retry');
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+
+    it('stays hidden when only this device is signed in', async () => {
+      mockFetchAccountSessions.mockResolvedValue({
+        sessions: [
+          {
+            id: 'sess_mobile',
+            device: 'iPhone',
+            browser: null,
+            location: null,
+            lastActiveAt: new Date().toISOString(),
+            isCurrent: true,
+          },
+        ],
+        currentSessionKnown: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await screen.findByLabelText('iPhone (this device). Active now');
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+
+    it('does not guess when this device cannot be matched and only one session is listed', async () => {
+      mockFetchAccountSessions.mockResolvedValue({
+        sessions: [
+          {
+            id: 'sess_only',
+            device: 'iPhone',
+            browser: null,
+            location: null,
+            lastActiveAt: new Date().toISOString(),
+            isCurrent: false,
+          },
+        ],
+        currentSessionKnown: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await screen.findByLabelText('iPhone. Active now');
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+
+    it('is not shown in Local Mode', () => {
+      mockAppMode = 'local';
+      const screen = render(<AccountSecurityScreen />);
+
+      expect(screen.queryByText('Security recommendations')).toBeNull();
+    });
+  });
+
+  describe('authenticator setup QR code', () => {
+    const startSetup = async (otpauthUrl: string) => {
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: false,
+        backupCodesReady: false,
+        enrollmentAvailable: true,
+      });
+      mockStartSetup.mockResolvedValueOnce({ secret: 'fixture-setup-secret', otpauthUrl });
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByText('Set up authenticator app'));
+      await screen.findByLabelText('Setup key');
+      return screen;
+    };
+
+    it('draws the QR code above the setup key with its scan line', async () => {
+      const screen = await startSetup(
+        'otpauth://totp/AGI:person@example.com?secret=FIXTURESECRET&issuer=AGI',
+      );
+
+      expect(screen.getByLabelText('QR code for your authenticator app')).toBeTruthy();
+      expect(
+        screen.getByText('Scan with your authenticator app, or open it on this phone'),
+      ).toBeTruthy();
+      const tree = JSON.stringify(screen.toJSON());
+      const at = (text: string) => tree.indexOf(text);
+      expect(at('QR code for your authenticator app')).toBeGreaterThan(-1);
+      expect(at('QR code for your authenticator app')).toBeLessThan(at('Or enter this key'));
+      expect(at('Or enter this key')).toBeLessThan(at('fixture-setup-secret'));
+      expect(at('fixture-setup-secret')).toBeLessThan(at('Copy setup key'));
+      expect(at('Copy setup key')).toBeLessThan(at('Authenticator code'));
+      expect(screen.getByText('Or enter this key')).toBeTruthy();
+      expect(screen.getByText('fixture-setup-secret')).toBeTruthy();
+      expect(screen.getByLabelText('Copy setup key')).toBeTruthy();
+      expect(screen.getByLabelText('Authenticator code')).toBeTruthy();
+    });
+
+    it('hides the QR code and keeps the key when the address cannot be encoded', async () => {
+      const screen = await startSetup('x'.repeat(8000));
+
+      expect(screen.queryByLabelText('QR code for your authenticator app')).toBeNull();
+      expect(screen.queryByText('Or enter this key')).toBeNull();
+      expect(screen.getByText('fixture-setup-secret')).toBeTruthy();
+      expect(screen.getByLabelText('Copy setup key')).toBeTruthy();
+    });
   });
 });

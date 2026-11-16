@@ -2620,7 +2620,7 @@ describe('the /web close-up and research steps are scaled pictures of the produc
       '<span className="font-medium">Sources{total > 3 ? ` · ${total}` : \'\'}</span>',
       'const preview = (cited.length > 0 ? cited : more).slice(0, 3);',
     ]);
-    expectSource('apps/web/features/chat/lib/researchReportSources.ts', [
+    expectSource('packages/ui/unified-chat/src/lib/report-sources.ts', [
       'Inline [n] citations stay; only the trailing block goes.',
     ]);
     expectSource('apps/web/features/chat/components/research/ResearchActivity.tsx', [

@@ -29,10 +29,10 @@ jest.mock('@/lib/mmkv', () => ({
 }));
 
 jest.mock('@/lib/safeOpenURL', () => ({
-  openUntrustedUrlInAppBrowser: jest.fn().mockResolvedValue(true),
+  openInAppBrowser: jest.fn().mockResolvedValue(true),
 }));
 
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { helpArticleUrl } from '@/src/features/support/HelpArticleLink';
 import {
   LibraryFeaturePromoSheet,
@@ -92,7 +92,7 @@ describe('Library feature promo sheet', () => {
 
     fireEvent.press(screen.getByLabelText('Learn more'));
 
-    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('library'));
+    expect(openInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('library'));
     expect(helpArticleUrl('library')).toMatch(/\/help\/library\?from=mobile$/);
     expect(screen.queryByText(LIBRARY_PROMO_TITLE)).toBeNull();
   });

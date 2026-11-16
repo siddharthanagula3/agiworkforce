@@ -42,7 +42,7 @@ export function ArtifactExportSheet({
 }: ArtifactExportSheetProps) {
   const colors = useThemeColors();
   const [exporting, setExporting] = useState<ArtifactExportFormat | null>(null);
-  const options = useMemo(() => artifactExportOptions(artifact), [artifact]);
+  const options = useMemo(() => artifactExportOptions(artifact, content), [artifact, content]);
 
   const handleExport = useCallback(
     async (option: ArtifactExportOption) => {

@@ -9,21 +9,39 @@ themselves are the slow part (iOS release ~15–25 min cold, Android release ~10
 
 ## What the stores actually require
 
-| Device class        | Canvas      | Upload slot                                    |
-| ------------------- | ----------- | ---------------------------------------------- |
-| `iphone-17-pro-max` | 1320 × 2868 | App Store Connect, iPhone 6.9" **(required)**  |
-| `ipad-pro-13`       | 2048 × 2732 | App Store Connect, iPad 13" **(required)**     |
-| `phone`             | 1080 × 1920 | Play Console, phone screenshots **(required)** |
-| `tablet-10`         | 1440 × 2560 | Play Console, 10" tablet (optional)            |
-| `iphone-17-pro`     | 1206 × 2622 | none, internal review only                     |
-| `ipad-pro-11`       | 1668 × 2388 | none, internal review only                     |
+| Device class        | Canvas      | Upload slot                                                                    |
+| ------------------- | ----------- | ------------------------------------------------------------------------------ |
+| `iphone-17-pro`     | 1206 × 2622 | App Store Connect, iPhone with Dynamic Island (medium display) **(required)**  |
+| `iphone-17-pro-max` | 1320 × 2868 | App Store Connect, iPhone with Dynamic Island (large display) (upload as well) |
+| `ipad-pro-13`       | 2048 × 2732 | App Store Connect, iPad 13-inch display **(required while iPad is supported)** |
+| `phone`             | 1080 × 1920 | Play Console, phone screenshots **(required: at least 2; 4 for promotion)**    |
+| `tablet-10`         | 1440 × 2560 | Play Console, 10" tablet (optional)                                            |
+| `ipad-pro-11`       | 1668 × 2388 | none, internal review only                                                     |
 
-The iPad slot is required because `app.config.js` sets `ios.supportsTablet: true`.
-Apple also accepts a direct 2064 × 2752 capture for the 13" iPad slot; the
-pipeline's branded canvas uses 2048 × 2732. See [Apple's current screenshot
-specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications).
-`iphone-17-pro` and `ipad-pro-11` produce good-looking frames that App Store Connect has
-no slot for; capture them only for internal review.
+Apple's [screenshot
+specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications),
+read 2026-11-15, list as required "At least one screenshot for iPhone with
+Dynamic Island (medium display)", which accepts 1179 × 2556 or 1206 × 2622, and
+"At least one screenshot for iPad 13-inch display" when the app supports iPad,
+which `app.config.js` does (`ios.supportsTablet: true`). Apple also accepts a
+direct 2064 × 2752 capture for the 13" iPad slot; the pipeline's branded canvas
+uses 2048 × 2732. Upload the 6.9" set too: the same page also describes the
+large-display sizes as a fallback chain, and uploading both avoids depending on
+it. `pnpm screenshots:required` does not include `iphone-17-pro`; capture it
+with the single-class command in step 3. The `storeSlot` text for
+`iphone-17-pro` in `scripts/screenshots/catalog.ts` still says it has no slot.
+
+**No transparency.** Apple says images "can't include alpha channels or
+transparencies", and Play requires JPEG or 24-bit PNG with no alpha
+([Play graphic assets](https://support.google.com/googleplay/android-developer/answer/9866151),
+read 2026-11-15). The compositor writes PNG with an alpha channel
+(`scripts/screenshots/compositor.ts`); the 2026-09-27 iPhone PNGs report
+`hasAlpha: yes`. Until the compositor writes opaque frames, convert each final
+PNG to JPEG before uploading, and confirm with `sips -g hasAlpha`:
+
+```bash
+sips -s format jpeg 01-local-demo-chat.png --out 01-local-demo-chat.jpg
+```
 
 ## One-time setup
 
@@ -117,14 +135,17 @@ store-listing/screenshots/captures/<platform>/<class>/
   final/   store-ready JPG/PNG screenshots at a size Apple accepts
 ```
 
-Upload `final/` contents:
+Upload `final/` contents, converted to JPEG as above:
 
-- App Store Connect → 6.9" iPhone slot ← `ios/iphone-17-pro-max/final/`
+- App Store Connect → iPhone medium display slot ← `ios/iphone-17-pro/final/`
+- App Store Connect → iPhone large display (6.9") slot ← `ios/iphone-17-pro-max/final/`
 - App Store Connect → 13" iPad slot ← `ios/ipad-pro-13/final/`
 - Play Console → phone screenshots ← `android/phone/final/`
 
-Apple accepts one to ten screenshots per slot. The pipeline is configured for
-five frames. On 2026-09-26, `02-onboarding-local` was captured and visually
+Apple accepts one to ten screenshots per slot; Play accepts up to eight per
+device type. The pipeline is configured for five frames. The captures described in the rest of this paragraph predate the
+November chat changes and must be retaken from a current release build before
+upload. On 2026-09-26, `02-onboarding-local` was captured and visually
 checked on isolated iPhone 17 Pro Max and iPad Pro 13 Simulators. Their `final/`
 files are opaque direct JPEG captures at 1320 × 2868 and 2064 × 2752. A later
 current-source iPhone run captured `01-local-demo-chat` and verified the

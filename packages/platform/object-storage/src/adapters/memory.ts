@@ -8,6 +8,7 @@ import {
   type CompleteMultipartUploadInput,
   type CopyObjectIfMatchInput,
   type CreateMultipartUploadInput,
+  type ListedObject,
   type MultipartUploadHandle,
   type ObjectBody,
   type ObjectEncryption,
@@ -39,6 +40,7 @@ const UPLOAD_EXPIRES_PARAM = 'expiresAt';
 const UPLOAD_ID_PARAM = 'uploadId';
 const UPLOAD_PART_NUMBER_PARAM = 'partNumber';
 const DOWNLOAD_DISPOSITION_PARAM = 'disposition';
+const DOWNLOAD_CONTENT_TYPE_PARAM = 'responseContentType';
 
 interface StoredObject {
   data: Uint8Array;
@@ -46,6 +48,7 @@ interface StoredObject {
   etag: string;
   checksumSha256: string;
   metadata: Readonly<Record<string, string>> | undefined;
+  writtenAtMs: number;
 }
 
 interface PendingUpload {
@@ -160,6 +163,7 @@ export class MemoryObjectStore implements ObjectStore {
       etag: etagOf(data),
       checksumSha256,
       metadata: input.metadata,
+      writtenAtMs: this.now(),
     });
   }
 
@@ -205,7 +209,10 @@ export class MemoryObjectStore implements ObjectStore {
   async copyIfMatch(input: CopyObjectIfMatchInput): Promise<boolean> {
     const stored = this.objects.get(MemoryObjectStore.address(input.bucket, input.sourceKey));
     if (!stored || stored.etag !== input.etag) return false;
-    this.objects.set(MemoryObjectStore.address(input.bucket, input.destinationKey), { ...stored });
+    this.objects.set(MemoryObjectStore.address(input.bucket, input.destinationKey), {
+      ...stored,
+      writtenAtMs: this.now(),
+    });
     return true;
   }
 
@@ -309,6 +316,24 @@ export class MemoryObjectStore implements ObjectStore {
     return pending;
   }
 
+  async listObjects(
+    bucket: string,
+    prefix: string,
+    limit?: number,
+    startAfter?: string,
+  ): Promise<ListedObject[]> {
+    const start = MemoryObjectStore.address(bucket, prefix);
+    const listed: ListedObject[] = [];
+    for (const [address, stored] of this.objects) {
+      if (!address.startsWith(start)) continue;
+      const key = address.slice(bucket.length + BUCKET_KEY_SEPARATOR.length);
+      if (startAfter !== undefined && key <= startAfter) continue;
+      listed.push({ key, lastModifiedMs: stored.writtenAtMs });
+    }
+    listed.sort((left, right) => (left.key < right.key ? -1 : left.key > right.key ? 1 : 0));
+    return limit === undefined ? listed : listed.slice(0, limit);
+  }
+
   private uploadUrl(): URL {
     if (!this.uploadBaseUrl) {
       throw new ObjectStorageConfigError(
@@ -341,6 +366,9 @@ export class MemoryObjectStore implements ObjectStore {
     url.searchParams.set(UPLOAD_KEY_PARAM, input.key);
     if (bound.contentDisposition) {
       url.searchParams.set(DOWNLOAD_DISPOSITION_PARAM, bound.contentDisposition);
+    }
+    if (bound.contentType) {
+      url.searchParams.set(DOWNLOAD_CONTENT_TYPE_PARAM, bound.contentType);
     }
     url.searchParams.set(
       UPLOAD_EXPIRES_PARAM,

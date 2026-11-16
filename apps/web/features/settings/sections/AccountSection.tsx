@@ -55,6 +55,7 @@ import {
   type OwnedAccountDeletionSnapshot,
 } from '../hooks/use-account-deletion-status';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import { useEmbeddedSignInPath } from '@shared/components/layout/EmbeddedPage';
 
 type DeletionStatusSnapshot = OwnedAccountDeletionSnapshot;
 
@@ -267,6 +268,7 @@ export function AccountSection({
   const logout = useAuthStore((s) => s.logout);
   const identitySignOut = useSignOut();
   const router = useRouter();
+  const signedOutPath = useEmbeddedSignInPath() ?? '/login';
 
   const userId = user?.id ?? null;
   const organizationId = useOrganizationOverview().data?.organization?.id ?? null;
@@ -341,7 +343,7 @@ export function AccountSection({
 
         if (session.isCurrent) {
           await logout();
-          await identitySignOut({ sessionId: session.id, redirectUrl: '/login' });
+          await identitySignOut({ sessionId: session.id, redirectUrl: signedOutPath });
           return;
         }
 
@@ -349,7 +351,7 @@ export function AccountSection({
         setSessionTotalCount((current) => (current === null ? current : Math.max(0, current - 1)));
       } catch (error) {
         if (sessionRevoked && session.isCurrent) {
-          router.replace('/login');
+          router.replace(signedOutPath);
           return;
         }
         setSessionActionError(toUserMessage(error, 'Unable to revoke this session.'));
@@ -357,7 +359,7 @@ export function AccountSection({
         setRevokingSessionId(null);
       }
     },
-    [identitySignOut, logout, router],
+    [identitySignOut, logout, router, signedOutPath],
   );
 
   // ── Delete account (canonical, working flow on this surface) ───────────────

@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { Mic } from 'lucide-react-native';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import { toUserMessage } from '@/services/userMessage';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   askFromSiriSupported,
   disableAskFromSiri,
@@ -13,6 +14,7 @@ import {
 export function AskFromSiriSetting() {
   const [enabled, setEnabled] = useState(isAskFromSiriEnabled);
   const [saving, setSaving] = useState(false);
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
   const change = useCallback(async (next: boolean) => {
     setSaving(true);
@@ -36,11 +38,15 @@ export function AskFromSiriSetting() {
     <SettingsGroup>
       <SettingsSwitchRow
         label="Ask from Siri"
-        description="Ask AGI through Siri and hear the answer, saved as a chat."
+        description={
+          isCloud
+            ? 'Ask AGI through Siri and hear the answer, saved as a chat.'
+            : 'Needs AGI Cloud. Switch to Cloud mode to turn it on.'
+        }
         icon={Mic}
         value={enabled}
         onValueChange={(next) => void change(next)}
-        disabled={saving}
+        disabled={saving || !isCloud}
         isLast
         testID="settings-ask-from-siri"
       />

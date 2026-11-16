@@ -4,8 +4,9 @@ jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
 }));
 
 import React from 'react';
-import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
-import { requireAutoMode } from '../test-utils/modelFixtures';
+import { act, fireEvent, render, renderHook, waitFor, within } from '@testing-library/react-native';
+import { requireAutoMode, requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { isAutoModeModelId } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const AUTO_MODEL_ID = requireAutoMode().id;
@@ -28,6 +29,8 @@ let mockChatInputExhaustedUsageRecovery: string | null | undefined;
 let mockChatInputOnMultilineChange: ((multiline: boolean) => void) | undefined;
 let mockChatInputSendPreview: { providerMode?: string } | undefined;
 let mockUsageSnapshot: Record<string, unknown> | null = null;
+
+jest.mock('@clerk/expo', () => ({ useUser: () => ({ user: null }) }));
 
 jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: jest.fn(async () => {
@@ -73,6 +76,8 @@ jest.mock('@/stores/chatStore', () => ({
       deleteMessage: jest.fn(),
       setPaywallError: jest.fn(),
       clearError: jest.fn(),
+      clearUnscopedError: jest.fn(),
+      discardUnsentConversation: jest.fn(async () => undefined),
       features: mockChatFeatures,
     }),
 }));
@@ -99,13 +104,14 @@ jest.mock('@/src/navigation/openNearestDrawer', () => ({
 
 jest.mock('@/src/features/chat/components/ChatInput', () => {
   const React = require('react');
-  const { View } = require('react-native');
+  const { Pressable, View } = require('react-native');
   return {
     ChatInput: React.forwardRef(function MockChatInput(
       props: {
         onSend?: (text: string) => void;
         draftProvenance?: { scope: 'local' } | { scope: 'cloud'; ownerId: string };
         onOpenCompare?: () => void;
+        onOpenVoiceMode?: () => void;
         selectedSkillName?: string;
         exhaustedUsageRecovery?: string | null;
         onMultilineChange?: (multiline: boolean) => void;
@@ -121,7 +127,13 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
       mockChatInputExhaustedUsageRecovery = props.exhaustedUsageRecovery;
       mockChatInputOnMultilineChange = props.onMultilineChange;
       mockChatInputSendPreview = props.sendPreview;
-      return <View testID="chat-input" />;
+      return (
+        <View testID="chat-input">
+          {props.onOpenVoiceMode ? (
+            <Pressable accessibilityLabel="Start voice mode" onPress={props.onOpenVoiceMode} />
+          ) : null}
+        </View>
+      );
     }),
   };
 });
@@ -202,15 +214,22 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
+import { Alert, NativeModules, Platform, StyleSheet } from 'react-native';
 import ChatTabScreen from '../app/(app)/(tabs)/chat';
+import { HEADER_TEXT_SCALE_LIMIT } from '../src/features/chat/components/WorkModeSwitch';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useTierStore } from '../src/features/billing/store';
 import { useAuthStore } from '../src/features/auth/store';
-import { DEFAULT_LOCAL_MODEL_ID } from '../src/features/model-picker/service';
+import {
+  DEFAULT_LOCAL_MODEL_ID,
+  canAccessCloudModelForTier,
+  getDefaultCloudModelIdForTier,
+} from '../src/features/model-picker/service';
 import { generateImage, getGeneratedImageUri } from '../src/features/image/services/imagegen';
 import { startCaptureSession } from '../src/features/voice/services/voiceInput';
+import { VOICE_DISCLOSURE } from '../src/features/voice/components/VoiceOnboardingSheet';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -227,6 +246,15 @@ import {
   CLOUD_CHAT_POST_AUTH_INTENT,
   POST_AUTH_INTENT_PARAM,
 } from '../src/features/auth/services/postAuthIntent';
+import {
+  __resetCloudModeFallbackForTests,
+  answerCloudSession,
+} from '../src/features/chat/store/cloudModeFallback';
+import { useAppModeSwitch } from '../src/features/chat/hooks/useAppModeSwitch';
+import { getDraft, setDraft } from '../src/features/chat/draftStore';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { useProjectStore } from '../src/features/projects/store';
+import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 
 const mockGenerateImage = generateImage as jest.Mock;
 const mockGetGeneratedImageUri = getGeneratedImageUri as jest.Mock;
@@ -269,6 +297,8 @@ describe('Chat tab new chat', () => {
     useModelStore.setState({
       selectedModel: DEFAULT_LOCAL_MODEL_ID,
       selectedProvider: 'local',
+      newChatModels: { local: null, cloud: null },
+      conversationModelShown: false,
       recentModels: [],
       favorites: [],
       thinkingModeEnabled: false,
@@ -381,6 +411,126 @@ describe('Chat tab new chat', () => {
     expect(screen.queryByTestId('voice-inline-bar')).toBeNull();
   });
 
+  describe('voice mode where the phone has no on-device recognizer', () => {
+    const originalOS = Platform.OS;
+    const originalVersion = Platform.Version;
+    const nativeModules = NativeModules as Record<string, unknown>;
+    const originalWebRtc = nativeModules['WebRTCModule'];
+
+    const runOn = (os: 'ios' | 'android', version: number | string) => {
+      Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+      Object.defineProperty(Platform, 'Version', { get: () => version, configurable: true });
+    };
+
+    const liveVoiceReady = () => {
+      nativeModules['WebRTCModule'] = {};
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+    };
+
+    afterEach(() => {
+      Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+      Object.defineProperty(Platform, 'Version', {
+        get: () => originalVersion,
+        configurable: true,
+      });
+      if (originalWebRtc === undefined) delete nativeModules['WebRTCModule'];
+      else nativeModules['WebRTCModule'] = originalWebRtc;
+    });
+
+    it('offers no voice mode in Local Mode on Android API 32', () => {
+      runOn('android', 32);
+      useSettingsStore.setState({ voiceOnboardingSeen: false });
+
+      const screen = render(<ChatTabScreen />);
+
+      expect(screen.queryByLabelText('Start voice mode')).toBeNull();
+      expect(screen.queryByText(VOICE_DISCLOSURE['on-device'])).toBeNull();
+    });
+
+    it('does nothing at launch on Android API 32 in Local Mode when Start with Voice is on', () => {
+      runOn('android', 32);
+      useSettingsStore.setState({ voiceOnboardingSeen: false });
+      useLocalSettingsStore.setState({ startWithVoice: true });
+
+      const screen = render(<ChatTabScreen />);
+
+      expect(screen.queryByText(VOICE_DISCLOSURE['on-device'])).toBeNull();
+      expect(screen.queryByTestId('voice-inline-bar')).toBeNull();
+      expect(mockStartCapture).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['Android API 33', 'android', 33],
+      ['iOS', 'ios', '17.5'],
+    ] as const)(
+      'offers voice mode in Local Mode on %s with the on-device disclosure',
+      (_label, os, version) => {
+        runOn(os, version);
+        useSettingsStore.setState({ voiceOnboardingSeen: false });
+
+        const screen = render(<ChatTabScreen />);
+        fireEvent.press(screen.getByLabelText('Start voice mode'));
+
+        expect(screen.getByText(VOICE_DISCLOSURE['on-device'])).toBeTruthy();
+      },
+    );
+
+    it('offers live voice on Android API 32 when live voice is available', () => {
+      runOn('android', 32);
+      liveVoiceReady();
+      useSettingsStore.setState({ voiceOnboardingSeen: false });
+
+      const screen = render(<ChatTabScreen />);
+      fireEvent.press(screen.getByLabelText('Start voice mode'));
+
+      expect(screen.getByText(VOICE_DISCLOSURE.live)).toBeTruthy();
+      expect(screen.queryByText(VOICE_DISCLOSURE['on-device'])).toBeNull();
+    });
+
+    it('waits for the account to load before Start with Voice opens live voice on Android API 32', async () => {
+      runOn('android', 32);
+      liveVoiceReady();
+      useLocalSettingsStore.setState({ startWithVoice: true });
+      useAuthStore.setState({ isClerkLoaded: false, isClerkSignedIn: false, clerkUserId: null });
+
+      render(<ChatTabScreen />);
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+
+      act(() => {
+        useAuthStore.setState({
+          isClerkLoaded: true,
+          isClerkSignedIn: true,
+          clerkUserId: 'mobile-image-test-user',
+        });
+      });
+
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/(app)/chat/conv-1?voice=live'));
+      expect(mockCreateConversation).toHaveBeenCalledTimes(1);
+      expect(mockStartCapture).not.toHaveBeenCalled();
+    });
+
+    it('says voice is unavailable instead of falling back to the device when the live chat cannot start on Android API 32', async () => {
+      runOn('android', 32);
+      liveVoiceReady();
+      mockCreateConversation.mockRejectedValueOnce(new Error('offline'));
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      const screen = render(<ChatTabScreen />);
+      fireEvent.press(screen.getByLabelText('Start voice mode'));
+
+      await waitFor(() =>
+        expect(alert).toHaveBeenCalledWith(
+          'Voice is unavailable',
+          'The chat could not be started.',
+        ),
+      );
+      expect(screen.queryByTestId('voice-inline-bar')).toBeNull();
+      expect(mockStartCapture).not.toHaveBeenCalled();
+      alert.mockRestore();
+    });
+  });
+
   it('hides the greeting while the composer text wraps', () => {
     const screen = render(<ChatTabScreen />);
     expect(screen.getByTestId('chat.new-chat.greeting')).toBeTruthy();
@@ -390,6 +540,25 @@ describe('Chat tab new chat', () => {
 
     act(() => mockChatInputOnMultilineChange?.(false));
     expect(screen.getByTestId('chat.new-chat.greeting')).toBeTruthy();
+  });
+
+  it('keeps the header, greeting and composer whole at the largest text sizes', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const screen = render(<ChatTabScreen />);
+
+    for (const label of ['Chat', 'Work']) {
+      const text = screen.getByText(label);
+      expect(text.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+      expect(text.props.allowFontScaling).not.toBe(false);
+    }
+    const greeting = screen.getByTestId('chat.new-chat.greeting');
+    expect(greeting.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+    expect(greeting.props.numberOfLines).toBe(1);
+    expect(greeting.props.ellipsizeMode).toBe('tail');
+    expect(
+      StyleSheet.flatten(screen.getByTestId('chat.new-chat.middle').props.style),
+    ).toMatchObject({ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 });
   });
 
   it('renders no starter suggestion chips in the empty new chat', () => {
@@ -627,6 +796,105 @@ describe('Chat tab new chat', () => {
     expect(mockFailImageGeneration).not.toHaveBeenCalled();
   });
 
+  it('puts the image choice back to its defaults once an image request is sent', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useChatViewStore.setState({
+      mediaMode: 'image',
+      imageAspectRatio: '16:9',
+      imageTransparentBackground: true,
+    });
+    mockGenerateImage.mockResolvedValue({
+      success: true,
+      images: [{ url: 'https://example.com/generated.png' }],
+      model: 'cloud-image-model',
+    });
+    mockGetGeneratedImageUri.mockReturnValue('https://example.com/generated.png');
+
+    render(<ChatTabScreen />);
+    await mockChatInputOnSend?.('/image a red circle on a white background');
+
+    await waitFor(() => expect(mockBeginImageGeneration).toHaveBeenCalled());
+    expect(useChatViewStore.getState()).toMatchObject({
+      mediaMode: 'text',
+      imageAspectRatio: '1:1',
+      imageTransparentBackground: false,
+    });
+  });
+
+  it('names the project a new chat starts in and lets the person start outside it', () => {
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-garden',
+          name: 'Garden',
+          description: '',
+          instructions: '',
+          createdAt: '2026-11-14T10:00:00.000Z',
+          updatedAt: '2026-11-14T10:00:00.000Z',
+        },
+      ],
+      activeProjectId: 'project-garden',
+    });
+
+    const screen = render(<ChatTabScreen />);
+
+    expect(screen.getByTestId('chat.new-chat.project')).toBeTruthy();
+    expect(screen.getByText('In Garden')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Start this chat outside Garden'));
+
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
+    expect(screen.queryByTestId('chat.new-chat.project')).toBeNull();
+    useProjectStore.setState({ projects: [], activeProjectId: null });
+  });
+
+  it('keeps a new chat in a project only while the person stays on the screen they opened from it', () => {
+    useProjectStore.setState({
+      projects: [
+        {
+          id: 'project-garden',
+          name: 'Garden',
+          description: '',
+          instructions: '',
+          createdAt: '2026-11-14T10:00:00.000Z',
+          updatedAt: '2026-11-14T10:00:00.000Z',
+        },
+      ],
+      activeProjectId: 'project-garden',
+    });
+    useCloudProjectStore.setState({
+      projects: [
+        {
+          id: 'project-kite',
+          name: 'Kite',
+          description: null,
+          instructions: null,
+          color: null,
+          isArchived: false,
+          metadata: null,
+          source: 'mobile',
+          createdAt: '2026-11-14T10:00:00.000Z',
+          updatedAt: '2026-11-14T10:00:00.000Z',
+          deletedAt: null,
+        },
+      ],
+      activeProjectId: 'project-kite',
+    });
+
+    const first = render(<ChatTabScreen />);
+    expect(first.getByText('In Garden')).toBeTruthy();
+    first.unmount();
+
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
+    expect(useCloudProjectStore.getState().activeProjectId).toBeNull();
+    const second = render(<ChatTabScreen />);
+    expect(second.queryByTestId('chat.new-chat.project')).toBeNull();
+    second.unmount();
+    useProjectStore.setState({ projects: [], activeProjectId: null });
+    useCloudProjectStore.setState({ projects: [], activeProjectId: null });
+  });
+
   it('routes a natural-language image request to image generation', async () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useWaitlistStore.setState({
@@ -828,6 +1096,110 @@ describe('Chat tab new chat', () => {
       expect(useCloudUsageStore.getState().snapshot).toBeNull();
       expect(screen.queryByTestId('chat.usage-limit')).toBeNull();
       expect(mockChatInputExhaustedUsageRecovery).toBeNull();
+    });
+  });
+
+  describe('after the session settle window ends without an answer', () => {
+    const owner = 'mobile-image-test-user';
+    const mmkvItems = new Map<string, string>();
+
+    beforeEach(() => {
+      __resetCloudModeFallbackForTests();
+      mmkvItems.clear();
+      const { mmkvStorage } = jest.requireMock('@/lib/mmkv') as {
+        mmkvStorage: Record<'getItem' | 'setItem' | 'removeItem', jest.Mock>;
+      };
+      mmkvStorage.getItem.mockImplementation((key: string) => mmkvItems.get(key) ?? null);
+      mmkvStorage.setItem.mockImplementation((key: string, value: string) => {
+        mmkvItems.set(key, value);
+      });
+      mmkvStorage.removeItem.mockImplementation((key: string) => {
+        mmkvItems.delete(key);
+      });
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false, clerkUserId: null });
+    });
+
+    afterEach(() => {
+      const { mmkvStorage } = jest.requireMock('@/lib/mmkv') as {
+        mmkvStorage: Record<'getItem' | 'setItem' | 'removeItem', jest.Mock>;
+      };
+      mmkvStorage.getItem.mockReset().mockReturnValue(null);
+      mmkvStorage.setItem.mockReset();
+      mmkvStorage.removeItem.mockReset();
+      __resetCloudModeFallbackForTests();
+    });
+
+    const confirmSession = (userId: string) =>
+      act(() => {
+        useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: userId });
+        answerCloudSession(userId);
+      });
+
+    it('returns to Cloud when the same account confirms, leaving the Local draft in Local', async () => {
+      render(<ChatTabScreen />);
+      await waitFor(() => expect(useChatAppModeStore.getState().appMode).toBe('local'));
+      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+      expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
+      setDraft('new-chat', 'private local notes', mockChatInputDraftProvenance);
+
+      confirmSession(owner);
+
+      await waitFor(() =>
+        expect(mockChatInputDraftProvenance).toEqual({ scope: 'cloud', ownerId: owner }),
+      );
+      expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+      await waitFor(() =>
+        expect(useModelStore.getState().selectedModel).not.toBe(DEFAULT_LOCAL_MODEL_ID),
+      );
+      expect(getDraft('new-chat', mockChatInputDraftProvenance)).toBe('');
+      expect(getDraft('new-chat', { scope: 'local' })).toBe('private local notes');
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
+    });
+
+    it('returns to Cloud with the model the person had picked, not the plan default', async () => {
+      const picked = requireMobileCloudModel(
+        (model) =>
+          !isAutoModeModelId(model.id) &&
+          canAccessCloudModelForTier(model.id, 'pro') &&
+          model.id !== getDefaultCloudModelIdForTier('pro'),
+        'non-default Mobile Cloud model on the Pro plan',
+      ).id;
+      act(() => useModelStore.getState().setModel(picked));
+      render(<ChatTabScreen />);
+      await waitFor(() => expect(useChatAppModeStore.getState().appMode).toBe('local'));
+      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+
+      confirmSession(owner);
+
+      await waitFor(() => expect(useChatAppModeStore.getState().appMode).toBe('cloud'));
+      await waitFor(() => expect(useModelStore.getState().selectedModel).toBe(picked));
+    });
+
+    it('stays in Local when the person picks Local themselves before the session confirms', async () => {
+      render(<ChatTabScreen />);
+      await waitFor(() => expect(useChatAppModeStore.getState().appMode).toBe('local'));
+      const modeSwitch = renderHook(() => useAppModeSwitch());
+
+      act(() => {
+        modeSwitch.result.current.switchToLocal();
+      });
+      confirmSession(owner);
+
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
+      expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
+    });
+
+    it('stays in Local when the session was answered signed out before the fallback', async () => {
+      answerCloudSession(null);
+      render(<ChatTabScreen />);
+      await waitFor(() => expect(useChatAppModeStore.getState().appMode).toBe('local'));
+
+      confirmSession(owner);
+
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
     });
   });
 });

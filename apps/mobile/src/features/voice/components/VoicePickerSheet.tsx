@@ -17,6 +17,7 @@ import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/src/features/auth/store';
+import { useHardwareBackDismiss } from '@/src/shared/hooks/useHardwareBackDismiss';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { liveVoiceModeUnavailableReason } from '../services/liveVoiceAvailability';
 import { VOICE_PRESETS } from '../voicePresets';
@@ -133,6 +134,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const sheetRef = useRef<BottomSheet>(null);
+  useHardwareBackDismiss(visible, () => sheetRef.current?.close());
   const [opened, setOpened] = useState(visible);
   if (visible && !opened) setOpened(true);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
@@ -182,13 +184,6 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
     listRef.current?.scrollToOffset({ offset: initialIndex * width, animated: false });
     sheetRef.current?.snapToIndex(0);
   }, [visible, initialIndex, width]);
-
-  const handleSheetChange = useCallback(
-    (next: number) => {
-      if (next === -1) onDismiss();
-    },
-    [onDismiss],
-  );
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -240,7 +235,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
       enablePanDownToClose
       enableDynamicSizing
       topInset={insets.top}
-      onChange={handleSheetChange}
+      onClose={onDismiss}
       backdropComponent={renderBackdrop}
       backgroundStyle={{
         backgroundColor: colors.surfaceElevated,

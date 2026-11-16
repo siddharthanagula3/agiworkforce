@@ -536,3 +536,48 @@ describe('chatSystemPromptDescribesProductCapabilities', () => {
     expect(chatSystemPromptDescribesProductCapabilities(select(9))).toBe(false);
   });
 });
+
+describe('rich inline blocks per surface', () => {
+  const versionsWithUnavailableText = CHAT_SYSTEM_PROMPT_VERSIONS.filter(
+    ({ sections }) =>
+      sections['inline_blocks'] !== undefined &&
+      sections['inline_blocks_unavailable'] !== undefined,
+  ).map(({ version }) => version);
+
+  it('has a published version that says inline blocks are unavailable on some surfaces', () => {
+    expect(versionsWithUnavailableText.length).toBeGreaterThan(0);
+  });
+
+  describe.each(versionsWithUnavailableText)('chat system prompt version %s', (version) => {
+    const sections = chatSystemPromptSections(version);
+    const preambleFor = (surface: 'web' | 'desktop' | 'mobile' | 'chrome' | 'vscode' | 'cli') =>
+      String(
+        buildCapabilityPreamble({
+          tools: [],
+          surface,
+          artifacts: true,
+          promptSelection: { variants: { 'chat.system': version } },
+        }),
+      );
+
+    it.each(['web', 'desktop', 'mobile'] as const)(
+      'tells the model on %s which fenced blocks render inline',
+      (surface) => {
+        const preamble = preambleFor(surface);
+
+        expect(preamble).toContain(String(sections['inline_blocks']));
+        expect(preamble).not.toContain(String(sections['inline_blocks_unavailable']));
+      },
+    );
+
+    it.each(['chrome', 'vscode', 'cli'] as const)(
+      'tells the model on %s that rich inline blocks are not shown',
+      (surface) => {
+        const preamble = preambleFor(surface);
+
+        expect(preamble).toContain(String(sections['inline_blocks_unavailable']));
+        expect(preamble).not.toContain(String(sections['inline_blocks']));
+      },
+    );
+  });
+});

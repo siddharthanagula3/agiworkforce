@@ -1,16 +1,22 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { BackHandler } from 'react-native';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const mockSheetProps: { current: Record<string, unknown> | null } = { current: null };
 const mockSheetCalls = { snapToIndex: jest.fn(), close: jest.fn() };
+const mockSheetState = { index: -1 };
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
   const { View } = require('react-native');
   const BottomSheet = React.forwardRef(
     (
-      props: { children: React.ReactNode; onChange?: (index: number) => void },
+      props: {
+        children: React.ReactNode;
+        onChange?: (index: number) => void;
+        onClose?: () => void;
+      },
       ref: React.Ref<unknown>,
     ) => {
       mockSheetProps.current = props as Record<string, unknown>;
@@ -18,7 +24,9 @@ jest.mock('@gorhom/bottom-sheet', () => {
         snapToIndex: (index: number) => mockSheetCalls.snapToIndex(index),
         close: () => {
           mockSheetCalls.close();
-          props.onChange?.(-1);
+          if (mockSheetState.index !== -1) props.onChange?.(-1);
+          mockSheetState.index = -1;
+          props.onClose?.();
         },
       }));
       return <View testID="bottom-sheet">{props.children}</View>;
@@ -62,6 +70,7 @@ describe('VoicePickerSheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockSheetProps.current = null;
+    mockSheetState.index = 0;
     mockGetVoicesForLanguage.mockReset().mockResolvedValue([]);
     useSettingsStore.setState({
       selectedPresetId: null,
@@ -88,15 +97,31 @@ describe('VoicePickerSheet', () => {
     renderSheet({ onDismiss });
     const props = mockSheetProps.current as {
       handleIndicatorStyle: { backgroundColor: string; width: number; height: number };
-      onChange: (index: number) => void;
+      onChange?: (index: number) => void;
+      onClose: () => void;
     };
 
     expect(props.handleIndicatorStyle.backgroundColor).toBeTruthy();
     expect(props.handleIndicatorStyle.width).toBe(36);
-    props.onChange(0);
+    props.onChange?.(0);
     expect(onDismiss).not.toHaveBeenCalled();
-    props.onChange(-1);
+    props.onChange?.(-1);
+    props.onClose();
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the caller it closed when Back arrives before the opening animation settles', () => {
+    mockSheetState.index = -1;
+    const remove = jest.fn();
+    const add = jest.spyOn(BackHandler, 'addEventListener').mockImplementation(() => ({ remove }));
+    const onDismiss = jest.fn();
+    renderSheet({ onDismiss });
+    const handler = add.mock.calls.at(-1)?.[1] as () => boolean;
+
+    expect(handler()).toBe(true);
+    expect(mockSheetCalls.close).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    add.mockRestore();
   });
 
   it('closes the sheet when it is hidden by the caller', () => {
@@ -222,5 +247,33 @@ describe('VoicePickerSheet', () => {
     expect(useSettingsStore.getState().selectedPresetId).toBe(existing.id);
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it('closes on the hardware back button only while it is open', () => {
+    const remove = jest.fn();
+    const add = jest.spyOn(BackHandler, 'addEventListener').mockImplementation(() => ({ remove }));
+    const onDismiss = jest.fn();
+    const view = renderSheet({ visible: false, onDismiss });
+    expect(add).not.toHaveBeenCalled();
+
+    view.rerender(
+      <SafeAreaProvider initialMetrics={METRICS}>
+        <VoicePickerSheet visible onStart={jest.fn()} onDismiss={onDismiss} />
+      </SafeAreaProvider>,
+    );
+    const handler = add.mock.calls.at(-1)?.[1] as () => boolean;
+
+    expect(add).toHaveBeenCalledWith('hardwareBackPress', expect.any(Function));
+    expect(handler()).toBe(true);
+    expect(mockSheetCalls.close).toHaveBeenCalled();
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+
+    view.rerender(
+      <SafeAreaProvider initialMetrics={METRICS}>
+        <VoicePickerSheet visible={false} onStart={jest.fn()} onDismiss={onDismiss} />
+      </SafeAreaProvider>,
+    );
+    expect(remove).toHaveBeenCalledTimes(1);
+    add.mockRestore();
   });
 });

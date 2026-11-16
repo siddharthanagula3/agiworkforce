@@ -62,7 +62,7 @@ describe('buildBillingInfoFromUsage', () => {
     const free = buildBillingInfoFromUsage({ ...usage, plan_tier: 'free' });
     const max15x = buildBillingInfoFromUsage({ ...usage, plan_tier: 'max_15x' });
 
-    expect(free.features).toContain('1 project');
+    expect(free.features).toContain('5 projects');
     expect(max15x.features).toContain('Projects with no set limit');
     expect(max15x.features).toContain('Remote Control');
     expect(free.features).not.toContain('Remote Control');

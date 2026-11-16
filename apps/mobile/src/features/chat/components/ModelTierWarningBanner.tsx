@@ -1,5 +1,6 @@
 import { View } from 'react-native';
 import { Zap } from 'lucide-react-native';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -8,7 +9,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { getModelById } from '@/lib/models';
 import { canAccessCloudModelForTier } from '@/src/features/model-picker/service';
 
-export function ModelTierWarningBanner() {
+export function ModelTierWarningBanner({ onChooseModel }: { onChooseModel?: () => void }) {
   const colors = useThemeColors();
   const selectedModel = useModelStore((s) => s.selectedModel);
   const userTier = useTierStore((s) => s.tier);
@@ -21,15 +22,15 @@ export function ModelTierWarningBanner() {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
+        paddingLeft: 16,
+        paddingRight: onChooseModel ? 4 : 16,
+        paddingVertical: onChooseModel ? 0 : 8,
         backgroundColor: colors.warningSurface,
         borderTopWidth: 1,
         borderTopColor: colors.warningBorder,
         gap: 8,
       }}
       accessibilityRole="alert"
-      accessibilityLabel="Selected model is not available on your plan"
     >
       <Zap size={13} color={colors.agentWarning} strokeWidth={2} />
       <Text
@@ -39,10 +40,24 @@ export function ModelTierWarningBanner() {
           fontWeight: '500',
           flex: 1,
         }}
-        numberOfLines={1}
+        numberOfLines={2}
       >
         {model.name} is not included in your plan. Choose an available model.
       </Text>
+      {onChooseModel ? (
+        <PressableBox
+          onPress={onChooseModel}
+          accessibilityRole="button"
+          accessibilityLabel="Choose a model"
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}
+        >
+          <Text
+            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textPrimary }}
+          >
+            Choose model
+          </Text>
+        </PressableBox>
+      ) : null}
     </View>
   );
 }

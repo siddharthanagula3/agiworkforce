@@ -9,7 +9,7 @@ jest.mock('../lib/mmkv', () => ({
 
 import { ManagedMediaImageGenerationRequestSchema } from '@agiworkforce/cloud-contracts';
 import { ApiPaywallError } from '../services/api';
-import { CLOUD_SIGN_IN_MESSAGE } from '../services/apiErrors';
+import { ApiHttpError, CLOUD_SIGN_IN_MESSAGE } from '../services/apiErrors';
 import {
   clearCloudImageGenerationState,
   runImageGenerationTurn,
@@ -247,6 +247,78 @@ describe('runImageGenerationTurn', () => {
       'conversation-1',
       'assistant-1',
       'Image generation failed. Try again.',
+    );
+  });
+
+  it('hands a rate limit back with the server sentence and when to retry', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-11-15T10:00:00Z'));
+    try {
+      const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+      const outcome = await runImageGenerationTurn(
+        {
+          conversationId: 'conversation-1',
+          displayText: '/image Mars',
+          prompt: 'Mars',
+          model: 'registry-image-route',
+          ownerId: 'default-test-account',
+          ...callbacks,
+        },
+        {
+          generate: async () => {
+            throw new ApiHttpError(
+              'Too many requests right now. Try again in 30 seconds.',
+              429,
+              null,
+              {
+                retryAfterSeconds: 30,
+              },
+            );
+          },
+          getUri: () => null,
+        },
+      );
+
+      expect(callbacks.fail).toHaveBeenCalledWith(
+        'conversation-1',
+        'assistant-1',
+        'Too many requests right now. Try again in 30 seconds.',
+        Date.now() + 30_000,
+      );
+      expect(callbacks.onUnexpectedError).not.toHaveBeenCalled();
+      expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('leaves Retry open when a rate limit names no wait', async () => {
+    const callbacks = createCallbacks();
+    await runImageGenerationTurn(
+      {
+        conversationId: 'conversation-1',
+        displayText: '/image Mars',
+        prompt: 'Mars',
+        model: 'registry-image-route',
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      {
+        generate: async () => {
+          throw new ApiHttpError(
+            'Too many requests right now. Please wait a moment and try again.',
+            429,
+          );
+        },
+        getUri: () => null,
+      },
+    );
+
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'Too many requests right now. Please wait a moment and try again.',
+      undefined,
     );
   });
 
@@ -575,6 +647,30 @@ describe('runImageGenerationTurn', () => {
       await failAreaEdit();
 
       expect(takeImageEditRetry('assistant-1', 'default-test-account')).toEqual(areaEdit);
+    });
+
+    it('hands back a failed change of shape with its ratio so Retry does not send the label as a prompt', async () => {
+      const callbacks = createCallbacks();
+      const reshape = {
+        conversationId: 'conversation-1',
+        displayText: 'Make it 3:2',
+        prompt: 'a harbour at dusk',
+        model: 'registry-image-route',
+        aspectRatio: '3:2' as const,
+        replayOnRetry: true as const,
+        ownerId: 'default-test-account',
+      };
+      await runImageGenerationTurn(
+        { ...reshape, ...callbacks },
+        {
+          generate: jest.fn(async () => {
+            throw new Error('provider unavailable');
+          }),
+          getUri: () => null,
+        },
+      );
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toEqual(reshape);
     });
 
     it('replays the area edit as a contract-valid inpaint request', async () => {

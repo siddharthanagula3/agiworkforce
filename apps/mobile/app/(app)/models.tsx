@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, ChevronRight, Cloud, Cpu } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Card } from '@/components/ui/Card';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
@@ -144,7 +145,7 @@ export default function ModelsScreen() {
           borderBottomColor: c.border,
           borderBottomWidth: 1,
           flexDirection: 'row',
-          height: 48,
+          minHeight: 48,
           paddingHorizontal: 12,
         }}
       >
@@ -158,7 +159,11 @@ export default function ModelsScreen() {
             <ArrowLeft size={20} color={c.textSecondary} />
           </View>
         </Pressable>
-        <Text variant="subheading" style={{ color: c.textPrimary, marginLeft: 4 }}>
+        <Text
+          variant="subheading"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          style={{ color: c.textPrimary, marginLeft: 4 }}
+        >
           Models
         </Text>
       </View>

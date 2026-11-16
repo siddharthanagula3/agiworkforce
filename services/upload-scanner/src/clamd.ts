@@ -104,15 +104,34 @@ export function parseVersionReply(reply: string): SignatureStatus {
   return { engine: match[1], version: Number(match[2]), publishedAt };
 }
 
+async function* chunksOf(
+  input: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
+): AsyncGenerator<Uint8Array, void, undefined> {
+  yield* input;
+}
+
 export async function scanStream(
   address: ClamdAddress,
   input: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
   signal: AbortSignal,
+  stopWhenAnswered = false,
 ): Promise<ScanVerdict> {
   const session = await openSession(address, signal);
+  const chunks = chunksOf(input);
+  const answered = stopWhenAnswered
+    ? session.reply.then(
+        (): IteratorResult<Uint8Array, void> => ({ done: true, value: undefined }),
+        (): IteratorResult<Uint8Array, void> => ({ done: true, value: undefined }),
+      )
+    : null;
   try {
     await send(session, INSTREAM_COMMAND);
-    for await (const chunk of input) {
+    for (;;) {
+      const pending = chunks.next();
+      if (answered) pending.catch(() => undefined);
+      const next = answered ? await Promise.race([pending, answered]) : await pending;
+      if (next.done) break;
+      const chunk = next.value;
       if (chunk.byteLength === 0) continue;
       await send(session, chunkLength(chunk.byteLength));
       await send(session, chunk);
@@ -123,6 +142,7 @@ export async function scanStream(
     return parseScanReply(text);
   } finally {
     session.socket.destroy();
+    void chunks.return(undefined).catch(() => undefined);
   }
 }
 

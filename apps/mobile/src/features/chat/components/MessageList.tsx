@@ -1,6 +1,14 @@
 import { useRef, useEffect, useCallback, useState, type ReactElement } from 'react';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
-import { AccessibilityInfo, View, RefreshControl, StyleSheet } from 'react-native';
+import {
+  AccessibilityInfo,
+  View,
+  RefreshControl,
+  StyleSheet,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/ui/Text';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
@@ -10,22 +18,37 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Swipeable } from 'react-native-gesture-handler';
-import { Reply, ChevronDown } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
+import { ChevronDown } from 'lucide-react-native';
 import { MessageBubble } from './MessageBubble';
 import { MessageListRow } from './MessageListRow';
+import { ChatScrollIntoView } from './cards/ChatScrollIntoView';
 import type { ResearchPlanDecision } from './research/ResearchRunCard';
 import { ChatEmptyState } from './ChatEmptyState';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { SwipeReplyRow } from './SwipeReplyRow';
+import { radii, useThemeColors } from '@/src/ui/theme';
 import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import type { ChatMessage } from '@/types/chat';
-import type { VariantInfoByMessageId } from '@agiworkforce/cloud-contracts';
+import { hasMessageStreamError } from '@/src/features/chat/utils/messageStreamError';
+import {
+  activityEndedByDecline,
+  toolCallsEndedByDecline,
+} from '@/src/features/chat/utils/declinedToolSteps';
+import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
+import {
+  isStoppedFinishReason,
+  settledTurnActivity,
+  type LiveRunState,
+} from '@/src/features/chat/utils/agentActivity';
+import type { ChatMessage, MessageAttachment } from '@/types/chat';
+import type {
+  ToolApprovalDecisionValue,
+  VariantInfoByMessageId,
+} from '@agiworkforce/cloud-contracts';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
+import type { ImageWholeEdit } from '@/src/features/image/wholeImageEdit';
 import type { VoiceOutputOwner } from '@/src/features/voice/services/voiceOutput';
+import type { ResponseRatingDetailsInput } from '@/src/features/chat/services/cloudMessageMutations';
 
 const NEAR_BOTTOM_THRESHOLD = 150;
 const TIME_DIVIDER_GAP_MS = 3 * 60 * 60 * 1000;
@@ -79,6 +102,13 @@ export function TimeDivider({ createdAt, now }: { createdAt: string; now?: Date 
   );
 }
 
+function latestUserMessageIdOf(messages: readonly ChatMessage[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === 'user') return messages[index]!.id;
+  }
+  return undefined;
+}
+
 function canRetry(message: ChatMessage): boolean {
   if (FEATURES.videoGen || message.role !== 'assistant') return true;
   return message.type !== 'video' && message.videoGenStatus === undefined;
@@ -96,20 +126,29 @@ interface MessageListProps {
   onScheduleMessage?: (messageId: string) => void;
   footer?: ReactElement | null;
   onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
+  onEditImage?: (message: ChatMessage, edit: ImageWholeEdit) => void;
+  imageEditModelIds?: ReadonlySet<string>;
+  inTemporaryChat?: boolean;
   onDeleteImageConversation?: () => void;
   variantInfoByMessageId?: VariantInfoByMessageId;
   onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
-  onEditMessage?: (messageId: string, newContent: string) => boolean;
+  onEditMessage?: (
+    messageId: string,
+    newContent: string,
+    attachments?: MessageAttachment[],
+  ) => boolean;
+  editAttachmentsSupported?: boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
   onQuoteReply?: (message: ChatMessage) => void;
   onReaction?: (messageId: string, reaction: 'thumbsUp' | 'thumbsDown' | null) => void;
+  onSubmitRatingDetails?: (messageId: string, details: ResponseRatingDetailsInput) => Promise<void>;
   onPairDesktop?: () => void;
   onResolveToolApproval?: (
     messageId: string,
     toolCallId: string,
-    decision: 'approved' | 'rejected',
+    decision: ToolApprovalDecisionValue,
     guidance?: string,
   ) => void;
   onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
@@ -118,15 +157,43 @@ interface MessageListProps {
   onPauseResearch?: (messageId: string) => Promise<boolean>;
   resumingResearchMessageId?: string | null;
   onFollowUp?: (text: string) => void;
+  highlightMessageId?: string;
+  lastAnswerLiveRun?: LiveRunState;
 }
 
-function turnOutcomeAnnouncement(message: ChatMessage): string {
+export const RESPONDING_ANNOUNCEMENT = 'Responding';
+
+function liveRunOf(
+  message: ChatMessage,
+  index: number,
+  count: number,
+  lastAnswerLiveRun: LiveRunState | undefined,
+): LiveRunState | undefined {
+  if (message.role !== 'assistant') return undefined;
+  return index < count - 1 ? 'ended' : lastAnswerLiveRun;
+}
+
+export function turnOutcomeAnnouncement(message: ChatMessage): string {
   if (message.role !== 'assistant') return 'No response was generated';
-  if (message.status === 'error') return 'Response failed';
-  if (message.metadata?.['finishReason'] === 'stopped') {
+  const storedActivity = readAgentActivityState(message.metadata?.['agentActivity']);
+  const activity = storedActivity
+    ? settledTurnActivity(storedActivity, {
+        toolCalls: message.toolCalls,
+        streaming: message.isStreaming === true,
+        hasText: /\S/.test(message.content),
+      })
+    : undefined;
+  const endedByDecline = activity
+    ? activityEndedByDecline(activity, message.toolCalls)
+    : toolCallsEndedByDecline(message.toolCalls ?? []);
+  if (!endedByDecline && (message.status === 'error' || hasMessageStreamError(message))) {
+    return 'Response failed';
+  }
+  const finishReason = message.metadata?.['finishReason'];
+  if (isStoppedFinishReason(finishReason)) {
     return message.content.trim()
-      ? 'Response cancelled. Partial response saved.'
-      : 'Response cancelled';
+      ? 'Response stopped. Partial response saved.'
+      : 'Response stopped';
   }
   return 'Response complete';
 }
@@ -143,15 +210,20 @@ export function MessageList({
   onScheduleMessage,
   footer,
   onEditImageArea,
+  onEditImage,
+  imageEditModelIds,
+  inTemporaryChat = false,
   onDeleteImageConversation,
   variantInfoByMessageId,
   onSelectVariant,
   onSwitchModel,
   onEditMessage,
+  editAttachmentsSupported = false,
   onRefresh,
   refreshing = false,
   onQuoteReply,
   onReaction,
+  onSubmitRatingDetails,
   onPairDesktop,
   onResolveToolApproval,
   onResearchPlanDecision,
@@ -160,6 +232,8 @@ export function MessageList({
   onPauseResearch,
   resumingResearchMessageId = null,
   onFollowUp,
+  highlightMessageId,
+  lastAnswerLiveRun,
 }: MessageListProps) {
   const colors = useThemeColors();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
@@ -177,6 +251,8 @@ export function MessageList({
     const streaming = lastMessage.isStreaming === true;
     if (previous?.id === lastMessage.id && previous.streaming && !streaming) {
       AccessibilityInfo.announceForAccessibility(turnOutcomeAnnouncement(lastMessage));
+    } else if (streaming && lastMessage.role === 'assistant' && previous?.streaming !== true) {
+      AccessibilityInfo.announceForAccessibility(RESPONDING_ANNOUNCEMENT);
     }
     lastWasStreaming.current = { id: lastMessage.id, streaming };
   }, [lastMessage]);
@@ -188,12 +264,87 @@ export function MessageList({
     listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
+  const followingBottomRef = useRef(true);
+  const readerScrollingRef = useRef(false);
+  const viewportRef = useRef<View>(null);
+  const stopFollowingBottom = useCallback(() => {
+    followingBottomRef.current = false;
+  }, []);
+  const contentHeightRef = useRef(0);
+  const latestUserMessageId = latestUserMessageIdOf(messages);
+  const sentMessageIdRef = useRef(latestUserMessageId);
+  useEffect(() => {
+    if (sentMessageIdRef.current === latestUserMessageId) return;
+    sentMessageIdRef.current = latestUserMessageId;
+    followingBottomRef.current = true;
+  }, [latestUserMessageId]);
+
+  const footerHeightRef = useRef(0);
+  const hasFooter = Boolean(footer);
+  useEffect(() => {
+    if (!hasFooter) footerHeightRef.current = 0;
+  }, [hasFooter]);
+  const handleFooterLayout = useCallback((event: LayoutChangeEvent) => {
+    footerHeightRef.current = event.nativeEvent.layout.height;
+  }, []);
+
+  const trackReaderPosition = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - contentOffset.y - layoutMeasurement.height;
+    const nearBottom = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
+    if (nearBottom) followingBottomRef.current = true;
+    else if (readerScrollingRef.current) followingBottomRef.current = false;
+    setShowScrollButton(distanceFromBottom >= NEAR_BOTTOM_THRESHOLD + footerHeightRef.current);
+  }, []);
+
+  const viewportHeightRef = useRef(0);
+  const handleListLayout = useCallback((event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    const previousHeight = viewportHeightRef.current;
+    viewportHeightRef.current = height;
+    if (
+      previousHeight === 0 ||
+      height >= previousHeight ||
+      !followingBottomRef.current ||
+      readerScrollingRef.current
+    ) {
+      return;
+    }
+    listRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  const handleContentSizeChange = useCallback((_width: number, height: number) => {
+    const previousHeight = contentHeightRef.current;
+    contentHeightRef.current = height;
+    if (height <= previousHeight || !followingBottomRef.current || readerScrollingRef.current) {
+      return;
+    }
+    listRef.current?.scrollToEnd({ animated: previousHeight > 0 });
+  }, []);
+
   useEffect(() => {
     fabOpacity.value = withTiming(showScrollButton ? 1 : 0, {
       duration: motion.quick,
       easing: Easing.out(Easing.ease),
     });
   }, [showScrollButton, fabOpacity]);
+
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const highlightHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightMessageId || highlightHandledRef.current === highlightMessageId) return;
+    const index = messages.findIndex((message) => message.id === highlightMessageId);
+    if (index < 0) return;
+    highlightHandledRef.current = highlightMessageId;
+    followingBottomRef.current = false;
+    listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    setHighlightedId(highlightMessageId);
+  }, [highlightMessageId, messages]);
+  useEffect(() => {
+    if (!highlightedId) return;
+    const timer = setTimeout(() => setHighlightedId(null), motion.ambient);
+    return () => clearTimeout(timer);
+  }, [highlightedId]);
 
   const handleQuoteSelection = useCallback(
     (message: ChatMessage, text: string) => onQuoteReply?.({ ...message, content: text }),
@@ -207,12 +358,19 @@ export function MessageList({
       <MessageListRow
         messageId={item.id}
         streaming={item.isStreaming === true}
-        style={contentColumn('reading')}
+        style={
+          item.id === highlightedId
+            ? [
+                contentColumn('reading'),
+                { backgroundColor: colors.accentSurface, borderRadius: radii.md },
+              ]
+            : contentColumn('reading')
+        }
       >
         {shouldShowTimeDivider(messages[index - 1]?.createdAt, item.createdAt) ? (
           <TimeDivider createdAt={item.createdAt} />
         ) : null}
-        <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply} colors={colors}>
+        <SwipeReplyRow message={item} onSwipeReply={onQuoteReply} colors={colors}>
           <MessageBubble
             message={item}
             speechOwner={speechOwner}
@@ -223,12 +381,17 @@ export function MessageList({
             onBranch={onBranch}
             onScheduleMessage={onScheduleMessage}
             onEditImageArea={onEditImageArea}
+            onEditImage={onEditImage}
+            imageEditModelIds={imageEditModelIds}
+            inTemporaryChat={inTemporaryChat}
             onDeleteImageConversation={onDeleteImageConversation}
             variant={variantInfoByMessageId?.[item.id]}
             onSelectVariant={onSelectVariant}
             onSwitchModel={onSwitchModel}
             onEditMessage={onEditMessage}
+            editAttachmentsSupported={editAttachmentsSupported}
             onReaction={onReaction}
+            onSubmitRatingDetails={onSubmitRatingDetails}
             onResolveToolApproval={onResolveToolApproval}
             onResearchPlanDecision={onResearchPlanDecision}
             onRetryResearch={onRetryResearch}
@@ -237,8 +400,14 @@ export function MessageList({
             isResumingResearch={resumingResearchMessageId === item.id}
             onQuoteSelection={onQuoteReply ? handleQuoteSelection : undefined}
             onFollowUp={item.role === 'assistant' ? onFollowUp : undefined}
+            nextAnswerId={
+              item.role === 'user' && messages[index + 1]?.role === 'assistant'
+                ? messages[index + 1]!.id
+                : undefined
+            }
+            liveRun={liveRunOf(item, index, messages.length, lastAnswerLiveRun)}
           />
-        </SwipeReplyWrapper>
+        </SwipeReplyRow>
       </MessageListRow>
     ),
     [
@@ -254,13 +423,18 @@ export function MessageList({
       onBranch,
       onScheduleMessage,
       onEditImageArea,
+      onEditImage,
+      imageEditModelIds,
+      inTemporaryChat,
       onDeleteImageConversation,
       variantInfoByMessageId,
       onSelectVariant,
       onSwitchModel,
       onEditMessage,
+      editAttachmentsSupported,
       onQuoteReply,
       onReaction,
+      onSubmitRatingDetails,
       onResolveToolApproval,
       onResearchPlanDecision,
       onRetryResearch,
@@ -268,6 +442,8 @@ export function MessageList({
       onPauseResearch,
       resumingResearchMessageId,
       onFollowUp,
+      highlightedId,
+      lastAnswerLiveRun,
     ],
   );
 
@@ -282,34 +458,55 @@ export function MessageList({
   }
 
   return (
-    <View testID="chat.message-list" style={styles.container}>
-      <FlashList
-        ref={listRef}
-        data={messages}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        contentContainerStyle={{ paddingVertical: 8 }}
-        ListFooterComponent={footer ?? null}
-        showsVerticalScrollIndicator={false}
-        maintainVisibleContentPosition={{
-          autoscrollToBottomThreshold: NEAR_BOTTOM_THRESHOLD,
-          startRenderingFromBottom: true,
-        }}
-        keyboardDismissMode="interactive"
-        keyboardShouldPersistTaps="handled"
-        onScroll={(event) => {
-          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-          const distanceFromBottom =
-            contentSize.height - contentOffset.y - layoutMeasurement.height;
-          setShowScrollButton(distanceFromBottom >= NEAR_BOTTOM_THRESHOLD);
-        }}
-        scrollEventThrottle={100}
-        refreshControl={
-          onRefresh ? (
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.teal} />
-          ) : undefined
-        }
-      />
+    <View testID="chat.message-list" ref={viewportRef} collapsable={false} style={styles.container}>
+      <ChatScrollIntoView list={listRef} viewport={viewportRef} onReveal={stopFollowingBottom}>
+        <FlashList
+          ref={listRef}
+          data={messages}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          contentContainerStyle={{ paddingVertical: 8 }}
+          ListFooterComponent={
+            footer ? (
+              <View testID="chat.message-list.footer" onLayout={handleFooterLayout}>
+                {footer}
+              </View>
+            ) : null
+          }
+          showsVerticalScrollIndicator={false}
+          maintainVisibleContentPosition={{ startRenderingFromBottom: true }}
+          keyboardDismissMode="interactive"
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={handleContentSizeChange}
+          onLayout={handleListLayout}
+          onScrollBeginDrag={(event) => {
+            readerScrollingRef.current = true;
+            trackReaderPosition(event);
+          }}
+          onScrollEndDrag={(event) => {
+            trackReaderPosition(event);
+            readerScrollingRef.current = false;
+          }}
+          onMomentumScrollBegin={() => {
+            readerScrollingRef.current = true;
+          }}
+          onMomentumScrollEnd={(event) => {
+            trackReaderPosition(event);
+            readerScrollingRef.current = false;
+          }}
+          onScroll={trackReaderPosition}
+          scrollEventThrottle={100}
+          refreshControl={
+            onRefresh ? (
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.teal}
+              />
+            ) : undefined
+          }
+        />
+      </ChatScrollIntoView>
 
       {/* Anchored to the reading column, so it stays over the thread rather
           than drifting to the edge of a wide pane. */}
@@ -373,69 +570,3 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
-
-interface SwipeReplyWrapperProps {
-  message: ChatMessage;
-  onSwipeReply?: (message: ChatMessage) => void;
-  colors: ColorScheme;
-  children: React.ReactNode;
-}
-
-function SwipeReplyWrapper({ message, onSwipeReply, colors, children }: SwipeReplyWrapperProps) {
-  const swipeableRef = useRef<Swipeable>(null);
-  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-
-  const renderLeftActions = useCallback(() => {
-    return (
-      <View
-        style={{
-          justifyContent: 'center',
-          alignItems: 'center',
-          width: 60,
-          marginRight: 4,
-        }}
-      >
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: colors.accentSurface,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Reply size={18} color={colors.teal} />
-        </View>
-      </View>
-    );
-  }, [colors]);
-
-  const handleSwipeOpen = useCallback(
-    (direction: 'left' | 'right') => {
-      if (direction !== 'left') return;
-      if (hapticsEnabled) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      onSwipeReply?.(message);
-      swipeableRef.current?.close();
-    },
-    [message, onSwipeReply, hapticsEnabled],
-  );
-
-  if (!onSwipeReply) {
-    return <>{children}</>;
-  }
-
-  return (
-    <Swipeable
-      ref={swipeableRef}
-      renderLeftActions={renderLeftActions}
-      onSwipeableOpen={handleSwipeOpen}
-      overshootLeft={false}
-      friction={2}
-    >
-      {children}
-    </Swipeable>
-  );
-}

@@ -147,6 +147,7 @@ export default function MemoryConflictsScreen() {
                 {`Replaced: ${conflict.replaced}`}
               </Text>
               <Pressable
+                hitSlop={{ top: 4, bottom: 4 }}
                 onPress={() => void restore(conflict)}
                 disabled={restoringId !== null}
                 accessibilityRole="button"

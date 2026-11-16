@@ -19,8 +19,8 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import {
   exportConversationToPDF,
+  exportConversationToMarkdown,
   exportConversationToText,
-  exportToMarkdown,
   formatConversationAsMarkdown,
   printConversation,
   shareFile,
@@ -94,7 +94,9 @@ export function ConversationExportSheet({
 
   const handleExport = useCallback(
     async (key: ExportOptionKey) => {
-      const filtered = messages.filter((m) => !m.isStreaming && m.content.trim());
+      const filtered = messages.filter(
+        (m) => !m.isStreaming && (m.content.trim() || m.attachments?.length),
+      );
       if (filtered.length === 0) {
         Alert.alert('Nothing to Export', 'This conversation has no messages yet.');
         return;
@@ -125,8 +127,7 @@ export function ConversationExportSheet({
         } else if (key === 'text') {
           result = await exportConversationToText(filtered, title);
         } else {
-          const md = formatConversationAsMarkdown(filtered, title);
-          result = await exportToMarkdown(md, title);
+          result = await exportConversationToMarkdown(filtered, title);
         }
 
         await shareFile(result.uri);

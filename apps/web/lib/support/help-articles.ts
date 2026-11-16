@@ -25,3 +25,17 @@ export function getHelpArticle(docId: string) {
     sections,
   };
 }
+
+export const PURCHASE_HELP_CATEGORY = 'billing';
+
+export function purchaseHelpPaths(): string[] {
+  const corpus = getSupportCorpus();
+  if (!corpus.available) return [];
+  const paths = new Set([`/help/collections/${PURCHASE_HELP_CATEGORY}`]);
+  for (const chunk of corpus.chunks) {
+    if (chunk.origin === 'markdown' && chunk.category === PURCHASE_HELP_CATEGORY) {
+      paths.add(helpArticlePath(chunk.docId));
+    }
+  }
+  return [...paths];
+}

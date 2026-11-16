@@ -15,6 +15,7 @@
     "apps/web/lib/services/managed-memory-context-service.ts": "renders the recalled memory block; the request processor tags its layer at the call site",
     "apps/web/lib/services/memory-summary-service.ts": "one fixed prompt for an internal call that summarises saved memories, fenced as data, and carries no user, project or workspace instruction layer",
     "apps/web/lib/services/model-memory-extraction.ts": "a fact extraction call whose prompt comes from the manifest and carries no user instruction layer",
+    "apps/web/lib/services/project-memory-edit-service.ts": "one fixed prompt for an internal call whose only task is to search, save or forget project memories with its memory tools; it carries no user, project or workspace instruction layer",
     "apps/web/lib/services/scheduled-agent-executor.ts": "runs a saved agent whose system prompt is the agent definition the account stored",
     "apps/web/lib/support/agent/answer/model-route.ts": "the support agent answers from its own manifest prompt and reads no account instruction layer",
     "packages/ai/providers/ollama/src/translate.ts": "a provider adapter putting an already assembled request onto the wire",

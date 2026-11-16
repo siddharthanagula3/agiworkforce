@@ -16,6 +16,7 @@ import {
 import { getRequestIdentity } from '@/lib/server/identity';
 import { accountAccessForSignIn } from '@/lib/auth/account-lifecycle';
 import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
+import { IDENTITY_SIGN_IN_LOOKUP_TIMEOUT_MS } from '@/lib/server/identity-timeouts';
 import { AccountAccessNotice } from '@/features/auth/AccountAccessNotice';
 import { AccountPolicyLinks } from '@/features/auth/AccountDataDisclosure';
 import { ConfirmEmailStep } from '@/features/auth/ConfirmEmailStep';
@@ -75,7 +76,7 @@ export default async function LoginCompletePage({
     );
   }
 
-  if (!(await readPrimaryEmailState(userId)).confirmed) {
+  if (!(await readPrimaryEmailState(userId, IDENTITY_SIGN_IN_LOOKUP_TIMEOUT_MS)).confirmed) {
     return (
       <AuthLayout embedded={isDesktopSurface} scene>
         <ConfirmEmailStep footer={<TermsReviewSignOut />} />

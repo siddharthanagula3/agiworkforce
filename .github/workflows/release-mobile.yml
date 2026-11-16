@@ -354,7 +354,16 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           ASC_API_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
           ASC_API_KEY_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
-        run: pnpm --filter @agiworkforce/mobile release:ios:prod -- --auto-submit
+          # eas build reads these names, not the submit profile's, to reach Apple
+          # when a provisioning profile has to be created or repaired.
+          EXPO_ASC_API_KEY_PATH: ${{ github.workspace }}/apps/mobile/secrets/asc-api-key.p8
+          EXPO_ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          EXPO_ASC_ISSUER_ID: ${{ secrets.ASC_API_KEY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          EXPO_APPLE_TEAM_ID="$(jq -er '.submit.production.ios.appleTeamId' apps/mobile/eas.json)"
+          export EXPO_APPLE_TEAM_ID
+          pnpm --filter @agiworkforce/mobile release:ios:prod --auto-submit
 
       - name: Remove local App Store credential
         if: always()
@@ -437,7 +446,7 @@ jobs:
       - name: Build the tagged Android source and submit that exact build
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: pnpm --filter @agiworkforce/mobile release:android:prod -- --auto-submit
+        run: pnpm --filter @agiworkforce/mobile release:android:prod --auto-submit
 
       - name: Remove local Google Play credential
         if: always()

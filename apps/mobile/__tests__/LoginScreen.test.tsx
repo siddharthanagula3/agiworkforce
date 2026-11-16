@@ -33,15 +33,22 @@ const mockSignInSendCode = jest.fn(async () => ({ error: null }));
 const mockSignInVerifyCode = jest.fn(async () => ({ error: null }));
 const mockFinalizeSignIn = jest.fn(async () => ({ error: null }));
 const mockResetSignIn = jest.fn(async () => ({ error: null }));
+const mockSignInMfaSendEmailCode = jest.fn(async () => ({ error: null }));
+const mockSignInMfaVerifyEmailCode = jest.fn(
+  async (): Promise<{ error: { message: string; code?: string } | null }> => ({ error: null }),
+);
 const mockSignIn = {
   status: 'needs_identifier',
   supportedFirstFactors: [] as { strategy: string }[],
+  supportedSecondFactors: [] as { strategy: string; safeIdentifier?: string }[],
   create: mockSignInCreate,
   password: mockSignInPassword,
   emailCode: { sendCode: mockSignInSendCode, verifyCode: mockSignInVerifyCode },
+  mfa: { sendEmailCode: mockSignInMfaSendEmailCode, verifyEmailCode: mockSignInMfaVerifyEmailCode },
   finalize: mockFinalizeSignIn,
   reset: mockResetSignIn,
 };
+let mockConfigPlugins: unknown[] = ['expo-apple-authentication'];
 let mockSSOResult: {
   createdSessionId: string | null;
   authSessionResult: { type: string } | null;
@@ -49,10 +56,17 @@ let mockSSOResult: {
   signUp?: { existingSession?: { sessionId: string } | null };
 } = { createdSessionId: null, authSessionResult: null };
 const mockStartSSOFlow = jest.fn(async () => mockSSOResult);
-const mockStartAppleAuthenticationFlow = jest.fn(async () => ({
-  createdSessionId: null as string | null,
-  setActive: undefined as jest.Mock | undefined,
-}));
+const mockStartAppleAuthenticationFlow = jest.fn(
+  async (): Promise<{
+    createdSessionId: string | null;
+    setActive: jest.Mock | undefined;
+    signIn?: { id?: string | null; status?: string | null };
+    signUp?: { id?: string | null; status?: string | null };
+  }> => ({
+    createdSessionId: null,
+    setActive: undefined,
+  }),
+);
 const mockAppleAvailable = jest.fn(async () => true);
 const mockSignUp = {
   status: 'missing_requirements',
@@ -105,6 +119,15 @@ jest.mock('@clerk/expo', () => ({
 jest.mock('@clerk/expo/experimental', () => ({
   useSSO: () => ({ startSSOFlow: mockStartSSOFlow }),
 }));
+
+jest.mock('expo-constants', () => {
+  const actual = jest.requireActual('expo-constants');
+  const constants = Object.create(actual.default);
+  Object.defineProperty(constants, 'expoConfig', {
+    get: () => ({ ...actual.default.expoConfig, plugins: mockConfigPlugins }),
+  });
+  return { __esModule: true, ...actual, default: constants };
+});
 
 jest.mock('@clerk/expo/apple', () => ({
   useSignInWithApple: () => ({ startAppleAuthenticationFlow: mockStartAppleAuthenticationFlow }),
@@ -203,6 +226,8 @@ describe('LoginScreen', () => {
     mockSignUp.status = 'missing_requirements';
     mockSignIn.status = 'needs_identifier';
     mockSignIn.supportedFirstFactors = [];
+    mockSignIn.supportedSecondFactors = [];
+    mockConfigPlugins = ['expo-apple-authentication'];
     mockSSOResult = { createdSessionId: null, authSessionResult: null };
   });
 
@@ -215,8 +240,8 @@ describe('LoginScreen', () => {
     }
   });
 
-  it('offers a provider-first mobile account creation form matching the website', () => {
-    const { getByText, getByTestId } = render(<LoginScreen />);
+  it('offers a provider-first mobile account creation form matching the website', async () => {
+    const { findByTestId, getByText, getByTestId } = render(<LoginScreen />);
 
     expect(getByTestId('mobile-custom-sign-in')).toBeTruthy();
     expect(getByText('Welcome back')).toBeTruthy();
@@ -231,8 +256,9 @@ describe('LoginScreen', () => {
     expect(getByText(FREE_PLAN_TRAINING_SIGNUP_NOTICE_LINK_LABEL)).toBeTruthy();
     expect(getByTestId('mobile-custom-sign-up')).toBeTruthy();
     expect(getByText('Create an account')).toBeTruthy();
-    expect(getByTestId('mobile-sign-up-google')).toBeTruthy();
+    expect(await findByTestId('mobile-sign-up-google')).toBeTruthy();
     expect(getByTestId('mobile-sign-up-github')).toBeTruthy();
+    expect(getByTestId('mobile-sign-up-apple')).toBeTruthy();
     expect(getByTestId('mobile-sign-up-email')).toBeTruthy();
     expect(getByTestId('mobile-sign-up-continue')).toBeTruthy();
     fireEvent.press(getByText('Log in'));
@@ -388,6 +414,96 @@ describe('LoginScreen', () => {
     await waitFor(() => expect(screen.getByText('AuthView:signIn')).toBeTruthy());
   });
 
+  async function submitPasswordReaching(
+    status: string,
+    secondFactors: typeof mockSignIn.supportedSecondFactors,
+  ) {
+    mockSignInCreate.mockImplementationOnce(async () => {
+      mockSignIn.status = 'needs_first_factor';
+      mockSignIn.supportedFirstFactors = [{ strategy: 'password' }];
+      return { error: null };
+    });
+    mockSignInPassword.mockImplementationOnce(async () => {
+      mockSignIn.status = status;
+      mockSignIn.supportedSecondFactors = secondFactors;
+      return { error: null };
+    });
+    const screen = render(<LoginScreen />);
+    fireEvent.changeText(screen.getByTestId('mobile-sign-in-email'), 'person@example.com');
+    fireEvent.press(screen.getByTestId('mobile-sign-in-continue'));
+    fireEvent.changeText(await screen.findByTestId('mobile-sign-in-password'), 'correct-horse');
+    fireEvent.press(screen.getByTestId('mobile-sign-in-submit-password'));
+    return screen;
+  }
+
+  it.each(['needs_client_trust', 'needs_second_factor'])(
+    'finishes a password sign-in that returns %s with an email code in the same form',
+    async (status) => {
+      const screen = await submitPasswordReaching(status, [
+        { strategy: 'totp' },
+        { strategy: 'email_code', safeIdentifier: 'p*****@example.com' },
+      ]);
+
+      await waitFor(() => expect(mockSignInMfaSendEmailCode).toHaveBeenCalledTimes(1));
+      expect(await screen.findByTestId('mobile-sign-in-code')).toBeTruthy();
+      expect(screen.getByText('Enter the code sent to p*****@example.com.')).toBeTruthy();
+      expect(mockSignInSendCode).not.toHaveBeenCalled();
+
+      fireEvent.press(screen.getByText('Send a new code'));
+      await waitFor(() => expect(mockSignInMfaSendEmailCode).toHaveBeenCalledTimes(2));
+
+      mockSignInMfaVerifyEmailCode.mockImplementationOnce(async () => {
+        mockSignIn.status = 'complete';
+        return { error: null };
+      });
+      fireEvent.changeText(screen.getByTestId('mobile-sign-in-code'), '654321');
+      fireEvent.press(screen.getByTestId('mobile-sign-in-submit-code'));
+
+      await waitFor(() =>
+        expect(mockSignInMfaVerifyEmailCode).toHaveBeenCalledWith({ code: '654321' }),
+      );
+      await waitFor(() => expect(mockFinalizeSignIn).toHaveBeenCalledTimes(1));
+      expect(mockSignInVerifyCode).not.toHaveBeenCalled();
+      expect(screen.queryByText('AuthView:signIn')).toBeNull();
+    },
+  );
+
+  it('shows the error when the second-step email code is wrong and stays on the code step', async () => {
+    const screen = await submitPasswordReaching('needs_client_trust', [
+      { strategy: 'email_code', safeIdentifier: 'p*****@example.com' },
+    ]);
+    await screen.findByTestId('mobile-sign-in-code');
+    mockSignInMfaVerifyEmailCode.mockResolvedValueOnce({
+      error: { code: 'form_code_incorrect', message: 'Incorrect code' },
+    });
+    fireEvent.changeText(screen.getByTestId('mobile-sign-in-code'), '000000');
+    fireEvent.press(screen.getByTestId('mobile-sign-in-submit-code'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('That code is incorrect. Check the latest email and try again.'),
+      ).toBeTruthy(),
+    );
+    expect(screen.getByTestId('mobile-sign-in-code')).toBeTruthy();
+    expect(mockFinalizeSignIn).not.toHaveBeenCalled();
+  });
+
+  it('hands a password second step without an email code to the native flow', async () => {
+    const screen = await submitPasswordReaching('needs_second_factor', [{ strategy: 'totp' }]);
+
+    await waitFor(() => expect(screen.getByText('AuthView:signIn')).toBeTruthy());
+    expect(mockSignInMfaSendEmailCode).not.toHaveBeenCalled();
+  });
+
+  it('hands a password sign-in that needs a new password to the native flow', async () => {
+    const screen = await submitPasswordReaching('needs_new_password', [
+      { strategy: 'email_code', safeIdentifier: 'p*****@example.com' },
+    ]);
+
+    await waitFor(() => expect(screen.getByText('AuthView:signIn')).toBeTruthy());
+    expect(mockSignInMfaSendEmailCode).not.toHaveBeenCalled();
+  });
+
   it('keeps the entered email and shows a safe sign-in error', async () => {
     mockSignInCreate.mockResolvedValueOnce({
       error: { code: 'form_identifier_not_found', message: 'Account not found at /private/auth' },
@@ -407,7 +523,7 @@ describe('LoginScreen', () => {
       signIn: {},
     };
     const screen = render(<LoginScreen />);
-    fireEvent.press(screen.getByTestId('mobile-sign-in-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-in-google'));
 
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
@@ -424,7 +540,7 @@ describe('LoginScreen', () => {
     mockSearchParams = { postAuthIntent: 'cloud-schedules' };
     mockSSOResult = { createdSessionId: null, authSessionResult: { type: 'cancel' } };
     const screen = render(<LoginScreen />);
-    fireEvent.press(screen.getByTestId('mobile-sign-in-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-in-google'));
 
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
@@ -440,7 +556,7 @@ describe('LoginScreen', () => {
       authSessionResult: { type: 'success' },
     };
     const screen = render(<LoginScreen />);
-    fireEvent.press(screen.getByTestId('mobile-sign-in-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-in-google'));
 
     await waitFor(() => expect(mockStartSSOFlow).toHaveBeenCalledTimes(1));
     await act(async () => {
@@ -458,7 +574,7 @@ describe('LoginScreen', () => {
       signIn: { existingSession: { sessionId: 'existing-session' } },
     };
     const screen = render(<LoginScreen />);
-    fireEvent.press(screen.getByTestId('mobile-sign-in-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-in-google'));
 
     await waitFor(() => expect(mockStartSSOFlow).toHaveBeenCalledTimes(1));
     await act(async () => {
@@ -476,7 +592,7 @@ describe('LoginScreen', () => {
       signIn: {},
     };
     const screen = render(<LoginScreen />);
-    fireEvent.press(screen.getByTestId('mobile-sign-in-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-in-google'));
 
     await waitFor(() => expect(screen.getByText('AuthView:signIn')).toBeTruthy());
   });
@@ -537,6 +653,133 @@ describe('LoginScreen', () => {
     }
   });
 
+  it('offers Apple beside Google and GitHub on iOS when the provider list leaves Apple out', async () => {
+    delete process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS;
+    const screen = render(<LoginScreen />);
+
+    expect(await screen.findByTestId('mobile-sign-in-apple')).toBeTruthy();
+    expect(screen.getByTestId('mobile-sign-in-google')).toBeTruthy();
+    expect(screen.getByTestId('mobile-sign-in-github')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+    expect(await screen.findByTestId('mobile-sign-up-apple')).toBeTruthy();
+    expect(screen.getByTestId('mobile-sign-up-google')).toBeTruthy();
+    expect(screen.getByTestId('mobile-sign-up-github')).toBeTruthy();
+  });
+
+  it.each([undefined, 'google,github', 'google,github,apple'])(
+    'shows no third-party sign-in on an iOS build without Sign in with Apple (%s)',
+    async (configured) => {
+      if (configured === undefined) delete process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS;
+      else process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS = configured;
+      mockConfigPlugins = ['expo-router'];
+      const screen = render(<LoginScreen />);
+      await act(async () => undefined);
+
+      for (const id of ['google', 'github', 'apple']) {
+        expect(screen.queryByTestId(`mobile-sign-in-${id}`)).toBeNull();
+      }
+      expect(screen.queryByText('OR')).toBeNull();
+      expect(screen.getByTestId('mobile-sign-in-email')).toBeTruthy();
+      fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+      await act(async () => undefined);
+      for (const id of ['google', 'github', 'apple']) {
+        expect(screen.queryByTestId(`mobile-sign-up-${id}`)).toBeNull();
+      }
+      expect(screen.getByTestId('mobile-sign-up-email')).toBeTruthy();
+      expect(mockAppleAvailable).not.toHaveBeenCalled();
+    },
+  );
+
+  it('shows no third-party sign-in on iOS while the device cannot offer Apple', async () => {
+    mockAppleAvailable.mockResolvedValue(false);
+    const screen = render(<LoginScreen />);
+
+    await waitFor(() => expect(mockAppleAvailable).toHaveBeenCalled());
+    await act(async () => undefined);
+    expect(screen.queryByTestId('mobile-sign-in-google')).toBeNull();
+    expect(screen.queryByTestId('mobile-sign-in-apple')).toBeNull();
+    expect(screen.getByTestId('mobile-sign-in-email')).toBeTruthy();
+  });
+
+  it.each([
+    [undefined, ['expo-apple-authentication']],
+    [undefined, ['expo-router']],
+    ['google,github,apple', ['expo-router']],
+  ])('keeps Google and GitHub without native Apple on Android (%s, %j)', (configured, plugins) => {
+    if (configured === undefined) delete process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS;
+    else process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS = configured;
+    mockConfigPlugins = plugins;
+    const platform = jest.replaceProperty(Platform, 'OS', 'android');
+    try {
+      const screen = render(<LoginScreen />);
+      expect(screen.getByTestId('mobile-sign-in-google')).toBeTruthy();
+      expect(screen.getByTestId('mobile-sign-in-github')).toBeTruthy();
+      expect(screen.queryByTestId('mobile-sign-in-apple')).toBeNull();
+      fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+      expect(screen.getByTestId('mobile-sign-up-google')).toBeTruthy();
+      expect(screen.getByTestId('mobile-sign-up-github')).toBeTruthy();
+      expect(screen.queryByTestId('mobile-sign-up-apple')).toBeNull();
+      expect(mockAppleAvailable).not.toHaveBeenCalled();
+    } finally {
+      platform.restore();
+    }
+  });
+
+  it('keeps the sign-in form quiet when Clerk reports the Apple sheet was dismissed', async () => {
+    mockStartAppleAuthenticationFlow.mockResolvedValueOnce({
+      createdSessionId: null,
+      setActive: jest.fn(),
+    });
+    const screen = render(<LoginScreen />);
+
+    fireEvent.press(await screen.findByTestId('mock-apple-button'));
+    await waitFor(() => expect(mockStartAppleAuthenticationFlow).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('Opening…')).toBeNull());
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('AuthView:signIn')).toBeNull();
+  });
+
+  it('says so when Apple sign-in starts before Clerk has loaded', async () => {
+    mockStartAppleAuthenticationFlow.mockResolvedValueOnce({
+      createdSessionId: null,
+      setActive: undefined,
+    });
+    const screen = render(<LoginScreen />);
+
+    fireEvent.press(await screen.findByTestId('mock-apple-button'));
+    expect(await screen.findByText('Sign-in is still loading. Please try again.')).toBeTruthy();
+    expect(screen.getByTestId('mobile-custom-sign-in')).toBeTruthy();
+  });
+
+  it('shows the sign-in error when Apple sign-in fails', async () => {
+    mockStartAppleAuthenticationFlow.mockRejectedValueOnce(new Error('Apple token rejected'));
+    const screen = render(<LoginScreen />);
+
+    fireEvent.press(await screen.findByTestId('mock-apple-button'));
+    expect(await screen.findByText('Could not complete sign-in. Try again.')).toBeTruthy();
+  });
+
+  it.each([
+    [
+      'a sign-up missing requirements',
+      { signUp: { id: 'sua_apple', status: 'missing_requirements' } },
+    ],
+    [
+      'a sign-in that needs another step',
+      { signIn: { id: 'sia_apple', status: 'needs_second_factor' } },
+    ],
+  ])('continues %s from Apple in the native flow', async (_label, attempt) => {
+    mockStartAppleAuthenticationFlow.mockResolvedValueOnce({
+      createdSessionId: null,
+      setActive: jest.fn(),
+      ...attempt,
+    });
+    const screen = render(<LoginScreen />);
+
+    fireEvent.press(await screen.findByTestId('mock-apple-button'));
+    expect(await screen.findByText('AuthView:signIn')).toBeTruthy();
+  });
+
   it('creates a legally accepted email sign-up and verifies its code', async () => {
     mockVerifyEmailCode.mockImplementationOnce(async () => {
       mockSignUp.status = 'complete';
@@ -568,7 +811,7 @@ describe('LoginScreen', () => {
     };
     const screen = render(<LoginScreen />);
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
-    fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
@@ -586,7 +829,7 @@ describe('LoginScreen', () => {
     mockSSOResult = { createdSessionId: null, authSessionResult: { type: 'cancel' } };
     const screen = render(<LoginScreen />);
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
-    fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
     await waitFor(() =>
       expect(mockStartSSOFlow).toHaveBeenCalledWith({
@@ -604,7 +847,7 @@ describe('LoginScreen', () => {
     };
     const screen = render(<LoginScreen />);
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
-    fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
     await waitFor(() => expect(mockStartSSOFlow).toHaveBeenCalledTimes(1));
     await act(async () => {
@@ -625,9 +868,11 @@ describe('LoginScreen', () => {
     );
     const screen = render(<LoginScreen />);
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+    const google = await screen.findByTestId('mobile-sign-up-google');
+    const github = screen.getByTestId('mobile-sign-up-github');
     act(() => {
-      fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
-      fireEvent.press(screen.getByTestId('mobile-sign-up-github'));
+      fireEvent.press(google);
+      fireEvent.press(github);
     });
 
     expect(mockStartSSOFlow).toHaveBeenCalledTimes(1);
@@ -677,6 +922,47 @@ describe('LoginScreen', () => {
     expect(screen.queryByText('Could not complete sign-up. Try again.')).toBeNull();
   });
 
+  it('keeps the create-account form quiet when Clerk reports the Apple sheet was dismissed', async () => {
+    mockStartAppleAuthenticationFlow.mockResolvedValueOnce({
+      createdSessionId: null,
+      setActive: jest.fn(),
+    });
+    const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+
+    fireEvent.press(await screen.findByTestId('mock-apple-button'));
+    await waitFor(() => expect(mockStartAppleAuthenticationFlow).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('Opening…')).toBeNull());
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('AuthView:signUp')).toBeNull();
+  });
+
+  it('says so when Apple sign-up starts before Clerk has loaded', async () => {
+    mockStartAppleAuthenticationFlow.mockResolvedValueOnce({
+      createdSessionId: null,
+      setActive: undefined,
+    });
+    const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+
+    fireEvent.press(await screen.findByTestId('mock-apple-button'));
+    expect(await screen.findByText('Sign-in is still loading. Please try again.')).toBeTruthy();
+    expect(screen.getByTestId('mobile-custom-sign-up')).toBeTruthy();
+  });
+
+  it('continues an incomplete Apple sign-up in the native flow', async () => {
+    mockStartAppleAuthenticationFlow.mockResolvedValueOnce({
+      createdSessionId: null,
+      setActive: jest.fn(),
+      signUp: { id: 'sua_apple', status: 'missing_requirements' },
+    });
+    const screen = render(<LoginScreen />);
+    fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
+
+    fireEvent.press(await screen.findByTestId('mock-apple-button'));
+    expect(await screen.findByText('AuthView:signUp')).toBeTruthy();
+  });
+
   it('keeps email signup usable when configured Apple authentication is unavailable', async () => {
     process.env.EXPO_PUBLIC_AGI_AUTH_PROVIDERS = 'apple';
     mockAppleAvailable.mockResolvedValue(false);
@@ -697,7 +983,7 @@ describe('LoginScreen', () => {
     };
     const screen = render(<LoginScreen />);
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
-    fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
     await waitFor(() => expect(mockStartSSOFlow).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('Opening…')).toBeNull());
@@ -709,7 +995,7 @@ describe('LoginScreen', () => {
   it('explains when Clerk has not loaded before a social attempt', async () => {
     const screen = render(<LoginScreen />);
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
-    fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
     await waitFor(() =>
       expect(screen.getByText('Sign-in is still loading. Please try again.')).toBeTruthy(),
@@ -721,7 +1007,7 @@ describe('LoginScreen', () => {
     mockStartSSOFlow.mockRejectedValueOnce(new Error('Legal acceptance required'));
     const screen = render(<LoginScreen />);
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
-    fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
     await waitFor(() =>
       expect(screen.getByText('Could not complete sign-up. Try again.')).toBeTruthy(),
@@ -738,7 +1024,7 @@ describe('LoginScreen', () => {
     };
     const screen = render(<LoginScreen />);
     fireEvent.press(screen.getByTestId('cloud-auth-signUp'));
-    fireEvent.press(screen.getByTestId('mobile-sign-up-google'));
+    fireEvent.press(await screen.findByTestId('mobile-sign-up-google'));
 
     await waitFor(() => expect(screen.getByText('AuthView:signUp')).toBeTruthy());
   });

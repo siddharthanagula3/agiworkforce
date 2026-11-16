@@ -700,25 +700,113 @@
           reactRoot.textContent = 'Loading React…';
           rootEl.appendChild(reactRoot);
 
+          let lastRuntimeScript = null;
           REACT_RUNTIME_SCRIPTS.forEach(function (cfg) {
             const script = appendPinnedScript(cfg, rootEl);
             script.addEventListener('error', function () {
               reportRenderError('The React runtime could not be loaded from ' + cfg.src);
             });
+            lastRuntimeScript = script;
           });
+          lastRuntimeScript.addEventListener('load', function () {
+            if (reactRoot.isConnected) mountReactSource(source, reactRoot);
+          });
+        }
 
-          const codeScript = document.createElement('script');
-          codeScript.type = 'text/babel';
-          codeScript.setAttribute('data-presets', 'env,react');
-          codeScript.async = false;
-          codeScript.text =
-            source +
-            '\n; try { var App = (typeof App !== "undefined" && App) ||' +
-            ' (typeof Component !== "undefined" && Component);' +
-            ' if (App) { ReactDOM.createRoot(document.getElementById("react-root"))' +
-            '.render(React.createElement(App)); } } catch (e) {' +
-            ' window.reportRenderError(e && e.message ? e.message : String(e)); }';
-          rootEl.appendChild(codeScript);
+        // Babel standalone 8 defaults the React preset to the automatic
+        // runtime, whose `react/jsx-runtime` import cannot load in a classic
+        // script, so the source is transformed here with the classic runtime.
+        const REACT_SOURCE_TRANSFORM = {
+          filename: 'Component.tsx',
+          sourceType: 'module',
+          presets: [['react', { runtime: 'classic' }], 'typescript'],
+          plugins: ['transform-modules-commonjs'],
+        };
+
+        function isReactComponent(value) {
+          return (
+            typeof value === 'function' ||
+            Boolean(value && typeof value === 'object' && value.$$typeof)
+          );
+        }
+
+        function mountReactSource(source, reactRoot) {
+          const React = window.React;
+          const ReactDOM = window.ReactDOM;
+          function fail(error) {
+            reportRenderError(error && error.message ? error.message : String(error));
+          }
+          let selfRendered = false;
+          const module = { exports: {} };
+          const previewReactDOM = Object.create(ReactDOM);
+          ['createRoot', 'hydrateRoot', 'render'].forEach(function (name) {
+            if (typeof ReactDOM[name] !== 'function') return;
+            previewReactDOM[name] = function () {
+              selfRendered = true;
+              return ReactDOM[name].apply(ReactDOM, arguments);
+            };
+          });
+          function require(name) {
+            if (name === 'react') return React;
+            if (name === 'react-dom' || name === 'react-dom/client') return previewReactDOM;
+            throw new Error(
+              'The preview cannot load "' + name + '". Only React and ReactDOM are available.',
+            );
+          }
+          let component;
+          reactRoot.textContent = '';
+          try {
+            const code = window.Babel.transform(source, REACT_SOURCE_TRANSFORM).code;
+            component = new Function(
+              'React',
+              'ReactDOM',
+              'require',
+              'module',
+              'exports',
+              code +
+                "\n;return (module.exports && module.exports.default) || (typeof App !== 'undefined' && App) || (typeof Component !== 'undefined' && Component) || null;",
+            )(React, previewReactDOM, require, module, module.exports);
+          } catch (error) {
+            fail(error);
+            return;
+          }
+          if (selfRendered) return;
+          if (
+            !isReactComponent(component) &&
+            module.exports &&
+            typeof module.exports === 'object'
+          ) {
+            const exported = Object.keys(module.exports).sort(function (first, second) {
+              return Number(/^[A-Z]/.test(second)) - Number(/^[A-Z]/.test(first));
+            });
+            component = exported
+              .map(function (key) {
+                return module.exports[key];
+              })
+              .filter(isReactComponent)[0];
+          }
+          if (!isReactComponent(component)) {
+            fail(new Error('The preview needs a default export or a component named App.'));
+            return;
+          }
+          function Boundary(props) {
+            React.Component.call(this, props);
+            this.state = { failed: false };
+          }
+          Boundary.prototype = Object.create(React.Component.prototype);
+          Boundary.prototype.constructor = Boundary;
+          Boundary.getDerivedStateFromError = function () {
+            return { failed: true };
+          };
+          Boundary.prototype.componentDidCatch = function (error) {
+            fail(error);
+          };
+          Boundary.prototype.render = function () {
+            return this.state.failed ? null : this.props.children;
+          };
+          ReactDOM.createRoot(reactRoot).render(
+            React.createElement(Boundary, null, React.createElement(component)),
+          );
         }
 
         function renderSvg(payload) {

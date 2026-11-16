@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
-  Alert,
+  BackHandler,
   View,
   StatusBar,
   useWindowDimensions,
@@ -12,10 +12,10 @@ import {
 } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
-import { ArrowUp, X, MicOff, Mic, Volume2, Hand } from 'lucide-react-native';
+import { ArrowUp, X, MicOff, Mic, Hand, Flag } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
@@ -30,12 +30,16 @@ import { useTierStore } from '@/src/features/billing/store';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
-import { VoiceCaptureError, transcribeAudioFile } from '@/src/features/voice/services/voiceInput';
-import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
+import {
+  VoiceCaptureError,
+  onDeviceRecognizerGuaranteed,
+  transcribeAudioFile,
+} from '@/src/features/voice/services/voiceInput';
+import { showVoiceCaptureFailureAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
 import { colors, motion, zIndex } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
+import { CapabilityUnavailable, useCapabilityDenialReason } from '@/src/lib/Capabilities';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import {
   createMessageIdSet,
@@ -47,8 +51,12 @@ import {
   type VoiceConversationPhase as Phase,
 } from '@/src/features/voice/hooks/useVoiceConversation';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
+import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
 
 const VOICE_GLOW_HEIGHT = 320;
+
+const REPORT_THIS_RESPONSE = 'Report this response';
 
 const PHASE_LABEL: Record<Phase, string> = {
   idle: 'Tap to speak',
@@ -64,14 +72,19 @@ const PHASE_SUBLABEL: Record<Phase, string> = {
   speaking: 'AI is responding',
 };
 
-function phaseLabel(phase: Phase, pttMode: boolean): string {
+const MUTED_LABEL = 'Microphone is muted';
+const MUTED_SUBLABEL = 'Unmute to talk';
+
+function phaseLabel(phase: Phase, pttMode: boolean, muted = false): string {
+  if (muted && phase === 'idle') return MUTED_LABEL;
   if (pttMode && phase === 'idle') return 'Hold to talk';
   return PHASE_LABEL[phase];
 }
 
 // Speech in and out is on-device; the reply comes from whichever model is
 // selected, so the label follows that model rather than claiming either one.
-function phaseSublabel(phase: Phase, pttMode: boolean, cloudModel: boolean): string {
+function phaseSublabel(phase: Phase, pttMode: boolean, cloudModel: boolean, muted = false): string {
+  if (muted && phase === 'idle') return MUTED_SUBLABEL;
   if (pttMode && phase === 'listening') return 'Release to send';
   if (phase === 'thinking') return cloudModel ? 'Sending to AGI Cloud' : 'Answering on this device';
   return PHASE_SUBLABEL[phase];
@@ -135,15 +148,45 @@ function CompanionOrb({
 }
 
 export default function VoiceScreen() {
+  return onDeviceRecognizerGuaranteed() ? (
+    <VoiceCompanion />
+  ) : (
+    <LeaveVoiceWithoutOnDeviceRecognizer />
+  );
+}
+
+function LeaveVoiceWithoutOnDeviceRecognizer() {
+  const router = useRouter();
+  const sentToChatRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!sentToChatRef.current) {
+        sentToChatRef.current = true;
+        router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+        return;
+      }
+      // The drawer keeps this route in its Back history, so a later focus is a Back press that must pass through.
+      if (router.canGoBack()) router.back();
+      else BackHandler.exitApp();
+    }, [router]),
+  );
+  return null;
+}
+
+function VoiceCompanion() {
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string; audioUri?: string }>();
   const insets = useSafeAreaInsets();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const voiceAllowed = useCapability('canUseVoice');
+  const voiceDenial = useCapabilityDenialReason('canUseVoice');
+  const voiceAllowed = voiceDenial === null;
   const voiceInputEnabled = useSettingsStore((s) => s.voiceEnabled) && voiceAllowed;
   const pttMode = useSettingsStore((s) => s.voicePushToTalk);
   const setVoicePushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
   const selectedModel = useModelStore((s) => s.selectedModel);
+  useEffect(() => {
+    useModelStore.getState().endConversationModel();
+  }, []);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const speechOwner = useVoiceOutputOwner(appMode, 'voice');
   const subscriptionTier = useTierStore((s) => s.tier);
@@ -168,6 +211,10 @@ export default function VoiceScreen() {
     (message) =>
       (message.role === 'user' || message.role === 'assistant') && message.content.trim(),
   );
+  const [reportingMessageId, setReportingMessageId] = useState<string | null>(null);
+  const reportedMessage = reportingMessageId
+    ? visibleSessionMessages?.find((message) => message.id === reportingMessageId)
+    : undefined;
 
   const [lastResponseMs, setLastResponseMs] = useState<number | undefined>(undefined);
   const [fileTranscription, setFileTranscription] = useState<string | null>(null);
@@ -221,6 +268,10 @@ export default function VoiceScreen() {
     },
     [getConversationId, modelForSend, sendMessage],
   );
+  const latestSendVoiceMessage = useRef(sendVoiceMessage);
+  useEffect(() => {
+    latestSendVoiceMessage.current = sendVoiceMessage;
+  }, [sendVoiceMessage]);
 
   const {
     phase,
@@ -240,14 +291,7 @@ export default function VoiceScreen() {
     sendMessage: sendVoiceMessage,
     speechOwner,
     speechOptions: speechSettings(),
-    onCaptureError: (err) => {
-      const message = voiceCaptureErrorMessage(err);
-      if (err instanceof VoiceCaptureError && err.code === 'mic-permission-denied') {
-        showVoicePermissionAlert(message);
-      } else {
-        Alert.alert('Voice unavailable', message);
-      }
-    },
+    onCaptureError: showVoiceCaptureFailureAlert,
     onSttComplete: (ms) => setLastResponseMs(ms),
   });
   const currentPreview = transcriptPreview || fileTranscription;
@@ -284,7 +328,7 @@ export default function VoiceScreen() {
           return;
         }
         setFileTranscription(trimmed);
-        await sendVoiceMessage(trimmed, signal).catch(() => {
+        await latestSendVoiceMessage.current(trimmed, signal).catch(() => {
           if (!signal.aborted) setFileSendError(true);
         });
       })
@@ -373,7 +417,7 @@ export default function VoiceScreen() {
   if (!voiceAllowed) {
     return (
       <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-        <CapabilityUnavailable label="Voice mode" onDismiss={handleClose} />
+        <CapabilityUnavailable label="Voice mode" reason={voiceDenial} onDismiss={handleClose} />
       </SafeAreaView>
     );
   }
@@ -398,18 +442,20 @@ export default function VoiceScreen() {
         behavior={keyboardAvoidingBehavior('screen')}
       >
         <View style={styles.content}>
-          <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode, isCloudModel)}</Text>
+          <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode, isCloudModel, muted)}</Text>
 
           {!isTyping ? (
             <CompanionOrb
               phase={phase}
               audioLevel={audioLevel}
-              label={voiceInputEnabled ? phaseLabel(phase, pttMode) : 'Voice Input is off'}
+              label={voiceInputEnabled ? phaseLabel(phase, pttMode, muted) : 'Voice Input is off'}
               hint={
                 voiceInputEnabled
-                  ? pttMode
-                    ? 'Hold to talk, release to send'
-                    : 'Tap to start or stop listening'
+                  ? muted
+                    ? 'Unmute the microphone to talk'
+                    : pttMode
+                      ? 'Hold to talk, release to send'
+                      : 'Tap to start or stop listening'
                   : 'Turn Voice Input on in Settings, Voice'
               }
               onPress={!voiceInputEnabled || pttMode ? undefined : handleOrbPress}
@@ -419,7 +465,7 @@ export default function VoiceScreen() {
           ) : null}
 
           <Text style={[styles.phaseLabel, { color: PHASE_LABEL_COLOR }]}>
-            {voiceInputEnabled ? phaseLabel(phase, pttMode) : 'Voice Input is off'}
+            {voiceInputEnabled ? phaseLabel(phase, pttMode, muted) : 'Voice Input is off'}
           </Text>
 
           {!voiceInputEnabled ? (
@@ -456,14 +502,29 @@ export default function VoiceScreen() {
               >
                 {visibleSessionMessages?.map((message) => (
                   <View key={message.id} style={styles.transcriptTurn}>
-                    <Text style={styles.transcriptSpeaker}>
-                      {message.role === 'user' ? 'You' : 'AGI'}
+                    <View style={styles.transcriptSpeakerRow}>
+                      <Text style={styles.transcriptSpeaker}>
+                        {message.role === 'user' ? 'You' : 'AGI'}
+                      </Text>
+                      {message.role === 'assistant' ? (
+                        <PressableBox
+                          testID={`voice-report-${message.id}`}
+                          onPress={() => setReportingMessageId(message.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel={REPORT_THIS_RESPONSE}
+                          style={styles.reportBtn}
+                        >
+                          <Flag size={14} color={colors.textMuted} />
+                        </PressableBox>
+                      ) : null}
+                    </View>
+                    <Text selectable style={styles.transcriptText}>
+                      {message.content}
                     </Text>
-                    <Text style={styles.transcriptText}>{message.content}</Text>
                   </View>
                 ))}
                 {showCurrentPreview ? (
-                  <Text testID="voice-transcript-preview" style={styles.transcriptText}>
+                  <Text selectable testID="voice-transcript-preview" style={styles.transcriptText}>
                     {currentPreview}
                   </Text>
                 ) : null}
@@ -527,7 +588,10 @@ export default function VoiceScreen() {
         ) : null}
 
         {!isTyping ? (
-          <View style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}>
+          <View
+            testID="voice-controls"
+            style={[styles.controls, { paddingBottom: insets.bottom + 20 }]}
+          >
             <PressableBox
               onPress={toggleMute}
               style={[
@@ -559,13 +623,22 @@ export default function VoiceScreen() {
             >
               <Hand size={22} color={pttMode ? colors.agentThinking : colors.textSecondary} />
             </PressableBox>
-
-            <View style={styles.controlBtn}>
-              <Volume2 size={22} color={colors.terraCotta} />
-            </View>
           </View>
         ) : null}
       </KeyboardAvoidingView>
+      {reportedMessage ? (
+        <ReportSheet
+          visible
+          onClose={() => setReportingMessageId(null)}
+          title={REPORT_THIS_RESPONSE}
+          target={{
+            messageId: reportedMessage.id,
+            conversationId: conversationId ?? reportedMessage.id,
+            contentExcerpt: reportedMessage.content,
+            subject: { kind: 'voice-turn', id: reportedMessage.id },
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -651,6 +724,17 @@ const styles = StyleSheet.create({
   },
   transcriptTurn: {
     gap: 3,
+  },
+  transcriptSpeakerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reportBtn: {
+    width: FULL_SCREEN_TOUCH_TARGET,
+    height: FULL_SCREEN_TOUCH_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   transcriptSpeaker: {
     color: colors.terraCotta,

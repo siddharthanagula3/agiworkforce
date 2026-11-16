@@ -1,3 +1,4 @@
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import {
   documentDirectory,
   getInfoAsync,
@@ -13,7 +14,9 @@ import {
   type FileSystemDownloadResult,
   type DownloadProgressData,
 } from 'expo-file-system/legacy';
+import { EXECUTORCH_MODELS_DIR, MODELS_DIR } from './modelStoragePaths';
 import NetInfo from '@react-native-community/netinfo';
+import { excludeFromBackup } from '@/src/platform/backupExclusion';
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 import {
   ensureMultimodalArtifacts,
@@ -87,8 +90,20 @@ export interface ModelDownloadOpts {
   mmprojSizeBytes?: number;
 }
 
-const MODELS_DIR = `${documentDirectory}models/`;
 const MAX_MODEL_ID_CHARS = 96;
+
+/**
+ * Model files can be downloaded again, so they stay out of iCloud and computer
+ * backups. They stay in Documents rather than Caches so the system never
+ * purges a multi-gigabyte download under storage pressure.
+ */
+export async function excludeModelFilesFromBackup(): Promise<void> {
+  try {
+    await excludeFromBackup([MODELS_DIR, EXECUTORCH_MODELS_DIR]);
+  } catch (error) {
+    console.warn('[modelDownload] Could not exclude model files from backup:', error);
+  }
+}
 const SHA256_HEX = /^[0-9a-f]{64}$/i;
 
 function modelDir(modelId: string): string {
@@ -191,10 +206,6 @@ async function assertNetworkAllowed(wifiOnly: boolean): Promise<void> {
   );
 }
 
-function formatGigabytes(bytes: number): string {
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
-
 /**
  * Free space is checked before the first byte is written, so an oversized model
  * fails with the real number instead of a mid-download write error.
@@ -211,7 +222,7 @@ export async function assertFreeSpaceFor(requiredBytes: number): Promise<void> {
   if (freeBytes >= needed) return;
   throw new ModelDownloadError(
     'storage_full',
-    `This model needs ${formatGigabytes(needed)} free and this device has ${formatGigabytes(freeBytes)}. Free up space and try again.`,
+    `This model needs ${formatAttachmentSize(needed)} free and this device has ${formatAttachmentSize(freeBytes)}. Free up space and try again.`,
   );
 }
 
@@ -462,6 +473,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
   assertNotCancelled();
 
   await ensureDir(modelDir(modelId));
+  await excludeModelFilesFromBackup();
   assertNotCancelled();
 
   const destPath = modelFilePath(modelId, format);
@@ -534,6 +546,7 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
     }
   }
 
+  await excludeModelFilesFromBackup();
   assertNotCancelled();
 
   const record: InstalledModel = {

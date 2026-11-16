@@ -22,7 +22,8 @@ import {
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
-import { getModelReasoning } from '@agiworkforce/types';
+import { getModelReasoning, isAutoModeModelId } from '@agiworkforce/types';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
 import {
   canAccessCloudModelForTier,
@@ -47,6 +48,21 @@ const MAX_ONLY_MODEL_ID = requireMobileCloudModel(
   'Max-only Mobile Cloud model',
 ).id;
 
+const PRO_CHOICE_ID = requireMobileCloudModel(
+  (model) =>
+    !isAutoModeModelId(model.id) &&
+    canAccessCloudModelForTier(model.id, 'pro') &&
+    model.id !== getDefaultCloudModelIdForTier('pro'),
+  'non-default Mobile Cloud model on the Pro plan',
+).id;
+const OTHER_PRO_MODEL_ID = requireMobileCloudModel(
+  (model) =>
+    !isAutoModeModelId(model.id) &&
+    canAccessCloudModelForTier(model.id, 'pro') &&
+    model.id !== PRO_CHOICE_ID,
+  'second Mobile Cloud model on the Pro plan',
+).id;
+
 function getState() {
   return useModelStore.getState();
 }
@@ -66,12 +82,15 @@ function resetStore() {
   useModelStore.setState({
     selectedModel: DEFAULT_LOCAL_MODEL_ID,
     selectedProvider: 'local',
+    newChatModels: { local: null, cloud: null },
+    conversationModelShown: false,
     favorites: [],
     recentModels: [],
     thinkingModeEnabled: false,
     thinkingEnabledPerModel: {},
   });
-  useTierStore.setState({ tier: 'free', billingTier: 'free' });
+  useChatAppModeStore.setState({ appMode: 'local' });
+  useTierStore.setState({ tier: 'free', billingTier: 'free', lastRefreshedAt: null });
 }
 
 describe('modelStore', () => {
@@ -182,6 +201,172 @@ describe('modelStore', () => {
       getState().setModel(LITE_MODEL_ID);
 
       expect(getState().thinkingModeEnabled).toBe(true);
+    });
+  });
+
+  describe('the choice for new chats', () => {
+    function unlockPro() {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      useTierStore.setState({ tier: 'pro', billingTier: 'pro' });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+    }
+
+    function startOfProcess(persisted: Record<string, unknown>) {
+      useWaitlistStore.setState({ cloudUnlocked: false });
+      useTierStore.setState({ tier: 'pro', billingTier: 'pro' });
+      const merge = useModelStore.persist.getOptions().merge;
+      return merge?.(persisted, useModelStore.getState());
+    }
+
+    it('survives a restart, when Cloud access is not yet known', () => {
+      const hydrated = startOfProcess({
+        selectedModel: PRO_CHOICE_ID,
+        newChatModels: { local: null, cloud: PRO_CHOICE_ID },
+      });
+
+      expect(hydrated?.selectedModel).toBe(PRO_CHOICE_ID);
+      expect(hydrated?.selectedProvider).toBe('cloud_managed');
+      expect(hydrated?.newChatModels?.cloud).toBe(PRO_CHOICE_ID);
+    });
+
+    it('returns to their own choice after a restart that left a project model shown', () => {
+      const hydrated = startOfProcess({
+        selectedModel: OTHER_PRO_MODEL_ID,
+        conversationModelShown: true,
+        newChatModels: { local: null, cloud: PRO_CHOICE_ID },
+      });
+
+      expect(hydrated?.selectedModel).toBe(PRO_CHOICE_ID);
+      expect(hydrated?.selectedProvider).toBe('cloud_managed');
+      expect(hydrated?.newChatModels?.cloud).toBe(PRO_CHOICE_ID);
+      expect(hydrated?.conversationModelShown).toBe(false);
+    });
+
+    it('never adopts a model shown only for a conversation as the choice for new chats', () => {
+      const hydrated = startOfProcess({
+        selectedModel: PRO_CHOICE_ID,
+        conversationModelShown: true,
+      });
+
+      expect(hydrated?.newChatModels).toEqual({ local: null, cloud: null });
+      expect(hydrated?.selectedModel).toBe(getDefaultCloudModelIdForTier('pro'));
+      expect(hydrated?.selectedModel).not.toBe(PRO_CHOICE_ID);
+    });
+
+    it('is read from the model saved by a version that only kept one selection', () => {
+      const cloud = startOfProcess({ selectedModel: PRO_CHOICE_ID });
+      expect(cloud?.newChatModels).toEqual({ local: null, cloud: PRO_CHOICE_ID });
+
+      const local = startOfProcess({ selectedModel: LITE_MODEL_ID });
+      expect(local?.newChatModels).toEqual({ local: LITE_MODEL_ID, cloud: null });
+    });
+
+    it('ignores a saved choice that is not a model of its mode', () => {
+      const hydrated = startOfProcess({
+        selectedModel: DEFAULT_LOCAL_MODEL_ID,
+        newChatModels: { local: PRO_CHOICE_ID, cloud: 42 },
+      });
+
+      expect(hydrated?.newChatModels).toEqual({ local: null, cloud: null });
+    });
+
+    it('is recorded per mode, so a Local pick does not replace the Cloud one', () => {
+      unlockPro();
+      getState().setModel(PRO_CHOICE_ID);
+      useChatAppModeStore.setState({ appMode: 'local' });
+      getState().setModel(LITE_MODEL_ID);
+
+      expect(getState().newChatModels).toEqual({ local: LITE_MODEL_ID, cloud: PRO_CHOICE_ID });
+    });
+
+    it('stays when a conversation shows its own model, and returns when the new chat does', () => {
+      unlockPro();
+      getState().setModel(PRO_CHOICE_ID);
+
+      getState().showConversationModel(OTHER_PRO_MODEL_ID);
+      expect(getState().selectedModel).toBe(OTHER_PRO_MODEL_ID);
+      expect(getState().newChatModels.cloud).toBe(PRO_CHOICE_ID);
+
+      getState().endConversationModel();
+      expect(getState().selectedModel).toBe(PRO_CHOICE_ID);
+      expect(getState().conversationModelShown).toBe(false);
+    });
+
+    it('leaves a pick made in the new chat alone when the new chat takes focus', () => {
+      unlockPro();
+      getState().setModel(PRO_CHOICE_ID);
+      getState().showConversationModel(OTHER_PRO_MODEL_ID);
+      getState().setModel(PRO_CHOICE_ID);
+      useModelStore.setState({ selectedModel: OTHER_PRO_MODEL_ID });
+
+      getState().endConversationModel();
+
+      expect(getState().selectedModel).toBe(OTHER_PRO_MODEL_ID);
+    });
+
+    it('falls back to the plan default for a saved choice the plan no longer includes', () => {
+      unlockPro();
+      useTierStore.setState({ lastRefreshedAt: new Date().toISOString() });
+      useModelStore.setState({
+        selectedModel: OTHER_PRO_MODEL_ID,
+        newChatModels: { local: null, cloud: MAX_ONLY_MODEL_ID },
+        conversationModelShown: true,
+      });
+
+      getState().endConversationModel();
+
+      expect(getState().selectedModel).toBe(getDefaultCloudModelIdForTier('pro'));
+      expect(getState().newChatModels.cloud).toBe(getDefaultCloudModelIdForTier('pro'));
+    });
+
+    it('keeps a saved choice the plan has not yet been confirmed to include', () => {
+      unlockPro();
+      useModelStore.setState({
+        selectedModel: OTHER_PRO_MODEL_ID,
+        newChatModels: { local: null, cloud: MAX_ONLY_MODEL_ID },
+        conversationModelShown: true,
+      });
+
+      getState().endConversationModel();
+
+      expect(getState().selectedModel).toBe(getDefaultCloudModelIdForTier('pro'));
+      expect(getState().newChatModels.cloud).toBe(MAX_ONLY_MODEL_ID);
+    });
+
+    it('is reset with the plan when the plan changes, even while a conversation is shown', () => {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      getState().setModel(MAX_ONLY_MODEL_ID);
+      getState().showConversationModel(OTHER_PRO_MODEL_ID);
+
+      useTierStore.setState({ tier: 'pro', billingTier: 'pro' });
+
+      expect(getState().selectedModel).toBe(OTHER_PRO_MODEL_ID);
+      expect(getState().newChatModels.cloud).toBe(getDefaultCloudModelIdForTier('pro'));
+    });
+
+    it('comes back for Cloud after a detour through Local', () => {
+      unlockPro();
+      getState().setModel(PRO_CHOICE_ID);
+      useChatAppModeStore.setState({ appMode: 'local' });
+      getState().setModel(DEFAULT_LOCAL_MODEL_ID);
+
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      getState().restoreNewChatModel();
+
+      expect(getState().selectedModel).toBe(PRO_CHOICE_ID);
+    });
+
+    it('waits for Cloud access before it restores a Cloud model', () => {
+      unlockPro();
+      getState().setModel(PRO_CHOICE_ID);
+      getState().showConversationModel(OTHER_PRO_MODEL_ID);
+      useWaitlistStore.setState({ cloudUnlocked: false });
+
+      getState().endConversationModel();
+
+      expect(getState().selectedModel).toBe(OTHER_PRO_MODEL_ID);
     });
   });
 

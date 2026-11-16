@@ -3,6 +3,7 @@ import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils/async';
 import {
   SSE_DONE_DATA,
+  ServerSentEventFrameLimitError,
   readServerSentEvents,
   splitJoinedServerSentEventData,
 } from '@agiworkforce/client-runtime';
@@ -10,11 +11,15 @@ import {
   getModelMetadataById,
   getProviderOffering,
   messageKindForAgentEvent,
+  MOVED_FROM_MODEL_HEADER,
+  MOVED_REASON_HEADER,
   type CloudWorkMode,
   type Effort,
   type Provider,
   type ResearchStep,
   type RoutingProfileChoice,
+  WEB_SEARCH_CITATION_DELTA_KEY,
+  type WebSearchCitationDeltaWire,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentEventSource } from '@agiworkforce/types/protocol';
 import { getAuthToken } from './authSession';
@@ -34,6 +39,7 @@ import {
   rateLimitErrorFrom,
 } from './apiErrors';
 import { ensureCloudSendConsent, ensureLlmGateOpen } from './llmGate';
+import { StreamConnectionLostError, isIdempotencyReplayRefusal } from './streamConnectionLost';
 import { surfaceTermsNotice } from './termsNotice';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -42,12 +48,22 @@ import { isFreeQuotaTurnModelId } from '@/src/features/model-picker/service';
 import { fastSpeedForModel } from '@/src/features/model-picker/fastMode';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import { createChatStreamDedupe } from '@/src/lib/chat-stream-dedupe';
-import type { ManagedMemoryCitations, ResearchDeliverableSpec } from '@agiworkforce/types';
+import type {
+  ManagedMemoryCitations,
+  ProjectFileCitation,
+  ResearchDeliverableSpec,
+} from '@agiworkforce/types';
 import { readMemoryCitationsHeader } from '@/src/features/memory/services/memoryCitations';
+import {
+  readPastChatCitationsHeader,
+  readProjectFileCitationsHeader,
+  type PastChatCitation,
+} from '@/src/features/chat/utils/referenceCitations';
 import {
   readModelSubstitution,
   type ModelSubstitution,
 } from '@/src/features/chat/utils/fallbackNotice';
+import { nativeCitationFromDelta } from '@/src/features/chat/utils/messageSources';
 import {
   createManagedChatIdempotencyKey,
   type ManagedChatPurpose,
@@ -57,6 +73,9 @@ import {
   parseToolStatusDelta,
   parseToolResultDelta,
   parseToolApprovalRequestDelta,
+  ToolApprovalReviewWireSchema,
+  type ToolApprovalDecisionValue,
+  type ToolApprovalReviewWire,
   parseToolInputRequestDelta,
   parseAgentEventDelta,
   readManagedCloudAgentRunHandle,
@@ -66,6 +85,10 @@ import {
   TOOL_INPUT_RESUME_PATH,
   DEVICE_STEP_RESUME_PATH,
   FREE_QUOTA_COMPLETIONS_PATH,
+  ROUTE_LANE_HEADER,
+  SECRET_REDACTION_COUNT_HEADER,
+  readRouteLane,
+  type ChatRouteLane,
   type DeviceStepResultWire,
   type ManagedCloudAgentRunClient,
   type ManagedCloudAgentRunReference,
@@ -110,7 +133,7 @@ export interface StreamToolResult {
  * manual mode when a tool call is suspended awaiting the user's decision.
  * Validated the same way as {@link StreamToolStatus}.
  */
-export interface StreamToolApprovalRequest {
+export interface StreamToolApprovalRequest extends Partial<ToolApprovalReviewWire> {
   tool_call_id: string;
   name: string;
   args?: unknown;
@@ -146,6 +169,7 @@ export interface StreamDelta {
   x_agent_event?: AgentEventEnvelope;
   x_code_result?: unknown;
   x_search_results?: unknown;
+  [WEB_SEARCH_CITATION_DELTA_KEY]?: WebSearchCitationDeltaWire;
   x_research_status?: unknown;
   x_research_plan?: unknown;
   x_generated_files?: { files?: StreamGeneratedFile[] };
@@ -170,7 +194,32 @@ export interface StreamCallbacks {
   onRunReference?: (reference: ManagedCloudAgentRunReference) => void;
   onAttachmentsTruncated?: (fileNames: string[]) => void;
   onMemoryCitations?: (citations: ManagedMemoryCitations) => void;
+  onProjectSources?: (citations: ProjectFileCitation[]) => void;
+  onPastChatSources?: (citations: PastChatCitation[]) => void;
   onModelSubstitution?: (substitution: ModelSubstitution) => void;
+  onTurnNotices?: (notices: TurnNoticeHeaders) => void;
+}
+
+export interface TurnNoticeHeaders {
+  movedFromModel?: string;
+  movedReason?: string;
+  routeLane?: ChatRouteLane;
+  secretRedactionCount?: number;
+}
+
+type HeaderReader = Pick<Headers, 'get'>;
+
+export function readTurnNoticeHeaders(headers: HeaderReader): TurnNoticeHeaders {
+  const movedFromModel = headers.get(MOVED_FROM_MODEL_HEADER)?.trim();
+  const movedReason = headers.get(MOVED_REASON_HEADER)?.trim();
+  const routeLane = readRouteLane(headers.get(ROUTE_LANE_HEADER));
+  const redactions = Number(headers.get(SECRET_REDACTION_COUNT_HEADER)?.trim() || Number.NaN);
+  return {
+    ...(movedFromModel ? { movedFromModel } : {}),
+    ...(movedFromModel && movedReason ? { movedReason } : {}),
+    ...(routeLane ? { routeLane } : {}),
+    ...(Number.isInteger(redactions) && redactions > 0 ? { secretRedactionCount: redactions } : {}),
+  };
 }
 
 function accountStreamCallbacks(
@@ -191,7 +240,83 @@ function accountStreamCallbacks(
     onRunReference: guard(callbacks.onRunReference),
     onAttachmentsTruncated: guard(callbacks.onAttachmentsTruncated),
     onMemoryCitations: guard(callbacks.onMemoryCitations),
+    onProjectSources: guard(callbacks.onProjectSources),
+    onPastChatSources: guard(callbacks.onPastChatSources),
     onModelSubstitution: guard(callbacks.onModelSubstitution),
+    onTurnNotices: guard(callbacks.onTurnNotices),
+  };
+}
+
+const STREAM_DELIVERY_INTERVAL_MS = 16;
+
+// A burst of events is parsed in one run of microtasks, and React Native renders
+// a store write from a microtask, so handing each event over as it is parsed
+// re-renders the transcript once per event and holds every tap, Stop included,
+// until the burst is drawn. Events are handed over at most once a frame instead,
+// in their original order, ahead of any callback that follows them.
+function frameStreamCallbacks(callbacks: StreamCallbacks, signal?: AbortSignal): StreamCallbacks {
+  let queued: Array<() => void> = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let failed = false;
+  let deliveredRunId: string | null = null;
+
+  const flush = (): boolean => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    const due = queued;
+    queued = [];
+    if (failed || signal?.aborted) return false;
+    for (const deliver of due) {
+      try {
+        deliver();
+      } catch (error) {
+        failed = true;
+        callbacks.onError(error instanceof Error ? error : new Error(String(error)));
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const later =
+    <Args extends unknown[]>(callback: ((...args: Args) => void) | undefined) =>
+    (...args: Args): void => {
+      if (!callback || failed) return;
+      queued.push(() => callback(...args));
+      timer ??= setTimeout(flush, STREAM_DELIVERY_INTERVAL_MS);
+    };
+
+  const inOrder =
+    <Args extends unknown[]>(callback: ((...args: Args) => void) | undefined) =>
+    (...args: Args): void => {
+      if (flush()) callback?.(...args);
+    };
+
+  const laterRunReference = later(callbacks.onRunReference);
+  const inOrderRunReference = inOrder(callbacks.onRunReference);
+
+  return {
+    onDelta: later(callbacks.onDelta),
+    onDone: inOrder(callbacks.onDone),
+    onError: inOrder(callbacks.onError),
+    onReconnecting: inOrder(callbacks.onReconnecting),
+    onActivity: callbacks.onActivity,
+    onRunReference: (reference) => {
+      if (reference.runId === deliveredRunId) {
+        laterRunReference(reference);
+        return;
+      }
+      deliveredRunId = reference.runId;
+      inOrderRunReference(reference);
+    },
+    onAttachmentsTruncated: inOrder(callbacks.onAttachmentsTruncated),
+    onMemoryCitations: inOrder(callbacks.onMemoryCitations),
+    onProjectSources: inOrder(callbacks.onProjectSources),
+    onPastChatSources: inOrder(callbacks.onPastChatSources),
+    onModelSubstitution: inOrder(callbacks.onModelSubstitution),
+    onTurnNotices: inOrder(callbacks.onTurnNotices),
   };
 }
 
@@ -207,8 +332,17 @@ function sanitizeToolEventFields(delta: StreamDelta): void {
     delta.x_tool_result = parseToolResultDelta(delta.x_tool_result) ?? delta.x_tool_result;
   }
   if (delta.x_tool_approval_request !== undefined) {
-    delta.x_tool_approval_request =
-      parseToolApprovalRequestDelta(delta.x_tool_approval_request) ?? delta.x_tool_approval_request;
+    const raw = delta.x_tool_approval_request;
+    const request = parseToolApprovalRequestDelta(raw);
+    const review = ToolApprovalReviewWireSchema.safeParse(raw);
+    delta.x_tool_approval_request = request
+      ? {
+          tool_call_id: request.tool_call_id,
+          name: request.name,
+          args: request.args,
+          ...(review.success ? review.data : {}),
+        }
+      : raw;
   }
   if (delta.x_tool_input_request !== undefined) {
     const inputRequest = parseToolInputRequestDelta(delta.x_tool_input_request);
@@ -216,6 +350,14 @@ function sanitizeToolEventFields(delta: StreamDelta): void {
       delta.x_tool_input_request = inputRequest;
     } else {
       delete delta.x_tool_input_request;
+    }
+  }
+  if (delta[WEB_SEARCH_CITATION_DELTA_KEY] !== undefined) {
+    const citation = nativeCitationFromDelta(delta[WEB_SEARCH_CITATION_DELTA_KEY]);
+    if (citation) {
+      delta[WEB_SEARCH_CITATION_DELTA_KEY] = { url: citation.url, title: citation.title };
+    } else {
+      delete delta[WEB_SEARCH_CITATION_DELTA_KEY];
     }
   }
   if (delta.x_agent_event !== undefined) {
@@ -228,11 +370,13 @@ function sanitizeToolEventFields(delta: StreamDelta): void {
   }
 }
 
-function processSseData(data: string, callbacks: StreamCallbacks): boolean {
+type SseOutcome = 'done' | 'detached' | null;
+
+function processSseData(data: string, callbacks: StreamCallbacks): SseOutcome {
   for (const payload of splitJoinedServerSentEventData(data)) {
     const trimmed = payload.trim();
     if (!trimmed) continue;
-    if (trimmed === SSE_DONE_DATA) return true;
+    if (trimmed === SSE_DONE_DATA) return 'done';
 
     let parsed;
     try {
@@ -241,6 +385,9 @@ function processSseData(data: string, callbacks: StreamCallbacks): boolean {
       continue;
     }
     const choice = parsed?.choices?.[0];
+    // The function budget ended this connection, not the run: the [DONE]
+    // that follows is not the end of the answer.
+    if (choice?.delta?.x_run_detached) return 'detached';
     if (choice?.delta) {
       sanitizeToolEventFields(choice.delta);
       callbacks.onDelta(choice.delta);
@@ -249,10 +396,11 @@ function processSseData(data: string, callbacks: StreamCallbacks): boolean {
       callbacks.onDelta({ finish_reason: choice.finish_reason });
     }
   }
-  return false;
+  return null;
 }
 
 const COMPLETIONS_PATH = '/api/llm/v1/chat/completions';
+const STREAM_ENDED_EARLY_MESSAGE = 'The response ended before completion. Please retry.';
 
 export function createMobileCloudAgentRunClient(
   account: CloudAccountEpoch | null = captureCloudAccountEpoch(),
@@ -397,6 +545,7 @@ interface InitialStreamRequest {
     steps?: ResearchStep[];
     approved_steps?: ResearchStep[];
     deliverable?: ResearchDeliverableSpec;
+    guidance?: string;
   };
   research_sources?: {
     files?: true;
@@ -425,7 +574,7 @@ interface InitialStreamRequest {
 interface ApprovalResumeRequest {
   run_id: string;
   operationId: string;
-  tool_approvals: Array<{ tool_call_id: string; decision: 'approved' | 'rejected' }>;
+  tool_approvals: Array<{ tool_call_id: string; decision: ToolApprovalDecisionValue }>;
   guidance?: string;
 }
 
@@ -473,7 +622,7 @@ async function attemptStream(
   path: string = COMPLETIONS_PATH,
   sessionRecovered = false,
   purpose: CompletionPurpose = 'send',
-): Promise<boolean> {
+): Promise<boolean | 'detached'> {
   assertCloudAccountEpochCurrent(account);
   const token = await getAuthToken();
   assertCloudAccountEpochCurrent(account);
@@ -587,27 +736,68 @@ async function attemptStream(
     if (truncated.length > 0) callbacks.onAttachmentsTruncated?.(truncated);
     const memoryCitations = readMemoryCitationsHeader(response.headers);
     if (memoryCitations) callbacks.onMemoryCitations?.(memoryCitations);
+    const projectSources = readProjectFileCitationsHeader(response.headers);
+    if (projectSources.length > 0) callbacks.onProjectSources?.(projectSources);
+    const pastChatSources = readPastChatCitationsHeader(response.headers);
+    if (pastChatSources.length > 0) callbacks.onPastChatSources?.(pastChatSources);
     const substitution = readModelSubstitution(response.headers);
     if (substitution) callbacks.onModelSubstitution?.(substitution);
+    const turnNotices = readTurnNoticeHeaders(response.headers);
+    if (Object.keys(turnNotices).length > 0) callbacks.onTurnNotices?.(turnNotices);
     assertCloudAccountEpochCurrent(account);
     surfaceTermsNotice(response.headers);
   }
 
-  for await (const event of readServerSentEvents(response, {
-    acceptUnterminatedFinalFrame: true,
-    signal,
-    onChunk: () => {
+  let outcome: SseOutcome = null;
+  try {
+    for await (const event of readServerSentEvents(response, {
+      acceptUnterminatedFinalFrame: true,
+      signal,
+      onChunk: () => {
+        assertCloudAccountEpochCurrent(account);
+        callbacks.onActivity?.();
+      },
+    })) {
       assertCloudAccountEpochCurrent(account);
-      callbacks.onActivity?.();
-    },
-  })) {
-    assertCloudAccountEpochCurrent(account);
-    if (processSseData(event.data, callbacks)) {
-      callbacks.onDone();
-      return true;
+      outcome = processSseData(event.data, callbacks);
+      if (outcome !== null) break;
     }
+  } catch (error) {
+    throw asBodyTransportFailure(error, signal, account);
   }
-  throw new Error('The response ended before completion. Please retry.');
+  if (outcome === 'detached') return 'detached';
+  if (outcome === 'done') {
+    callbacks.onDone();
+    return true;
+  }
+  throw new Error(STREAM_ENDED_EARLY_MESSAGE);
+}
+
+class StreamTransportError extends Error {
+  constructor(cause: Error) {
+    super(cause.message);
+    this.name = 'StreamTransportError';
+  }
+}
+
+// The streaming fetch reports a dropped connection while reading the body as a
+// plain Error carrying the platform's sentence, so a read failure is told
+// apart by where it happened rather than by its type or wording.
+function asBodyTransportFailure(
+  error: unknown,
+  signal: AbortSignal,
+  account: CloudAccountEpoch,
+): unknown {
+  if (
+    !(error instanceof Error) ||
+    signal.aborted ||
+    !isCloudAccountEpochCurrent(account) ||
+    error.name === 'AbortError' ||
+    error instanceof ServerSentEventFrameLimitError
+  ) {
+    return error;
+  }
+  return new StreamTransportError(error);
 }
 
 export async function streamFreeQuotaChat(
@@ -620,7 +810,7 @@ export async function streamFreeQuotaChat(
     callbacks.onError(new CloudCredentialUnavailableError());
     return;
   }
-  callbacks = accountStreamCallbacks(callbacks, account);
+  callbacks = frameStreamCallbacks(accountStreamCallbacks(callbacks, account), signal);
   try {
     assertCloudAccountEpochCurrent(account);
     if (!isFreeQuotaTurnModelId(body.model)) {
@@ -646,13 +836,14 @@ export async function streamFreeQuotaChat(
       },
     };
     try {
-      await attemptStream(
+      const outcome = await attemptStream(
         body,
         timedCallbacks,
         combinedSignal,
         account,
         FREE_QUOTA_COMPLETIONS_PATH,
       );
+      if (outcome === 'detached') callbacks.onError(new Error(STREAM_ENDED_EARLY_MESSAGE));
     } catch (error) {
       if (signal?.aborted) return;
       callbacks.onError(
@@ -679,7 +870,13 @@ function resolveProviderFromModel(modelId: string | undefined): Provider {
   return metadata.provider;
 }
 
+// expo/fetch does not export the FetchError it throws when a request cannot be
+// started, so its fixed message prefix is the only mark it carries.
+const EXPO_FETCH_START_FAILURE_PREFIX = 'fetch failed: ';
+
 function isNetworkError(err: unknown): boolean {
+  if (err instanceof StreamTransportError) return true;
+  if (err instanceof Error && err.message.startsWith(EXPO_FETCH_START_FAILURE_PREFIX)) return true;
   if (err instanceof TypeError) {
     const msg = err.message.toLowerCase();
     return (
@@ -712,6 +909,128 @@ function withDeviceTimeZone(body: InitialStreamRequest): InitialStreamRequest {
   return clientTimeZone ? { ...body, client_timezone: clientTimeZone } : body;
 }
 
+function finishReasonFromStop(
+  envelope: AgentEventEnvelope,
+): StreamDelta['finish_reason'] | undefined {
+  if (envelope.event.type !== 'stop') return undefined;
+  if (envelope.event.reason === 'max-tokens') return 'length';
+  if (envelope.event.reason === 'cancelled') return 'stopped';
+  if (envelope.event.reason === 'error') return 'error';
+  return 'stop';
+}
+
+interface FollowWindow {
+  restartForFollow: () => AbortSignal;
+  clear: () => void;
+}
+
+interface DurableRunFollower {
+  callbacks: StreamCallbacks;
+  recover: (reconnectAttempt: number | null) => Promise<boolean>;
+}
+
+// `recover` is false only when the response never named a run to follow.
+function createDurableRunFollower(
+  account: CloudAccountEpoch,
+  callbacks: StreamCallbacks,
+  signal: AbortSignal | undefined,
+  rearmStallWatchdog: () => void,
+  followWindow: FollowWindow,
+  afterSequence = -1,
+): DurableRunFollower {
+  let currentRunReference: ManagedCloudAgentRunReference | undefined;
+  const dedupe = createChatStreamDedupe();
+  const trackedCallbacks: StreamCallbacks = {
+    ...callbacks,
+    onActivity: rearmStallWatchdog,
+    onRunReference: (reference) => {
+      currentRunReference = {
+        ...reference,
+        lastSequence: Math.max(reference.lastSequence, afterSequence),
+      };
+      callbacks.onRunReference?.({ ...currentRunReference });
+    },
+    onDelta: (delta) => {
+      rearmStallWatchdog();
+      if (delta.x_agent_event && !dedupe.admit(delta.x_agent_event)) return;
+      if (delta.x_agent_event && currentRunReference) {
+        currentRunReference = {
+          ...currentRunReference,
+          lastSequence: Math.max(currentRunReference.lastSequence, delta.x_agent_event.sequence),
+        };
+        callbacks.onRunReference?.({ ...currentRunReference });
+      }
+      callbacks.onDelta(delta);
+    },
+  };
+
+  const publishRunReference = (patch: Partial<ManagedCloudAgentRunReference>): void => {
+    if (!currentRunReference) return;
+    currentRunReference = {
+      ...currentRunReference,
+      ...patch,
+      lastSequence: Math.max(currentRunReference.lastSequence, patch.lastSequence ?? -1),
+    };
+    callbacks.onRunReference?.({ ...currentRunReference });
+  };
+
+  const follow = async (followSignal: AbortSignal): Promise<void> => {
+    if (!currentRunReference) throw new Error('Managed Cloud run handle is unavailable');
+    const client = createMobileCloudAgentRunClient(account);
+    const followed = await client.followRun(currentRunReference.runId, {
+      afterSequence: currentRunReference.lastSequence,
+      signal: followSignal,
+      onEvent: (envelope) => {
+        const finishReason = finishReasonFromStop(envelope);
+        trackedCallbacks.onDelta({
+          x_agent_event: envelope,
+          ...(messageKindForAgentEvent(envelope.event.type) === 'text' &&
+          envelope.event.type === 'text-delta'
+            ? { content: envelope.event.delta }
+            : {}),
+          ...(finishReason ? { finish_reason: finishReason } : {}),
+          durableReplay: true,
+        });
+      },
+      onSnapshot: (snapshot) => {
+        rearmStallWatchdog();
+        publishRunReference({
+          lastSequence: snapshot.nextAfterSequence,
+          state: snapshot.run.state,
+          cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
+        });
+      },
+    });
+    publishRunReference({
+      lastSequence: followed.lastSequence,
+      state: followed.run.state,
+      cancellationRequestedAt: followed.run.cancellationRequestedAt,
+    });
+    callbacks.onDone();
+  };
+
+  const recover = async (reconnectAttempt: number | null): Promise<boolean> => {
+    if (!isCloudAccountEpochCurrent(account) || signal?.aborted) return true;
+    if (!currentRunReference) return false;
+    if (reconnectAttempt !== null) callbacks.onReconnecting?.(reconnectAttempt);
+    const followSignal = followWindow.restartForFollow();
+    try {
+      await follow(followSignal);
+    } catch (followError) {
+      if (!signal?.aborted) {
+        callbacks.onError(
+          followError instanceof Error ? followError : new Error(String(followError)),
+        );
+      }
+    } finally {
+      followWindow.clear();
+    }
+    return true;
+  };
+
+  return { callbacks: trackedCallbacks, recover };
+}
+
 export interface StreamChatOptions {
   ignorePickerSpeed?: boolean;
   /**
@@ -733,7 +1052,7 @@ export async function streamChat(
     callbacks.onError(new CloudCredentialUnavailableError());
     return;
   }
-  callbacks = accountStreamCallbacks(callbacks, account);
+  callbacks = frameStreamCallbacks(accountStreamCallbacks(callbacks, account), signal);
   if (getProviderOffering(body.model)) {
     callbacks.onError(new Error('Provider-funded Free models require the Free chat route.'));
     return;
@@ -762,114 +1081,36 @@ export async function streamChat(
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
   };
-  let currentRunReference: ManagedCloudAgentRunReference | undefined;
-  const dedupe = createChatStreamDedupe();
-  const timedCallbacks: StreamCallbacks = {
-    ...callbacks,
-    onActivity: rearmStallWatchdog,
-    onRunReference: (reference) => {
-      currentRunReference = { ...reference };
-      callbacks.onRunReference?.({ ...currentRunReference });
+  const run = createDurableRunFollower(account, callbacks, signal, rearmStallWatchdog, {
+    restartForFollow: () => {
+      clearTimeout(timeoutId);
+      timeoutController = new AbortController();
+      timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
+      combinedSignal = signal
+        ? combineAbortSignals([signal, timeoutController.signal])
+        : timeoutController.signal;
+      return combinedSignal;
     },
+    clear: () => clearTimeout(timeoutId),
+  });
+  let answerStarted = false;
+  const timedCallbacks: StreamCallbacks = {
+    ...run.callbacks,
     onDelta: (delta) => {
-      rearmStallWatchdog();
-      if (delta.x_agent_event && !dedupe.admit(delta.x_agent_event)) return;
-      if (delta.x_agent_event && currentRunReference) {
-        currentRunReference = {
-          ...currentRunReference,
-          lastSequence: Math.max(currentRunReference.lastSequence, delta.x_agent_event.sequence),
-        };
-        callbacks.onRunReference?.({ ...currentRunReference });
-      }
-      callbacks.onDelta(delta);
+      answerStarted = true;
+      run.callbacks.onDelta(delta);
     },
   };
+  const reconnectCallbacks: StreamCallbacks = {
+    ...timedCallbacks,
+    onError: (error) =>
+      timedCallbacks.onError(
+        isIdempotencyReplayRefusal(error) ? new StreamConnectionLostError() : error,
+      ),
+  };
+  const recoverFromDurableRun = run.recover;
 
   let lastNetworkError: Error | null = null;
-
-  const publishRunReference = (patch: Partial<ManagedCloudAgentRunReference>): void => {
-    if (!currentRunReference) return;
-    currentRunReference = {
-      ...currentRunReference,
-      ...patch,
-      lastSequence: Math.max(currentRunReference.lastSequence, patch.lastSequence ?? -1),
-    };
-    callbacks.onRunReference?.({ ...currentRunReference });
-  };
-
-  const finishReasonFromStop = (
-    envelope: AgentEventEnvelope,
-  ): StreamDelta['finish_reason'] | undefined => {
-    if (envelope.event.type !== 'stop') return undefined;
-    if (envelope.event.reason === 'max-tokens') return 'length';
-    if (envelope.event.reason === 'cancelled') return 'stopped';
-    if (envelope.event.reason === 'error') return 'error';
-    return 'stop';
-  };
-
-  const followDurableRun = async (): Promise<void> => {
-    if (!currentRunReference) throw new Error('Managed Cloud run handle is unavailable');
-    const client = createMobileCloudAgentRunClient(account);
-    const followed = await client.followRun(currentRunReference.runId, {
-      afterSequence: currentRunReference.lastSequence,
-      signal: combinedSignal,
-      onEvent: (envelope) => {
-        rearmStallWatchdog();
-        const finishReason = finishReasonFromStop(envelope);
-        timedCallbacks.onDelta({
-          x_agent_event: envelope,
-          ...(messageKindForAgentEvent(envelope.event.type) === 'text' &&
-          envelope.event.type === 'text-delta'
-            ? { content: envelope.event.delta }
-            : {}),
-          ...(finishReason ? { finish_reason: finishReason } : {}),
-          durableReplay: true,
-        });
-      },
-      onSnapshot: (snapshot) => {
-        rearmStallWatchdog();
-        publishRunReference({
-          lastSequence: snapshot.nextAfterSequence,
-          state: snapshot.run.state,
-          cancellationRequestedAt: snapshot.run.cancellationRequestedAt,
-        });
-      },
-    });
-    publishRunReference({
-      lastSequence: followed.lastSequence,
-      state: followed.run.state,
-      cancellationRequestedAt: followed.run.cancellationRequestedAt,
-    });
-    callbacks.onDone();
-  };
-
-  const resetTimeoutForDurableFollow = (): void => {
-    clearTimeout(timeoutId);
-    timeoutController = new AbortController();
-    timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
-    combinedSignal = signal
-      ? combineAbortSignals([signal, timeoutController.signal])
-      : timeoutController.signal;
-  };
-
-  const recoverFromDurableRun = async (reconnectAttempt: number): Promise<boolean> => {
-    if (!isCloudAccountEpochCurrent(account)) return true;
-    if (!currentRunReference) return false;
-    callbacks.onReconnecting?.(reconnectAttempt);
-    resetTimeoutForDurableFollow();
-    try {
-      await followDurableRun();
-      clearTimeout(timeoutId);
-      return true;
-    } catch (followError) {
-      clearTimeout(timeoutId);
-      if (signal?.aborted) return true;
-      callbacks.onError(
-        followError instanceof Error ? followError : new Error(String(followError)),
-      );
-      return true;
-    }
-  };
 
   for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
     if (!isCloudAccountEpochCurrent(account)) {
@@ -929,15 +1170,17 @@ export async function streamChat(
     try {
       const completed = await attemptStream(
         request,
-        timedCallbacks,
+        attempt === 0 ? timedCallbacks : reconnectCallbacks,
         combinedSignal,
         account,
         COMPLETIONS_PATH,
         false,
         options.purpose,
       );
-      if (completed) {
+      if (completed === 'detached') {
+        if (await recoverFromDurableRun(null)) return;
         clearTimeout(timeoutId);
+        callbacks.onError(new Error(STREAM_ENDED_EARLY_MESSAGE));
         return;
       }
       clearTimeout(timeoutId);
@@ -959,6 +1202,11 @@ export async function streamChat(
       if (isNetworkError(err)) {
         lastNetworkError = err instanceof Error ? err : new Error(String(err));
         if (await recoverFromDurableRun(attempt + 1)) return;
+        if (answerStarted) {
+          clearTimeout(timeoutId);
+          callbacks.onError(new StreamConnectionLostError());
+          return;
+        }
         continue;
       }
 
@@ -974,42 +1222,50 @@ export async function streamChat(
   );
 }
 
+export interface CheckpointResumeOptions {
+  afterSequence?: number;
+}
+
 export function streamToolApprovalResume(
   body: ApprovalResumeRequest,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
+  options: CheckpointResumeOptions = {},
 ): Promise<void> {
-  return streamCheckpointResume(body, callbacks, TOOL_APPROVAL_RESUME_PATH, signal);
+  return streamCheckpointResume(body, callbacks, TOOL_APPROVAL_RESUME_PATH, signal, options);
 }
 
 export function streamToolInputResume(
   body: ToolInputResumeRequest,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
+  options: CheckpointResumeOptions = {},
 ): Promise<void> {
-  return streamCheckpointResume(body, callbacks, TOOL_INPUT_RESUME_PATH, signal);
+  return streamCheckpointResume(body, callbacks, TOOL_INPUT_RESUME_PATH, signal, options);
 }
 
 export function streamDeviceStepResume(
   body: DeviceStepResumeRequest,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
+  options: CheckpointResumeOptions = {},
 ): Promise<void> {
-  return streamCheckpointResume(body, callbacks, DEVICE_STEP_RESUME_PATH, signal);
+  return streamCheckpointResume(body, callbacks, DEVICE_STEP_RESUME_PATH, signal, options);
 }
 
 async function streamCheckpointResume(
   body: ApprovalResumeRequest | ToolInputResumeRequest | DeviceStepResumeRequest,
   callbacks: StreamCallbacks,
   path: string,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  options: CheckpointResumeOptions,
 ): Promise<void> {
   const account = captureCloudAccountEpoch();
   if (!account) {
     callbacks.onError(new CloudCredentialUnavailableError());
     return;
   }
-  callbacks = accountStreamCallbacks(callbacks, account);
+  callbacks = frameStreamCallbacks(accountStreamCallbacks(callbacks, account), signal);
   try {
     assertCloudAccountEpochCurrent(account);
     assertRemoteChatAllowed(undefined, {
@@ -1023,9 +1279,9 @@ async function streamCheckpointResume(
     return;
   }
 
-  const timeoutController = new AbortController();
+  let timeoutController = new AbortController();
   let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
-  const combinedSignal = signal
+  let combinedSignal = signal
     ? combineAbortSignals([signal, timeoutController.signal])
     : timeoutController.signal;
 
@@ -1033,29 +1289,45 @@ async function streamCheckpointResume(
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
   };
-  const timedCallbacks: StreamCallbacks = {
-    ...callbacks,
-    onActivity: rearmStallWatchdog,
-    onDelta: (delta) => {
-      rearmStallWatchdog();
-      callbacks.onDelta(delta);
+  const run = createDurableRunFollower(
+    account,
+    callbacks,
+    signal,
+    rearmStallWatchdog,
+    {
+      restartForFollow: () => {
+        clearTimeout(timeoutId);
+        timeoutController = new AbortController();
+        timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAM_STALL);
+        combinedSignal = signal
+          ? combineAbortSignals([signal, timeoutController.signal])
+          : timeoutController.signal;
+        return combinedSignal;
+      },
+      clear: () => clearTimeout(timeoutId),
     },
-  };
+    options.afterSequence,
+  );
 
   try {
-    await attemptStream(body, timedCallbacks, combinedSignal, account, path);
+    const outcome = await attemptStream(body, run.callbacks, combinedSignal, account, path);
     clearTimeout(timeoutId);
+    if (outcome === 'detached' && !(await run.recover(null))) {
+      callbacks.onError(new Error(STREAM_ENDED_EARLY_MESSAGE));
+    }
   } catch (err) {
     clearTimeout(timeoutId);
     if (signal?.aborted) {
       return;
     }
     if (timeoutController.signal.aborted) {
+      if (await run.recover(1)) return;
       callbacks.onError(
         new Error('The request timed out. Please check your connection and try again.'),
       );
       return;
     }
+    if (isNetworkError(err) && (await run.recover(1))) return;
     callbacks.onError(err instanceof Error ? err : new Error(String(err)));
   }
 }

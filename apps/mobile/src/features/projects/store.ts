@@ -595,6 +595,15 @@ export const useProjectStore = create<ProjectState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[projectStore] Hydration failed:', error);
       },
+      // activeProjectId scopes one new chat started from a project; persisting it
+      // would put every later chat into that project.
+      partialize: (state) => ({
+        projects: state.projects,
+      }),
+      merge: (persisted, current) => ({
+        ...current,
+        projects: (persisted as Partial<ProjectState> | undefined)?.projects ?? current.projects,
+      }),
     },
   ),
 );

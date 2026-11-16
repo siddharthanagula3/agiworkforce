@@ -13,6 +13,7 @@ import {
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { useScheduleStore, type CreateScheduleInput } from '../store';
 import { requestsSubDailySchedule } from '../policy';
+import { isoToZonedDateInput, scheduleTimingProblem, zonedDateAndTimeToIso } from '../timing';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 
 interface ParsedSchedule {
@@ -20,7 +21,13 @@ interface ParsedSchedule {
   timeOfDay: string;
   daysOfWeek?: number[];
   dayOfMonth?: number;
+  scheduledDate?: string;
   description: string;
+}
+
+interface ParseOptions {
+  now?: Date;
+  timezone?: string;
 }
 
 const DAY_NAMES: Record<string, number> = {
@@ -60,18 +67,142 @@ function parseTime(raw: string): string | null {
 }
 
 const TIME_INTRODUCER = /(?:\bat\b|@)\s*([\w:]+(?:\s*(?:am|pm))?)/gi;
+const BARE_CLOCK = /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i;
 
-function findExplicitTime(text: string): { introduced: boolean; time: string | null } {
+function findExplicitTime(text: string): {
+  introduced: boolean;
+  time: string | null;
+  phrase: string | null;
+} {
   let introduced = false;
   for (const match of text.matchAll(TIME_INTRODUCER)) {
     introduced = true;
     const time = parseTime(match[1]);
-    if (time) return { introduced, time };
+    if (time) return { introduced, time, phrase: match[0] };
   }
-  return { introduced, time: null };
+  if (!introduced) {
+    const bare = BARE_CLOCK.exec(text);
+    const time = bare ? parseTime(bare[0]) : null;
+    if (bare && time) return { introduced, time, phrase: bare[0] };
+  }
+  return { introduced, time: null, phrase: null };
 }
 
-export function parseNaturalLanguage(text: string): ParsedSchedule | null {
+const MONTHS: Record<string, number> = {
+  january: 1,
+  jan: 1,
+  february: 2,
+  feb: 2,
+  march: 3,
+  mar: 3,
+  april: 4,
+  apr: 4,
+  may: 5,
+  june: 6,
+  jun: 6,
+  july: 7,
+  jul: 7,
+  august: 8,
+  aug: 8,
+  september: 9,
+  sept: 9,
+  sep: 9,
+  october: 10,
+  oct: 10,
+  november: 11,
+  nov: 11,
+  december: 12,
+  dec: 12,
+};
+const MONTH_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+const MONTH_NAME = Object.keys(MONTHS).join('|');
+const MONTH_FIRST = new RegExp(
+  `\\b(${MONTH_NAME})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b`,
+);
+const DAY_FIRST = new RegExp(
+  `\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${MONTH_NAME})\\.?(?:,?\\s+(\\d{4}))?\\b`,
+);
+const ISO_DATE = /\b(\d{4})-(\d{2})-(\d{2})\b/;
+const NUMERIC_DATE = /\b\d{1,2}[/.]\d{1,2}(?:[/.]\d{2,4})?\b/;
+const RELATIVE_WEEKDAY = new RegExp(
+  `\\b(?:next|this|coming)\\s+(?:${Object.keys(DAY_NAMES).join('|')})\\b`,
+);
+
+const pad = (value: number) => String(value).padStart(2, '0');
+
+function dateInput(year: number, month: number, day: number): string | null {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+function addDays(input: string, days: number): string {
+  const [year, month, day] = input.split('-').map(Number);
+  const date = new Date(Date.UTC(year!, month! - 1, day! + days));
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+}
+
+type DateReading = { kind: 'none' } | { kind: 'unreadable' } | { kind: 'date'; value: string };
+
+function findOneTimeDate(lower: string, today: string): DateReading {
+  const iso = ISO_DATE.exec(lower);
+  if (iso) {
+    const value = dateInput(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+    return value ? { kind: 'date', value } : { kind: 'unreadable' };
+  }
+  const named = MONTH_FIRST.exec(lower);
+  const dayFirst = named ? null : DAY_FIRST.exec(lower);
+  if (named || dayFirst) {
+    const month = MONTHS[(named ? named[1] : dayFirst![2])!]!;
+    const day = Number(named ? named[2] : dayFirst![1]);
+    const yearText = named ? named[3] : dayFirst![3];
+    const thisYear = Number(today.slice(0, 4));
+    let value = dateInput(yearText ? Number(yearText) : thisYear, month, day);
+    if (value && !yearText && value < today) value = dateInput(thisYear + 1, month, day);
+    return value ? { kind: 'date', value } : { kind: 'unreadable' };
+  }
+  if (NUMERIC_DATE.test(lower) || RELATIVE_WEEKDAY.test(lower)) return { kind: 'unreadable' };
+  if (/\btomorrow\b/.test(lower)) return { kind: 'date', value: addDays(today, 1) };
+  if (/\btoday\b/.test(lower)) return { kind: 'date', value: today };
+  return { kind: 'none' };
+}
+
+function describeDate(input: string): string {
+  const [year, month, day] = input.split('-').map(Number);
+  return `${MONTH_LABELS[month! - 1]} ${day}, ${year}`;
+}
+
+function deviceTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+export function parseNaturalLanguage(
+  text: string,
+  { now = new Date(), timezone = deviceTimezone() }: ParseOptions = {},
+): ParsedSchedule | null {
   const lower = text.toLowerCase().trim();
   if (!lower) return null;
   if (requestsSubDailySchedule(lower)) return null;
@@ -79,6 +210,25 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
   const explicit = findExplicitTime(text);
   if (explicit.introduced && !explicit.time) return null;
   const timeOfDay = explicit.time ?? '09:00';
+
+  let today: string;
+  try {
+    today = isoToZonedDateInput(now.toISOString(), timezone);
+  } catch {
+    return null;
+  }
+  const oneTime = findOneTimeDate(lower, today);
+  if (oneTime.kind === 'unreadable') return null;
+  if (oneTime.kind === 'date') {
+    if (/\b(?:every|each|daily|weekly|monthly)\b/.test(lower)) return null;
+    return {
+      recurrence: 'once',
+      timeOfDay,
+      scheduledDate: oneTime.value,
+      description: `Once on ${describeDate(oneTime.value)} at ${timeOfDay}`,
+    };
+  }
+  if (/\bonce\b/.test(lower) && !/\bonce\s+a\s+month\b/.test(lower)) return null;
 
   const dayMatches: number[] = [];
   for (const [name, idx] of Object.entries(DAY_NAMES)) {
@@ -150,12 +300,18 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     };
   }
 
-  if (explicit.time) {
+  const leftover = explicit.phrase
+    ? lower.replace(explicit.phrase.toLowerCase(), '').replace(/[\s,.!]+/g, '')
+    : lower;
+  if (explicit.time && !leftover) {
     return { recurrence: 'daily', timeOfDay, description: `Daily at ${timeOfDay}` };
   }
 
   return null;
 }
+
+const NOT_UNDERSTOOD =
+  'Could not understand the schedule. Try "Every day at 9am" or "January 5 at 9am".';
 
 const SUGGESTIONS = [
   'Every day at 9am',
@@ -209,12 +365,26 @@ export function QuickSchedule({
 
   const handleCreate = useCallback(async () => {
     if (!parsed) {
-      setError('Could not understand the schedule. Try "Every day at 9am".');
+      setError(NOT_UNDERSTOOD);
       return;
     }
     if (!prompt.trim()) {
       setError('Please enter what the AI should do.');
       return;
+    }
+    const timezone = deviceTimezone();
+    let scheduledAt: string | null = null;
+    if (parsed.recurrence === 'once' && parsed.scheduledDate) {
+      try {
+        scheduledAt = zonedDateAndTimeToIso(parsed.scheduledDate, parsed.timeOfDay, timezone);
+      } catch (dateError) {
+        setError(scheduleTimingProblem(dateError));
+        return;
+      }
+      if (new Date(scheduledAt).getTime() <= Date.now()) {
+        setError('Choose a date and time in the future');
+        return;
+      }
     }
 
     setError('');
@@ -228,8 +398,8 @@ export function QuickSchedule({
         timeOfDay: parsed.timeOfDay,
         daysOfWeek: parsed.daysOfWeek,
         dayOfMonth: parsed.dayOfMonth,
-        scheduledAt: null,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        scheduledAt,
+        timezone,
         isActive: true,
       };
       const created = await createSchedule(scheduleInput);
@@ -344,8 +514,11 @@ export function QuickSchedule({
                   <Text className="text-[16px] font-semibold text-white">Quick Schedule</Text>
                 </View>
                 <PressableBox
+                  hitSlop={8}
                   onPress={handleClose}
                   className="w-7 h-7 rounded-full items-center justify-center active:bg-white/10"
+                  accessibilityRole="button"
+                  accessibilityLabel="Close quick schedule"
                 >
                   <X size={16} color={colors.textMuted} />
                 </PressableBox>
@@ -376,6 +549,11 @@ export function QuickSchedule({
                   )}
                 </View>
 
+                {input.trim() && !parsed ? (
+                  <Text className="text-sm mb-3" style={{ color: colors.agentError }}>
+                    {NOT_UNDERSTOOD}
+                  </Text>
+                ) : null}
                 {parsed && (
                   <View
                     className="flex-row items-center gap-2 px-3 py-2 rounded-lg mb-3"

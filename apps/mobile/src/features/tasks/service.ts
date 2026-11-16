@@ -3,10 +3,10 @@ import {
   ManagedCloudAgentRunApprovalExpiredError,
   ManagedCloudAgentRunHttpError,
   type CloudAgentRun,
-  type CloudAgentRunListPage,
   type ManagedCloudAgentRunApprovalDecision,
   type ManagedCloudAgentRunFollowOptions,
   type ManagedCloudAgentRunFollowResult,
+  type ManagedCloudAgentRunListResult,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
@@ -28,14 +28,18 @@ const APPROVAL_EXPIRED_MESSAGE = 'This approval expired, so the task cannot cont
 export interface CloudRunListOptions {
   states: AgentTaskState[];
   cursor?: string;
+  query?: string;
   signal?: AbortSignal;
 }
 
-export function listCloudRuns(options: CloudRunListOptions): Promise<CloudAgentRunListPage> {
+export function listCloudRuns(
+  options: CloudRunListOptions,
+): Promise<ManagedCloudAgentRunListResult> {
   return createMobileCloudAgentRunClient().listRuns({
     states: options.states,
     limit: CLOUD_RUN_PAGE_LIMIT,
     ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(options.query ? { q: options.query } : {}),
     signal: options.signal,
   });
 }

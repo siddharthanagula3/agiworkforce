@@ -42,7 +42,7 @@ import {
 import { resolvePrompt, type ResolvePromptOptions } from '@/lib/prompts/prompt-registry';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { TEMPORARY_CHAT_RETENTION_DAYS } from '@/lib/server/temporary-files';
-import { isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { isFileSearchTool } from '@/lib/server/tools/file-tool-names';
 import { isMemoryTool } from '@/lib/server/tools/memory-tools';
 
 const TIME_CONTEXT_GRANULARITY_MS = 60_000;
@@ -111,6 +111,12 @@ const SETTINGS_GUIDANCE: Readonly<Record<PreambleSurface, SettingsGuidance>> = {
   slack: 'account',
   scheduled: 'account',
 };
+
+const RICH_INLINE_BLOCK_SURFACES: ReadonlySet<PreambleSurface> = new Set<PreambleSurface>([
+  'web',
+  'desktop',
+  'mobile',
+]);
 
 export function settingsGuidanceFor(surface: PreambleSurface): SettingsGuidance {
   return SETTINGS_GUIDANCE[surface];
@@ -318,7 +324,8 @@ function buildPublishedCapabilityPreamble(
         ? { attachmentSandboxPaths: input.attachmentSandboxPaths }
         : {}),
       ...(input.memory ? { memory: input.memory } : {}),
-      richInlineBlocks: input.surface === 'web' || input.surface === 'desktop',
+      richInlineBlocks:
+        input.surface !== undefined && RICH_INLINE_BLOCK_SURFACES.has(input.surface),
       ...(input.artifacts
         ? {
             artifactMarkers: {

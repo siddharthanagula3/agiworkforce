@@ -47,10 +47,18 @@ jest.mock('../lib/safeOpenURL', () => ({
   openExternalUrl: jest.fn(),
 }));
 
+import { useAuthStore } from '../src/features/auth/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import DataControlsScreen from '../src/features/settings/data-controls';
 import CloudPrivacyScreen from '../src/features/settings/cloud-privacy';
+import DataUseScreen from '../src/features/settings/cloud-privacy/DataUseScreen';
 
 describe('model-training privacy policy', () => {
+  beforeEach(() => {
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user_test' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+  });
+
   const policyLead =
     'AGI doesn’t train its own models on your chats; Free-plan providers may unless you opt out';
 
@@ -66,7 +74,7 @@ describe('model-training privacy policy', () => {
     const { getAllByText, getByText, queryByText } = render(<CloudPrivacyScreen />);
 
     expect(getAllByText('Model training')).toHaveLength(2);
-    expect(getByText(`${policyLead} below.`)).toBeTruthy();
+    expect(getByText(`${policyLead} in AGI Cloud.`)).toBeTruthy();
     expect(getByText('Only use models that do not train on your chats')).toBeTruthy();
     expect(queryByText(/without explicit consent/i)).toBeNull();
   });
@@ -82,6 +90,23 @@ describe('model-training privacy policy', () => {
     expect(
       queryByText('Deleted and temporary chats are erased for good after 30 days.'),
     ).toBeNull();
+  });
+
+  it('lists the Siri and calendar paths that send data to AGI Cloud', () => {
+    const { getByText } = render(<DataUseScreen />);
+
+    expect(getByText('Ask from Siri')).toBeTruthy();
+    expect(
+      getByText(
+        'Siri passes your question to AGI Cloud, then the AI provider of the model that answers. The answer is saved as a chat.',
+      ),
+    ).toBeTruthy();
+    expect(getByText('Calendar in AGI Cloud chats')).toBeTruthy();
+    expect(
+      getByText(
+        'When a chat reads your calendar, the events it reads, with their titles, times, places and notes, go to AGI Cloud and the model provider.',
+      ),
+    ).toBeTruthy();
   });
 });
 

@@ -35,6 +35,32 @@ export async function POST(request) {
 }
 `;
 
+const STEPS = `
+import { inspectUploadHead } from '@/lib/security/upload-scan';
+import { submitSourceScan } from '@/lib/security/source-scan-client';
+export async function inspect(head) { return inspectUploadHead(head, 'application/pdf', 'f'); }
+export async function submit(request) { return submitSourceScan(request); }
+`;
+
+const SEAL = `
+import { insertScannedChatFileMediaAsset } from '@/lib/server/media-assets';
+export async function commit(tx, row) {
+  return insertScannedChatFileMediaAsset({ metadata: { source: 'chat-attachment' } }, tx);
+}
+`;
+
+const MEDIA_ASSETS = `
+export async function insertMediaAsset(params, db) { return db.query('insert', [params]); }
+export async function insertScannedChatFileMediaAsset(params, db) { return db.query('insert', [params]); }
+`;
+
+const WRITES_CHAT_MEDIA = `
+import { insertMediaAsset } from '@/lib/server/media-assets';
+export async function keep(db, key) {
+  return insertMediaAsset({ storageUrl: key, metadata: { source: 'chat-attachment' } }, db);
+}
+`;
+
 const INGESTS = `
 export async function POST(request) {
   const form = await request.formData();
@@ -65,6 +91,7 @@ const DEFERRALS = [
     [
       'apps/web/lib/server/chat-attachment-completion.ts',
       'apps/web/lib/server/project-knowledge-extraction.ts',
+      'apps/web/lib/server/chat-file-intake/steps.ts',
     ],
   ],
   [
@@ -81,13 +108,26 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const STEPS_FILE = 'apps/web/lib/server/chat-file-intake/steps.ts';
+const SEAL_FILE = 'apps/web/lib/server/chat-file-intake/seal.ts';
+const COMPLETION_FILE = 'apps/web/lib/server/chat-attachment-completion.ts';
+
+function completingSource(file) {
+  return file === STEPS_FILE ? STEPS : COMPLETES;
+}
+
 function baseTree() {
-  const tree = { 'apps/web/lib/security/upload-scan.ts': MODULE };
+  const tree = {
+    'apps/web/lib/security/upload-scan.ts': MODULE,
+    'apps/web/lib/server/media-assets.ts': MEDIA_ASSETS,
+    [SEAL_FILE]: SEAL,
+  };
   for (const route of SINGLE_REQUEST_ROUTES) tree[route] = INSPECTS;
   for (const [stage, completing] of DEFERRALS) {
     tree[stage] = STAGES;
-    for (const file of completing) tree[file] = COMPLETES;
+    for (const file of completing) tree[file] = completingSource(file);
   }
+  tree[COMPLETION_FILE] = `${COMPLETES}\n${WRITES_CHAT_MEDIA}`;
   return tree;
 }
 
@@ -147,7 +187,9 @@ test('fails when any file a deferral names does not inspect', () => {
   for (const [stage, completing] of DEFERRALS) {
     for (const file of completing) {
       const tree = baseTree();
-      tree[file] = COMPLETES.replaceAll('scanUploadBytes', 'store');
+      tree[file] = completingSource(file)
+        .replaceAll('scanUploadBytes', 'store')
+        .replaceAll('inspectUploadHead(', 'store(');
       const result = run(fixture(tree));
       assert.equal(result.code, 1, `${stage} accepted a deferral to nothing through ${file}`);
       assert.match(
@@ -195,4 +237,57 @@ test('fails when the scanner module is gone entirely', () => {
   const result = run(fixture(tree));
   assert.equal(result.code, 1);
   assert.match(result.output, /is missing; nothing inspects/);
+});
+
+test('fails when the intake steps stop calling either check that stands in for reading the bytes', () => {
+  for (const [needle, replacement] of [
+    ['inspectUploadHead(head', 'store(head'],
+    ['submitSourceScan(request', 'store(request'],
+  ]) {
+    const tree = baseTree();
+    tree[STEPS_FILE] = STEPS.replace(needle, replacement);
+    const result = run(fixture(tree));
+    assert.equal(result.code, 1, `the intake steps could drop ${needle}`);
+    assert.match(result.output, new RegExp(`defers inspection to ${escapeRegExp(STEPS_FILE)}`));
+  }
+});
+
+test('fails when another file writes a chat-attachment media row', () => {
+  for (const writer of ['insertMediaAsset', 'insertMediaAssetsAtomically']) {
+    const tree = baseTree();
+    tree['apps/web/lib/server/shortcut-upload.ts'] = WRITES_CHAT_MEDIA.replaceAll(
+      'insertMediaAsset',
+      writer,
+    );
+    const result = run(fixture(tree));
+    assert.equal(result.code, 1, `${writer} with source chat-attachment slipped through`);
+    assert.match(
+      result.output,
+      /apps\/web\/lib\/server\/shortcut-upload\.ts writes a chat-attachment media row/,
+    );
+  }
+});
+
+test('passes a media write that is not a chat attachment, and a test that plants one', () => {
+  const tree = baseTree();
+  tree['apps/web/lib/server/generated-image.ts'] = WRITES_CHAT_MEDIA.replace(
+    "'chat-attachment'",
+    "'generated-image'",
+  );
+  tree['apps/web/lib/server/__tests__/planted.test.ts'] = WRITES_CHAT_MEDIA;
+  tree['apps/web/lib/server/planted.test.ts'] = WRITES_CHAT_MEDIA;
+  const result = run(fixture(tree));
+  assert.equal(result.code, 0, result.output);
+});
+
+test('fails when any file but the seal calls the scanned media insert', () => {
+  const tree = baseTree();
+  tree['apps/web/app/api/files/intakes/[intakeId]/finish.ts'] = SEAL;
+  const result = run(fixture(tree));
+  assert.equal(result.code, 1);
+  assert.match(
+    result.output,
+    /intakes\/\[intakeId\]\/finish\.ts calls insertScannedChatFileMediaAsset/,
+  );
+  assert.doesNotMatch(result.output, /media-assets\.ts calls/);
 });

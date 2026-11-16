@@ -20,7 +20,13 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
-  return { AlertCircle: icon, ArrowLeft: icon, Telescope: icon, TriangleAlert: icon };
+  return {
+    AlertCircle: icon,
+    ArrowLeft: icon,
+    MoreHorizontal: icon,
+    Telescope: icon,
+    TriangleAlert: icon,
+  };
 });
 
 jest.mock('@clerk/expo', () => ({

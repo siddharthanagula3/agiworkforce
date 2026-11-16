@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { AppState } from 'react-native';
+import { AppState, BackHandler, Platform } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
@@ -86,16 +86,39 @@ jest.mock('react-native-svg', () => {
   };
 });
 
+const mockRouterReplace = jest.fn();
+const mockRouterBack = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
+const mockFocusEffects = new Set<{ focus: () => void }>();
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   __esModule: true,
   useRouter: () => ({
     push: jest.fn(),
-    replace: jest.fn(),
-    back: jest.fn(),
-    canGoBack: () => true,
+    replace: mockRouterReplace,
+    back: mockRouterBack,
+    canGoBack: mockCanGoBack,
   }),
   useLocalSearchParams: () => ({ audioUri: mockAudioUri }),
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    const React = require('react');
+    const latest = React.useRef(cb);
+    latest.current = cb;
+    React.useEffect(() => {
+      let cleanup: void | (() => void) = latest.current();
+      const entry = {
+        focus: () => {
+          if (typeof cleanup === 'function') cleanup();
+          cleanup = latest.current();
+        },
+      };
+      mockFocusEffects.add(entry);
+      return () => {
+        mockFocusEffects.delete(entry);
+        if (typeof cleanup === 'function') cleanup();
+      };
+    }, []);
+  },
 }));
 
 jest.mock('@/src/features/voice/services/voiceInput', () => ({
@@ -130,9 +153,21 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+const mockReportSheet = jest.fn();
+jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
+  ReportSheet: (props: Record<string, unknown>) => {
+    mockReportSheet(props);
+    return null;
+  },
+}));
+
+const mockEndConversationModel = jest.fn();
 jest.mock('@/src/features/model-picker/store', () => ({
-  useModelStore: (selector: (s: { selectedModel: string }) => unknown) =>
-    selector({ selectedModel: mockSelectedModel }),
+  useModelStore: Object.assign(
+    (selector: (s: { selectedModel: string }) => unknown) =>
+      selector({ selectedModel: mockSelectedModel }),
+    { getState: () => ({ endConversationModel: mockEndConversationModel }) },
+  ),
 }));
 
 import VoiceScreen from '@/app/(app)/voice';
@@ -193,6 +228,7 @@ describe('Voice conversation PTT + hands-free', () => {
     chatState().messages = {};
     chatState().error = null;
     mockSelectedModel = 'test-model';
+    mockEndConversationModel.mockReset();
     useChatAppModeStore.setState({ appMode: 'local' });
     useSettingsStore.setState({
       hapticsEnabled: false,
@@ -245,6 +281,84 @@ describe('Voice conversation PTT + hands-free', () => {
     expect(reply.props.numberOfLines).toBeUndefined();
     expect(screen.getAllByText('You')).toHaveLength(1);
     expect(screen.getAllByText('AGI')).toHaveLength(1);
+  });
+
+  it('lets a transcript line be selected and copied', async () => {
+    const state = chatState();
+    state.messages['voice-conv-1'] = [
+      { id: 'voice-user', role: 'user', content: 'What happened?' },
+      { id: 'voice-reply', role: 'assistant', content: 'A spoken answer.' },
+    ];
+    state.sendMessage.mockResolvedValue(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'Continue');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    expect(screen.getByText('What happened?').props.selectable).toBe(true);
+    expect(screen.getByText('A spoken answer.').props.selectable).toBe(true);
+  });
+
+  it('draws only working controls in the bottom row', () => {
+    const screen = render(<VoiceScreen />);
+
+    const controls = screen.getByTestId('voice-controls').children as {
+      props: { accessibilityRole?: string; accessibilityLabel?: string };
+    }[];
+    expect(controls.map((control) => control.props.accessibilityLabel)).toEqual([
+      'Mute microphone',
+      'Switch to push-to-talk mode',
+    ]);
+  });
+
+  it('says the microphone is muted instead of inviting a hold or a tap', async () => {
+    useSettingsStore.setState({ voicePushToTalk: true });
+    const screen = render(<VoiceScreen />);
+
+    expect(screen.getAllByText('Hold to talk').length).toBeGreaterThan(0);
+    await act(async () => fireEvent.press(screen.getByLabelText('Mute microphone')));
+
+    expect(screen.queryByText('Hold to talk')).toBeNull();
+    expect(screen.getByText('Microphone is muted')).toBeTruthy();
+    expect(screen.getByText('Unmute to talk')).toBeTruthy();
+    expect(screen.getByTestId('voice-companion-orb').props.accessibilityLabel).toBe(
+      'Microphone is muted',
+    );
+
+    await act(async () => fireEvent.press(screen.getByLabelText('Unmute')));
+    expect(screen.getByText('Hold to talk')).toBeTruthy();
+  });
+
+  it('reports an assistant turn from the voice transcript, and offers no report on what you said', async () => {
+    const state = chatState();
+    state.messages['voice-conv-1'] = [
+      { id: 'voice-user', role: 'user', content: 'What happened?' },
+      { id: 'voice-reply', role: 'assistant', content: 'A spoken answer.' },
+    ];
+    state.sendMessage.mockResolvedValue(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'Continue');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    expect(screen.getAllByLabelText('Report this response')).toHaveLength(1);
+    expect(screen.queryByTestId('voice-report-voice-user')).toBeNull();
+    expect(mockReportSheet).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByTestId('voice-report-voice-reply'));
+
+    expect(mockReportSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        visible: true,
+        title: 'Report this response',
+        target: {
+          messageId: 'voice-reply',
+          conversationId: 'voice-conv-1',
+          contentExcerpt: 'A spoken answer.',
+          subject: { kind: 'voice-turn', id: 'voice-reply' },
+        },
+      }),
+    );
   });
 
   it('does not claim an on-device model when none is installed', () => {
@@ -303,6 +417,59 @@ describe('Voice conversation PTT + hands-free', () => {
       'voice-conv-1',
       'cloud request',
       getDefaultCloudModelIdForTier('pro'),
+    );
+  });
+
+  it('starts the Voice chat on the new-chat model, not one shown only for a project', async () => {
+    activateCloudAccount('voice-test-account');
+    const projectModel = requireMobileCloudModel().id;
+    const ownModel = requireMobileCloudModel((model) => model.id !== projectModel).id;
+    mockSelectedModel = projectModel;
+    mockEndConversationModel.mockImplementation(() => {
+      mockSelectedModel = ownModel;
+    });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useSettingsStore.setState({ voiceEnabled: false });
+    const state = chatState();
+    state.sendMessage.mockResolvedValue(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'own model please');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    expect(mockEndConversationModel).toHaveBeenCalledTimes(1);
+    expect(state.sendMessage).toHaveBeenCalledWith('voice-conv-1', 'own model please', ownModel);
+  });
+
+  it('sends a handed-over recording on the new-chat model', async () => {
+    activateCloudAccount('voice-test-account');
+    const projectModel = requireMobileCloudModel().id;
+    const ownModel = requireMobileCloudModel((model) => model.id !== projectModel).id;
+    mockSelectedModel = projectModel;
+    mockEndConversationModel.mockImplementation(() => {
+      mockSelectedModel = ownModel;
+    });
+    mockAudioUri = 'file:///handed-over.m4a';
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    let finishTranscription: (value: { text: string }) => void = () => undefined;
+    (VoiceInput.transcribeAudioFile as jest.Mock).mockImplementation(
+      () =>
+        new Promise<{ text: string }>((resolve) => {
+          finishTranscription = resolve;
+        }),
+    );
+    const state = chatState();
+    state.sendMessage.mockResolvedValue(true);
+    render(<VoiceScreen />);
+
+    await act(async () => finishTranscription({ text: 'from the recording' }));
+
+    await waitFor(() =>
+      expect(state.sendMessage).toHaveBeenCalledWith(
+        'voice-conv-1',
+        'from the recording',
+        ownModel,
+      ),
     );
   });
 
@@ -674,5 +841,98 @@ describe('Voice route, imported recording and Close', () => {
         expect.any(String),
       ),
     );
+  });
+});
+
+describe('Voice route on a phone without on-device recognition', () => {
+  const transcribe = VoiceInput.transcribeAudioFile as jest.Mock;
+  const originalOS = Platform.OS;
+  const originalVersion = Platform.Version;
+  const runOn = (os: 'ios' | 'android', version: number | string) => {
+    Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+    Object.defineProperty(Platform, 'Version', { get: () => version, configurable: true });
+  };
+
+  beforeEach(async () => {
+    await VoiceInput.cancelCapture();
+    speechRecognitionMock.__clearListeners();
+    jest.clearAllMocks();
+    mockCanGoBack.mockReturnValue(true);
+    mockAudioUri = 'file:///recording.m4a';
+    transcribe.mockReset().mockResolvedValue({ text: 'recorded request' });
+    const state = chatState();
+    state.messages = {};
+    state.error = null;
+    state.createConversation.mockReset().mockResolvedValue('voice-conv-1');
+    state.sendMessage.mockReset().mockResolvedValue(true);
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useSettingsStore.setState({ hapticsEnabled: false, voiceEnabled: true });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+    Object.defineProperty(Platform, 'Version', { get: () => originalVersion, configurable: true });
+    mockAudioUri = undefined;
+  });
+
+  it('leaves for the chat tab on Android API 32 without drawing the companion or hearing anything', async () => {
+    runOn('android', 32);
+    const screen = render(<VoiceScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockRouterReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(screen.queryByLabelText('Close voice companion')).toBeNull();
+    expect(transcribe).not.toHaveBeenCalled();
+    expect(chatState().createConversation).not.toHaveBeenCalled();
+  });
+
+  const refocus = () =>
+    act(() => {
+      mockFocusEffects.forEach((entry) => entry.focus());
+    });
+
+  it('steps past itself when Back from the chat tab lands on it again on Android API 32', async () => {
+    runOn('android', 32);
+    const screen = render(<VoiceScreen />);
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+    expect(mockRouterBack).not.toHaveBeenCalled();
+
+    mockCanGoBack.mockReturnValue(true);
+    refocus();
+
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText('Close voice companion')).toBeNull();
+    expect(transcribe).not.toHaveBeenCalled();
+  });
+
+  it('lets Android finish the Back press when nothing is behind it on API 32', async () => {
+    runOn('android', 32);
+    const exitApp = jest.spyOn(BackHandler, 'exitApp').mockImplementation(() => undefined);
+    render(<VoiceScreen />);
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+
+    mockCanGoBack.mockReturnValue(false);
+    refocus();
+
+    expect(exitApp).toHaveBeenCalledTimes(1);
+    expect(mockRouterBack).not.toHaveBeenCalled();
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+    exitApp.mockRestore();
+    mockCanGoBack.mockReturnValue(true);
+  });
+
+  it.each([
+    ['Android API 33', 'android', 33],
+    ['iOS', 'ios', '18.0'],
+  ] as const)('stays on the companion on %s', async (_label, os, version) => {
+    runOn(os, version);
+    const screen = render(<VoiceScreen />);
+
+    expect(screen.getByLabelText('Close voice companion')).toBeTruthy();
+    await waitFor(() => expect(transcribe).toHaveBeenCalled());
+    expect(mockRouterReplace).not.toHaveBeenCalledWith('/(app)/(tabs)/chat');
   });
 });

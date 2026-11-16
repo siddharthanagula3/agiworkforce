@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Alert } from 'react-native';
-import { EyeOff, Fingerprint, Shield, Smartphone } from 'lucide-react-native';
+import { EyeOff, Fingerprint, KeyRound, Shield, Smartphone } from 'lucide-react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
 import { isMinorMode } from '@/src/features/auth/services/ageGate';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
   SettingsGroup,
@@ -12,6 +14,8 @@ import {
   SettingsScreenShell,
   SettingsSwitchRow,
 } from '@/src/features/settings/Common';
+import { useOpenCloudRoute } from '@/src/features/settings/useOpenCloudRoute';
+import { SECURITY_LOGIN_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
 import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useRouter } from 'expo-router';
 
@@ -21,6 +25,10 @@ export default function SafetySecurityScreen() {
   const setBiometricEnabled = useBiometricFlag((s) => s.setEnabled);
   const reduceSensitiveContent = useSettingsStore((s) => s.reduceSensitiveContent);
   const setReduceSensitiveContent = useSettingsStore((s) => s.setReduceSensitiveContent);
+  const isCloud = useChatAppModeStore((s) => s.appMode === 'cloud');
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const openCloudRoute = useOpenCloudRoute();
   const minorMode = isMinorMode();
   const strictContentFilterEnabled = minorMode || reduceSensitiveContent;
   const [saving, setSaving] = useState(false);
@@ -105,11 +113,20 @@ export default function SafetySecurityScreen() {
         <SettingsRow
           label="Permissions"
           icon={Smartphone}
-          isLast
+          isLast={!isCloud}
           onPress={() =>
             router.push('/(app)/settings/permissions' as Parameters<typeof router.push>[0])
           }
         />
+        {isCloud ? (
+          <SettingsRow
+            label={SECURITY_LOGIN_SCREEN_TITLE}
+            icon={KeyRound}
+            value={!isClerkLoaded ? 'Checking…' : isClerkSignedIn ? undefined : 'Sign in'}
+            isLast
+            onPress={openCloudRoute('/(app)/settings/account-security')}
+          />
+        ) : null}
       </SettingsGroup>
     </SettingsScreenShell>
   );

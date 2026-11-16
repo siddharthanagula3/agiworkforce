@@ -9,6 +9,9 @@ const mockDeleteFile = jest.fn();
 const mockClearCloudState = jest.fn();
 const mockMarkers = new Map<string, string | boolean>();
 const mockClearMmkv = jest.fn();
+const mockDeleteSetAsideStores = jest.fn();
+const mockRemoveViewerFileCopies = jest.fn();
+const mockDeleteSetAsideDatabases = jest.fn();
 const mockClerkSetActive = jest.fn();
 const mockClerkSignOut = jest.fn();
 let mockClerkInstance: Record<string, unknown> | null = null;
@@ -39,6 +42,7 @@ jest.mock('../lib/mmkv', () => ({
     delete: (key: string) => mockMarkers.delete(key),
     clearAll: () => mockClearMmkv(),
   },
+  deleteSetAsideStores: () => mockDeleteSetAsideStores(),
 }));
 jest.mock('../services/api', () => ({ api: { post: jest.fn(), delete: jest.fn() } }));
 jest.mock('../src/features/billing/store', () => ({ useTierStore: { getState: jest.fn() } }));
@@ -58,6 +62,7 @@ jest.mock('../storage/db', () => ({
     execAsync: (...args: unknown[]) => mockExec(...args),
   }),
   closeDb: () => mockCloseDb(),
+  deleteSetAsideDatabases: () => mockDeleteSetAsideDatabases(),
 }));
 jest.mock('expo-file-system/legacy', () => ({
   cacheDirectory: 'file:///cache/',
@@ -79,7 +84,10 @@ jest.mock('../services/complianceLedger', () => ({
   mmkvDisclosureLedger: { read: jest.fn() },
   mmkvConsentLedger: { getNamedProviderConsent: jest.fn() },
 }));
-jest.mock('../services/fileCreation', () => ({ EXPORTS_DIR: 'file:///documents/exports/' }));
+jest.mock('../services/fileCreation', () => ({
+  EXPORTS_DIR: 'file:///documents/exports/',
+  removeViewerFileCopies: () => mockRemoveViewerFileCopies(),
+}));
 
 import { wipeAllLocalData } from '../services/dsarExport';
 import { useAuthStore } from '../src/features/auth/store';
@@ -210,6 +218,45 @@ describe('local wipe cleanup ordering', () => {
     response.resolve({ ok: true });
     await wipe;
     expect(mockClearMmkv).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes every model folder and the copies of stores set aside after a restore', async () => {
+    await wipeAllLocalData();
+
+    expect(mockDeleteSetAsideDatabases).toHaveBeenCalledTimes(1);
+    expect(mockDeleteSetAsideStores).toHaveBeenCalledTimes(1);
+    const deleted = mockDeleteFile.mock.calls.map(([uri]) => uri);
+    expect(deleted).toEqual(
+      expect.arrayContaining([
+        'file:///documents/models/',
+        'file:///documents/react-native-executorch/',
+      ]),
+    );
+  });
+
+  it('waits for the viewing copies to be removed after the exports folder', async () => {
+    const removal = deferred<void>();
+    mockRemoveViewerFileCopies.mockImplementation(() => removal.promise);
+    let finished = false;
+    const wipe = wipeAllLocalData().then(() => {
+      finished = true;
+    });
+    for (let turn = 0; turn < 50 && mockRemoveViewerFileCopies.mock.calls.length === 0; turn += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(mockRemoveViewerFileCopies).toHaveBeenCalledTimes(1);
+    expect(finished).toBe(false);
+    const exportsDeletion = mockDeleteFile.mock.calls.findIndex(
+      ([uri]) => uri === 'file:///documents/exports/',
+    );
+    expect(mockDeleteFile.mock.invocationCallOrder[exportsDeletion]).toBeLessThan(
+      mockRemoveViewerFileCopies.mock.invocationCallOrder[0]!,
+    );
+
+    removal.resolve(undefined);
+    await wipe;
+    expect(finished).toBe(true);
   });
 
   it('keeps best-effort cleanup failures from blocking the local wipe', async () => {

@@ -4,7 +4,7 @@ title: Getting started with AGI
 path: /help
 category: getting-started
 tags: getting started, first steps, setup, sign in, new account, onboarding, install
-updated: 2026-11-10
+updated: 2026-11-16
 description: How to create an account, start a chat, choose a model route and decide what to set up first.
 scope: public
 ---
@@ -12,9 +12,7 @@ scope: public
 ## Create an account and start a chat
 
 Open [Sign up](https://agiworkforce.com/signup), create an account, then open the
-web chat and send a message. Consult [Plans](https://agiworkforce.com/pricing) and
-[Billing and plans](https://agiworkforce.com/help/billing-and-plans) before
-choosing an upgrade.
+web chat and send a message.
 
 ## Choose a model route
 
@@ -28,8 +26,7 @@ installing the CLI or another client.
   [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login
   commands, key storage and custom endpoints. Review your provider's billing and
   data-use terms before using a key.
-- **Managed cloud** uses your AGI account. Review the current plan details on the
-  pricing page.
+- **Managed cloud** uses your AGI account.
 
 Desktop chat uses Cloud and Desktop does not accept provider keys; its local
 coding sessions run the CLI, which can use a local model or a provider key you set

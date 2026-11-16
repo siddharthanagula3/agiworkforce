@@ -16,7 +16,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { resolveNewChatTemporary } from '@/lib/temporary-chat-policy';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
-import { readPersistedRouteLane } from '@/features/chat/lib/routeLane';
+import { readPersistedRouteLane } from '@agiworkforce/cloud-contracts';
 import { CONVERSATION_NOT_FOUND_MESSAGE } from '@/lib/conversation-load-error';
 import { hasPendingDraftClear } from '@/features/chat/lib/pending-draft-clear';
 import { observeConversationDraftRevision } from '@/features/chat/services/conversation-draft';

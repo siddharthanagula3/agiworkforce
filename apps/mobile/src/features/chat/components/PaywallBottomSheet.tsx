@@ -17,6 +17,11 @@ import { BILLING_PLAN_PRICING, PAYWALL_FEATURE_COPY, isBillingPlanTier } from '@
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
 import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLinks';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
+import {
+  useBottomSheetPresence,
+  useHardwareBackDismiss,
+} from '@/src/shared/hooks/useHardwareBackDismiss';
+import { NOT_INCLUDED_IN_PLAN, purchaseNeutralRemainder } from '@/services/failureCopy';
 
 const FEATURE_LABELS: Record<string, string> = {
   general_upgrade: 'More features',
@@ -55,6 +60,19 @@ function withoutPurchasesBody(
     : `${featureLabel} isn’t included in your plan.`;
 }
 
+function comparable(text: string): string {
+  return text.trim().replace(/’/g, "'").toLowerCase();
+}
+
+function reasonWithoutPurchases(reason: string | undefined, body: string): string | undefined {
+  if (!reason) return undefined;
+  const remainder = purchaseNeutralRemainder(reason);
+  const repeatsSheet = [body, NOT_INCLUDED_IN_PLAN].some(
+    (said) => comparable(said) === comparable(remainder),
+  );
+  return remainder.trim() && !repeatsSheet ? remainder : undefined;
+}
+
 function tierLabelFor(requiredTier: string): string {
   return isBillingPlanTier(requiredTier)
     ? BILLING_PLAN_PRICING[requiredTier].label
@@ -91,6 +109,8 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     const colors = useThemeColors();
     const router = useRouter();
     const sheetRef = useRef<BottomSheet>(null);
+    const [presented, sheetPresence] = useBottomSheetPresence();
+    useHardwareBackDismiss(presented, () => sheetRef.current?.close());
     const webBillingLinksAllowed = useWebBillingLinksAllowed();
 
     useImperativeHandle(forwardedRef, () => sheetRef.current as BottomSheet);
@@ -116,6 +136,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
         : recoveryAction === 'subscribe'
           ? `${featureLabel} requires an active subscription.`
           : `${featureLabel} requires the ${tierLabel} plan.`;
+    const reasonLine = NATIVE_PURCHASES_AVAILABLE ? reason : reasonWithoutPurchases(reason, body);
     const primaryActionLabel =
       recoveryAction === 'manage_billing'
         ? 'Manage billing'
@@ -137,11 +158,12 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
 
     const handleSheetChange = useCallback(
       (index: number) => {
+        sheetPresence.onChange(index);
         if (index === -1) {
           onDismiss();
         }
       },
-      [onDismiss],
+      [onDismiss, sheetPresence],
     );
 
     const handleDismiss = useCallback(() => {
@@ -195,6 +217,8 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
         index={-1}
         accessible={false}
         onChange={handleSheetChange}
+        onAnimate={sheetPresence.onAnimate}
+        onClose={sheetPresence.onClose}
         enablePanDownToClose
         enableDynamicSizing
         backgroundStyle={{
@@ -269,19 +293,19 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               fontSize: typeScale.body,
               color: colors.textSecondary,
               lineHeight: 22,
-              marginBottom: reason || resetLabel ? 8 : 20,
+              marginBottom: reasonLine || resetLabel ? 8 : 20,
             }}
           >
             {body}
           </Text>
 
-          {reason || resetLabel ? (
+          {reasonLine || resetLabel ? (
             <View style={{ gap: 4, marginBottom: 20 }}>
-              {reason ? (
+              {reasonLine ? (
                 <Text
                   style={{ fontSize: typeScale.footnote, color: colors.textMuted, lineHeight: 20 }}
                 >
-                  {reason}
+                  {reasonLine}
                 </Text>
               ) : null}
               {resetLabel ? (

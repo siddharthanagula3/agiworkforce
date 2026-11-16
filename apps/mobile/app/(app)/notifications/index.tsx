@@ -18,6 +18,7 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { formatNotificationTime } from '@/src/features/notifications/time';
@@ -45,6 +46,10 @@ const ACCOUNT_RECORDED_EVENT_TYPES = new Set([
   'agent_failed',
   'schedule_run',
   'chat_message',
+  'research_completed',
+  'code_session_completed',
+  'code_session_failed',
+  'code_session_needs_input',
 ]);
 
 const SEVERITY_PRIORITY: Record<NotificationSeverity, NotificationPriority> = {
@@ -304,6 +309,22 @@ export default function NotificationCenterScreen() {
             router.push({ pathname: '/(app)' as const });
           }
           break;
+        case 'code_session_completed':
+        case 'code_session_failed':
+        case 'code_session_needs_input': {
+          const codeSessionId =
+            typeof item.data.codeSessionId === 'string' ? item.data.codeSessionId.trim() : '';
+          if (codeSessionId.length > 0) {
+            router.push(
+              `/(app)/cloud-code/${encodeURIComponent(codeSessionId)}` as Parameters<
+                typeof router.push
+              >[0],
+            );
+          } else {
+            router.push({ pathname: '/(app)/cloud-code' as const });
+          }
+          break;
+        }
         case 'schedule_triggered':
           router.push({ pathname: '/(app)/schedules' as const });
           break;
@@ -340,7 +361,7 @@ export default function NotificationCenterScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="flex-row items-center px-3 h-12">
+      <View className="flex-row items-center px-3 min-h-12">
         <Pressable
           onPress={handleBack}
           className="p-2 rounded-lg"
@@ -350,7 +371,12 @@ export default function NotificationCenterScreen() {
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
+        <Text
+          variant="subheading"
+          className="ml-2 flex-1"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          style={{ color: colors.textPrimary }}
+        >
           Notifications
         </Text>
         {unreadCount > 0 && (

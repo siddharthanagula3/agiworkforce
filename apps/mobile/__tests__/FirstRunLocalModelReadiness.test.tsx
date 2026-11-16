@@ -4,6 +4,8 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+jest.mock('@clerk/expo', () => ({ useUser: () => ({ user: null }) }));
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (cb: () => void | (() => void)) => {
@@ -158,6 +160,8 @@ jest.mock('@/stores/chatStore', () => ({
       deleteMessage: jest.fn(),
       setPaywallError: jest.fn(),
       clearError: jest.fn(),
+      clearUnscopedError: jest.fn(),
+      discardUnsentConversation: jest.fn(async () => undefined),
       setSendError: jest.fn(),
       features: { imageGen: false },
       workMode: 'default',

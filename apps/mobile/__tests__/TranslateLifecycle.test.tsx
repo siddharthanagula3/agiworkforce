@@ -5,6 +5,7 @@ import type { TranslateOptions, TranslateResult } from '../services/translateSer
 
 const mockTranslate = jest.fn();
 const mockSetStringAsync = jest.fn();
+jest.mock('../src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (...args: unknown[]) => mockSetStringAsync(...args),
 }));

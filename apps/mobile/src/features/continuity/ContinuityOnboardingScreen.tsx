@@ -48,7 +48,10 @@ export default function ContinuityOnboardingScreen() {
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const setWorkMode = useChatStore((state) => state.setWorkMode);
   const subscriptionTier = useTierStore((state) => state.tier);
+  const planKnown = useTierStore((state) => state.lastRefreshedAt !== null);
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
+  const notInPlan =
+    isClerkSignedIn && planKnown && !canUseBillingPlanCapability(subscriptionTier, 'agi_work');
 
   const rememberDecision = useCallback(() => {
     if (isClerkSignedIn && clerkUserId) {
@@ -213,30 +216,44 @@ export default function ContinuityOnboardingScreen() {
         <View style={{ flex: 1, minHeight: 12 }} />
 
         <View style={{ gap: 10 }}>
-          <Pressable
-            onPress={startTask}
-            accessibilityRole="button"
-            accessibilityLabel="Start a Managed Cloud task"
-            style={({ pressed }) => ({
-              minHeight: 52,
-              borderRadius: 14,
-              borderCurve: 'continuous',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: colors.teal,
-              opacity: pressed ? 0.78 : 1,
-            })}
-          >
+          {notInPlan ? (
             <Text
-              style={{ color: colors.accentText, fontSize: typeScale.callout, fontWeight: '700' }}
+              testID="continuity.not-in-plan"
+              style={{
+                color: colors.textSecondary,
+                fontSize: typeScale.callout,
+                lineHeight: 23,
+                textAlign: 'center',
+              }}
             >
-              Start a task
+              {`${PRODUCT_NAMES.work} isn’t included in your plan.`}
             </Text>
-          </Pressable>
+          ) : (
+            <Pressable
+              onPress={startTask}
+              accessibilityRole="button"
+              accessibilityLabel="Start a Managed Cloud task"
+              style={({ pressed }) => ({
+                minHeight: 52,
+                borderRadius: 14,
+                borderCurve: 'continuous',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.teal,
+                opacity: pressed ? 0.78 : 1,
+              })}
+            >
+              <Text
+                style={{ color: colors.accentText, fontSize: typeScale.callout, fontWeight: '700' }}
+              >
+                Start a task
+              </Text>
+            </Pressable>
+          )}
           <Pressable
             onPress={leave}
             accessibilityRole="button"
-            accessibilityLabel="Not now"
+            accessibilityLabel={notInPlan ? 'Close' : 'Not now'}
             style={({ pressed }) => ({
               minHeight: 48,
               borderRadius: 14,
@@ -249,7 +266,7 @@ export default function ContinuityOnboardingScreen() {
             <Text
               style={{ color: colors.textSecondary, fontSize: typeScale.body, fontWeight: '600' }}
             >
-              Not now
+              {notInPlan ? 'Close' : 'Not now'}
             </Text>
           </Pressable>
         </View>

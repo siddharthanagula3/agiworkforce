@@ -1,10 +1,10 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArticleFeedback } from '@/features/docs/components/ArticleFeedback';
 import { ArticleSupportCards } from '@/features/docs/components/ArticleSupportCards';
 import { CopyPageButton } from '@/features/docs/components/CopyPageButton';
 import { DocsArticleBody } from '@/features/docs/components/DocsArticleBody';
 import { DocsShell } from '@/features/docs/components/DocsShell';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import {
   DOCS_HOME_PATH,
   docsGroupFor,
@@ -102,16 +102,21 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
         <ArticleSupportCards related={related} />
         <nav className="dx-pager" aria-label="More guides">
           {previous ? (
-            <Link href={previous.href} className="dx-pager-link" data-dir="previous">
+            <PageLink
+              href={previous.href}
+              className="dx-pager-link"
+              data-dir="previous"
+              omitWhenEmbedded
+            >
               <span className="dx-pager-kicker">Previous</span>
               <span className="dx-pager-title">{previous.title}</span>
-            </Link>
+            </PageLink>
           ) : null}
           {next ? (
-            <Link href={next.href} className="dx-pager-link" data-dir="next">
+            <PageLink href={next.href} className="dx-pager-link" data-dir="next" omitWhenEmbedded>
               <span className="dx-pager-kicker">Next</span>
               <span className="dx-pager-title">{next.title}</span>
-            </Link>
+            </PageLink>
           ) : null}
         </nav>
       </article>

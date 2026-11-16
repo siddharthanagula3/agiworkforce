@@ -1,6 +1,6 @@
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { SUPPORT_ROWS } from '@/features/marketing/components/pages/company/support-content';
@@ -58,9 +58,9 @@ export default function SupportPage() {
               <Prose>
                 One table names the available channel for each tier. {TEAM_AND_ENTERPRISE} carry a
                 stated first-response target; other tiers do not. The uptime and credit targets on{' '}
-                <Link href="/sla" className="agi-ds-link">
+                <PageLink href="/sla" className="agi-ds-link">
                   /sla
-                </Link>{' '}
+                </PageLink>{' '}
                 are the ones still labeled as planned.
               </Prose>
             </div>

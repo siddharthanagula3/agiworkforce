@@ -24,6 +24,7 @@ import {
   RefreshCw,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Separator } from '@/components/ui/Separator';
@@ -130,7 +131,7 @@ export default function AgentDetailScreen() {
   if (!agent) {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-        <View className="flex-row items-center px-3 h-12">
+        <View className="flex-row items-center px-3 min-h-12">
           <PressableBox
             onPress={handleBack}
             className="p-2 rounded-lg active:bg-white/5"
@@ -139,7 +140,11 @@ export default function AgentDetailScreen() {
           >
             <ArrowLeft size={20} color={colors.textSecondary} />
           </PressableBox>
-          <Text variant="subheading" className="ml-2 flex-1">
+          <Text
+            variant="subheading"
+            className="ml-2 flex-1"
+            maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+          >
             Agent Detail
           </Text>
         </View>
@@ -180,7 +185,7 @@ export default function AgentDetailScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="flex-row items-center px-3 h-12">
+      <View className="flex-row items-center px-3 min-h-12">
         <PressableBox
           onPress={handleBack}
           className="p-2 rounded-lg active:bg-white/5"
@@ -189,7 +194,12 @@ export default function AgentDetailScreen() {
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
         </PressableBox>
-        <Text variant="subheading" className="ml-2 flex-1" numberOfLines={1}>
+        <Text
+          variant="subheading"
+          className="ml-2 flex-1"
+          numberOfLines={1}
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+        >
           {agent.name}
         </Text>
         <PressableBox

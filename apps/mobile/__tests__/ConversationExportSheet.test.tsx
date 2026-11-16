@@ -43,13 +43,13 @@ jest.mock('lucide-react-native', () => {
 
 const mockExportConversationToPDF = jest.fn();
 const mockExportConversationToText = jest.fn();
-const mockExportToMarkdown = jest.fn();
+const mockExportConversationToMarkdown = jest.fn();
 const mockFormatConversationAsMarkdown = jest.fn(() => 'markdown content');
 const mockShareFile = jest.fn();
 jest.mock('@/services/fileCreation', () => ({
   exportConversationToPDF: (...args: unknown[]) => mockExportConversationToPDF(...args),
   exportConversationToText: (...args: unknown[]) => mockExportConversationToText(...args),
-  exportToMarkdown: (...args: unknown[]) => mockExportToMarkdown(...args),
+  exportConversationToMarkdown: (...args: unknown[]) => mockExportConversationToMarkdown(...args),
   formatConversationAsMarkdown: (...args: unknown[]) => mockFormatConversationAsMarkdown(...args),
   shareFile: (...args: unknown[]) => mockShareFile(...args),
 }));
@@ -142,6 +142,53 @@ describe('ConversationExportSheet', () => {
 
     await waitFor(() => {
       expect(mockExportConversationToText).toHaveBeenCalledWith(messages, 'Renamed Test Chat');
+    });
+  });
+
+  it('hands the conversation to the Markdown exporter, which writes the title once', async () => {
+    mockExportConversationToMarkdown.mockResolvedValue({ uri: 'file://export.md' });
+    const { getByLabelText } = render(
+      <ConversationExportSheet
+        visible
+        onClose={jest.fn()}
+        messages={messages}
+        title="Renamed Test Chat"
+      />,
+    );
+
+    fireEvent.press(getByLabelText('Export as Markdown'));
+
+    await waitFor(() => {
+      expect(mockExportConversationToMarkdown).toHaveBeenCalledWith(messages, 'Renamed Test Chat');
+    });
+    expect(mockShareFile).toHaveBeenCalledWith('file://export.md');
+  });
+
+  it('keeps a message that carries only an attachment', async () => {
+    mockExportConversationToText.mockResolvedValue({ uri: 'file://export.txt' });
+    const attachmentOnly = {
+      id: 'm3',
+      role: 'user',
+      content: '',
+      createdAt: new Date().toISOString(),
+      attachments: [{ url: 'file:///a', mimeType: 'application/pdf', fileName: 'itinerary.pdf' }],
+    } as unknown as ChatMessage;
+    const { getByLabelText } = render(
+      <ConversationExportSheet
+        visible
+        onClose={jest.fn()}
+        messages={[attachmentOnly]}
+        title="Renamed Test Chat"
+      />,
+    );
+
+    fireEvent.press(getByLabelText('Export as Text'));
+
+    await waitFor(() => {
+      expect(mockExportConversationToText).toHaveBeenCalledWith(
+        [attachmentOnly],
+        'Renamed Test Chat',
+      );
     });
   });
 

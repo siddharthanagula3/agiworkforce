@@ -15,9 +15,9 @@ import { useCodeBlockEditor } from './codeBlockEditor';
 import { codeFileFor } from './codeFileName';
 import { downloadTextFile } from './downloadTextFile';
 import { ChartArtifact } from '../artifact-components/ChartArtifact';
-import { parseChartArtifact } from '../artifact-components/chart-spec';
 import { InlineChart } from './AnswerSurface';
 import { parseChartSurface } from './answerSurfaces';
+import { chartSpecFromFence } from './assistantFence';
 import { HighlightedCode } from './HighlightedCode';
 import { MermaidDiagram } from './MermaidDiagram';
 import { reactNodeText } from './reactNodeText';
@@ -291,19 +291,14 @@ export const CodeBlock = ({
   const language = match?.[1]?.toLowerCase() ?? '';
   const code = reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '');
 
-  const chart =
-    language === 'chart' ||
-    (language === 'json' &&
-      /"(?:type|chartType|chart_type|kind)"\s*:\s*"(?:bar|line|pie|donut|doughnut)"/i.test(code))
-      ? parseChartArtifact(code)
-      : null;
-  if (chart?.ok) {
+  const chart = chartSpecFromFence(language, code);
+  if (chart) {
     return (
       <ChartArtifact
         artifact={{
           id: `inline-chart-${code.length}`,
           type: 'chart',
-          title: chart.spec.title ?? 'Chart',
+          title: chart.title ?? 'Chart',
           content: code,
         }}
       />

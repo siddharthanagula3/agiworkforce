@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import {
@@ -14,6 +15,7 @@ import {
   beginCloudPostAuthIntent,
   clearPostAuthIntent,
 } from '@/src/features/auth/services/postAuthIntent';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import ParentalControlsScreen from '@/src/features/settings/parental-controls';
 
 const mockStore = new Map<string, string>();
@@ -51,6 +53,8 @@ jest.mock('expo-router', () => {
     useLocalSearchParams: () => mockSearchParams,
   };
 });
+
+jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 
 let mockSignedIn = false;
 const mockSignOut = jest.fn(() => Promise.resolve());
@@ -193,6 +197,23 @@ describe('the age screen when the answer does not work', () => {
     fireEvent.press(screen.getByLabelText('Go back'));
 
     expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
+  });
+
+  it('lets the review header grow and caps its title at the largest text size', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls' };
+    render(<AgeGateScreen />);
+
+    const title = screen.getByRole('header', { name: 'Review Age Settings' });
+    expect(title.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+    let node = title.parent;
+    let row: Record<string, unknown> | undefined;
+    while (node && !row) {
+      const flat = StyleSheet.flatten(node.props?.style) as Record<string, unknown> | undefined;
+      if (flat && 'flexDirection' in flat) row = flat;
+      node = node.parent;
+    }
+    expect(row?.minHeight).toBeGreaterThan(0);
+    expect(row?.height).toBeUndefined();
   });
 
   it('says what went wrong instead of ignoring the button', () => {

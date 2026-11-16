@@ -14,6 +14,7 @@ import {
   type BillingPlanCapability,
   type BillingPlanTier,
 } from '@agiworkforce/types';
+import { STATUTORY_RECORD_RETENTION_DAYS } from '@/lib/billing/financial-record-retention';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import {
@@ -108,6 +109,18 @@ describe('help article fact tokens', () => {
       expect(article(id), id).toContain('{{CONTACT.email}}');
       expect(rendered(id), id).toContain(CONTACT_EMAIL);
     }
+  });
+
+  it('gives help articles the statutory record-keeping period from the billing retention rules', () => {
+    const years = String(Math.round(STATUTORY_RECORD_RETENTION_DAYS / 365.25));
+    expect(interpolateFacts('{{RETENTION.statutoryRecordYears}}', 'probe')).toBe(years);
+    expect(article('delete-your-account').replace(/\s+/g, ' ')).toContain(
+      'Books of account are kept {{RETENTION.statutoryRecordYears}} years and then deleted.',
+    );
+    expect(article('delete-your-account')).not.toMatch(/\b\d+ years\b/);
+    expect(rendered('delete-your-account')).toContain(
+      `Books of account are kept ${years} years and then deleted.`,
+    );
   });
 
   it('states the connector release status, and says nothing once connectors are released', () => {

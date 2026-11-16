@@ -14,7 +14,7 @@ import {
   withCorsRoute,
 } from '@/lib/cors';
 import { addFallbackReasonHeader, addModelEscalationHeaders } from '@/lib/chat-fallback-reason';
-import { addSecretRedactionNoticeHeader } from '@/lib/chat-secret-redaction-notice';
+import { addSecretRedactionNoticeHeader } from '@agiworkforce/cloud-contracts';
 import { addAttachmentTruncationHeader } from '@agiworkforce/cloud-contracts';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { addRouteLaneHeader } from '@/lib/services/free-lane/plan';
@@ -1125,6 +1125,7 @@ async function dispatchChatCompletions(
               processed.turnToolProhibition,
               checkpoint.toolSchemaState,
               processed.contextPolicySnapshot,
+              processed.largeFileTurn,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1149,6 +1150,7 @@ async function dispatchChatCompletions(
               processed.turnToolProhibition,
               checkpoint.toolSchemaState,
               processed.contextPolicySnapshot,
+              processed.largeFileTurn,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1177,6 +1179,7 @@ async function dispatchChatCompletions(
               processed.turnToolProhibition,
               checkpoint.toolSchemaState,
               processed.contextPolicySnapshot,
+              processed.largeFileTurn,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1202,6 +1205,7 @@ async function dispatchChatCompletions(
               processed.turnToolProhibition,
               checkpoint.toolSchemaState,
               processed.contextPolicySnapshot,
+              processed.largeFileTurn,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,

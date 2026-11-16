@@ -3,6 +3,7 @@ import {
   Pressable,
   StyleSheet,
   type PressableProps,
+  type Insets,
   type PressableStateCallbackType,
   type ViewStyle,
 } from 'react-native';
@@ -19,13 +20,21 @@ interface ButtonProps extends Omit<PressableProps, 'children'> {
   loading?: boolean;
 }
 
-const sizeStyles: Record<NonNullable<ButtonProps['size']>, ViewStyle> = {
+const MINIMUM_TOUCH_TARGET = 44;
+
+const sizeStyles: Record<NonNullable<ButtonProps['size']>, ViewStyle & { minHeight: number }> = {
   sm: { minHeight: 36, paddingHorizontal: 12, borderRadius: 8 },
   md: { minHeight: 44, paddingHorizontal: 16, borderRadius: 10 },
   lg: { minHeight: 52, paddingHorizontal: 24, borderRadius: 14 },
 };
 
+function touchTargetSlop(size: NonNullable<ButtonProps['size']>): Insets | undefined {
+  const missing = MINIMUM_TOUCH_TARGET - sizeStyles[size].minHeight;
+  return missing > 0 ? { top: missing / 2, bottom: missing / 2 } : undefined;
+}
+
 const baseStyle: ViewStyle = {
+  minWidth: MINIMUM_TOUCH_TARGET,
   alignItems: 'center',
   justifyContent: 'center',
   flexDirection: 'row',
@@ -112,6 +121,7 @@ export function Button({
         disabled || loading ? { opacity: 0.5 } : null,
         typeof style === 'function' ? style({ pressed } as PressableStateCallbackType) : style,
       ])}
+      hitSlop={touchTargetSlop(size)}
       disabled={disabled || loading}
       onPress={handlePress}
       onPressIn={handlePressIn}

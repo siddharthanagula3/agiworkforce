@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-15
 
 This runbook covers the production identifiers and public verification inputs
 that must agree across EAS, Apple, Google Play, and the web deployment.
@@ -39,8 +39,12 @@ work around signing errors. Reconcile the remote credential with these values.
 4. Put the Google Play service-account JSON in the same directory as
    `google-play-service-account.json`.
 5. Configure the environment variables listed in `apps/mobile/.env.example`
-   in the matching EAS environment. Export the same `EXPO_PUBLIC_API_URL` in the
-   local release shell. The preflight requires the Terms status and
+   in the matching EAS environment. Export the same `EXPO_PUBLIC_API_URL` and the
+   `pk_live_` `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` in the local release shell:
+   EAS evaluates `apps/mobile/app.config.js` on the local machine with only the
+   profile's `env` block before it loads the EAS environment, and that file
+   stops a `preview` or `production` build without both
+   (`mobile-store-first-release.md`, section 6.2). The preflight requires the Terms status and
    provider-funded Free catalogue routes on that origin to return an
    authentication challenge before a beta or production build. For iOS, enable
    the Apple connection in the production Clerk instance, register the app in
@@ -54,7 +58,13 @@ work around signing errors. Reconcile the remote credential with these values.
    ```
 
 The release scripts run `release:preflight`, require a clean commit, and use
-remote EAS credentials. Production uses the `production` update channel; beta
+remote EAS credentials. They always pass `--non-interactive` to EAS
+(`apps/mobile/scripts/release/_lib.sh`). In that mode EAS can generate an
+Android upload keystore, but cannot create an iOS distribution certificate or
+push key, register the share extension and widget bundle identifiers, or sync
+capabilities, so the first iOS credentials are made once in an interactive
+`eas credentials --platform ios` session signed in to Apple
+(`mobile-store-first-release.md`, section 6.2). Production uses the `production` update channel; beta
 uses `beta`. The Expo runtime version is derived from the native fingerprint,
 so an update cannot be installed on an incompatible native binary.
 
@@ -63,9 +73,11 @@ so an update cannot be installed on an incompatible native binary.
 `.github/workflows/release-mobile.yml` validates an exact
 `v-mobile-X.Y.Z` tag whose version matches both mobile configuration sources.
 A tag push, or a manual run with `publish=true`, then waits for approval on the
-`mobile-store-release` GitHub environment before starting either store build.
-Manual runs with `publish=false` perform validation only and spend no EAS build
-credits.
+`mobile-store-release` GitHub environment before starting either store build;
+the wait happens only while that environment has a required reviewer. Manual
+runs with `publish=false` perform validation only and spend no EAS build
+credits; they take a tag that is already pushed, so a tag push is always the
+first run.
 
 Configure these values on the protected environment:
 
@@ -111,16 +123,22 @@ no secret. Android requires the SHA-256 fingerprint of the certificate Google
 Play uses to sign installed builds. The upload-key fingerprint is not a
 substitute for Play App Signing.
 
-1. In Google Play Console, open **Setup > App integrity > App signing**.
-2. Copy the SHA-256 fingerprint from **App signing key certificate**.
+1. In Google Play Console, open **Protected with Play > Play Store protection >
+   Manage Play app signing** and scroll to **App signing key** (Play Console
+   Help, answer 9842756, read 2026-11-15).
+2. Copy every SHA-256 fingerprint shown there. New apps use hybrid signing,
+   which gives three keys, and Google asks that the fingerprints of all three
+   be registered with API providers. Which of them Android App Links
+   verification needs is unverified.
 3. Set the server-only web deployment variable:
 
    ```text
-   ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS=<SHA-256 fingerprint>
+   ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS=<SHA-256 fingerprint>,<SHA-256 fingerprint>
    ```
 
-   Multiple active fingerprints may be separated by commas or newlines during
-   a signing-key rotation. Do not add a sample fingerprint to production.
+   Multiple fingerprints are separated by commas or newlines, both here and in
+   the protected GitHub variable of the same name. Do not add a sample
+   fingerprint to production.
 
 4. Redeploy the web app and verify the public responses:
 
@@ -144,7 +162,11 @@ overbroad, or unavailable document blocks the Play build before store upload.
 - Install an Android build from a Google Play test track (not a locally signed
   APK), repeat the link checks, and inspect verification if needed with
   `adb shell pm get-app-links com.agiworkforce.app`.
-- Verify `/pair` and `/pair/<code>` open the companion pairing flow.
+- Version 1 hides Remote Control (`companion` and `dispatch` are `false` in
+  `apps/mobile/lib/v1FeatureFlags.ts`), so `/pair` and `/pair/<code>` open no
+  pairing flow. While `apps/mobile/app.config.js` still declares them as
+  Android App Links, they open the app and do nothing; verify that, and verify
+  they open the pairing flow only in a build where `companion` is `true`.
 - Verify unrelated and extra-segment paths remain in the browser.
 - Verify the redirect-only `www.agiworkforce.com` host remains in the browser;
   only the canonical apex host is declared for verified app links.

@@ -8,9 +8,13 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
   getNeonDb: () => ({ query }),
 }));
 
-import { parseReportAsset, readContentReportQueue } from '../content-report-triage';
+import {
+  parseReportAsset,
+  parseReportSubject,
+  readContentReportQueue,
+} from '../content-report-triage';
 
-function row(asset: unknown) {
+function row(asset: unknown, subject: unknown = null) {
   return {
     id: 'r-1',
     client_report_id: 'client-1',
@@ -21,6 +25,7 @@ function row(asset: unknown) {
     content_excerpt: 'a prompt',
     user_note: '',
     asset,
+    subject,
     status: 'received',
     reviewer_id: null,
     reviewer_note: null,
@@ -72,6 +77,40 @@ describe('the media a content report carries', () => {
       url: `https://cdn.example/${'a'.repeat(5000)}`,
     });
     expect(parsed?.reference.length).toBe(2048);
+  });
+});
+
+describe('the kind of content a report is about', () => {
+  beforeEach(() => query.mockReset());
+
+  it('reads the stored subject with the queue', async () => {
+    query.mockResolvedValue([row(null, { kind: 'voice-turn', id: 'msg-4' })]);
+
+    const [report] = await readContentReportQueue();
+
+    expect(query.mock.calls[0]![0]).toContain("metadata -> 'subject' as subject");
+    expect(report?.subject).toEqual({ kind: 'voice-turn', id: 'msg-4' });
+  });
+
+  it('reports no subject for an older report or a malformed one', async () => {
+    query.mockResolvedValue([
+      row(null),
+      row(null, { kind: 'podcast', id: 'x' }),
+      row(null, { kind: 'artifact', id: '  ' }),
+      row(null, { kind: 'artifact', id: 'a'.repeat(201) }),
+      row(null, 'artifact:a'),
+    ]);
+
+    const reports = await readContentReportQueue();
+
+    expect(reports.map((report) => report.subject)).toEqual([null, null, null, null, null]);
+  });
+
+  it('trims the subject id it hands to a reviewer', () => {
+    expect(parseReportSubject({ kind: 'task-run', id: ' run-1 ' })).toEqual({
+      kind: 'task-run',
+      id: 'run-1',
+    });
   });
 });
 

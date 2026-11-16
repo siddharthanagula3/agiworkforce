@@ -4,6 +4,8 @@ jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
 }));
 
 import React from 'react';
+import { Alert } from 'react-native';
+import NetInfo from '@react-native-community/netinfo';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('../lib/mmkv', () => ({
@@ -22,6 +24,7 @@ jest.mock('../lib/mmkv', () => ({
     getString: jest.fn().mockReturnValue(undefined),
     getNumber: jest.fn().mockReturnValue(undefined),
     set: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -155,6 +158,9 @@ import {
   getProviderOfferings,
   type ModelReasoning,
 } from '@agiworkforce/types';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
+import { isChineseHqProvider } from '@agiworkforce/compliance';
+import { CELLULAR_CONSENT_SETTING_PATH } from '../services/modelDownload';
 import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 const LITE_MODEL_ID = requireLocalModel(
@@ -281,6 +287,21 @@ function renderPicker(overrides?: {
   );
 }
 
+type AlertButton = { text?: string; onPress?: () => void };
+
+async function answerDownloadPrompt(buttonText: 'Download' | 'Cancel') {
+  await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+  const buttons = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2] as AlertButton[];
+  await act(async () => {
+    buttons.find((button) => button.text === buttonText)?.onPress?.();
+  });
+}
+
+function lastPrompt(): { title: string; message: string } {
+  const [title, message] = jest.mocked(Alert.alert).mock.calls.at(-1) as [string, string];
+  return { title, message };
+}
+
 function cloudAutoLabel(mode: (typeof AUTO_MODES)[number]): string {
   const description =
     mode.id === DEFAULT_AUTO_MODE_ID
@@ -305,6 +326,7 @@ describe('ModelPickerSheet', () => {
     resetModelStore();
     useTierStore.setState({ tier: 'free' });
     useAgentControlStore.setState({ byConversation: {}, byProject: {} });
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
   it('explains an empty provider-funded catalogue and a retryable check failure', () => {
@@ -735,6 +757,7 @@ describe('ModelPickerSheet', () => {
     expect(queryByTestId('model-picker-loading')).toBeNull();
 
     fireEvent.press(getByLabelText(/AGI Lite/));
+    await answerDownloadPrompt('Download');
 
     expect(prepareModel).toHaveBeenCalledTimes(1);
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
@@ -764,6 +787,7 @@ describe('ModelPickerSheet', () => {
     });
 
     fireEvent.press(getByLabelText(/AGI Lite/));
+    await answerDownloadPrompt('Download');
     expect(prepareModel).toHaveBeenCalledTimes(1);
     useModelStore.setState({ selectedModel: 'newer-selection' });
     await act(async () => {
@@ -797,6 +821,7 @@ describe('ModelPickerSheet', () => {
     });
 
     fireEvent.press(getByLabelText(/AGI Lite/));
+    await answerDownloadPrompt('Download');
     fireEvent.press(getByLabelText(/AGI Standard/));
     await act(async () => {
       completions[0]?.();
@@ -804,6 +829,95 @@ describe('ModelPickerSheet', () => {
 
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(DEFAULT_LOCAL_MODEL_ID);
+  });
+
+  describe('downloading an on-device model', () => {
+    const prepareModel = jest.fn(() => Promise.resolve());
+
+    beforeEach(() => {
+      prepareModel.mockClear();
+      useModelInstallStore.setState({
+        installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+        readySystemModelIds: [],
+        jobs: {},
+        allowCellularDownloads: false,
+        prepareModel,
+      });
+    });
+
+    it('asks first, naming the model and its size, and downloads only after Download', async () => {
+      const { getByLabelText } = renderPicker();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByLabelText(/AGI Lite/));
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+
+      const { title, message } = lastPrompt();
+      expect(title).toBe(`Download ${LITE_MODEL!.name}?`);
+      expect(message).toContain(formatAttachmentSize(LITE_MODEL!.fileSizeBytes!));
+      expect(message).toContain('starts downloading now');
+      expect(message).toContain('storage');
+      expect(message).not.toContain('mobile data');
+      expect(prepareModel).not.toHaveBeenCalled();
+
+      await answerDownloadPrompt('Download');
+      expect(prepareModel).toHaveBeenCalledTimes(1);
+    });
+
+    it('starts nothing when the person cancels', async () => {
+      const { getByLabelText } = renderPicker();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByLabelText(/AGI Lite/));
+      await answerDownloadPrompt('Cancel');
+
+      expect(prepareModel).not.toHaveBeenCalled();
+      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    });
+
+    it('says the download will use mobile data when the phone is on mobile data and allows it', async () => {
+      useModelInstallStore.setState({ allowCellularDownloads: true });
+      jest.mocked(NetInfo.fetch).mockResolvedValueOnce({
+        type: 'cellular',
+        isConnected: true,
+        isInternetReachable: true,
+        details: { isConnectionExpensive: true, cellularGeneration: '5g', carrier: null },
+      } as never);
+      const { getByLabelText } = renderPicker();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByLabelText(/AGI Lite/));
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+
+      expect(lastPrompt().message).toContain('mobile data');
+      expect(prepareModel).not.toHaveBeenCalled();
+    });
+
+    it('starts nothing and points at Wi-Fi when mobile data is not allowed for downloads', async () => {
+      jest.mocked(NetInfo.fetch).mockResolvedValueOnce({
+        type: 'cellular',
+        isConnected: true,
+        isInternetReachable: true,
+        details: { isConnectionExpensive: true, cellularGeneration: '5g', carrier: null },
+      } as never);
+      const { getByLabelText } = renderPicker();
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      fireEvent.press(getByLabelText(/AGI Lite/));
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+
+      expect(lastPrompt().title).toBe('Wi-Fi needed');
+      expect(lastPrompt().message).toContain(CELLULAR_CONSENT_SETTING_PATH);
+      expect(prepareModel).not.toHaveBeenCalled();
+    });
   });
 
   it('calls onSelect callback instead of store when provided', () => {
@@ -1155,7 +1269,12 @@ describe('ModelPickerSheet', () => {
     const { queryByTestId, getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     expect(queryByTestId('model-picker-effort-selector')).toBeNull();
-    fireEvent.press(getByLabelText(`${THINKING_TOGGLE_MODEL.name}, selected`));
+    const turnedOff = isChineseHqProvider(
+      getModelMetadataById(THINKING_TOGGLE_MODEL.id)?.provider ?? '',
+    )
+      ? ', turned off for your account'
+      : '';
+    fireEvent.press(getByLabelText(`${THINKING_TOGGLE_MODEL.name}, selected${turnedOff}`));
     expect(getByLabelText(`Thinking mode for ${THINKING_TOGGLE_MODEL.name}`)).toBeTruthy();
   });
 

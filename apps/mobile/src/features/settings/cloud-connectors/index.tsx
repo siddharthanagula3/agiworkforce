@@ -10,9 +10,12 @@ import {
   RefreshCw,
   AlertTriangle,
   Compass,
+  X,
 } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
+import { CONNECTORS_COMING_SOON_LABEL, connectorReleased } from '@agiworkforce/types';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -31,9 +34,11 @@ import { AddCustomConnectorModal } from './AddCustomConnectorModal';
 import { ApprovalPolicySummary } from './ApprovalPolicySummary';
 import { ConnectorLogo } from './ConnectorLogo';
 import { connectionStatus, formatConnectorName } from './connectorStatus';
+import { connectorAuthorizationNotice } from './connectorAuthorizationOutcome';
+import { connectorFailureMessage } from './connectorFailureMessage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
+import { CapabilityUnavailable, useCapabilityDenialReason } from '@/src/lib/Capabilities';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -43,15 +48,22 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
+  authorizeConnectorInApp,
   browseConnectorListings,
   fetchConnectorDirectory,
   linkBankAccountsInApp,
+  startConnectorOAuth,
   type ConnectedConnector,
   type ConnectorDirectory,
   type ConnectorListing,
   type ConnectorListingCategory,
 } from '@/services/connectors';
-import { BANK_ACCOUNTS_CONNECTOR_ID } from '@agiworkforce/cloud-contracts';
+import {
+  BANK_ACCOUNTS_CONNECTOR_ID,
+  CONNECTOR_DIRECTORY_CATEGORIES,
+  connectorOutcomeNotice,
+  type ConnectorOutcomeNotice,
+} from '@agiworkforce/cloud-contracts';
 
 const BANK_LINK_LABEL = 'Link a bank account';
 const BANK_LINK_HINT = 'Read-only US bank balances and transactions via Plaid. Can’t move money.';
@@ -60,6 +72,27 @@ const ALL_FILTER = 'All';
 const CONNECTED_FILTER = 'Connected';
 const CUSTOM_FILTER = 'Custom';
 const CUSTOM_CONNECTOR_DESCRIPTION = 'Your encrypted remote MCP endpoint';
+
+function requestedCategoryFilter(
+  value: string | string[] | undefined,
+): ConnectorListingCategory | null {
+  const requested = Array.isArray(value) ? value[0] : value;
+  return CONNECTOR_DIRECTORY_CATEGORIES.find((category) => category === requested) ?? null;
+}
+
+function keepRequestedCategory(
+  categories: ConnectorListingCategory[],
+  requested: ConnectorListingCategory | null,
+  previous: readonly ConnectorListingCategory[],
+): ConnectorListingCategory[] {
+  if (requested === null || categories.includes(requested)) return categories;
+  const position = previous.indexOf(requested);
+  if (position === -1) return [...categories, requested];
+  const precedingCount = previous
+    .slice(0, position)
+    .filter((category) => categories.includes(category)).length;
+  return [...categories.slice(0, precedingCount), requested, ...categories.slice(precedingCount)];
+}
 
 interface ConnectorRow {
   key: string;
@@ -125,13 +158,16 @@ function ConnectorCard({ row, onPress }: { row: ConnectorRow; onPress: () => voi
       : status === 'not-responding'
         ? colors.agentWarning
         : colors.textMuted;
-  const detail = statusLabel ?? row.description;
+  const comingSoon = !row.connection && !connectorReleased(row.routeId);
+  const detail = statusLabel ?? (comingSoon ? CONNECTORS_COMING_SOON_LABEL : row.description);
 
   return (
     <PressableBox
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${row.name}${row.publisher ? `, ${row.publisher}` : ''}. ${statusLabel ?? 'Not connected'}`}
+      accessibilityLabel={`${row.name}${row.publisher ? `, ${row.publisher}` : ''}. ${
+        statusLabel ?? (comingSoon ? CONNECTORS_COMING_SOON_LABEL : 'Not connected')
+      }`}
     >
       {({ pressed }) => (
         <View
@@ -211,6 +247,125 @@ function ConnectorCard({ row, onPress }: { row: ConnectorRow; onPress: () => voi
   );
 }
 
+const announcedConnectorNotices = new Set<string>();
+
+interface ConnectorHealthNotice {
+  key: string;
+  connection: ConnectedConnector;
+  name: string;
+  expired: boolean;
+}
+
+const CONNECTOR_HEALTH_NOTICE_TOOL = 'its last request';
+
+function connectorHealthNoticeOutcome(notice: ConnectorHealthNotice): ConnectorOutcomeNotice {
+  return connectorOutcomeNotice({
+    connectorId: notice.connection.connectorId,
+    connectorLabel: notice.name,
+    toolName: CONNECTOR_HEALTH_NOTICE_TOOL,
+    failure: notice.expired ? 'authorization' : 'unavailable',
+  });
+}
+
+function connectorHealthNoticeBody(
+  notice: ConnectorHealthNotice,
+  outcome: ConnectorOutcomeNotice,
+): string {
+  if (notice.expired && notice.connection.source !== 'oauth') {
+    return 'Its authorization expired. Open it to disconnect it, then add it again.';
+  }
+  return outcome.detail;
+}
+
+function ConnectorHealthNoticeCard({
+  notice,
+  reconnecting,
+  onReconnect,
+  onRetry,
+  onOpen,
+  onDismiss,
+}: {
+  notice: ConnectorHealthNotice;
+  reconnecting: boolean;
+  onReconnect: () => void;
+  onRetry: () => void;
+  onOpen: () => void;
+  onDismiss: () => void;
+}) {
+  const colors = useThemeColors();
+  const outcome = connectorHealthNoticeOutcome(notice);
+  const canReconnect = notice.expired && notice.connection.source === 'oauth';
+  const canRetry = !notice.expired && outcome.actionLabel !== null;
+  const actionName =
+    (canReconnect || canRetry ? outcome.actionLabel : null) ??
+    (canReconnect ? 'Reconnect' : 'Open');
+  const actionLabel = canReconnect && reconnecting ? 'Opening authorization…' : actionName;
+  const onAction = canReconnect ? onReconnect : canRetry ? onRetry : onOpen;
+  const actionAccessibilityLabel = `${actionName} ${notice.name}`;
+  return (
+    <View
+      testID="connector-health-notice"
+      accessibilityRole="alert"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 10,
+        borderRadius: 12,
+        backgroundColor: notice.expired ? colors.dangerSurface : colors.warningSurface,
+        borderWidth: 1,
+        borderColor: notice.expired ? colors.dangerBorder : colors.warningBorder,
+        paddingLeft: 12,
+        paddingTop: 12,
+        marginBottom: 14,
+      }}
+    >
+      <View style={{ paddingTop: 2 }}>
+        {notice.expired ? (
+          <RefreshCw size={15} color={colors.agentError} />
+        ) : (
+          <AlertTriangle size={15} color={colors.agentWarning} />
+        )}
+      </View>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text
+          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+        >
+          {outcome.title}
+        </Text>
+        <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
+          {connectorHealthNoticeBody(notice, outcome)}
+        </Text>
+        <PressableBox
+          onPress={onAction}
+          disabled={reconnecting}
+          accessibilityRole="button"
+          accessibilityLabel={actionAccessibilityLabel}
+          accessibilityState={{ disabled: reconnecting }}
+          style={{ alignSelf: 'flex-start', minHeight: 44, minWidth: 44, justifyContent: 'center' }}
+        >
+          <Text
+            style={{
+              color: notice.expired ? colors.agentError : colors.agentWarning,
+              fontSize: typeScale.footnote,
+              fontWeight: '600',
+            }}
+          >
+            {actionLabel}
+          </Text>
+        </PressableBox>
+      </View>
+      <PressableBox
+        onPress={onDismiss}
+        accessibilityRole="button"
+        accessibilityLabel={`Dismiss the notice about ${notice.name}`}
+        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <X size={16} color={colors.textMuted} />
+      </PressableBox>
+    </View>
+  );
+}
+
 function WaitlistPlaceholder() {
   const colors = useThemeColors();
   return (
@@ -252,6 +407,8 @@ function WaitlistPlaceholder() {
 }
 
 const DIRECTORY_INDEXING_NOTE = 'The directory is still being indexed. Try again shortly.';
+const NONE_CONNECTED_COPY = 'No connectors connected yet.';
+const NO_CONNECTORS_FOUND = 'No connectors found';
 
 export default function CloudConnectorsScreen({
   backHref = '/(app)/settings',
@@ -261,13 +418,16 @@ export default function CloudConnectorsScreen({
   const colors = useThemeColors();
   const bottomSearchSpace = useBottomSearchBarSpace();
   const router = useRouter();
+  const { category: categoryParam } = useLocalSearchParams<{ category?: string | string[] }>();
+  const requestedCategory = requestedCategoryFilter(categoryParam);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const clerkUserId = useAuthStore((s) => s.clerkUserId);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const isCloudModeActive = appMode === 'cloud';
-  const connectorsSwitchedOn = useCapability('canUseConnectors');
+  const connectorsDenial = useCapabilityDenialReason('canUseConnectors');
+  const connectorsSwitchedOn = connectorsDenial === null;
   const canUseConnectors = useTierStore((s) => s.grantedCapabilities.includes('canUseConnectors'));
   const isTierRefreshing = useTierStore((s) => s.isRefreshing);
   const lastTierRefreshAt = useTierStore((s) => s.lastRefreshedAt);
@@ -281,7 +441,8 @@ export default function CloudConnectorsScreen({
   const [directory, setDirectory] = useState<ConnectorDirectory | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<string>(ALL_FILTER);
+  const [activeFilter, setActiveFilter] = useState<string>(requestedCategory ?? ALL_FILTER);
+  const filterOwnerRef = useRef(clerkUserId);
   const [search, setSearch] = useState('');
   const [listingSearch, setListingSearch] = useState('');
   const [addCustomVisible, setAddCustomVisible] = useState(false);
@@ -290,10 +451,15 @@ export default function CloudConnectorsScreen({
     () => new Map(),
   );
   const [listingCategories, setListingCategories] = useState<ConnectorListingCategory[]>([]);
+  const [categoriesWithListings, setCategoriesWithListings] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [listingsLoading, setListingsLoading] = useState(false);
   const [listingsError, setListingsError] = useState<string | null>(null);
   const [directoryIndexing, setDirectoryIndexing] = useState(false);
+  const [healthNotices, setHealthNotices] = useState<ConnectorHealthNotice[]>([]);
+  const [reconnectingId, setReconnectingId] = useState<string | null>(null);
   const listingRequestRef = useRef(0);
 
   const load = useCallback(async (): Promise<void> => {
@@ -318,17 +484,30 @@ export default function CloudConnectorsScreen({
     setDirectory(null);
     setLoading(false);
     setError(null);
-    setActiveFilter(ALL_FILTER);
+    if (filterOwnerRef.current && filterOwnerRef.current !== clerkUserId) {
+      setActiveFilter(ALL_FILTER);
+    }
+    filterOwnerRef.current = clerkUserId;
     setSearch('');
     setListingSearch('');
     setAddCustomVisible(false);
     setListings([]);
     setKnownListings(new Map());
     setListingCategories([]);
+    setCategoriesWithListings(new Set());
     setNextCursor(null);
     setListingsLoading(false);
     setListingsError(null);
+    setHealthNotices([]);
+    setReconnectingId(null);
   }, [clerkUserId]);
+
+  const appliedCategoryRef = useRef(requestedCategory);
+  useEffect(() => {
+    if (appliedCategoryRef.current === requestedCategory) return;
+    appliedCategoryRef.current = requestedCategory;
+    setActiveFilter(requestedCategory ?? ALL_FILTER);
+  }, [requestedCategory]);
 
   useEffect(() => {
     const timer = setTimeout(() => setListingSearch(search.trim()), SEARCH_INPUT_DEBOUNCE_MS);
@@ -386,8 +565,10 @@ export default function CloudConnectorsScreen({
     !error;
 
   const listingCategory = useMemo(
-    () => listingCategories.find((category) => category === activeFilter) ?? null,
-    [activeFilter, listingCategories],
+    () =>
+      listingCategories.find((category) => category === activeFilter) ??
+      (activeFilter === requestedCategory ? requestedCategory : null),
+    [activeFilter, listingCategories, requestedCategory],
   );
   const browsesListings = activeFilter === ALL_FILTER || listingCategory !== null;
 
@@ -413,7 +594,18 @@ export default function CloudConnectorsScreen({
           (current) =>
             new Map([...current, ...page.entries.map((entry) => [entry.id, entry] as const)]),
         );
-        setListingCategories(page.categories);
+        setListingCategories((current) =>
+          keepRequestedCategory(page.categories, listingCategory, current),
+        );
+        if (listingCategory === null && !cursor && !listingSearch) {
+          setCategoriesWithListings(
+            new Set(
+              page.nextCursor === null
+                ? page.entries.flatMap((entry) => entry.categories)
+                : page.categories,
+            ),
+          );
+        }
         setNextCursor(page.nextCursor);
         if (!cursor) setDirectoryIndexing(page.stats?.bootstrapComplete === false);
       } catch {
@@ -441,6 +633,38 @@ export default function CloudConnectorsScreen({
       ) ?? null,
     [directory],
   );
+  useEffect(() => {
+    if (!connections || !clerkUserId) return;
+    const fresh: ConnectorHealthNotice[] = [];
+    for (const connection of connections) {
+      const status = connectionStatus(connection);
+      if (status === 'connected') continue;
+      const key = `${clerkUserId}:${connection.id}:${status}`;
+      if (announcedConnectorNotices.has(key)) continue;
+      announcedConnectorNotices.add(key);
+      fresh.push({
+        key,
+        connection,
+        name: connection.name || formatConnectorName(connection.connectorId),
+        expired: status === 'needs-reauthorization',
+      });
+    }
+    if (fresh.length > 0) setHealthNotices((current) => [...current, ...fresh]);
+  }, [clerkUserId, connections]);
+
+  const dismissHealthNotice = useCallback((key: string) => {
+    setHealthNotices((current) => current.filter((notice) => notice.key !== key));
+  }, []);
+
+  const retryFromNotice = useCallback(
+    (notice: ConnectorHealthNotice) => {
+      dismissHealthNotice(notice.key);
+      announcedConnectorNotices.delete(notice.key);
+      void load();
+    },
+    [dismissHealthNotice, load],
+  );
+
   const bankLinkOffered =
     FEATURES.bankLinking &&
     (directory?.available.includes(BANK_ACCOUNTS_CONNECTOR_ID) ?? false) &&
@@ -481,14 +705,61 @@ export default function CloudConnectorsScreen({
     [isConnectorActionCurrent, router],
   );
 
+  const reconnectFromNotice = useCallback(
+    (notice: ConnectorHealthNotice) => {
+      if (reconnectingId) return;
+      const account = captureCloudAccountEpoch();
+      if (!account || !isConnectorActionCurrent(account)) return;
+      setReconnectingId(notice.key);
+      void (async () => {
+        try {
+          const start = await startConnectorOAuth(notice.connection.connectorId);
+          if (!isConnectorActionCurrent(account)) return;
+          if (start.appReturn) {
+            const outcome = await authorizeConnectorInApp(start.authorizeUrl);
+            if (!isConnectorActionCurrent(account)) return;
+            if (outcome === 'connected') dismissHealthNotice(notice.key);
+            await load();
+            const announced = connectorAuthorizationNotice(notice.name, outcome);
+            if (announced && isConnectorActionCurrent(account)) {
+              Alert.alert(announced.title, announced.body);
+            }
+            return;
+          }
+          const opened = await openUntrustedUrlInAppBrowser(start.authorizeUrl);
+          if (!isConnectorActionCurrent(account)) return;
+          if (!opened) {
+            Alert.alert(
+              'Could not open authorization',
+              'No browser was available to complete the authorization. Nothing changed.',
+            );
+            return;
+          }
+          await load();
+        } catch (reconnectError) {
+          if (!isConnectorActionCurrent(account)) return;
+          Alert.alert(
+            'Could not reauthorize',
+            connectorFailureMessage(reconnectError, 'reauthorize'),
+          );
+        } finally {
+          if (isCloudAccountEpochCurrent(account)) setReconnectingId(null);
+        }
+      })();
+    },
+    [dismissHealthNotice, isConnectorActionCurrent, load, reconnectingId],
+  );
+
   const filters = useMemo(
     () => [
       ALL_FILTER,
       CONNECTED_FILTER,
       ...(connections?.some((connector) => connector.source === 'custom') ? [CUSTOM_FILTER] : []),
-      ...listingCategories,
+      ...listingCategories.filter(
+        (category) => category === activeFilter || categoriesWithListings.has(category),
+      ),
     ],
-    [connections, listingCategories],
+    [activeFilter, categoriesWithListings, connections, listingCategories],
   );
 
   const visibleRows = useMemo(() => {
@@ -522,6 +793,10 @@ export default function CloudConnectorsScreen({
 
   const listingsPending =
     connections === null || (browsesListings && (listingsLoading || listingsError !== null));
+  const emptyTitle =
+    activeFilter === CONNECTED_FILTER && !search.trim() && connections?.length === 0
+      ? NONE_CONNECTED_COPY
+      : NO_CONNECTORS_FOUND;
 
   const handleSignIn = useCallback(() => {
     router.push(beginCloudPostAuthIntent('cloud-connectors'));
@@ -546,7 +821,7 @@ export default function CloudConnectorsScreen({
         backHref={backHref}
         help={{ docId: 'connectors-and-mcp', label: 'How connectors work' }}
       >
-        <CapabilityUnavailable label="Connectors" />
+        <CapabilityUnavailable label="Connectors" reason={connectorsDenial} />
       </SettingsScreenShell>
     );
   }
@@ -652,6 +927,7 @@ export default function CloudConnectorsScreen({
                 {error}
               </Text>
               <PressableBox
+                hitSlop={{ top: 6, bottom: 6 }}
                 onPress={() => void load()}
                 disabled={loading}
                 accessibilityLabel="Retry loading connectors"
@@ -680,6 +956,28 @@ export default function CloudConnectorsScreen({
 
         {directoryVisible && (
           <>
+            {healthNotices.map((notice) => (
+              <ConnectorHealthNoticeCard
+                key={notice.key}
+                notice={notice}
+                reconnecting={reconnectingId === notice.key}
+                onReconnect={() => reconnectFromNotice(notice)}
+                onRetry={() => retryFromNotice(notice)}
+                onOpen={() => {
+                  dismissHealthNotice(notice.key);
+                  openConnector({
+                    key: notice.key,
+                    routeId: notice.connection.connectorId,
+                    name: notice.name,
+                    publisher: null,
+                    description: '',
+                    connection: notice.connection,
+                  });
+                }}
+                onDismiss={() => dismissHealthNotice(notice.key)}
+              />
+            ))}
+
             <PressableBox
               onPress={() => setAddCustomVisible(true)}
               accessibilityRole="button"
@@ -747,6 +1045,7 @@ export default function CloudConnectorsScreen({
                 const active = f === activeFilter;
                 return (
                   <PressableBox
+                    hitSlop={{ top: 5, bottom: 5 }}
                     key={f}
                     onPress={() => setActiveFilter(f)}
                     accessibilityRole="button"
@@ -780,9 +1079,9 @@ export default function CloudConnectorsScreen({
               <View style={{ alignItems: 'center', paddingVertical: 40, gap: 8 }}>
                 <Link size={28} color={colors.textMuted} />
                 <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>
-                  No connectors found
+                  {emptyTitle}
                 </Text>
-                {directoryIndexing ? (
+                {directoryIndexing && browsesListings ? (
                   <Text
                     style={{
                       color: colors.textMuted,

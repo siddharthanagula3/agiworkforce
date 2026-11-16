@@ -1,3 +1,5 @@
+import { catalogConnectorName } from '@agiworkforce/cloud-contracts';
+
 import type { ConnectedConnector } from '@/services/connectors';
 
 export type ConnectionStatus = 'connected' | 'needs-reauthorization' | 'not-responding';
@@ -10,7 +12,8 @@ export function connectionStatus(connection: ConnectedConnector): ConnectionStat
 }
 
 export function formatConnectorName(connectorId: string): string {
-  if (connectorId === 'github') return 'GitHub';
+  const catalogName = catalogConnectorName(connectorId);
+  if (catalogName) return catalogName;
   return connectorId
     .replace(/^custom-/, '')
     .split(/[-_]/)

@@ -499,7 +499,7 @@ export interface ProjectMember {
  * refuses past this, and project-context-service queries with the same limit,
  * so the two cannot drift into a state where a file is stored but never read.
  */
-export const MAX_PROJECT_KNOWLEDGE_FILES = 20;
+export const MAX_PROJECT_KNOWLEDGE_FILES = 40;
 
 export type ProjectKnowledgeIndexStatus = 'pending' | 'indexing' | 'indexed' | 'stale' | 'failed';
 

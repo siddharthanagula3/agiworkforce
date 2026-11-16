@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, Share, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPost = jest.fn();
@@ -12,6 +12,12 @@ jest.mock('@/services/api', () => ({
     patch: (...args: unknown[]) => mockPatch(...args),
     delete: (...args: unknown[]) => mockDelete(...args),
   },
+}));
+
+const mockOpenURL = jest.fn();
+jest.mock('expo-linking', () => ({
+  ...jest.requireActual('expo-linking'),
+  openURL: (...args: unknown[]) => mockOpenURL(...args),
 }));
 
 const mockCopy = jest.fn().mockResolvedValue(true);
@@ -146,7 +152,7 @@ describe('ArtifactFullScreen publish-to-link', () => {
     mockCopy.mockReset().mockResolvedValue(true);
     invalidateCloudAccount();
     activateCloudAccount('owner-a');
-    useChatAppModeStore.setState({ appMode: 'local' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     usePublishedArtifactAudiences.setState({ ownerId: null, byId: {} });
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
@@ -184,6 +190,82 @@ describe('ArtifactFullScreen publish-to-link', () => {
       expect(view.getByTestId('artifact-published-url').props.children).toBe(publishedUrl),
     );
     expect(mockCopy).toHaveBeenCalledWith(publishedUrl);
+  });
+
+  it('copies and shares the exact publication link from the link row', async () => {
+    mockPost.mockResolvedValue(publishReceipt);
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+    const view = render(
+      <ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />,
+    );
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    await waitFor(() => expect(view.getByLabelText('Copy publication link')).toBeTruthy(), {
+      timeout: 5000,
+    });
+    mockCopy.mockClear();
+    for (const label of ['Copy publication link', 'Share publication link']) {
+      const target = StyleSheet.flatten(view.getByLabelText(label).props.style);
+      expect(target).toMatchObject({ width: 44, height: 44 });
+    }
+
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Copy publication link'));
+    });
+    expect(mockCopy).toHaveBeenCalledTimes(1);
+    expect(mockCopy).toHaveBeenCalledWith(publishedUrl);
+
+    await act(async () => {
+      fireEvent.press(view.getByLabelText('Share publication link'));
+    });
+    expect(share).toHaveBeenCalledWith({ title: 'Landing page', message: publishedUrl });
+  });
+
+  it('opens a first-party publication link in Safari and offers no other link there', async () => {
+    const firstParty = `https://agiworkforce.com/shared-artifact/${'a'.repeat(24)}`;
+    mockPost.mockResolvedValue({ ...publishReceipt, shareUrl: firstParty });
+    mockOpenURL.mockReset().mockResolvedValue(true);
+    const view = render(
+      <ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />,
+    );
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByTestId('artifact-open-published')).toBeTruthy());
+    expect(StyleSheet.flatten(view.getByLabelText('Open in Safari').props.style)).toMatchObject({
+      width: 44,
+      height: 44,
+    });
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId('artifact-open-published'));
+    });
+    expect(mockOpenURL).toHaveBeenCalledTimes(1);
+    expect(mockOpenURL).toHaveBeenCalledWith(firstParty);
+
+    (Alert.alert as unknown as jest.Mock).mockClear();
+    mockOpenURL.mockRejectedValueOnce(new Error('no handler'));
+    await act(async () => {
+      fireEvent.press(view.getByTestId('artifact-open-published'));
+    });
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Could not open the link',
+      'Copy the link and open it in Safari.',
+    );
+  });
+
+  it('offers no Open in Safari for a link outside the first-party hosts', async () => {
+    mockPost.mockResolvedValue(publishReceipt);
+    const view = render(
+      <ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />,
+    );
+    fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    tapAlertButton('Publish');
+    await waitFor(() => expect(view.getByTestId('artifact-published-url')).toBeTruthy());
+    expect(view.queryByTestId('artifact-open-published')).toBeNull();
   });
 
   // UNRUN: receipt, ambiguity, clipboard and current-view regressions.
@@ -559,6 +641,13 @@ describe('ArtifactFullScreen publish-to-link', () => {
       'markdown',
     );
     expect(publishableKindFor({ ...htmlArtifact, type: 'chart', language: undefined })).toBeNull();
+    expect(
+      publishableKindFor({
+        ...htmlArtifact,
+        language: undefined,
+        content: '<svg xmlns="http://www.w3.org/2000/svg"><circle r="4"/></svg>',
+      }),
+    ).toBe('svg');
   });
 
   it('does not infer private from an unrelated populated audience cache or a failed lookup', async () => {

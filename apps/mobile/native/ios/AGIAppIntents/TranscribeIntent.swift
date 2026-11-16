@@ -17,11 +17,8 @@ struct TranscribeIntent: AppIntent {
     var audio: IntentFile
 
     func perform() async throws -> some IntentResult {
-        var params: [String: String] = ["intent": "transcribe"]
-        if let url = audio.fileURL {
-            params["audioUri"] = url.absoluteString
-        }
-        AGIIntentDispatch.open(verb: "transcribe", params: params)
+        let audioUri = try AGIIntentFileStaging.stageAudio(audio).absoluteString
+        AGIIntentDispatch.open(verb: "transcribe", params: ["intent": "transcribe", "audioUri": audioUri])
         return .result()
     }
 }

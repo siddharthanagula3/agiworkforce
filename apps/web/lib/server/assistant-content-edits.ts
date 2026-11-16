@@ -1,12 +1,13 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { stripCitationMarkup } from '@agiworkforce/provider-protocol';
 import { createError } from '@/lib/errors';
 import {
   ASSISTANT_CONTENT_CHANGED_MESSAGE,
   ASSISTANT_CONTENT_CHANGED_REASON,
   ASSISTANT_CONTENT_EDIT_METADATA_KEY,
-} from '@/features/chat/lib/assistant-content-edit-contract';
+} from '@agiworkforce/cloud-contracts';
 
 function assistantContentWriteAllowedSql(metadata: '$6' | '$8'): string {
   return `(
@@ -117,12 +118,29 @@ export async function readEditedAssistantContent(
   return { content: row.content, editRevision: row.edit_revision };
 }
 
+const SAVE_CLEANED_ASSISTANT_CONTENT_SQL = `update web_messages
+   set content = $1
+ where id = $2::uuid and conversation_id = $3::uuid and role = 'assistant'
+   and deleted_at is null and content = $4
+   and metadata ->> '${ASSISTANT_CONTENT_EDIT_METADATA_KEY}' = $5
+ returning content`;
+
 export async function assertAssistantContinuationSeed(
   scope: EditedAssistantContentScope & { seed: string | null },
 ): Promise<EditedAssistantContent | null> {
   const content = await readEditedAssistantContent(scope);
-  if (content !== null && scope.seed !== content.content) throw assistantContentChangedError();
-  return content;
+  if (content === null || scope.seed === content.content) return content;
+  const cleaned = stripCitationMarkup(content.content);
+  if (scope.seed !== cleaned) throw assistantContentChangedError();
+  const [saved] = await scope.db.query<{ content: string }>(SAVE_CLEANED_ASSISTANT_CONTENT_SQL, [
+    cleaned,
+    scope.messageId,
+    scope.conversationId,
+    content.content,
+    content.editRevision,
+  ]);
+  if (!saved) throw assistantContentChangedError();
+  return { content: cleaned, editRevision: content.editRevision };
 }
 
 export async function refuseEditedAssistantOverwrite(

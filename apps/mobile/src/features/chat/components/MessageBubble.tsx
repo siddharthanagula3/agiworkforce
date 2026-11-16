@@ -1,22 +1,32 @@
-import { View, useWindowDimensions, Alert, Modal, Platform } from 'react-native';
+import { View, useWindowDimensions, Alert, Modal, Platform, ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { readConnectorConnectRequest, type ConnectorConnectRequest } from '@agiworkforce/types';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
 import { useRouter } from 'expo-router';
 import type { AccessibilityActionEvent, AccessibilityActionInfo } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { SafeAreaInsetsContext, SafeAreaView } from 'react-native-safe-area-context';
+import {
+  memo,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
   Check,
   Clock,
+  FileSpreadsheet,
   FileText,
+  Presentation,
   AlertCircle,
   RefreshCw,
   Copy,
   TriangleAlert,
-  ThumbsUp,
-  ThumbsDown,
   Volume2,
   MoreHorizontal,
   Square,
@@ -30,28 +40,51 @@ import {
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
-import { Image } from 'expo-image';
+import { AuthorizedImage } from '@/src/features/image/components/AuthorizedImage';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/Text';
 import { StreamingIndicator } from './StreamingIndicator';
 import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';
 import * as voiceOutput from '@/src/features/voice/services/voiceOutput';
-import { useArtifactStore } from '@/src/features/artifacts/store';
+import {
+  READ_ALOUD_UNAVAILABLE_REASON,
+  readAloudOwnerReason,
+  useReadAloudUnavailableReason,
+} from '@/src/features/voice/services/readAloudAvailability';
+import {
+  canonicalToMobileArtifact,
+  useArtifactStore,
+  type CloudLinkedMobileArtifact,
+} from '@/src/features/artifacts/store';
+import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
+import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
-  useChatToolAllowanceStore,
-  useToolsAllowedForChat,
-} from '@/src/features/chat/store/chatToolAllowanceStore';
+  SAVE_ANSWER_AS_DOCUMENT_LABEL,
+  documentTitleFromAnswer,
+  normalizeArtifactTitle,
+} from '@agiworkforce/unified-chat/answer-document';
+import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 import { ToolCallDetailsSheet, ToolCallTimeline } from './ToolCallTimeline';
+import {
+  isExecutingCode,
+  readCodeExecutionResult,
+} from '@agiworkforce/unified-chat/code-execution-result';
+import { CodeExecutionBlock } from './CodeExecutionBlock';
+import { codeExecutionPlotFiles, finishedCodeStepId } from './CodeExecutionPlots';
+import { answerFormatCardType } from '@agiworkforce/unified-chat/message-format';
+import { withoutCitationMarkers } from '@agiworkforce/unified-chat/citation-markers';
+import { MessageFormatCard } from './MessageFormatCard';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { API_URL } from '@/lib/constants';
-import { AgentActivityTimeline } from './AgentActivityTimeline';
+import { RunningAgentActivityTimeline } from './RunningAgentActivityTimeline';
 import {
   explainAutoRouteReason,
   getToolDisplayLabel,
   isTerminalToolStatus,
+  pastChatCitationsFromMetadata,
   summarizeToolTimeline,
 } from '@agiworkforce/types';
 import { StatusStep as StatusStepComponent } from './StatusStep';
@@ -59,11 +92,38 @@ import { GeneratedImage } from './GeneratedImage';
 import { ImageGenProgress } from './ImageGenProgress';
 import { GeneratedVideo } from './GeneratedVideo';
 import { VideoGenProgress } from './VideoGenProgress';
-import { ImageFullScreen } from './ImageFullScreen';
+import { ImageFullScreen, type ViewerImage } from './ImageFullScreen';
 import { FileExportButton } from './FileExportButton';
-import { CitationChip } from './CitationChip';
-import { StreamingArtifactCard } from './StreamingArtifactCard';
+import { StreamingArtifactCard, streamingArtifactBlock } from './StreamingArtifactCard';
+import {
+  fencesShownAsCards,
+  liveMessageArtifacts,
+  offersStreamingArtifact,
+  withoutFencesShownAsCards,
+  withheldDerivedArtifactIds,
+} from '@/stores/chat/derivedMessageArtifact';
 import { CollapsibleSources } from './CollapsibleSources';
+import { ProjectFileCitations, projectFileCitationsFromMetadata } from './ProjectFileCitations';
+import { PastChatCitations } from './PastChatCitations';
+import { AssistantDraftScope, hasUnsavedAnswerEdits } from './AssistantDraftScope';
+import { saveAssistantFenceEdit } from '@/src/features/chat/services/assistantFenceEdit';
+import type { AssistantFenceEditRequest } from '@/src/features/chat/services/assistantFenceEditRequest';
+import { answerClipboardText } from '@/src/features/chat/utils/markdownPlainText';
+import {
+  nativeCitationFromDelta,
+  orderTurnSources,
+  searchQueryFromMetadata,
+  type NativeCitation,
+} from '@/src/features/chat/utils/messageSources';
+import {
+  SENT_FILE_UNAVAILABLE_MESSAGE,
+  sentAttachmentDetail,
+  sentAttachmentKind,
+  sentAttachmentViewerSource,
+  sharedAttachmentsNotCopied,
+} from '@/src/features/chat/utils/sentAttachment';
+import { FileViewerScreen } from './artifact-viewers/FileViewerScreen';
+import type { FileViewerSource } from './artifact-viewers/viewerKind';
 import { MemoryUsedChip } from './MemoryUsedChip';
 import { messageSentAtLabel } from '@/src/features/chat/utils/messageTime';
 import { messageMemoryCitations } from '@/src/features/memory/services/memoryCitations';
@@ -77,7 +137,32 @@ import {
 } from '@/src/features/chat/utils/agiWorkPlan';
 import { ResearchSourcesAppendix } from './research/ResearchSourcesAppendix';
 import { ResearchReportSections } from './research/ResearchReportSections';
-import { readResearchRunState } from '@/src/features/chat/utils/researchRunState';
+import { useRevealInChat } from './cards/ChatScrollIntoView';
+import {
+  RESEARCH_PHASE_LABELS,
+  readResearchRunState,
+} from '@/src/features/chat/utils/researchRunState';
+import {
+  activityEndedByDecline,
+  toolCallsEndedByDecline,
+} from '@/src/features/chat/utils/declinedToolSteps';
+import { imageVersionsFromMetadata } from '@/src/features/image/imageVersions';
+import { collectMessageResearchSources } from '@agiworkforce/unified-chat/message-sources';
+import type { MessageResearchSourceMetadata } from '@agiworkforce/unified-chat/message-sources';
+import { getManagedModelPresentationLabel } from '@agiworkforce/unified-chat/model-info';
+import {
+  reconcileCitationMarkersFromSourceList,
+  stripTrailingCitationOnlyBlock,
+  stripTrailingSourceList,
+} from '@agiworkforce/unified-chat/report-sources';
+import {
+  WEB_SEARCH_NOTICE_ACTION,
+  WEB_SEARCH_NOTICE_TEXT,
+  answeredOnFreePool,
+  modelEscalationLine,
+  secretRedactionNotice,
+  webSearchNoticeForMessage,
+} from './messageTurnNotices';
 import { MessageEditModal } from './MessageEditModal';
 import { SelectTextSheet } from './SelectTextSheet';
 import { renderMarkdownContent } from './MessageContentRenderer';
@@ -85,9 +170,12 @@ import { parseAssistantThinking } from '@/stores/chat/chatExecutionStore';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import { PerformanceChip } from './PerformanceChip';
-import { ReportFlagButton } from './ReportFlagButton';
+import { ReportSheet } from './ReportFlagButton';
+import { ResponseRatingDetails } from './ResponseRatingDetails';
+import type { ResponseRatingDetailsInput } from '@/src/features/chat/services/cloudMessageMutations';
 import { reportAssetFor } from '@/services/contentReportAsset';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
+import { showToast } from '@/src/shared/components/Toast';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
@@ -104,14 +192,38 @@ import {
   streamFailureNoticeText,
 } from '@/src/features/chat/utils/messageStreamError';
 import { offersModelSwitch } from '@/services/apiErrors';
-import { isApprovalTurnLive, useChatExecutionStore } from '@/stores/chat/chatExecutionStore';
-import type { ChatMessage, Artifact, ToolCall, ToolSearchResult } from '@/types/chat';
+import {
+  CLOUD_RESUME_SIGN_IN,
+  confirmBeforeRewrite,
+  isApprovalTurnLive,
+  noteBannerModelSwitch,
+  useChatExecutionStore,
+  type ToolInputOutcome,
+} from '@/stores/chat/chatExecutionStore';
+import { useAuthStore } from '@/src/features/auth/store';
+import { modelEditsImages, serverEditsImages } from '@/stores/chat/imageEditSupport';
+import type {
+  ChatMessage,
+  Artifact,
+  MessageAttachment,
+  ToolCall,
+  ToolSearchResult,
+} from '@/types/chat';
 import { useConversationArtifacts } from '@/src/features/chat/hooks/useConversationArtifacts';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
+import {
+  isPlaceholderOnlyActivity,
+  isStoppedFinishReason,
+  settledTurnActivity,
+  type LiveRunState,
+} from '@/src/features/chat/utils/agentActivity';
 import {
   ManagedCloudAgentRunReferenceSchema,
   describeAttachmentTruncation,
   readPersistedInteractiveCards,
+  SHARED_ATTACHMENTS_NOT_COPIED,
+  TOOL_APPROVAL_SCOPE_DECISIONS,
+  type ToolApprovalDecisionValue,
   type VariantInfo,
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCardResponsePayload } from '@agiworkforce/types';
@@ -122,15 +234,77 @@ import {
   mergeDerivedAndGeneratedFileArtifacts,
 } from '@/src/features/chat/utils/generatedFileArtifacts';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
+import type { ImageWholeEdit } from '@/src/features/image/wholeImageEdit';
 
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
+
+const RATING_RECORDED_NOTICE = 'Thanks for your feedback';
+const RATING_REMOVED_NOTICE = 'Rating removed';
+
+function confirmRating(next: ReactionType): void {
+  showToast(next === null ? RATING_REMOVED_NOTICE : RATING_RECORDED_NOTICE);
+}
 
 interface MessageAction {
   key: string;
   label: string;
   destructive?: boolean;
+  unavailableReason?: string;
   run: () => void;
 }
+
+const WAIT_FOR_RESPONSE = 'Available when the current response finishes.';
+const RESEARCH_SETTLED_PHASES: ReadonlySet<string> = new Set([
+  'complete',
+  'error',
+  'interrupted',
+  'paused',
+]);
+const READ_ALOUD_FAILED = 'Read aloud could not play. Try again.';
+const SAVE_DOCUMENT_SIGNED_OUT = 'Sign in to save this answer as a document.';
+const DISCARD_DRAFT_TITLE = 'Discard your unsaved changes?';
+const DISCARD_DRAFT_PROMPTS = {
+  regenerate: {
+    message: 'Regenerating replaces this answer, and the unsaved changes in it are lost.',
+    confirm: 'Discard and regenerate',
+  },
+  edit: {
+    message:
+      'Editing your message replaces the answer below, and the unsaved changes in it are lost.',
+    confirm: 'Discard and edit',
+  },
+  resend: {
+    message:
+      'Sending your message again replaces the answer below, and the unsaved changes in it are lost.',
+    confirm: 'Discard and resend',
+  },
+} as const;
+const TOOL_INPUT_OUTCOME_COPY: Record<ToolInputOutcome, string> = {
+  sent: 'Answer sent.',
+  expired: 'This request expired.',
+};
+
+function readToolInputOutcome(metadata: ChatMessage['metadata']): ToolInputOutcome | undefined {
+  const value = metadata?.toolInputOutcome;
+  return value === 'sent' || value === 'expired' ? value : undefined;
+}
+
+function confirmLosingAnswerEdits(
+  answerId: string | undefined,
+  action: keyof typeof DISCARD_DRAFT_PROMPTS,
+  run: () => void,
+): void {
+  if (!answerId || !hasUnsavedAnswerEdits(answerId)) {
+    run();
+    return;
+  }
+  const prompt = DISCARD_DRAFT_PROMPTS[action];
+  Alert.alert(DISCARD_DRAFT_TITLE, prompt.message, [
+    { text: 'Keep editing', style: 'cancel' },
+    { text: prompt.confirm, style: 'destructive', onPress: run },
+  ]);
+}
+const ACTION_SHEET_CHROME = 160;
 
 function MessageActionSheet({
   visible,
@@ -148,6 +322,12 @@ function MessageActionSheet({
   onDismissed: () => void;
 }) {
   const colors = useThemeColors();
+  const { height } = useWindowDimensions();
+  const insets = useContext(SafeAreaInsetsContext);
+  const rowsMaxHeight = Math.max(
+    52 * 3,
+    height - (insets?.top ?? 0) - (insets?.bottom ?? 0) - ACTION_SHEET_CHROME,
+  );
 
   return (
     <Modal
@@ -190,31 +370,50 @@ function MessageActionSheet({
                 {sentAt}
               </Text>
             ) : null}
-            {actions.map((action, index) => (
-              <PressableBox
-                key={action.key}
-                testID={`message-action-${action.key}`}
-                onPress={() => onSelect(action)}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                style={{
-                  minHeight: 52,
-                  justifyContent: 'center',
-                  paddingHorizontal: 20,
-                  borderBottomWidth: index < actions.length - 1 ? 1 : 0,
-                  borderBottomColor: colors.border,
-                }}
-              >
-                <Text
+            <ScrollView
+              testID="message-action-rows"
+              style={{ maxHeight: rowsMaxHeight }}
+              bounces={false}
+            >
+              {actions.map((action, index) => (
+                <PressableBox
+                  key={action.key}
+                  testID={`message-action-${action.key}`}
+                  onPress={action.unavailableReason ? undefined : () => onSelect(action)}
+                  disabled={Boolean(action.unavailableReason)}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
+                  accessibilityHint={action.unavailableReason}
+                  accessibilityState={{ disabled: Boolean(action.unavailableReason) }}
                   style={{
-                    fontSize: typeScale.callout,
-                    color: action.destructive ? colors.agentError : colors.textPrimary,
+                    minHeight: 52,
+                    justifyContent: 'center',
+                    paddingHorizontal: 20,
+                    paddingVertical: action.unavailableReason ? 8 : 0,
+                    borderBottomWidth: index < actions.length - 1 ? 1 : 0,
+                    borderBottomColor: colors.border,
                   }}
                 >
-                  {action.label}
-                </Text>
-              </PressableBox>
-            ))}
+                  <Text
+                    style={{
+                      fontSize: typeScale.callout,
+                      color: action.unavailableReason
+                        ? colors.textMuted
+                        : action.destructive
+                          ? colors.agentError
+                          : colors.textPrimary,
+                    }}
+                  >
+                    {action.label}
+                  </Text>
+                  {action.unavailableReason ? (
+                    <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
+                      {action.unavailableReason}
+                    </Text>
+                  ) : null}
+                </PressableBox>
+              ))}
+            </ScrollView>
             <PressableBox
               testID="message-action-cancel"
               onPress={onClose}
@@ -258,7 +457,7 @@ function TurnNotice({
   icon: React.ComponentType<{ size?: number; color?: string }>;
   message: string;
   actionLabel?: string;
-  actionAccessibilityLabel: string;
+  actionAccessibilityLabel?: string;
   onAction?: () => void;
   secondaryLabel?: string;
   secondaryAccessibilityLabel?: string;
@@ -296,7 +495,7 @@ function TurnNotice({
         <PressableBox
           onPress={onAction}
           accessibilityRole="button"
-          accessibilityLabel={actionAccessibilityLabel}
+          accessibilityLabel={actionAccessibilityLabel ?? actionLabel}
           style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}
         >
           <Text
@@ -390,6 +589,28 @@ function VariantPager({
   );
 }
 
+function legacyReasoningText(metadata: ChatMessage['metadata']): string | undefined {
+  const content = metadata?.thinkingContent;
+  if (typeof content === 'string' && content.trim()) return content;
+  const steps = metadata?.thinkingSteps;
+  if (!Array.isArray(steps)) return undefined;
+  const written = steps.filter(
+    (step): step is string => typeof step === 'string' && step.trim().length > 0,
+  );
+  return written.length > 0
+    ? written.map((step, index) => `**Step ${index + 1}**\n${step.trim()}`).join('\n\n')
+    : undefined;
+}
+
+function readCardTextOffsets(value: unknown): Readonly<Record<string, number>> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const offsets = Object.entries(value).filter(
+    (entry): entry is [string, number] =>
+      typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] >= 0,
+  );
+  return offsets.length > 0 ? Object.fromEntries(offsets) : undefined;
+}
+
 const USAGE_NUMBER = new Intl.NumberFormat();
 
 function answerUsageLine(metadata: ChatMessage['metadata']): string | null {
@@ -408,6 +629,42 @@ function answerUsageLine(metadata: ChatMessage['metadata']): string | null {
     durationMs !== undefined ? `${(durationMs / 1000).toFixed(1)}s` : null,
   ].filter((part): part is string => part !== null);
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+function SentImageTile({
+  attachment,
+  style,
+  onOpen,
+}: {
+  attachment: MessageAttachment;
+  style: ComponentProps<typeof AuthorizedImage>['style'];
+  onOpen: (url: string) => void;
+}) {
+  const [unavailable, setUnavailable] = useState(false);
+  return (
+    <PressableBox
+      onPress={() =>
+        unavailable
+          ? Alert.alert(`${attachment.fileName} is no longer available`)
+          : onOpen(attachment.url)
+      }
+      className="rounded-lg overflow-hidden"
+      accessibilityLabel={
+        unavailable
+          ? `Attached image: ${attachment.fileName}, unavailable`
+          : `Attached image: ${attachment.fileName}`
+      }
+      {...(unavailable ? {} : { accessibilityHint: 'Opens full screen' })}
+      accessibilityRole="button"
+    >
+      <AuthorizedImage
+        uri={attachment.url}
+        name={attachment.fileName}
+        style={style}
+        onUnavailableChange={setUnavailable}
+      />
+    </PressableBox>
+  );
 }
 
 function SentContextChip({
@@ -444,6 +701,57 @@ function SentContextChip({
   );
 }
 
+const SENT_FILE_ICON = {
+  spreadsheet: FileSpreadsheet,
+  presentation: Presentation,
+  document: FileText,
+} as const;
+
+function SentFileChip({
+  attachment,
+  onOpen,
+}: {
+  attachment: MessageAttachment;
+  onOpen: (source: FileViewerSource) => void;
+}) {
+  const colors = useThemeColors();
+  const Icon = SENT_FILE_ICON[sentAttachmentKind(attachment)];
+  const detail = sentAttachmentDetail(attachment);
+  const open = () => {
+    const source = sentAttachmentViewerSource(attachment);
+    if (source) onOpen(source);
+    else Alert.alert('Could not open file', SENT_FILE_UNAVAILABLE_MESSAGE);
+  };
+  return (
+    <PressableBox
+      testID="sent-file-chip"
+      onPress={open}
+      accessibilityRole="button"
+      accessibilityLabel={`File attachment: ${attachment.fileName}${detail ? `, ${detail}` : ''}`}
+      accessibilityHint="Opens the file"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        minHeight: 44,
+        paddingHorizontal: 12,
+        borderRadius: radii.md,
+        backgroundColor: colors.accentSurface,
+      }}
+    >
+      <Icon size={16} color={colors.agentActive} />
+      <View style={{ flex: 1 }}>
+        <Text numberOfLines={1} style={{ fontSize: typeScale.footnote, color: colors.textPrimary }}>
+          {attachment.fileName}
+        </Text>
+        {detail ? (
+          <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>{detail}</Text>
+        ) : null}
+      </View>
+    </PressableBox>
+  );
+}
+
 function modelSupportsThinking(modelId?: string): boolean {
   if (!modelId || isAutoMode(modelId)) return true;
   const def = getModelById(modelId);
@@ -471,7 +779,12 @@ function getProvenance(message: ChatMessage): { provider?: string; model?: strin
     return { provider: 'Local Mode', model: def.name };
   }
 
-  return { provider: 'AGI Cloud', model: def.name };
+  return {
+    provider: 'AGI Cloud',
+    model: getManagedModelPresentationLabel(answeredBy, {
+      freePool: answeredOnFreePool(metadata),
+    }),
+  };
 }
 
 function autoRouteReceipt(metadata: ChatMessage['metadata']): string | null {
@@ -498,16 +811,25 @@ interface MessageBubbleProps {
   onBranch?: (messageId: string) => void;
   onScheduleMessage?: (messageId: string) => void;
   onEditImageArea?: (message: ChatMessage, edit: ImageAreaEdit) => void;
+  onEditImage?: (message: ChatMessage, edit: ImageWholeEdit) => void;
+  imageEditModelIds?: ReadonlySet<string>;
+  inTemporaryChat?: boolean;
   onDeleteImageConversation?: () => void;
   variant?: VariantInfo;
   onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
-  onEditMessage?: (messageId: string, newContent: string) => boolean;
+  onEditMessage?: (
+    messageId: string,
+    newContent: string,
+    attachments?: MessageAttachment[],
+  ) => boolean;
+  editAttachmentsSupported?: boolean;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
+  onSubmitRatingDetails?: (messageId: string, details: ResponseRatingDetailsInput) => Promise<void>;
   onResolveToolApproval?: (
     messageId: string,
     toolCallId: string,
-    decision: 'approved' | 'rejected',
+    decision: ToolApprovalDecisionValue,
     guidance?: string,
   ) => void;
   onResearchPlanDecision?: (messageId: string, decision: ResearchPlanDecision) => void;
@@ -517,13 +839,18 @@ interface MessageBubbleProps {
   isResumingResearch?: boolean;
   onQuoteSelection?: (message: ChatMessage, text: string) => void;
   onFollowUp?: (text: string) => void;
+  nextAnswerId?: string;
+  liveRun?: LiveRunState;
 }
+
+const RUN_STATUS_UNAVAILABLE = 'Status unavailable';
 
 function MessageActionButton({
   label,
   icon: Icon,
   onPress,
   color,
+  unavailableReason,
   accessibilityActions,
   onAccessibilityAction,
 }: {
@@ -531,14 +858,17 @@ function MessageActionButton({
   icon: React.ComponentType<{ size?: number; color?: string }>;
   onPress: () => void;
   color: string;
+  unavailableReason?: string;
   accessibilityActions?: AccessibilityActionInfo[];
   onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
 }) {
   return (
     <PressableBox
-      onPress={onPress}
+      onPress={unavailableReason ? () => showToast(unavailableReason) : onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityHint={unavailableReason}
+      accessibilityState={unavailableReason ? { disabled: true } : undefined}
       accessibilityActions={accessibilityActions}
       onAccessibilityAction={onAccessibilityAction}
       style={{
@@ -547,6 +877,7 @@ function MessageActionButton({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: radii.md,
+        opacity: unavailableReason ? 0.4 : 1,
       }}
     >
       <Icon size={16} color={color} />
@@ -560,6 +891,9 @@ export const MessageBubble = memo(function MessageBubble({
   onDeleteMessage,
   onRetryMessage,
   onEditImageArea,
+  onEditImage,
+  imageEditModelIds,
+  inTemporaryChat = false,
   onDeleteImageConversation,
   onRetryWithModel,
   onContinueMessage,
@@ -569,7 +903,9 @@ export const MessageBubble = memo(function MessageBubble({
   onSelectVariant,
   onSwitchModel,
   onEditMessage,
+  editAttachmentsSupported = false,
   onReaction,
+  onSubmitRatingDetails,
   onResolveToolApproval,
   onResearchPlanDecision,
   onRetryResearch,
@@ -578,12 +914,15 @@ export const MessageBubble = memo(function MessageBubble({
   isResumingResearch = false,
   onQuoteSelection,
   onFollowUp,
+  nextAnswerId,
+  liveRun,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const research = isAssistant ? readResearchRunState(message.metadata?.research) : undefined;
   const reportAsset =
     reportAssetFor('video', message.videoUrl) ?? reportAssetFor('image', message.imageUrl);
+  const reportConversationId = message.conversationId || message.id;
   const router = useRouter();
   const [arrivedNow] = useState(
     () =>
@@ -629,9 +968,29 @@ export const MessageBubble = memo(function MessageBubble({
     () => (isAssistant ? messageMemoryCitations(message.metadata) : null),
     [isAssistant, message.metadata],
   );
-  const canonicalActivity = isAssistant
-    ? readAgentActivityState(message.metadata?.agentActivity)
-    : undefined;
+  const storedActivity = message.metadata?.agentActivity;
+  const storedFinishReason = message.metadata?.finishReason;
+  const canonicalActivity = useMemo(() => {
+    const activity = isAssistant ? readAgentActivityState(storedActivity) : undefined;
+    return activity
+      ? settledTurnActivity(activity, {
+          toolCalls: message.toolCalls,
+          streaming: message.isStreaming === true,
+          hasText: /\S/.test(message.content),
+          finishReason: storedFinishReason,
+          ...(liveRun ? { liveRun } : {}),
+        })
+      : undefined;
+  }, [
+    isAssistant,
+    storedActivity,
+    storedFinishReason,
+    message.toolCalls,
+    message.isStreaming,
+    message.content,
+    liveRun,
+  ]);
+  const toolInputOutcome = isAssistant ? readToolInputOutcome(message.metadata) : undefined;
   const attachmentTruncationNotice = isUser
     ? describeAttachmentTruncation(
         Array.isArray(message.metadata?.truncatedAttachments)
@@ -639,6 +998,11 @@ export const MessageBubble = memo(function MessageBubble({
           : undefined,
       )
     : null;
+  const sharedAttachmentNames = isUser
+    ? sharedAttachmentsNotCopied(message.metadata)
+        .map((attachment) => attachment.name)
+        .join(', ')
+    : '';
   const steerRunId = useMemo(() => {
     const reference = ManagedCloudAgentRunReferenceSchema.safeParse(
       message.metadata?.cloudAgentRun,
@@ -649,33 +1013,158 @@ export const MessageBubble = memo(function MessageBubble({
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
   const routeReceipt =
     isAssistant && !message.isStreaming ? autoRouteReceipt(message.metadata) : null;
+  const [fallbackNoticeDismissed, setFallbackNoticeDismissed] = useRecyclingState(false, [
+    message.id,
+  ]);
   const fallbackNotice =
-    isAssistant && message.content.trim() ? messageFallbackNotice(message.metadata) : null;
+    isAssistant && !message.isStreaming && !fallbackNoticeDismissed && message.content.trim()
+      ? messageFallbackNotice(message.metadata)
+      : null;
+  const awaitingApproval =
+    isAssistant &&
+    (canonicalActivity
+      ? canonicalActivity.status === 'awaiting-approval' ||
+        canonicalActivity.entries.some(
+          (entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval',
+        )
+      : (message.toolCalls ?? []).some(
+          (tool) =>
+            tool.requiresApproval === true &&
+            !tool.approvalDecision &&
+            !isTerminalToolStatus(tool.status),
+        ));
+  const endedByDecline =
+    isAssistant &&
+    (canonicalActivity
+      ? activityEndedByDecline(canonicalActivity, message.toolCalls)
+      : toolCallsEndedByDecline(message.toolCalls ?? []));
+  const citedSourceCount = useMemo(() => {
+    const cited = message.metadata?.citations;
+    if (!isAssistant || !Array.isArray(cited)) return undefined;
+    const citations = cited.flatMap((entry): NativeCitation[] => {
+      const citation = nativeCitationFromDelta(entry);
+      return citation ? [citation] : [];
+    });
+    return citations.length > 0 ? orderTurnSources([], citations).length : undefined;
+  }, [isAssistant, message.metadata?.citations]);
+  const sourcesQuery = isAssistant ? searchQueryFromMetadata(message.metadata) : undefined;
+  const projectFileCitations = useMemo(
+    () => (isAssistant ? projectFileCitationsFromMetadata(message.metadata) : []),
+    [isAssistant, message.metadata],
+  );
+  const pastChatCitations = useMemo(
+    () => (isAssistant ? pastChatCitationsFromMetadata(message.metadata) : []),
+    [isAssistant, message.metadata],
+  );
+  const imageVersions = useMemo(
+    () => (isAssistant ? imageVersionsFromMetadata(message.metadata) : []),
+    [isAssistant, message.metadata],
+  );
+  const viewerImages = useMemo<ViewerImage[]>(() => {
+    const attachedImages = (message.attachments ?? [])
+      .filter((attachment) => attachment.mimeType.startsWith('image/'))
+      .map((attachment): ViewerImage => ({
+        url: attachment.url,
+        kind: 'attachment',
+        name: attachment.fileName,
+        mimeType: attachment.mimeType,
+      }));
+    if (isUser) return attachedImages;
+    return [
+      ...(message.imageUrl
+        ? [
+            {
+              url: message.imageUrl,
+              kind: 'generated' as const,
+              ...(message.imageGenPrompt || message.revisedPrompt
+                ? { prompt: message.imageGenPrompt ?? message.revisedPrompt }
+                : {}),
+              ...(message.model ? { model: message.model } : {}),
+              ...(message.imageAspectRatio ? { aspectRatio: message.imageAspectRatio } : {}),
+              allowEphemeral: message.imageGenPersisted === false,
+            },
+          ]
+        : []),
+      ...attachedImages,
+    ];
+  }, [
+    isUser,
+    message.attachments,
+    message.imageUrl,
+    message.imageGenPrompt,
+    message.revisedPrompt,
+    message.model,
+    message.imageAspectRatio,
+    message.imageGenPersisted,
+  ]);
+  const saveFenceEdit = useCallback(
+    (request: AssistantFenceEditRequest) =>
+      saveAssistantFenceEdit(message.conversationId, message.id, request),
+    [message.conversationId, message.id],
+  );
   const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
   const parsedThinking = useMemo(
     () => (isAssistant ? parseAssistantThinking(message.content) : null),
     [isAssistant, message.content],
   );
   const displayContent = parsedThinking?.hasReasoning ? parsedThinking.content : message.content;
+  const codeExecutionResult = isAssistant ? readCodeExecutionResult(message.metadata) : undefined;
+  const codeExecuting =
+    isAssistant &&
+    isExecutingCode({
+      isStreaming: message.isStreaming,
+      metadata: message.metadata,
+      toolCalls: [],
+    });
+  const legacyThinking = isAssistant ? legacyReasoningText(message.metadata) : undefined;
   const reasoningText =
-    message.reasoning ?? (parsedThinking?.hasReasoning ? parsedThinking.reasoning : undefined);
+    message.reasoning ??
+    (parsedThinking?.hasReasoning ? parsedThinking.reasoning : undefined) ??
+    legacyThinking;
   const hasReasoning =
     isAssistant &&
     reasoningText !== undefined &&
-    (parsedThinking?.hasReasoning === true || modelSupportsThinking(message.model));
+    (parsedThinking?.hasReasoning === true ||
+      legacyThinking !== undefined ||
+      modelSupportsThinking(message.model));
   const [expandedArtifact, setExpandedArtifact] = useRecyclingState<Artifact | null>(null, [
     message.id,
   ]);
   const [fullScreenImageUrl, setFullScreenImageUrl] = useRecyclingState<string | null>(null, [
     message.id,
   ]);
+  const shownViewerImages = useMemo<ViewerImage[]>(() => {
+    if (!fullScreenImageUrl || viewerImages.some((image) => image.url === fullScreenImageUrl)) {
+      return viewerImages;
+    }
+    const version = imageVersions.find((entry) => entry.imageUrl === fullScreenImageUrl);
+    if (!version) return viewerImages;
+    return [
+      {
+        url: version.imageUrl,
+        kind: 'generated',
+        ...(version.prompt ? { prompt: version.prompt } : {}),
+        ...(version.model ? { model: version.model } : {}),
+        ...(version.aspect ? { aspectRatio: version.aspect } : {}),
+        allowEphemeral: false,
+      },
+    ];
+  }, [fullScreenImageUrl, viewerImages, imageVersions]);
   const [showExportSheet, setShowExportSheet] = useRecyclingState(false, [message.id]);
+  const [viewingAttachment, setViewingAttachment] = useRecyclingState<FileViewerSource | null>(
+    null,
+    [message.id],
+  );
   const [accessibilityTool, setAccessibilityTool] = useRecyclingState<ToolCall | null>(null, [
     message.id,
   ]);
   const [editModalVisible, setEditModalVisible] = useRecyclingState(false, [message.id]);
   const [selectTextVisible, setSelectTextVisible] = useRecyclingState(false, [message.id]);
   const [editText, setEditText] = useRecyclingState('', [message.id]);
+  const [editAttachments, setEditAttachments] = useRecyclingState<MessageAttachment[]>(
+    [],
+    [message.id],
+  );
   const [reaction, setReaction] = useRecyclingState<ReactionType>(
     (message.metadata?.reaction as ReactionType) ?? null,
     [message.id],
@@ -694,9 +1183,21 @@ export const MessageBubble = memo(function MessageBubble({
     useChatMessageStore.getState().stopImageGeneration(message.conversationId, message.id);
   }, [message.conversationId, message.id]);
 
-  const handleRetryGeneration = useCallback(() => {
-    onRetryMessage?.(message.id);
-  }, [onRetryMessage, message.id]);
+  const answerWithDrafts = isAssistant ? message.id : nextAnswerId;
+  const rerunPrompt = isAssistant ? 'regenerate' : 'resend';
+  const retryTurn = useCallback(() => {
+    if (!onRetryMessage) return;
+    confirmLosingAnswerEdits(answerWithDrafts, rerunPrompt, () => onRetryMessage(message.id));
+  }, [answerWithDrafts, rerunPrompt, onRetryMessage, message.id]);
+  const retryWithModel = useCallback(() => {
+    if (!onRetryWithModel) return;
+    confirmLosingAnswerEdits(answerWithDrafts, rerunPrompt, () => onRetryWithModel(message.id));
+  }, [answerWithDrafts, rerunPrompt, onRetryWithModel, message.id]);
+  const handleRetryGeneration = retryTurn;
+  const switchModelFromBanner = useCallback(() => {
+    noteBannerModelSwitch(message.conversationId);
+    onSwitchModel?.();
+  }, [message.conversationId, onSwitchModel]);
 
   const handleStopVideoGeneration = useCallback(() => {
     void useChatMessageStore.getState().stopVideoGeneration(message.conversationId, message.id);
@@ -721,15 +1222,33 @@ export const MessageBubble = memo(function MessageBubble({
       appMode === 'cloud'
         ? generatedFileArtifactsFromMetadata(message.metadata?.generatedFiles, message.createdAt)
         : [];
+    const liveArtifacts = message.isStreaming
+      ? liveMessageArtifacts(
+          message.content,
+          message.conversationId,
+          message.id,
+          message.createdAt,
+          appMode,
+          message.metadata,
+        )
+      : [];
     const byId = new Map<string, Artifact>();
     for (const artifact of [
+      ...liveArtifacts,
       ...scopedStoreArtifacts,
       ...persistedFiles,
       ...(message.artifacts ?? []),
     ]) {
       byId.set(artifact.id, artifact);
     }
-    const unique = [...byId.values()];
+    const withheld = withheldDerivedArtifactIds(
+      message.content,
+      message.conversationId,
+      message.id,
+      appMode,
+      message.metadata,
+    );
+    const unique = [...byId.values()].filter((artifact) => !withheld.has(artifact.id));
     return mergeDerivedAndGeneratedFileArtifacts(
       unique.filter((artifact) => !artifact.generatedFile),
       unique.filter((artifact) => artifact.generatedFile),
@@ -738,10 +1257,51 @@ export const MessageBubble = memo(function MessageBubble({
     appMode,
     storedArtifacts,
     message.id,
+    message.conversationId,
+    message.content,
     message.createdAt,
     message.metadata,
     message.artifacts,
+    message.isStreaming,
   ]);
+  const artifactCardSources = useMemo(
+    () =>
+      fencesShownAsCards(
+        message.content,
+        message.conversationId,
+        message.id,
+        appMode,
+        message.metadata,
+        new Set(inlineArtifacts.map((artifact) => artifact.id)),
+      ),
+    [
+      appMode,
+      inlineArtifacts,
+      message.content,
+      message.conversationId,
+      message.id,
+      message.metadata,
+    ],
+  );
+  const hasCodeExecutionResult = codeExecutionResult !== undefined;
+  const codePlots = useMemo(
+    () =>
+      hasCodeExecutionResult || finishedCodeStepId(canonicalActivity) !== undefined
+        ? codeExecutionPlotFiles(inlineArtifacts)
+        : [],
+    [hasCodeExecutionResult, canonicalActivity, inlineArtifacts],
+  );
+  const cardArtifacts = useMemo(() => {
+    if (!hasCodeExecutionResult || codePlots.length === 0) return inlineArtifacts;
+    const plotIds = new Set(codePlots.map((plot) => plot.artifactId));
+    return inlineArtifacts.filter((artifact) => !plotIds.has(artifact.id));
+  }, [hasCodeExecutionResult, codePlots, inlineArtifacts]);
+  const showsStreamingArtifact = useMemo(
+    () => offersStreamingArtifact(message.content, appMode, message.metadata),
+    [appMode, message.content, message.metadata],
+  );
+  const streamingArtifactCardShown =
+    showsStreamingArtifact && streamingArtifactBlock(message.content) !== null;
 
   const interactiveCards = useMemo(
     () =>
@@ -750,10 +1310,19 @@ export const MessageBubble = memo(function MessageBubble({
         : [],
     [appMode, message.interactiveCards, message.metadata],
   );
+  const interactiveCardTextOffsets = useMemo(
+    () => readCardTextOffsets(message.metadata?.interactiveCardTextOffsets),
+    [message.metadata?.interactiveCardTextOffsets],
+  );
 
   const conversationStreaming = useChatExecutionStore((s) =>
     s.streamingConversationIds.includes(message.conversationId),
   );
+  const clerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const toolInputSendError = useChatExecutionStore((s) => {
+    const error = s.toolInputSendErrors[message.id];
+    return error === CLOUD_RESUME_SIGN_IN && clerkSignedIn ? undefined : error;
+  });
 
   const handleRespondToCard = useCallback(
     (cardId: string, payload: InteractiveCardResponsePayload) =>
@@ -804,64 +1373,38 @@ export const MessageBubble = memo(function MessageBubble({
   }, [setExpandedArtifact]);
 
   const handleResolveToolApproval = useCallback(
-    (toolCallId: string, decision: 'approved' | 'rejected', guidance?: string) =>
+    (toolCallId: string, decision: ToolApprovalDecisionValue, guidance?: string) =>
       onResolveToolApproval?.(message.id, toolCallId, decision, guidance),
     [onResolveToolApproval, message.id],
   );
+  const handleAllowToolForChat = useCallback(
+    (toolCallId: string, _toolName: string, guidance?: string) =>
+      onResolveToolApproval?.(
+        message.id,
+        toolCallId,
+        TOOL_APPROVAL_SCOPE_DECISIONS.session,
+        guidance,
+      ),
+    [onResolveToolApproval, message.id],
+  );
+  const handleAlwaysAllowTool = useCallback(
+    (toolCallId: string, _toolName: string, guidance?: string) =>
+      onResolveToolApproval?.(
+        message.id,
+        toolCallId,
+        TOOL_APPROVAL_SCOPE_DECISIONS.always,
+        guidance,
+      ),
+    [onResolveToolApproval, message.id],
+  );
+  const scopedApprovalProps = onResolveToolApproval
+    ? {
+        onAllowApprovalForChat: handleAllowToolForChat,
+        onAlwaysAllowApproval: handleAlwaysAllowTool,
+      }
+    : {};
 
   const approvalTurnExpired = Boolean(onResolveToolApproval) && !isApprovalTurnLive(message.id);
-
-  const toolsAllowedForChat = useToolsAllowedForChat(message.conversationId);
-  const allowForChat = useChatToolAllowanceStore((state) => state.allowForChat);
-
-  const handleAllowToolForChat = useCallback(
-    (toolCallId: string, toolName: string, guidance?: string) => {
-      allowForChat(message.conversationId, toolName);
-      onResolveToolApproval?.(message.id, toolCallId, 'approved', guidance);
-    },
-    [allowForChat, message.conversationId, message.id, onResolveToolApproval],
-  );
-
-  const approvedForChatRef = useRef(new Set<string>());
-  useEffect(() => {
-    if (
-      !onResolveToolApproval ||
-      message.isStreaming ||
-      approvalTurnExpired ||
-      toolsAllowedForChat.length === 0
-    ) {
-      return;
-    }
-    const highRiskToolCallIds = new Set(
-      (canonicalActivity?.entries ?? []).flatMap((entry) =>
-        entry.kind === 'tool' && entry.approval?.riskLevel === 'high' ? [entry.toolCallId] : [],
-      ),
-    );
-    for (const tool of message.toolCalls ?? []) {
-      if (
-        !tool.requiresApproval ||
-        !tool.toolCallId ||
-        tool.approvalDecision ||
-        tool.approvalRiskLevel === 'high' ||
-        highRiskToolCallIds.has(tool.toolCallId) ||
-        isTerminalToolStatus(tool.status) ||
-        !toolsAllowedForChat.includes(tool.name) ||
-        approvedForChatRef.current.has(tool.toolCallId)
-      ) {
-        continue;
-      }
-      approvedForChatRef.current.add(tool.toolCallId);
-      onResolveToolApproval(message.id, tool.toolCallId, 'approved');
-    }
-  }, [
-    approvalTurnExpired,
-    canonicalActivity,
-    message.id,
-    message.isStreaming,
-    message.toolCalls,
-    onResolveToolApproval,
-    toolsAllowedForChat,
-  ]);
 
   const handleImagePress = useCallback(
     (url: string) => {
@@ -870,14 +1413,20 @@ export const MessageBubble = memo(function MessageBubble({
     [setFullScreenImageUrl],
   );
 
+  const modelCanEditImage = imageEditModelIds
+    ? serverEditsImages(message.model, imageEditModelIds)
+    : modelEditsImages(message.model);
   const handleCloseFullScreenImage = useCallback(() => {
     setFullScreenImageUrl(null);
   }, [setFullScreenImageUrl]);
 
   const [actionsVisible, setActionsVisible] = useRecyclingState(false, [message.id]);
+  const [reportVisible, setReportVisible] = useRecyclingState(false, [message.id]);
+  const [ratingDetailsVisible, setRatingDetailsVisible] = useRecyclingState(false, [message.id]);
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const [isSpeaking, setIsSpeaking] = useRecyclingState(false, [message.id]);
+  const readAloudUnavailable = useReadAloudUnavailableReason(isAssistant ? speechOwner : null);
   const speechRef = useRef<voiceOutput.VoiceOutputHandle | null>(null);
   const speechScopeRef = useRef<object | null>(null);
   const speechScope = useMemo(
@@ -898,30 +1447,6 @@ export const MessageBubble = memo(function MessageBubble({
     };
   }, [speechScope, setIsSpeaking]);
 
-  const handleToggleReadAloud = useCallback(() => {
-    if (speechScopeRef.current !== speechScope) return;
-    const previous = speechRef.current;
-    if (previous) {
-      speechRef.current = null;
-      void previous.stop().catch(() => undefined);
-      setIsSpeaking(false);
-      return;
-    }
-    const scope = speechScope;
-    if (!speechOwner?.isCurrent()) return;
-    const speech = speechOwner.start(message.content, {
-      ...voiceOutput.speechOptionsFromSettings(),
-      serverVoice: speechOwner.source?.scope === 'cloud',
-    });
-    speechRef.current = speech;
-    setIsSpeaking(true);
-    void speech.done.then(() => {
-      if (speechRef.current !== speech || speechScopeRef.current !== scope) return;
-      speechRef.current = null;
-      setIsSpeaking(false);
-    });
-  }, [speechOwner, speechScope, message.content, setIsSpeaking]);
-
   const handleShowExport = useCallback(() => {
     setShowExportSheet(true);
   }, [setShowExportSheet]);
@@ -929,21 +1454,6 @@ export const MessageBubble = memo(function MessageBubble({
   const handleCloseExport = useCallback(() => {
     setShowExportSheet(false);
   }, [setShowExportSheet]);
-
-  const handleDoubleTap = useCallback(
-    (event: TapGestureHandlerStateChangeEvent) => {
-      if (event.nativeEvent.state === State.ACTIVE && isAssistant) {
-        if (hapticsEnabled) {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }
-        const next: ReactionType =
-          reaction === null ? 'thumbsUp' : reaction === 'thumbsUp' ? 'thumbsDown' : null;
-        setReaction(next);
-        onReaction?.(message.id, next);
-      }
-    },
-    [isAssistant, hapticsEnabled, message.id, onReaction, reaction, setReaction],
-  );
 
   const applyReaction = useCallback(
     (target: Exclude<ReactionType, null>) => {
@@ -953,20 +1463,124 @@ export const MessageBubble = memo(function MessageBubble({
       const next: ReactionType = reaction === target ? null : target;
       setReaction(next);
       onReaction?.(message.id, next);
+      if (next === 'thumbsDown' && onSubmitRatingDetails) setRatingDetailsVisible(true);
+      else confirmRating(next);
     },
-    [hapticsEnabled, message.id, onReaction, reaction, setReaction],
+    [
+      hapticsEnabled,
+      message.id,
+      onReaction,
+      onSubmitRatingDetails,
+      reaction,
+      setReaction,
+      setRatingDetailsVisible,
+    ],
+  );
+
+  const submitRatingDetails = useCallback(
+    async (details: ResponseRatingDetailsInput) => {
+      if (!onSubmitRatingDetails) return;
+      await onSubmitRatingDetails(message.id, details);
+      confirmRating('thumbsDown');
+    },
+    [onSubmitRatingDetails, message.id],
   );
 
   const handleOpenEditModal = useCallback(() => {
     setEditText(message.content);
+    setEditAttachments(message.attachments ?? []);
     setEditModalVisible(true);
-  }, [message.content, setEditModalVisible, setEditText]);
+  }, [message.content, message.attachments, setEditAttachments, setEditModalVisible, setEditText]);
+
+  const handleRemoveEditAttachment = useCallback(
+    (url: string) => setEditAttachments((current) => current.filter((item) => item.url !== url)),
+    [setEditAttachments],
+  );
 
   const handleSubmitEdit = useCallback(() => {
     const trimmed = editText.trim();
-    if (trimmed && onEditMessage && !onEditMessage(message.id, trimmed)) return;
-    setEditModalVisible(false);
-  }, [editText, message.id, onEditMessage, setEditModalVisible]);
+    const attachmentsChanged = editAttachments.length !== (message.attachments ?? []).length;
+    if (!trimmed || (trimmed === message.content.trim() && !attachmentsChanged)) {
+      setEditModalVisible(false);
+      return;
+    }
+    const send = () => {
+      if (onEditMessage) {
+        const accepted = attachmentsChanged
+          ? onEditMessage(message.id, trimmed, editAttachments)
+          : onEditMessage(message.id, trimmed);
+        if (!accepted) return;
+      }
+      setEditModalVisible(false);
+    };
+    confirmLosingAnswerEdits(nextAnswerId, 'edit', () =>
+      confirmBeforeRewrite(message.conversationId, message.id, 'edit', send),
+    );
+  }, [
+    editText,
+    editAttachments,
+    nextAnswerId,
+    message.id,
+    message.conversationId,
+    message.content,
+    message.attachments,
+    onEditMessage,
+    setEditModalVisible,
+  ]);
+
+  const copyMessage = useCallback(
+    () => void copy(isAssistant ? answerClipboardText(message.content) : message.content),
+    [copy, isAssistant, message.content],
+  );
+
+  const saveAnswerAsDocument = useCallback(() => {
+    const content = displayContent.trim();
+    if (!content) return;
+    let provenance: MobileArtifactProvenance;
+    if (appMode === 'local') {
+      provenance = { scope: 'local' };
+    } else {
+      const account = captureCloudAccountEpoch();
+      if (!account) {
+        showToast(SAVE_DOCUMENT_SIGNED_OUT);
+        return;
+      }
+      provenance = { scope: 'cloud', ownerId: account.ownerId };
+    }
+    const document: CloudLinkedMobileArtifact = {
+      ...canonicalToMobileArtifact(
+        {
+          id: uuidv7(),
+          type: 'document',
+          title: normalizeArtifactTitle(documentTitleFromAnswer(content)),
+          content: `${content}\n`,
+          language: 'markdown',
+        },
+        new Date().toISOString(),
+        '',
+        themeColors,
+        provenance,
+      ),
+      messageId: message.id,
+      conversationId: message.conversationId,
+      artifactType: 'document' as const,
+    };
+    useArtifactStore.getState().addArtifacts([document]);
+    setExpandedArtifact({
+      id: document.id,
+      type: document.kind,
+      title: document.title,
+      content: document.content,
+      ...(document.language ? { language: document.language } : {}),
+    });
+  }, [
+    appMode,
+    displayContent,
+    message.conversationId,
+    message.id,
+    setExpandedArtifact,
+    themeColors,
+  ]);
 
   const confirmDeleteMessage = useCallback(() => {
     if (!onDeleteMessage) return;
@@ -984,25 +1598,51 @@ export const MessageBubble = memo(function MessageBubble({
     );
   }, [onDeleteMessage, message.id]);
 
+  const canRate = isAssistant && !message.isStreaming && Boolean(onReaction);
+  const canReport =
+    isAssistant && !message.isStreaming && Boolean(message.content.trim() || reportAsset);
+  const showsAnswerActions = canReport || (isAssistant && !message.isStreaming && endedByDecline);
+  const rowStreaming = message.isStreaming === true;
+  const rerunUnavailable = conversationStreaming ? WAIT_FOR_RESPONSE : undefined;
+
+  const handleDoubleTap = useCallback(
+    (event: TapGestureHandlerStateChangeEvent) => {
+      if (event.nativeEvent.state !== State.ACTIVE || !canRate) return;
+      applyReaction('thumbsUp');
+    },
+    [canRate, applyReaction],
+  );
+
   const messageActions = useMemo<MessageAction[]>(() => {
     const actions: MessageAction[] = [];
     if (isUser && onEditMessage) {
       actions.push({ key: 'edit', label: 'Edit Message', run: handleOpenEditModal });
     }
     if (isUser && onRetryMessage) {
-      actions.push({ key: 'resend', label: 'Resend', run: () => onRetryMessage(message.id) });
+      actions.push({
+        key: 'resend',
+        label: 'Resend',
+        ...(rerunUnavailable ? { unavailableReason: rerunUnavailable } : {}),
+        run: retryTurn,
+      });
     }
-    if (!isUser && onRetryMessage) {
-      actions.push({ key: 'retry', label: 'Retry', run: () => onRetryMessage(message.id) });
+    if (!isUser && onRetryMessage && !rowStreaming && !awaitingApproval) {
+      actions.push({
+        key: 'retry',
+        label: 'Retry',
+        ...(rerunUnavailable ? { unavailableReason: rerunUnavailable } : {}),
+        run: retryTurn,
+      });
     }
-    if (isAssistant && onRetryWithModel) {
+    if (isAssistant && onRetryWithModel && !rowStreaming && !awaitingApproval) {
       actions.push({
         key: 'retry-model',
         label: 'Retry with Another Model',
-        run: () => onRetryWithModel(message.id),
+        ...(rerunUnavailable ? { unavailableReason: rerunUnavailable } : {}),
+        run: retryWithModel,
       });
     }
-    if (onBranch && !message.isStreaming) {
+    if (onBranch && !rowStreaming) {
       actions.push({
         key: 'branch',
         label: 'Branch Conversation from Here',
@@ -1018,8 +1658,8 @@ export const MessageBubble = memo(function MessageBubble({
     }
     actions.push({
       key: 'copy',
-      label: 'Copy Message',
-      run: () => void copy(message.content),
+      label: rowStreaming ? 'Copy Partial Response' : 'Copy Message',
+      run: copyMessage,
     });
     if (displayContent.trim()) {
       actions.push({
@@ -1028,10 +1668,32 @@ export const MessageBubble = memo(function MessageBubble({
         run: () => setSelectTextVisible(true),
       });
     }
-    if (isAssistant && message.content.trim()) {
+    if (isAssistant && !rowStreaming && message.content.trim()) {
       actions.push({ key: 'export', label: 'Export Message\u2026', run: handleShowExport });
     }
-    if (onDeleteMessage) {
+    if (isAssistant && !rowStreaming && displayContent.trim()) {
+      actions.push({
+        key: 'save-as-document',
+        label: SAVE_ANSWER_AS_DOCUMENT_LABEL,
+        run: saveAnswerAsDocument,
+      });
+    }
+    if (canRate) {
+      actions.push({
+        key: 'good-response',
+        label: reaction === 'thumbsUp' ? 'Remove Good Response' : 'Good Response',
+        run: () => applyReaction('thumbsUp'),
+      });
+      actions.push({
+        key: 'bad-response',
+        label: reaction === 'thumbsDown' ? 'Remove Bad Response' : 'Bad Response',
+        run: () => applyReaction('thumbsDown'),
+      });
+    }
+    if (canReport) {
+      actions.push({ key: 'report', label: 'Report\u2026', run: () => setReportVisible(true) });
+    }
+    if (onDeleteMessage && !rowStreaming) {
       actions.push({
         key: 'delete',
         label: 'Delete Message',
@@ -1045,19 +1707,29 @@ export const MessageBubble = memo(function MessageBubble({
     isAssistant,
     message.id,
     message.content,
-    message.isStreaming,
+    rowStreaming,
+    awaitingApproval,
+    rerunUnavailable,
     displayContent,
-    copy,
+    copyMessage,
     onEditMessage,
     onRetryMessage,
     onRetryWithModel,
+    retryTurn,
+    retryWithModel,
     onBranch,
     onScheduleMessage,
     onDeleteMessage,
     handleOpenEditModal,
     handleShowExport,
+    saveAnswerAsDocument,
     confirmDeleteMessage,
     setSelectTextVisible,
+    canRate,
+    canReport,
+    reaction,
+    applyReaction,
+    setReportVisible,
   ]);
 
   const handleLongPress = useCallback(() => {
@@ -1090,23 +1762,43 @@ export const MessageBubble = memo(function MessageBubble({
   const accessibilityActionsList = useMemo<AccessibilityActionInfo[]>(() => {
     const actions: AccessibilityActionInfo[] = [];
     if (isUser && onEditMessage) actions.push({ name: 'edit', label: 'Edit message' });
-    if (isUser && onRetryMessage) actions.push({ name: 'resend', label: 'Resend message' });
-    if (isAssistant && onRetryMessage) actions.push({ name: 'retry', label: 'Retry' });
-    if (isAssistant && onRetryWithModel) {
+    const canRerun = !rerunUnavailable;
+    const canRerunAnswer = canRerun && !rowStreaming && !awaitingApproval;
+    if (isUser && onRetryMessage && canRerun) {
+      actions.push({ name: 'resend', label: 'Resend message' });
+    }
+    if (isAssistant && onRetryMessage && canRerunAnswer) {
+      actions.push({ name: 'retry', label: 'Retry' });
+    }
+    if (isAssistant && onRetryWithModel && canRerunAnswer) {
       actions.push({ name: 'retry-model', label: 'Retry with another model' });
     }
-    if (onBranch && !message.isStreaming) {
+    if (onBranch && !rowStreaming) {
       actions.push({ name: 'branch', label: 'Branch conversation from here' });
     }
     if (isUser && onScheduleMessage && message.content.trim()) {
       actions.push({ name: 'schedule', label: 'Schedule as task' });
     }
-    actions.push({ name: 'copy', label: 'Copy message' });
+    actions.push({ name: 'copy', label: rowStreaming ? 'Copy partial response' : 'Copy message' });
     if (displayContent.trim()) actions.push({ name: 'select-text', label: 'Select text' });
-    if (isAssistant && message.content.trim()) {
+    if (isAssistant && !rowStreaming && message.content.trim()) {
       actions.push({ name: 'export', label: 'Export message' });
     }
-    if (onDeleteMessage) actions.push({ name: 'delete', label: 'Delete message' });
+    if (isAssistant && !rowStreaming && displayContent.trim()) {
+      actions.push({ name: 'save-as-document', label: SAVE_ANSWER_AS_DOCUMENT_LABEL });
+    }
+    if (canRate) {
+      actions.push({
+        name: 'good-response',
+        label: reaction === 'thumbsUp' ? 'Remove good response' : 'Good response',
+      });
+      actions.push({
+        name: 'bad-response',
+        label: reaction === 'thumbsDown' ? 'Remove bad response' : 'Bad response',
+      });
+    }
+    if (canReport) actions.push({ name: 'report', label: 'Report' });
+    if (onDeleteMessage && !rowStreaming) actions.push({ name: 'delete', label: 'Delete message' });
     if (isAssistant && !canonicalActivity && message.toolCalls) {
       for (const tool of message.toolCalls) {
         actions.push({
@@ -1126,10 +1818,15 @@ export const MessageBubble = memo(function MessageBubble({
     onScheduleMessage,
     onDeleteMessage,
     message.content,
-    message.isStreaming,
+    rowStreaming,
+    awaitingApproval,
+    rerunUnavailable,
     message.toolCalls,
     canonicalActivity,
     displayContent,
+    canRate,
+    canReport,
+    reaction,
   ]);
 
   const handleAccessibilityAction = useCallback(
@@ -1145,17 +1842,17 @@ export const MessageBubble = memo(function MessageBubble({
       }
       switch (actionName) {
         case 'copy':
-          void copy(message.content);
+          copyMessage();
           break;
         case 'retry':
         case 'resend':
-          onRetryMessage?.(message.id);
+          retryTurn();
           break;
         case 'select-text':
           setSelectTextVisible(true);
           break;
         case 'retry-model':
-          onRetryWithModel?.(message.id);
+          retryWithModel();
           break;
         case 'branch':
           onBranch?.(message.id);
@@ -1172,24 +1869,38 @@ export const MessageBubble = memo(function MessageBubble({
         case 'export':
           handleShowExport();
           break;
+        case 'save-as-document':
+          saveAnswerAsDocument();
+          break;
+        case 'good-response':
+          applyReaction('thumbsUp');
+          break;
+        case 'bad-response':
+          applyReaction('thumbsDown');
+          break;
+        case 'report':
+          setReportVisible(true);
+          break;
         default:
           break;
       }
     },
     [
       message.id,
-      message.content,
       message.toolCalls,
-      copy,
+      copyMessage,
       setAccessibilityTool,
-      onRetryMessage,
-      onRetryWithModel,
+      retryTurn,
+      retryWithModel,
       onBranch,
       onScheduleMessage,
       confirmDeleteMessage,
       handleOpenEditModal,
       handleShowExport,
+      saveAnswerAsDocument,
       setSelectTextVisible,
+      applyReaction,
+      setReportVisible,
     ],
   );
 
@@ -1197,20 +1908,155 @@ export const MessageBubble = memo(function MessageBubble({
   const reconnecting = useChatExecutionStore((state) =>
     state.reconnectingMessageIds.includes(message.id),
   );
-  const stopping = useChatExecutionStore((state) => state.stoppingMessageIds.includes(message.id));
-  const streamingLabel = stopping ? 'Stopping…' : reconnecting ? 'Reconnecting…' : undefined;
+  const streamingLabel = reconnecting ? 'Reconnecting…' : undefined;
+  const researchStatusLabel =
+    isStreamingRow &&
+    research &&
+    !RESEARCH_SETTLED_PHASES.has(research.phase) &&
+    !/\S/.test(displayContent)
+      ? research.label || RESEARCH_PHASE_LABELS[research.phase]
+      : undefined;
+  const turnStatusLabel =
+    streamingLabel ??
+    researchStatusLabel ??
+    (!isStreamingRow && liveRun === 'unknown' ? RUN_STATUS_UNAVAILABLE : undefined);
+  const showStatusLine =
+    isStreamingRow &&
+    (!canonicalActivity ||
+      (researchStatusLabel !== undefined && canonicalActivity.status !== 'running'));
   const finishReason = isAssistant ? message.metadata?.finishReason : undefined;
-  const stoppedByUser = !isStreamingRow && finishReason === 'stopped';
+  const stoppedByUser = !isStreamingRow && isStoppedFinishReason(finishReason);
+  const stoppedWithText = stoppedByUser && message.content.trim().length > 0;
+  const showsAnswerRow = showsAnswerActions && (stoppedWithText || !stoppedByUser);
   const offersStreamFailureModelSwitch = Boolean(
     onSwitchModel && offersModelSwitch(getMessageStreamErrorCode(message)),
   );
   const usageLine = isAssistant && !isStreamingRow ? answerUsageLine(message.metadata) : null;
+  const escalationLine = isAssistant && !isStreamingRow ? modelEscalationLine(message) : null;
+  const [redactionNoticeDismissed, setRedactionNoticeDismissed] = useRecyclingState(false, [
+    message.id,
+  ]);
+  const redactionNotice =
+    isAssistant && !isStreamingRow && !redactionNoticeDismissed
+      ? secretRedactionNotice(message.metadata)
+      : null;
   const refusedAnswer =
     !isStreamingRow && typeof finishReason === 'string' && REFUSAL_FINISH_REASONS.has(finishReason);
   const quotedReply = isUser ? splitQuotedReply(displayContent) : null;
   const skillUsed = isUser ? sentSkillName(message.metadata) : null;
   const bodyContent = quotedReply ? quotedReply.body : displayContent;
   const inlineCitations = research ? researchSources : message.citations;
+  const metadataSearchResults = message.metadata?.searchResults;
+  const metadataCitations = message.metadata?.citations;
+  const metadataSources = useMemo(
+    () =>
+      isAssistant
+        ? collectMessageResearchSources({
+            searchResults: metadataSearchResults as MessageResearchSourceMetadata['searchResults'],
+            citations: metadataCitations as MessageResearchSourceMetadata['citations'],
+          })
+        : undefined,
+    [isAssistant, metadataSearchResults, metadataCitations],
+  );
+  const hasResearch = Boolean(research);
+  const turnHasSources =
+    (metadataSources?.searchSources.length ?? 0) > 0 || (message.citations?.length ?? 0) > 0;
+  const preparedAnswer = useMemo(() => {
+    if (isUser) return { markdown: bodyContent, canLinkNumericCitations: true };
+    const reconciled = reconcileCitationMarkersFromSourceList(bodyContent, inlineCitations ?? []);
+    const withoutDuplicateSources =
+      hasResearch || turnHasSources
+        ? stripTrailingSourceList(reconciled.markdown)
+        : reconciled.markdown;
+    return {
+      markdown: stripTrailingCitationOnlyBlock(withoutDuplicateSources),
+      canLinkNumericCitations: reconciled.canLinkNumericCitations,
+    };
+  }, [isUser, bodyContent, inlineCitations, hasResearch, turnHasSources]);
+  const answerCitations = preparedAnswer.canLinkNumericCitations ? inlineCitations : undefined;
+  const answerShowsCitations = (answerCitations?.length ?? 0) > 0;
+  const handleToggleReadAloud = useCallback(() => {
+    if (speechScopeRef.current !== speechScope) return;
+    const previous = speechRef.current;
+    if (previous) {
+      speechRef.current = null;
+      void previous.stop().catch(() => undefined);
+      setIsSpeaking(false);
+      return;
+    }
+    const scope = speechScope;
+    const ownerReason = readAloudOwnerReason(speechOwner);
+    if (!speechOwner || ownerReason) {
+      showToast(ownerReason ?? READ_ALOUD_UNAVAILABLE_REASON.preparing);
+      return;
+    }
+    const spoken = answerShowsCitations ? withoutCitationMarkers(message.content) : message.content;
+    const speech = speechOwner.start(spoken, {
+      ...voiceOutput.speechOptionsFromSettings(),
+      serverVoice: speechOwner.source?.scope === 'cloud',
+    });
+    speechRef.current = speech;
+    setIsSpeaking(true);
+    void speech.done.then((outcome) => {
+      if (speechRef.current !== speech || speechScopeRef.current !== scope) return;
+      speechRef.current = null;
+      setIsSpeaking(false);
+      if (outcome?.status === 'failed') showToast(READ_ALOUD_FAILED);
+    });
+  }, [speechOwner, speechScope, message.content, answerShowsCitations, setIsSpeaking]);
+  const formatCardType = useMemo(
+    () =>
+      isAssistant && !isStreamingRow && !hasResearch
+        ? answerFormatCardType(
+            preparedAnswer.markdown,
+            interactiveCards.map((card) => card.kind),
+          )
+        : null,
+    [isAssistant, isStreamingRow, hasResearch, preparedAnswer.markdown, interactiveCards],
+  );
+  const trustedImageUrls = useMemo(() => {
+    const unlinkedCitations = preparedAnswer.canLinkNumericCitations ? [] : (inlineCitations ?? []);
+    const urls = [
+      ...(metadataSources?.searchSources ?? []),
+      ...(metadataSources?.citationsByMarker ?? []),
+      ...unlinkedCitations,
+    ].flatMap((source) => (source.url ? [source.url] : []));
+    return urls.length > 0 ? [...new Set(urls)] : undefined;
+  }, [metadataSources, preparedAnswer.canLinkNumericCitations, inlineCitations]);
+  const revealInChat = useRevealInChat();
+  const reportComplete = research?.phase === 'complete' && !isStreamingRow;
+  const canJumpToSection = reportComplete && revealInChat !== null;
+  const answerBodyRef = useRef<View>(null);
+  const headingTops = useRef<{ messageId: string; tops: Map<string, number> }>({
+    messageId: message.id,
+    tops: new Map(),
+  });
+  const handleHeadingLayout = useCallback(
+    (sectionId: string, y: number) => {
+      if (headingTops.current.messageId !== message.id) {
+        headingTops.current = { messageId: message.id, tops: new Map() };
+      }
+      headingTops.current.tops.set(sectionId, y);
+    },
+    [message.id],
+  );
+  const jumpToSection = useCallback(
+    (sectionId: string) => {
+      const { messageId, tops } = headingTops.current;
+      const top = messageId === message.id ? tops.get(sectionId) : undefined;
+      const body = answerBodyRef.current;
+      if (top === undefined || !body || !revealInChat) return;
+      const nextTops = [...tops.values()].filter((value) => value > top);
+      revealInChat({
+        measureInWindow: (done) =>
+          body.measureInWindow((x, y, width, height) => {
+            const end = nextTops.length > 0 ? Math.min(...nextTops) : height;
+            done(x, y + top, width, Math.max(0, end - top));
+          }),
+      });
+    },
+    [message.id, revealInChat],
+  );
   const contentElements = useMemo(() => {
     if (isUser) {
       return bodyContent
@@ -1218,7 +2064,6 @@ export const MessageBubble = memo(function MessageBubble({
             <Text
               key="user-text"
               testID="user-message-text"
-              selectable
               style={{ ...chatTypography.body, color: themeColors.textPrimary }}
             >
               {bodyContent}
@@ -1226,14 +2071,101 @@ export const MessageBubble = memo(function MessageBubble({
           ]
         : [];
     }
-    return renderMarkdownContent(bodyContent, themeColors, {
+    const answerMarkdown =
+      artifactCardSources.size > 0 || streamingArtifactCardShown
+        ? withoutFencesShownAsCards(
+            preparedAnswer.markdown,
+            artifactCardSources,
+            streamingArtifactCardShown,
+          )
+        : preparedAnswer.markdown;
+    return renderMarkdownContent(answerMarkdown, themeColors, {
       highlightCode: !isStreamingRow,
-      ...(inlineCitations ? { citations: inlineCitations } : {}),
+      streaming: isStreamingRow,
+      selectable: false,
+      capCodeBlocks: true,
+      ...(stoppedByUser ? { stopped: true } : {}),
+      ...(answerCitations ? { citations: answerCitations } : {}),
+      ...(trustedImageUrls ? { trustedImageUrls } : {}),
       ...(onFollowUp ? { onFollowUp } : {}),
+      ...(canJumpToSection ? { onHeadingLayout: handleHeadingLayout } : {}),
     });
-  }, [isUser, bodyContent, themeColors, isStreamingRow, inlineCitations, onFollowUp]);
+  }, [
+    isUser,
+    bodyContent,
+    preparedAnswer.markdown,
+    themeColors,
+    isStreamingRow,
+    artifactCardSources,
+    streamingArtifactCardShown,
+    stoppedByUser,
+    answerCitations,
+    trustedImageUrls,
+    onFollowUp,
+    canJumpToSection,
+    handleHeadingLayout,
+  ]);
+
+  const producedNoVisibleOutput =
+    !/\S/.test(displayContent.replace(/[\u200B\uFEFF]/g, '')) &&
+    !message.imageUrl &&
+    !message.videoUrl &&
+    !message.isGeneratingImage &&
+    !message.isGeneratingVideo &&
+    (message.attachments?.length ?? 0) === 0 &&
+    inlineArtifacts.length === 0;
+  const searchNotice = isAssistant
+    ? webSearchNoticeForMessage({
+        message,
+        activity: canonicalActivity,
+        awaitingApproval,
+        producedNoVisibleOutput,
+        rendersResearchPlan: Boolean(research),
+        hasStreamError: hasMessageStreamError(message),
+        declinedSearch: endedByDecline,
+        memoryCitationCount: memoryCitations?.count ?? 0,
+        sourceCount: Math.max(
+          metadataSources?.searchSources.length ?? 0,
+          message.citations?.length ?? 0,
+        ),
+      })
+    : null;
+
+  const shownActivity =
+    canonicalActivity && !(stoppedByUser && isPlaceholderOnlyActivity(canonicalActivity))
+      ? canonicalActivity
+      : undefined;
+  const reasoningInActivity = Boolean(
+    shownActivity && (shownActivity.entries.length > 0 || shownActivity.status !== 'completed'),
+  );
+  const plotsInActivity =
+    !hasCodeExecutionResult &&
+    codePlots.length > 0 &&
+    finishedCodeStepId(shownActivity) !== undefined;
+  const thinkingChip = hasReasoning ? (
+    <ThinkingChip
+      thinkingText={reasoningText ?? ''}
+      isStreaming={message.isStreaming}
+      duration={
+        (message.metadata?.thinkingDuration ?? message.metadata?.thinkingDurationSeconds) as
+          number | undefined
+      }
+      startedAtMs={message.metadata?.thinkingStartedAt as number | undefined}
+      answerStarted={/\S/.test(displayContent)}
+      activity={canonicalActivity}
+      showPreview={reasoningInActivity}
+    />
+  ) : null;
 
   const imageWidth = Math.min(width - 80, 320);
+  const createdAtParsed = Date.parse(message.createdAt);
+  const createdAtMs = Number.isFinite(createdAtParsed) ? createdAtParsed : undefined;
+  const imageAttachments = (message.attachments ?? []).filter((attachment) =>
+    attachment.mimeType.startsWith('image/'),
+  );
+  const fileAttachments = (message.attachments ?? []).filter(
+    (attachment) => !attachment.mimeType.startsWith('image/'),
+  );
   const isGroupedMessage = !isAssistant && !canonicalActivity;
 
   const messageContent = (
@@ -1304,7 +2236,7 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
               {onRetryMessage ? (
                 <PressableBox
-                  onPress={() => onRetryMessage(message.id)}
+                  onPress={retryTurn}
                   accessibilityRole="button"
                   accessibilityLabel="Retry sending this message"
                   hitSlop={10}
@@ -1344,60 +2276,38 @@ export const MessageBubble = memo(function MessageBubble({
                 : { width: '100%' }
             }
           >
-            {isUser && message.attachments && message.attachments.length > 0 && (
-              <View className="mt-1">
-                <View className="flex-row flex-wrap gap-2">
-                  {message.attachments
-                    .filter((a) => a.mimeType.startsWith('image/'))
-                    .map((attachment, idx) => (
-                      <PressableBox
-                        key={`att-${idx}`}
-                        onPress={() => handleImagePress(attachment.url)}
-                        className="rounded-lg overflow-hidden"
-                        accessibilityLabel={`Attached image: ${attachment.fileName}`}
-                        accessibilityRole="image"
-                      >
-                        <Image
-                          source={{ uri: attachment.url }}
-                          style={{
+            {imageAttachments.length > 0 ? (
+              <View className="mt-1 flex-row flex-wrap gap-2">
+                {imageAttachments.map((attachment) => (
+                  <SentImageTile
+                    key={`att-${attachment.url}`}
+                    attachment={attachment}
+                    onOpen={handleImagePress}
+                    style={
+                      isUser
+                        ? {
                             width: Math.min(imageWidth, 200),
                             height: Math.min(imageWidth, 200),
-                            borderRadius: 8,
-                          }}
-                          contentFit="cover"
-                          transition={200}
-                        />
-                      </PressableBox>
-                    ))}
-                </View>
-
-                {message.attachments.filter((a) => !a.mimeType.startsWith('image/')).length > 0 && (
-                  <View className="gap-1 mt-2">
-                    {message.attachments
-                      .filter((a) => !a.mimeType.startsWith('image/'))
-                      .map((attachment, idx) => (
-                        <View
-                          key={`file-att-${idx}`}
-                          className="flex-row items-center gap-2 px-3 py-2 rounded-lg"
-                          style={{ backgroundColor: themeColors.accentSurface }}
-                          accessible={true}
-                          accessibilityLabel={`File attachment: ${attachment.fileName}`}
-                          accessibilityRole="button"
-                        >
-                          <FileText size={16} color={themeColors.agentActive} />
-                          <Text
-                            className="flex-1 text-sm"
-                            numberOfLines={1}
-                            style={{ color: themeColors.textPrimary }}
-                          >
-                            {attachment.fileName}
-                          </Text>
-                        </View>
-                      ))}
-                  </View>
-                )}
+                            borderRadius: radii.md,
+                          }
+                        : { width: imageWidth, height: imageWidth, borderRadius: radii.md }
+                    }
+                  />
+                ))}
               </View>
-            )}
+            ) : null}
+
+            {fileAttachments.length > 0 ? (
+              <View className="gap-1 mt-2">
+                {fileAttachments.map((attachment) => (
+                  <SentFileChip
+                    key={`file-att-${attachment.url}`}
+                    attachment={attachment}
+                    onOpen={setViewingAttachment}
+                  />
+                ))}
+              </View>
+            ) : null}
 
             {attachmentTruncationNotice ? (
               <Text
@@ -1408,9 +2318,20 @@ export const MessageBubble = memo(function MessageBubble({
               </Text>
             ) : null}
 
+            {sharedAttachmentNames ? (
+              <Text
+                testID="message-shared-attachments"
+                accessibilityRole="text"
+                style={{ marginTop: 4, fontSize: typeScale.caption, color: themeColors.textMuted }}
+              >
+                {`${SHARED_ATTACHMENTS_NOT_COPIED} ${sharedAttachmentNames}`}
+              </Text>
+            ) : null}
+
             {research ? (
               <ResearchRunCard
                 research={research}
+                messageId={message.id}
                 isStreaming={message.isStreaming === true}
                 isResuming={isResumingResearch}
                 {...(onResearchPlanDecision
@@ -1435,28 +2356,30 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
-            {canonicalActivity ? (
-              <AgentActivityTimeline
+            {shownActivity ? (
+              <RunningAgentActivityTimeline
                 messageId={message.id}
-                activity={canonicalActivity}
+                activity={shownActivity}
                 onResolveApproval={handleResolveToolApproval}
-                onAllowApprovalForChat={onResolveToolApproval ? handleAllowToolForChat : undefined}
+                {...scopedApprovalProps}
+                {...(message.toolCalls ? { approvalToolCalls: message.toolCalls } : {})}
                 approvalExpired={approvalTurnExpired}
-                onResendApproval={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+                onResendApproval={onRetryMessage ? retryTurn : undefined}
+                {...(onRetryMessage && !rowStreaming && !conversationStreaming
+                  ? { onRetry: retryTurn }
+                  : {})}
+                {...(turnStatusLabel ? { statusLabel: turnStatusLabel } : {})}
+                statusUnavailable={!isStreamingRow && liveRun === 'unknown'}
                 steerRunId={message.isStreaming ? steerRunId : undefined}
                 codeRunConversationId={message.conversationId}
+                reasoning={reasoningInActivity ? thinkingChip : undefined}
+                artifacts={inlineArtifacts}
+                onOpenArtifact={handleExpandArtifact}
+                {...(plotsInActivity ? { codePlots } : {})}
               />
             ) : null}
 
-            {hasReasoning ? (
-              <ThinkingChip
-                thinkingText={reasoningText ?? ''}
-                isStreaming={message.isStreaming}
-                duration={message.metadata?.thinkingDuration as number | undefined}
-                startedAtMs={message.metadata?.thinkingStartedAt as number | undefined}
-                activity={canonicalActivity}
-              />
-            ) : null}
+            {reasoningInActivity ? null : thinkingChip}
 
             {isAssistant && !canonicalActivity && message.steps && message.steps.length > 0 ? (
               <View style={{ gap: 2 }}>
@@ -1480,36 +2403,77 @@ export const MessageBubble = memo(function MessageBubble({
                 toolCalls={message.toolCalls}
                 summary={summarizeToolTimeline(message.toolCalls)}
                 onResolveApproval={handleResolveToolApproval}
-                onAllowApprovalForChat={onResolveToolApproval ? handleAllowToolForChat : undefined}
+                {...scopedApprovalProps}
                 approvalExpired={approvalTurnExpired}
-                onResendApproval={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+                onResendApproval={onRetryMessage ? retryTurn : undefined}
+                codeRunConversationId={message.conversationId}
+              />
+            ) : null}
+            {isAssistant && (codeExecuting || codeExecutionResult) ? (
+              <CodeExecutionBlock
+                messageId={message.id}
+                isExecuting={codeExecuting}
+                {...(codeExecutionResult ? { result: codeExecutionResult, plots: codePlots } : {})}
               />
             ) : null}
             {connectRequests.map((request) => (
               <ConnectorConnectCard
                 key={request.connectorId}
                 request={request}
-                {...(onRetryMessage ? { onRetryTurn: () => onRetryMessage(message.id) } : {})}
+                {...(onRetryMessage ? { onRetryTurn: retryTurn } : {})}
               />
             ))}
 
+            {isAssistant && interactiveCards.length > 0 ? (
+              <InteractiveCardBlock
+                cards={interactiveCards}
+                tileBaseUrl={API_URL}
+                canLoadManagedCloudTiles={appMode === 'cloud'}
+                canRespond={
+                  appMode === 'cloud' && message.isStreaming !== true && !conversationStreaming
+                }
+                onRespond={handleRespondToCard}
+                messageId={message.id}
+                conversationId={reportConversationId}
+                placement="before-prose"
+                assistantText={displayContent}
+                {...(interactiveCardTextOffsets ? { textOffsets: interactiveCardTextOffsets } : {})}
+                {...(onFollowUp ? { onSendMessage: onFollowUp } : {})}
+              />
+            ) : null}
+
             {contentElements.length > 0 ? (
-              <View key={message.id}>
-                {contentElements}
-                {message.isStreaming && !canonicalActivity && (
-                  <StreamingIndicator label={streamingLabel} />
-                )}
+              <View
+                key={message.id}
+                ref={answerBodyRef}
+                collapsable={false}
+                testID="message-answer-body"
+              >
+                <AssistantDraftScope
+                  messageId={message.id}
+                  {...(isAssistant ? { saveFenceEdit } : {})}
+                >
+                  {contentElements}
+                </AssistantDraftScope>
+                {formatCardType ? (
+                  <MessageFormatCard
+                    content={preparedAnswer.markdown}
+                    cardType={formatCardType}
+                    conversationId={message.conversationId}
+                    messageId={message.id}
+                  />
+                ) : null}
+                {showStatusLine && <StreamingIndicator label={turnStatusLabel} />}
               </View>
-            ) : message.isStreaming &&
-              !canonicalActivity &&
+            ) : showStatusLine &&
               !message.isGeneratingImage &&
-              !message.isGeneratingVideo ? (
+              !message.isGeneratingVideo &&
+              !codeExecuting &&
+              !codeExecutionResult ? (
               <StreamingIndicator
                 label={
-                  streamingLabel ??
-                  (canonicalActivity || hasReasoning || research || message.toolCalls?.length
-                    ? undefined
-                    : 'Preparing')
+                  turnStatusLabel ??
+                  (hasReasoning || research || message.toolCalls?.length ? undefined : 'Preparing')
                 }
               />
             ) : null}
@@ -1520,6 +2484,12 @@ export const MessageBubble = memo(function MessageBubble({
                 progress={message.imageGenProgress}
                 status={message.imageGenStatus ?? 'generating'}
                 errorMessage={message.imageGenError}
+                width={imageWidth}
+                {...(message.imageAspectRatio ? { aspectRatio: message.imageAspectRatio } : {})}
+                {...(createdAtMs !== undefined ? { startedAt: createdAtMs } : {})}
+                {...(message.imageGenRetryAt !== undefined
+                  ? { retryAt: message.imageGenRetryAt }
+                  : {})}
                 onRetry={onRetryMessage ? handleRetryGeneration : undefined}
                 onStop={message.isGeneratingImage ? handleStopImageGeneration : undefined}
               />
@@ -1532,7 +2502,11 @@ export const MessageBubble = memo(function MessageBubble({
                 revisedPrompt={message.revisedPrompt}
                 width={imageWidth}
                 allowEphemeral={message.imageGenPersisted === false}
-                onPress={() => handleImagePress(message.imageUrl!)}
+                {...(message.model ? { model: message.model } : {})}
+                {...(message.imageAspectRatio ? { aspectRatio: message.imageAspectRatio } : {})}
+                previousVersions={imageVersions}
+                inTemporaryChat={inTemporaryChat}
+                onPress={handleImagePress}
               />
             )}
 
@@ -1559,6 +2533,7 @@ export const MessageBubble = memo(function MessageBubble({
                 onPress={handleRetryGeneration}
                 accessibilityRole="button"
                 accessibilityLabel="Retry video generation"
+                hitSlop={{ top: 6, bottom: 6 }}
                 style={{
                   alignSelf: 'flex-start',
                   marginTop: 8,
@@ -1591,7 +2566,7 @@ export const MessageBubble = memo(function MessageBubble({
                 prompt={message.videoGenPrompt}
                 reportTarget={{
                   messageId: message.id,
-                  conversationId: (message.metadata?.conversationId as string) ?? message.id,
+                  conversationId: reportConversationId,
                   contentExcerpt: message.videoGenPrompt ?? message.content,
                   asset: reportAssetFor('video', message.videoUrl),
                 }}
@@ -1602,7 +2577,7 @@ export const MessageBubble = memo(function MessageBubble({
             message.imageGenPersisted === false &&
             typeof message.imageGenError === 'string' ? (
               <PressableBox
-                onPress={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+                onPress={onRetryMessage ? retryTurn : undefined}
                 disabled={!onRetryMessage}
                 accessibilityRole={onRetryMessage ? 'button' : 'text'}
                 accessibilityLabel={
@@ -1658,6 +2633,12 @@ export const MessageBubble = memo(function MessageBubble({
                   appMode === 'cloud' && message.isStreaming !== true && !conversationStreaming
                 }
                 onRespond={handleRespondToCard}
+                messageId={message.id}
+                conversationId={reportConversationId}
+                placement="after-prose"
+                assistantText={displayContent}
+                {...(interactiveCardTextOffsets ? { textOffsets: interactiveCardTextOffsets } : {})}
+                {...(onFollowUp ? { onSendMessage: onFollowUp } : {})}
               />
             ) : null}
 
@@ -1676,27 +2657,61 @@ export const MessageBubble = memo(function MessageBubble({
                   padding: 12,
                 }}
               >
-                <Text
-                  accessibilityRole="header"
-                  style={{
-                    fontSize: typeScale.subhead,
-                    fontWeight: '600',
-                    color: themeColors.textPrimary,
-                  }}
-                >
-                  Needs your input
-                </Text>
                 <CloudRunInputForm
                   key={message.pendingToolInput.requestedAt}
                   pendingInput={message.pendingToolInput}
                   busy={conversationStreaming}
                   onSubmit={handleAnswerToolInput}
+                  {...(toolInputSendError ? { sendError: toolInputSendError } : {})}
                 />
               </View>
             ) : null}
 
-            {research?.phase === 'complete' && !message.isStreaming ? (
-              <ResearchReportSections content={message.content} />
+            {isAssistant &&
+            appMode === 'cloud' &&
+            !message.pendingToolInput &&
+            toolInputOutcome &&
+            message.isStreaming !== true ? (
+              message.answeredToolInput ? (
+                <View
+                  testID="chat.tool-input-answered"
+                  style={{
+                    marginTop: 8,
+                    gap: 10,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: themeColors.borderLight,
+                    padding: 12,
+                  }}
+                >
+                  <CloudRunInputForm
+                    key={message.answeredToolInput.requestedAt}
+                    pendingInput={message.answeredToolInput}
+                    busy={false}
+                    outcome={toolInputOutcome}
+                  />
+                </View>
+              ) : (
+                <Text
+                  testID="chat.tool-input-outcome"
+                  accessibilityLiveRegion="polite"
+                  style={{
+                    marginTop: 8,
+                    fontSize: typeScale.caption,
+                    color: themeColors.textMuted,
+                  }}
+                >
+                  {TOOL_INPUT_OUTCOME_COPY[toolInputOutcome]}
+                </Text>
+              )
+            ) : null}
+
+            {reportComplete ? (
+              <ResearchReportSections
+                content={preparedAnswer.markdown}
+                messageId={message.id}
+                {...(canJumpToSection ? { onSelectSection: jumpToSection } : {})}
+              />
             ) : null}
 
             {research && researchSources.length > 0 ? (
@@ -1704,30 +2719,56 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {isAssistant && !research && message.citations && message.citations.length > 0 ? (
-              message.citations.length <= 3 ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-                  {message.citations.map((cit, i) => (
-                    <CitationChip
-                      key={`cit-${i}`}
-                      index={i + 1}
-                      title={cit.title ?? cit.url}
-                      url={cit.url}
-                      snippet={cit.snippet}
-                    />
-                  ))}
-                </View>
-              ) : (
-                <CollapsibleSources sources={message.citations} />
-              )
+              <CollapsibleSources
+                sources={message.citations}
+                {...(citedSourceCount !== undefined ? { citedCount: citedSourceCount } : {})}
+                {...(sourcesQuery ? { query: sourcesQuery } : {})}
+                partial={awaitingApproval}
+                {...(message.metadata ? { metadata: message.metadata } : {})}
+              />
+            ) : null}
+
+            {projectFileCitations.length > 0 && !message.isStreaming ? (
+              <ProjectFileCitations citations={projectFileCitations} answerText={displayContent} />
+            ) : null}
+
+            {pastChatCitations.length > 0 && !message.isStreaming ? (
+              <PastChatCitations citations={pastChatCitations} />
+            ) : null}
+
+            {awaitingApproval && !message.isStreaming ? (
+              <TurnNotice
+                icon={AlertCircle}
+                message={
+                  approvalTurnExpired
+                    ? 'This response is partial. The approval request can no longer be resumed; send a new message to try again.'
+                    : 'Waiting for approval. This response is partial; review the tool request to continue.'
+                }
+              />
             ) : null}
 
             {memoryCitations && !message.isStreaming ? (
               <MemoryUsedChip citations={memoryCitations} />
             ) : null}
 
-            {isAssistant && inlineArtifacts.length > 0 ? (
+            {searchNotice ? (
+              <TurnNotice
+                icon={AlertCircle}
+                message={WEB_SEARCH_NOTICE_TEXT[searchNotice]}
+                {...(onRetryMessage
+                  ? {
+                      actionLabel: WEB_SEARCH_NOTICE_ACTION[searchNotice].label,
+                      actionAccessibilityLabel:
+                        WEB_SEARCH_NOTICE_ACTION[searchNotice].accessibilityLabel,
+                      onAction: retryTurn,
+                    }
+                  : {})}
+              />
+            ) : null}
+
+            {isAssistant && cardArtifacts.length > 0 ? (
               <View style={{ gap: 4 }}>
-                {inlineArtifacts.map((artifact) => (
+                {cardArtifacts.map((artifact) => (
                   <InlineArtifactCard
                     key={artifact.id}
                     artifact={artifact}
@@ -1741,8 +2782,9 @@ export const MessageBubble = memo(function MessageBubble({
                 conversationId={message.conversationId}
                 messageId={message.id}
                 content={message.content}
+                offered={showsStreamingArtifact}
                 isStreaming={Boolean(message.isStreaming)}
-                failed={hasMessageStreamError(message)}
+                failed={hasMessageStreamError(message) && !endedByDecline}
                 finalArtifacts={inlineArtifacts}
               />
             ) : null}
@@ -1758,100 +2800,103 @@ export const MessageBubble = memo(function MessageBubble({
                 indication anything went wrong. The partial content itself is
                 left exactly as it streamed; this only adds a visible notice
                 below it. */}
-            {isAssistant && !message.isStreaming && hasMessageStreamError(message) && (
-              <PressableBox
-                onPress={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
-                disabled={!onRetryMessage}
-                accessibilityRole={onRetryMessage ? 'button' : 'text'}
-                accessibilityLabel={
-                  onRetryMessage
-                    ? `${streamFailureNoticeText(message)} Tap to try again.`
-                    : streamFailureNoticeText(message)
-                }
-                style={{
-                  gap: 6,
-                  backgroundColor: themeColors.dangerSurface,
-                  borderWidth: 1,
-                  borderColor: themeColors.dangerBorder,
-                  borderRadius: radii.md,
-                  paddingHorizontal: 10,
-                  paddingVertical: 8,
-                  marginTop: 4,
-                  alignSelf: 'flex-start',
-                  maxWidth: '100%',
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
-                  <View style={{ paddingTop: 2 }}>
-                    <AlertCircle size={13} color={themeColors.agentError} />
+            {isAssistant &&
+              !message.isStreaming &&
+              hasMessageStreamError(message) &&
+              !endedByDecline && (
+                <PressableBox
+                  onPress={onRetryMessage ? retryTurn : undefined}
+                  disabled={!onRetryMessage}
+                  accessibilityRole={onRetryMessage ? 'button' : 'text'}
+                  accessibilityLabel={
+                    onRetryMessage
+                      ? `${streamFailureNoticeText(message)} Tap to try again.`
+                      : streamFailureNoticeText(message)
+                  }
+                  style={{
+                    gap: 6,
+                    backgroundColor: themeColors.dangerSurface,
+                    borderWidth: 1,
+                    borderColor: themeColors.dangerBorder,
+                    borderRadius: radii.md,
+                    paddingHorizontal: 10,
+                    paddingVertical: 8,
+                    marginTop: 4,
+                    alignSelf: 'flex-start',
+                    maxWidth: '100%',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                    <View style={{ paddingTop: 2 }}>
+                      <AlertCircle size={13} color={themeColors.agentError} />
+                    </View>
+                    <Text
+                      testID="stream-failure-notice-text"
+                      style={{
+                        flexShrink: 1,
+                        fontSize: typeScale.caption,
+                        color: themeColors.textSecondary,
+                      }}
+                    >
+                      {streamFailureNoticeText(message)}
+                    </Text>
                   </View>
-                  <Text
-                    testID="stream-failure-notice-text"
-                    style={{
-                      flexShrink: 1,
-                      fontSize: typeScale.caption,
-                      color: themeColors.textSecondary,
-                    }}
-                  >
-                    {streamFailureNoticeText(message)}
-                  </Text>
-                </View>
-                {onRetryMessage || offersStreamFailureModelSwitch ? (
-                  <View
-                    testID="stream-failure-notice-actions"
-                    style={{
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      gap: 12,
-                      paddingLeft: 19,
-                    }}
-                  >
-                    {onRetryMessage && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <RefreshCw size={12} color={themeColors.agentError} />
-                        <Text
-                          style={{
-                            fontSize: typeScale.caption,
-                            fontWeight: '600',
-                            color: themeColors.agentError,
-                          }}
+                  {onRetryMessage || offersStreamFailureModelSwitch ? (
+                    <View
+                      testID="stream-failure-notice-actions"
+                      style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        gap: 12,
+                        paddingLeft: 19,
+                      }}
+                    >
+                      {onRetryMessage && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <RefreshCw size={12} color={themeColors.agentError} />
+                          <Text
+                            style={{
+                              fontSize: typeScale.caption,
+                              fontWeight: '600',
+                              color: themeColors.agentError,
+                            }}
+                          >
+                            Retry
+                          </Text>
+                        </View>
+                      )}
+                      {offersStreamFailureModelSwitch && (
+                        <PressableBox
+                          onPress={switchModelFromBanner}
+                          accessibilityRole="button"
+                          accessibilityLabel="Switch model"
+                          hitSlop={6}
+                          testID="stream-error-switch-model"
                         >
-                          Retry
-                        </Text>
-                      </View>
-                    )}
-                    {offersStreamFailureModelSwitch && (
-                      <PressableBox
-                        onPress={onSwitchModel}
-                        accessibilityRole="button"
-                        accessibilityLabel="Switch model"
-                        hitSlop={6}
-                        testID="stream-error-switch-model"
-                      >
-                        <Text
-                          style={{
-                            fontSize: typeScale.caption,
-                            fontWeight: '600',
-                            color: themeColors.agentError,
-                          }}
-                        >
-                          Switch model
-                        </Text>
-                      </PressableBox>
-                    )}
-                  </View>
-                ) : null}
-              </PressableBox>
-            )}
+                          <Text
+                            style={{
+                              fontSize: typeScale.caption,
+                              fontWeight: '600',
+                              color: themeColors.agentError,
+                            }}
+                          >
+                            Switch model
+                          </Text>
+                        </PressableBox>
+                      )}
+                    </View>
+                  ) : null}
+                </PressableBox>
+              )}
 
             {stoppedByUser ? (
               <TurnNotice
                 icon={Square}
                 message="Response stopped."
-                actionLabel={onRetryMessage ? 'Try again' : undefined}
+                actionLabel={onRetryMessage && !stoppedWithText ? 'Try again' : undefined}
                 actionAccessibilityLabel="Regenerate this response"
-                onAction={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+                onAction={onRetryMessage && !stoppedWithText ? retryTurn : undefined}
               />
             ) : null}
 
@@ -1861,7 +2906,7 @@ export const MessageBubble = memo(function MessageBubble({
                 message="The model declined to finish this response for safety reasons. Rephrase your message, or try a different model."
                 actionLabel={onSwitchModel ? 'Switch model' : undefined}
                 actionAccessibilityLabel="Switch model"
-                onAction={onSwitchModel}
+                onAction={onSwitchModel ? switchModelFromBanner : undefined}
                 secondaryLabel="Report"
                 secondaryAccessibilityLabel="Report this refusal as incorrect"
                 onSecondary={() =>
@@ -1878,7 +2923,7 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
-            {onContinueMessage && !isStreamingRow ? (
+            {onContinueMessage && !isStreamingRow && !stoppedByUser ? (
               <PressableBox
                 onPress={() => onContinueMessage(message.id)}
                 accessibilityRole="button"
@@ -1929,17 +2974,38 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {fallbackNotice ? (
-              <Text
+              <View
                 testID="message-fallback-notice"
-                style={{
-                  marginTop: 2,
-                  paddingHorizontal: 2,
-                  fontSize: typeScale.caption,
-                  color: themeColors.textSecondary,
-                }}
+                accessibilityRole="summary"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
               >
-                {fallbackNotice}
-              </Text>
+                <Text
+                  style={{
+                    flex: 1,
+                    paddingHorizontal: 2,
+                    fontSize: typeScale.caption,
+                    color: themeColors.textSecondary,
+                  }}
+                >
+                  {fallbackNotice}
+                </Text>
+                <PressableBox
+                  onPress={() => setFallbackNoticeDismissed(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss model substitution notice"
+                  style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typeScale.caption,
+                      fontWeight: '600',
+                      color: themeColors.textPrimary,
+                    }}
+                  >
+                    Dismiss
+                  </Text>
+                </PressableBox>
+              </View>
             ) : null}
 
             {routeReceipt ? (
@@ -1953,6 +3019,55 @@ export const MessageBubble = memo(function MessageBubble({
               >
                 {routeReceipt}
               </Text>
+            ) : null}
+
+            {escalationLine ? (
+              <Text
+                testID="model-escalation-receipt"
+                style={{
+                  marginTop: 2,
+                  paddingHorizontal: 2,
+                  fontSize: typeScale.caption,
+                  color: themeColors.textMuted,
+                }}
+              >
+                {escalationLine}
+              </Text>
+            ) : null}
+
+            {redactionNotice ? (
+              <View
+                testID="secret-redaction-notice"
+                accessibilityRole="summary"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+              >
+                <Text
+                  style={{
+                    flex: 1,
+                    paddingHorizontal: 2,
+                    fontSize: typeScale.caption,
+                    color: themeColors.textSecondary,
+                  }}
+                >
+                  {redactionNotice}
+                </Text>
+                <PressableBox
+                  onPress={() => setRedactionNoticeDismissed(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Dismiss secret redaction notice"
+                  style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
+                >
+                  <Text
+                    style={{
+                      fontSize: typeScale.caption,
+                      fontWeight: '600',
+                      color: themeColors.textPrimary,
+                    }}
+                  >
+                    Dismiss
+                  </Text>
+                </PressableBox>
+              </View>
             ) : null}
 
             {/* Performance chip, on-device inference metadata.
@@ -1974,25 +3089,17 @@ export const MessageBubble = memo(function MessageBubble({
                   firstTokenLatencyMs={message.firstTokenLatencyMs}
                 />
               )}
-
-            {isAssistant && !message.isStreaming && (message.content.trim() || reportAsset) && (
-              <ReportFlagButton
-                messageId={message.id}
-                conversationId={(message.metadata?.conversationId as string) ?? message.id}
-                contentExcerpt={
-                  message.content.trim()
-                    ? message.content
-                    : (message.revisedPrompt ?? message.videoGenPrompt ?? '')
-                }
-                asset={reportAsset}
-                title="Report this response"
-              />
-            )}
           </View>
         </View>
       </PressableBox>
 
-      {isAssistant && message.content.trim() ? (
+      {isAssistant && !message.isStreaming && !showsAnswerRow && variant && onSelectVariant ? (
+        <View style={{ alignItems: 'flex-start', paddingLeft: 10 }}>
+          <VariantPager variant={variant} noun="response" onSelect={onSelectVariant} />
+        </View>
+      ) : null}
+
+      {showsAnswerRow ? (
         <View
           style={{
             flexDirection: 'row',
@@ -2003,17 +3110,17 @@ export const MessageBubble = memo(function MessageBubble({
           }}
           accessibilityLabel="Message actions"
         >
-          {!message.isStreaming ? (
+          {variant && onSelectVariant ? (
+            <VariantPager variant={variant} noun="response" onSelect={onSelectVariant} />
+          ) : null}
+          {message.content.trim() ? (
             <>
-              {variant && onSelectVariant ? (
-                <VariantPager variant={variant} noun="response" onSelect={onSelectVariant} />
-              ) : null}
               <MessageActionButton
                 label={copyControlLabel(copyStatus, 'Copy')}
                 icon={
                   copyStatus === 'copied' ? Check : copyStatus === 'failed' ? TriangleAlert : Copy
                 }
-                onPress={() => void copy(message.content)}
+                onPress={copyMessage}
                 color={
                   copyStatus === 'copied'
                     ? themeColors.agentSuccess
@@ -2027,36 +3134,20 @@ export const MessageBubble = memo(function MessageBubble({
                 icon={isSpeaking ? Square : Volume2}
                 onPress={handleToggleReadAloud}
                 color={isSpeaking ? themeColors.teal : themeColors.textMuted}
+                {...(readAloudUnavailable && !isSpeaking
+                  ? { unavailableReason: readAloudUnavailable }
+                  : {})}
               />
-              {onRetryMessage ? (
-                <MessageActionButton
-                  label="Regenerate response"
-                  icon={RefreshCw}
-                  onPress={() => onRetryMessage(message.id)}
-                  color={themeColors.textMuted}
-                />
-              ) : null}
-              {onReaction ? (
-                <>
-                  <MessageActionButton
-                    label="Good response"
-                    icon={ThumbsUp}
-                    onPress={() => applyReaction('thumbsUp')}
-                    color={
-                      reaction === 'thumbsUp' ? themeColors.agentSuccess : themeColors.textMuted
-                    }
-                  />
-                  <MessageActionButton
-                    label="Bad response"
-                    icon={ThumbsDown}
-                    onPress={() => applyReaction('thumbsDown')}
-                    color={
-                      reaction === 'thumbsDown' ? themeColors.agentError : themeColors.textMuted
-                    }
-                  />
-                </>
-              ) : null}
             </>
+          ) : null}
+          {onRetryMessage && !awaitingApproval ? (
+            <MessageActionButton
+              label="Regenerate response"
+              icon={RefreshCw}
+              onPress={retryTurn}
+              color={themeColors.textMuted}
+              {...(rerunUnavailable ? { unavailableReason: rerunUnavailable } : {})}
+            />
           ) : null}
           <MessageActionButton
             label={`More message actions for ${roleLabel}`}
@@ -2081,34 +3172,45 @@ export const MessageBubble = memo(function MessageBubble({
         onSwitch={setExpandedArtifact}
         visible={expandedArtifact !== null}
         onClose={handleCloseArtifact}
-        onRegenerate={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
+        onRegenerate={onRetryMessage ? retryTurn : undefined}
         conversationId={message.conversationId}
+        messageId={message.id}
       />
+
+      <FileViewerScreen source={viewingAttachment} onClose={() => setViewingAttachment(null)} />
 
       <ImageFullScreen
         key={`${message.id}:${fullScreenImageUrl}`}
-        imageUrl={fullScreenImageUrl}
-        prompt={message.imageGenPrompt ?? message.revisedPrompt}
-        model={message.model}
-        aspectRatio={message.imageAspectRatio}
+        images={shownViewerImages}
+        initialIndex={Math.max(
+          0,
+          shownViewerImages.findIndex((image) => image.url === fullScreenImageUrl),
+        )}
         visible={fullScreenImageUrl !== null}
-        allowEphemeral={message.imageGenPersisted === false}
         onClose={handleCloseFullScreenImage}
         onEditArea={
-          onEditImageArea
+          onEditImageArea && modelCanEditImage
             ? (edit) => {
                 handleCloseFullScreenImage();
                 onEditImageArea(message, edit);
               }
             : undefined
         }
-        onDelete={onDeleteImageConversation}
+        onEditImage={
+          onEditImage && modelCanEditImage
+            ? (edit) => {
+                handleCloseFullScreenImage();
+                onEditImage(message, edit);
+              }
+            : undefined
+        }
+        onDelete={isUser ? undefined : onDeleteImageConversation}
         deleteMessage="Deleting this image deletes the chat it was made in, with all of its messages."
         reportTarget={
           isAssistant && fullScreenImageUrl
             ? {
                 messageId: message.id,
-                conversationId: (message.metadata?.conversationId as string) ?? message.id,
+                conversationId: reportConversationId,
                 contentExcerpt: message.revisedPrompt ?? message.content,
                 asset: reportAssetFor('image', fullScreenImageUrl),
               }
@@ -2127,6 +3229,32 @@ export const MessageBubble = memo(function MessageBubble({
         />
       )}
 
+      {canReport ? (
+        <ReportSheet
+          visible={reportVisible}
+          onClose={() => setReportVisible(false)}
+          title="Report this response"
+          target={{
+            messageId: message.id,
+            conversationId: reportConversationId,
+            contentExcerpt: message.content.trim()
+              ? message.content
+              : (message.revisedPrompt ?? message.videoGenPrompt ?? ''),
+            ...(reportAsset
+              ? { asset: reportAsset }
+              : { subject: { kind: 'chat-message' as const, id: message.id } }),
+          }}
+        />
+      ) : null}
+
+      {canRate && onSubmitRatingDetails ? (
+        <ResponseRatingDetails
+          visible={ratingDetailsVisible}
+          onSubmit={submitRatingDetails}
+          onClose={() => setRatingDetailsVisible(false)}
+        />
+      ) : null}
+
       <MessageActionSheet
         visible={actionsVisible}
         sentAt={messageSentAtLabel(message.createdAt)}
@@ -2139,6 +3267,7 @@ export const MessageBubble = memo(function MessageBubble({
       <SelectTextSheet
         visible={selectTextVisible}
         text={displayContent}
+        verbatim={isUser}
         onClose={() => setSelectTextVisible(false)}
         onQuoteSelection={onQuoteSelection ? (text) => onQuoteSelection(message, text) : undefined}
       />
@@ -2146,7 +3275,8 @@ export const MessageBubble = memo(function MessageBubble({
       <MessageEditModal
         visible={editModalVisible}
         text={editText}
-        attachments={message.attachments}
+        attachments={editModalVisible ? editAttachments : message.attachments}
+        {...(editAttachmentsSupported ? { onRemoveAttachment: handleRemoveEditAttachment } : {})}
         onChangeText={setEditText}
         onClose={() => setEditModalVisible(false)}
         onSubmit={handleSubmitEdit}

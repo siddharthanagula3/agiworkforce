@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codeRanges, normalizeMathDelimiters } from '../markdownSource';
+import { codeRanges, normalizeMathDelimiters, tagsAndDollarsAsText } from '../markdownSource';
 
 describe('tilde code fence math source', () => {
   it.each([
@@ -29,5 +29,30 @@ describe('tilde code fence math source', () => {
 
     expect(codeRanges(source)).toEqual([[0, source.length]]);
     expect(normalizeMathDelimiters(source)).toBe(source);
+  });
+});
+
+describe('tagsAndDollarsAsText, so a short line reads tags and dollars as words', () => {
+  it.each([
+    ['How do I center a <div>?', 'How do I center a \\<div>?'],
+    ['Why close <script> with </script>?', 'Why close \\<script> with \\</script>?'],
+    ['Is a <!-- comment --> useful?', 'Is a \\<!-- comment --> useful?'],
+    ['Is 3 < 4 and a<b?', 'Is 3 < 4 and a<b?'],
+    ['Compare $HOME and $PATH', 'Compare \\$HOME and \\$PATH'],
+    ['Is $5 cheaper than $10?', 'Is \\$5 cheaper than \\$10?'],
+  ])('escapes %p', (raw, escaped) => {
+    expect(tagsAndDollarsAsText(raw)).toBe(escaped);
+  });
+
+  it.each([
+    'Why is $x^2$ positive?',
+    'Why is $a<b$ true?',
+    'Is \\(E = mc^2\\) derived?',
+    'Is $$<x>$$ a block?',
+    'What does `<div>` and `$HOME` do?',
+    'Already \\<b> and \\$5',
+    '~~~html\n<div>$x</div>\n~~~',
+  ])('leaves code, TeX and escapes in %p alone', (raw) => {
+    expect(tagsAndDollarsAsText(raw)).toBe(raw);
   });
 });

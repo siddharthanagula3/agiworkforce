@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 import type { ChatMessage } from '@/types/chat';
 
 jest.mock('@/src/ui/theme', () => {
@@ -170,12 +170,13 @@ jest.mock('@/src/features/chat/components/PerformanceChip', () => ({
   PerformanceChip: () => null,
 }));
 jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
-  ReportFlagButton: () => null,
+  ReportSheet: () => null,
 }));
 
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useChatExecutionStore } from '@/stores/chat/chatExecutionStore';
+import { CLOUD_RESUME_SIGN_IN, useChatExecutionStore } from '@/stores/chat/chatExecutionStore';
+import { useAuthStore } from '@/src/features/auth/store';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000051';
 
@@ -221,13 +222,17 @@ describe('MessageBubble tool input request', () => {
   beforeEach(() => {
     answerToolInput.mockClear();
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    useChatExecutionStore.setState({ answerToolInput });
+    useChatExecutionStore.setState({ answerToolInput, toolInputSendErrors: {} });
+    useAuthStore.setState({ isClerkSignedIn: false });
   });
 
   it('asks for the connector input and sends the answer for the paused run', () => {
     const view = render(<MessageBubble message={pausedMessage()} />);
 
-    expect(view.getByText('Needs your input')).toBeTruthy();
+    expect(view.getAllByRole('header').map((header) => header.props.children)).toEqual([
+      'GitHub needs your input',
+    ]);
+    expect(view.queryByText('Needs your input')).toBeNull();
     expect(view.getByText('Which repository should I use?')).toBeTruthy();
 
     fireEvent.changeText(view.getByLabelText(/Repository/), 'acme/app');
@@ -249,6 +254,128 @@ describe('MessageBubble tool input request', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     const local = render(<MessageBubble message={pausedMessage()} />);
     expect(local.queryByTestId('chat.tool-input-request')).toBeNull();
+  });
+
+  it('says the answer was sent once the run takes it, instead of the form', () => {
+    const view = render(
+      <MessageBubble
+        message={pausedMessage({
+          pendingToolInput: undefined,
+          metadata: { toolInputOutcome: 'sent' },
+        })}
+      />,
+    );
+
+    expect(view.queryByTestId('chat.tool-input-request')).toBeNull();
+    expect(view.getByTestId('chat.tool-input-outcome')).toHaveTextContent('Answer sent.');
+    expect(view.queryByText('Send answer')).toBeNull();
+  });
+
+  it('says a request the run no longer waits on expired when the phone has no copy of it', () => {
+    const view = render(
+      <MessageBubble
+        message={pausedMessage({
+          pendingToolInput: undefined,
+          metadata: { toolInputOutcome: 'expired' },
+        })}
+      />,
+    );
+
+    expect(view.getByTestId('chat.tool-input-outcome')).toHaveTextContent('This request expired.');
+    expect(view.queryByText('Send answer')).toBeNull();
+  });
+
+  it('keeps a sent request on screen read-only once the run takes the answer', () => {
+    const answered = pausedMessage().pendingToolInput;
+    const view = render(
+      <MessageBubble
+        message={pausedMessage({
+          pendingToolInput: undefined,
+          answeredToolInput: answered,
+          metadata: { toolInputOutcome: 'sent' },
+        })}
+      />,
+    );
+
+    expect(view.getByTestId('chat.tool-input-answered')).toBeTruthy();
+    expect(view.getAllByRole('header').map((header) => header.props.children)).toEqual([
+      'GitHub needs your input',
+    ]);
+    expect(
+      view.getByText('Sent. The reply continues once every request in it is answered.'),
+    ).toBeTruthy();
+    expect(view.queryByTestId('chat.tool-input-outcome')).toBeNull();
+    expect(view.queryByTestId('chat.tool-input-request')).toBeNull();
+    expect(view.queryByText('Send answer')).toBeNull();
+    expect(view.queryByText('Decline')).toBeNull();
+  });
+
+  it('shows an expired request with every field and button disabled', () => {
+    const view = render(
+      <MessageBubble
+        message={pausedMessage({
+          pendingToolInput: undefined,
+          answeredToolInput: pausedMessage().pendingToolInput,
+          metadata: { toolInputOutcome: 'expired' },
+        })}
+      />,
+    );
+
+    expect(view.getByTestId('chat.tool-input-answered')).toBeTruthy();
+    expect(view.getByText('This request expired.')).toBeTruthy();
+    expect(view.queryByTestId('chat.tool-input-outcome')).toBeNull();
+    for (const name of ['Send answer', 'Decline', 'Cancel']) {
+      expect(view.getByRole('button', { name }).props.accessibilityState?.disabled).toBe(true);
+    }
+    fireEvent.press(view.getByRole('button', { name: 'Send answer' }));
+    expect(answerToolInput).not.toHaveBeenCalled();
+    expect(view.getByLabelText(/Repository/).props.editable).toBe(false);
+  });
+
+  it('says why the answer could not be sent above the buttons of the paused form', () => {
+    const sendError = 'Could not send your answer. Check your connection and try again.';
+    useChatExecutionStore.setState({ toolInputSendErrors: { 'm-input': sendError } });
+    const view = render(<MessageBubble message={pausedMessage()} />);
+
+    expect(view.getByTestId('tool-input.send-error')).toHaveTextContent(sendError);
+    expect(
+      view.getByRole('button', { name: 'Send answer' }).props.accessibilityState?.disabled,
+    ).toBe(false);
+
+    act(() => useChatExecutionStore.setState({ toolInputSendErrors: {} }));
+    expect(view.queryByTestId('tool-input.send-error')).toBeNull();
+  });
+
+  it('stops asking the person to sign in once they are signed in again', () => {
+    useChatExecutionStore.setState({ toolInputSendErrors: { 'm-input': CLOUD_RESUME_SIGN_IN } });
+    const view = render(<MessageBubble message={pausedMessage()} />);
+    expect(view.getByTestId('tool-input.send-error')).toHaveTextContent(CLOUD_RESUME_SIGN_IN);
+
+    act(() => useAuthStore.setState({ isClerkSignedIn: true }));
+    expect(view.queryByTestId('tool-input.send-error')).toBeNull();
+
+    const sendError = 'Could not send your answer. Check your connection and try again.';
+    act(() => useChatExecutionStore.setState({ toolInputSendErrors: { 'm-input': sendError } }));
+    expect(view.getByTestId('tool-input.send-error')).toHaveTextContent(sendError);
+  });
+
+  it('keeps the live form while the request is still pending, and ignores an unknown outcome', () => {
+    const pending = render(
+      <MessageBubble message={pausedMessage({ metadata: { toolInputOutcome: 'sent' } })} />,
+    );
+    expect(pending.getByTestId('chat.tool-input-request')).toBeTruthy();
+    expect(pending.queryByTestId('chat.tool-input-outcome')).toBeNull();
+    pending.unmount();
+
+    const unknown = render(
+      <MessageBubble
+        message={pausedMessage({
+          pendingToolInput: undefined,
+          metadata: { toolInputOutcome: 'lost' },
+        })}
+      />,
+    );
+    expect(unknown.queryByTestId('chat.tool-input-outcome')).toBeNull();
   });
 });
 

@@ -3,13 +3,22 @@ import 'server-only';
 import { z } from 'zod';
 
 import { OVERRULED_MEMORY_MESSAGE } from '@agiworkforce/agent-core';
+import type {
+  ProjectMemoryEditChange,
+  ProjectMemoryEditRemoval,
+} from '@agiworkforce/cloud-contracts';
 import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
 import {
+  MemoryIneligibleError,
+  activeMemoryPredicate,
   loadManagedMemoryContext,
   loadManagedMemoryPolicy,
   loadProjectMemoryScope,
   loadSuppressedMemorySources,
+  workspaceMemoryPredicate,
+  writeConsolidatedMemory,
   type ManagedMemoryContextDb,
+  type MemoryScope,
 } from '@/lib/services/managed-memory-context-service';
 import { MEMORY_COMMAND_SOURCE, createMemoryCommandPorts } from '@/lib/services/memory-commands';
 
@@ -27,6 +36,7 @@ const MAX_FACT_CHARS = 500;
 const MAX_QUERY_CHARS = 200;
 const MIN_SUBJECT_CHARS = 3;
 const MAX_SEARCH_RESULTS = 10;
+const MAX_PROJECT_FORGET_MATCHES = 25;
 
 export function isMemoryTool(name: string): boolean {
   return MEMORY_TOOL_NAMES.has(name);
@@ -175,16 +185,28 @@ async function searchMemory(
       isError: false,
     };
   }
+  return searchMemoryIn(
+    context,
+    loadProjectMemoryScope(context.db, {
+      userId: context.userId,
+      projectId: context.projectId ?? null,
+    }),
+    parsed.data.query,
+  );
+}
+
+async function searchMemoryIn(
+  context: Pick<MemoryToolContext, 'db' | 'userId' | 'organizationId'>,
+  memoryScope: Promise<MemoryScope> | MemoryScope,
+  query: string,
+): Promise<MemoryToolResult> {
   const [policy, suppressedSources, scope] = await Promise.all([
     loadManagedMemoryPolicy(context.db, {
       userId: context.userId,
       organizationId: context.organizationId,
     }),
     loadSuppressedMemorySources(context.db, { userId: context.userId }),
-    loadProjectMemoryScope(context.db, {
-      userId: context.userId,
-      projectId: context.projectId ?? null,
-    }),
+    memoryScope,
   ]);
   if (!policy.enabled) {
     return {
@@ -198,7 +220,7 @@ async function searchMemory(
     suppressedSources,
     scope,
     policy,
-    query: parsed.data.query,
+    query,
   });
   return {
     content: JSON.stringify({
@@ -241,5 +263,137 @@ export async function executeMemoryTool(
   if (name === SAVE_MEMORY_TOOL_NAME) return saveMemory(args, context);
   if (name === SEARCH_MEMORY_TOOL_NAME) return searchMemory(args, context);
   if (name === FORGET_MEMORY_TOOL_NAME) return forgetMemory(args, context);
+  return { content: `Unknown tool: ${name}`, isError: true };
+}
+
+export type ProjectMemoryChange = ProjectMemoryEditChange;
+export type ProjectMemoryRemoval = ProjectMemoryEditRemoval;
+
+export interface ProjectMemoryEditToolContext {
+  db: ManagedMemoryContextDb;
+  userId: string;
+  organizationId: string | null;
+  projectId: string;
+  source: string;
+  signal?: AbortSignal;
+  changes: ProjectMemoryChange[];
+  removals: ProjectMemoryRemoval[];
+}
+
+function toolReply(body: Record<string, unknown>): MemoryToolResult {
+  return { content: JSON.stringify(body), isError: false };
+}
+
+function likePattern(subject: string): string {
+  return `%${subject.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+}
+
+async function saveProjectMemory(
+  args: Record<string, unknown>,
+  context: ProjectMemoryEditToolContext,
+): Promise<MemoryToolResult> {
+  const parsed = FactArgs.safeParse(args);
+  if (!parsed.success) return invalid(SAVE_MEMORY_TOOL_NAME);
+  const scope = {
+    userId: context.userId,
+    organizationId: context.organizationId,
+    projectId: context.projectId,
+    source: context.source,
+    userRequested: true,
+  };
+  const eligibility = await createMemoryCommandPorts(context.db, {
+    ...scope,
+    signal: context.signal,
+  }).checkEligibility(parsed.data.fact);
+  if (!eligibility.eligible) return toolReply({ saved: false, reason: eligibility.message });
+  let row: Awaited<ReturnType<typeof writeConsolidatedMemory>>;
+  try {
+    row = await writeConsolidatedMemory(
+      context.db,
+      { ...scope, content: parsed.data.fact, category: 'fact' },
+      { signal: context.signal },
+    );
+  } catch (error) {
+    if (context.signal?.aborted && error === context.signal.reason) throw error;
+    if (error instanceof MemoryIneligibleError) {
+      return toolReply({ saved: false, reason: error.message });
+    }
+    throw error;
+  }
+  if (!row) return toolReply({ saved: false });
+  if (row.outcome === 'merged') return toolReply({ saved: false, alreadyKnown: true });
+  if (row.superseded_by) return toolReply({ saved: false, reason: OVERRULED_MEMORY_MESSAGE });
+  context.changes.push({
+    id: row.id,
+    action: row.superseded_ids.length > 0 ? 'updated' : 'added',
+    content: row.content,
+  });
+  const replaced = new Set(row.superseded_ids);
+  const pending = context.removals.filter((removal) => !replaced.has(removal.id));
+  context.removals.splice(0, context.removals.length, ...pending);
+  return toolReply({ saved: true });
+}
+
+async function searchProjectMemory(
+  args: Record<string, unknown>,
+  context: ProjectMemoryEditToolContext,
+): Promise<MemoryToolResult> {
+  const parsed = QueryArgs.safeParse(args);
+  if (!parsed.success) return invalid(SEARCH_MEMORY_TOOL_NAME);
+  return searchMemoryIn(
+    context,
+    { projectId: context.projectId, usesGlobalMemory: false },
+    parsed.data.query,
+  );
+}
+
+async function forgetProjectMemory(
+  args: Record<string, unknown>,
+  context: ProjectMemoryEditToolContext,
+): Promise<MemoryToolResult> {
+  const parsed = SubjectArgs.safeParse(args);
+  if (!parsed.success) return invalid(FORGET_MEMORY_TOOL_NAME);
+  const matches = await context.db.query<ProjectMemoryRemoval>(
+    `select id::text as id, content
+       from user_memories
+      where user_id = $1
+        and ${activeMemoryPredicate()}
+        and ${workspaceMemoryPredicate(3)}
+        and project_id = $4::uuid
+        and content ilike $2 escape '\\'
+        and id::text <> all($5::text[])
+      order by pinned desc, updated_at desc
+      limit ${MAX_PROJECT_FORGET_MATCHES}`,
+    [
+      context.userId,
+      likePattern(parsed.data.subject),
+      context.organizationId,
+      context.projectId,
+      context.changes.map((change) => change.id),
+    ],
+  );
+  context.signal?.throwIfAborted();
+  for (const match of matches) {
+    if (!context.removals.some((removal) => removal.id === match.id)) {
+      context.removals.push({ id: match.id, content: match.content });
+    }
+  }
+  return toolReply({ awaitingConfirmation: matches.map((match) => match.content) });
+}
+
+/**
+ * The memory tools confined to one project: every read, write and removal
+ * names that project, and a removal is only collected, never applied, so the
+ * person confirms each one before it is deleted.
+ */
+export async function executeProjectMemoryEditTool(
+  name: string,
+  args: Record<string, unknown>,
+  context: ProjectMemoryEditToolContext,
+): Promise<MemoryToolResult> {
+  context.signal?.throwIfAborted();
+  if (name === SAVE_MEMORY_TOOL_NAME) return saveProjectMemory(args, context);
+  if (name === SEARCH_MEMORY_TOOL_NAME) return searchProjectMemory(args, context);
+  if (name === FORGET_MEMORY_TOOL_NAME) return forgetProjectMemory(args, context);
   return { content: `Unknown tool: ${name}`, isError: true };
 }

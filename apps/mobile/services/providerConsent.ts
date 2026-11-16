@@ -8,7 +8,7 @@ import {
 import { getProviderOfferings, providerLabels } from '@agiworkforce/types';
 import { storage } from '@/lib/mmkv';
 import { PROVIDERS } from '@/lib/models';
-import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import {
   mmkvRoutingConsentLedger,
   mmkvDisclosureLedger,
@@ -186,7 +186,7 @@ async function promptCloudProviderConsent(providers: readonly CloudProvider[]): 
       return true;
     }
     if (choice === 'decline') return false;
-    await openInAppBrowser(CLOUD_PROVIDER_LIST_URL);
+    await openWebContentPage(CLOUD_PROVIDER_LIST_URL);
   }
 }
 

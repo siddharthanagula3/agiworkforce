@@ -12,9 +12,10 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, ArrowLeftRight, Check, ChevronDown, Copy, X } from 'lucide-react-native';
+import { ArrowLeft, ArrowLeftRight, Check, ChevronDown, Copy, Flag, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -27,6 +28,24 @@ import {
   type TranslateResult,
   type LanguagePair,
 } from '@/services/translateService';
+import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
+import { ReportSheet, type ReportTarget } from '@/src/features/chat/components/ReportFlagButton';
+
+const REPORT_THIS_TRANSLATION = 'Report this translation';
+
+const GENERATIVE_TRANSLATE_BACKENDS: ReadonlySet<TranslateResult['backend']> = new Set<
+  TranslateResult['backend']
+>(['local_llm']);
+
+function translationReportTarget(result: TranslateResult): ReportTarget {
+  const reference = `translation:${result.sourceLanguage}:${result.targetLanguage}`;
+  return {
+    messageId: reference,
+    conversationId: 'translate',
+    contentExcerpt: result.translatedText,
+    subject: { kind: 'translation', id: reference },
+  };
+}
 
 interface TranslationOperation {
   revision: number;
@@ -60,6 +79,7 @@ export default function TranslateScreen() {
   const [state, setState] = useState<TranslateState>(initialState);
   const [langPickerFor, setLangPickerFor] = useState<'source' | 'target' | null>(null);
   const [copyFailedFor, setCopyFailedFor] = useState<string | null>(null);
+  const [reportingResult, setReportingResult] = useState<TranslateResult | null>(null);
 
   const mountedRef = useRef(false);
   const focusedRef = useRef(false);
@@ -269,6 +289,12 @@ export default function TranslateScreen() {
   const targetLangDef = SUPPORTED_LANGUAGES.find((l) => l.code === targetLang);
   const displayedTranslation = state.result?.translatedText ?? state.tokensAccum;
   const backendLabel = state.result ? translateBackendLabel(state.result.backend) : null;
+  const reportableResult =
+    state.result &&
+    GENERATIVE_TRANSLATE_BACKENDS.has(state.result.backend) &&
+    state.result.translatedText.trim()
+      ? state.result
+      : null;
   const canTranslate = sourceText.trim().length > 0 && !state.isTranslating;
 
   return (
@@ -283,7 +309,7 @@ export default function TranslateScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 12,
-            height: 48,
+            minHeight: 48,
             borderBottomWidth: 1,
             borderBottomColor: colors.border,
             gap: 8,
@@ -298,6 +324,7 @@ export default function TranslateScreen() {
             <ArrowLeft size={20} color={colors.textSecondary} />
           </Pressable>
           <Text
+            maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
             style={{
               flex: 1,
               fontSize: typeScale.body,
@@ -459,6 +486,22 @@ export default function TranslateScreen() {
                     <Copy size={14} color={colors.textMuted} />
                   </Pressable>
                 )}
+                {reportableResult ? (
+                  <Pressable
+                    testID="translate-report"
+                    onPress={() => setReportingResult(reportableResult)}
+                    style={{
+                      width: FULL_SCREEN_TOUCH_TARGET,
+                      height: FULL_SCREEN_TOUCH_TARGET,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    accessibilityLabel={REPORT_THIS_TRANSLATION}
+                    accessibilityRole="button"
+                  >
+                    <Flag size={14} color={colors.textMuted} />
+                  </Pressable>
+                ) : null}
               </View>
 
               {state.errorMessage ? (
@@ -629,6 +672,14 @@ export default function TranslateScreen() {
           </View>
         </Pressable>
       </Modal>
+      {reportingResult && reportingResult === reportableResult ? (
+        <ReportSheet
+          visible
+          onClose={() => setReportingResult(null)}
+          title={REPORT_THIS_TRANSLATION}
+          target={translationReportTarget(reportingResult)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

@@ -15,6 +15,7 @@ import {
   CloudAgentRunSchema,
   CloudAgentRunSteerSchema,
   ManagedCloudAgentRunRequestIdSchema,
+  ManagedCloudAgentRunSearchTextSchema,
   MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH,
   MAX_CLOUD_AGENT_PENDING_APPROVAL_ARGS_PREVIEW_LENGTH,
   MAX_CLOUD_AGENT_PENDING_STEERS,
@@ -54,6 +55,7 @@ import {
   type AgentRunNotice,
 } from './agent-notification-service';
 import { isPhoneChatReply, notifyChatReplyReady } from './chat-reply-notification-service';
+import { getResearchReportByRequestId } from './research-report-service';
 
 const TERMINAL_STATE_VALUES: string[] = [...TERMINAL_AGENT_TASK_STATES];
 
@@ -126,6 +128,22 @@ interface CloudAgentRunRow extends Record<string, unknown> {
   previous_state?: string | null;
 }
 
+// A research run whose report was saved as completed was already announced by
+// `notifyResearchReportSettled`. A run that stopped for plan approval, or whose
+// report could not be saved, has no such report and keeps the run notice.
+async function isResearchReportReady(
+  db: DatabaseAdapter,
+  run: CloudAgentRun,
+  event: AgentRunNotice['event'],
+): Promise<boolean> {
+  if (event !== 'completed' || run.workMode !== 'research') return false;
+  const report = await getResearchReportByRequestId(db, {
+    userId: run.userId,
+    requestId: run.requestId,
+  });
+  return report?.status === 'completed';
+}
+
 /**
  * Delivering a notification must never break a run. Mirrors the isolation
  * `announceScheduleRun` in schedule-service.ts puts around the one other
@@ -140,6 +158,10 @@ async function announceAgentRunEvent(
     if (run && isPhoneChatReply(run, notice.event)) {
       trackAgentRunOutcome(notice);
       await notifyChatReplyReady(run);
+      return;
+    }
+    if (run && (await isResearchReportReady(db, run, notice.event))) {
+      trackAgentRunOutcome(notice);
       return;
     }
     await notifyAgentRunEvent(db, notice);
@@ -440,7 +462,8 @@ const CONVERSATION_PREVIEW_LATERAL = `
     select left(
              btrim(regexp_replace(message.content, '\\s+', ' ', 'g')),
              ${MAX_CLOUD_AGENT_CONVERSATION_PREVIEW_LENGTH}
-           ) as preview
+           ) as preview,
+           message.content
       from public.web_messages message
      where message.conversation_id = conversations.id
        and message.deleted_at is null
@@ -1222,6 +1245,13 @@ export async function getCloudAgentRun(
   return { run: mapRun(runRow), events };
 }
 
+const RUN_TEXT_MATCH_PREDICATE = `and (conversations.title ilike $9 escape '\\'
+          or first_prompt.content ilike $9 escape '\\')`;
+
+function likeContainsPattern(text: string): string {
+  return `%${text.replace(/[\\%_]/g, '\\$&')}%`;
+}
+
 export async function listCloudAgentRuns(
   db: DatabaseAdapter,
   input: {
@@ -1238,6 +1268,8 @@ export async function listCloudAgentRuns(
      * so a chat moved between projects moves its runs with it.
      */
     projectId?: string;
+    /** Keep runs whose conversation title or first prompt contains this text, ignoring case. */
+    text?: string;
   },
 ): Promise<CloudAgentRunList> {
   const requestedStates = z
@@ -1253,6 +1285,8 @@ export async function listCloudAgentRuns(
   const limit = Math.min(100, Math.max(1, Math.trunc(input.limit ?? 25)));
   const workModes = input.workModes?.length ? [...input.workModes] : null;
   const projectId = input.projectId ? z.string().uuid().parse(input.projectId) : null;
+  const text =
+    input.text === undefined ? null : ManagedCloudAgentRunSearchTextSchema.parse(input.text);
   // The conversation title is the only human name a run has: the runs table
   // stores none, so a list of them is otherwise headed by its work mode and
   // every agiwork row reads identically. Left-joined because a run may have no
@@ -1275,6 +1309,7 @@ export async function listCloudAgentRuns(
         and ($4::timestamptz is null or (runs.updated_at, runs.id) < ($4::timestamptz, $5::uuid))
         and ($7::text[] is null or runs.work_mode = any($7::text[]))
         and ($8::text is null or conversations.project_id = $8::text)
+        ${text === null ? '' : RUN_TEXT_MATCH_PREDICATE}
         and coalesce(conversations.is_temporary, false) = false
         and not exists (
           select 1 from public.web_conversations withdrawn_conversation
@@ -1293,6 +1328,7 @@ export async function listCloudAgentRuns(
       limit + 1,
       workModes,
       projectId,
+      ...(text === null ? [] : [likeContainsPattern(text)]),
     ],
   );
   const pageRows = rows.slice(0, limit);

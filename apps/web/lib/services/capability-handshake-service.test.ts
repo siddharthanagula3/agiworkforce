@@ -288,6 +288,27 @@ describe('BILL-15, effective-entitlement limits on the existing /api/me handshak
     }
   });
 
+  it('publishes no monthly token cap, which nothing enforces, on any tier', () => {
+    for (const tier of ['free', 'basic', 'pro', 'team', 'max', 'max_15x', 'enterprise']) {
+      const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier, resets: RESETS });
+      expect(
+        document.limits.map((limit) => limit.id),
+        tier,
+      ).not.toContain('tokens_per_month');
+    }
+  });
+
+  it('publishes a voice minute cap for Free only, since paid voice draws on the usage budget', () => {
+    const voiceCap = (tier: string) =>
+      buildMeCapabilityHandshake({ ...BASE_INPUT, tier, resets: RESETS }).limits.find(
+        (limit) => limit.id === 'voice_minutes_per_month',
+      );
+    expect(voiceCap('free')?.limit).toBe(10);
+    for (const tier of ['basic', 'pro', 'team', 'max', 'max_15x']) {
+      expect(voiceCap(tier), tier).toBeUndefined();
+    }
+  });
+
   it('differs by tier: free and max do not publish the same caps', () => {
     const free = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free', resets: RESETS });
     const max = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'max', resets: RESETS });

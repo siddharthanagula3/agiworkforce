@@ -2,6 +2,8 @@ export type {
   CompleteMultipartUploadInput,
   CopyObjectIfMatchInput,
   CreateMultipartUploadInput,
+  ListedObject,
+  ListingObjectStore,
   MultipartObjectStore,
   MultipartUploadHandle,
   ObjectBody,
@@ -26,6 +28,7 @@ export {
   ObjectStorageConfigError,
   ObjectStorageTimeoutError,
   supportsMultipartUploads,
+  supportsObjectListing,
 } from './types';
 
 export { objectChecksum } from './checksum';
@@ -39,9 +42,12 @@ export {
 
 export {
   abortOrphanedMultipartUploads,
+  deleteObjectsUnderPrefix,
   DEFAULT_ORPHAN_MULTIPART_AGE_MS,
   type AbortOrphanedMultipartUploadsInput,
+  type DeleteObjectsUnderPrefixInput,
   type OrphanedMultipartSweep,
+  type PrefixObjectSweep,
 } from './lifecycle';
 
 export {
@@ -98,6 +104,7 @@ export {
 export {
   createRetryingObjectStore,
   isRetryableObjectStorageError,
+  objectStorageBackoffMs,
   resolveObjectStorageRetryPolicy,
   DEFAULT_OBJECT_STORAGE_RETRY_POLICY,
   OBJECT_STORAGE_RETRY_BASE_DELAY_MS_ENV,

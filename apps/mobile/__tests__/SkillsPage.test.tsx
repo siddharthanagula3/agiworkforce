@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -23,8 +23,29 @@ let mockAuthState = {
 
 let mockIsDark = false;
 
+const mockFocus = (() => {
+  let focused = true;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => focused,
+    set: (next: boolean) => {
+      focused = next;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+})();
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const React = require('react');
+    const focused = React.useSyncExternalStore(mockFocus.subscribe, mockFocus.get);
+    React.useEffect(() => (focused ? effect() : undefined), [effect, focused]);
+  },
   useLocalSearchParams: () => mockSearchParams,
   useRouter: () => ({
     push: mockPush,
@@ -163,6 +184,8 @@ const mockImportSkillFile = jest.fn();
 import { ApiHttpError } from '@/services/api';
 import { SkillsScreen } from '@/src/features/skills/SkillsScreen';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
+import { useTierStore } from '@/src/features/billing/store';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 
 function pageBackground(screen: ReturnType<typeof render>) {
   const tree = screen.toJSON();
@@ -173,6 +196,7 @@ function pageBackground(screen: ReturnType<typeof render>) {
 describe('Mobile Skills screen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    act(() => mockFocus.set(true));
     mockAppMode = 'cloud';
     mockAuthState = {
       isClerkLoaded: true,
@@ -197,6 +221,30 @@ describe('Mobile Skills screen', () => {
     ]);
     mockFetchInstalledSkillNames.mockResolvedValue(new Set(['Documents']));
     useMobileSkillSelectionStore.setState({ selection: null });
+  });
+
+  it('reloads the list when the screen is shown again so a deleted skill disappears', async () => {
+    mockFetchManagedSkills
+      .mockResolvedValueOnce([
+        {
+          name: 'qa-pirate',
+          description: 'Talk like a pirate.',
+          source: 'personal',
+          lifecycle: 'included',
+          downloadable: false,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const screen = render(<SkillsScreen />);
+    expect(await screen.findByText('qa-pirate')).toBeTruthy();
+    expect(mockFetchManagedSkills).toHaveBeenCalledTimes(1);
+
+    act(() => mockFocus.set(false));
+    expect(mockFetchManagedSkills).toHaveBeenCalledTimes(1);
+    act(() => mockFocus.set(true));
+
+    await waitFor(() => expect(screen.queryByText('qa-pirate')).toBeNull());
+    expect(mockFetchManagedSkills).toHaveBeenCalledTimes(2);
   });
 
   it('says what a skill needs and still lets it be used', async () => {
@@ -303,6 +351,35 @@ describe('Mobile Skills screen', () => {
     });
     expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
     expect(screen.queryByLabelText('Use Release helper in chat')).toBeNull();
+  });
+
+  it('turns Run code on when the Skill handed to chat needs it and the plan allows it', async () => {
+    useTierStore.setState({
+      grantedCapabilities: ['canUseCloudExecution'],
+      codeExecutionAvailable: true,
+    });
+    useChatViewStore.getState().setRunCode(NEW_CHAT_STYLE_KEY, false);
+    mockFetchManagedSkills.mockResolvedValueOnce([
+      {
+        name: 'Documents',
+        description: 'Create and edit documents.',
+        source: 'bundled',
+        lifecycle: 'included',
+        downloadable: true,
+        requiredTools: ['execute_code'],
+      },
+    ]);
+    const screen = render(<SkillsScreen />);
+
+    await screen.findByText('Documents');
+    fireEvent.press(screen.getByLabelText('Use Documents in chat'));
+
+    expect(useChatViewStore.getState().runCodeByConversation[NEW_CHAT_STYLE_KEY]).toBe(true);
+
+    useChatViewStore.getState().setRunCode(NEW_CHAT_STYLE_KEY, false);
+    useTierStore.setState({ codeExecutionAvailable: false });
+    fireEvent.press(screen.getByLabelText('Use Documents in chat'));
+    expect(useChatViewStore.getState().runCodeByConversation[NEW_CHAT_STYLE_KEY]).toBeUndefined();
   });
 
   it('installs a catalog Skill and then offers it in chat', async () => {

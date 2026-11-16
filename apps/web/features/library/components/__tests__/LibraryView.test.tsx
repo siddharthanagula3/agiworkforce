@@ -19,6 +19,8 @@ const {
   toastSuccess: vi.fn(),
 }));
 
+type CsrfModule = typeof import('@/lib/client/csrf');
+
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } }));
 vi.mock('@features/projects/services/project-knowledge-upload', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
@@ -46,10 +48,22 @@ vi.mock('@features/chat/services/document-export-service', () => ({ exportDocume
 // The same boundary for uploads: the Library's New menu must reach the one
 // upload path that catalogs an asset, not a second uploader of its own.
 vi.mock('@features/chat/services/chat-attachment-upload', () => ({ uploadChatAttachments }));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<CsrfModule>()),
+  getCsrfToken: vi.fn(async () => 'csrf-token'),
+}));
 
 import { LibraryView, iconKindFor, generatedFileFromLibraryItem } from '../LibraryView';
 import { takeStagedLibraryAttachments } from '../../lib/library-chat-handoff';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
+import { useBillingStore } from '@/shared/stores/web-auth-store';
+import {
+  CHAT_LARGE_FILE_POLICY,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+  MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
+  type ChatAttachmentLimits,
+} from '@agiworkforce/cloud-contracts';
 
 function makeItem(overrides: Record<string, unknown> = {}) {
   return {
@@ -244,8 +258,48 @@ describe('LibraryView', () => {
     Object.defineProperty(input, 'files', { value: [file] });
     fireEvent.change(input);
 
-    await waitFor(() => expect(uploadChatAttachments).toHaveBeenCalledWith([file]));
+    await waitFor(() =>
+      expect(uploadChatAttachments).toHaveBeenCalledWith([file], { declineLargeFiles: true }),
+    );
     await waitFor(() => expect(libraryCalls().length).toBeGreaterThan(before));
+  });
+
+  it('refuses a file over the inline limit before any request, as today, even when the account is offered large files', async () => {
+    const offer: ChatAttachmentLimits = {
+      maxFileBytes: CHAT_LARGE_FILE_POLICY.largeFiles.maxBytes,
+      maxImageBytes: MAX_CHAT_IMAGE_ATTACHMENT_BYTES,
+      maxMessageBytes: CHAT_LARGE_FILE_POLICY.largeFiles.maxMessageBytes,
+      maxFilesPerMessage: CHAT_LARGE_FILE_POLICY.largeFiles.maxCount,
+      largeFilesAvailable: true,
+      storageRemainingBytes: null,
+      inlineMessageBytes: MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+    };
+    useBillingStore.setState({ attachmentLimits: offer });
+    const actual = await vi.importActual<
+      typeof import('@features/chat/services/chat-attachment-upload')
+    >('@features/chat/services/chat-attachment-upload');
+    uploadChatAttachments.mockImplementationOnce(((
+      ...args: Parameters<typeof actual.uploadChatAttachments>
+    ) => actual.uploadChatAttachments(...args)) as never);
+    try {
+      render(<LibraryView />);
+      await screen.findByText('report.pdf');
+      const before = fetchMock.mock.calls.length;
+
+      fireEvent.click(screen.getByRole('button', { name: /New/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Upload file' }));
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File([new Uint8Array(MAX_CHAT_ATTACHMENT_BYTES + 1)], 'big.pdf', {
+        type: 'application/pdf',
+      });
+      Object.defineProperty(input, 'files', { value: [file] });
+      fireEvent.change(input);
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('25 MiB');
+      expect(fetchMock.mock.calls.slice(before).map((call) => String(call[0]))).toEqual([]);
+    } finally {
+      useBillingStore.setState({ attachmentLimits: null });
+    }
   });
 
   it('keeps Delete behind the row menu and a confirm', async () => {

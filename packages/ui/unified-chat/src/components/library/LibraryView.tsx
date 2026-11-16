@@ -390,6 +390,7 @@ export function LibraryView({
   const [error, setError] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [unavailableIds, setUnavailableIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [fullFileTileIds, setFullFileTileIds] = useState<ReadonlySet<string>>(() => new Set());
   const [viewDeleted, setViewDeleted] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -558,7 +559,11 @@ export function LibraryView({
   const probedThumbnailIds = useRef<Set<string>>(new Set());
 
   const handleThumbnailError = useCallback(
-    async (item: LibraryItem) => {
+    async (item: LibraryItem, tileSource: string) => {
+      if (item.thumbnail_uri && tileSource === item.thumbnail_uri) {
+        setFullFileTileIds((current) => new Set(current).add(item.id));
+        return;
+      }
       if (probedThumbnailIds.current.has(item.id)) return;
       probedThumbnailIds.current.add(item.id);
       try {
@@ -851,6 +856,7 @@ export function LibraryView({
     items: page.items,
     folders: visibleFolders,
     unavailableIds,
+    fullFileTileIds,
     busyIds,
     rowErrors,
     viewDeleted,
@@ -1352,12 +1358,13 @@ interface LibraryListProps {
   items: readonly LibraryItem[];
   folders: readonly LibraryFolder[];
   unavailableIds: ReadonlySet<string>;
+  fullFileTileIds: ReadonlySet<string>;
   busyIds: ReadonlySet<string>;
   rowErrors: Record<string, string>;
   viewDeleted: boolean;
   actions: RowActions;
   onOpenFolder?: (folder: LibraryFolder) => void;
-  onThumbnailError: (item: LibraryItem) => Promise<void>;
+  onThumbnailError: (item: LibraryItem, tileSource: string) => Promise<void>;
   inlinePreviewUri?: (uri: string) => string;
   openArtifactIds: ReadonlySet<string>;
   artifactSources: Record<string, ArtifactSource>;
@@ -1438,8 +1445,10 @@ function LibraryGrid(props: LibraryListProps) {
 
       {props.items.map((item) => {
         const unavailable = props.unavailableIds.has(item.id);
+        const tileSource =
+          item.thumbnail_uri && !props.fullFileTileIds.has(item.id) ? item.thumbnail_uri : item.uri;
         const thumbnailUri =
-          !unavailable && isImageItem(item) ? props.inlinePreviewUri?.(item.uri) : undefined;
+          !unavailable && isImageItem(item) ? props.inlinePreviewUri?.(tileSource) : undefined;
         const rowError = props.rowErrors[item.id];
         return (
           <GridTile
@@ -1481,7 +1490,7 @@ function LibraryGrid(props: LibraryListProps) {
                 alt=""
                 loading="lazy"
                 className="h-full w-full object-cover"
-                onError={() => void props.onThumbnailError(item)}
+                onError={() => void props.onThumbnailError(item, tileSource)}
               />
             ) : isVideoItem(item) ? (
               <Play className={TILE_GLYPH_CLASS} aria-hidden />

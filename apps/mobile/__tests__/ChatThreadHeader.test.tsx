@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { Alert, Modal } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
+const mockPush = jest.fn();
 
 jest.mock('@clerk/expo', () => ({
   ...jest.requireActual('@clerk/expo'),
@@ -13,7 +14,7 @@ jest.mock('@clerk/expo', () => ({
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
-    push: jest.fn(),
+    push: mockPush,
     replace: mockReplace,
     back: jest.fn(),
     canGoBack: () => false,
@@ -21,9 +22,35 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ id: 'thread-1' }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    React.useEffect(() => cb(), []);
+    const latest = React.useRef(cb);
+    latest.current = cb;
+    React.useEffect(() => {
+      let cleanup: void | (() => void) = latest.current();
+      const entry = {
+        blur: () => {
+          if (typeof cleanup === 'function') cleanup();
+          cleanup = undefined;
+        },
+        focus: () => {
+          entry.blur();
+          cleanup = latest.current();
+        },
+      };
+      mockFocusEffects.add(entry);
+      return () => {
+        mockFocusEffects.delete(entry);
+        entry.blur();
+      };
+    }, []);
   },
+}));
+
+const mockFocusEffects = new Set<{ blur: () => void; focus: () => void }>();
+
+const mockArchiveConversation = jest.fn();
+jest.mock('@/src/features/archived-chats', () => ({
+  ...jest.requireActual('@/src/features/archived-chats'),
+  archiveConversation: (...args: unknown[]) => mockArchiveConversation(...args),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -101,11 +128,28 @@ import ChatScreen from '../app/(app)/chat/[id]';
 import { handOffConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
 import { useChatExecutionStore, useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
+import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import { useTierStore } from '../src/features/billing/store';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { isAutoModeModelId } from '@agiworkforce/types';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
+
+function refocusScreen(): void {
+  act(() => {
+    for (const effect of [...mockFocusEffects]) effect.focus();
+  });
+}
+
+function blurScreen(): void {
+  act(() => {
+    for (const effect of [...mockFocusEffects]) effect.blur();
+  });
+}
 
 function seedThread(overrides: Record<string, unknown> = {}): void {
   useChatStore.setState({
@@ -129,6 +173,10 @@ describe('Thread header', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useProjectStore.setState({ projects: [], activeProjectId: null });
+    useChatStore.setState({
+      missingConversationId: null,
+      messageLoadErrorConversationId: null,
+    } as never);
   });
 
   it('keeps project navigation and source controls distinct beside a long title', () => {
@@ -158,6 +206,59 @@ describe('Thread header', () => {
         name: 'A conversation title with more detail. Open conversation menu',
       }),
     ).toHaveStyle({ minWidth: 44, minHeight: 44 });
+  });
+
+  it('names the project of this conversation, not the project the last new chat started in', () => {
+    const project = {
+      id: 'local-project',
+      name: 'Garden',
+      description: '',
+      instructions: '',
+      createdAt: '2026-10-31T00:00:00.000Z',
+      updatedAt: '2026-10-31T00:00:00.000Z',
+    };
+    useProjectStore.setState({ projects: [project], activeProjectId: project.id });
+    seedThread();
+    const screen = render(<ChatScreen />);
+
+    expect(
+      screen.queryByRole('button', {
+        name: `Active project: ${project.name}. Tap to view details.`,
+      }),
+    ).toBeNull();
+  });
+
+  it('starts New chat from the header outside any project', () => {
+    const project = {
+      id: 'local-project',
+      name: 'Garden',
+      description: '',
+      instructions: '',
+      createdAt: '2026-10-31T00:00:00.000Z',
+      updatedAt: '2026-10-31T00:00:00.000Z',
+    };
+    useProjectStore.setState({ projects: [project], activeProjectId: project.id });
+    seedThread({ projectId: project.id });
+    const screen = render(<ChatScreen />);
+
+    fireEvent.press(screen.getByRole('button', { name: 'New chat' }));
+
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
+    expect(mockPush).toHaveBeenCalledWith('/(app)');
+  });
+
+  it('leaves no project scope behind for the next new chat once the person leaves the conversation', () => {
+    seedThread();
+    const screen = render(<ChatScreen />);
+    act(() => {
+      useProjectStore.setState({ activeProjectId: 'local-project' });
+      useCloudProjectStore.setState({ activeProjectId: 'cloud-project' });
+    });
+
+    screen.unmount();
+
+    expect(useProjectStore.getState().activeProjectId).toBeNull();
+    expect(useCloudProjectStore.getState().activeProjectId).toBeNull();
   });
 
   it('shows the message being handed to a new chat instead of a blank skeleton while history loads', () => {
@@ -192,7 +293,11 @@ describe('Thread header', () => {
     seedThread({ executionMode: 'cloud' });
     const screen = render(<ChatScreen />);
 
-    expect(screen.getByTestId('chat.work-mode.chat')).toBeTruthy();
+    const header = screen.getByTestId('chat.thread-header.work-switch');
+    expect(within(header).getByTestId('chat.work-mode.chat')).toBeTruthy();
+    expect(within(header).getByTestId('chat.work-mode.agiwork')).toBeTruthy();
+    expect(screen.getAllByTestId('chat.work-mode.chat')).toHaveLength(1);
+    expect(screen.queryByLabelText('Quarterly plan. Open conversation menu')).toBeNull();
 
     act(() => {
       useChatStore.setState({
@@ -212,6 +317,50 @@ describe('Thread header', () => {
 
     expect(screen.queryByTestId('chat.work-mode.chat')).toBeNull();
     expect(screen.queryByTestId('chat.work-mode.agiwork')).toBeNull();
+    expect(screen.getByLabelText('Quarterly plan. Open conversation menu')).toBeTruthy();
+  });
+
+  it('keeps the title in the header for a plan without Work', () => {
+    useTierStore.setState({ tier: 'free' });
+    seedThread({ executionMode: 'cloud' });
+    const screen = render(<ChatScreen />);
+
+    expect(screen.queryByTestId('chat.thread-header.work-switch')).toBeNull();
+    expect(screen.getByLabelText('Quarterly plan. Open conversation menu')).toBeTruthy();
+  });
+
+  it('shows only the error, not a blank new chat, when the history did not load', () => {
+    useTierStore.setState({ tier: 'pro' });
+    seedThread({ executionMode: 'cloud' });
+    useChatStore.setState({
+      isLoadingMessages: false,
+      messageLoadErrorConversationId: 'thread-1',
+    } as never);
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByTestId('chat.history-not-loaded')).toBeTruthy();
+    expect(screen.queryByTestId('message-list')).toBeNull();
+    expect(screen.queryByTestId('chat.work-mode.chat')).toBeNull();
+    expect(screen.getByLabelText('Quarterly plan. Open conversation menu')).toBeTruthy();
+  });
+
+  it('says a chat that no longer exists is not available and offers a new chat instead of a composer', () => {
+    useTierStore.setState({ tier: 'pro' });
+    seedThread({ executionMode: 'cloud' });
+    useChatStore.setState({
+      isLoadingMessages: false,
+      missingConversationId: 'thread-1',
+    } as never);
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByTestId('chat.conversation-unavailable')).toBeTruthy();
+    expect(screen.getByText('This chat is not available')).toBeTruthy();
+    expect(screen.queryByTestId('composer')).toBeNull();
+    expect(screen.queryByTestId('message-list')).toBeNull();
+    expect(screen.queryByTestId('chat.work-mode.chat')).toBeNull();
+
+    fireEvent.press(screen.getByText('New chat'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)');
   });
 
   it('leaves Switch model to the failed turn instead of repeating it in the error bar', () => {
@@ -241,6 +390,7 @@ describe('Thread header', () => {
     useChatExecutionStore.setState({
       error: failure,
       failureCode: { message: failure, code: 'provider_overloaded' },
+      errorConversationId: 'thread-1',
     } as never);
 
     const screen = render(<ChatScreen />);
@@ -254,6 +404,7 @@ describe('Thread header', () => {
     useChatExecutionStore.setState({
       error: failure,
       failureCode: { message: failure, code: 'provider_overloaded' },
+      errorConversationId: 'thread-1',
     } as never);
 
     const screen = render(<ChatScreen />);
@@ -333,5 +484,139 @@ describe('Thread header', () => {
 
     expect(useChatStore.getState().conversations.some((c) => c.id === 'thread-1')).toBe(false);
     expect(mockReplace).toHaveBeenCalled();
+  });
+
+  describe('a Cloud chat the drawer keeps mounted', () => {
+    const storeLoadMessages = useChatStore.getState().loadMessages;
+    let loadMessages: jest.Mock<Promise<void>, [string]>;
+
+    beforeEach(() => {
+      activateCloudAccount('header-owner');
+      useTierStore.setState({ tier: 'pro' });
+      seedThread({ executionMode: 'cloud' });
+      loadMessages = jest.fn((_conversationId: string) => Promise.resolve());
+      useChatStore.setState({ loadMessages } as never);
+      useChatExecutionStore.setState({ streamingConversationIds: [] });
+    });
+
+    afterEach(() => {
+      useChatStore.setState({ loadMessages: storeLoadMessages } as never);
+      useChatExecutionStore.setState({ streamingConversationIds: [] });
+      __resetCloudAccountSessionForTests();
+    });
+
+    async function settle(): Promise<void> {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
+
+    it('loads the history again when it is opened with no messages, as after a restore', async () => {
+      render(<ChatScreen />);
+      await settle();
+      expect(loadMessages).toHaveBeenCalledTimes(1);
+
+      refocusScreen();
+      await settle();
+
+      expect(loadMessages).toHaveBeenCalledTimes(2);
+      expect(loadMessages).toHaveBeenLastCalledWith('thread-1');
+    });
+
+    it('does not load again on focus when the messages are already here', async () => {
+      render(<ChatScreen />);
+      await settle();
+      act(() => {
+        useChatStore.setState({
+          messages: {
+            'thread-1': [
+              {
+                id: 'kept-question',
+                conversationId: 'thread-1',
+                role: 'user',
+                content: 'Plan my week',
+                createdAt: '2026-11-12T00:00:00.000Z',
+              },
+            ],
+          },
+        } as never);
+      });
+
+      refocusScreen();
+      await settle();
+
+      expect(loadMessages).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not load on focus while an answer is being written', async () => {
+      render(<ChatScreen />);
+      await settle();
+      act(() => useChatExecutionStore.setState({ streamingConversationIds: ['thread-1'] }));
+
+      refocusScreen();
+      await settle();
+
+      expect(loadMessages).toHaveBeenCalledTimes(1);
+    });
+
+    it('never starts a second load while the first is still running', async () => {
+      let finish!: () => void;
+      loadMessages.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      render(<ChatScreen />);
+      await settle();
+
+      refocusScreen();
+      await settle();
+      expect(loadMessages).toHaveBeenCalledTimes(1);
+
+      await act(async () => finish());
+      refocusScreen();
+      await settle();
+      expect(loadMessages).toHaveBeenCalledTimes(2);
+    });
+
+    function archiveFromHeader(screen: ReturnType<typeof render>): void {
+      fireEvent.press(screen.getByLabelText('Conversation menu'));
+      fireEvent.press(screen.getByTestId('conversation-action-archive'));
+      act(() => {
+        screen.UNSAFE_getAllByType(Modal).forEach((modal) => modal.props.onDismiss?.());
+      });
+    }
+
+    it('leaves the chat once it is archived from its own menu', async () => {
+      mockArchiveConversation.mockResolvedValueOnce(undefined);
+      const screen = render(<ChatScreen />);
+      await settle();
+
+      archiveFromHeader(screen);
+
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(app)'));
+      expect(mockArchiveConversation).toHaveBeenCalledWith('thread-1', expect.anything());
+    });
+
+    it('does not navigate when the person has already left the chat before the archive lands', async () => {
+      let land!: () => void;
+      mockArchiveConversation.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            land = resolve;
+          }),
+      );
+      const screen = render(<ChatScreen />);
+      await settle();
+
+      archiveFromHeader(screen);
+      await waitFor(() => expect(mockArchiveConversation).toHaveBeenCalled());
+      blurScreen();
+      await act(async () => land());
+      await settle();
+
+      expect(mockReplace).not.toHaveBeenCalled();
+    });
   });
 });

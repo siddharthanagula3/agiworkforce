@@ -5,8 +5,9 @@ RUN rm -rf /usr/local/lib/node_modules /opt/yarn-* && \
     apk add --no-cache clamav-daemon clamav-libunrar dumb-init && \
     addgroup -S -g 1001 scanner && \
     adduser -S -D -H -u 1001 -G scanner scanner && \
-    mkdir -p /var/lib/clamav && \
-    chown scanner:scanner /var/lib/clamav
+    mkdir -p /var/lib/clamav /var/tmp/clamd /var/tmp/upload-scanner && \
+    chown scanner:scanner /var/lib/clamav /var/tmp/clamd /var/tmp/upload-scanner && \
+    chmod 700 /var/tmp/clamd /var/tmp/upload-scanner
 
 COPY clamav/clamd.conf clamav/freshclam.conf /etc/clamav/
 

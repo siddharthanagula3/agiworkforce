@@ -340,6 +340,18 @@ describe('downloadGeneratedFile', () => {
     );
   });
 
+  it.each(['ts', 'tsx', 'mts', 'cts', 'py', 'rs', 'kt', 'swift', 'sh', 'yml', 'sql'])(
+    'shares a .%s source file as plain text and keeps its name',
+    async (extension) => {
+      await shareFile(`file:///docs/exports/export-1/code.${extension}`);
+
+      expect(Sharing.shareAsync).toHaveBeenCalledWith(
+        `file:///docs/exports/export-1/code.${extension}`,
+        { UTI: 'public.plain-text', mimeType: 'text/plain' },
+      );
+    },
+  );
+
   it('does not claim a type it does not know when sharing', async () => {
     await shareFile('file:///docs/exports/export-1/notes.unknownext');
 

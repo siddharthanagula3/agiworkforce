@@ -15,7 +15,10 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: mocks.warn, error: vi.fn(), debug: vi.fn() },
 }));
 
+import { MAX_CHAT_ATTACHMENT_BYTES } from '@agiworkforce/cloud-contracts';
 import { createMemoryObjectStore } from '@agiworkforce/object-storage';
+
+import { uploadObjectKey } from '@/lib/server/upload-keys';
 
 import {
   isCrossRegionBackup,
@@ -33,6 +36,9 @@ import {
 const PRIMARY_BUCKET = 'agi-private';
 const BACKUP_BUCKET = 'agi-private-backup';
 const KEY = 'private-media/image/a/1.png';
+const CHAT_KEY = uploadObjectKey('chat-attachment', { userId: 'user-1', fileName: 'a.pdf' });
+const MEDIA_VIDEO_KEY = 'private-media/video/a/1.mp4';
+const MIB = 1024 * 1024;
 const BYTES = new Uint8Array([1, 2, 3, 4]);
 
 const CONFIGURED = {
@@ -154,6 +160,79 @@ describe('object replication', () => {
     expect(result.outcome).toBe('too-large');
     expect(source.get).not.toHaveBeenCalled();
     expect(mocks.warn).toHaveBeenCalled();
+  });
+
+  it('a chat-attachments key above the inline limit is too-large and never read', async () => {
+    const source = {
+      head: vi.fn(async () => ({
+        contentLength: MAX_CHAT_ATTACHMENT_BYTES + 1,
+        contentType: 'application/pdf',
+        etag: 'x',
+      })),
+      get: vi.fn(),
+    };
+    const target = backupTarget();
+    const targetHead = vi.spyOn(target.store, 'head');
+    const targetPut = vi.spyOn(target.store, 'put');
+
+    const result = await replicateObject(CHAT_KEY, { source: source as never, target });
+
+    expect(result).toEqual({ outcome: 'too-large', bytes: MAX_CHAT_ATTACHMENT_BYTES + 1 });
+    expect(source.head).toHaveBeenCalledTimes(1);
+    expect(source.get).not.toHaveBeenCalled();
+    expect(targetHead).not.toHaveBeenCalled();
+    expect(targetPut).not.toHaveBeenCalled();
+    expect(mocks.warn).toHaveBeenCalled();
+  });
+
+  it('a chat-attachments key whose head carries no length is too-large and never read', async () => {
+    const source = {
+      head: vi.fn(async () => ({ contentType: 'application/pdf', etag: 'x' })),
+      get: vi.fn(),
+    };
+    const target = backupTarget();
+    const targetPut = vi.spyOn(target.store, 'put');
+
+    const result = await replicateObject(CHAT_KEY, { source: source as never, target });
+
+    expect(result).toEqual({ outcome: 'too-large', bytes: 0 });
+    expect(source.get).not.toHaveBeenCalled();
+    expect(targetPut).not.toHaveBeenCalled();
+  });
+
+  it('a chat-attachments key at the inline limit is copied', async () => {
+    const source = {
+      head: vi.fn(async () => ({
+        contentLength: MAX_CHAT_ATTACHMENT_BYTES,
+        contentType: 'application/pdf',
+        etag: 'x',
+      })),
+      get: vi.fn(async () => ({ data: BYTES, contentType: 'application/pdf' })),
+    };
+    const target = backupTarget();
+
+    const result = await replicateObject(CHAT_KEY, { source: source as never, target });
+
+    expect(result).toEqual({ outcome: 'replicated', bytes: BYTES.byteLength });
+    expect(source.get).toHaveBeenCalledTimes(1);
+    await expect(target.store.head(BACKUP_BUCKET, CHAT_KEY)).resolves.not.toBeNull();
+  });
+
+  it('a 200 MiB generated-media key is still copied', async () => {
+    const source = {
+      head: vi.fn(async () => ({
+        contentLength: 200 * MIB,
+        contentType: 'video/mp4',
+        etag: 'x',
+      })),
+      get: vi.fn(async () => ({ data: BYTES, contentType: 'video/mp4' })),
+    };
+    const target = backupTarget();
+
+    const result = await replicateObject(MEDIA_VIDEO_KEY, { source: source as never, target });
+
+    expect(result.outcome).toBe('replicated');
+    expect(source.get).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing when no backup target is configured', async () => {

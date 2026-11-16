@@ -25,10 +25,8 @@ import {
   MCP_APP_RESOURCE_MAX_BYTES,
   MCP_APP_SANDBOX_UNAVAILABLE_MESSAGE,
   MCP_APP_TOO_LARGE_MESSAGE,
-  McpAppCard,
-  deviceAccessSentence,
-  requestedDevicePermissions,
-} from './McpAppCard';
+} from '@agiworkforce/unified-chat/mcp-app';
+import { McpAppCard, deviceAccessSentence, requestedDevicePermissions } from './McpAppCard';
 
 type CsrfModule = typeof import('@/lib/client/csrf');
 

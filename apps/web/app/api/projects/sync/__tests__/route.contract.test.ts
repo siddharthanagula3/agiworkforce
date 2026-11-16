@@ -235,7 +235,7 @@ describe('POST /api/projects/sync, shared cloud contract', () => {
     expect(sql).toContain('deleted_at = case when incoming.should_delete then now() else null end');
     expect(sql).toContain('assert_user_resource_limit(');
     expect(sql).toContain("'projects'");
-    expect(params[2]).toBe(1);
+    expect(params[2]).toBe(getProjectLimit('free'));
     expect(params[3]).toBe(ORGANIZATION_ID);
     const pushed = JSON.parse(String(params[1]));
     expect(pushed[0].baseVersion).toBe('0');
@@ -307,7 +307,9 @@ describe('POST /api/projects/sync, shared cloud contract', () => {
     expect(compact).toContain('incoming.should_delete as tombstoned');
     expect(compact).toContain('where not updated.tombstoned');
     expect(compact).toContain('updated.id in (select id from prior_tombstones)');
-    expect(compact).toContain('case when dependency.admitted_count > 0 then $3 else null end');
+    expect(compact).toContain(
+      'case when dependency.admitted_count > 0 then $3::integer else null end',
+    );
     expect(compact).not.toContain('inserted_count');
     expect(params[2]).toBe(getProjectLimit('free'));
   });

@@ -48,6 +48,9 @@ const EDIT = {
 };
 const EXPECTED = ORIGINAL.replace('Second draft.', EDIT.content);
 
+const MARKUP = '\uE200cite\uE202turn0search0\uE201';
+const MARKUP_CHARACTERS = /[\uE200-\uE204]/;
+
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   query: vi.fn<(sql: string, params?: unknown[]) => Promise<unknown[]>>(),
@@ -182,6 +185,73 @@ describe('PATCH assistant fence edits', () => {
       artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
     });
     expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('saves a stored answer with trailing citation markup in its cleaned form', async () => {
+    stored!.content = `${ORIGINAL}\n${MARKUP}`;
+
+    const response = await PATCH(request(), context);
+
+    expect((await response.json()).content).toBe(`${EXPECTED}\n`);
+    expect(saveCalls()[0]?.[1]).toEqual([
+      `${EXPECTED}\n`,
+      MESSAGE_ID,
+      CONVERSATION_ID,
+      `${ORIGINAL}\n${MARKUP}`,
+      expect.any(String),
+    ]);
+    expect(mocks.indexArtifacts.mock.calls[0]?.[0].content).toBe(`${EXPECTED}\n`);
+  });
+
+  it.each([
+    ['inside the edited block', ORIGINAL.replace('Second draft.', `Second ${MARKUP}draft.`)],
+    ['inside a sibling block', ORIGINAL.replace('First draft.', `First ${MARKUP}draft.`)],
+    ['in the prose before the blocks', ORIGINAL.replace('Before', `Be${MARKUP}fore`)],
+  ])(
+    'accepts an edit from a client holding the cleaned text when markup sits %s',
+    async (_where, rawStored) => {
+      stored!.content = rawStored;
+
+      const response = await PATCH(request(), context);
+
+      expect(response.status).toBe(200);
+      expect(saveCalls()).toHaveLength(1);
+      const params = saveCalls()[0]?.[1] as string[];
+      expect(params[0]).toBe(EXPECTED);
+      expect(params[0]).not.toMatch(MARKUP_CHARACTERS);
+      expect(params[3]).toBe(rawStored);
+      expect((await response.json()).content).toBe(EXPECTED);
+    },
+  );
+
+  it.each([
+    { source: 'An old draft.' },
+    { source: 'Second draft. And more.' },
+    { index: 0 },
+    { index: 9 },
+    { language: 'writing' },
+  ])(
+    'still rejects a stale source or block identity on a row holding markup: %j',
+    async (change) => {
+      stored!.content = ORIGINAL.replace('Second draft.', `Second ${MARKUP}draft.`);
+
+      const response = await PATCH(request({ fenceEdit: { ...EDIT, ...change } }), context);
+
+      expect(response.status).toBe(409);
+      expectNoWrite();
+    },
+  );
+
+  it('refuses a source that still carries the markup, so only the cleaned text is the baseline', async () => {
+    stored!.content = ORIGINAL.replace('Second draft.', `Second ${MARKUP}draft.`);
+
+    const response = await PATCH(
+      request({ fenceEdit: { ...EDIT, source: `Second ${MARKUP}draft.` } }),
+      context,
+    );
+
+    expect(response.status).toBe(409);
+    expectNoWrite();
   });
 
   it('waits for SQL confirmation before indexing the authoritative saved source', async () => {

@@ -2,6 +2,11 @@
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
+jest.mock('@/lib/v1FeatureFlags', () => {
+  const actual = jest.requireActual('@/lib/v1FeatureFlags');
+  return { FEATURES: { ...actual.FEATURES, companion: true, dispatch: true } };
+});
+
 jest.mock('react-native-webrtc', () => ({
   RTCPeerConnection: jest.fn().mockImplementation(() => ({
     close: jest.fn(),
@@ -37,6 +42,7 @@ jest.mock('@/lib/mmkv', () => ({
   },
 }));
 
+let mockSearchParams: { pairingCode?: string } = {};
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
@@ -45,7 +51,7 @@ jest.mock('expo-router', () => ({
     canGoBack: () => false,
     replace: jest.fn(),
   }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -132,6 +138,7 @@ import CompanionScreen from '../app/(app)/companion/index';
 import { stopHealthChecks, stopReconnectRecovery } from '@/services/companion';
 import { useAgentStore } from '../stores/agentStore';
 import { useConnectionStore } from '../stores/connectionStore';
+import { useTierStore } from '../src/features/billing/store';
 
 describe('CompanionScreen', () => {
   beforeEach(() => {
@@ -223,5 +230,73 @@ describe('CompanionScreen, reconnect ownership', () => {
     screen.unmount();
 
     expect(stopReconnectRecovery).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CompanionScreen, plan without remote control', () => {
+  const connect = jest.fn();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSearchParams = {};
+    mockHasSeenDispatchSetup = true;
+    useAgentStore.setState({ pendingApprovals: [] });
+    useConnectionStore.setState({ status: 'disconnected', pairingCode: null, connect });
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: null });
+  });
+
+  afterAll(() => {
+    mockSearchParams = {};
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: null });
+  });
+
+  it('offers a Free plan no pairing flow, no scanner and no upgrade path', () => {
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: '2026-11-14T00:00:00.000Z' });
+
+    const screen = render(<CompanionScreen />);
+
+    expect(screen.getByLabelText('unavailable-entitlement')).toBeTruthy();
+    expect(screen.getByText(/isn’t included in your plan/)).toBeTruthy();
+    expect(screen.queryByTestId('disconnected-view')).toBeNull();
+    expect(screen.queryByTestId('dispatch-setup-checklist')).toBeNull();
+    expect(screen.queryByText(/upgrade|price|\$/i)).toBeNull();
+  });
+
+  it('does not pair from a deep link while the plan lacks the capability', () => {
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: '2026-11-14T00:00:00.000Z' });
+    mockSearchParams = { pairingCode: 'ABCD1234' };
+
+    render(<CompanionScreen />);
+
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it('keeps the pairing flow for a paid plan', () => {
+    useTierStore.setState({ tier: 'pro', lastRefreshedAt: '2026-11-14T00:00:00.000Z' });
+    mockSearchParams = { pairingCode: 'ABCD1234' };
+
+    const screen = render(<CompanionScreen />);
+
+    expect(screen.queryByLabelText('unavailable-entitlement')).toBeNull();
+    expect(screen.getByTestId('disconnected-view')).toBeTruthy();
+    expect(connect).toHaveBeenCalledWith('ABCD1234');
+  });
+
+  it('keeps an already paired computer reachable on a Free plan', () => {
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: '2026-11-14T00:00:00.000Z' });
+    useConnectionStore.setState({ pairingCode: 'ABCD1234', desktopName: 'Studio' });
+
+    const screen = render(<CompanionScreen />);
+
+    expect(screen.queryByLabelText('unavailable-entitlement')).toBeNull();
+  });
+
+  it('does not flash the unavailable state while the plan is still unknown', () => {
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: null });
+
+    const screen = render(<CompanionScreen />);
+
+    expect(screen.queryByLabelText('unavailable-entitlement')).toBeNull();
+    expect(screen.getByTestId('disconnected-view')).toBeTruthy();
   });
 });

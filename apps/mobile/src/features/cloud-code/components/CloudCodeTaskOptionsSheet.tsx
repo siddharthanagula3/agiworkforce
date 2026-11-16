@@ -18,6 +18,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { PageSheetSafeArea } from '@/src/features/chat/components/ModalSafeArea';
 import {
   CLOUD_CODE_OPTIONS_COPY as COPY,
   CLOUD_CODE_TURN_MODE_OPTIONS,
@@ -174,125 +175,129 @@ export function CloudCodeTaskOptionsSheet({
       accessibilityViewIsModal
       onRequestClose={onClose}
     >
-      <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-          <Text
-            accessibilityRole="header"
-            style={{
-              flex: 1,
-              color: colors.textPrimary,
-              fontSize: typeScale.headline,
-              fontWeight: '600',
-            }}
-          >
-            {COPY.heading}
-          </Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel={COPY.close}
-            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <X size={18} color={colors.textMuted} />
-          </Pressable>
-        </View>
-        <ScrollView contentContainerStyle={{ gap: 20, paddingBottom: 32 }}>
-          {turnControls ? (
-            <>
-              <Section title={COPY.mode}>
-                <View accessibilityRole="radiogroup">
-                  {CLOUD_CODE_TURN_MODE_OPTIONS.map((option) => (
-                    <Choice
-                      key={option.id}
-                      label={option.label}
-                      description={option.description}
-                      selected={mode === option.id}
-                      onPress={() => onModeChange(option.id)}
-                    />
-                  ))}
-                </View>
-              </Section>
-              <Section title={COPY.steps}>
-                <View accessibilityRole="radiogroup">
-                  {CLOUD_CODE_TURN_STEP_BOUNDS.map((bound) => (
-                    <Choice
-                      key={bound}
-                      label={`${bound} ${COPY.stepsUnit}`}
-                      description={CLOUD_CODE_TURN_STEP_HINTS[bound]}
-                      selected={steps === bound}
-                      onPress={() => onStepsChange(bound)}
-                    />
-                  ))}
-                </View>
-              </Section>
-            </>
-          ) : (
-            <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 19 }}>
-              {COPY.ownAgent}
+      <PageSheetSafeArea style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+        <View style={{ flex: 1, backgroundColor: colors.surfaceBase, padding: dialogPadding }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Text
+              accessibilityRole="header"
+              style={{
+                flex: 1,
+                color: colors.textPrimary,
+                fontSize: typeScale.headline,
+                fontWeight: '600',
+              }}
+            >
+              {COPY.heading}
             </Text>
-          )}
-
-          <Section title={COPY.usage}>
-            {contextPercent !== null ? (
-              <UsageRow label={COPY.contextWindow} percent={contextPercent} detail={null} />
-            ) : null}
-            {snapshot ? (
+            <Pressable
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel={COPY.close}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <X size={18} color={colors.textMuted} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ gap: 20, paddingBottom: 32 }}>
+            {turnControls ? (
               <>
-                {snapshot.sessionResetAt !== null ? (
-                  <UsageRow
-                    label={managedUsageBucketLabel('session')}
-                    percent={snapshot.sessionUsagePercentage}
-                    detail={formatUsageResetIn(snapshot.sessionResetAt)}
-                  />
-                ) : null}
-                {snapshot.weeklyResetAt !== null ? (
-                  <UsageRow
-                    label={managedUsageBucketLabel('weekly')}
-                    percent={snapshot.weeklyUsagePercentage}
-                    detail={formatUsageResetIn(snapshot.weeklyResetAt)}
-                  />
-                ) : null}
-                {snapshot.flagshipWeeklyResetAt !== null ? (
-                  <UsageRow
-                    label={managedUsageBucketLabel('weeklyFlagship')}
-                    percent={snapshot.flagshipWeeklyUsagePercentage}
-                    detail={formatUsageResetIn(snapshot.flagshipWeeklyResetAt)}
-                  />
-                ) : null}
-                <UsageRow
-                  label={managedUsageBucketLabel('period')}
-                  percent={snapshot.usagePercentage}
-                  detail={formatUsageResetIn(snapshot.usageResetAt)}
-                />
+                <Section title={COPY.mode}>
+                  <View accessibilityRole="radiogroup">
+                    {CLOUD_CODE_TURN_MODE_OPTIONS.map((option) => (
+                      <Choice
+                        key={option.id}
+                        label={option.label}
+                        description={option.description}
+                        selected={mode === option.id}
+                        onPress={() => onModeChange(option.id)}
+                      />
+                    ))}
+                  </View>
+                </Section>
+                <Section title={COPY.steps}>
+                  <View accessibilityRole="radiogroup">
+                    {CLOUD_CODE_TURN_STEP_BOUNDS.map((bound) => (
+                      <Choice
+                        key={bound}
+                        label={`${bound} ${COPY.stepsUnit}`}
+                        description={CLOUD_CODE_TURN_STEP_HINTS[bound]}
+                        selected={steps === bound}
+                        onPress={() => onStepsChange(bound)}
+                      />
+                    ))}
+                  </View>
+                </Section>
               </>
-            ) : loading ? (
-              <LoadingIndicator />
             ) : (
-              <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
-                {COPY.usageUnavailable}
+              <Text
+                style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 19 }}
+              >
+                {COPY.ownAgent}
               </Text>
             )}
-            <Pressable
-              onPress={openUsage}
-              accessibilityRole="link"
-              accessibilityLabel={COPY.usageDetail}
-              style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-            >
-              <Text
-                style={{
-                  flex: 1,
-                  color: colors.textPrimary,
-                  fontSize: typeScale.subhead,
-                  fontWeight: '600',
-                }}
+
+            <Section title={COPY.usage}>
+              {contextPercent !== null ? (
+                <UsageRow label={COPY.contextWindow} percent={contextPercent} detail={null} />
+              ) : null}
+              {snapshot ? (
+                <>
+                  {snapshot.sessionResetAt !== null ? (
+                    <UsageRow
+                      label={managedUsageBucketLabel('session')}
+                      percent={snapshot.sessionUsagePercentage}
+                      detail={formatUsageResetIn(snapshot.sessionResetAt)}
+                    />
+                  ) : null}
+                  {snapshot.weeklyResetAt !== null ? (
+                    <UsageRow
+                      label={managedUsageBucketLabel('weekly')}
+                      percent={snapshot.weeklyUsagePercentage}
+                      detail={formatUsageResetIn(snapshot.weeklyResetAt)}
+                    />
+                  ) : null}
+                  {snapshot.flagshipWeeklyResetAt !== null ? (
+                    <UsageRow
+                      label={managedUsageBucketLabel('weeklyFlagship')}
+                      percent={snapshot.flagshipWeeklyUsagePercentage}
+                      detail={formatUsageResetIn(snapshot.flagshipWeeklyResetAt)}
+                    />
+                  ) : null}
+                  <UsageRow
+                    label={managedUsageBucketLabel('period')}
+                    percent={snapshot.usagePercentage}
+                    detail={formatUsageResetIn(snapshot.usageResetAt)}
+                  />
+                </>
+              ) : loading ? (
+                <LoadingIndicator />
+              ) : (
+                <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+                  {COPY.usageUnavailable}
+                </Text>
+              )}
+              <Pressable
+                onPress={openUsage}
+                accessibilityRole="link"
+                accessibilityLabel={COPY.usageDetail}
+                style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 }}
               >
-                {COPY.usageDetail}
-              </Text>
-              <ChevronRight size={16} color={colors.textMuted} />
-            </Pressable>
-          </Section>
-        </ScrollView>
-      </View>
+                <Text
+                  style={{
+                    flex: 1,
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                  }}
+                >
+                  {COPY.usageDetail}
+                </Text>
+                <ChevronRight size={16} color={colors.textMuted} />
+              </Pressable>
+            </Section>
+          </ScrollView>
+        </View>
+      </PageSheetSafeArea>
     </Modal>
   );
 }

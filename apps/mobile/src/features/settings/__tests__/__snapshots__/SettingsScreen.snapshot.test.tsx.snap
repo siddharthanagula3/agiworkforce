@@ -30,28 +30,6 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
       }
     >
       <View
-        style={
-          {
-            "width": 40,
-          }
-        }
-      />
-      <Text
-        accessibilityRole="header"
-        numberOfLines={1}
-        style={
-          {
-            "color": "#fff",
-            "flex": 1,
-            "fontSize": 17,
-            "fontWeight": "600",
-            "textAlign": "center",
-          }
-        }
-      >
-        Settings
-      </Text>
-      <View
         accessibilityLabel="Close settings"
         accessibilityRole="button"
         accessibilityState={
@@ -74,7 +52,6 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         accessible={true}
         collapsable={false}
         focusable={true}
-        hitSlop={10}
         onBlur={[Function]}
         onClick={[Function]}
         onFocus={[Function]}
@@ -88,10 +65,10 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           {
             "alignItems": "center",
             "backgroundColor": "#1a1a1a",
-            "borderRadius": 20,
-            "height": 40,
+            "borderRadius": 22,
+            "height": 44,
             "justifyContent": "center",
-            "width": 40,
+            "width": 44,
           }
         }
       >
@@ -99,6 +76,70 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           color="#aaa"
           size={20}
           testID="icon-X"
+        />
+      </View>
+      <Text
+        accessibilityRole="header"
+        numberOfLines={1}
+        style={
+          {
+            "color": "#fff",
+            "flex": 1,
+            "fontSize": 17,
+            "fontWeight": "600",
+            "textAlign": "center",
+          }
+        }
+      >
+        Settings
+      </Text>
+      <View
+        accessibilityLabel="About AGI"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "alignItems": "center",
+            "backgroundColor": "#1a1a1a",
+            "borderRadius": 22,
+            "height": 44,
+            "justifyContent": "center",
+            "width": 44,
+          }
+        }
+      >
+        <View
+          color="#aaa"
+          size={20}
+          testID="icon-Info"
         />
       </View>
     </View>
@@ -111,8 +152,51 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         "paddingHorizontal": 16,
       }
     }
+    keyboardShouldPersistTaps="handled"
   >
     <View>
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "backgroundColor": undefined,
+            "borderColor": "#333",
+            "borderRadius": 14,
+            "borderWidth": 1,
+            "flexDirection": "row",
+            "gap": 9,
+            "marginBottom": 16,
+            "minHeight": 44,
+            "paddingHorizontal": 13,
+            "paddingVertical": 8,
+          }
+        }
+      >
+        <View
+          color="#777"
+          size={17}
+          testID="icon-Search"
+        />
+        <TextInput
+          accessibilityLabel="Search settings"
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxFontSizeMultiplier={2}
+          onChangeText={[Function]}
+          placeholder="Search settings"
+          placeholderTextColor="#777"
+          returnKeyType="search"
+          style={
+            {
+              "color": "#fff",
+              "flex": 1,
+              "fontSize": 15,
+              "paddingVertical": 0,
+            }
+          }
+          value=""
+        />
+      </View>
       <View
         style={
           {
@@ -140,7 +224,9 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           <View
             accessibilityHint="Switches to Local Mode without Cloud context"
             accessibilityLabel="Local Mode"
+            accessibilityLargeContentTitle="Local"
             accessibilityRole="button"
+            accessibilityShowsLargeContentViewer={true}
             accessibilityState={
               {
                 "busy": undefined,
@@ -186,8 +272,8 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 "flex": 1,
                 "flexDirection": "row",
                 "gap": 6,
-                "height": 38,
                 "justifyContent": "center",
+                "minHeight": 38,
                 "minWidth": 44,
               }
             }
@@ -199,7 +285,9 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               testID="icon-Cpu"
             />
             <Text
-              maxFontSizeMultiplier={1.4}
+              adjustsFontSizeToFit={true}
+              maxFontSizeMultiplier={2}
+              minimumFontScale={0.7}
               numberOfLines={1}
               style={
                 {
@@ -217,7 +305,9 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           <View
             accessibilityHint="Opens AGI Cloud access"
             accessibilityLabel="AGI Cloud, sign in required"
+            accessibilityLargeContentTitle="Cloud"
             accessibilityRole="button"
+            accessibilityShowsLargeContentViewer={true}
             accessibilityState={
               {
                 "busy": undefined,
@@ -263,8 +353,8 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 "flex": 1,
                 "flexDirection": "row",
                 "gap": 6,
-                "height": 38,
                 "justifyContent": "center",
+                "minHeight": 38,
                 "minWidth": 44,
               }
             }
@@ -276,7 +366,9 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               testID="icon-Cloud"
             />
             <Text
-              maxFontSizeMultiplier={1.4}
+              adjustsFontSizeToFit={true}
+              maxFontSizeMultiplier={2}
+              minimumFontScale={0.7}
               numberOfLines={1}
               style={
                 {
@@ -748,6 +840,77 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Time and focus"
+            accessibilityLabel="Time and focus"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#aaa"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-MoonStar"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "fontSize": 15,
+                }
+              }
+              testID="settings-row-label-time-and-focus"
+            >
+              Time and focus
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
             accessibilityHint="Opens Quick Access"
             accessibilityLabel="Quick Access"
             accessibilityRole="button"
@@ -1033,7 +1196,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           </View>
           <View
             accessibilityHint="Opens Parental Controls"
-            accessibilityLabel="Parental Controls"
+            accessibilityLabel="Parental Controls. Not set"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -1095,6 +1258,20 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               testID="settings-row-label-parental-controls"
             >
               Parental Controls
+            </Text>
+            <Text
+              maxFontSizeMultiplier={2}
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#777",
+                  "flexShrink": 1,
+                  "fontSize": 14,
+                  "textAlign": "right",
+                }
+              }
+            >
+              Not set
             </Text>
             <View
               color="#777"
@@ -1526,7 +1703,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               {
                 "alignItems": "center",
                 "borderBottomColor": "#333",
-                "borderBottomWidth": 0,
+                "borderBottomWidth": 1,
                 "flexDirection": "row",
                 "gap": 12,
                 "minHeight": 50,
@@ -1553,6 +1730,77 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               testID="settings-row-label-data-controls"
             >
               Data Controls
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            accessibilityHint="Opens Privacy"
+            accessibilityLabel="Privacy"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 0,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#aaa"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-LockKeyhole"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flexGrow": 1,
+                  "flexShrink": 0,
+                  "fontSize": 15,
+                }
+              }
+              testID="settings-row-label-privacy"
+            >
+              Privacy
             </Text>
             <View
               color="#777"

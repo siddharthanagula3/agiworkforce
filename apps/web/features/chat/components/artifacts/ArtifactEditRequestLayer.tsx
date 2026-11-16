@@ -5,7 +5,7 @@ import { Check, ImageUp, MessageSquarePlus, X } from 'lucide-react';
 import { isImageSelection } from './design/design-edits';
 import type { ArtifactPickerSelection } from '@/lib/artifact-sandbox';
 import { cn } from '@shared/lib/utils';
-import { normalizeEditInstruction } from './artifact-edit-request';
+import { normalizeEditInstruction } from '@agiworkforce/unified-chat/artifact-edit-request';
 
 export const SELECT_CONTENT_PROMPT = 'Select content and ask for changes';
 export const CANCEL_EDIT_REQUEST = 'Cancel';

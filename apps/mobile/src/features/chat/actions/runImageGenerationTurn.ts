@@ -1,7 +1,7 @@
 import type { ManagedMediaImageOperation } from '@agiworkforce/cloud-contracts';
 import type { MessageAttachment } from '@/types/chat';
 import { ApiPaywallError } from '@/services/api';
-import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
+import { ApiHttpError, CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
 import { readReferenceImageBase64 } from '@/src/features/image/services/imageReference';
 import type { MobileImageReferenceAttachment } from './resolveMobileImageGenerationRequest';
 import {
@@ -51,6 +51,7 @@ export interface RunImageGenerationTurnInput {
   sourceImageBase64?: string;
   maskImageBase64?: string;
   referenceImages?: MobileImageReferenceAttachment[];
+  replayOnRetry?: boolean;
   ownerId: string;
   onStarted?: () => void;
   begin: (
@@ -65,7 +66,12 @@ export interface RunImageGenerationTurnInput {
     assistantMessageId: string,
     result: ImageTurnCompletion,
   ) => void;
-  fail: (conversationId: string, assistantMessageId: string, message: string) => void;
+  fail: (
+    conversationId: string,
+    assistantMessageId: string,
+    message: string,
+    retryAt?: number,
+  ) => void;
   remove: (conversationId: string, assistantMessageId: string) => void;
   onPaywall: (error: ApiPaywallError) => void;
   onUnexpectedError?: (error: unknown) => void;
@@ -171,7 +177,7 @@ export async function runImageGenerationTurn(
   if (
     (outcome.status === 'failed' || outcome.stopped === true) &&
     outcome.assistantMessageId &&
-    editOperation
+    (editOperation || input.replayOnRetry)
   ) {
     rememberImageEditRetry(outcome.assistantMessageId, {
       conversationId: input.conversationId,
@@ -179,7 +185,8 @@ export async function runImageGenerationTurn(
       prompt: input.prompt,
       model: input.model,
       ownerId: input.ownerId,
-      operation: editOperation,
+      ...(editOperation ? { operation: editOperation } : {}),
+      ...(input.replayOnRetry ? { replayOnRetry: true } : {}),
       ...(input.aspectRatio ? { aspectRatio: input.aspectRatio } : {}),
       ...(input.transparentBackground ? { transparentBackground: true } : {}),
       ...(input.sourceImage ? { sourceImage: input.sourceImage } : {}),
@@ -328,6 +335,15 @@ async function executeImageGenerationTurn(
 
     if (error instanceof ImageGenerationTimeout) {
       input.fail(input.conversationId, assistantMessageId, IMAGE_GENERATION_TIMEOUT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
+    }
+
+    if (error instanceof ApiHttpError && error.status === 429) {
+      const retryAt =
+        error.retryAfterSeconds !== undefined
+          ? Date.now() + error.retryAfterSeconds * 1000
+          : undefined;
+      input.fail(input.conversationId, assistantMessageId, error.message, retryAt);
       return { status: 'failed', assistantMessageId };
     }
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 const mockModelPicker = jest.fn().mockReturnValue(null);
 
@@ -89,6 +90,25 @@ describe('Mobile schedule form', () => {
       }),
     );
     expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('attachments');
+  });
+
+  it('draws the Prompt field as one bordered box that grows with the text', () => {
+    const screen = render(<ScheduleForm onSubmit={jest.fn()} onCancel={jest.fn()} />);
+
+    const prompt = screen.getByLabelText('Prompt');
+    const own = StyleSheet.flatten(prompt.props.style);
+    expect(own.borderWidth).toBe(1);
+    expect(own.height).toBe('auto');
+
+    let ancestor = prompt.parent;
+    while (ancestor) {
+      if (typeof ancestor.type === 'string') {
+        const style = StyleSheet.flatten(ancestor.props.style) ?? {};
+        expect(style.borderWidth ?? 0).toBe(0);
+        expect(String(ancestor.props.className ?? '')).not.toMatch(/\bborder\b/);
+      }
+      ancestor = ancestor.parent;
+    }
   });
 
   it('does not silently rewrite a legacy unsupported cadence when editing', () => {

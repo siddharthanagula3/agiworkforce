@@ -13,7 +13,10 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
+import {
+  DIRECTORY_CATEGORIES,
+  type DirectoryCategory,
+} from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
 import {
   DIRECTORY_CONNECTABLE_MODES,
@@ -83,6 +86,20 @@ function selectRecords(
   return selected;
 }
 
+function categoriesWithEntries(
+  records: readonly DirectoryRecord[],
+  query: ConnectorDirectoryQuery,
+  selected: readonly DirectoryRecord[],
+): DirectoryCategory[] {
+  const scope = query.category
+    ? selectRecords(records, { ...query, category: undefined })
+    : selected;
+  return DIRECTORY_CATEGORIES.filter(
+    (category) =>
+      category === query.category || scope.some((record) => record.categories.includes(category)),
+  );
+}
+
 function readQuery(url: URL) {
   const raw = Object.fromEntries(
     Object.keys(ConnectorDirectoryQuerySchema.shape).map((key) => [
@@ -121,7 +138,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         entries: page.map(toDirectoryEntryView),
         total: selected.length,
         nextCursor: nextOffset < selected.length ? String(nextOffset) : null,
-        categories: [...DIRECTORY_CATEGORIES],
+        categories: categoriesWithEntries(view.records, query, selected),
         connectableModes: [...DIRECTORY_CONNECTABLE_MODES],
         stats: {
           ...view.counts,

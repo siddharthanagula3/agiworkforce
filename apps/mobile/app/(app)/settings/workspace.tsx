@@ -4,15 +4,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import {
-  ArrowLeft,
-  AlertCircle,
-  Building2,
-  Check,
-  Users,
-  UserRound,
-  Trash2,
-} from 'lucide-react-native';
+import { AlertCircle, Building2, Check, Users, UserRound, Trash2 } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
@@ -26,6 +18,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/Common';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import {
   WORKSPACE_ROLES,
   fetchWorkspaceMembers,
@@ -324,37 +317,7 @@ export default function WorkspaceScreen() {
     [load],
   );
 
-  const header = (
-    <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
-      <Pressable
-        onPress={handleBack}
-        hitSlop={8}
-        style={({ pressed }) => ({
-          width: 42,
-          height: 42,
-          borderRadius: 21,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: pressed ? c.surfaceHover : c.transparent,
-        })}
-        accessibilityLabel="Go back"
-        accessibilityRole="button"
-      >
-        <ArrowLeft size={22} color={c.textPrimary} />
-      </Pressable>
-      <Text
-        style={{
-          flex: 1,
-          color: c.textPrimary,
-          fontSize: typeScale.title3,
-          fontWeight: '700',
-          marginLeft: 4,
-        }}
-      >
-        Workspace
-      </Text>
-    </View>
-  );
+  const header = <ScreenHeader title="Workspace" onBack={handleBack} />;
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (

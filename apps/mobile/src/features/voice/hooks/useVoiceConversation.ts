@@ -8,6 +8,10 @@ import {
   activeSpeechLanguage,
   autoListenEnabled,
 } from '@/src/features/voice/services/speechSettings';
+import {
+  VOICE_INPUT_DISABLED_MESSAGE,
+  voiceFailureMessage,
+} from '@/src/features/voice/services/voiceFailure';
 import type { VoiceHandoff } from '@/src/features/voice/services/voiceHandoff';
 import type {
   VoiceOutputHandle,
@@ -40,23 +44,10 @@ interface CaptureEntry {
   capture: VoiceInput.VoiceCaptureSession | null;
 }
 
-export const VOICE_INPUT_DISABLED_MESSAGE =
-  'Voice Input is off. Turn it on in Settings, Voice to use the microphone.';
+export { VOICE_INPUT_DISABLED_MESSAGE };
 
 export function voiceCaptureErrorMessage(err: unknown): string {
-  if (err instanceof VoiceInput.VoiceCaptureError) {
-    if (err.code === 'mic-permission-denied') {
-      return 'Microphone access is off. Enable microphone permission in Settings to use voice.';
-    }
-    if (err.code === 'on-device-recognition-unavailable') {
-      return 'On-device speech recognition is not available for this device or language yet.';
-    }
-    if (err.code === 'already-active') return 'Voice capture is already running.';
-    if (err.code === 'max-duration-reached') return err.message;
-    if (err.code === 'voice-input-disabled') return VOICE_INPUT_DISABLED_MESSAGE;
-    return err.message;
-  }
-  return 'Voice input could not start. Please try again.';
+  return voiceFailureMessage(err);
 }
 
 export function useVoiceConversation(options: UseVoiceConversationOptions) {

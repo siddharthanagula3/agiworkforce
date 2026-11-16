@@ -5,11 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
+import { FLOATING_PRIMARY_ACTION_LIST_PADDING } from '@/src/shared/components/FloatingPrimaryAction';
 import { elevation, motion, radii, spacing, useThemeColors, zIndex } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 
 const TOAST_DURATION_MS = 5_000;
+const TOAST_ACTION_DURATION_MS = 8_000;
+const TOAST_TAP_GUARD_MS = 400;
 
 export interface ToastAction {
   label: string;
@@ -24,31 +27,108 @@ interface ToastEntry {
 
 interface ToastState {
   current: ToastEntry | null;
+  guard: ToastEntry | null;
   show: (message: string, action?: ToastAction) => void;
   dismiss: (id: number) => void;
+  releaseGuard: (id: number) => void;
 }
 
 let nextToastId = 0;
 
 const useToastStore = create<ToastState>()((set) => ({
   current: null,
+  guard: null,
   show: (message, action) => {
     nextToastId += 1;
-    set({ current: { id: nextToastId, message, ...(action ? { action } : {}) } });
+    set({ current: { id: nextToastId, message, ...(action ? { action } : {}) }, guard: null });
   },
-  dismiss: (id) => set((state) => (state.current?.id === id ? { current: null } : state)),
+  dismiss: (id) =>
+    set((state) =>
+      state.current?.id === id
+        ? { current: null, guard: state.current.action ? state.current : null }
+        : state,
+    ),
+  releaseGuard: (id) => set((state) => (state.guard?.id === id ? { guard: null } : state)),
 }));
 
 export function showToast(message: string, action?: ToastAction): void {
   useToastStore.getState().show(message, action);
 }
 
-export function ToastHost() {
+function ToastBody({
+  entry,
+  inert,
+  onAction,
+}: {
+  entry: ToastEntry;
+  inert?: boolean;
+  onAction?: () => void;
+}) {
   const colors = useThemeColors();
+  return (
+    <View
+      testID={inert ? 'toast-tap-guard' : undefined}
+      accessibilityElementsHidden={inert}
+      importantForAccessibility={inert ? 'no-hide-descendants' : undefined}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        maxWidth: 520,
+        minHeight: 44,
+        paddingLeft: spacing.lg,
+        paddingRight: entry.action ? spacing.sm : spacing.lg,
+        paddingVertical: spacing.sm,
+        borderRadius: radii.xl,
+        borderWidth: 1,
+        borderColor: inert ? colors.transparent : colors.border,
+        backgroundColor: inert ? colors.transparent : colors.surfaceElevated,
+        ...(inert ? {} : elevation.e2),
+      }}
+    >
+      <Text
+        style={{
+          flexShrink: 1,
+          color: colors.textPrimary,
+          fontSize: typeScale.subhead,
+          opacity: inert ? 0 : 1,
+        }}
+      >
+        {entry.message}
+      </Text>
+      {entry.action ? (
+        <Pressable
+          onPress={onAction}
+          disabled={inert}
+          accessibilityRole="button"
+          accessibilityLabel={entry.action.label}
+          style={{
+            minHeight: 44,
+            minWidth: 44,
+            paddingHorizontal: spacing.md,
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: inert ? 0 : 1,
+          }}
+        >
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}
+          >
+            {entry.action.label}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+export function ToastHost() {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReduceMotion();
   const current = useToastStore((s) => s.current);
+  const guard = useToastStore((s) => s.guard);
   const dismiss = useToastStore((s) => s.dismiss);
+  const releaseGuard = useToastStore((s) => s.releaseGuard);
 
   useEffect(() => {
     if (!current) return;
@@ -60,9 +140,9 @@ export function ToastHost() {
       timer = setTimeout(() => dismiss(current.id), durationMs);
     };
     if (current.action) {
-      AccessibilityInfo.getRecommendedTimeoutMillis(TOAST_DURATION_MS).then(
-        (recommendedMs) => scheduleDismiss(Math.max(TOAST_DURATION_MS, recommendedMs)),
-        () => scheduleDismiss(TOAST_DURATION_MS),
+      AccessibilityInfo.getRecommendedTimeoutMillis(TOAST_ACTION_DURATION_MS).then(
+        (recommendedMs) => scheduleDismiss(Math.max(TOAST_ACTION_DURATION_MS, recommendedMs)),
+        () => scheduleDismiss(TOAST_ACTION_DURATION_MS),
       );
     } else {
       scheduleDismiss(TOAST_DURATION_MS);
@@ -73,7 +153,13 @@ export function ToastHost() {
     };
   }, [current, dismiss]);
 
-  if (!current) return null;
+  useEffect(() => {
+    if (!guard) return;
+    const timer = setTimeout(() => releaseGuard(guard.id), TOAST_TAP_GUARD_MS);
+    return () => clearTimeout(timer);
+  }, [guard, releaseGuard]);
+
+  if (!current && !guard) return null;
 
   return (
     <View
@@ -82,59 +168,29 @@ export function ToastHost() {
         position: 'absolute',
         left: spacing.lg,
         right: spacing.lg,
-        bottom: insets.bottom + spacing['3xl'] + spacing['4xl'],
+        bottom: insets.bottom + FLOATING_PRIMARY_ACTION_LIST_PADDING,
         alignItems: 'center',
         zIndex: zIndex.notification,
       }}
     >
-      <Animated.View
-        key={current.id}
-        entering={reduceMotion ? undefined : FadeInDown.duration(motion.quick)}
-        exiting={reduceMotion ? undefined : FadeOutDown.duration(motion.quick)}
-        accessibilityLiveRegion="polite"
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: spacing.md,
-          maxWidth: 520,
-          minHeight: 44,
-          paddingLeft: spacing.lg,
-          paddingRight: current.action ? spacing.sm : spacing.lg,
-          paddingVertical: spacing.sm,
-          borderRadius: radii.xl,
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surfaceElevated,
-          ...elevation.e2,
-        }}
-      >
-        <Text style={{ flexShrink: 1, color: colors.textPrimary, fontSize: typeScale.subhead }}>
-          {current.message}
-        </Text>
-        {current.action ? (
-          <Pressable
-            onPress={() => {
+      {current ? (
+        <Animated.View
+          key={current.id}
+          entering={reduceMotion ? undefined : FadeInDown.duration(motion.quick)}
+          exiting={reduceMotion ? undefined : FadeOutDown.duration(motion.quick)}
+          accessibilityLiveRegion="polite"
+        >
+          <ToastBody
+            entry={current}
+            onAction={() => {
               dismiss(current.id);
               current.action?.onPress();
             }}
-            accessibilityRole="button"
-            accessibilityLabel={current.action.label}
-            style={{
-              minHeight: 44,
-              minWidth: 44,
-              paddingHorizontal: spacing.md,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Text
-              style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}
-            >
-              {current.action.label}
-            </Text>
-          </Pressable>
-        ) : null}
-      </Animated.View>
+          />
+        </Animated.View>
+      ) : guard ? (
+        <ToastBody entry={guard} inert />
+      ) : null}
     </View>
   );
 }

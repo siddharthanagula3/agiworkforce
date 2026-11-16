@@ -68,6 +68,24 @@ export interface CloudCodeRuntime {
   runsOwnAgent?: boolean;
 }
 
+const RUNTIME_MB_PER_GB = 1024;
+export const CLOUD_CODE_RUNTIME_NEEDS_KEY = 'needs your own API key';
+
+export function describeCloudCodeRuntime(
+  runtime: Pick<
+    CloudCodeRuntime,
+    'name' | 'summary' | 'cpuCount' | 'memoryMB' | 'needsUserCredential'
+  >,
+): string {
+  const cores = runtime.cpuCount > 0 ? `${runtime.cpuCount} vCPU` : null;
+  const memory =
+    runtime.memoryMB > 0 ? `${Math.round(runtime.memoryMB / RUNTIME_MB_PER_GB)} GB RAM` : null;
+  const summary = runtime.summary.replace(/[.。]+$/u, '');
+  const detail = [summary, [cores, memory].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
+  const label = detail ? `${runtime.name}, ${detail}` : runtime.name;
+  return runtime.needsUserCredential ? `${label}, ${CLOUD_CODE_RUNTIME_NEEDS_KEY}` : label;
+}
+
 export interface CloudCodeSession {
   id: string;
   title: string;
@@ -448,4 +466,50 @@ export interface CloudCodeNotebookFile {
   name: string;
   isDir: boolean;
   byteSize: number;
+}
+
+export const CLOUD_CODE_ENVIRONMENT_LIMITS = {
+  name: 60,
+  perAccount: 20,
+  setupScriptBytes: 16_384,
+} as const;
+
+export const CLOUD_CODE_BUILT_IN_ENVIRONMENT = Object.freeze({
+  name: 'Default',
+  networkAccess: 'trusted' as CloudCodeNetworkAccess,
+});
+
+export interface CloudCodeEnvironment {
+  id: string;
+  name: string;
+  networkAccess: CloudCodeNetworkAccess;
+  extraHosts: string[];
+  allowPackageManagers: boolean;
+  setupScript: string;
+  /** Names only: a stored value is never sent back to a client. */
+  variableNames: string[];
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CloudCodeEnvironmentListResponse {
+  environments: CloudCodeEnvironment[];
+  limit: number;
+}
+
+export interface UpdateCloudCodeEnvironmentInput {
+  name?: string;
+  networkAccess?: CloudCodeNetworkAccess;
+  fullNetworkAcknowledged?: boolean;
+  extraHosts?: string[];
+  allowPackageManagers?: boolean;
+  setupScript?: string;
+  isDefault?: boolean;
+}
+
+export interface CreateCloudCodeEnvironmentInput extends UpdateCloudCodeEnvironmentInput {
+  requestId: string;
+  name: string;
+  networkAccess: CloudCodeNetworkAccess;
 }

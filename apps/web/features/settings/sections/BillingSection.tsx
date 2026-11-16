@@ -60,7 +60,16 @@ import {
   PERSONAL_GRANT_PLAN_SENTENCE,
   PERSONAL_GRANT_SUPPORT_PATH,
   isPersonalGrantPlan,
+  planPeriodEndKind,
+  type PlanPeriodEndKind,
 } from '@/features/billing/lib/subscription-owner-presentation';
+
+const PERIOD_END_ROW_LABEL: Record<PlanPeriodEndKind, string> = {
+  trial: 'Trial ends on',
+  ends: 'Ends on',
+  renews: 'Renews on',
+  period: 'Current period ends',
+};
 
 interface PaymentMethod {
   id: string;
@@ -602,15 +611,11 @@ export function BillingSection() {
   })();
 
   const usageComparison = planUsageComparisonLabel(tier);
-  const periodEndLabel = formatBillingDateFromSeconds(subscription?.current_period_end ?? null);
-  const periodEndRowLabel =
-    billingStatus === 'trialing'
-      ? 'Trial ends on'
-      : endingSoon
-        ? 'Ends on'
-        : isManagedPaid
-          ? 'Renews on'
-          : 'Current period ends';
+  const periodEndKind = planPeriodEndKind(subscription, { endingSoon });
+  const periodEndLabel = periodEndKind
+    ? formatBillingDateFromSeconds(subscription?.current_period_end ?? null)
+    : null;
+  const periodEndRowLabel = periodEndKind ? PERIOD_END_ROW_LABEL[periodEndKind] : null;
 
   if (!billingInitialized || billingLoading) {
     return (
@@ -812,7 +817,7 @@ export function BillingSection() {
                 <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{billingSourceLabel}</span>
               </Row>
             )}
-            {periodEndLabel && (
+            {periodEndLabel && periodEndRowLabel && (
               <Row label={periodEndRowLabel}>
                 <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{periodEndLabel}</span>
               </Row>

@@ -3,6 +3,11 @@ import { Dimensions, Platform } from 'react-native';
 
 import { apiFetch } from '../../../../services/api';
 import { SUPPORT_DIAGNOSTICS_PATH } from '@agiworkforce/cloud-contracts/support';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import {
+  feedbackClientContext,
+  type FeedbackClientContext,
+} from '@/src/features/feedback/clientContext';
 
 /**
  * Shape of supportDiagnosticsSchema in packages/contracts/cloud-contracts/src/support.ts. There is no DOM here, so
@@ -16,6 +21,9 @@ export interface MobileDiagnosticsBundle {
   releaseSha: string | null;
   deployEnv: string | null;
   platform: string | null;
+  appBuild: FeedbackClientContext['appBuild'];
+  deviceClass: FeedbackClientContext['deviceClass'];
+  appMode: FeedbackClientContext['appMode'];
   locale: string | null;
   timeZone: string | null;
   viewport: { width: number; height: number } | null;
@@ -66,6 +74,7 @@ export function collectMobileDiagnostics(
   } = {},
 ): MobileDiagnosticsBundle {
   const resolved = readResolvedOptions();
+  const client = feedbackClientContext(useChatAppModeStore.getState().appMode);
 
   return {
     collectedAt: new Date().toISOString(),
@@ -74,6 +83,9 @@ export function collectMobileDiagnostics(
     releaseSha: null,
     deployEnv: null,
     platform: `${Platform.OS} ${String(Platform.Version)}`.trim(),
+    appBuild: client.appBuild,
+    deviceClass: client.deviceClass,
+    appMode: client.appMode,
     locale: resolved.locale ?? null,
     timeZone: resolved.timeZone ?? null,
     viewport: readViewport(),

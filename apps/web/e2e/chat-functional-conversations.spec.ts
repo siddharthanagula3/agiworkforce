@@ -7,7 +7,7 @@ import {
   QA_CITATION_SOURCES,
 } from '../test/fixtures/chat-rendering';
 import { signIn, apiCall } from './qa-capability-harness';
-import { ASSISTANT_CONTENT_CHANGED_REASON } from '../features/chat/lib/assistant-content-edit-contract';
+import { ASSISTANT_CONTENT_CHANGED_REASON } from '@agiworkforce/cloud-contracts';
 
 const ONLY_CASE = process.env['QA_RENDER_CASE'];
 

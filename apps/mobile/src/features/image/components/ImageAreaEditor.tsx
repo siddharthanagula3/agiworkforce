@@ -13,7 +13,7 @@ import { Image } from 'expo-image';
 import Slider from '@react-native-community/slider';
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Redo2, Undo2, X } from 'lucide-react-native';
+import { Eraser, Redo2, Undo2, X } from 'lucide-react-native';
 import { MANAGED_MEDIA_IMAGE_REF_MAX_B64_LENGTH } from '@agiworkforce/cloud-contracts';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -158,6 +158,12 @@ export function ImageAreaEditor({
     setStrokes([...strokes, last]);
   }, [redoStack, strokes]);
 
+  const clear = useCallback(() => {
+    if (strokes.length === 0) return;
+    setRedoStack([...redoStack, ...[...strokes].reverse()]);
+    setStrokes([]);
+  }, [redoStack, strokes]);
+
   const submit = useCallback(() => {
     if (!loaded || !hasMaskArea(strokes) || !prompt.trim()) return;
     setPreparing(true);
@@ -231,6 +237,7 @@ export function ImageAreaEditor({
           </Text>
           {iconButton('Undo', Undo2, undo, strokes.length === 0)}
           {iconButton('Redo', Redo2, redo, redoStack.length === 0)}
+          {iconButton('Clear selection', Eraser, clear, strokes.length === 0)}
         </View>
 
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>

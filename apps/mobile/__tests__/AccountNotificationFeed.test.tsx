@@ -155,6 +155,122 @@ describe('notifications inbox, account feed', () => {
     expect(screen.getByText('1 unread notification')).toBeTruthy();
   });
 
+  it.each([
+    'research_completed',
+    'code_session_completed',
+    'code_session_failed',
+    'code_session_needs_input',
+  ])('shows a %s notice once, from the account feed, and drops its device copy', async (type) => {
+    mockGet.mockResolvedValue({
+      notifications: [feedItem({ title: 'Recorded on the account' })],
+      unreadCount: 1,
+    });
+    mockDeviceItems = [
+      {
+        id: 'push-1',
+        title: 'Same notice on the device',
+        body: 'duplicate of the account row',
+        data: { type },
+        priority: 'normal',
+        receivedAt: '2026-09-29T10:00:01.000Z',
+        read: false,
+      },
+    ];
+
+    render(<NotificationCenterScreen />);
+
+    await waitFor(() => expect(screen.getByText('Recorded on the account')).toBeTruthy());
+    expect(screen.queryByText('Same notice on the device')).toBeNull();
+    expect(screen.getByText('1 unread notification')).toBeTruthy();
+  });
+
+  describe('a device row for a code session notice', () => {
+    const SESSION_ID = '0190a000-0000-7000-8000-000000000061';
+
+    const codeRow = (type: string, data: Record<string, unknown> = {}) => ({
+      id: 'push-code',
+      title: 'Session notice on the device',
+      body: 'Shown while the account feed has not loaded.',
+      data: { type, ...data },
+      priority: 'normal',
+      receivedAt: '2026-09-29T10:00:01.000Z',
+      read: false,
+    });
+
+    beforeEach(() => {
+      mockGet.mockRejectedValue(new Error('network'));
+    });
+
+    it.each(['code_session_completed', 'code_session_failed', 'code_session_needs_input'])(
+      'opens the session that %s names',
+      async (type) => {
+        mockDeviceItems = [codeRow(type, { codeSessionId: SESSION_ID })];
+
+        render(<NotificationCenterScreen />);
+        await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+        await act(async () => {
+          fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+        });
+
+        expect(mockMarkDeviceRead).toHaveBeenCalledWith('push-code');
+        expect(mockPush).toHaveBeenCalledWith(`/(app)/cloud-code/${SESSION_ID}`);
+      },
+    );
+
+    it('opens the AGI Code list when the notice carries no session id', async () => {
+      mockDeviceItems = [codeRow('code_session_completed', { codeSessionId: '' })];
+
+      render(<NotificationCenterScreen />);
+      await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+      });
+
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/cloud-code' });
+    });
+
+    it('opens the AGI Code list when the session id is only spaces', async () => {
+      mockDeviceItems = [codeRow('code_session_completed', { codeSessionId: '   ' })];
+
+      render(<NotificationCenterScreen />);
+      await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+      });
+
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/cloud-code' });
+    });
+
+    it('opens the session when the id carries surrounding spaces', async () => {
+      mockDeviceItems = [codeRow('code_session_completed', { codeSessionId: ` ${SESSION_ID} ` })];
+
+      render(<NotificationCenterScreen />);
+      await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+      });
+
+      expect(mockPush).toHaveBeenCalledWith(`/(app)/cloud-code/${SESSION_ID}`);
+    });
+
+    it('keeps an id from reaching the route unencoded', async () => {
+      mockDeviceItems = [codeRow('code_session_failed', { codeSessionId: 'a/b?c' })];
+
+      render(<NotificationCenterScreen />);
+      await waitFor(() => expect(screen.getByText('Session notice on the device')).toBeTruthy());
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText(/Session notice on the device/));
+      });
+
+      expect(mockPush).toHaveBeenCalledWith('/(app)/cloud-code/a%2Fb%3Fc');
+    });
+  });
+
   it('marks an account notification read on the server and opens its target', async () => {
     mockGet.mockResolvedValue({ notifications: [feedItem({})], unreadCount: 1 });
 

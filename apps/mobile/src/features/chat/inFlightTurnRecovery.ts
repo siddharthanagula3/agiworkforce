@@ -4,31 +4,69 @@ import { MANAGED_CLOUD_AGENT_RUNS_BASE_PATH } from '@agiworkforce/cloud-contract
 import type { LifecycleStatus } from '@agiworkforce/types';
 import { apiFetch } from '@/services/api';
 import type { ChatMessage } from '@/types/chat';
+import { hasUnfinishedRun, isStoppedFinishReason, type LiveRunState } from './utils/agentActivity';
 
 export const IN_FLIGHT_TURN_RECHECK_MS = 5_000;
 export const IN_FLIGHT_TURN_STALL_DEADLINE_MS = 150_000;
 export const IN_FLIGHT_TURN_STALLED_MESSAGE =
   'This turn stopped running on the server and will not finish. Send it again to retry.';
 
-export type InFlightTurnVerdict = Extract<LifecycleStatus, 'running' | 'idle'> | 'stalled';
+export type InFlightTurnVerdict =
+  Extract<LifecycleStatus, 'running' | 'idle'> | 'stalled' | 'checking' | 'unknown';
 
 export interface InFlightRunLiveness {
   state: string;
   staleForMs?: number;
 }
 
-const WAITING_STATES = new Set(['paused', 'awaiting_input', 'ready_for_review']);
+type TurnRow = Pick<ChatMessage, 'role'> &
+  Partial<
+    Pick<
+      ChatMessage,
+      'isStreaming' | 'isQueued' | 'queueFailed' | 'metadata' | 'toolCalls' | 'content'
+    >
+  >;
 
-export function shouldAskWhetherTurnIsRunning(input: {
+function questionSettledOnThisPhone(question: TurnRow): boolean {
+  return (
+    question.isQueued === true ||
+    question.queueFailed === true ||
+    isStoppedFinishReason(question.metadata?.['finishReason'])
+  );
+}
+
+interface InFlightTurnInput {
   conversationId: string | null | undefined;
   isCloud: boolean;
   isStreaming: boolean;
-  messages: readonly Pick<ChatMessage, 'role' | 'isStreaming'>[];
-}): boolean {
-  if (!input.conversationId || !input.isCloud || input.isStreaming) return false;
+  messages: readonly TurnRow[];
+}
+
+const WAITING_STATES = new Set(['paused', 'awaiting_input', 'ready_for_review']);
+
+function turnToAsk(input: InFlightTurnInput): 'question' | 'answer' | null {
+  if (!input.conversationId || !input.isCloud || input.isStreaming) return null;
   const last = input.messages[input.messages.length - 1];
-  if (!last || last.isStreaming) return false;
-  return last.role === 'user';
+  if (!last || last.isStreaming) return null;
+  if (last.role === 'user') return questionSettledOnThisPhone(last) ? null : 'question';
+  return hasUnfinishedRun(last) ? 'answer' : null;
+}
+
+export function shouldAskWhetherTurnIsRunning(input: InFlightTurnInput): boolean {
+  return turnToAsk(input) !== null;
+}
+
+export function lastAnswerLiveRun(input: {
+  isCloud: boolean;
+  isStreaming: boolean;
+  verdict: InFlightTurnVerdict;
+}): LiveRunState | undefined {
+  if (input.isStreaming) return undefined;
+  if (!input.isCloud) return 'ended';
+  if (input.verdict === 'running') return 'live';
+  if (input.verdict === 'stalled') return 'ended';
+  if (input.verdict === 'unknown') return 'unknown';
+  return undefined;
 }
 
 function isAlive(run: InFlightRunLiveness, stallDeadlineMs: number): boolean {
@@ -53,9 +91,9 @@ export async function askWhetherTurnIsRunning(
     `${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?conversationId=${encodeURIComponent(conversationId)}`,
     { method: 'GET', signal },
   );
-  if (!response.ok) return 'idle';
+  if (!response.ok) return 'unknown';
   const payload = (await response.json()) as { runs?: unknown[] };
-  if (!Array.isArray(payload.runs)) return 'idle';
+  if (!Array.isArray(payload.runs)) return 'unknown';
   const runs = payload.runs.filter(
     (run): run is InFlightRunLiveness =>
       typeof run === 'object' &&
@@ -66,53 +104,76 @@ export async function askWhetherTurnIsRunning(
   return readInFlightTurnVerdict(runs);
 }
 
-export function useInFlightTurnRecovery(input: {
-  conversationId: string | null | undefined;
-  isCloud: boolean;
-  isStreaming: boolean;
-  messages: readonly Pick<ChatMessage, 'role' | 'isStreaming'>[];
-  onFinished: () => void;
-}): InFlightTurnVerdict {
+export function useInFlightTurnRecovery(
+  input: InFlightTurnInput & { isOnline: boolean; onFinished: () => void },
+): InFlightTurnVerdict {
   const [verdict, setVerdict] = useState<InFlightTurnVerdict>('idle');
-  const [foregroundTick, setForegroundTick] = useState(0);
+  const [recheckTick, setRecheckTick] = useState(0);
+  const wasOnline = useRef(input.isOnline);
   const onFinishedRef = useRef(input.onFinished);
   onFinishedRef.current = input.onFinished;
   const runningSeen = useRef<string | null>(null);
-  const shouldAsk = shouldAskWhetherTurnIsRunning(input);
+  const askedFor = useRef<string | null>(null);
+  const asking = turnToAsk(input);
   const conversationId = input.conversationId;
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') setForegroundTick((tick) => tick + 1);
+      if (state === 'active') setRecheckTick((tick) => tick + 1);
     });
     return () => subscription.remove();
   }, []);
 
   useEffect(() => {
-    if (!shouldAsk || !conversationId) {
+    if (input.isOnline && !wasOnline.current) setRecheckTick((tick) => tick + 1);
+    wasOnline.current = input.isOnline;
+  }, [input.isOnline]);
+
+  useEffect(() => {
+    if (!asking || !conversationId) {
+      askedFor.current = null;
       setVerdict('idle');
       return undefined;
     }
+    const turn = `${conversationId}:${asking}`;
+    if (askedFor.current !== turn) {
+      askedFor.current = turn;
+      setVerdict('checking');
+    }
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const askAgainLater = (): void => {
+      timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
+    };
 
     const ask = async (): Promise<void> => {
       let next: InFlightTurnVerdict;
       try {
         next = await askWhetherTurnIsRunning(conversationId, controller.signal);
       } catch {
-        return;
+        next = 'unknown';
       }
       if (controller.signal.aborted) return;
-      setVerdict(next);
       if (next === 'running') {
+        setVerdict(next);
         runningSeen.current = conversationId;
-        timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
+        askAgainLater();
+        return;
+      }
+      if (next === 'unknown') {
+        setVerdict(next);
+        if (runningSeen.current === conversationId) askAgainLater();
         return;
       }
       const finished = runningSeen.current === conversationId && next === 'idle';
       runningSeen.current = null;
-      if (finished) onFinishedRef.current();
+      if (finished) {
+        onFinishedRef.current();
+        setVerdict('checking');
+        askAgainLater();
+        return;
+      }
+      setVerdict('stalled');
     };
 
     void ask();
@@ -120,7 +181,7 @@ export function useInFlightTurnRecovery(input: {
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [conversationId, foregroundTick, shouldAsk]);
+  }, [asking, conversationId, recheckTick]);
 
   return verdict;
 }

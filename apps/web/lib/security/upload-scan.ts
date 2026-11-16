@@ -60,7 +60,11 @@ export interface UploadScanFinding {
     | 'sensitive_filename'
     | 'unsafe_filename'
     | 'external_scanner'
-    | 'encrypted_content';
+    | 'encrypted_content'
+    | 'limits_exceeded'
+    | 'scan_unavailable'
+    | 'storage_full'
+    | 'changed_during_check';
   detail: string;
 }
 
@@ -374,13 +378,35 @@ export const UPLOAD_REJECTED_MESSAGE =
 export const UPLOAD_ENCRYPTED_MESSAGE =
   'This file is password protected, so its contents could not be checked. Remove the password and upload it again.';
 
+export const UPLOAD_SCAN_UNAVAILABLE_MESSAGE =
+  "We couldn't check this file for safety. Try again later.";
+
+export const UPLOAD_LIMITS_EXCEEDED_MESSAGE =
+  "This file is too complex for us to check for safety, so it wasn't added. Try a smaller or simpler file.";
+
+export const UPLOAD_STORAGE_FULL_MESSAGE =
+  "There isn't enough storage left for this file. Delete files in your Library to make room.";
+
+export const UPLOAD_CHANGED_DURING_CHECK_MESSAGE =
+  'This file changed while we were checking it. Upload it again.';
+
+const REFUSAL_COPY: Partial<Record<UploadScanFinding['code'], string>> = {
+  encrypted_content: UPLOAD_ENCRYPTED_MESSAGE,
+  limits_exceeded: UPLOAD_LIMITS_EXCEEDED_MESSAGE,
+  scan_unavailable: UPLOAD_SCAN_UNAVAILABLE_MESSAGE,
+  storage_full: UPLOAD_STORAGE_FULL_MESSAGE,
+  changed_during_check: UPLOAD_CHANGED_DURING_CHECK_MESSAGE,
+};
+
 export function uploadRefusalMessage(
   findings: readonly UploadScanFinding[],
   fallback: string,
 ): string {
-  return findings.some((finding) => finding.code === 'encrypted_content')
-    ? UPLOAD_ENCRYPTED_MESSAGE
-    : fallback;
+  for (const finding of findings) {
+    const copy = REFUSAL_COPY[finding.code];
+    if (typeof copy === 'string') return copy;
+  }
+  return fallback;
 }
 
 /**
@@ -425,16 +451,15 @@ export interface UploadScanPosition {
 const NO_STRUCTURAL_FINDINGS: UploadScanResult = { ok: true, findings: [] };
 const NO_EXTERNAL_FINDINGS: UploadScanFinding[] = [];
 
-export async function scanUploadBytes(
-  bytes: Uint8Array,
+export const UPLOAD_INSPECTION_BYTES = 256_000;
+
+function verdictOf(
   declaredMime: string,
-  position: UploadScanPosition,
-): Promise<UploadScanResult> {
-  const { leadsObject, filename, externalScan = true } = position;
-  const structural = leadsObject ? inspectUploadBytes(bytes, declaredMime) : NO_STRUCTURAL_FINDINGS;
-  const credentials = scanUploadForCredentials(bytes, declaredMime, filename);
-  const external = externalScan ? await runExternalScanner(bytes) : NO_EXTERNAL_FINDINGS;
-  const findings = [...structural.findings, ...credentials, ...external];
+  structural: readonly UploadScanFinding[],
+  credentials: readonly UploadScanFinding[],
+  external: readonly UploadScanFinding[],
+): UploadScanResult {
+  const findings = [...structural, ...credentials, ...external];
 
   const reported = credentials.filter((finding) => !uploadFindingRejects(finding));
   if (reported.length > 0) {
@@ -445,4 +470,30 @@ export async function scanUploadBytes(
   }
 
   return { ok: findings.every((finding) => !uploadFindingRejects(finding)), findings };
+}
+
+export function inspectUploadHead(
+  bytes: Uint8Array,
+  declaredMime: string,
+  filename: string,
+): UploadScanResult {
+  const head = bytes.subarray(0, UPLOAD_INSPECTION_BYTES);
+  return verdictOf(
+    declaredMime,
+    inspectUploadBytes(head, declaredMime).findings,
+    scanUploadForCredentials(head, declaredMime, filename),
+    NO_EXTERNAL_FINDINGS,
+  );
+}
+
+export async function scanUploadBytes(
+  bytes: Uint8Array,
+  declaredMime: string,
+  position: UploadScanPosition,
+): Promise<UploadScanResult> {
+  const { leadsObject, filename, externalScan = true } = position;
+  const structural = leadsObject ? inspectUploadBytes(bytes, declaredMime) : NO_STRUCTURAL_FINDINGS;
+  const credentials = scanUploadForCredentials(bytes, declaredMime, filename);
+  const external = externalScan ? await runExternalScanner(bytes) : NO_EXTERNAL_FINDINGS;
+  return verdictOf(declaredMime, structural.findings, credentials, external);
 }

@@ -1,10 +1,10 @@
 import { classifyAuthError } from '@agiworkforce/client-runtime';
-import { API_URL } from '@/lib/constants';
+import { webContentPageUrl } from '@/src/platform/webContentPage';
 
 type AuthAction = 'sign-in' | 'sign-up' | 'send-code';
 
 export function suspensionAppealUrl(): string {
-  return `${API_URL.replace(/\/+$/, '')}/appeal?from=mobile`;
+  return webContentPageUrl('/appeal');
 }
 
 export const ACCOUNT_SUSPENDED_MESSAGE =

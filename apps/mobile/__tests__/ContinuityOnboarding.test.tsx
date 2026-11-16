@@ -86,6 +86,8 @@ import { useTierStore } from '../src/features/billing/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatStore } from '../stores/chatStore';
 
+const PLAN_REFRESHED_AT = '2026-11-14T00:00:00.000Z';
+
 describe('Mobile cross-device continuity onboarding', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -98,7 +100,7 @@ describe('Mobile cross-device continuity onboarding', () => {
       clerkUserId: 'user-1',
     });
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    useTierStore.setState({ tier: 'free' });
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: null });
     useWaitlistStore.setState({ cloudUnlocked: true });
     useChatStore.getState().setWorkMode('chat');
   });
@@ -112,7 +114,8 @@ describe('Mobile cross-device continuity onboarding', () => {
     expect(mockGetBoolean).toHaveBeenCalledWith('continuity-onboarding:v1:user%2Fone');
   });
 
-  it('presents once when a signed-in owner first enters Managed Cloud', async () => {
+  it('presents once when an owner whose plan includes Work first enters Managed Cloud', async () => {
+    useTierStore.setState({ tier: 'pro', lastRefreshedAt: PLAN_REFRESHED_AT });
     const screen = render(<ContinuityOnboardingGate />);
 
     await waitFor(() =>
@@ -126,7 +129,27 @@ describe('Mobile cross-device continuity onboarding', () => {
     expect(mockPush).toHaveBeenCalledTimes(1);
   });
 
+  it('never presents Work to an owner whose plan leaves it out', async () => {
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: PLAN_REFRESHED_AT });
+    render(<ContinuityOnboardingGate />);
+    await act(async () => Promise.resolve());
+
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('waits for the plan before presenting, then presents once it includes Work', async () => {
+    useTierStore.setState({ tier: 'pro', lastRefreshedAt: null });
+    render(<ContinuityOnboardingGate />);
+    await act(async () => Promise.resolve());
+    expect(mockPush).not.toHaveBeenCalled();
+
+    act(() => useTierStore.setState({ lastRefreshedAt: PLAN_REFRESHED_AT }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+  });
+
   it('does not present in Local Mode or after the owner acknowledged it', async () => {
+    useTierStore.setState({ tier: 'pro', lastRefreshedAt: PLAN_REFRESHED_AT });
     useChatAppModeStore.setState({ appMode: 'local' });
     const screen = render(<ContinuityOnboardingGate />);
     await act(async () => Promise.resolve());
@@ -178,6 +201,22 @@ describe('Mobile cross-device continuity onboarding', () => {
 
     expect(useChatStore.getState().workMode).toBe('chat');
     expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+  });
+
+  it('says Work is not in the plan, with no task or purchase step, for a plan that leaves it out', () => {
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: PLAN_REFRESHED_AT });
+    const { getByText, getByLabelText, queryByLabelText, queryByText } = render(
+      <ContinuityOnboardingScreen />,
+    );
+
+    expect(getByText(`${PRODUCT_NAMES.work} isn’t included in your plan.`)).toBeTruthy();
+    expect(queryByLabelText('Start a Managed Cloud task')).toBeNull();
+    expect(queryByText(/upgrade/i)).toBeNull();
+
+    fireEvent.press(getByLabelText('Close'));
+
+    expect(mockSet).toHaveBeenCalledWith('continuity-onboarding:v1:user-1', true);
+    expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
   it('persists Not now and returns to the caller', () => {

@@ -465,6 +465,60 @@ describe('shared LibraryView', () => {
       expect(inlinePreviewUri).toHaveBeenCalledWith('/api/files/asset-1');
     });
 
+    it('draws the tile from the small thumbnail the server offers instead of the whole file', async () => {
+      const image = {
+        ...ITEM,
+        file_name: 'chart.png',
+        mime_type: 'image/png',
+        previewable: true,
+        thumbnail_uri: '/api/files/asset-1/thumbnail',
+      };
+      render(
+        <LibraryView
+          transport={makeTransport({ listPage: pageOf([image]), inlinePreviewUri: (uri) => uri })}
+        />,
+      );
+
+      expect((await screen.findByTestId('library-thumbnail')).getAttribute('src')).toBe(
+        '/api/files/asset-1/thumbnail',
+      );
+    });
+
+    it('draws the whole file when the server cannot make the small thumbnail', async () => {
+      const image = {
+        ...ITEM,
+        file_name: 'panorama.png',
+        mime_type: 'image/png',
+        previewable: true,
+        thumbnail_uri: '/api/files/asset-1/thumbnail',
+      };
+      const fetchAsset = vi.fn(async () => ({ status: 404, ok: false }) as Response);
+      render(
+        <LibraryView
+          transport={makeTransport({
+            fetchAsset,
+            inlinePreviewUri: (uri) => uri,
+            listPage: pageOf([image]),
+          })}
+        />,
+      );
+
+      fireEvent.error(await screen.findByTestId('library-thumbnail'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('library-thumbnail').getAttribute('src')).toBe(
+          '/api/files/asset-1',
+        ),
+      );
+      expect(fetchAsset).not.toHaveBeenCalled();
+      expect(screen.queryByText(/file is unavailable right now/i)).toBeNull();
+
+      fireEvent.error(screen.getByTestId('library-thumbnail'));
+
+      await waitFor(() => expect(fetchAsset).toHaveBeenCalledWith('/api/files/asset-1'));
+      expect(await screen.findByText(/file is unavailable right now/i)).toBeTruthy();
+    });
+
     it('carries no provenance chip and no readiness badge on the face', async () => {
       render(
         <LibraryView

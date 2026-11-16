@@ -1,23 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { ArtifactPreview } from './ArtifactPreview';
-import { documentTitleFromAnswer, useSaveAnswerAsDocument } from './save-answer-as-document';
+import { useSaveAnswerAsDocument } from './save-answer-as-document';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 
 describe('save answer as document', () => {
   beforeEach(() => {
     useArtifactsStore.getState().reset();
     useArtifactsStore.getState().setPanelOpen(false);
-  });
-
-  it('titles the document from its heading or first words', () => {
-    expect(documentTitleFromAnswer('Intro\n\n## Trip **plan** for May\n\ntext')).toBe(
-      'Trip plan for May',
-    );
-    expect(documentTitleFromAnswer('one two three four five six seven eight nine ten')).toBe(
-      'one two three four five six seven eight…',
-    );
-    expect(documentTitleFromAnswer('   ')).toBe('Saved answer');
   });
 
   it('creates an editable document from the answer and opens it in the panel', async () => {

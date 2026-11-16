@@ -21,6 +21,7 @@ import {
   assertDownloadAllowed,
   cancelDownload,
   downloadModel,
+  excludeModelFilesFromBackup,
   ModelDownloadError,
 } from '@/services/modelDownload';
 import type { ModelDownloadErrorKind } from '@/services/modelDownload';
@@ -265,6 +266,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
       },
 
       hydrateInstalledModels: async () => {
+        void excludeModelFilesFromBackup();
         const [recorded, caps] = await Promise.all([
           listInstalledModels().catch(() => []),
           getCapabilities().catch(() => null),
@@ -404,6 +406,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
               await deleteExecutorchPresetFiles(preset).catch(() => undefined);
               throw new ModelDownloadError('cancelled', 'Download was cancelled.');
             }
+            await excludeModelFilesFromBackup();
             await recordInstalledModel(installedRecordFor(model));
           } else {
             await installGgufModel(

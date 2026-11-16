@@ -1,8 +1,14 @@
 import '@/lib/observability/trace-storage.node';
-import { afterEach, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
-import '@testing-library/jest-dom/vitest';
+import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
+import type {} from '@testing-library/jest-dom/vitest';
 import React from 'react';
+
+// '@testing-library/jest-dom/vitest' imports its own resolution of vitest, which
+// pnpm can link to a second build: that build patches chai's `throw` again and
+// every `.rejects.toThrow(message)` then compares against a thrown function.
+expect.extend(jestDomMatchers);
 
 afterEach(() => {
   cleanup();

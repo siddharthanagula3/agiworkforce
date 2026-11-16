@@ -1,0 +1,679 @@
+export const SCOPE_REVIEW_PENDING = 'needs-vendor-specific-review';
+
+export type ConnectorScopeCeiling = readonly string[] | typeof SCOPE_REVIEW_PENDING;
+
+const GOOGLE_SCOPE_PREFIX = 'https://www.googleapis.com/auth/';
+const MS_GRAPH_SCOPE_PREFIX = 'https://graph.microsoft.com/';
+const PAYPAL_SCOPE_PREFIX = 'https://uri.paypal.com/services/';
+const AZURE_ARM_SCOPE_PREFIX = 'https://management.azure.com/';
+
+const OIDC_SCOPES: readonly string[] = ['openid', 'profile', 'email'];
+const OFFLINE_ACCESS_SCOPE = 'offline_access';
+const NO_SCOPE_PARAMETER: readonly string[] = Object.freeze([]);
+
+function google(...names: readonly string[]): string[] {
+  return names.map((name) => `${GOOGLE_SCOPE_PREFIX}${name}`);
+}
+
+function graph(...names: readonly string[]): string[] {
+  return names.flatMap((name) => [name, `${MS_GRAPH_SCOPE_PREFIX}${name}`]);
+}
+
+const GOOGLE_IDENTITY_SCOPES: readonly string[] = [
+  ...OIDC_SCOPES,
+  ...google('userinfo.email', 'userinfo.profile'),
+];
+
+const SMART_ON_FHIR_PATIENT_SCOPES: readonly string[] = [
+  'openid',
+  'fhirUser',
+  'launch/patient',
+  OFFLINE_ACCESS_SCOPE,
+  'patient/Patient.read',
+  'patient/Observation.read',
+  'patient/Condition.read',
+  'patient/MedicationRequest.read',
+  'patient/AllergyIntolerance.read',
+  'patient/DocumentReference.read',
+];
+
+export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorScopeCeiling>> = {
+  gmail: [...GOOGLE_IDENTITY_SCOPES, ...google('gmail.readonly', 'gmail.compose', 'gmail.send')],
+  'google-calendar': [
+    ...GOOGLE_IDENTITY_SCOPES,
+    ...google('calendar.readonly', 'calendar.calendarlist.readonly', 'calendar.events'),
+  ],
+  'google-drive': [
+    ...GOOGLE_IDENTITY_SCOPES,
+    ...google('drive.file', 'drive.readonly', 'drive.metadata.readonly'),
+  ],
+  'google-contacts': [
+    ...GOOGLE_IDENTITY_SCOPES,
+    ...google('contacts.readonly', 'directory.readonly'),
+  ],
+  'google-sheets': [
+    ...GOOGLE_IDENTITY_SCOPES,
+    ...google('spreadsheets.readonly', 'spreadsheets', 'drive.file'),
+  ],
+  'google-analytics': [...GOOGLE_IDENTITY_SCOPES, ...google('analytics.readonly')],
+  youtube: [...GOOGLE_IDENTITY_SCOPES, ...google('youtube.readonly', 'yt-analytics.readonly')],
+  bigquery: [...GOOGLE_IDENTITY_SCOPES, ...google('bigquery.readonly', 'devstorage.read_only')],
+  gcp: [...GOOGLE_IDENTITY_SCOPES, ...google('cloud-platform.read-only')],
+
+  outlook: [
+    ...OIDC_SCOPES,
+    OFFLINE_ACCESS_SCOPE,
+    ...graph('User.Read', 'Mail.Read', 'Mail.Send', 'Calendars.Read', 'Calendars.ReadWrite'),
+  ],
+  onedrive: [
+    ...OIDC_SCOPES,
+    OFFLINE_ACCESS_SCOPE,
+    ...graph('User.Read', 'Files.Read', 'Files.ReadWrite.AppFolder'),
+  ],
+  teams: [
+    ...OIDC_SCOPES,
+    OFFLINE_ACCESS_SCOPE,
+    ...graph(
+      'User.Read',
+      'Team.ReadBasic.All',
+      'Channel.ReadBasic.All',
+      'Chat.Read',
+      'ChatMessage.Send',
+    ),
+  ],
+  sharepoint: [...OIDC_SCOPES, OFFLINE_ACCESS_SCOPE, ...graph('User.Read', 'Sites.Read.All')],
+  'microsoft-365': [
+    ...OIDC_SCOPES,
+    OFFLINE_ACCESS_SCOPE,
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.User.Read.All',
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Group.Read.All',
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.GroupMember.Read.All',
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Device.Read.All',
+    'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Organization.Read.All',
+  ],
+  azure: [...OIDC_SCOPES, OFFLINE_ACCESS_SCOPE, `${AZURE_ARM_SCOPE_PREFIX}user_impersonation`],
+
+  slack: [
+    'channels:read',
+    'channels:history',
+    'groups:read',
+    'chat:write',
+    'users:read',
+    'users:read.email',
+    'team:read',
+    'files:read',
+    'search:read.public',
+    'search:read.private',
+    'search:read.im',
+    'search:read.mpim',
+  ],
+  notion: NO_SCOPE_PARAMETER,
+  intercom: NO_SCOPE_PARAMETER,
+  mailchimp: NO_SCOPE_PARAMETER,
+  basecamp: NO_SCOPE_PARAMETER,
+  evernote: NO_SCOPE_PARAMETER,
+
+  airtable: SCOPE_REVIEW_PENDING,
+  clickup: SCOPE_REVIEW_PENDING,
+  cloudflare: SCOPE_REVIEW_PENDING,
+  datadog: SCOPE_REVIEW_PENDING,
+  huggingface: SCOPE_REVIEW_PENDING,
+  monday: SCOPE_REVIEW_PENDING,
+  pagerduty: SCOPE_REVIEW_PENDING,
+  plaid: SCOPE_REVIEW_PENDING,
+  posthog: SCOPE_REVIEW_PENDING,
+  sentry: SCOPE_REVIEW_PENDING,
+  square: SCOPE_REVIEW_PENDING,
+  stripe: SCOPE_REVIEW_PENDING,
+  todoist: SCOPE_REVIEW_PENDING,
+  vercel: SCOPE_REVIEW_PENDING,
+
+  linear: ['read', 'write', 'issues:create', 'comments:create'],
+  jira: [
+    OFFLINE_ACCESS_SCOPE,
+    'read:me',
+    'read:jira:agent-interface',
+    'write:jira:agent-interface',
+    'search:jira:agent-interface',
+  ],
+  confluence: [
+    OFFLINE_ACCESS_SCOPE,
+    'read:me',
+    'read:confluence:agent-interface',
+    'write:confluence:agent-interface',
+    'search:confluence:agent-interface',
+  ],
+  asana: [
+    ...OIDC_SCOPES,
+    'tasks:read',
+    'tasks:write',
+    'projects:read',
+    'sections:read',
+    'stories:read',
+    'stories:write',
+    'teams:read',
+    'users:read',
+    'workspaces:read',
+  ],
+  zoom: [
+    'user:read:user',
+    'meeting:read:meeting',
+    'meeting:read:list_meetings',
+    'meeting:write:meeting',
+    'cloud_recording:read:list_user_recordings',
+  ],
+  hubspot: [
+    'oauth',
+    'crm.objects.contacts.read',
+    'crm.objects.contacts.write',
+    'crm.objects.companies.read',
+    'crm.objects.deals.read',
+    'crm.objects.deals.write',
+  ],
+  salesforce: [...OIDC_SCOPES, 'id', 'api', 'refresh_token'],
+  calendly: SCOPE_REVIEW_PENDING,
+  adobe: SCOPE_REVIEW_PENDING,
+  shopify: ['read_products', 'read_orders', 'read_customers', 'read_inventory', 'write_products'],
+  linkedin: [...OIDC_SCOPES, 'w_member_social'],
+  twitter: ['tweet.read', 'tweet.write', 'users.read', OFFLINE_ACCESS_SCOPE],
+  discord: ['identify', 'guilds', 'guilds.members.read'],
+  'github-mcp': [OFFLINE_ACCESS_SCOPE],
+  gitlab: [...OIDC_SCOPES, 'read_user', 'read_api', 'read_repository'],
+  bitbucket: ['account', 'repository', 'pullrequest', 'issue'],
+  pipedrive: ['base', 'deals:read', 'contacts:read', 'activities:read', 'users:read', 'search'],
+  figma: [
+    'current_user:read',
+    'files:read',
+    'projects:read',
+    'file_comments:write',
+    'file_dev_resources:read',
+  ],
+  canva: [
+    'profile:read',
+    'design:meta:read',
+    'design:content:read',
+    'design:content:write',
+    'asset:read',
+    'asset:write',
+    'folder:read',
+  ],
+  quickbooks: [...OIDC_SCOPES, 'com.intuit.quickbooks.accounting'],
+  xero: [
+    ...OIDC_SCOPES,
+    OFFLINE_ACCESS_SCOPE,
+    'accounting.settings.read',
+    'accounting.contacts.read',
+    'accounting.transactions.read',
+    'accounting.reports.read',
+  ],
+  paypal: ['openid', 'email', `${PAYPAL_SCOPE_PREFIX}reporting/search/read`],
+  dropbox: [
+    'account_info.read',
+    'files.metadata.read',
+    'files.content.read',
+    'files.content.write',
+  ],
+  box: ['root_readonly', 'item_preview', 'item_download', 'item_upload'],
+  docusign: ['signature', 'adm_store_unified_repo_read', 'aow_manage'],
+  instagram: [
+    'instagram_basic',
+    'instagram_manage_insights',
+    'instagram_content_publish',
+    'pages_show_list',
+  ],
+  facebook: [
+    'public_profile',
+    'email',
+    'pages_show_list',
+    'pages_read_engagement',
+    'pages_manage_posts',
+  ],
+  'epic-fhir': SMART_ON_FHIR_PATIENT_SCOPES,
+  cerner: SMART_ON_FHIR_PATIENT_SCOPES,
+  healthex: [...OIDC_SCOPES, OFFLINE_ACCESS_SCOPE, 'patient/*.read'],
+  'bank-accounts': ['transactions'],
+};
+
+/**
+ * The Google scope that lets the artifact export create a document in the
+ * person's Drive, in the canonical form canonicalConnectorScope() returns. It
+ * is the one write scope the google-drive ceiling admits.
+ */
+export const GOOGLE_DRIVE_FILE_CREATE_SCOPE = 'drive.file';
+
+export const ONEDRIVE_APP_FOLDER_SCOPE = 'Files.ReadWrite.AppFolder';
+
+/**
+ * Scopes no enforced ceiling may ever admit, regardless of provider. One
+ * place for what "broader than declared" means, read by both the ceiling
+ * table test and `scripts/check-connector-scopes.mjs`.
+ */
+export const FORBIDDEN_CONNECTOR_OAUTH_SCOPES: readonly string[] = [
+  'admin',
+  'full',
+  'default',
+  'https://mail.google.com/',
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/calendar',
+  'https://www.googleapis.com/auth/cloud-platform',
+  'Files.ReadWrite.All',
+  'Sites.FullControl.All',
+  'Mail.ReadWrite',
+];
+
+/**
+ * Strips the Google and Microsoft Graph URL prefixes so the same scope
+ * described once (`gmail.readonly`, `User.Read`) matches both the bare and
+ * fully-qualified forms `graph()` emits for every Graph scope.
+ */
+export function canonicalConnectorScope(scope: string): string {
+  if (scope.startsWith(GOOGLE_SCOPE_PREFIX)) return scope.slice(GOOGLE_SCOPE_PREFIX.length);
+  if (scope.startsWith(MS_GRAPH_SCOPE_PREFIX)) return scope.slice(MS_GRAPH_SCOPE_PREFIX.length);
+  return scope;
+}
+
+export function getConnectorScopeCeiling(connectorId: string): ConnectorScopeCeiling | null {
+  return CONNECTOR_OAUTH_SCOPE_CEILINGS[connectorId] ?? null;
+}
+
+export type ScopeAccessClass = 'read' | 'write';
+
+export interface ScopeDescription {
+  readonly sentence: string;
+  readonly access: ScopeAccessClass;
+}
+
+export interface ScopeDescriptionEntry extends ScopeDescription {
+  readonly scope: string;
+}
+
+export type ConnectorScopeDescriptions =
+  | { readonly status: 'known'; readonly entries: readonly ScopeDescriptionEntry[] }
+  | { readonly status: 'pending' }
+  | { readonly status: 'none' };
+
+const READ: ScopeAccessClass = 'read';
+const WRITE: ScopeAccessClass = 'write';
+
+const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
+  openid: { sentence: 'Confirms your identity when you sign in.', access: READ },
+  profile: { sentence: 'Reads your name and public profile info.', access: READ },
+  email: { sentence: 'Reads your email address.', access: READ },
+  'userinfo.email': { sentence: 'Reads your email address.', access: READ },
+  'userinfo.profile': { sentence: 'Reads your name and public profile info.', access: READ },
+  offline_access: {
+    sentence: 'Keeps you signed in so this connection does not require logging in again.',
+    access: READ,
+  },
+
+  'gmail.readonly': { sentence: 'Reads your Gmail messages and attachments.', access: READ },
+  'gmail.compose': {
+    sentence: 'Creates and edits drafts in your Gmail account and can send them.',
+    access: WRITE,
+  },
+  'gmail.send': { sentence: 'Sends email from your Gmail account.', access: WRITE },
+
+  'calendar.readonly': { sentence: 'Reads your calendar events.', access: READ },
+  'calendar.calendarlist.readonly': {
+    sentence: 'Reads the list of Google calendars you subscribe to.',
+    access: READ,
+  },
+  'calendar.events': {
+    sentence: 'Reads, creates, edits and deletes events on your Google calendars.',
+    access: WRITE,
+  },
+
+  'drive.file': {
+    sentence: 'Reads and writes files this app created or you opened with it.',
+    access: WRITE,
+  },
+  'drive.readonly': {
+    sentence: 'Searches and reads the files in your Drive.',
+    access: READ,
+  },
+  'drive.metadata.readonly': {
+    sentence: 'Reads file names and metadata across your Drive.',
+    access: READ,
+  },
+
+  'contacts.readonly': { sentence: 'Reads your Google contacts.', access: READ },
+  'directory.readonly': {
+    sentence: "Reads people's profiles in your organization's directory.",
+    access: READ,
+  },
+
+  'spreadsheets.readonly': { sentence: 'Reads the contents of your spreadsheets.', access: READ },
+  spreadsheets: { sentence: 'Reads and edits your spreadsheets.', access: WRITE },
+
+  'analytics.readonly': { sentence: 'Reads your Analytics reports.', access: READ },
+
+  'youtube.readonly': { sentence: 'Reads your channel and video data.', access: READ },
+  'yt-analytics.readonly': { sentence: 'Reads your YouTube Analytics reports.', access: READ },
+
+  'bigquery.readonly': {
+    sentence: 'Runs read-only queries and lists your BigQuery datasets.',
+    access: READ,
+  },
+  'devstorage.read_only': {
+    sentence: 'Reads objects in your Cloud Storage buckets.',
+    access: READ,
+  },
+
+  'cloud-platform.read-only': {
+    sentence: 'Reads your Google Cloud project resources.',
+    access: READ,
+  },
+
+  'User.Read': { sentence: 'Reads your basic Microsoft profile.', access: READ },
+  'Mail.Read': { sentence: 'Reads your Outlook mail.', access: READ },
+  'Mail.Send': { sentence: 'Sends mail from your Outlook account.', access: WRITE },
+  'Calendars.Read': { sentence: 'Reads your Outlook calendar.', access: READ },
+  'Calendars.ReadWrite': {
+    sentence: 'Creates events on your Outlook calendar and invites the people you name.',
+    access: WRITE,
+  },
+  'Files.Read': { sentence: 'Reads your OneDrive files.', access: READ },
+  'Files.ReadWrite.AppFolder': {
+    sentence: "Reads and writes files inside this app's own OneDrive folder.",
+    access: WRITE,
+  },
+  'Team.ReadBasic.All': { sentence: 'Lists the Microsoft Teams you belong to.', access: READ },
+  'Channel.ReadBasic.All': { sentence: 'Lists the channels in your Teams.', access: READ },
+  'Chat.Read': { sentence: 'Reads your Teams chat messages.', access: READ },
+  'ChatMessage.Send': { sentence: 'Sends a message in a Teams chat.', access: WRITE },
+  'Sites.Read.All': { sentence: 'Reads SharePoint site content you can access.', access: READ },
+
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.User.Read.All': {
+    sentence: 'Reads the user profiles in your Microsoft Entra directory.',
+    access: READ,
+  },
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Group.Read.All': {
+    sentence: 'Reads the groups in your Microsoft Entra directory.',
+    access: READ,
+  },
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.GroupMember.Read.All': {
+    sentence: 'Reads who belongs to each group.',
+    access: READ,
+  },
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Device.Read.All': {
+    sentence: 'Reads the devices registered in your directory.',
+    access: READ,
+  },
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Organization.Read.All': {
+    sentence: 'Reads your organization profile and license subscriptions.',
+    access: READ,
+  },
+
+  'https://management.azure.com/user_impersonation': {
+    sentence: "Manages Azure resources on your behalf, using your account's role permissions.",
+    access: WRITE,
+  },
+
+  'channels:read': { sentence: 'Lists the public channels in your workspace.', access: READ },
+  'channels:history': { sentence: 'Reads messages in public channels.', access: READ },
+  'groups:read': { sentence: 'Lists the private channels you belong to.', access: READ },
+  'chat:write': { sentence: 'Posts messages as you.', access: WRITE },
+  'users:read': { sentence: 'Lists the members of your workspace.', access: READ },
+  'users:read.email': { sentence: "Reads workspace members' email addresses.", access: READ },
+  'team:read': { sentence: 'Reads basic information about your workspace.', access: READ },
+  'files:read': { sentence: 'Reads files you have access to.', access: READ },
+  'search:read.public': { sentence: 'Searches messages in public channels.', access: READ },
+  'search:read.private': {
+    sentence: 'Searches messages in private channels you belong to.',
+    access: READ,
+  },
+  'search:read.im': { sentence: 'Searches your direct messages.', access: READ },
+  'search:read.mpim': { sentence: 'Searches your group direct messages.', access: READ },
+
+  read: { sentence: 'Reads issues, projects, and comments in your workspace.', access: READ },
+  write: { sentence: 'Creates and edits issues and projects in your workspace.', access: WRITE },
+  'issues:create': { sentence: 'Creates new issues.', access: WRITE },
+  'comments:create': { sentence: 'Posts comments on issues.', access: WRITE },
+  'app:assignable': { sentence: 'Lets issues be assigned to this app.', access: WRITE },
+  'app:mentionable': { sentence: 'Lets this app be @mentioned in comments.', access: WRITE },
+
+  'read:me': { sentence: 'Reads your account profile.', access: READ },
+  'read:jira:agent-interface': { sentence: 'Reads issues, projects, and boards.', access: READ },
+  'write:jira:agent-interface': { sentence: 'Creates and edits issues.', access: WRITE },
+  'search:jira:agent-interface': { sentence: 'Searches issues with JQL.', access: READ },
+
+  'read:confluence:agent-interface': {
+    sentence: 'Reads spaces, pages, and comments.',
+    access: READ,
+  },
+  'write:confluence:agent-interface': { sentence: 'Creates and edits pages.', access: WRITE },
+  'search:confluence:agent-interface': { sentence: 'Searches pages with CQL.', access: READ },
+
+  'tasks:read': { sentence: 'Reads tasks in your workspace.', access: READ },
+  'tasks:write': { sentence: 'Creates and edits tasks.', access: WRITE },
+  'projects:read': { sentence: 'Reads projects and their details.', access: READ },
+  'sections:read': { sentence: 'Reads the sections within a project.', access: READ },
+  'stories:read': { sentence: 'Reads comments and activity on tasks.', access: READ },
+  'stories:write': { sentence: 'Posts comments on tasks.', access: WRITE },
+  'teams:read': { sentence: 'Reads the teams in your workspace.', access: READ },
+  'workspaces:read': { sentence: 'Reads the workspaces you belong to.', access: READ },
+
+  'user:read:user': { sentence: 'Reads your Zoom profile.', access: READ },
+  'meeting:read:meeting': { sentence: 'Reads details of your meetings.', access: READ },
+  'meeting:read:list_meetings': { sentence: 'Lists your scheduled meetings.', access: READ },
+  'meeting:write:meeting': { sentence: 'Creates and edits meetings.', access: WRITE },
+  'cloud_recording:read:list_user_recordings': {
+    sentence: 'Lists your cloud recordings.',
+    access: READ,
+  },
+
+  oauth: {
+    sentence: 'Establishes the connection your account authorized.',
+    access: READ,
+  },
+  'crm.objects.contacts.read': { sentence: 'Reads CRM contact records.', access: READ },
+  'crm.objects.contacts.write': {
+    sentence: 'Creates and edits CRM contact records.',
+    access: WRITE,
+  },
+  'crm.objects.companies.read': { sentence: 'Reads CRM company records.', access: READ },
+  'crm.objects.deals.read': { sentence: 'Reads CRM deal records.', access: READ },
+  'crm.objects.deals.write': { sentence: 'Creates and edits CRM deal records.', access: WRITE },
+
+  id: { sentence: 'Reads your identity URL.', access: READ },
+  api: { sentence: 'Reads and edits records through the REST API.', access: WRITE },
+  refresh_token: {
+    sentence: 'Keeps the connection active without repeating the login.',
+    access: READ,
+  },
+
+  read_products: { sentence: 'Reads your product catalog.', access: READ },
+  read_orders: { sentence: 'Reads your orders.', access: READ },
+  read_customers: { sentence: 'Reads your customer records.', access: READ },
+  read_inventory: { sentence: 'Reads your inventory levels.', access: READ },
+  write_products: { sentence: 'Creates and edits products.', access: WRITE },
+
+  w_member_social: { sentence: 'Posts on your behalf.', access: WRITE },
+
+  'tweet.read': { sentence: 'Reads posts.', access: READ },
+  'tweet.write': { sentence: 'Creates and deletes posts as you.', access: WRITE },
+  'users.read': { sentence: 'Reads public profile information.', access: READ },
+
+  identify: { sentence: 'Reads your username and avatar.', access: READ },
+  guilds: { sentence: 'Lists the servers you belong to.', access: READ },
+  'guilds.members.read': { sentence: 'Reads member lists in your servers.', access: READ },
+
+  read_user: { sentence: 'Reads your profile.', access: READ },
+  read_api: {
+    sentence: 'Reads project, issue, and merge request data through the API.',
+    access: READ,
+  },
+  read_repository: { sentence: 'Reads repository contents.', access: READ },
+
+  account: { sentence: 'Reads your account profile.', access: READ },
+  repository: { sentence: 'Reads repositories you can access.', access: READ },
+  pullrequest: { sentence: 'Reads pull requests.', access: READ },
+  issue: { sentence: 'Reads issues.', access: READ },
+
+  base: { sentence: 'Reads your account and user info.', access: READ },
+  'deals:read': { sentence: 'Reads deals in your pipeline.', access: READ },
+  'contacts:read': { sentence: 'Reads your contacts.', access: READ },
+  'activities:read': { sentence: 'Reads scheduled activities.', access: READ },
+  search: { sentence: 'Searches across your data.', access: READ },
+
+  'current_user:read': { sentence: 'Reads your profile.', access: READ },
+  'file_comments:write': { sentence: 'Posts comments on files.', access: WRITE },
+  'file_dev_resources:read': {
+    sentence: 'Reads developer resources attached to files.',
+    access: READ,
+  },
+
+  'profile:read': { sentence: 'Reads your profile.', access: READ },
+  'design:meta:read': { sentence: 'Reads design titles and metadata.', access: READ },
+  'design:content:read': { sentence: 'Reads the content of your designs.', access: READ },
+  'design:content:write': { sentence: 'Creates and edits designs.', access: WRITE },
+  'asset:read': { sentence: 'Reads assets in your account.', access: READ },
+  'asset:write': { sentence: 'Uploads and edits assets.', access: WRITE },
+  'folder:read': { sentence: 'Reads the folders in your account.', access: READ },
+
+  'com.intuit.quickbooks.accounting': {
+    sentence: 'Reads and edits your accounting data, including invoices and transactions.',
+    access: WRITE,
+  },
+
+  'accounting.settings.read': { sentence: 'Reads your organization settings.', access: READ },
+  'accounting.contacts.read': { sentence: 'Reads your contacts.', access: READ },
+  'accounting.transactions.read': { sentence: 'Reads your transactions.', access: READ },
+  'accounting.reports.read': { sentence: 'Reads your financial reports.', access: READ },
+
+  'https://uri.paypal.com/services/reporting/search/read': {
+    sentence: 'Searches your transaction history.',
+    access: READ,
+  },
+
+  'account_info.read': { sentence: 'Reads your account info.', access: READ },
+  'files.metadata.read': { sentence: 'Reads file and folder names and metadata.', access: READ },
+  'files.content.read': { sentence: 'Reads the content of your files.', access: READ },
+  'files.content.write': { sentence: 'Creates and edits file content.', access: WRITE },
+
+  root_readonly: { sentence: 'Reads files and folders you can access.', access: READ },
+  item_preview: { sentence: 'Generates previews of your files.', access: READ },
+  item_download: { sentence: 'Downloads your files.', access: READ },
+  item_upload: { sentence: 'Uploads new files.', access: WRITE },
+
+  signature: {
+    sentence:
+      'Creates, sends and updates envelopes for signature, and reads your envelopes, templates, recipients and account.',
+    access: WRITE,
+  },
+  adm_store_unified_repo_read: {
+    sentence: 'Reads your agreements and their details in Docusign Navigator.',
+    access: READ,
+  },
+  aow_manage: {
+    sentence: 'Lists, starts, pauses, resumes and cancels your Docusign Maestro workflows.',
+    access: WRITE,
+  },
+
+  instagram_basic: { sentence: 'Reads your profile and media.', access: READ },
+  instagram_manage_insights: {
+    sentence: 'Reads engagement and audience insights.',
+    access: READ,
+  },
+  instagram_content_publish: { sentence: 'Publishes content to your account.', access: WRITE },
+
+  public_profile: { sentence: 'Reads your public profile info.', access: READ },
+  pages_show_list: { sentence: 'Lists the Pages you manage.', access: READ },
+  pages_read_engagement: { sentence: 'Reads engagement data on your Pages.', access: READ },
+  pages_manage_posts: { sentence: 'Creates and edits posts on your Pages.', access: WRITE },
+
+  fhirUser: { sentence: 'Identifies you as the authenticated clinical user.', access: READ },
+  'launch/patient': {
+    sentence: 'Establishes which patient record the session applies to.',
+    access: READ,
+  },
+  'patient/Patient.read': { sentence: "Reads the patient's demographic record.", access: READ },
+  'patient/Observation.read': {
+    sentence: "Reads the patient's clinical observations, such as vitals and labs.",
+    access: READ,
+  },
+  'patient/Condition.read': { sentence: "Reads the patient's diagnosed conditions.", access: READ },
+  'patient/MedicationRequest.read': {
+    sentence: "Reads the patient's prescribed medications.",
+    access: READ,
+  },
+  'patient/AllergyIntolerance.read': {
+    sentence: "Reads the patient's recorded allergies.",
+    access: READ,
+  },
+  'patient/DocumentReference.read': {
+    sentence: "Reads references to the patient's clinical documents.",
+    access: READ,
+  },
+  'patient/*.read': {
+    sentence: 'Reads your own health records, without changing them.',
+    access: READ,
+  },
+  transactions: {
+    sentence:
+      'Reads the balances and transactions of the bank accounts you link, without moving money.',
+    access: READ,
+  },
+};
+
+export function describeConnectorScope(scope: string): ScopeDescription | null {
+  return SCOPE_DESCRIPTIONS[canonicalConnectorScope(scope)] ?? null;
+}
+
+export function describeGrantedConnectorScopes(
+  scopes: readonly string[],
+): { scope: string; sentence: string; access: 'read' | 'write' }[] {
+  return scopes.map((scope) => ({
+    scope,
+    ...(describeConnectorScope(scope) ?? undescribedScope(scope)),
+  }));
+}
+
+/**
+ * An undescribed scope names itself and is counted as write. A reader cannot
+ * weigh "this permission has not been described yet"; the raw scope is at least
+ * something they can look up at the provider.
+ */
+function undescribedScope(scope: string): ScopeDescription {
+  return {
+    sentence: `Grants the permission the provider calls "${scope}". It has no plain-language description here yet, so treat it as able to change things.`,
+    access: WRITE,
+  };
+}
+
+export function getConnectorScopeDescriptions(connectorId: string): ConnectorScopeDescriptions {
+  const ceiling = getConnectorScopeCeiling(connectorId);
+  if (ceiling === null) return { status: 'none' };
+  if (ceiling === SCOPE_REVIEW_PENDING) return { status: 'pending' };
+  const entries = ceiling.map((scope) => {
+    const description = describeConnectorScope(scope) ?? undescribedScope(scope);
+    return { scope, ...description };
+  });
+  return { status: 'known', entries };
+}
+
+export interface ConnectorScopeSummary {
+  readonly readCount: number;
+  readonly writeCount: number;
+  readonly sentence: string;
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+/**
+ * The one line a reader needs before the list: how much of this is reading and
+ * how much of it can change their account.
+ */
+export function summarizeConnectorScopes(connectorId: string): ConnectorScopeSummary | null {
+  const descriptions = getConnectorScopeDescriptions(connectorId);
+  if (descriptions.status !== 'known' || descriptions.entries.length === 0) return null;
+  const readCount = descriptions.entries.filter((entry) => entry.access === READ).length;
+  const writeCount = descriptions.entries.length - readCount;
+  const sentence =
+    writeCount === 0
+      ? `Read-only: ${plural(readCount, 'permission')}, none of which can change anything in your account.`
+      : `${plural(readCount, 'read permission')} and ${plural(writeCount, 'permission')} that can change things in your account. Nothing outside this list is granted.`;
+  return { readCount, writeCount, sentence };
+}

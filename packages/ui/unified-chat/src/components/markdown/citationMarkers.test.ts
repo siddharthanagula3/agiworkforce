@@ -4,10 +4,14 @@ import {
   CITATION_HREF_PATTERN,
   citationGroupHref,
   citationHref,
+  citationSpansFromAnchors,
+  deliveredCitationSpans,
   findCitationIndexForUrl,
   insertCitationMarkers,
   isCitationOnlyLinkText,
   linkifyCitationMarkers,
+  readCitationSpans,
+  withoutCitationMarkers,
 } from './citationMarkers';
 
 describe('linkifyCitationMarkers', () => {
@@ -209,5 +213,101 @@ describe('insertCitationMarkers', () => {
 
   it('ignores an offset past the end of the answer', () => {
     expect(insertCitationMarkers(ANSWER, [{ endIndex: 900, positions: [1] }], 2)).toBe(ANSWER);
+  });
+});
+
+describe('citationSpansFromAnchors', () => {
+  const ANSWER =
+    'The latest LTS line is Node.js 24. It moves to maintenance on October 20, 2026.\n\n' +
+    '| Line | Status |\n| --- | --- |\n| 24 | LTS |';
+
+  it('places each citation at the end of the sentence it arrived in', () => {
+    const second = ANSWER.indexOf('It moves');
+    const spans = citationSpansFromAnchors(ANSWER, [
+      { offset: 0, marker: 1 },
+      { offset: second, marker: 2 },
+      { offset: second + 3, marker: 1 },
+    ]);
+    expect(insertCitationMarkers(ANSWER, spans, 2).split('\n')[0]).toBe(
+      'The latest LTS line is Node.js 24.[1] It moves to maintenance on October 20, 2026.[1][2]',
+    );
+  });
+
+  it('leaves table rows without a marker', () => {
+    const row = ANSWER.indexOf('| 24 |');
+    expect(citationSpansFromAnchors(ANSWER, [{ offset: row, marker: 1 }])).toEqual([]);
+  });
+
+  it('reaches the end of the text for a claim whose sentence has not ended', () => {
+    expect(citationSpansFromAnchors('Tulips need a cold', [{ offset: 0, marker: 1 }])).toEqual([
+      { endIndex: 18, positions: [1] },
+    ]);
+  });
+
+  it('ignores an anchor at or past the end of the text', () => {
+    expect(citationSpansFromAnchors('Short.', [{ offset: 6, marker: 1 }])).toEqual([]);
+  });
+});
+
+describe('readCitationSpans', () => {
+  it('keeps only spans with a numeric end and at least one whole position', () => {
+    expect(
+      readCitationSpans([
+        { endIndex: 18, positions: [1, 0, 2.5, 3] },
+        { endIndex: 'x', positions: [1] },
+        { endIndex: 9, positions: [] },
+        { endIndex: 4 },
+        null,
+      ]),
+    ).toEqual([{ endIndex: 18, positions: [1, 3] }]);
+  });
+
+  it('reads anything that is not a list as no spans', () => {
+    expect(readCitationSpans({ endIndex: 1, positions: [1] })).toEqual([]);
+  });
+});
+
+describe('deliveredCitationSpans', () => {
+  it("renumbers the provider's positions onto the delivered list and drops pages never delivered", () => {
+    expect(
+      deliveredCitationSpans(
+        [
+          { endIndex: 18, positions: [1] },
+          { endIndex: 33, positions: [2, 3] },
+          { endIndex: 40, positions: [3] },
+        ],
+        ['https://a.example/one', 'https://www.b.example/two/?utm_source=x', 'https://c.example/'],
+        ['https://b.example/two', 'https://a.example/one'],
+      ),
+    ).toEqual([
+      { endIndex: 18, positions: [2] },
+      { endIndex: 33, positions: [1] },
+    ]);
+  });
+});
+
+describe('withoutCitationMarkers', () => {
+  it('drops marker runs from prose and keeps code, links and footnotes as written', () => {
+    expect(
+      withoutCitationMarkers(
+        [
+          'Tulips need a cold winter.[1] They bloom in spring.[1][2]',
+          'Read `rows[1]` and [the guide][2] or [docs](https://example.com).',
+          '```',
+          'items[3]',
+          '```',
+          '[2]: https://example.com/guide',
+        ].join('\n'),
+      ),
+    ).toBe(
+      [
+        'Tulips need a cold winter. They bloom in spring.',
+        'Read `rows[1]` and [the guide][2] or [docs](https://example.com).',
+        '```',
+        'items[3]',
+        '```',
+        '[2]: https://example.com/guide',
+      ].join('\n'),
+    );
   });
 });

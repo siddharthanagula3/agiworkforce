@@ -28,6 +28,7 @@ import type { AgentRunNotificationEvent } from '../agent-notification-service';
 
 const {
   notifyAgentRunEvent,
+  notifyCloudCodeTurnEvent,
   notifyResearchReportSettled,
   trackAgentRunOutcome,
   AGENT_PUSH_PREFERENCE_KEY,
@@ -247,6 +248,56 @@ describe('notifyResearchReportSettled', () => {
     );
   });
 
+  it('sends a finished report as research, which the phone can mute on its own', async () => {
+    await notifyResearchReportSettled(callerDb, {
+      ...report,
+      conversationId: '0190a000-0000-7000-8000-000000000456',
+      runId: 'run-1',
+    });
+
+    expect(mocks.sendPush).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        data: {
+          type: 'research_completed',
+          priority: 'normal',
+          route: '/(app)/reports',
+          target: 'research',
+          targetId: 'report-1',
+          conversationId: '0190a000-0000-7000-8000-000000000456',
+          runId: 'run-1',
+        },
+      }),
+      { expo: true, web: true },
+    );
+  });
+
+  it('leaves out the conversation and run when the report names neither', async () => {
+    await notifyResearchReportSettled(callerDb, report);
+
+    const message = mocks.sendPush.mock.calls[0]?.[1] as { data: Record<string, string> };
+    expect(message.data).toEqual({
+      type: 'research_completed',
+      priority: 'normal',
+      route: '/(app)/reports',
+      target: 'research',
+      targetId: 'report-1',
+    });
+  });
+
+  it('keeps a report that did not finish under agent failures', async () => {
+    await notifyResearchReportSettled(callerDb, { ...report, status: 'failed' });
+
+    expect(mocks.sendPush).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        title: 'Research did not finish',
+        data: expect.objectContaining({ type: 'agent_failed', priority: 'critical' }),
+      }),
+      { expo: true, web: true },
+    );
+  });
+
   it('says nothing while the report is still being written', async () => {
     await notifyResearchReportSettled(callerDb, { ...report, status: 'synthesizing' });
     expect(mocks.record).not.toHaveBeenCalled();
@@ -260,5 +311,30 @@ describe('notifyResearchReportSettled', () => {
       pushed: false,
     });
     expect(mocks.sendPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifyCloudCodeTurnEvent', () => {
+  const turn = {
+    userId: 'user-1',
+    sessionId: 'session-1',
+    sessionTitle: 'Fix the login page',
+    turnId: 'turn-1',
+  };
+
+  it.each([
+    ['approval_required', 'code_session_needs_input', 'high'],
+    ['completed', 'code_session_completed', 'normal'],
+    ['failed', 'code_session_failed', 'critical'],
+  ] as const)('sends %s as %s with the session it is about', async (event, type, priority) => {
+    await notifyCloudCodeTurnEvent(callerDb, { ...turn, event });
+
+    expect(mocks.sendPush).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        data: { type, priority, codeSessionId: 'session-1' },
+      }),
+      { expo: true, web: true },
+    );
   });
 });

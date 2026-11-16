@@ -145,6 +145,36 @@ describe('AttachmentPreview · document type line', () => {
     expect(screen.getByText('Spreadsheet · 7 B')).toBeTruthy();
     expect(screen.getByText('PDF · 3 B')).toBeTruthy();
   });
+
+  it('names Office documents by their kind, not as code, while XML stays code', () => {
+    const office = (name: string, type: string): AttachmentPreviewData => ({
+      file: new File(['zip'], name, { type }),
+      url: `blob:${name}`,
+      type: 'document',
+    });
+
+    render(
+      <AttachmentPreview
+        previews={[
+          office(
+            'brief.docx',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          ),
+          office(
+            'deck.pptx',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          ),
+          office('feed.xml', 'application/xml'),
+          office('logo.svg', 'image/svg+xml'),
+        ]}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Document · 3 B')).toBeTruthy();
+    expect(screen.getByText('Presentation · 3 B')).toBeTruthy();
+    expect(screen.getAllByText('Code · 3 B')).toHaveLength(2);
+  });
 });
 
 describe('AttachmentPreview · image order', () => {

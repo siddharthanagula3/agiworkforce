@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Security
-Last updated: 2026-09-28
+Last updated: 2026-11-15
 
 Every route that materialises bytes a user uploads runs the same scanner, and
 `scripts/check-upload-inspection-coverage.mjs` enumerates them from the route
@@ -102,7 +102,47 @@ contract; the parts that decide an upload are:
   engine and signature versions need the token.
 - `services/upload-scanner/__tests__/clamd-config.test.ts` pins the clamd
   settings above: `AlertExceedsMax`, `AlertEncrypted`, the in-memory spool and
-  the loopback address.
+  the loopback address, and every value of the source scan settings below.
+
+### Source scans (protocol 2)
+
+For large chat files (`docs/specs/large-file-uploads/spec.md`) the scanner
+also answers `POST /v2/scans`: it takes a presigned GET URL for one staged
+object and answers a job to poll, so no function carries the bytes. No web code
+calls it yet. The scanner's README holds the contract. What decides safety:
+
+- It is off unless `UPLOAD_SCAN_SOURCE_HOSTS` is set; until then every `/v2`
+  path answers 404, the web's readiness probe reads that as protocol 1, and
+  clamd keeps the settings above.
+- The scanner fetches only https URLs on a listed host, never an IP literal, a
+  URL with credentials or a port, and never follows a redirect
+  (`redirect: 'error'`). The rules run before the fetch, and the fetch sends
+  `If-Match` with the staged ETag; a 412 answers `source_changed`.
+- `clean` is the only outcome the web may seal, and only with the SHA-256, byte
+  count and ETag the scanner read. A byte count other than the declared one is
+  `size_mismatch`; a deadline, a failed fetch or a clamd failure is
+  `incomplete` and retried, never treated as safe.
+- With protocol 2 on, clamd runs with raised limits (`CLAMD_SOURCE_SCAN_SETTINGS`
+  in `services/upload-scanner/src/config.ts`): `StreamMaxLength`,
+  `MaxFileSize`, `PCREMaxFileSize` and `MaxEmbeddedPE` at 520M, `MaxScanSize`
+  1024M, `MaxScanTime` 600000, `ReadTimeout` 300, and the spool in
+  `/var/tmp/clamd` on the machine's disk instead of `/dev/shm`. These are
+  global to clamd, so they also bind `POST /scan`; deployment step 4 of
+  `docs/specs/large-file-uploads/plan.md` measures their cost on a test app
+  before the production scanner gets them.
+- For `application/pdf` the source scan also looks for `/JavaScript`, `/JS`,
+  `/Launch` and `/EmbeddedFile` outside stream bodies. This is a heuristic, not a
+  parser: any object placed inside a stream body, compressed or not, is invisible
+  to it, as is a token written with `#` name escapes. clamd still scans every
+  byte, and the check adds a refusal on top of clamd's verdict; it is not what
+  makes a file safe.
+- A large scan cannot take capacity from `POST /scan`: one source scan at a
+  time, a bounded FIFO queue, and an hourly byte budget that starts empty after
+  every restart.
+  Whether clamd keeps scanning a spooled stream after the scanner closes its
+  connection at a deadline is not measured; deployment step 4 of
+  `docs/specs/large-file-uploads/plan.md` measures it before large files go on.
+- Logs never carry the presigned URL, its path or its query.
 
 The machine is `shared-cpu-2x` with 4 GB. clamd holds about 1.2 GiB of
 signatures and briefly doubles that while it reloads them after an update,
@@ -286,6 +326,8 @@ text is assembled into a prompt.
 - `apps/web/lib/security/upload-scan.test.ts`
 - `services/upload-scanner/__tests__/server.test.ts`, `clamd-config.test.ts`,
   `config.test.ts` and `limits.test.ts`
+- `services/upload-scanner/__tests__/server-v2.test.ts`, `source-scan.test.ts`,
+  `source-scan-limits.test.ts`, `scan-queue.test.ts` and `watchdog.test.ts`
 - `apps/web/lib/security/__tests__/decompression-ratio.test.ts`
 - `apps/web/lib/redaction/__tests__/redaction.test.ts`
 - `scripts/check-client-bundle-secrets.mjs` and its `.test.mjs`

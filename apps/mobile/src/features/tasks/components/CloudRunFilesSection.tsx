@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Alert, View } from 'react-native';
 import { FileText, Share } from 'lucide-react-native';
 import { resolveGeneratedFileUri } from '@agiworkforce/cloud-contracts';
-import { formatBytes } from '@agiworkforce/utils/format';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { Text } from '@/components/ui/Text';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { API_URL } from '@/lib/constants';
@@ -79,7 +79,7 @@ export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] 
               </Text>
               {file.sizeBytes !== undefined ? (
                 <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }}>
-                  {formatBytes(file.sizeBytes, 1)}
+                  {formatAttachmentSize(file.sizeBytes)}
                 </Text>
               ) : null}
             </View>

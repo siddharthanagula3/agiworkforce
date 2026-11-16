@@ -3,12 +3,10 @@ import { useRouter } from 'expo-router';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
-import { useTierStore } from '@/src/features/billing/store';
 import { useModelStore } from '@/src/features/model-picker/store';
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
-  getDefaultCloudModelIdForTier,
 } from '@/src/features/model-picker/service';
 import { readyLocalModelIdOr } from '@/src/features/model-picker/installStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -19,8 +17,8 @@ export function useAppModeSwitch() {
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
-  const subscriptionTier = useTierStore((s) => s.tier);
   const setModel = useModelStore((s) => s.setModel);
+  const restoreNewChatModel = useModelStore((s) => s.restoreNewChatModel);
   const setWorkMode = useChatStore((s) => s.setWorkMode);
 
   const switchToLocal = useCallback((): boolean => {
@@ -40,9 +38,9 @@ export function useAppModeSwitch() {
       return false;
     }
     setAppMode('cloud');
-    setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
+    restoreNewChatModel();
     return true;
-  }, [cloudUnlocked, router, setAppMode, setModel, subscriptionTier]);
+  }, [cloudUnlocked, restoreNewChatModel, router, setAppMode]);
 
   return { appMode, cloudUnlocked, switchToLocal, switchToCloud };
 }

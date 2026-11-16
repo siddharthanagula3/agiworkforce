@@ -4,7 +4,7 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { ShieldAlert } from 'lucide-react-native';
 
 import { Text } from '@/components/ui/Text';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 import { useThemeColors } from '@/src/ui/theme';
 
 /**
@@ -21,7 +21,7 @@ export function PairingRiskDisclosure({ className }: { className?: string }) {
   const colors = useThemeColors();
 
   const handleOpenSafetyGuide = useCallback(async () => {
-    const opened = await openExternalUrl(DISPATCH_SAFETY_URL);
+    const opened = await openWebContentPage(DISPATCH_SAFETY_URL);
     if (!opened) {
       Alert.alert('Error', 'Could not open the link. Please try again.');
     }

@@ -48,7 +48,8 @@ export default function GitHubInstallReturnRoute() {
             : { state: returned.state, error: 'denied' },
         );
         if (status === 'connected') {
-          routerRef.current.replace(CLOUD_CODE_HREF);
+          if (routerRef.current.canGoBack()) routerRef.current.back();
+          else routerRef.current.replace(CLOUD_CODE_HREF);
           return;
         }
         setStage({ name: 'done', message: describeGitHubInstallOutcome(status) });

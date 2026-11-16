@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { buildChangeReview, resolveReview } from './change-review';
+import { buildChangeReview, resolveReview } from '@agiworkforce/artifacts';
 
 export function ArtifactChangesReview({
   previous,

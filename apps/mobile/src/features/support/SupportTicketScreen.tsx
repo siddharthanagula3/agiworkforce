@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -74,6 +74,8 @@ function SupportTicketThread({ ticketId }: { ticketId: string }) {
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [closing, setClosing] = useState(false);
+
+  useFocusEffect(useCallback(() => () => setReply(''), []));
 
   const load = useCallback(
     async (signal?: AbortSignal) => {

@@ -175,7 +175,7 @@ export function LibraryView() {
       openFolder,
       createFolder,
       uploadFiles: async (files) => {
-        await uploadChatAttachments(files);
+        await uploadChatAttachments(files, { declineLargeFiles: true });
       },
       deleteItem: async (id) => {
         const csrf = await getCsrfToken();

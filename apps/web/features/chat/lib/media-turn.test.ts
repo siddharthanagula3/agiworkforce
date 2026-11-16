@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getProviderOfferings } from '@agiworkforce/types';
-import {
-  hasKnownMediaFrame,
-  mediaFrameStyle,
-  mediaTurn,
-  mediaTurnProse,
-  type MediaTurnMessage,
-} from './media-turn';
+import { mediaFrameStyle, mediaTurn, mediaTurnProse, type MediaTurnMessage } from './media-turn';
 
 function offeringKey(protocol: string, field?: 'quotaVideoRatio' | 'quotaVideoSize'): string {
   const entry = Object.entries(getProviderOfferings()).find(
@@ -226,8 +220,5 @@ describe('mediaFrameStyle', () => {
     expect(mediaFrameStyle('image-card', 'auto').aspectRatio).toBe('1');
     expect(mediaFrameStyle('inline-image', undefined).aspectRatio).toBe('1');
     expect(mediaFrameStyle('video-player', undefined).aspectRatio).toBe(String(16 / 9));
-    expect(hasKnownMediaFrame('auto')).toBe(false);
-    expect(hasKnownMediaFrame('0:9')).toBe(false);
-    expect(hasKnownMediaFrame('1280:720')).toBe(true);
   });
 });

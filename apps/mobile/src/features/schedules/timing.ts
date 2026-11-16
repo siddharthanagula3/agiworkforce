@@ -1,3 +1,18 @@
+const TIMING_PROBLEMS = {
+  invalidDateTime: 'Enter a valid date and time.',
+  invalidTimezone: 'Enter a valid IANA timezone, such as America/Chicago.',
+  skippedLocalTime: 'This local time does not exist because the clock changes for daylight saving.',
+  repeatedLocalTime: 'This local time occurs twice because the clock changes for daylight saving.',
+} as const;
+
+const KNOWN_TIMING_PROBLEMS: ReadonlySet<string> = new Set(Object.values(TIMING_PROBLEMS));
+
+export function scheduleTimingProblem(error: unknown): string {
+  return error instanceof Error && KNOWN_TIMING_PROBLEMS.has(error.message)
+    ? error.message
+    : TIMING_PROBLEMS.invalidDateTime;
+}
+
 interface WallClockParts {
   year: number;
   month: number;
@@ -8,7 +23,7 @@ interface WallClockParts {
 
 function parseDateAndTime(date: string, time: string): WallClockParts {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(`${date}T${time}`);
-  if (!match) throw new Error('Enter a valid date and time.');
+  if (!match) throw new Error(TIMING_PROBLEMS.invalidDateTime);
 
   const parts: WallClockParts = {
     year: Number(match[1]),
@@ -30,7 +45,7 @@ function parseDateAndTime(date: string, time: string): WallClockParts {
     normalized.getUTCMonth() + 1 !== parts.month ||
     normalized.getUTCDate() !== parts.day
   ) {
-    throw new Error('Enter a valid date and time.');
+    throw new Error(TIMING_PROBLEMS.invalidDateTime);
   }
   return parts;
 }
@@ -47,7 +62,7 @@ function formatterFor(timezone: string): Intl.DateTimeFormat {
       hourCycle: 'h23',
     });
   } catch {
-    throw new Error('Enter a valid IANA timezone, such as America/Chicago.');
+    throw new Error(TIMING_PROBLEMS.invalidTimezone);
   }
 }
 
@@ -98,12 +113,10 @@ export function zonedDateAndTimeToIso(date: string, time: string, timezone: stri
     .sort();
 
   if (candidates.length === 0) {
-    throw new Error(
-      'This local time does not exist because the clock changes for daylight saving.',
-    );
+    throw new Error(TIMING_PROBLEMS.skippedLocalTime);
   }
   if (candidates.length > 1) {
-    throw new Error('This local time occurs twice because the clock changes for daylight saving.');
+    throw new Error(TIMING_PROBLEMS.repeatedLocalTime);
   }
   return candidates[0]!;
 }

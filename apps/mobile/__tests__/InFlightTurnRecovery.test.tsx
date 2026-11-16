@@ -56,6 +56,7 @@ describe('in-flight turn recovery', () => {
   it('follows a running turn and reloads once it finishes', async () => {
     mockApiFetch
       .mockResolvedValueOnce(runsResponse([{ state: 'running', staleForMs: 10 }]))
+      .mockResolvedValueOnce(runsResponse([]))
       .mockResolvedValueOnce(runsResponse([]));
     const onFinished = jest.fn();
 
@@ -64,6 +65,7 @@ describe('in-flight turn recovery', () => {
         conversationId: 'c1',
         isCloud: true,
         isStreaming: false,
+        isOnline: true,
         messages: userLast,
         onFinished,
       }),
@@ -78,7 +80,129 @@ describe('in-flight turn recovery', () => {
     await act(async () => {
       jest.advanceTimersByTime(IN_FLIGHT_TURN_RECHECK_MS);
     });
-    expect(result.current).toBe('idle');
+    expect(result.current).toBe('checking');
     expect(onFinished).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      jest.advanceTimersByTime(IN_FLIGHT_TURN_RECHECK_MS);
+    });
+    expect(result.current).toBe('stalled');
+    expect(onFinished).toHaveBeenCalledTimes(1);
+  });
+
+  describe('a question left without an answer', () => {
+    function renderQuestion(
+      overrides: Partial<{ isStreaming: boolean; messages: typeof userLast }> = {},
+    ) {
+      return renderHook(() =>
+        useInFlightTurnRecovery({
+          conversationId: 'c1',
+          isCloud: true,
+          isStreaming: false,
+          isOnline: true,
+          messages: userLast,
+          onFinished: jest.fn(),
+          ...overrides,
+        }),
+      );
+    }
+
+    it('is reported as stopped once the server knows of no run for it', async () => {
+      mockApiFetch.mockResolvedValue(runsResponse([]));
+      const { result } = renderQuestion();
+      expect(result.current).toBe('checking');
+
+      await act(async () => {});
+      expect(result.current).toBe('stalled');
+    });
+
+    it('is still being checked while the first status request is pending', async () => {
+      mockApiFetch.mockReturnValue(new Promise(() => undefined));
+      const { result } = renderQuestion();
+
+      await act(async () => {});
+      expect(result.current).toBe('checking');
+    });
+
+    it('is running while the server has a live run for it', async () => {
+      mockApiFetch.mockResolvedValue(runsResponse([{ state: 'running', staleForMs: 10 }]));
+      const { result } = renderQuestion();
+
+      await act(async () => {});
+      expect(result.current).toBe('running');
+    });
+
+    it.each([
+      ['the request fails', () => mockApiFetch.mockResolvedValue({ ok: false })],
+      ['the phone is offline', () => mockApiFetch.mockRejectedValue(new TypeError('Network'))],
+    ])('is unknown, never stopped, when %s', async (_case, arrange) => {
+      arrange();
+      const { result } = renderQuestion();
+
+      await act(async () => {});
+      expect(result.current).toBe('unknown');
+    });
+
+    it('is not asked about while this phone is still sending it', async () => {
+      mockApiFetch.mockResolvedValue(runsResponse([]));
+      const { result } = renderQuestion({ isStreaming: true });
+
+      await act(async () => {});
+      expect(result.current).toBe('idle');
+      expect(mockApiFetch).not.toHaveBeenCalled();
+    });
+
+    it('is not asked about while it waits in the offline queue', async () => {
+      mockApiFetch.mockResolvedValue(runsResponse([]));
+      const { result } = renderQuestion({
+        messages: [{ role: 'user', isStreaming: false, isQueued: true }] as typeof userLast,
+      });
+
+      await act(async () => {});
+      expect(result.current).toBe('idle');
+      expect(mockApiFetch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['its offline send failed and the bubble offers its own retry', { queueFailed: true }],
+      ['the person stopped it before it started', { metadata: { finishReason: 'stopped' } }],
+    ])('is not asked about when %s', async (_case, row) => {
+      mockApiFetch.mockResolvedValue(runsResponse([]));
+      const { result } = renderQuestion({
+        messages: [
+          { role: 'user', isStreaming: false, isQueued: false, ...row },
+        ] as typeof userLast,
+      });
+
+      await act(async () => {});
+      expect(result.current).toBe('idle');
+      expect(mockApiFetch).not.toHaveBeenCalled();
+    });
+
+    it('is asked about again once the phone comes back online', async () => {
+      mockApiFetch
+        .mockRejectedValueOnce(new TypeError('Network'))
+        .mockResolvedValueOnce(runsResponse([]));
+      const { result, rerender } = renderHook(
+        ({ isOnline }: { isOnline: boolean }) =>
+          useInFlightTurnRecovery({
+            conversationId: 'c1',
+            isCloud: true,
+            isStreaming: false,
+            isOnline,
+            messages: userLast,
+            onFinished: jest.fn(),
+          }),
+        { initialProps: { isOnline: false } },
+      );
+
+      await act(async () => {});
+      expect(result.current).toBe('unknown');
+
+      rerender({ isOnline: true });
+      await act(async () => {});
+      expect(result.current).toBe('stalled');
+      expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    });
   });
 });

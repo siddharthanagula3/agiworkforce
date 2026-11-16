@@ -33,18 +33,21 @@ import {
   PERSONALIZATION_STYLES,
   PERSONALIZATION_TECHNICAL_LEVELS,
 } from './constants';
+import {
+  PERSONALIZATION_NICKNAME_MAX_LENGTH,
+  PERSONALIZATION_OCCUPATION_MAX_LENGTH,
+} from './personalizationFieldLimits';
 import { TraitLevelSheet } from './TraitLevelSheet';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { toUserMessage } from '@/services/userMessage';
 import { ScreenHeader } from '@/src/shared/components/cloud-screen';
-import { API_URL } from '@/lib/constants';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openWebContentPage } from '@/src/platform/webContentPage';
 
 const MAX_ABOUT_YOU_CHARS = 1500;
 
-const ACCEPTABLE_USE_URL = new URL('/acceptable-use', API_URL).toString();
+const ACCEPTABLE_USE_PATH = '/acceptable-use';
 
 const RESPONSE_LANGUAGE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: RESPONSE_LANGUAGE_AUTO, label: 'Match my message' },
@@ -111,6 +114,7 @@ function LabeledInput({
   onChangeText,
   placeholder,
   multiline,
+  maxLength,
   helper,
   error,
 }: {
@@ -119,6 +123,7 @@ function LabeledInput({
   onChangeText: (text: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  maxLength?: number;
   helper?: ReactNode;
   error?: string | null;
 }) {
@@ -145,6 +150,7 @@ function LabeledInput({
         placeholderTextColor={c.textMuted}
         selectionColor={c.teal}
         multiline={multiline}
+        maxLength={maxLength}
         textAlignVertical={multiline ? 'top' : 'center'}
         autoCorrect={false}
         returnKeyType={multiline ? 'default' : 'done'}
@@ -471,6 +477,7 @@ export default function PersonalizationScreen() {
               setNickname(value);
             }}
             placeholder="What should AGI call you?"
+            maxLength={PERSONALIZATION_NICKNAME_MAX_LENGTH}
             helper={`${PRODUCT_BRAND} uses your nickname in chat.`}
           />
           <LabeledInput
@@ -481,6 +488,7 @@ export default function PersonalizationScreen() {
               setOccupation(value);
             }}
             placeholder="e.g. Founder & Engineer"
+            maxLength={PERSONALIZATION_OCCUPATION_MAX_LENGTH}
           />
           <LabeledInput
             label="More about you"
@@ -508,7 +516,7 @@ export default function PersonalizationScreen() {
                   className="text-sm leading-5"
                   style={{ color: c.teal }}
                   accessibilityRole="link"
-                  onPress={() => void openExternalUrl(ACCEPTABLE_USE_URL)}
+                  onPress={() => void openWebContentPage(ACCEPTABLE_USE_PATH)}
                 >
                   acceptable use policy
                 </Text>

@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, type RefObject } from 'react';
-import { bestOccurrence, windowAround, type OccurrenceContext } from '../text-occurrence';
+import {
+  bestOccurrence,
+  windowAround,
+  type OccurrenceContext,
+} from '@agiworkforce/unified-chat/artifact-selection-request';
 import type { ArtifactCommentAnchor } from './artifact-comments-client';
 
 export const COMMENT_HIGHLIGHT_NAME = 'artifact-comment';

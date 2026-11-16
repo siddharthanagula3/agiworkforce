@@ -16,11 +16,13 @@ type AllPermissionsMap = Record<MobilePermissionKind, StoredPermissionState>;
 function makeDefaults(): AllPermissionsMap {
   return {
     microphone: { ...DEFAULT_STATE },
+    speechRecognition: { ...DEFAULT_STATE },
     camera: { ...DEFAULT_STATE },
     photos: { ...DEFAULT_STATE },
     notifications: { ...DEFAULT_STATE },
     calendar: { ...DEFAULT_STATE },
     reminders: { ...DEFAULT_STATE },
+    faceId: { ...DEFAULT_STATE },
   };
 }
 

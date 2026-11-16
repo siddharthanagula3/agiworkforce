@@ -16,22 +16,30 @@ export function useBottomSearchBarSpace(): number {
   return insets.bottom + BOTTOM_SEARCH_BAR_MARGIN + BOTTOM_SEARCH_BAR_HEIGHT;
 }
 
+/**
+ * The Android window is edge to edge and never resizes for the keyboard, so the
+ * bar lifts itself there too. Android reports the keyboard height above the
+ * navigation bar, while iOS measures it from the bottom of the screen.
+ */
 export function useKeyboardOverlap(): number {
-  const [overlap, setOverlap] = useState(0);
+  const insets = useSafeAreaInsets();
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   useEffect(() => {
-    if (Platform.OS !== 'ios') return;
-    const show = Keyboard.addListener('keyboardWillShow', (event) => {
-      setOverlap(event.endCoordinates.height);
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
     });
-    const hide = Keyboard.addListener('keyboardWillHide', () => setOverlap(0));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => {
       show.remove();
       hide.remove();
     };
   }, []);
 
-  return overlap;
+  if (keyboardHeight === 0 || Platform.OS === 'ios') return keyboardHeight;
+  return keyboardHeight + insets.bottom;
 }
 
 export function BottomSearchBar({
@@ -42,6 +50,7 @@ export function BottomSearchBar({
   clearAccessibilityLabel = 'Clear search',
   inputRef,
   autoFocus = false,
+  onSubmitEditing,
   testID,
 }: {
   value: string;
@@ -51,6 +60,7 @@ export function BottomSearchBar({
   clearAccessibilityLabel?: string;
   inputRef?: Ref<TextInput>;
   autoFocus?: boolean;
+  onSubmitEditing?: () => void;
   testID?: string;
 }) {
   const colors = useThemeColors();
@@ -82,6 +92,7 @@ export function BottomSearchBar({
         autoFocus={autoFocus}
         value={value}
         onChangeText={onChangeText}
+        onSubmitEditing={onSubmitEditing}
         placeholder={placeholder}
         placeholderTextColor={colors.textMuted}
         accessibilityLabel={accessibilityLabel}

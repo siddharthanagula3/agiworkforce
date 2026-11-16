@@ -5,6 +5,7 @@ import type { ModelDef } from '@/src/features/model-picker/service';
 
 jest.mock('@/services/modelDownload', () => ({
   downloadModel: jest.fn(),
+  excludeModelFilesFromBackup: jest.fn().mockResolvedValue(undefined),
   cancelDownload: jest.fn(),
   assertDownloadAllowed: jest.fn().mockResolvedValue(undefined),
 }));

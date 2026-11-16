@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-13
+Last updated: 2026-11-14
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -73,9 +73,6 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 - Phone sign-in to Cloud works in production from `main` (`568584454a`, part of the release
   `e822c4fda6` live since 2026-11-13). The local branch `hotfix/mobile-native-session`
   (`a8e278c62e`) is no longer served.
-- No store build can start before 2026-11-12: the Expo patch update the release check requires is
-  held by the seven-day package-age rule until then (`MOBILE-EXPO-PATCH-LAG-2026-11-10`, runbook
-  step 7 item 1).
 - `codex/mobile-store-release` (2026-10-17) is not needed for this: its free-first idea was
   reimplemented on current code. Whether to keep or delete that branch is yours.
 

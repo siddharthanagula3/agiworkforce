@@ -1278,7 +1278,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowMediaGeneration: true,
     allowImageGeneration: true,
     allowVoice: true,
-    voiceMinutesPerMonth: 300,
+    voiceMinutesPerMonth: null,
     allowVideoGeneration: false,
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,

@@ -3,11 +3,9 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ResearchReport } from '@agiworkforce/types';
 
-import {
-  ResearchReportView,
-  extractMarkdownHeadings,
-  researchReportToArtifact,
-} from './ResearchReportView';
+import { extractMarkdownHeadings } from '@agiworkforce/unified-chat/markdown-headings';
+import { researchReportToArtifact } from '@agiworkforce/unified-chat/research-report';
+import { ResearchReportView } from './ResearchReportView';
 
 const BODY = [
   '## Overview',

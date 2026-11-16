@@ -91,6 +91,8 @@ jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: (...args: unknown[]) => mockFetchDirectory(...args),
   browseConnectorListings: (...args: unknown[]) => mockBrowseListings(...args),
   addCustomConnector: jest.fn(),
+  startConnectorOAuth: jest.fn(),
+  authorizeConnectorInApp: jest.fn(),
 }));
 
 function connection(connectorId: string, name: string) {

@@ -10,16 +10,20 @@ import {
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
+import { Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { api } from '@/services/api';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { SUPPORT_EMAIL } from '@/src/features/support/contact';
+import { useNoMailAppAlert } from '@/src/features/support/useNoMailAppAlert';
+import { feedbackClientContext } from './clientContext';
+import { FEEDBACK_SCREEN_TITLE } from './presentation';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 
@@ -76,7 +80,18 @@ export default function FeedbackScreen() {
   const [type, setType] = useState<FeedbackType>('general');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const sendsByEmail = useChatAppModeStore((s) => s.appMode) !== 'cloud';
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const alertNoMailApp = useNoMailAppAlert();
+  const sendsByEmail = appMode !== 'cloud';
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        setType('general');
+        setMessage('');
+      },
+      [],
+    ),
+  );
   const canSubmit = !sending && Boolean(message.trim());
 
   const handleSubmit = useCallback(async () => {
@@ -90,7 +105,7 @@ export default function FeedbackScreen() {
       try {
         await Linking.openURL(feedbackMailtoUrl(type, trimmed));
       } catch {
-        Alert.alert('No email app', `Send your feedback to ${SUPPORT_EMAIL}.`);
+        alertNoMailApp();
       }
       return;
     }
@@ -100,8 +115,11 @@ export default function FeedbackScreen() {
       await api.post('/api/mobile/feedback', {
         type,
         message: trimmed,
+        client: feedbackClientContext(appMode),
         ...(appeal ? { context: appeal } : {}),
       });
+      setType('general');
+      setMessage('');
       Alert.alert('Thank You!', 'Your feedback has been submitted.', [
         {
           text: 'OK',
@@ -113,7 +131,7 @@ export default function FeedbackScreen() {
     } finally {
       setSending(false);
     }
-  }, [appeal, type, message, router, returnTo, sendsByEmail]);
+  }, [alertNoMailApp, appeal, appMode, type, message, router, returnTo, sendsByEmail]);
 
   const handleBack = useGoBack(returnTo);
 
@@ -124,37 +142,10 @@ export default function FeedbackScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View
-          style={{
-            height: 50,
-            paddingHorizontal: 8,
-            flexDirection: 'row',
-            alignItems: 'center',
-          }}
-        >
-          <Pressable
-            onPress={handleBack}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-            hitSlop={8}
-            style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 12,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-            })}
-          >
-            <ArrowLeft size={20} color={colors.textSecondary} />
-          </Pressable>
-          <Text
-            variant="subheading"
-            style={{ marginLeft: 4, color: colors.textPrimary, fontWeight: '700' }}
-          >
-            {appeal ? 'Report an incorrect refusal' : 'Send Feedback'}
-          </Text>
-        </View>
+        <ScreenHeader
+          title={appeal ? 'Report an incorrect refusal' : FEEDBACK_SCREEN_TITLE}
+          onBack={handleBack}
+        />
 
         <ScrollView
           keyboardShouldPersistTaps="handled"

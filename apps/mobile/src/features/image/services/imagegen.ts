@@ -132,8 +132,15 @@ export function getDurableGeneratedImageAssetId(path: string): string | null {
   return candidate.slice(candidate.lastIndexOf('/') + 1).toLowerCase();
 }
 
+const DURABLE_IMAGE_THUMBNAIL_PATH =
+  /^\/api\/files\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/thumbnail$/i;
+
 export function resolveGeneratedImageUri(path: string): string | null {
   const candidate = path.trim();
-  if (!DURABLE_GENERATED_IMAGE_PATH.test(candidate)) return null;
+  if (
+    !DURABLE_GENERATED_IMAGE_PATH.test(candidate) &&
+    !DURABLE_IMAGE_THUMBNAIL_PATH.test(candidate)
+  )
+    return null;
   return `${API_URL.replace(/\/+$/, '')}${candidate}`;
 }

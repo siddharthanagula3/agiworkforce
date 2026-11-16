@@ -5,6 +5,7 @@ import type {
   ComputeSession,
   GeneratedFile,
 } from '@agiworkforce/types';
+import type { ToolApprovalDecisionValue, ToolApprovalReview } from '@agiworkforce/cloud-contracts';
 
 export type { CanonicalChatMessage };
 
@@ -18,6 +19,10 @@ export interface MessageAttachment {
   fileName: string;
   fileSize?: number;
   assetId?: string;
+}
+
+export interface MessageSharedAttachment {
+  name: string;
 }
 
 export interface Artifact {
@@ -52,6 +57,8 @@ export interface ToolCall {
   approvalDecision?: 'approved' | 'rejected';
   approvalGuidance?: string;
   approvalRiskLevel?: RiskLevel;
+  approvalReview?: ToolApprovalReview;
+  approvalScope?: ToolApprovalDecisionValue;
   toolCallId?: string;
 }
 
@@ -106,6 +113,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   artifacts?: Artifact[];
   toolCalls?: ToolCall[];
   pendingToolInput?: PendingToolInput;
+  answeredToolInput?: PendingToolInput;
   steps?: StatusStep[];
   type?: MessageType;
   imageUrl?: string;
@@ -116,6 +124,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   imageGenProgress?: number;
   imageGenStatus?: 'pending' | 'generating' | 'completed' | 'failed';
   imageGenError?: string;
+  imageGenRetryAt?: number;
   imageGenPrompt?: string;
   videoUrl?: string;
   videoThumbnailUrl?: string;
@@ -127,7 +136,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   videoTaskId?: string;
   videoGenCancelRequested?: boolean;
   videoGenCancelError?: string;
-  citations?: AgentEventSource[];
+  citations?: import('@/src/features/chat/utils/messageSources').MessageSource[];
   interactiveCards?: InteractiveCard[];
   isQueued?: boolean;
   offlineQueueId?: string;

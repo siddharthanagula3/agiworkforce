@@ -1,5 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -100,9 +100,9 @@ const DEFINITIONS_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         A third party we or our processor engage to help process personal data, listed at{' '}
-        <Link href="/subprocessors" className="agi-ds-link">
+        <PageLink href="/subprocessors" className="agi-ds-link">
           /subprocessors
-        </Link>
+        </PageLink>
         .
       </>
     ),
@@ -116,9 +116,9 @@ const MODE_LEDGER: readonly LedgerRow[] = [
       <>
         <strong>Where your prompts go:</strong> from the CLI to Ollama or LM Studio on loopback.
         Nothing is transmitted to us and nothing is silently routed to BYOK or Cloud. The{' '}
-        <Link href="/download" className="agi-ds-link">
+        <PageLink href="/download" className="agi-ds-link">
           download page
-        </Link>{' '}
+        </PageLink>{' '}
         shows which CLI releases are published.
         <br />
         <strong>What we hold:</strong> nothing about the local model request. Desktop chat and the
@@ -156,9 +156,9 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         <strong>What we hold:</strong> conversations, files, projects, memories, schedules and
         settings, so they sync across your devices. This is the only mode where we act as your
         processor. See the{' '}
-        <Link href="/dpa" className="agi-ds-link">
+        <PageLink href="/dpa" className="agi-ds-link">
           DPA
-        </Link>
+        </PageLink>
         .
       </>
     ),
@@ -252,9 +252,9 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         speaker identification or other biometric identifier anywhere in this product, and nothing
         here infers who is speaking. What OpenAI does with audio it receives is its own published
         practice, named on{' '}
-        <Link href="/subprocessors" className="agi-ds-link">
+        <PageLink href="/subprocessors" className="agi-ds-link">
           /subprocessors
-        </Link>
+        </PageLink>
         , not a promise we can make for it.
       </>
     ),
@@ -273,16 +273,16 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         <strong>Why, and how it is protected:</strong> doing the task you asked for. A web search
         sends your query to Perplexity. A sandbox run sends the code and the files it works on to
         E2B, and only where sandbox execution is switched on. Both are named on{' '}
-        <Link href="/subprocessors" className="agi-ds-link">
+        <PageLink href="/subprocessors" className="agi-ds-link">
           /subprocessors
-        </Link>
+        </PageLink>
         . Tool calls follow the conversation&rsquo;s retention in section 05. The web app cannot
         watch your screen or your other tabs on its own. Browser control and computer use belong to
         the Chrome extension; what it captures, including screenshots of the tab that cannot be
         redacted, is set out on{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.agentPermissions} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.agentPermissions} className="agi-ds-link">
           /agent-permissions
-        </Link>
+        </PageLink>
         . When you attach a page in the Chrome extension, or run a page command on it, the extension
         sends up to 30,000 characters taken from that page: its visible text and what is currently
         in its visible form fields, such as a name, an address or a message you have typed but not
@@ -483,9 +483,9 @@ const NOT_COLLECTED: readonly { title: string; body: React.ReactNode }[] = [
         receive its response; on the Free plan’s default model that provider is chosen by AGI, as
         section 01 sets out. Some models are reached through OpenRouter or through an inference
         gateway instead of directly, and{' '}
-        <Link href="/subprocessors" className="agi-ds-link">
+        <PageLink href="/subprocessors" className="agi-ds-link">
           /subprocessors
-        </Link>{' '}
+        </PageLink>{' '}
         names each of those and the condition under which it carries a request. Those third parties
         handle that content under their applicable terms and data-use policies; this statement about
         AGI-owned models is not a promise on their behalf. In BYOK mode, provider handling is
@@ -651,9 +651,9 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
         <strong>Basis:</strong> <strong>your consent</strong>, asked in a separate unticked box at
         sign-up or when you first accept the terms after signing in, if no decision is on record for
         this purpose. You can also choose in Settings, Privacy, or withdraw on the{' '}
-        <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+        <PageLink href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
           data rights page
-        </Link>
+        </PageLink>
         . Your decision is recorded against the revision of the privacy notice you were shown. No
         marketing email is sent by the product yet.
       </>
@@ -815,9 +815,9 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
         cannot be deleted, the record is kept and the next run tries again. A new rating on a reply
         replaces your earlier rating on that reply. Feedback sent without signing in is not tied to
         an account, so account deletion does not reach it. Ask at{' '}
-        <Link href="/privacy/requests" className="agi-ds-link">
+        <PageLink href="/privacy/requests" className="agi-ds-link">
           /privacy/requests
-        </Link>{' '}
+        </PageLink>{' '}
         and we will remove it.
       </>
     ),
@@ -889,9 +889,9 @@ const SURVIVORS_LEDGER: readonly LedgerRow[] = [
         </strong>
         , because there is no account to delete. Nothing ages those out automatically either. Use
         the request form at{' '}
-        <Link href="/privacy/requests" className="agi-ds-link">
+        <PageLink href="/privacy/requests" className="agi-ds-link">
           /privacy/requests
-        </Link>{' '}
+        </PageLink>{' '}
         and we will remove them.
       </>
     ),
@@ -913,9 +913,9 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
     label: 'Withdraw a consent',
     value: (
       <>
-        <Link href="/privacy/requests" className="agi-ds-link">
+        <PageLink href="/privacy/requests" className="agi-ds-link">
           /privacy/requests
-        </Link>
+        </PageLink>
         . Per purpose, one click, immediate. Withdrawing an optional purpose never costs you access
         to anything you did not withdraw.
       </>
@@ -926,9 +926,9 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         The cookie preferences dialog, reachable from{' '}
-        <Link href="/cookies" className="agi-ds-link">
+        <PageLink href="/cookies" className="agi-ds-link">
           /cookies
-        </Link>
+        </PageLink>
         . It is already off until you turn it on; this is how you change your mind.
       </>
     ),
@@ -963,9 +963,9 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
       <>
         In the CLI, Local keeps the conversation on your machine and sends us nothing; BYOK goes
         straight to your provider on your key. The{' '}
-        <Link href="/download" className="agi-ds-link">
+        <PageLink href="/download" className="agi-ds-link">
           download page
-        </Link>{' '}
+        </PageLink>{' '}
         shows which CLI releases are published. VS Code BYOK is coming soon. Web and Desktop chat
         use Cloud; Desktop local coding sessions run the CLI and can use a local model or your own
         provider key.
@@ -1136,9 +1136,9 @@ export default function PrivacyPage() {
                     , so if a direct route fails, prompt content for a model from any provider can
                     pass through it. We would rather say that than let the two named families imply
                     a narrower answer. The full current list with regions is at{' '}
-                    <Link href="/subprocessors" className="agi-ds-link">
+                    <PageLink href="/subprocessors" className="agi-ds-link">
                       /subprocessors
-                    </Link>
+                    </PageLink>
                     . BYOK routes from your client directly to the provider; Local contacts none of
                     them.
                   </Prose>
@@ -1168,15 +1168,15 @@ export default function PrivacyPage() {
                       <Prose size="sm">
                         <strong>On what basis.</strong> In Cloud we hold it as the account
                         holder&rsquo;s processor and act on their instruction under the{' '}
-                        <Link href="/dpa" className="agi-ds-link">
+                        <PageLink href="/dpa" className="agi-ds-link">
                           DPA
-                        </Link>
+                        </PageLink>
                         ; they are the controller, and bringing your data in was their decision, not
                         ours. Our own processing rests on our contract with them rather than on any
                         consent from you, and the{' '}
-                        <Link href="/terms" className="agi-ds-link">
+                        <PageLink href="/terms" className="agi-ds-link">
                           terms
-                        </Link>{' '}
+                        </PageLink>{' '}
                         make them confirm they were entitled to give it to us, including having
                         given any notice or obtained any consent your law required first. That duty
                         is theirs and we cannot discharge it for them.
@@ -1184,9 +1184,9 @@ export default function PrivacyPage() {
                       <Prose size="sm">
                         <strong>What you can do about it.</strong> File an access, correction,
                         erasure or grievance request at{' '}
-                        <Link href="/privacy/requests" className="agi-ds-link">
+                        <PageLink href="/privacy/requests" className="agi-ds-link">
                           /privacy/requests
-                        </Link>{' '}
+                        </PageLink>{' '}
                         without signing in: the form asks for a contact address, not an account. Two
                         limits, said here rather than discovered later: we can only act on a record
                         we can locate, so the request needs enough detail to find it; and where the
@@ -1229,9 +1229,9 @@ export default function PrivacyPage() {
                     <strong>India works differently and has its own page.</strong> Under the Digital
                     Personal Data Protection Act, 2023 consent is the default ground rather than one
                     of several, so the analysis is not the same as the table above. It is at{' '}
-                    <Link href="/privacy/india" className="agi-ds-link">
+                    <PageLink href="/privacy/india" className="agi-ds-link">
                       /privacy/india
-                    </Link>
+                    </PageLink>
                     , and it governs for data principals in India where the two differ.
                   </Prose>
                 </Stack>
@@ -1244,9 +1244,9 @@ export default function PrivacyPage() {
                   </h2>
                   <Prose>
                     We share data only with the subprocessors listed at{' '}
-                    <Link href="/subprocessors" className="agi-ds-link">
+                    <PageLink href="/subprocessors" className="agi-ds-link">
                       /subprocessors
-                    </Link>
+                    </PageLink>
                     , and only as necessary to run the service. We do not sell data. We may disclose
                     data if compelled by valid legal process; we narrow such disclosures to the
                     minimum required. If AGI is involved in a merger or sale of assets, personal
@@ -1256,9 +1256,12 @@ export default function PrivacyPage() {
                   <Prose>
                     <strong>Government requests.</strong> What legal process we require, when we
                     tell the account holder, and where a request must be sent are on the{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.governmentRequests} className="agi-ds-link">
+                    <PageLink
+                      href={CANONICAL_POLICY_ROUTES.governmentRequests}
+                      className="agi-ds-link"
+                    >
                       government requests page
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                   <Prose>
@@ -1285,9 +1288,9 @@ export default function PrivacyPage() {
                     In Cloud we store your conversations and files. Access to your content by people
                     at AGI is limited to those who need it to operate or support the service, and to
                     the cases in the table below. The text filter described in the{' '}
-                    <Link href={CANONICAL_POLICY_ROUTES.acceptableUse} className="agi-ds-link">
+                    <PageLink href={CANONICAL_POLICY_ROUTES.acceptableUse} className="agi-ds-link">
                       acceptable use policy
-                    </Link>{' '}
+                    </PageLink>{' '}
                     is automatic. When it refuses or flags a request, it logs the rule that matched
                     and a one-way fingerprint of the text, not the text. Suspending or banning an
                     account is done by a person, not by an automatic check.
@@ -1313,9 +1316,12 @@ export default function PrivacyPage() {
                             read, a ticket and a reason, and that expires within eight hours. The
                             grant and every read under it are written to a log the workspace can
                             read. The full mechanism, and its limits, are on{' '}
-                            <Link href={CANONICAL_POLICY_ROUTES.security} className="agi-ds-link">
+                            <PageLink
+                              href={CANONICAL_POLICY_ROUTES.security}
+                              className="agi-ds-link"
+                            >
                               /security
-                            </Link>
+                            </PageLink>
                             .
                           </>
                         ),
@@ -1400,21 +1406,21 @@ export default function PrivacyPage() {
                     goes into a notification to a regulator, and what an affected person is told. It
                     runs against a 72-hour clock for notifying a regulator where a law requires one,
                     which is the same commitment the{' '}
-                    <Link href="/terms" className="agi-ds-link">
+                    <PageLink href="/terms" className="agi-ds-link">
                       terms
-                    </Link>{' '}
+                    </PageLink>{' '}
                     make. The safeguards the procedure sits on top of are at{' '}
-                    <Link href="/security" className="agi-ds-link">
+                    <PageLink href="/security" className="agi-ds-link">
                       /security
-                    </Link>
+                    </PageLink>
                     , including the parts of that posture we have not built.
                   </Prose>
                   <Prose>
                     <strong>How a notice would actually reach you.</strong> AGI sends email to one
                     account at a time; the Resend entry on{' '}
-                    <Link href="/subprocessors" className="agi-ds-link">
+                    <PageLink href="/subprocessors" className="agi-ds-link">
                       /subprocessors
-                    </Link>{' '}
+                    </PageLink>{' '}
                     lists those messages. No operator procedure for emailing a set of affected
                     customers has been built or exercised. So a notice to you would arrive as an
                     in-product message and at a dated public address rather than by email, with
@@ -1422,9 +1428,9 @@ export default function PrivacyPage() {
                     Neither that in-product notice nor that public page exists as a built feature
                     today; they would be put up during the incident. The same statement is in
                     section 10 of the{' '}
-                    <Link href="/privacy/india" className="agi-ds-link">
+                    <PageLink href="/privacy/india" className="agi-ds-link">
                       India notice
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                 </Stack>
@@ -1482,9 +1488,12 @@ export default function PrivacyPage() {
                             </a>{' '}
                             from your account address with the subject line &ldquo;
                             {CONTACT_SUBJECTS.privacy}&rdquo;, or use the form at{' '}
-                            <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
+                            <PageLink
+                              href={CANONICAL_POLICY_ROUTES.dataRights}
+                              className="agi-ds-link"
+                            >
                               /privacy/requests
-                            </Link>
+                            </PageLink>
                             , which gives you a reference. You may use an authorised agent where the
                             law allows.
                           </>
@@ -1521,9 +1530,9 @@ export default function PrivacyPage() {
                     authority. California residents: we do not sell or share personal information,
                     so there is no opt-out to exercise, and the CCPA service-provider terms we
                     operate under are in section 06 of the{' '}
-                    <Link href="/dpa" className="agi-ds-link">
+                    <PageLink href="/dpa" className="agi-ds-link">
                       DPA
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                   <Prose size="sm">
@@ -1584,14 +1593,14 @@ export default function PrivacyPage() {
                     customers&rsquo; data is transferred to and processed in the US. For EU, UK and
                     Swiss personal data we rely on the Standard Contractual Clauses with the UK
                     Addendum and the Swiss adaptations, set out in section 06 of the{' '}
-                    <Link href="/dpa#s-06" className="agi-ds-link">
+                    <PageLink href="/dpa#s-06" className="agi-ds-link">
                       DPA
-                    </Link>
+                    </PageLink>
                     . AGI has not appointed a representative under GDPR Art. 27; the current
                     position is at{' '}
-                    <Link href="/legal/eu-representative" className="agi-ds-link">
+                    <PageLink href="/legal/eu-representative" className="agi-ds-link">
                       /legal/eu-representative
-                    </Link>
+                    </PageLink>
                     .
                   </Prose>
                 </Stack>
@@ -1606,9 +1615,9 @@ export default function PrivacyPage() {
                     You must be at least {ACCOUNT_MINIMUM_AGE} to create an account, and anyone
                     under {PARENTAL_PERMISSION_BELOW_AGE} needs permission from a parent or
                     guardian, as set out in section 02 of the{' '}
-                    <Link href="/terms" className="agi-ds-link">
+                    <PageLink href="/terms" className="agi-ds-link">
                       terms
-                    </Link>
+                    </PageLink>
                     . Sign-up asks for your age to apply that rule. The number is checked in your
                     browser and is not stored, sent to our servers or sent to our identity provider,
                     and we do not verify it or the permission. We do not knowingly collect personal
@@ -1627,9 +1636,9 @@ export default function PrivacyPage() {
                   <Prose>
                     We may update this policy. The current version is always at this URL with the
                     revision date at the top, and material changes are recorded on{' '}
-                    <Link href="/changelog" className="agi-ds-link">
+                    <PageLink href="/changelog" className="agi-ds-link">
                       /changelog
-                    </Link>
+                    </PageLink>
                     . No mailing path in this product can reach an arbitrary list of customers, so
                     we do not promise emailed notice of a change.
                   </Prose>
@@ -1649,18 +1658,18 @@ export default function PrivacyPage() {
                     .
                   </Prose>
                   <nav aria-label="Related legal pages" className="agi-ds-btn-row">
-                    <Link href="/terms" className="agi-ds-link">
+                    <PageLink href="/terms" className="agi-ds-link">
                       Terms
-                    </Link>
-                    <Link href="/dpa" className="agi-ds-link">
+                    </PageLink>
+                    <PageLink href="/dpa" className="agi-ds-link">
                       DPA
-                    </Link>
-                    <Link href="/cookies" className="agi-ds-link">
+                    </PageLink>
+                    <PageLink href="/cookies" className="agi-ds-link">
                       Cookies
-                    </Link>
-                    <Link href="/subprocessors" className="agi-ds-link">
+                    </PageLink>
+                    <PageLink href="/subprocessors" className="agi-ds-link">
                       Subprocessors
-                    </Link>
+                    </PageLink>
                   </nav>
                 </Stack>
               </Section>

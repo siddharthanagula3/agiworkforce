@@ -122,14 +122,24 @@ export async function updateCloudProjectDetails(
     } catch (error) {
       edits.pending = edits.pending.filter((entry) => entry !== edit);
       const claimed = new Set(edits.pending.flatMap((entry) => Object.keys(entry.patch)));
+      const current = useCloudProjectStore.getState();
+      const held = current.details[projectId];
+      const refreshedByServer = edits.baseline === undefined && held?.isOrgShared !== undefined;
       const restore = Object.fromEntries(
         Object.keys(patch)
           .filter((key) => !claimed.has(key))
           .map((key) => [key, edits.baseline?.[key as keyof CloudProjectDetails]]),
       ) as Partial<CloudProjectDetails>;
-      const current = useCloudProjectStore.getState();
-      if (edits.baseline && current.details[projectId] && accountEpochIsCurrent(account)) {
+      if (held && !refreshedByServer && accountEpochIsCurrent(account)) {
         current.patchCloudProjectDetails(projectId, restore);
+        const restored = useCloudProjectStore.getState().details[projectId];
+        if (restored && Object.values(restored).every((value) => value === undefined)) {
+          useCloudProjectStore.setState((state) => {
+            const details = { ...state.details };
+            delete details[projectId];
+            return { details };
+          });
+        }
       }
       throw error;
     } finally {

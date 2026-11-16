@@ -7,6 +7,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { MemoryEntry } from '@/src/features/memory/store';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
+import { describeMemoryDeletion } from '@/src/features/memory/deleteConfirmation';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 interface AddMemorySheetProps {
@@ -94,24 +95,18 @@ export function AddMemorySheet({
   const handleDelete = useCallback(() => {
     if (!editingMemory || !onDelete) return;
 
-    Alert.alert(
-      'Delete memory?',
-      isCloud
-        ? 'This removes the memory from your account and every synced device.'
-        : 'This removes the memory from this device.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            onDelete(editingMemory.id);
-            setContent('');
-            onClose();
-          },
+    Alert.alert('Delete memory?', describeMemoryDeletion(editingMemory.fact, isCloud), [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          onDelete(editingMemory.id);
+          setContent('');
+          onClose();
         },
-      ],
-    );
+      },
+    ]);
   }, [editingMemory, isCloud, onClose, onDelete]);
 
   return (

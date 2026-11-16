@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { notFound } from 'next/navigation';
 
 import { buildMetadata } from '@/lib/seo/metadata';
@@ -63,9 +63,9 @@ export default async function HelpCollectionPage({ params }: CollectionProps) {
               caption={`${collection.label} articles`}
               rows={collection.articles.map((article) => ({
                 label: (
-                  <Link href={article.href} className="agi-ds-link">
+                  <PageLink href={article.href} className="agi-ds-link">
                     {article.title}
-                  </Link>
+                  </PageLink>
                 ),
                 value: null,
               }))}

@@ -20,6 +20,7 @@ jest.mock('../services/api', () => ({
 jest.mock('@agiworkforce/utils', () => ({
   uuidv7: jest.fn(() => `00000000-0000-7000-8000-${Date.now().toString(16).padStart(12, '0')}`),
   isUuidV7: jest.fn(() => true),
+  uuidV7TimestampMs: jest.requireActual('@agiworkforce/utils/uuidv7').uuidV7TimestampMs,
   setUuidV7RandomSource: jest.fn(),
 }));
 

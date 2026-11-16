@@ -1,3 +1,5 @@
+const PREVIEW_DOCUMENT = /^about:(?:blank|srcdoc)(?:#.*)?$/;
+
 export function isAllowedPreviewNavigation(url: string): boolean {
-  return url === 'about:blank' || url === 'about:srcdoc' || url.startsWith('data:');
+  return PREVIEW_DOCUMENT.test(url);
 }

@@ -149,6 +149,21 @@ jest.mock('expo-calendar/legacy', () => ({
   requestRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
+jest.mock('expo-speech-recognition', () => ({
+  __esModule: true,
+  ExpoSpeechRecognitionModule: {
+    getSpeechRecognizerPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
+    requestSpeechRecognizerPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
+  },
+}));
+
+jest.mock('expo-local-authentication', () => ({
+  AuthenticationType: { FINGERPRINT: 1, FACIAL_RECOGNITION: 2, IRIS: 3 },
+  supportedAuthenticationTypesAsync: jest.fn().mockResolvedValue([2]),
+  isEnrolledAsync: jest.fn().mockResolvedValue(true),
+  authenticateAsync: jest.fn().mockResolvedValue({ success: false, error: 'user_cancel' }),
+}));
+
 const mockDefaultPerm = { lastObservedStatus: 'undetermined' };
 
 const mockPermissionsState = {
@@ -159,6 +174,8 @@ const mockPermissionsState = {
     notifications: { ...mockDefaultPerm },
     calendar: { ...mockDefaultPerm },
     reminders: { ...mockDefaultPerm },
+    speechRecognition: { ...mockDefaultPerm },
+    faceId: { ...mockDefaultPerm },
   },
   setObservedStatus: jest.fn(),
   getPermission: jest.fn().mockReturnValue(mockDefaultPerm),

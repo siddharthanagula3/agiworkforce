@@ -69,7 +69,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { exportDocument } from '@features/chat/services/document-export-service';
-import { extractMarkdownHeadings } from '@features/chat/components/research/ResearchReportView';
+import { extractMarkdownHeadings } from '@agiworkforce/unified-chat/markdown-headings';
 import {
   connectorsReleased,
   summarizeGeneratedFileBundle,
@@ -115,7 +115,7 @@ import {
   ImageEmbedError,
   embedImageFile,
 } from './presentation/image-embed';
-import { hasStudyBlocks } from './study/study-set';
+import { hasStudyBlocks } from '@agiworkforce/unified-chat/study-set';
 import { ArtifactCommentsPanel, COMMENTS_LABEL } from './comments/ArtifactCommentsPanel';
 import {
   canCommentOn,
@@ -127,14 +127,14 @@ import {
   scrollToAnchor,
   useCommentHighlights,
 } from './comments/use-comment-highlights';
-import type { OccurrenceContext } from './text-occurrence';
 import commentStyles from './comments/Comments.module.css';
-import { buildArtifactEditRequest } from './artifact-edit-request';
+import { buildArtifactEditRequest } from '@agiworkforce/unified-chat/artifact-edit-request';
 import { ArtifactSelectionToolbar } from './ArtifactSelectionToolbar';
 import {
   buildArtifactSelectionRequest,
   captureSelectionContext,
-} from './artifact-selection-request';
+  type OccurrenceContext,
+} from '@agiworkforce/unified-chat/artifact-selection-request';
 import { artifactLineage, buildVersionTimeline, type LineageCandidate } from './artifact-lineage';
 import { ArtifactVersionHistory } from './ArtifactVersionHistory';
 import { ArtifactChangesView } from './ArtifactChangesView';

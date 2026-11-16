@@ -19,6 +19,7 @@ import { useTierStore } from '@/src/features/billing/store';
 import { planCheckOf } from '@/src/features/billing/planCheck';
 import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 const COMPARED_PLANS: readonly BillingPlanTier[] = [
   'free',
@@ -31,10 +32,37 @@ const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 });
 
-function usageLine(plan: BillingPlanTier): string {
+const IN_APP_CAPABILITIES: Readonly<Record<BillingPlanCapability, boolean>> = {
+  managed_chat: FEATURES.cloudChat,
+  chat_tools: FEATURES.cloudChat,
+  projects: FEATURES.projects,
+  memory_personalization: FEATURES.cloudChat,
+  skills: FEATURES.skills,
+  connectors: FEATURES.connectors,
+  remote_control: FEATURES.companion,
+  cloud_sync: FEATURES.cloudChat,
+  agi_work: FEATURES.cloudChat,
+  deep_research: FEATURES.research,
+  image_generation: FEATURES.imageGen,
+  video_generation: FEATURES.videoGen,
+  managed_api: false,
+  developer_surfaces: false,
+  slack_app: false,
+  artifact_connectors: false,
+  team_admin: false,
+  enterprise_controls: false,
+};
+
+function shownCapabilities(capabilities: BillingPlanCapability[]): BillingPlanCapability[] {
+  return NATIVE_PURCHASES_AVAILABLE
+    ? capabilities
+    : capabilities.filter((capability) => IN_APP_CAPABILITIES[capability]);
+}
+
+function usageLine(plan: BillingPlanTier): string | null {
   if (PLAN_CREDIT_ALLOWANCES[plan].unlimited) return 'Usage set by your contract';
   if (isFreeBillingPlanTier(plan)) return 'A small allowance, free models only';
-  return managedUsageComparisonLines(plan).join(', ');
+  return NATIVE_PURCHASES_AVAILABLE ? managedUsageComparisonLines(plan).join(', ') : null;
 }
 
 function contextLine(plan: BillingPlanTier): string {
@@ -50,7 +78,10 @@ function featureLines(
 ): { heading: string; items: string[] } {
   const label = (capability: BillingPlanCapability) => BILLING_PLAN_CAPABILITY_LABELS[capability];
   if (current === null || plan === current) {
-    return { heading: 'Includes', items: billingPlanCapabilities(plan).map(label) };
+    return {
+      heading: 'Includes',
+      items: shownCapabilities(billingPlanCapabilities(plan)).map(label),
+    };
   }
   const added = billingPlanCapabilitiesAddedOver(plan, current);
   const currentLabel = getBillingPlanPricing(current).label;
@@ -83,13 +114,14 @@ export default function PlansScreen() {
         const isCurrent = NATIVE_PURCHASES_AVAILABLE && plan === current;
         const features = featureLines(plan, current);
         const label = getBillingPlanPricing(plan).label;
+        const usage = usageLine(plan);
         return (
           <View
             key={plan}
             accessible
             accessibilityLabel={[
               isCurrent ? `${label}, your plan` : label,
-              usageLine(plan),
+              ...(usage ? [usage] : []),
               contextLine(plan),
               features.items.length > 0
                 ? `${features.heading}: ${features.items.join(', ')}`
@@ -127,11 +159,13 @@ export default function PlansScreen() {
                 </Text>
               ) : null}
             </View>
-            <Text
-              style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 20 }}
-            >
-              {usageLine(plan)}
-            </Text>
+            {usage ? (
+              <Text
+                style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 20 }}
+              >
+                {usage}
+              </Text>
+            ) : null}
             <Text
               style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 20 }}
             >

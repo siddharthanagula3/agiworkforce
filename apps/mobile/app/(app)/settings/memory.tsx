@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
+  Platform,
   View,
   TextInput,
-  FlatList,
   RefreshControl,
   ScrollView,
   SectionList,
@@ -30,7 +31,11 @@ import { SettingsGroup, SettingsRow } from '@/src/features/settings/Common';
 import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
-import { MemoryControlsCard } from '@/src/features/memory/components/MemoryControlsCard';
+import {
+  DELETION_WARNING_MESSAGE,
+  MemoryControlsCard,
+} from '@/src/features/memory/components/MemoryControlsCard';
+import { describeMemoryDeletion } from '@/src/features/memory/deleteConfirmation';
 import {
   describeMemoryFreshness,
   groupMemoryFactsByTopic,
@@ -41,6 +46,8 @@ import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
+import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
 import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
 import { useThemeColors, type ColorScheme, elevation, zIndex, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -54,6 +61,12 @@ import {
 } from '@/src/features/auth/services/accountScopedUiState';
 
 const FILTER_CATEGORIES = ['All', 'Pinned'] as const;
+
+interface MemoryListSection {
+  key: string;
+  title: string;
+  data: MemoryEntry[];
+}
 
 function describeMemoryScope(isCloud: boolean, workspaceName: string | null | undefined): string {
   if (!isCloud) return 'Stored on this device only.';
@@ -116,13 +129,17 @@ export default function MemoryScreen() {
       apply: (enabled: boolean) => void,
     ) => {
       apply(value);
-      patchPreferenceNamespace(CAPABILITIES_NAMESPACE, { [key]: value }).catch(() => {
-        apply(previous);
-        Alert.alert(
-          'Not saved',
-          'This memory setting could not be saved to your account. Check your connection and try again.',
-        );
-      });
+      patchPreferenceNamespace(CAPABILITIES_NAMESPACE, { [key]: value })
+        .then(() => {
+          if (key === 'memory') useMemorySyncStateStore.getState().setAccountMemoryEnabled(value);
+        })
+        .catch(() => {
+          apply(previous);
+          Alert.alert(
+            'Not saved',
+            'This memory setting could not be saved to your account. Check your connection and try again.',
+          );
+        });
     },
     [],
   );
@@ -187,6 +204,7 @@ export default function MemoryScreen() {
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [editingMemory, setEditingMemory] = useState<MemoryEntry | null>(null);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
+  const [deletionIncomplete, setDeletionIncomplete] = useState(false);
 
   const {
     entries,
@@ -220,6 +238,7 @@ export default function MemoryScreen() {
       setActiveFilter('All');
       setEditingMemory(null);
       setAddSheetOpen(false);
+      setDeletionIncomplete(false);
       editorScopeRef.current = null;
     }
     activeScopeRef.current = nextScope;
@@ -237,6 +256,13 @@ export default function MemoryScreen() {
     if (screenScopeKey === 'unavailable') return;
     void fetchMemories();
   }, [fetchMemories, screenScopeKey]);
+
+  useEffect(() => {
+    if (!currentIsCloud || screenScopeKey === 'unavailable') return;
+    return useCloudMemoryStore.subscribe((state, previous) => {
+      if (state.entries !== previous.entries) void fetchMemories();
+    });
+  }, [currentIsCloud, fetchMemories, screenScopeKey]);
 
   useEffect(() => {
     if (error) {
@@ -352,9 +378,14 @@ export default function MemoryScreen() {
         {
           text: 'Reset memory',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             if (!isScopeCurrent(actionScope)) return;
-            void resetMemories();
+            const completed = await resetMemories();
+            if (!isScopeCurrent(actionScope)) return;
+            setDeletionIncomplete(!completed);
+            if (!completed && Platform.OS === 'ios') {
+              AccessibilityInfo.announceForAccessibility(DELETION_WARNING_MESSAGE);
+            }
           },
         },
       ],
@@ -399,25 +430,21 @@ export default function MemoryScreen() {
     (id: string) => {
       const actionScope = activeScopeRef.current;
       if (!isScopeCurrent(actionScope)) return;
-      Alert.alert(
-        'Delete memory?',
-        currentIsCloud
-          ? 'This removes the memory from your account and every synced device.'
-          : 'This removes the memory from this device.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              if (!isScopeCurrent(actionScope)) return;
-              void deleteMemory(id);
-            },
+      const memory = entries.find((entry) => entry.id === id);
+      if (!memory) return;
+      Alert.alert('Delete memory?', describeMemoryDeletion(memory.fact, currentIsCloud), [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            if (!isScopeCurrent(actionScope)) return;
+            void deleteMemory(id);
           },
-        ],
-      );
+        },
+      ]);
     },
-    [currentIsCloud, deleteMemory, isScopeCurrent],
+    [currentIsCloud, deleteMemory, entries, isScopeCurrent],
   );
 
   const handleOpenConversation = useCallback(
@@ -443,68 +470,70 @@ export default function MemoryScreen() {
     [isScopeCurrent, updateMemory],
   );
 
+  // Stored entries stay listed, editable and deletable while memory is off: the
+  // master switch stops the assistant using them, it does not lock the person
+  // out of their own data. Dimming states that they are inert right now.
   const renderItem = useCallback(
     ({ item }: { item: MemoryEntry }) => (
-      <MemoryItem
-        memory={item}
-        conversationTitle={
-          (item.source_conversation_id
-            ? conversationTitles.get(item.source_conversation_id)
-            : null) ??
-          item.source_conversation_title ??
-          null
-        }
-        onEdit={handleEdit}
-        onDelete={handleSwipeDelete}
-        onTogglePin={handleTogglePin}
-        onOpenConversation={handleOpenConversation}
-      />
+      <View style={{ paddingHorizontal: 16, opacity: memoryEnabled ? 1 : 0.45 }}>
+        <MemoryItem
+          memory={item}
+          conversationTitle={
+            (item.source_conversation_id
+              ? conversationTitles.get(item.source_conversation_id)
+              : null) ??
+            item.source_conversation_title ??
+            null
+          }
+          onEdit={handleEdit}
+          onDelete={handleSwipeDelete}
+          onTogglePin={handleTogglePin}
+          onOpenConversation={handleOpenConversation}
+        />
+      </View>
     ),
-    [conversationTitles, handleEdit, handleOpenConversation, handleSwipeDelete, handleTogglePin],
+    [
+      conversationTitles,
+      handleEdit,
+      handleOpenConversation,
+      handleSwipeDelete,
+      handleTogglePin,
+      memoryEnabled,
+    ],
   );
 
   const renderSectionHeader = useCallback(
-    ({ section }: { section: MemoryTopicGroup }) => (
-      <Text
-        accessibilityRole="header"
-        style={{
-          color: colors.textMuted,
-          fontSize: typeScale.caption,
-          fontWeight: '700',
-          textTransform: 'uppercase',
-          paddingTop: 8,
-          paddingBottom: 6,
-          backgroundColor: colors.surfaceBase,
-        }}
-      >
-        {section.title}
-      </Text>
-    ),
+    ({ section }: { section: MemoryListSection }) =>
+      section.title ? (
+        <Text
+          accessibilityRole="header"
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.caption,
+            fontWeight: '700',
+            textTransform: 'uppercase',
+            paddingTop: 8,
+            paddingBottom: 6,
+            paddingHorizontal: 16,
+            backgroundColor: colors.surfaceBase,
+          }}
+        >
+          {section.title}
+        </Text>
+      ) : null,
     [colors.surfaceBase, colors.textMuted],
   );
 
   const keyExtractor = useCallback((item: MemoryEntry) => item.id, []);
 
-  return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <ScreenHeader
-        title={currentIsCloud ? 'Cloud Memory' : 'Memory'}
-        onBack={goBack}
-        trailing={
-          <Pressable
-            onPress={handleImportPress}
-            className="p-2 rounded-lg"
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-            })}
-            accessibilityLabel="Import memories"
-            accessibilityRole="button"
-          >
-            <Upload size={18} color={colors.textSecondary} />
-          </Pressable>
-        }
-      />
+  const listSections = useMemo<MemoryListSection[]>(() => {
+    if (loading && entries.length === 0) return [];
+    if (displayedEntries.length === 0) return [];
+    return topicGroups ?? [{ key: 'all', title: '', data: displayedEntries }];
+  }, [displayedEntries, entries.length, loading, topicGroups]);
 
+  const listHeader = (
+    <View>
       <MemoryControlsCard
         isCloud={currentIsCloud}
         memoryEnabled={memoryEnabled}
@@ -515,6 +544,11 @@ export default function MemoryScreen() {
         onReferencePastChatsChange={setReferencePastChats}
         onGenerateMemoryFromHistoryChange={setGenerateMemoryFromHistory}
         onIncludeSensitiveTopicsChange={setIncludeSensitiveTopics}
+        deletionWarning={
+          deletionIncomplete
+            ? { onTryAgain: handleResetPress, onDismiss: () => setDeletionIncomplete(false) }
+            : null
+        }
       />
 
       <View className="px-4">
@@ -552,6 +586,26 @@ export default function MemoryScreen() {
         </Text>
       </View>
 
+      {!memoryEnabled ? (
+        <View className="mx-4 mb-2 flex-row items-center gap-3">
+          <Text style={{ flex: 1, color: colors.textSecondary, fontSize: typeScale.caption }}>
+            Memory is off, so new memories can't be added or imported.
+          </Text>
+          <Pressable
+            onPress={() => setMemoryEnabled(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Turn on Memory"
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text
+              style={{ color: colors.textPrimary, fontSize: typeScale.caption, fontWeight: '600' }}
+            >
+              Turn on
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {error && (
         <Animated.View entering={FadeIn.duration(motion.quick)} className="mx-4 mb-2">
           <View
@@ -567,13 +621,7 @@ export default function MemoryScreen() {
         </Animated.View>
       )}
 
-      {/*
-        Stored entries stay listed, editable and deletable while memory is off.
-        the master switch stops the assistant using them, it does not lock the
-        user out of their own data. Dimming states that they are inert right now.
-      */}
       <View
-        className="flex-1"
         style={{ opacity: memoryEnabled ? 1 : 0.45 }}
         accessibilityLabel={
           memoryEnabled ? undefined : 'Memory is off. Saved memories are not used in chats.'
@@ -603,6 +651,7 @@ export default function MemoryScreen() {
           {searchText.length > 0 && (
             <Pressable
               onPress={handleClearSearch}
+              hitSlop={14}
               className="p-0.5"
               accessibilityRole="button"
               accessibilityLabel="Clear search"
@@ -649,51 +698,67 @@ export default function MemoryScreen() {
             })}
           </ScrollView>
         </View>
-
-        {loading && entries.length === 0 ? (
-          <LoadingSkeleton colors={colors} />
-        ) : displayedEntries.length === 0 ? (
-          <EmptyState
-            hasSearch={searchText.length > 0}
-            isPinnedFilter={activeFilter === 'Pinned'}
-            colors={colors}
-          />
-        ) : topicGroups ? (
-          <SectionList
-            sections={topicGroups}
-            renderItem={renderItem}
-            renderSectionHeader={renderSectionHeader}
-            keyExtractor={keyExtractor}
-            stickySectionHeadersEnabled={false}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={loading && entries.length > 0}
-                onRefresh={handleRefresh}
-                tintColor={colors.teal}
-              />
-            }
-          />
-        ) : (
-          <FlatList
-            data={displayedEntries}
-            renderItem={renderItem}
-            keyExtractor={keyExtractor}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={loading && entries.length > 0}
-                onRefresh={handleRefresh}
-                tintColor={colors.teal}
-              />
-            }
-          />
-        )}
       </View>
+    </View>
+  );
 
-      {!addSheetOpen ? (
+  return (
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
+      <ScreenHeader
+        title={currentIsCloud ? 'Cloud Memory' : 'Memory'}
+        onBack={goBack}
+        trailing={
+          memoryEnabled ? (
+            <Pressable
+              onPress={handleImportPress}
+              hitSlop={5}
+              className="p-2 rounded-lg"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+              })}
+              accessibilityLabel="Import memories"
+              accessibilityRole="button"
+            >
+              <Upload size={18} color={colors.textSecondary} />
+            </Pressable>
+          ) : undefined
+        }
+      />
+
+      <SectionList
+        testID="memory-list"
+        sections={listSections}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        keyExtractor={keyExtractor}
+        stickySectionHeadersEnabled={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={listHeader}
+        ListEmptyComponent={
+          loading && entries.length === 0 ? (
+            <LoadingSkeleton colors={colors} />
+          ) : (
+            <EmptyState
+              hasSearch={searchText.length > 0}
+              isPinnedFilter={activeFilter === 'Pinned'}
+              memoryEnabled={memoryEnabled}
+              colors={colors}
+            />
+          )
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={loading && entries.length > 0}
+            onRefresh={handleRefresh}
+            tintColor={colors.teal}
+          />
+        }
+      />
+
+      {!addSheetOpen && memoryEnabled ? (
         <View style={{ position: 'absolute', right: 24, bottom: 24, zIndex: zIndex.control }}>
           <Pressable
             onPress={handleAddPress}
@@ -758,14 +823,16 @@ function LoadingSkeleton({ colors }: { colors: ColorScheme }) {
 function EmptyState({
   hasSearch,
   isPinnedFilter,
+  memoryEnabled,
   colors,
 }: {
   hasSearch: boolean;
   isPinnedFilter: boolean;
+  memoryEnabled: boolean;
   colors: ColorScheme;
 }) {
   return (
-    <View className="flex-1 items-center justify-center px-8">
+    <View className="items-center justify-center px-8 pt-10">
       <View
         className="w-20 h-20 rounded-2xl items-center justify-center mb-4"
         style={{
@@ -791,7 +858,9 @@ function EmptyState({
           ? 'Try a different search term'
           : isPinnedFilter
             ? 'Pin a memory to keep it at the top'
-            : 'Add notes manually or import from another app.'}
+            : memoryEnabled
+              ? 'Add notes manually or import from another app.'
+              : 'Turn on Memory to add notes or import from another app.'}
       </Text>
     </View>
   );

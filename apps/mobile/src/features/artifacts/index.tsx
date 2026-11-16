@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Platform, ScrollView, Share, View } from 'react-native';
+import { Alert, FlatList, Modal, ScrollView, View, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useNavigation } from 'expo-router';
@@ -12,26 +12,47 @@ import {
   Copy,
   FileText,
   ImageIcon,
-  LibraryBig,
+  MoreHorizontal,
   Share2,
   Sparkles,
   TriangleAlert,
   X,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
-import { Badge } from '@/components/ui/Badge';
-import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
+import { spacing, typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
-import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
+import {
+  useArtifactStore,
+  accentColorForKind,
+  formatAgeLabel,
+  mergeMobileArtifactsForGallery,
+  viewerArtifactFor,
+} from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';
-import { canSaveArtifactToLibrary, saveArtifactToLibrary } from './libraryService';
 import { GeneratedImage } from '@/src/features/chat/components/GeneratedImage';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
-import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
+import { ArtifactFullScreen } from '@/src/features/chat/components/ArtifactFullScreen';
 import { ArtifactAudienceChip } from '@/src/features/chat/components/ArtifactAudienceChip';
+import { ReportSheet, type ReportTarget } from '@/src/features/chat/components/ReportFlagButton';
+import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
+import { useDismissOnScreenBlur } from './useDismissOnScreenBlur';
+import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
+import {
+  runViewerImageAction,
+  viewerImageActions,
+} from '@/src/features/image/services/viewerImageActions';
+import {
+  COPY_CONFIRMATION_MS,
+  COPY_FAILED_LABEL,
+  copyControlLabel,
+  type CopyStatus,
+} from '@/src/shared/hooks/useCopyAction';
+import { reportAssetFor } from '@/services/contentReportAsset';
+import { downloadFailureMessage, shareGeneratedImage } from '@/services/fileCreation';
 import { refreshPublishedArtifactAudiences } from '@/src/features/chat/services/artifactPublishing';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -51,16 +72,7 @@ interface ArtifactsGalleryScreenProps {
 
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
-
-type BadgeTone = 'teal' | 'terra-cotta' | 'green' | 'red' | 'yellow' | 'purple' | 'blue' | 'gray';
-
-const KIND_BADGE: Record<MobileArtifactKind, BadgeTone> = {
-  code: 'teal',
-  chart: 'yellow',
-  research: 'purple',
-  document: 'gray',
-  image: 'terra-cotta',
-};
+const TILE_PREVIEW_LINES = 4;
 
 const KIND_ICON: Record<MobileArtifactKind, typeof FileText> = {
   code: Code2,
@@ -70,7 +82,12 @@ const KIND_ICON: Record<MobileArtifactKind, typeof FileText> = {
   image: ImageIcon,
 };
 
-function badgeLabel(artifact: MobileArtifact): string {
+function artifactAgeLabel(artifact: MobileArtifact): string {
+  const madeOrEditedAt = artifact.editedAt ?? artifact.createdAt;
+  return (madeOrEditedAt && formatAgeLabel(madeOrEditedAt)) || artifact.ageLabel;
+}
+
+function kindLabel(artifact: MobileArtifact): string {
   if (artifact.language) return artifact.language;
   return artifact.kind.charAt(0).toUpperCase() + artifact.kind.slice(1);
 }
@@ -137,6 +154,13 @@ export function ArtifactsGalleryScreen({
   );
 
   const keyExtractor = useCallback((item: MobileArtifact) => item.id, []);
+  const openedFullScreenArtifact = useMemo(
+    () =>
+      selectedArtifact && selectedArtifact.kind !== 'image'
+        ? viewerArtifactFor(selectedArtifact)
+        : null,
+    [selectedArtifact],
+  );
 
   const handleOpenArtifact = useCallback((artifact: MobileArtifact) => {
     const provenance = artifact.provenance;
@@ -180,11 +204,12 @@ export function ArtifactsGalleryScreen({
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
-      <View className="h-12 flex-row items-center px-3 gap-2">
+      <View testID="artifacts-header" className="min-h-12 flex-row items-center px-3 gap-2">
         <DrawerButton testID="artifacts-open-drawer" onPress={openDrawer} />
 
         <Text
           accessibilityRole="header"
+          maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
           style={{
             flex: 1,
             color: c.textPrimary,
@@ -216,7 +241,19 @@ export function ArtifactsGalleryScreen({
         />
       )}
 
-      <ArtifactPreviewModal artifact={selectedArtifact} onClose={handleCloseArtifact} />
+      <ImageArtifactPreview
+        artifact={selectedArtifact?.kind === 'image' ? selectedArtifact : null}
+        onClose={handleCloseArtifact}
+      />
+      <ArtifactFullScreen
+        artifact={openedFullScreenArtifact}
+        visible={openedFullScreenArtifact !== null}
+        onClose={handleCloseArtifact}
+        messageId={selectedArtifact?.messageId}
+        libraryArtifact={
+          selectedArtifact?.kind === 'image' ? undefined : (selectedArtifact ?? undefined)
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -302,6 +339,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
   const isCode = artifact.kind === 'code';
   const isImage = artifact.kind === 'image';
   const KindIcon = KIND_ICON[artifact.kind];
+  const ageLabel = artifactAgeLabel(artifact);
 
   return (
     <Pressable
@@ -309,20 +347,42 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
       onPress={() => onPress(artifact)}
       className="active:opacity-80"
       style={[{ width, marginBottom: 20 }, style]}
-      accessibilityLabel={`Open artifact ${artifact.title}, ${artifact.ageLabel}`}
+      accessibilityLabel={`Open artifact ${artifact.title}, ${ageLabel}`}
       accessibilityRole="button"
     >
       <View
+        testID={`artifact-tile-${artifact.id}`}
         className="rounded-2xl border overflow-hidden"
         style={{
           height: previewHeight,
-          backgroundColor: c.surfaceElevated,
+          backgroundColor: isImage ? c.surfaceElevated : c.surfaceHover,
           borderColor: c.border,
         }}
       >
-        <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
+        <View
+          testID={`artifact-kind-row-${artifact.id}`}
+          className={
+            isImage
+              ? 'absolute top-3 left-3 z-10 flex-row items-center gap-1.5'
+              : 'flex-row items-center gap-1.5 px-3 pt-3'
+          }
+        >
           <KindIcon size={12} color={artifact.accentColor} />
-          <Badge label={badgeLabel(artifact)} color={KIND_BADGE[artifact.kind]} />
+          {isImage ? null : (
+            <Text
+              testID={`artifact-kind-${artifact.id}`}
+              numberOfLines={1}
+              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+              style={{
+                flexShrink: 1,
+                fontSize: typeScale.caption,
+                color: c.textSecondary,
+                textTransform: 'uppercase',
+              }}
+            >
+              {kindLabel(artifact)}
+            </Text>
+          )}
           <ArtifactAudienceChip artifactId={artifact.id} />
         </View>
 
@@ -330,19 +390,17 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
           <ArtifactImagePreview artifact={artifact} width={width} height={previewHeight} />
         ) : (
           <View
-            className="absolute inset-0 justify-end px-3 pb-3 pt-10"
-            style={{ backgroundColor: c.surfaceHover }}
+            testID={`artifact-preview-${artifact.id}`}
+            className="flex-1 justify-end px-3 pb-3 mt-2 overflow-hidden"
           >
-            {artifact.previewLines.slice(0, 5).map((line, index) => (
+            {artifact.previewLines.slice(0, TILE_PREVIEW_LINES).map((line, index) => (
               <Text
                 key={`${artifact.id}-${index}`}
                 className="text-sm leading-[18px]"
                 numberOfLines={1}
                 style={{
                   color: index === 0 ? artifact.accentColor : c.textSecondary,
-                  fontFamily: isCode
-                    ? Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
-                    : undefined,
+                  fontFamily: isCode ? codeFontFamily : undefined,
                   opacity: index === 0 ? 1 : Math.max(0.35, 1 - index * 0.18),
                 }}
               >
@@ -362,7 +420,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
       </Text>
 
       <Text className="text-sm mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
-        {artifact.ageLabel}
+        {ageLabel}
       </Text>
     </Pressable>
   );
@@ -402,35 +460,31 @@ function ArtifactsSkeletonGrid({ cardWidth, columns }: { cardWidth: number; colu
   );
 }
 
-type LibrarySaveStatus = 'idle' | 'saving' | 'saved' | 'failed';
+const REPORT_THIS_IMAGE = 'Report this image';
 
-interface LibrarySaveReceipt {
-  ownerId: string | null;
-  content: string;
-  status: LibrarySaveStatus;
+function imageReportTarget(artifact: MobileArtifact): ReportTarget {
+  const reference = `artifact:${artifact.id}`;
+  const target: ReportTarget = {
+    messageId: artifact.messageId ?? reference,
+    conversationId: reference,
+    subject: { kind: 'image', id: artifact.id },
+    contentExcerpt: artifact.title,
+  };
+  const asset = reportAssetFor(
+    'image',
+    resolveGeneratedImageUri(artifact.content) ?? artifact.content,
+  );
+  return asset ? { ...target, asset } : target;
 }
 
-function artifactOwnerId(artifact: MobileArtifact): string | null {
-  return artifact.provenance?.scope === 'cloud' ? artifact.provenance.ownerId : null;
-}
+const HEADER_BUTTON_SIZE = {
+  width: FULL_SCREEN_TOUCH_TARGET,
+  height: FULL_SCREEN_TOUCH_TARGET,
+  alignItems: 'center',
+  justifyContent: 'center',
+} as const;
 
-function receiptFor(artifact: MobileArtifact, status: LibrarySaveStatus): LibrarySaveReceipt {
-  return { ownerId: artifactOwnerId(artifact), content: artifact.content, status };
-}
-
-function receiptMatches(receipt: LibrarySaveReceipt, artifact: MobileArtifact): boolean {
-  return receipt.ownerId === artifactOwnerId(artifact) && receipt.content === artifact.content;
-}
-
-function librarySaveStatusFor(
-  receipts: Readonly<Record<string, LibrarySaveReceipt>>,
-  artifact: MobileArtifact,
-): LibrarySaveStatus {
-  const receipt = receipts[artifact.id];
-  return receipt && receiptMatches(receipt, artifact) ? receipt.status : 'idle';
-}
-
-function ArtifactPreviewModal({
+function ImageArtifactPreview({
   artifact,
   onClose,
 }: {
@@ -439,44 +493,44 @@ function ArtifactPreviewModal({
 }) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
-  const { status: copyStatus, copy } = useCopyAction();
+  const { width: windowWidth } = useWindowDimensions();
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  const [copied, setCopied] = useState<{ id: string; status: CopyStatus } | null>(null);
+  const copyStatus: CopyStatus = copied && copied.id === artifact?.id ? copied.status : 'idle';
+  useDismissOnScreenBlur(artifact !== null, onClose);
 
-  const handleCopy = useCallback(() => {
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(null), COPY_CONFIRMATION_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  const handleCopyImage = useCallback(async () => {
     if (!artifact) return;
-    void copy(artifact.content);
-  }, [artifact, copy]);
+    const id = artifact.id;
+    try {
+      await runViewerImageAction('copy', artifact.content);
+      setCopied({ id, status: 'copied' });
+    } catch (error) {
+      setCopied({ id, status: 'failed' });
+      Alert.alert(
+        COPY_FAILED_LABEL,
+        downloadFailureMessage(error, 'This image could not be copied. Try Share instead.'),
+      );
+    }
+  }, [artifact]);
 
   const handleShare = useCallback(async () => {
     if (!artifact) return;
-    await Share.share({
-      title: artifact.title,
-      message: `${artifact.title}\n\n${artifact.content}`,
-    });
-  }, [artifact]);
-
-  const [librarySaveReceipts, setLibrarySaveReceipts] = useState<
-    Record<string, LibrarySaveReceipt>
-  >({});
-  const librarySave = artifact ? librarySaveStatusFor(librarySaveReceipts, artifact) : 'idle';
-
-  const handleSaveToLibrary = useCallback(async () => {
-    if (!artifact || librarySave === 'saving') return;
-    const record = (status: LibrarySaveStatus) =>
-      setLibrarySaveReceipts((receipts) => {
-        const current = receipts[artifact.id];
-        if (status !== 'saving' && (!current || !receiptMatches(current, artifact))) {
-          return receipts;
-        }
-        return { ...receipts, [artifact.id]: receiptFor(artifact, status) };
-      });
-    record('saving');
     try {
-      await saveArtifactToLibrary(artifact);
-      record('saved');
-    } catch {
-      record('failed');
+      await shareGeneratedImage(artifact.content, artifact.title);
+    } catch (error) {
+      Alert.alert(
+        'Share failed',
+        downloadFailureMessage(error, 'This image is not available to share right now.'),
+      );
     }
-  }, [artifact, librarySave]);
+  }, [artifact]);
 
   if (!artifact) return null;
 
@@ -490,14 +544,14 @@ function ArtifactPreviewModal({
     >
       <View className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
         <View
-          className="flex-row items-center gap-3 px-4 pb-3 border-b"
+          className="flex-row items-center gap-2 px-4 pb-3 border-b"
           style={{ paddingTop: insets.top + 10, borderBottomColor: c.border }}
         >
           <Pressable
             testID="artifact-preview-close"
             onPress={onClose}
-            className="w-10 h-10 rounded-full items-center justify-center border active:opacity-80"
-            style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
+            className="active:opacity-80"
+            style={HEADER_BUTTON_SIZE}
             accessibilityLabel="Close artifact preview"
             accessibilityRole="button"
           >
@@ -517,46 +571,21 @@ function ArtifactPreviewModal({
             </Text>
           </View>
 
-          <Pressable
-            testID="artifact-copy"
-            onPress={handleCopy}
-            className="w-10 h-10 rounded-full items-center justify-center border active:opacity-80"
-            style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
-            accessibilityLabel={copyControlLabel(copyStatus, 'Copy artifact')}
-            accessibilityRole="button"
-          >
-            {copyStatus === 'copied' ? (
-              <Check size={19} color={c.agentSuccess} />
-            ) : copyStatus === 'failed' ? (
-              <TriangleAlert size={19} color={c.agentError} />
-            ) : (
-              <Copy size={19} color={c.textSecondary} />
-            )}
-          </Pressable>
-
-          {canSaveArtifactToLibrary(artifact) ? (
+          {viewerImageActions(artifact.content).has('copy') ? (
             <Pressable
-              testID="artifact-save-library"
-              onPress={() => void handleSaveToLibrary()}
-              disabled={librarySave === 'saving' || librarySave === 'saved'}
-              className="w-10 h-10 rounded-full items-center justify-center border active:opacity-80"
-              style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
-              accessibilityLabel={
-                librarySave === 'saved'
-                  ? 'Saved to Library'
-                  : librarySave === 'failed'
-                    ? 'Could not save to Library. Try again'
-                    : 'Save to Library'
-              }
+              testID="artifact-copy"
+              onPress={() => void handleCopyImage()}
+              className="active:opacity-80"
+              style={HEADER_BUTTON_SIZE}
+              accessibilityLabel={copyControlLabel(copyStatus, 'Copy image')}
               accessibilityRole="button"
-              accessibilityState={{ busy: librarySave === 'saving' }}
             >
-              {librarySave === 'saved' ? (
+              {copyStatus === 'copied' ? (
                 <Check size={19} color={c.agentSuccess} />
-              ) : librarySave === 'failed' ? (
+              ) : copyStatus === 'failed' ? (
                 <TriangleAlert size={19} color={c.agentError} />
               ) : (
-                <LibraryBig size={19} color={c.textSecondary} />
+                <Copy size={19} color={c.textSecondary} />
               )}
             </Pressable>
           ) : null}
@@ -564,71 +593,61 @@ function ArtifactPreviewModal({
           <Pressable
             testID="artifact-share"
             onPress={handleShare}
-            className="w-10 h-10 rounded-full items-center justify-center border active:opacity-80"
-            style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
+            className="active:opacity-80"
+            style={HEADER_BUTTON_SIZE}
             accessibilityLabel="Share artifact"
             accessibilityRole="button"
           >
             <Share2 size={19} color={c.textSecondary} />
           </Pressable>
+
+          <Pressable
+            testID="artifact-more"
+            onPress={() =>
+              Alert.alert(artifact.title, undefined, [
+                {
+                  text: REPORT_THIS_IMAGE,
+                  onPress: () => setReportingId(artifact.id),
+                },
+                { text: 'Cancel', style: 'cancel' },
+              ])
+            }
+            className="active:opacity-80"
+            style={HEADER_BUTTON_SIZE}
+            accessibilityLabel="More artifact actions"
+            accessibilityHint={REPORT_THIS_IMAGE}
+            accessibilityRole="button"
+          >
+            <MoreHorizontal size={20} color={c.textSecondary} />
+          </Pressable>
         </View>
 
         <ScrollView
+          testID="artifact-preview-scroll"
           className="flex-1"
-          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 36 }}
+          contentContainerStyle={{
+            paddingHorizontal: spacing.xl,
+            paddingTop: spacing.xl,
+            paddingBottom: insets.bottom + 36,
+          }}
         >
-          <View
-            className="rounded-2xl border p-4 mb-5"
-            style={{ borderColor: c.border, backgroundColor: c.surfaceElevated }}
-          >
-            <View className="flex-row items-center gap-2 mb-2">
-              <FileText size={16} color={artifact.accentColor} />
-              <Text className="text-sm font-semibold" style={{ color: artifact.accentColor }}>
-                Artifact preview
-              </Text>
-            </View>
-            <Text className="text-sm leading-[18px]" style={{ color: c.textMuted }}>
-              Preview, copy and share here. Run or regenerate on AGI Desktop or AGI Cloud.
-            </Text>
-          </View>
-
-          {artifact.kind === 'image' ? (
+          <View testID="artifact-preview-content" style={{ alignItems: 'center' }}>
             <GeneratedImage
               imageUrl={artifact.content}
               revisedPrompt={artifact.previewLines[0]}
-              width={Math.min(420, Math.max(240, 320))}
+              width={Math.max(0, windowWidth - 2 * spacing.xl)}
             />
-          ) : artifact.kind === 'code' ? (
-            <ScrollView
-              testID="artifact-preview-content"
-              horizontal
-              showsHorizontalScrollIndicator
-              className="rounded-xl border"
-              style={{ borderColor: c.border, backgroundColor: c.surfaceElevated }}
-              contentContainerStyle={{ padding: 12 }}
-            >
-              <Text
-                className="text-sm leading-[19px]"
-                style={{
-                  color: c.textPrimary,
-                  fontFamily: Platform.select({
-                    ios: 'Menlo',
-                    android: 'monospace',
-                    default: 'monospace',
-                  }),
-                }}
-                selectable
-              >
-                {artifact.content}
-              </Text>
-            </ScrollView>
-          ) : (
-            <View testID="artifact-preview-content">
-              {renderMarkdownContent(artifact.content, c)}
-            </View>
-          )}
+          </View>
         </ScrollView>
       </View>
+      {reportingId === artifact.id ? (
+        <ReportSheet
+          visible
+          onClose={() => setReportingId(null)}
+          title={REPORT_THIS_IMAGE}
+          target={imageReportTarget(artifact)}
+        />
+      ) : null}
     </Modal>
   );
 }

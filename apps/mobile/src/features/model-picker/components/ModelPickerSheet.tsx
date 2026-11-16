@@ -1,5 +1,13 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import React, { Children, isValidElement, useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, {
@@ -27,6 +35,7 @@ import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAc
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { claimModelSelection } from '@/src/features/model-picker/selectionIntent';
+import { confirmModelDownload } from '@/src/features/model-picker/downloadConfirmation';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
@@ -49,6 +58,10 @@ import {
   type ModelDef,
 } from '@/src/features/model-picker/service';
 import { guardProviderSwitch } from '@/src/features/model-picker/tierGuard';
+import {
+  useBottomSheetPresence,
+  useHardwareBackDismiss,
+} from '@/src/shared/hooks/useHardwareBackDismiss';
 import { groupByModelLine, leadModelOf } from '@/src/features/model-picker/modelLines';
 import { matchesModelFilters, type ModelFilterId } from '@/src/features/model-picker/modelFilters';
 import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
@@ -280,8 +293,10 @@ export function ModelPickerSheet({
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
   const hydrateInstalledModels = useModelInstallStore((s) => s.hydrateInstalledModels);
   const prepareModel = useModelInstallStore((s) => s.prepareModel);
+  const allowCellularDownloads = useModelInstallStore((s) => s.allowCellularDownloads);
   const statusForModel = useModelInstallStore((s) => s.statusForModel);
 
+  const downloadPromptOpen = useRef(false);
   const [search, setSearch] = useState('');
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
   const [openLineId, setOpenLineId] = useState<string | null>(null);
@@ -485,12 +500,20 @@ export function ModelPickerSheet({
       if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') return;
 
       if (installStatus.status === 'download_required' || installStatus.status === 'failed') {
-        const stillWanted = claimModelSelection();
-        void prepareModel(chosenModel)
-          .then(() => {
-            if (stillWanted()) selectAndClose(id);
+        if (downloadPromptOpen.current) return;
+        downloadPromptOpen.current = true;
+        void confirmModelDownload(chosenModel, allowCellularDownloads)
+          .then((confirmed) => {
+            downloadPromptOpen.current = false;
+            if (!confirmed) return;
+            const stillWanted = claimModelSelection();
+            return prepareModel(chosenModel).then(() => {
+              if (stillWanted()) selectAndClose(id);
+            });
           })
-          .catch(() => undefined);
+          .catch(() => {
+            downloadPromptOpen.current = false;
+          });
         return;
       }
 
@@ -520,6 +543,7 @@ export function ModelPickerSheet({
       openInvite,
       openUpgrade,
       prepareModel,
+      allowCellularDownloads,
       rowSelectedModel,
       selectAndClose,
       sheetRef,
@@ -547,6 +571,26 @@ export function ModelPickerSheet({
     setOpenLineId(null);
     setActiveFilters([]);
   }, []);
+
+  const [isOpen, sheetPresence] = useBottomSheetPresence();
+  useHardwareBackDismiss(isOpen, () => sheetRef.current?.close());
+
+  const handleSheetAnimate = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      sheetPresence.onAnimate(fromIndex, toIndex);
+      if (fromIndex === -1 || toIndex === -1) resetView();
+    },
+    [resetView, sheetPresence],
+  );
+
+  const handleSheetClose = useCallback(() => {
+    sheetPresence.onClose();
+    resetView();
+  }, [resetView, sheetPresence]);
+
+  useEffect(() => {
+    if (openSignal) resetView();
+  }, [openSignal, resetView]);
 
   const toggleFilter = useCallback((id: ModelFilterId) => {
     setActiveFilters((current) =>
@@ -627,7 +671,9 @@ export function ModelPickerSheet({
         accessible={false}
         snapPoints={snapPoints}
         enablePanDownToClose
-        onClose={resetView}
+        onClose={handleSheetClose}
+        onChange={sheetPresence.onChange}
+        onAnimate={handleSheetAnimate}
         enableDynamicSizing={false}
         keyboardBehavior="extend"
         keyboardBlurBehavior="restore"
@@ -686,6 +732,7 @@ export function ModelPickerSheet({
                 {freeQuotaError}
               </Text>
               <PressableBox
+                hitSlop={{ top: 2, bottom: 2 }}
                 onPress={() => void refreshFreeQuotaCatalogue()}
                 accessibilityRole="button"
                 accessibilityLabel="Retry loading provider-funded Free models"

@@ -45,6 +45,14 @@ const { POST } = await import('./route');
 const context = { params: Promise.resolve({ id: CONVERSATION_ID }) };
 const ACTIVATION = /set activated_at = now\(\)/;
 const MESSAGE_COUNT = /select count\(\*\).*from web_messages/i;
+const TITLE_WRITE = /set title = \$1/;
+const EARLIER_QUESTION_GUARD =
+  /not exists \(\s*select 1\s+from web_messages earlier\s+where earlier\.conversation_id = \$2\s+and earlier\.role = 'user'\s+and earlier\.id <> \$5\s*\)/;
+const ANSWERED_GUARD =
+  /not exists \(\s*select 1\s+from web_messages answered\s+where answered\.conversation_id = \$2\s+and answered\.role = 'assistant'\s*\)/;
+const ANSWER_ID = '66666666-6666-4666-8666-666666666666';
+const OTHER_QUESTION_ID = '77777777-7777-4777-8777-777777777777';
+const { scheduleConversationTitleGeneration } = await import('./lib/generate-title');
 
 function request(): NextRequest {
   return new NextRequest(
@@ -70,6 +78,29 @@ function savedRow() {
     created_at: '2026-09-01T00:00:00.000Z',
     metadata: {},
   };
+}
+
+type StoredMessage = { id: string; conversation_id: string; role: 'user' | 'assistant' };
+
+function storedMessages(rows: StoredMessage[]) {
+  mocks.execute.mockImplementation(async (sql: string, params: unknown[]) => {
+    if (!TITLE_WRITE.test(sql)) return 1;
+    const conversationId = params[1];
+    const savedId = params[4];
+    const inConversation = rows.filter((row) => row.conversation_id === conversationId);
+    const otherQuestion =
+      EARLIER_QUESTION_GUARD.test(sql) &&
+      inConversation.some((row) => row.role === 'user' && row.id !== savedId);
+    const answered =
+      ANSWERED_GUARD.test(sql) && inConversation.some((row) => row.role === 'assistant');
+    return otherQuestion || answered ? 0 : 1;
+  });
+}
+
+function titleWrites() {
+  return mocks.execute.mock.calls
+    .map((call, index) => ({ call, result: mocks.execute.mock.results[index] }))
+    .filter(({ call: [sql] }) => TITLE_WRITE.test(String(sql)));
 }
 
 function activationCalls() {
@@ -111,6 +142,77 @@ describe('conversation activation', () => {
     const response = await POST(request(), context);
     expect(response.status).toBe(500);
     expect(mocks.query.mock.calls.some(([query]) => MESSAGE_COUNT.test(String(query)))).toBe(false);
+  });
+
+  it('titles the conversation from the question that activates it when no earlier question exists', async () => {
+    storedMessages([{ id: MESSAGE_ID, conversation_id: CONVERSATION_ID, role: 'user' }]);
+
+    const response = await POST(request(), context);
+    expect(response.status).toBe(200);
+
+    const writes = titleWrites();
+    expect(writes).toHaveLength(1);
+    await expect(writes[0]?.result?.value).resolves.toBe(1);
+    const [sql, params] = writes[0]?.call as [string, unknown[]];
+    expect(sql).toMatch(EARLIER_QUESTION_GUARD);
+    expect(sql).toMatch(ANSWERED_GUARD);
+    expect(params).toEqual([
+      'the first thing anyone said',
+      CONVERSATION_ID,
+      USER_ID,
+      ORGANIZATION_ID,
+      MESSAGE_ID,
+    ]);
+    expect(scheduleConversationTitleGeneration).toHaveBeenCalledTimes(1);
+    expect(scheduleConversationTitleGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: CONVERSATION_ID,
+        content: 'the first thing anyone said',
+        expectedCurrentTitle: 'the first thing anyone said',
+      }),
+    );
+  });
+
+  it('keeps the title when a regenerate re-sends the only question of a synced conversation that has an answer', async () => {
+    storedMessages([
+      { id: MESSAGE_ID, conversation_id: CONVERSATION_ID, role: 'user' },
+      { id: ANSWER_ID, conversation_id: CONVERSATION_ID, role: 'assistant' },
+    ]);
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(200);
+    expect(activationCalls()).toHaveLength(1);
+    const writes = titleWrites();
+    expect(writes).toHaveLength(1);
+    await expect(writes[0]?.result?.value).resolves.toBe(0);
+    expect(scheduleConversationTitleGeneration).not.toHaveBeenCalled();
+  });
+
+  it('keeps the title when an edit adds a new question to a synced conversation whose answer was never saved', async () => {
+    storedMessages([
+      { id: OTHER_QUESTION_ID, conversation_id: CONVERSATION_ID, role: 'user' },
+      { id: MESSAGE_ID, conversation_id: CONVERSATION_ID, role: 'user' },
+    ]);
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(200);
+    expect(activationCalls()).toHaveLength(1);
+    await expect(titleWrites()[0]?.result?.value).resolves.toBe(0);
+    expect(scheduleConversationTitleGeneration).not.toHaveBeenCalled();
+  });
+
+  it('judges the stored conversation by its own id, not by rows of another conversation', async () => {
+    storedMessages([
+      { id: MESSAGE_ID, conversation_id: CONVERSATION_ID, role: 'user' },
+      { id: ANSWER_ID, conversation_id: '99999999-9999-4999-8999-999999999999', role: 'assistant' },
+    ]);
+
+    const response = await POST(request(), context);
+
+    expect(response.status).toBe(200);
+    expect(scheduleConversationTitleGeneration).toHaveBeenCalledTimes(1);
   });
 
   it('skips count and title work after the conversation is already activated', async () => {

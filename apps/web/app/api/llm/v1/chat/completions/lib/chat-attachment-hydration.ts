@@ -3,7 +3,10 @@ import 'server-only';
 import { readStoredMedia } from '@/lib/server/media-storage';
 import { getMediaAssetById } from '@/lib/server/media-assets';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { StoredObjectTooLargeError } from '@/lib/server/object-storage';
 import {
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
   isChatImageMimeType,
   isSupportedChatAttachment,
   normalizeChatDocumentMimeType,
@@ -25,15 +28,15 @@ import { withSpan } from '@/lib/observability/span';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import type { ImageDetailValue } from './image-detail';
 import { markNativeDocument, type NativeDocument } from './media-input';
+import { ModelImageUnreadableError, prepareModelImage } from './model-image';
 import { mapWithConcurrency } from './tool-loop';
 
-const MAX_REQUEST_ATTACHMENT_BYTES = 18 * 1024 * 1024;
 const MAX_NOTEBOOK_TEXT_CHARS = 200_000;
 const NOTEBOOK_MIME_TYPE = 'application/x-ipynb+json';
 const PDF_MIME_TYPE = 'application/pdf';
 export const MAX_PARALLEL_ATTACHMENT_FETCHES = 4;
 
-type AttachmentReferencePart = {
+export type AttachmentReferencePart = {
   type: string;
   text?: string;
   image_url?: { url: string; detail?: ImageDetailValue };
@@ -195,7 +198,7 @@ function extractNotebookText(data: Buffer): string | null {
   return truncateExtractedText(text, MAX_NOTEBOOK_TEXT_CHARS);
 }
 
-type AttachmentSlot = {
+export type AttachmentSlot = {
   messageIndex: number;
   partIndex: number;
   assetId: string;
@@ -228,31 +231,139 @@ function collectAttachmentSlots(messages: HydratableMessage[]): AttachmentSlot[]
   return slots;
 }
 
-type ResolvedMediaAsset = NonNullable<Awaited<ReturnType<typeof getMediaAssetById>>>;
+export type ResolvedMediaAsset = NonNullable<Awaited<ReturnType<typeof getMediaAssetById>>>;
 type ResolvedStoredMedia = NonNullable<Awaited<ReturnType<typeof readStoredMedia>>>;
 
-type AttachmentFetchOutcome =
+export type OversizeAttachmentReason = 'over_file_limit' | 'over_message_budget';
+
+export type OversizeAttachmentResolution =
+  | { kind: 'refuse' }
+  | { kind: 'note'; reason: ChatAttachmentUnavailableReason }
+  | { kind: 'parts'; parts: AttachmentReferencePart[] };
+
+export type OversizeAttachmentResolver = (input: {
+  slot: AttachmentSlot;
+  asset: ResolvedMediaAsset;
+  turn: 'live' | 'history';
+  reason: OversizeAttachmentReason;
+}) => Promise<OversizeAttachmentResolution>;
+
+export interface HydrateChatAttachmentsOptions {
+  resolveOversizeAttachment?: OversizeAttachmentResolver;
+}
+
+export const defaultOversizeAttachmentResolver: OversizeAttachmentResolver = async ({ turn }) =>
+  turn === 'live' ? { kind: 'refuse' } : { kind: 'note', reason: 'over_budget' };
+
+type AttachmentLookupOutcome =
   | { readonly kind: 'foreign' }
   | { readonly kind: 'removed'; readonly filename: string }
   | { readonly kind: 'unsupported'; readonly filename: string }
-  | { readonly kind: 'unreadable'; readonly filename: string }
   | {
-      readonly kind: 'ready';
+      readonly kind: 'candidate';
       readonly filename: string;
       readonly asset: ResolvedMediaAsset;
-      readonly object: ResolvedStoredMedia;
+      readonly pathname: string;
     };
 
+type StoredAttachmentRead =
+  | { readonly kind: 'unread' }
+  | { readonly kind: 'unreadable' }
+  | { readonly kind: 'too_large'; readonly reason: OversizeAttachmentReason }
+  | { readonly kind: 'ready'; readonly object: ResolvedStoredMedia };
+
+type AttachmentCandidate = {
+  readonly slot: AttachmentSlot;
+  readonly filename: string;
+  readonly asset: ResolvedMediaAsset;
+  readonly pathname: string;
+  read: StoredAttachmentRead;
+};
+
+type AdmissionDecision =
+  | { readonly kind: 'admitted' }
+  | { readonly kind: 'unreadable' }
+  | { readonly kind: 'oversize'; readonly reason: OversizeAttachmentReason };
+
+type PlannedDecision = AdmissionDecision | { readonly kind: 'pending' };
+
+type PlannedRead = { readonly candidate: AttachmentCandidate; readonly maxBytes: number };
+
+type AdmissionPlan = {
+  readonly decisions: readonly PlannedDecision[];
+  readonly reads: readonly PlannedRead[];
+};
+
+function recordedByteSize(asset: ResolvedMediaAsset): number | null {
+  const size = asset.byteSize;
+  return size != null && Number.isSafeInteger(size) && size >= 0 ? size : null;
+}
+
+function chargeableBytes(candidate: AttachmentCandidate): number | null {
+  if (candidate.read.kind === 'ready') return candidate.read.object.data.byteLength;
+  return recordedByteSize(candidate.asset);
+}
+
 /**
- * The DB row and the stored bytes are two round trips with nothing between
- * them a caller can use, so they run one after another here, while this whole
- * function runs concurrently across slots.
+ * Charges in `ordered` sequence, as the read-then-charge loop this replaced
+ * did. A file proved unreadable is never charged, so a later file that fits
+ * only without it is admitted when this runs again.
+ *
+ * A file with no usable recorded size cannot be charged until it is read, and
+ * every decision after it waits on that size. It is read only once every
+ * admitted file before it is ready, so the budget left before it is final,
+ * and only up to that budget: a larger object fails the bounded read without
+ * being held, and is over the budget wherever the later files land.
  */
-async function fetchAttachmentPayload(
+function planAdmissions(candidates: readonly AttachmentCandidate[]): AdmissionPlan {
+  let totalBytes = 0;
+  let admittedUnread = false;
+  let unsizedBound: number | null = null;
+  let waiting = false;
+  const reads: PlannedRead[] = [];
+
+  const decisions = candidates.map((candidate): PlannedDecision => {
+    if (candidate.read.kind === 'unreadable') return { kind: 'unreadable' };
+    if (candidate.read.kind === 'too_large') {
+      return { kind: 'oversize', reason: candidate.read.reason };
+    }
+    const bytes = chargeableBytes(candidate);
+    if (bytes === null) {
+      if (!waiting && !admittedUnread) {
+        unsizedBound = Math.min(
+          MAX_CHAT_ATTACHMENT_BYTES,
+          MAX_CHAT_ATTACHMENT_MESSAGE_BYTES - totalBytes,
+        );
+      }
+      if (unsizedBound !== null && reads.length < MAX_PARALLEL_ATTACHMENT_FETCHES) {
+        reads.push({ candidate, maxBytes: unsizedBound });
+      }
+      waiting = true;
+      return { kind: 'pending' };
+    }
+    if (waiting) return { kind: 'pending' };
+    if (bytes > MAX_CHAT_ATTACHMENT_BYTES) {
+      return { kind: 'oversize', reason: 'over_file_limit' };
+    }
+    if (totalBytes + bytes > MAX_CHAT_ATTACHMENT_MESSAGE_BYTES) {
+      return { kind: 'oversize', reason: 'over_message_budget' };
+    }
+    totalBytes += bytes;
+    if (candidate.read.kind === 'unread') {
+      admittedUnread = true;
+      reads.push({ candidate, maxBytes: MAX_CHAT_ATTACHMENT_BYTES });
+    }
+    return { kind: 'admitted' };
+  });
+
+  return { decisions, reads };
+}
+
+async function lookupAttachment(
   assetId: string,
   userId: string,
   organizationId: string | null,
-): Promise<AttachmentFetchOutcome> {
+): Promise<AttachmentLookupOutcome> {
   const asset = await withSpan(
     'chat_attachment.asset_lookup',
     { domain: 'retrieval', attributes: { 'chat_attachment.asset_id': assetId } },
@@ -278,23 +389,89 @@ async function fetchAttachmentPayload(
     return { kind: 'unsupported', filename };
   }
 
-  const object = await withSpan(
-    'chat_attachment.storage_read',
-    {
-      domain: 'retrieval',
-      attributes: {
-        'chat_attachment.asset_id': asset.id,
-        'chat_attachment.mime_type': asset.mimeType,
-      },
-    },
-    () => readStoredMedia(asset.storagePathname as string),
-  );
-  if (!object) return { kind: 'unreadable', filename };
-  if (asset.byteSize != null && object.data.byteLength !== asset.byteSize) {
-    return { kind: 'unreadable', filename };
-  }
+  return { kind: 'candidate', filename, asset, pathname: asset.storagePathname };
+}
 
-  return { kind: 'ready', filename, asset, object };
+/**
+ * Every read is bounded by the inline per-file limit or less, so a row whose
+ * recorded size is missing or wrong can never pull a larger object into
+ * memory. An object that breaks the bound despite a recorded size disagrees
+ * with that size, which is the same mismatch an exact-length check reports as
+ * unreadable.
+ */
+async function readAttachment({ candidate, maxBytes }: PlannedRead): Promise<StoredAttachmentRead> {
+  const { asset, pathname } = candidate;
+  const tooLarge: StoredAttachmentRead =
+    asset.byteSize != null
+      ? { kind: 'unreadable' }
+      : {
+          kind: 'too_large',
+          reason: maxBytes < MAX_CHAT_ATTACHMENT_BYTES ? 'over_message_budget' : 'over_file_limit',
+        };
+  let object: ResolvedStoredMedia | null;
+  try {
+    object = await withSpan(
+      'chat_attachment.storage_read',
+      {
+        domain: 'retrieval',
+        attributes: {
+          'chat_attachment.asset_id': asset.id,
+          'chat_attachment.mime_type': asset.mimeType,
+        },
+      },
+      () => readStoredMedia(pathname, maxBytes),
+    );
+  } catch (error) {
+    if (error instanceof StoredObjectTooLargeError) return tooLarge;
+    throw error;
+  }
+  if (!object) return { kind: 'unreadable' };
+  if (object.data.byteLength > maxBytes) return tooLarge;
+  if (asset.byteSize != null && object.data.byteLength !== asset.byteSize) {
+    return { kind: 'unreadable' };
+  }
+  return { kind: 'ready', object };
+}
+
+async function readCandidates(planned: readonly PlannedRead[]): Promise<void> {
+  const reads = await mapWithConcurrency(planned, MAX_PARALLEL_ATTACHMENT_FETCHES, readAttachment);
+  planned.forEach(({ candidate }, index) => {
+    candidate.read = reads[index]!;
+  });
+}
+
+function isSettled(decision: PlannedDecision): decision is AdmissionDecision {
+  return decision.kind !== 'pending';
+}
+
+/**
+ * Decides which files fit from their recorded sizes before reading any bytes,
+ * then reads only the admitted ones, and files with no usable recorded size
+ * only up to the budget left before them. Reading can prove an admitted file
+ * unreadable; the decision then runs again without its charge, and only files
+ * newly admitted are read. A file read and then pushed out by an earlier one
+ * that fits again is let go before any content is built.
+ */
+async function admitAndReadCandidates(
+  candidates: readonly AttachmentCandidate[],
+): Promise<AdmissionDecision[]> {
+  for (;;) {
+    const { decisions, reads } = planAdmissions(candidates);
+    if (reads.length > 0) {
+      await readCandidates(reads);
+      continue;
+    }
+    const settled = decisions.filter(isSettled);
+    if (settled.length !== candidates.length) {
+      throw new Error('Attachment admission ended with an undecided file.');
+    }
+    candidates.forEach((candidate, index) => {
+      if (settled[index]!.kind !== 'admitted' && candidate.read.kind === 'ready') {
+        candidate.read = { kind: 'unread' };
+      }
+    });
+    return settled;
+  }
 }
 
 /**
@@ -312,13 +489,15 @@ export async function hydrateChatAttachments(
   onTruncated: ((filename: string) => void) | undefined,
   maxAttachments: number,
   organizationId: string | null,
+  options: HydrateChatAttachmentsOptions = {},
 ): Promise<TurnAttachment[]> {
+  const resolveOversizeAttachment =
+    options.resolveOversizeAttachment ?? defaultOversizeAttachmentResolver;
   const turnAttachments: TurnAttachment[] = [];
   const slots = collectAttachmentSlots(messages);
   if (slots.length === 0) return turnAttachments;
 
   let attachmentCount = 0;
-  let totalBytes = 0;
 
   /**
    * The turn being sent goes first so that history cannot spend the budget it
@@ -357,18 +536,37 @@ export async function hydrateChatAttachments(
   }
 
   /**
-   * Fetching is independent per slot, so it runs concurrently under a small
-   * cap; the budget and ordering rules below apply afterward, in `ordered`
-   * sequence, so the outcome does not depend on which fetch happens to land
-   * first.
+   * Lookups and reads are independent per slot, so each runs concurrently
+   * under a small cap; the budget and ordering rules apply in `ordered`
+   * sequence, so the outcome does not depend on which request lands first.
    */
-  const outcomes = await mapWithConcurrency(pending, MAX_PARALLEL_ATTACHMENT_FETCHES, (slot) =>
-    fetchAttachmentPayload(slot.assetId, userId, organizationId),
+  const lookups = await mapWithConcurrency(pending, MAX_PARALLEL_ATTACHMENT_FETCHES, (slot) =>
+    lookupAttachment(slot.assetId, userId, organizationId),
   );
+
+  const candidates: AttachmentCandidate[] = [];
+  const candidateBySlot = new Map<AttachmentSlot, AttachmentCandidate>();
+  pending.forEach((slot, index) => {
+    const lookup = lookups[index]!;
+    if (lookup.kind !== 'candidate') return;
+    const candidate: AttachmentCandidate = {
+      slot,
+      filename: lookup.filename,
+      asset: lookup.asset,
+      pathname: lookup.pathname,
+      read: { kind: 'unread' },
+    };
+    candidates.push(candidate);
+    candidateBySlot.set(slot, candidate);
+  });
+
+  const decisions = await admitAndReadCandidates(candidates);
+  const decisionBySlot = new Map<AttachmentSlot, AdmissionDecision>();
+  candidates.forEach((candidate, index) => decisionBySlot.set(candidate.slot, decisions[index]!));
 
   for (let index = 0; index < pending.length; index += 1) {
     const slot = pending[index]!;
-    const outcome = outcomes[index]!;
+    const outcome = lookups[index]!;
     const live = slot.fromCurrentTurn;
     const degrade = (filename: string, reason: ChatAttachmentUnavailableReason): void => {
       slot.resolved = [{ type: 'text', text: unavailableChatAttachmentNote(filename, reason) }];
@@ -403,14 +601,25 @@ export async function hydrateChatAttachments(
       continue;
     }
 
-    if (outcome.kind === 'unreadable') {
-      degrade(outcome.filename, 'unreadable');
-      continue;
-    }
+    const candidate = candidateBySlot.get(slot)!;
+    const decision = decisionBySlot.get(slot)!;
+    const { filename, asset } = candidate;
 
-    const { filename, asset, object } = outcome;
-
-    if (totalBytes + object.data.byteLength > MAX_REQUEST_ATTACHMENT_BYTES) {
+    if (decision.kind === 'oversize') {
+      const resolution = await resolveOversizeAttachment({
+        slot: { ...slot },
+        asset,
+        turn: live ? 'live' : 'history',
+        reason: decision.reason,
+      });
+      if (resolution.kind === 'parts') {
+        slot.resolved = resolution.parts;
+        continue;
+      }
+      if (resolution.kind === 'note') {
+        degrade(filename, resolution.reason);
+        continue;
+      }
       if (live) {
         throw new ChatAttachmentHydrationError(
           413,
@@ -421,7 +630,12 @@ export async function hydrateChatAttachments(
       degrade(filename, 'over_budget');
       continue;
     }
-    totalBytes += object.data.byteLength;
+
+    if (candidate.read.kind !== 'ready') {
+      degrade(filename, 'unreadable');
+      continue;
+    }
+    const { object } = candidate.read;
 
     const header = attachmentContextHeader(filename, asset.mimeType);
     // The sandbox gets the file as uploaded, not the shape the provider wire
@@ -438,13 +652,25 @@ export async function hydrateChatAttachments(
     };
 
     if (isChatImageMimeType(asset.mimeType)) {
+      let image: Awaited<ReturnType<typeof prepareModelImage>>;
+      try {
+        image = await prepareModelImage(object.data, filename);
+      } catch (error) {
+        if (!(error instanceof ModelImageUnreadableError)) throw error;
+        if (live) {
+          throw new ChatAttachmentHydrationError(400, 'unreadable_attachment', error.message);
+        }
+        degrade(filename, 'unreadable');
+        continue;
+      }
       stageForSandbox();
       slot.resolved = [
         header,
+        ...(image.note ? [{ type: 'text', text: image.note }] : []),
         {
           type: 'image_url',
           image_url: {
-            url: `data:${asset.mimeType};base64,${rawBase64}`,
+            url: `data:${image.mimeType};base64,${image.data.toString('base64')}`,
           },
         },
       ];

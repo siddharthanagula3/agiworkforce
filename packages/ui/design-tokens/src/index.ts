@@ -941,10 +941,15 @@ export const agiMobileAccentSwatches = {
     light: agiMobileColors.light.textPrimary,
     dark: agiMobileColors.dark.textPrimary,
   },
-  green: { light: '#0c735a', dark: '#12bb91' },
   blue: { light: '#1658ea', dark: '#64a8fa' },
-  violet: { light: '#7a38ed', dark: '#af95fa' },
+  cyan: { light: '#0a6e84', dark: '#22d3ee' },
+  green: { light: '#0c735a', dark: '#12bb91' },
+  lime: { light: '#4d6f00', dark: '#a3e635' },
+  yellow: { light: '#825d00', dark: '#facc15' },
+  orange: { light: '#b0380a', dark: '#fb923c' },
   rose: { light: '#c61a3f', dark: '#fb7e90' },
+  magenta: { light: '#b4208f', dark: '#f78fdc' },
+  violet: { light: '#7a38ed', dark: '#af95fa' },
 } as const;
 
 export const agiMobileNotificationLedColors = {

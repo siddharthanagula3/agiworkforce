@@ -1203,7 +1203,7 @@ describe('PricingPage', () => {
 
     column('free', {
       usage: 'compareFreeUsage',
-      projects: '1',
+      projects: '5',
       storage: '100 MB',
       downloads: '775 MB',
       attachment: '25 MB',
@@ -1215,18 +1215,18 @@ describe('PricingPage', () => {
     });
     column('basic', {
       usage: '5x more usage per session than Free',
-      projects: '5',
+      projects: 'noSetLimit',
       storage: '1 GB',
       downloads: '1 GB',
       attachment: '25 MB',
       customMcp: '5',
       chats: '1',
-      scheduledTasks: '2',
+      scheduledTasks: '3',
       sandboxes: '5 at once, 24 h each',
     });
     column('pro', {
       usage: '5x more usage than Basic',
-      projects: '25',
+      projects: 'noSetLimit',
       storage: '10 GB',
       downloads: '3 GB',
       attachment: '25 MB',
@@ -1244,7 +1244,7 @@ describe('PricingPage', () => {
       attachment: '25 MB',
       customMcp: 'noSetLimit',
       chats: '5',
-      scheduledTasks: '10',
+      scheduledTasks: '15',
       sandboxes: '20 at once, 24 h each',
       proFeatures: true,
     });
@@ -1265,13 +1265,13 @@ describe('PricingPage', () => {
     showBusinessPlans();
     column('team', {
       usage: 'Same usage as Premium for every seat',
-      projects: '25',
+      projects: 'noSetLimit',
       storage: '25 GB',
       downloads: '3.3 GB',
       attachment: '25 MB',
       customMcp: '25',
       chats: '3',
-      scheduledTasks: '5',
+      scheduledTasks: '10',
       sandboxes: '10 at once, 24 h each',
       proFeatures: true,
       teamAdmin: true,

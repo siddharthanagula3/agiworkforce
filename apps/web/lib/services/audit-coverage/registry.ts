@@ -51,6 +51,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'email/unsubscribe/route.ts', reason: 'dedicated_record' },
   { route: 'devices/heartbeat/route.ts', reason: 'no_governed_state' },
   { route: 'feedback/route.ts', reason: 'own_content' },
+  { route: 'files/intakes/[intakeId]/route.ts', reason: 'own_content' },
   { route: 'files/uploads/[uploadId]/parts/route.ts', reason: 'own_content' },
   { route: 'files/uploads/[uploadId]/route.ts', reason: 'own_content' },
   { route: 'files/uploads/route.ts', reason: 'own_content' },
@@ -224,11 +225,23 @@ export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = 
     eventTypes: ['tool_executed'],
   },
   {
+    route: 'chat/conversations/[id]/tool-grants/[grantId]/route.ts',
+    eventTypes: ['connector_setting_changed'],
+  },
+  {
     route: 'code/sessions/route.ts',
     eventTypes: ['code_session_lifecycle_changed'],
   },
   {
     route: 'code/sessions/handoff/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  {
+    route: 'code/environments/route.ts',
+    eventTypes: ['code_session_lifecycle_changed'],
+  },
+  {
+    route: 'code/environments/[environmentId]/route.ts',
     eventTypes: ['code_session_lifecycle_changed'],
   },
   { route: 'github/install/complete/route.ts', eventTypes: ['connector_added'] },

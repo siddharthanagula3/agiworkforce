@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+type CloudAgentRunSearchModule = typeof import('@/lib/services/cloud-agent-run-search');
+
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
   listCloudAgentRuns: vi.fn(),
   findActiveRun: vi.fn(),
+  searchCloudAgentRuns: vi.fn(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -29,6 +32,15 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   findActiveCloudAgentRunForConversation: mocks.findActiveRun,
 }));
 
+vi.mock('@/lib/services/cloud-agent-run-search', async (importOriginal) => ({
+  ...(await importOriginal<CloudAgentRunSearchModule>()),
+  searchCloudAgentRuns: mocks.searchCloudAgentRuns,
+}));
+
+import {
+  MANAGED_CLOUD_AGENT_RUNS_SEARCH_HEADER,
+  MANAGED_CLOUD_AGENT_RUNS_SEARCH_SUPPORTED,
+} from '@agiworkforce/cloud-contracts';
 import { GET } from './route';
 
 const db = { query: vi.fn() };
@@ -144,5 +156,84 @@ describe('asking whether one conversation has a turn in flight', () => {
 
     expect(response.status).toBe(400);
     expect(mocks.findActiveRun).not.toHaveBeenCalled();
+  });
+});
+
+describe('searching Cloud tasks by text', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-owner' });
+    mocks.listCloudAgentRuns.mockResolvedValue({ runs: [], next: null });
+    mocks.searchCloudAgentRuns.mockResolvedValue({ runs: [], next: null });
+  });
+
+  it('searches inside the owner, state and AGI Work scope with the trimmed text', async () => {
+    const response = await GET(request('?q=%20Quarterly%20report%20&state=completed&limit=10'));
+
+    expect(response.status).toBe(200);
+    expect(mocks.listCloudAgentRuns).not.toHaveBeenCalled();
+    expect(mocks.searchCloudAgentRuns).toHaveBeenCalledWith(db, {
+      userId: 'user-owner',
+      states: ['completed'],
+      requestId: undefined,
+      before: undefined,
+      limit: 10,
+      workModes: ['agiwork'],
+      text: 'Quarterly report',
+    });
+  });
+
+  it('carries the cursor into the search and returns the next one', async () => {
+    const cursor = Buffer.from(
+      JSON.stringify({
+        updatedAt: '2026-11-01T10:00:00.000Z',
+        id: '8f2d3f5a-1c4e-4c3a-9f2b-6b0f9d3c1a77',
+      }),
+    ).toString('base64url');
+    mocks.searchCloudAgentRuns.mockResolvedValue({
+      runs: [],
+      next: { updatedAt: '2026-10-01T10:00:00.000Z', id: '9f2d3f5a-1c4e-4c3a-9f2b-6b0f9d3c1a77' },
+    });
+
+    const response = await GET(request(`?q=invoice&cursor=${cursor}`));
+
+    expect(mocks.searchCloudAgentRuns).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        text: 'invoice',
+        before: {
+          updatedAt: '2026-11-01T10:00:00.000Z',
+          id: '8f2d3f5a-1c4e-4c3a-9f2b-6b0f9d3c1a77',
+        },
+      }),
+    );
+    const body = (await response.json()) as { nextCursor: string };
+    expect(JSON.parse(Buffer.from(body.nextCursor, 'base64url').toString('utf8'))).toEqual({
+      updatedAt: '2026-10-01T10:00:00.000Z',
+      id: '9f2d3f5a-1c4e-4c3a-9f2b-6b0f9d3c1a77',
+    });
+  });
+
+  it.each(['?q=', '?q=%20%20', `?q=${'x'.repeat(201)}`])(
+    'refuses search text that is empty or over 200 characters before database access: %s',
+    async (query) => {
+      const response = await GET(request(query));
+
+      expect(response.status).toBe(400);
+      expect(mocks.getUserScopedDb).not.toHaveBeenCalled();
+      expect(mocks.searchCloudAgentRuns).not.toHaveBeenCalled();
+    },
+  );
+
+  it('tells the phone the server searched, with or without text', async () => {
+    const withText = await GET(request('?q=invoice'));
+    const without = await GET(request());
+
+    for (const response of [withText, without]) {
+      expect(response.headers.get(MANAGED_CLOUD_AGENT_RUNS_SEARCH_HEADER)).toBe(
+        MANAGED_CLOUD_AGENT_RUNS_SEARCH_SUPPORTED,
+      );
+    }
+    expect(mocks.listCloudAgentRuns).toHaveBeenCalledTimes(1);
   });
 });

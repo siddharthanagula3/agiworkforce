@@ -10,6 +10,7 @@ const mockGetAgent = jest.fn();
 const mockCreateAgent = jest.fn();
 const mockUpdateAgent = jest.fn();
 const mockStartConversation = jest.fn();
+const mockStartCatalogConversation = jest.fn();
 const mockPublishAgent = jest.fn();
 const mockSetAgentStatus = jest.fn();
 const mockRestoreAgentVersion = jest.fn();
@@ -64,6 +65,7 @@ jest.mock('../service', () => ({
   createAgent: (...args: unknown[]) => mockCreateAgent(...args),
   updateAgent: (...args: unknown[]) => mockUpdateAgent(...args),
   startAgentConversation: (...args: unknown[]) => mockStartConversation(...args),
+  startCatalogAgentConversation: (...args: unknown[]) => mockStartCatalogConversation(...args),
   publishAgent: (...args: unknown[]) => mockPublishAgent(...args),
   listAgentFiles: jest.fn(async () => []),
   setAgentStatus: (...args: unknown[]) => mockSetAgentStatus(...args),
@@ -74,7 +76,12 @@ jest.mock('../service', () => ({
   getAgentActivity: jest.fn(async () => ({ conversations: [], routines: [] })),
 }));
 
-import { NEW_AGENT_DRAFT, type ManagedCloudAgent } from '@agiworkforce/cloud-contracts';
+import {
+  AGENT_CATALOG,
+  NEW_AGENT_DRAFT,
+  type ManagedCloudAgent,
+} from '@agiworkforce/cloud-contracts';
+import { PROJECT_ACCENTS, PROJECT_ICONS } from '@/src/features/projects/projectAppearance';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -82,7 +89,13 @@ import {
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { AgentEditorScreen } from '../AgentEditorScreen';
-import { AgentsScreen, groupAgents } from '../AgentsScreen';
+import {
+  AgentsScreen,
+  __resetAgentsSegmentForTests,
+  agentListSections,
+  agentsSegments,
+  groupAgents,
+} from '../AgentsScreen';
 
 const AGENT: ManagedCloudAgent = {
   ...NEW_AGENT_DRAFT,
@@ -123,6 +136,7 @@ describe('mobile agents', () => {
     jest.clearAllMocks();
     mockStorage.clear();
     delete mockParams.id;
+    __resetAgentsSegmentForTests();
     __resetCloudAccountSessionForTests();
     activateCloudAccount('user-1');
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
@@ -140,6 +154,28 @@ describe('mobile agents', () => {
     ]);
   });
 
+  it('draws every built-in agent with an icon and accent the app knows', () => {
+    for (const entry of AGENT_CATALOG) {
+      expect(PROJECT_ICONS.map((icon) => icon.id)).toContain(entry.icon);
+      expect(PROJECT_ACCENTS.map((accent) => accent.id)).toContain(entry.accentColor);
+    }
+  });
+
+  it('puts By AGI after Your agents and offers Shared only when agents are shared', () => {
+    const titles = (agents: ManagedCloudAgent[]) =>
+      agentListSections(agents, 'all').map((section) => section.title);
+    expect(titles([AGENT, SHARED])).toEqual(['Your agents', 'By AGI', 'Shared with you']);
+    expect(titles([])).toEqual(['By AGI']);
+    expect(agentsSegments([AGENT])).toEqual(['all', 'yours', 'by-agi']);
+    expect(agentsSegments([AGENT, SHARED])).toEqual(['all', 'yours', 'by-agi', 'shared']);
+    expect(agentListSections([AGENT, SHARED], 'yours').map((section) => section.title)).toEqual([
+      'Your agents',
+    ]);
+    expect(agentListSections([AGENT, SHARED], 'shared').map((section) => section.title)).toEqual([
+      'Shared with you',
+    ]);
+  });
+
   it('gates Local Mode without reading Cloud agents', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     const { getByText } = render(<AgentsScreen />);
@@ -152,7 +188,9 @@ describe('mobile agents', () => {
     const { getByText, getByLabelText } = render(<AgentsScreen />);
     await waitFor(() => expect(getByText('Planner')).toBeTruthy());
     expect(getByText('Draft')).toBeTruthy();
+    fireEvent.press(getByLabelText('Shared'));
     expect(getByText('Shared by Ana')).toBeTruthy();
+    fireEvent.press(getByLabelText('All'));
 
     fireEvent.press(getByLabelText('Chat with Planner'));
     await waitFor(() =>
@@ -162,6 +200,85 @@ describe('mobile agents', () => {
       }),
     );
     expect(mockStartConversation).toHaveBeenCalledWith(AGENT.id);
+  });
+
+  it('lists the built-in agents after Your agents and starts one chat from a row', async () => {
+    mockStartCatalogConversation.mockResolvedValue({
+      agent: { ...AGENT, id: 'copy-1', name: 'Brainstormer' },
+      conversationId: 'conv-9',
+    });
+    const { findByText, getByLabelText, getByText } = render(<AgentsScreen />);
+    await findByText('Planner');
+    expect(getByText('BY AGI')).toBeTruthy();
+    for (const entry of AGENT_CATALOG) {
+      expect(getByText(entry.name)).toBeTruthy();
+      expect(getByLabelText(`Chat with ${entry.name}`)).toBeTruthy();
+    }
+
+    fireEvent.press(getByLabelText('Chat with Brainstormer'));
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith({
+        pathname: '/(app)/chat/[id]',
+        params: { id: 'conv-9' },
+      }),
+    );
+    expect(mockStartCatalogConversation).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Brainstormer' }),
+    );
+    expect(mockStartConversation).not.toHaveBeenCalled();
+  });
+
+  it('starts a built-in chat from the row itself', async () => {
+    mockStartCatalogConversation.mockResolvedValue({ agent: AGENT, conversationId: 'conv-2' });
+    const { findByLabelText } = render(<AgentsScreen />);
+    fireEvent.press(await findByLabelText(/^Coding partner\./));
+    await waitFor(() => expect(mockStartCatalogConversation).toHaveBeenCalledTimes(1));
+  });
+
+  it('says which built-in agent could not be started', async () => {
+    mockStartCatalogConversation.mockRejectedValue(new Error('down'));
+    const { findByLabelText, findByText } = render(<AgentsScreen />);
+    fireEvent.press(await findByLabelText('Chat with Brainstormer'));
+    expect(await findByText('Could not start Brainstormer.')).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('filters by segment, remembers the choice and shows Shared only when shared', async () => {
+    const first = render(<AgentsScreen />);
+    fireEvent.press(await first.findByLabelText('Yours'));
+    expect(first.getByText('Planner')).toBeTruthy();
+    expect(first.queryByText('Reviewer')).toBeNull();
+    expect(first.queryByText('Brainstormer')).toBeNull();
+
+    fireEvent.press(first.getByLabelText('Shared'));
+    expect(first.getByText('Reviewer')).toBeTruthy();
+    expect(first.queryByText('Planner')).toBeNull();
+
+    fireEvent.press(first.getByLabelText('By AGI'));
+    expect(first.getByText('Brainstormer')).toBeTruthy();
+    expect(first.queryByText('Planner')).toBeNull();
+    first.unmount();
+
+    const second = render(<AgentsScreen />);
+    await waitFor(() =>
+      expect(second.getByLabelText('By AGI').props.accessibilityState).toEqual({ selected: true }),
+    );
+    expect(second.queryByText('Planner')).toBeNull();
+    second.unmount();
+
+    mockListAgents.mockResolvedValue([AGENT]);
+    const third = render(<AgentsScreen />);
+    await waitFor(() => expect(third.getByLabelText('Yours')).toBeTruthy());
+    expect(third.queryByLabelText('Shared')).toBeNull();
+  });
+
+  it('says there is nothing in Yours and offers to create an agent', async () => {
+    mockListAgents.mockResolvedValue([SHARED]);
+    const { findByLabelText, getByText, getAllByLabelText } = render(<AgentsScreen />);
+    fireEvent.press(await findByLabelText('Yours'));
+    expect(getByText('No agents here yet')).toBeTruthy();
+    expect(getByText('Create an agent')).toBeTruthy();
+    expect(getAllByLabelText('Create an agent')).toHaveLength(2);
   });
 
   it('creates an agent from the editor with the instructions and tools set', async () => {
@@ -324,6 +441,7 @@ describe('mobile agents', () => {
     const { findByLabelText, getByText, queryByLabelText } = render(<AgentsScreen />);
     expect(queryByLabelText('Report or hide Planner')).toBeNull();
 
+    fireEvent.press(await findByLabelText('Shared'));
     fireEvent.press(await findByLabelText('Report or hide Reviewer'));
     pressAlertButton(alert, 'Report');
 
@@ -334,6 +452,7 @@ describe('mobile agents', () => {
     const alert = jest.spyOn(Alert, 'alert');
     const { findByLabelText, queryByText, getByText } = render(<AgentsScreen />);
 
+    fireEvent.press(await findByLabelText('Shared'));
     fireEvent.press(await findByLabelText('Report or hide Reviewer'));
     pressAlertButton(alert, 'Hide Ana');
     expect(alert.mock.calls.at(-1)?.[0]).toBe('Hide Ana?');

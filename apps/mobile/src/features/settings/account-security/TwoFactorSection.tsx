@@ -5,7 +5,6 @@ import {
   KeyboardAvoidingView,
   Linking,
   Modal,
-  Platform,
   ScrollView,
   Share,
   TextInput,
@@ -31,6 +30,8 @@ import {
   verifyAuthenticatorCode,
   type AccountSecurityStatus,
 } from './service';
+import { AuthenticatorQrCode } from './AuthenticatorQrCode';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
@@ -316,6 +317,7 @@ export function TwoFactorSection({
                 >
                   Add AGI to your authenticator app, then enter the 6-digit code.
                 </Text>
+                <AuthenticatorQrCode value={stage.otpauthUrl} />
                 <Text
                   selectable
                   accessibilityLabel="Setup key"
@@ -323,7 +325,7 @@ export function TwoFactorSection({
                     fontSize: typeScale.body,
                     letterSpacing: 1,
                     color: colors.textPrimary,
-                    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
+                    fontFamily: codeFontFamily,
                   }}
                 >
                   {stage.secret}
@@ -424,7 +426,7 @@ export function TwoFactorSection({
                     fontSize: typeScale.body,
                     lineHeight: 24,
                     color: colors.textPrimary,
-                    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
+                    fontFamily: codeFontFamily,
                   }}
                 >
                   {codesText}

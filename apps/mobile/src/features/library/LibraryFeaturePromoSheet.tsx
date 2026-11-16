@@ -7,8 +7,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import { helpArticleUrl } from '@/src/features/support/HelpArticleLink';
+import { openHelpArticle } from '@/src/features/support/HelpArticleLink';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
@@ -53,7 +52,7 @@ export function LibraryFeaturePromoSheet() {
 
   const handleLearnMore = useCallback(() => {
     markSeen();
-    void openUntrustedUrlInAppBrowser(helpArticleUrl('library'));
+    void openHelpArticle('library');
   }, [markSeen]);
 
   return (

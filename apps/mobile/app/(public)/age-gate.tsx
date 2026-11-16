@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -118,7 +119,13 @@ export default function AgeGateScreen() {
       >
         <ArrowLeft size={22} color={colors.textPrimary} />
       </Pressable>
-      <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Review Age Settings</Text>
+      <Text
+        accessibilityRole="header"
+        maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+        style={[styles.headerTitle, { color: colors.textPrimary }]}
+      >
+        Review Age Settings
+      </Text>
     </View>
   ) : null;
 
@@ -275,7 +282,7 @@ export default function AgeGateScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    height: 58,
+    minHeight: 58,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,

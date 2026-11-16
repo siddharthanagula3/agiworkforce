@@ -1,4 +1,8 @@
 import { Alert, Linking } from 'react-native';
+import {
+  classifyVoiceFailure,
+  voiceFailureMessage,
+} from '@/src/features/voice/services/voiceFailure';
 
 export function showVoicePermissionAlert(message: string): void {
   Alert.alert('Voice input unavailable', message, [
@@ -15,4 +19,10 @@ export function showVoicePermissionAlert(message: string): void {
       },
     },
   ]);
+}
+
+export function showVoiceCaptureFailureAlert(err: unknown): void {
+  const message = voiceFailureMessage(err);
+  if (classifyVoiceFailure(err) === 'permission') showVoicePermissionAlert(message);
+  else Alert.alert('Voice unavailable', message);
 }

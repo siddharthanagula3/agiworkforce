@@ -3,7 +3,7 @@ import {
   ServiceNoticeListSchema,
   type ServiceNotice,
 } from '@agiworkforce/cloud-contracts';
-import { API_URL } from '@/lib/constants';
+import { webContentPageUrl } from '@/src/platform/webContentPage';
 import { api } from '@/services/api';
 
 export async function fetchServiceNotices(signal?: AbortSignal): Promise<ServiceNotice[]> {
@@ -12,5 +12,5 @@ export async function fetchServiceNotices(signal?: AbortSignal): Promise<Service
 }
 
 export function noticeUrl(href: string): string {
-  return /^https?:\/\//i.test(href) ? href : `${API_URL.replace(/\/+$/, '')}${href}`;
+  return /^https?:\/\//i.test(href) ? href : webContentPageUrl(href);
 }

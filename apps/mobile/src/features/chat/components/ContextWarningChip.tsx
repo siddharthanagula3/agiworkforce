@@ -48,6 +48,7 @@ export function ContextWarningChip({
           accessibilityRole="button"
           accessibilityLabel="Chat is getting long. View what is in context"
           testID="context-warning-details"
+          hitSlop={{ top: 6, bottom: 6 }}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minHeight: 32 }}
         >
           <AlertTriangle size={13} color={colors.agentWarning} strokeWidth={2} />

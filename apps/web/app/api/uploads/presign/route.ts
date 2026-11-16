@@ -129,7 +129,7 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     }
   }
   if (kind === 'chat-attachment' || kind === 'knowledge-file') {
-    await admitAttachmentUpload({ db, userId, organizationId, kind, byteCount });
+    await admitAttachmentUpload({ db, userId, organizationId, kind, byteCount, mimeType });
   }
   const key = uploadObjectKey(kind, { userId, projectId: projectId ?? null, fileName });
 

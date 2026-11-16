@@ -27,10 +27,20 @@ jest.mock('@gorhom/bottom-sheet', () => {
 
   const BottomSheet = React.forwardRef(
     (
-      { children, onChange }: { children: React.ReactNode; onChange: (index: number) => void },
+      {
+        children,
+        onChange,
+        onAnimate,
+        onClose,
+      }: {
+        children: React.ReactNode;
+        onChange: (index: number) => void;
+        onAnimate?: (fromIndex: number, toIndex: number) => void;
+        onClose?: () => void;
+      },
       _ref: React.Ref<unknown>,
     ) => (
-      <View testID="bottom-sheet" onChange={onChange}>
+      <View testID="bottom-sheet" onChange={onChange} onAnimate={onAnimate} onClose={onClose}>
         {children}
       </View>
     ),
@@ -127,10 +137,24 @@ jest.mock('../src/features/chat/components/StyleSelector', () => {
   };
 });
 
+jest.mock('../src/features/image/components/AuthorizedImage', () => {
+  const { View } = require('react-native');
+  return {
+    AuthorizedImage: ({
+      uri,
+      onUnavailableChange,
+    }: {
+      uri: string;
+      onUnavailableChange?: (unavailable: boolean) => void;
+    }) => <View testID={`library-picture:${uri}`} onUnavailableChange={onUnavailableChange} />,
+  };
+});
+
 import { AddToChatSheet } from '../src/features/chat/components/AddToChatSheet';
 import { useChatStore } from '../stores/chatStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useProjectStore } from '../src/features/projects/store';
+import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import {
   activateCloudAccount,
@@ -190,6 +214,7 @@ function resetStores() {
     projects: [],
     activeProjectId: null,
   });
+  useCloudProjectStore.setState({ projects: [], activeProjectId: null });
   useChatAppModeStore.setState({ appMode: 'local' });
   useChatViewStore.setState({ mediaMode: 'text', selectedMediaModel: {} });
   useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
@@ -285,6 +310,112 @@ describe('AddToChatSheet', () => {
     });
     expect(view.queryByLabelText('Attach private.pdf from Library')).toBeNull();
     expect(fetchLibraryPage).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows a Library image as its picture with no file name, and a file by its name', async () => {
+    activateCloudAccount('picker-owner');
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    (fetchLibraryPage as jest.Mock).mockResolvedValue({
+      assets: [
+        {
+          id: 'photo',
+          kind: 'image',
+          fileName: 'IMG_0002.jpg',
+          uri: '/api/files/photo',
+          mimeType: 'image/jpeg',
+          sourceLabel: 'mobile',
+        },
+        {
+          id: 'plan',
+          kind: 'document',
+          fileName: 'plan.pdf',
+          uri: '/api/files/plan',
+          mimeType: 'application/pdf',
+          sourceLabel: 'mobile',
+        },
+      ],
+      hasMore: false,
+      nextOffset: null,
+    });
+    const onAttachFromLibrary = jest.fn();
+    const view = renderSheet({ onAttachFromLibrary });
+    fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+
+    const picture = await view.findByLabelText('Attach IMG_0002.jpg from Library');
+    expect(view.getByTestId('library-picture:/api/files/photo')).toBeTruthy();
+    expect(view.queryByText('IMG_0002.jpg')).toBeNull();
+    expect(view.getByText('plan.pdf')).toBeTruthy();
+    expect(view.queryByTestId('library-picture:/api/files/plan')).toBeNull();
+
+    fireEvent.press(picture);
+    expect(onAttachFromLibrary).toHaveBeenCalledTimes(1);
+    expect(onAttachFromLibrary.mock.calls[0][0]).toMatchObject({
+      fileName: 'IMG_0002.jpg',
+      mimeType: 'image/jpeg',
+    });
+  });
+
+  describe('Library picture thumbnails', () => {
+    const photoAsset = {
+      id: 'photo',
+      kind: 'image',
+      fileName: 'IMG_0002.jpg',
+      uri: '/api/files/photo',
+      mimeType: 'image/jpeg',
+      sourceLabel: 'mobile',
+    };
+
+    async function openSheetWith(asset: Record<string, unknown>) {
+      activateCloudAccount('picker-owner');
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      (fetchLibraryPage as jest.Mock).mockResolvedValue({
+        assets: [asset],
+        hasMore: false,
+        nextOffset: null,
+      });
+      const onAttachFromLibrary = jest.fn();
+      const view = renderSheet({ onAttachFromLibrary });
+      fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+      await view.findByLabelText('Attach IMG_0002.jpg from Library');
+      return { view, onAttachFromLibrary };
+    }
+
+    it('draws the thumbnail and attaches the full file', async () => {
+      const { view, onAttachFromLibrary } = await openSheetWith({
+        ...photoAsset,
+        thumbnailUri: '/api/files/photo/thumbnail',
+      });
+
+      expect(view.getByTestId('library-picture:/api/files/photo/thumbnail')).toBeTruthy();
+      expect(view.queryByTestId('library-picture:/api/files/photo')).toBeNull();
+
+      fireEvent.press(view.getByLabelText('Attach IMG_0002.jpg from Library'));
+      expect(onAttachFromLibrary.mock.calls[0][0]).toMatchObject({ uri: '/api/files/photo' });
+    });
+
+    it('draws the full file once when the thumbnail is unavailable', async () => {
+      const { view } = await openSheetWith({
+        ...photoAsset,
+        thumbnailUri: '/api/files/photo/thumbnail',
+      });
+
+      fireEvent(
+        view.getByTestId('library-picture:/api/files/photo/thumbnail'),
+        'unavailableChange',
+        true,
+      );
+
+      expect(view.getByTestId('library-picture:/api/files/photo')).toBeTruthy();
+      expect(view.queryByTestId('library-picture:/api/files/photo/thumbnail')).toBeNull();
+    });
+
+    it('draws the full file for a picture with no thumbnail', async () => {
+      const { view } = await openSheetWith(photoAsset);
+
+      expect(view.getByTestId('library-picture:/api/files/photo')).toBeTruthy();
+      fireEvent(view.getByTestId('library-picture:/api/files/photo'), 'unavailableChange', true);
+      expect(view.getByTestId('library-picture:/api/files/photo')).toBeTruthy();
+    });
   });
 
   it('revokes a retained row callback when the same scope is reopened', async () => {
@@ -502,6 +633,27 @@ describe('AddToChatSheet', () => {
       const { getByText } = renderSheet();
 
       expect(getByText('Study and learn')).toBeTruthy();
+    });
+
+    it('tells the composer before it leaves for Study or Connectors', async () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ grantedCapabilities: ['canUseConnectors'] });
+      mockFetchConnectorDirectory.mockResolvedValue({
+        connectors: [],
+        available: [],
+        entries: [],
+        policy: null,
+      });
+      const onStartComposerRoundTrip = jest.fn();
+
+      const { getByText, getByLabelText } = renderSheet({ onStartComposerRoundTrip });
+
+      fireEvent.press(getByText('Study and learn'));
+      expect(onStartComposerRoundTrip).toHaveBeenCalledTimes(1);
+
+      await waitFor(() => expect(getByLabelText('Connectors')).toBeTruthy());
+      fireEvent.press(getByLabelText('Connectors'));
+      expect(onStartComposerRoundTrip).toHaveBeenCalledTimes(2);
     });
 
     it('lets this chat turn web search and each connected app on or off', async () => {
@@ -817,6 +969,20 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Create image')).toBeNull();
     });
 
+    it('shows Web search only for a model the turn would send it to', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseWebSearch'] } as never);
+      useModelStore.setState({ selectedModel: SEARCH_UNSUPPORTED_MODEL_ID });
+
+      const unsupported = renderSheet();
+      expect(unsupported.queryByText('Web search')).toBeNull();
+      unsupported.unmount();
+
+      useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
+      const capable = renderSheet();
+      expect(capable.getByLabelText('Web search on')).toBeTruthy();
+    });
+
     it('keeps Web search out of the + sheet when a Cloud generic backend is available', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useModelStore.setState({ selectedModel: SEARCH_UNSUPPORTED_MODEL_ID });
@@ -917,6 +1083,88 @@ describe('AddToChatSheet', () => {
       expect(getByText('My Project')).toBeTruthy();
     });
 
+    it('shows the project of the open conversation instead of the global scope', () => {
+      const now = new Date().toISOString();
+      useProjectStore.setState({
+        projects: [
+          {
+            id: 'proj-1',
+            name: 'Scoped Project',
+            description: '',
+            instructions: '',
+            createdAt: now,
+            updatedAt: now,
+          },
+          {
+            id: 'proj-2',
+            name: 'Conversation Project',
+            description: '',
+            instructions: '',
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        activeProjectId: 'proj-1',
+      });
+
+      const { getByText, queryByText } = renderSheet({ conversationProjectId: 'proj-2' });
+
+      expect(getByText('Conversation Project')).toBeTruthy();
+      expect(queryByText('Scoped Project')).toBeNull();
+    });
+
+    it('shows Choose for a conversation without a project even when a scope is active', () => {
+      const now = new Date().toISOString();
+      useProjectStore.setState({
+        projects: [
+          {
+            id: 'proj-1',
+            name: 'Scoped Project',
+            description: '',
+            instructions: '',
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        activeProjectId: 'proj-1',
+      });
+
+      const { getByText, queryByText } = renderSheet({ conversationProjectId: null });
+
+      expect(getByText('Choose')).toBeTruthy();
+      expect(queryByText('Scoped Project')).toBeNull();
+    });
+
+    it('shows Choose in Cloud mode when the conversation project was deleted on this device', () => {
+      const now = new Date().toISOString();
+      const cloudProject = {
+        id: 'cloud-proj',
+        name: 'Deleted Cloud Project',
+        description: null,
+        instructions: null,
+        color: null,
+        isArchived: false,
+        metadata: null,
+        source: 'mobile' as const,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: now,
+      };
+      useCloudProjectStore.setState({ projects: [cloudProject], activeProjectId: null });
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+
+      const { getByText, queryByText } = renderSheet({ conversationProjectId: 'cloud-proj' });
+
+      expect(queryByText('Deleted Cloud Project')).toBeNull();
+      expect(getByText('Choose')).toBeTruthy();
+
+      act(() => {
+        useCloudProjectStore.setState({ projects: [{ ...cloudProject, deletedAt: null }] });
+      });
+
+      expect(getByText('Deleted Cloud Project')).toBeTruthy();
+    });
+
     it('uses the Cloud project store without leaking a Local project name', () => {
       useProjectStore.setState({
         projects: [
@@ -938,6 +1186,51 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Project')).toBeTruthy();
       expect(queryByText('My Project')).toBeNull();
       expect(queryByText('Choose style')).toBeTruthy();
+    });
+  });
+
+  describe('hardware back', () => {
+    it('closes the sheet on back only while it is open', () => {
+      const { BackHandler } = require('react-native');
+      const remove = jest.fn();
+      const add = jest
+        .spyOn(BackHandler, 'addEventListener')
+        .mockImplementation(() => ({ remove }));
+      const sheetRef = { current: { close: jest.fn() } };
+      const view = render(<AddToChatSheet {...defaultProps} ref={sheetRef as never} />);
+      expect(add).not.toHaveBeenCalled();
+
+      fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+      const handler = add.mock.calls.at(-1)?.[1] as () => boolean;
+
+      expect(add).toHaveBeenCalledWith('hardwareBackPress', expect.any(Function));
+      expect(handler()).toBe(true);
+      expect(sheetRef.current.close).toHaveBeenCalledTimes(1);
+
+      fireEvent(view.getByTestId('bottom-sheet'), 'change', -1);
+      expect(remove).toHaveBeenCalledTimes(1);
+      add.mockRestore();
+    });
+
+    it('answers back while the sheet slides open and lets it go when that opening is closed', () => {
+      const { BackHandler } = require('react-native');
+      const remove = jest.fn();
+      const add = jest
+        .spyOn(BackHandler, 'addEventListener')
+        .mockImplementation(() => ({ remove }));
+      const sheetRef = { current: { close: jest.fn() } };
+      const view = render(<AddToChatSheet {...defaultProps} ref={sheetRef as never} />);
+
+      fireEvent(view.getByTestId('bottom-sheet'), 'animate', -1, 0);
+      const handler = add.mock.calls.at(-1)?.[1] as () => boolean;
+
+      expect(add).toHaveBeenCalledTimes(1);
+      expect(handler()).toBe(true);
+      expect(sheetRef.current.close).toHaveBeenCalledTimes(1);
+
+      fireEvent(view.getByTestId('bottom-sheet'), 'close');
+      expect(remove).toHaveBeenCalledTimes(1);
+      add.mockRestore();
     });
   });
 });

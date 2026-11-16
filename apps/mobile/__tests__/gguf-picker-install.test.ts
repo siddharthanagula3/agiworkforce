@@ -1,4 +1,3 @@
-
 import type { OnDeviceModel } from '@agiworkforce/types';
 import { getModelsForRole } from '@agiworkforce/local-llm';
 import {
@@ -13,6 +12,7 @@ import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
 jest.mock('@/services/modelDownload', () => ({
   downloadModel: jest.fn(),
+  excludeModelFilesFromBackup: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('@/storage/installedModels', () => ({

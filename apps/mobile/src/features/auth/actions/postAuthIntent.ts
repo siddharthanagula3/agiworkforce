@@ -2,6 +2,8 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   DEFAULT_LOCAL_MODEL_ID,
   getDefaultCloudModelIdForTier,
+  isAutoMode,
+  isCloudManagedModelId,
 } from '@/src/features/model-picker/service';
 import { useModelStore } from '@/src/features/model-picker/store';
 import {
@@ -26,13 +28,14 @@ export function applyPostAuthIntentAfterSignIn(
     return false;
   }
 
-  useModelStore.getState().setModel(defaultCloudModelId);
-  if (useModelStore.getState().selectedModel !== defaultCloudModelId) {
+  useChatAppModeStore.getState().setAppMode('cloud');
+  useModelStore.getState().restoreNewChatModel();
+  const { selectedModel } = useModelStore.getState();
+  if (!isCloudManagedModelId(selectedModel) && !isAutoMode(selectedModel)) {
     resetPostAuthDestinationToLocal();
     return false;
   }
 
-  useChatAppModeStore.getState().setAppMode('cloud');
   return true;
 }
 

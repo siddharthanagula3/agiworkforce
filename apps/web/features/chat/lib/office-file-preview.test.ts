@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WorkbookFormatError } from '@agiworkforce/unified-chat/tabular';
 import { DecompressionLimitError } from '@/lib/security/archive-budget';
 import {
   XLSX_NOT_CALCULATED,
@@ -12,8 +13,16 @@ import {
   PresentationPreviewLimitError,
   loadWorkbookSheets,
   pptxToSlidesMarkdown,
-  xlsxSheets,
 } from './office-file-preview';
+
+async function xlsxSheets(data: ArrayBuffer) {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(data)));
+  try {
+    return await loadWorkbookSheets('/api/files/workbook');
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
 
 async function xlsxFirstSheetToCsv(data: ArrayBuffer): Promise<string> {
   return (await xlsxSheets(data))[0]?.csv ?? '';
@@ -125,7 +134,7 @@ describe('Office preview decompression limits', () => {
     zip.file('xl/worksheets/sheet1.xml', `<worksheet>${' '.repeat(1_000_000)}</worksheet>`);
     await expect(
       xlsxSheets(await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' })),
-    ).rejects.toBeInstanceOf(DecompressionLimitError);
+    ).rejects.toBeInstanceOf(WorkbookFormatError);
   });
 
   it('rejects a slide preview that exceeds the decompression ratio', async () => {
@@ -302,6 +311,12 @@ describe('xlsxSheets', () => {
     expect(sheets).toEqual([{ name: 'Sheet1', csv: '1' }]);
   });
 
+  it('keeps cells that carry no reference in the order they are written', async () => {
+    expect(
+      await xlsxFirstSheetToCsv(await workbook('<row><c><v>a</v></c><c><v>b</v></c></row>')),
+    ).toBe('a,b');
+  });
+
   it('returns nothing for an archive with no worksheet', async () => {
     expect(await xlsxSheets(await new JSZip().generateAsync({ type: 'arraybuffer' }))).toEqual([]);
   });
@@ -402,11 +417,11 @@ describe('workbook serialized preview bound', () => {
   });
 
   it('counts CSV quoting before allocating its escaped output', async () => {
-    const quotes = '&quot;'.repeat(MAX_FILE_TEXT_CHARS / 2);
+    const quotes = '"'.repeat(MAX_FILE_TEXT_CHARS / 2);
     await expect(
       xlsxSheets(await workbook(`<row><c r="A1"><v>${quotes}</v></c></row>`)),
     ).rejects.toBeInstanceOf(WorkbookPreviewLimitError);
-    const accepted = '&quot;'.repeat((MAX_FILE_TEXT_CHARS - 2) / 2);
+    const accepted = '"'.repeat((MAX_FILE_TEXT_CHARS - 2) / 2);
     expect(
       (await xlsxFirstSheetToCsv(await workbook(`<row><c><v>${accepted}</v></c></row>`))).length,
     ).toBe(MAX_FILE_TEXT_CHARS);
@@ -428,10 +443,10 @@ describe('workbook serialized preview bound', () => {
     expect(
       await xlsxFirstSheetToCsv(
         await workbook(
-          `<row><c r="A1"><v>${'x'.repeat(MAX_FILE_TEXT_CHARS + 1)}</v></c><c r="A1"/></row>`,
+          `<row><c r="A1"><v>${'x'.repeat(MAX_FILE_TEXT_CHARS * 0.6)}</v></c><c r="A1"><v>y</v></c></row>`,
         ),
       ),
-    ).toBe('');
+    ).toBe('y');
   });
 
   it('retains inline rich-text escaping across text runs', async () => {

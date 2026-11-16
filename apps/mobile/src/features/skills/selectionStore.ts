@@ -3,6 +3,7 @@ import { create } from 'zustand';
 export interface MobileSkillSelection {
   ownerId: string;
   name: string;
+  requiredTools?: readonly string[];
 }
 
 interface MobileSkillSelectionState {

@@ -230,12 +230,23 @@ describe('Clerk native pending-session policy', () => {
     );
     const accountScoped = dependencySets.filter((deps) => deps.includes('isClerkSignedIn'));
 
-    // Two effects are deliberately not account-scoped: one mirrors the signed-in
-    // boolean onto the notification service, the other reacts to a pairing URL.
+    // Three effects are deliberately not account-scoped: one mirrors the signed-in
+    // boolean onto the notification service, and two handle a link arrival once,
+    // a pairing link and a chat link that asks a signed-out person to sign in.
     const notAccountScoped = accountScoped.filter((deps) => !deps.includes('clerkUserId'));
     expect(notAccountScoped).toEqual([
       ['isClerkSignedIn'],
-      ['url', 'isClerkSignedIn', 'isInitialized', 'router'],
+      ['linkArrival', 'isClerkSignedIn', 'isInitialized', 'router'],
+      [
+        'linkArrival',
+        'authEnabled',
+        'isInitialized',
+        'isMmkvReady',
+        'isClerkLoaded',
+        'isClerkSignedIn',
+        'segments',
+        'router',
+      ],
     ]);
 
     // Everything else that reads the session must re-run when the person behind

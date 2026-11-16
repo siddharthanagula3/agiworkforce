@@ -794,7 +794,7 @@
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/app/api/feedback/route.ts#storedMessage",
-        "apps/web/app/api/feedback/response-rating-contract.ts#WEB_RESPONSE_RATING_MESSAGE",
+        "packages/contracts/cloud-contracts/src/response-rating.ts#WEB_RESPONSE_RATING_MESSAGE",
         "apps/web/lib/server/account-erasure.ts"
       ],
       "proof": [
@@ -1666,6 +1666,171 @@
           "kind": "test",
           "file": "apps/web/features/settings/components/BulkConversationControls.test.tsx",
           "name": "reserves one count and exact confirmation, including repeated confirm and cancel callbacks"
+        }
+      ]
+    },
+    {
+      "id": "delete-without-sign-in-uses-privacy-request",
+      "doc": "delete-your-account",
+      "section": "Delete your account on the web",
+      "kind": "prose",
+      "sentence": "If you cannot sign in, email [{{CONTACT.email}}](mailto:{{CONTACT.email}}?subject=Privacy%20request) from your account address with the subject line \"Privacy request\", or use the form at [agiworkforce.com/privacy/requests](https://agiworkforce.com/privacy/requests), which gives you a reference.",
+      "implementation": [
+        "apps/web/app/api/privacy/requests/route.ts",
+        "apps/web/app/privacy/requests/RightsRequestForm.tsx",
+        "apps/web/lib/legal-constants.ts"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/legal-constants.ts",
+          "text": "privacy: 'Privacy request'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/support/agent/corpus/index.ts",
+          "text": "'CONTACT.email': CONTACT_EMAIL"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/privacy/page.tsx",
+          "text": "from your account address with the subject line"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/privacy/requests/RightsRequestForm.tsx",
+          "text": "label: 'Erasure: delete personal data you hold about me'"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/privacy/requests/route.test.ts",
+          "name": "still returns the reference but records the failure when the alert cannot be delivered"
+        }
+      ]
+    },
+    {
+      "id": "delete-erases-records-objects-and-identity",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "The daily job erases your user-scoped records and stored objects and deletes your identity at our authentication provider.",
+      "implementation": [
+        "apps/web/lib/server/scheduled-account-erasure.ts",
+        "apps/web/lib/server/account-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "tombstones before erasing, settles the tombstone, then deletes the identity and profile"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "erases every listed table, anonymizes shared rows, and removes the profile last"
+        }
+      ]
+    },
+    {
+      "id": "delete-security-audit-log-kept-90-days",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "The security audit log keeps an entry for 90 days.",
+      "implementation": ["apps/web/app/api/cron/purge-security-audit-logs/route.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/db/neon/0020_functions.sql",
+          "text": "Deletes security_audit_logs rows older than 90 days."
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/privacy/__tests__/retention-claims-match-crons.test.ts",
+          "name": "has the audit-log purge cron the policy now cites"
+        }
+      ]
+    },
+    {
+      "id": "delete-erasure-keeps-audit-entries",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "Erasure does not purge them.",
+      "implementation": ["apps/web/lib/server/account-erasure.ts", "apps/web/app/privacy/page.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/privacy/page.tsx",
+          "text": "Erasure does not purge them."
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/help/__tests__/DeleteYourAccountArticle.test.tsx",
+          "name": "quotes the privacy policy on how long organisation audit log entries are kept"
+        }
+      ]
+    },
+    {
+      "id": "delete-organisation-audit-log-no-automatic-end",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "Organisation audit log entries have no automatic end date: a separate privileged routine exists to purge them, and it is not part of the automatic path.",
+      "implementation": ["apps/web/app/privacy/page.tsx", "vercel.json"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/privacy/page.tsx",
+          "text": "a separate privileged routine exists to purge them, and it is not part of the automatic path."
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/help/__tests__/DeleteYourAccountArticle.test.tsx",
+          "name": "quotes the privacy policy on how long organisation audit log entries are kept"
+        }
+      ]
+    },
+    {
+      "id": "delete-erasure-record-survives",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "A record that you were erased, so the system can tell that you must stay erased.",
+      "implementation": [
+        "apps/web/lib/server/account-erasure.ts",
+        "apps/web/lib/server/scheduled-account-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "erases NOTHING when the tombstone cannot be written"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/tombstone-resweep.test.ts",
+          "name": "erases the residual rows, settles the tombstone and leaves the identity provider alone"
+        }
+      ]
+    },
+    {
+      "id": "delete-organisation-rows-keep-without-you",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "Rows that belong to an organisation rather than to you, such as its billing ledger row with your user id removed.",
+      "implementation": ["apps/web/lib/server/account-erasure.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/account-erasure.ts",
+          "text": "table: 'organization_usage_ledger'"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "erases every listed table, anonymizes shared rows, and removes the profile last"
         }
       ]
     },
@@ -7833,6 +7998,15 @@
   ],
   "narrative": [
     {
+      "id": "delete-vendor-logs-and-snapshots",
+      "doc": "delete-your-account",
+      "section": "What is deleted and what is kept",
+      "kind": "prose",
+      "sentence": "Platform logs and database or object-storage snapshots, retained according to our hosting vendors' own configuration.",
+      "implementation": ["apps/web/app/privacy/page.tsx"],
+      "why": "external-fact"
+    },
+    {
       "id": "privacy-settings-gathers-the-controls",
       "doc": "privacy-controls",
       "section": "Your data in the product",
@@ -8040,15 +8214,6 @@
       "sentence": "Connecting is not the same as granting scopes.",
       "implementation": ["apps/web/features/connectors/components/ToolPermissionsPanel.tsx"],
       "why": "editorial-rule"
-    },
-    {
-      "kind": "prose",
-      "id": "schedules-pricing-figures",
-      "doc": "schedules-and-triggers",
-      "section": "Limits",
-      "sentence": "The pricing page carries the current per-plan figures.",
-      "implementation": ["packages/contracts/types/src/billing-catalog.ts"],
-      "why": "reader-instruction"
     },
     {
       "id": "enterprise-roadmap-carries-no-date",

@@ -83,6 +83,26 @@ describe('tier metered-unit allowances', () => {
     expect(FREE_POLICY.voiceMinutesPerMonth).toBe(10);
   });
 
+  it.each(['basic', 'pro', 'team', 'max', 'max_15x', 'enterprise'] as const)(
+    'sets no monthly voice minute cap on %s, whose voice is paid from the usage budget',
+    async (planTier) => {
+      expect(getTierUnitAllowance(planTier, 'voice_minutes')).toEqual({
+        hardLimit: null,
+        softLimit: null,
+      });
+      const db = dbReturning(10_000 * 60);
+      const decision = await assertTierUnitAllowance({
+        db,
+        userId: 'user-paid',
+        planTier,
+        unit: 'voice_minutes',
+        requestedUnits: 1,
+      });
+      expect(decision).toMatchObject({ hardLimit: null, softLimitReached: false });
+      expect(db.query).not.toHaveBeenCalled();
+    },
+  );
+
   it('exposes both computer-use ceilings the tier policy documents', () => {
     expect(getTierUnitAllowance('max', 'computer_use_requests')).toEqual({
       hardLimit: MAX_POLICY.computerUseHardCap,

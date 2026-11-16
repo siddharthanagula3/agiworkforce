@@ -19,6 +19,7 @@ export type StepUpLevel = (typeof STEP_UP_LEVELS)[number];
 
 export type StepUpAction =
   | 'account.delete'
+  | 'account_security.change'
   | 'organization.transfer_ownership'
   | 'password.change'
   | 'session.revoke_all'

@@ -5,7 +5,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { collectMessageResearchSources } from '@/features/chat/utils/research-sources';
+import { collectMessageResearchSources } from '@agiworkforce/unified-chat/message-sources';
 import {
   FOLLOW_UP_SUGGESTIONS_METADATA_KEY,
   generateFollowUpSuggestions,

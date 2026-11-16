@@ -2,6 +2,7 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { Alert } from 'react-native';
+import { chooseActionMenuItem } from '@/test-utils/actionMenu';
 import type { ReactTestInstance } from 'react-test-renderer';
 
 const mockInsetBottom = 34;
@@ -131,6 +132,7 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => ({
 
 import { api } from '@/services/api';
 import { LibraryScreen } from '../src/features/library';
+import { HEADER_TEXT_SCALE_LIMIT } from '../src/features/chat/components/WorkModeSwitch';
 
 const mockApi = api as unknown as { get: jest.Mock; delete: jest.Mock };
 
@@ -227,13 +229,8 @@ describe('Library bottom-anchored search', () => {
       ['Type', 'type'],
     ]) {
       fireEvent.press(screen.getByLabelText('Library options'));
-      const menu = alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>;
-      act(() => menu.find((option) => option.text === 'Sort saved files')?.onPress?.());
-      const sortOptions = alert.mock.calls.at(-1)?.[2] as Array<{
-        text: string;
-        onPress?: () => void;
-      }>;
-      act(() => sortOptions.find((option) => option.text === label)?.onPress?.());
+      chooseActionMenuItem('Sort saved files');
+      chooseActionMenuItem(label!);
       await waitFor(() =>
         expect(mockApi.get).toHaveBeenCalledWith(expect.stringContaining(`sort=${sort}`)),
       );
@@ -260,8 +257,7 @@ describe('Library bottom-anchored search', () => {
     );
 
     fireEvent.press(screen.getByLabelText('Library options'));
-    const menu = alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>;
-    act(() => menu.find((option) => option.text === 'Select saved files')?.onPress?.());
+    chooseActionMenuItem('Select saved files');
     fireEvent.press(screen.getByTestId('library-select-all-shown'));
     expect(screen.getByText('2 selected')).toBeTruthy();
     expect(screen.getByTestId('library-share-selected').props.accessibilityState.disabled).toBe(
@@ -282,6 +278,22 @@ describe('Library bottom-anchored search', () => {
     alert.mockRestore();
   });
 
+  it('keeps the Done label in selection mode on one line and capped at large text sizes', async () => {
+    mockApi.get.mockResolvedValue({ items: [HOSTED_DOCUMENT], has_more: false, next_offset: null });
+    const screen = render(<LibraryScreen />);
+    await waitFor(() =>
+      expect(screen.getByTestId(`library-document-card-${HOSTED_DOCUMENT.id}`)).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByLabelText('Library options'));
+    chooseActionMenuItem('Select saved files');
+
+    const done = screen.getByText('Done');
+    expect(done.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+    expect(done.props.numberOfLines).toBe(1);
+    expect(done.props.adjustsFontSizeToFit).toBe(true);
+  });
+
   it('leaves a failed deletion selected for retry', async () => {
     mockApi.delete.mockResolvedValue({ success: false });
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
@@ -291,8 +303,7 @@ describe('Library bottom-anchored search', () => {
     );
 
     fireEvent.press(screen.getByLabelText('Library options'));
-    const menu = alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>;
-    act(() => menu.find((option) => option.text === 'Select saved files')?.onPress?.());
+    chooseActionMenuItem('Select saved files');
     fireEvent.press(screen.getByLabelText('Select launch-plan.pdf'));
     expect(screen.getByTestId('library-share-selected').props.accessibilityState.disabled).toBe(
       false,
@@ -319,8 +330,7 @@ describe('Library bottom-anchored search', () => {
     );
 
     fireEvent.press(screen.getByLabelText('Library options'));
-    const menu = alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>;
-    act(() => menu.find((option) => option.text === 'Select saved files')?.onPress?.());
+    chooseActionMenuItem('Select saved files');
     fireEvent.press(screen.getByLabelText('Select launch-plan.pdf'));
     expect(screen.getByText('1 selected')).toBeTruthy();
 

@@ -4,6 +4,8 @@ import {
   createMapSearchToolDefinition,
   executeMapSearchTool,
   hasMapSearchIntent,
+  MAP_RESULTS_UNAVAILABLE_TITLE,
+  MAP_SEARCH_TOOL_NAME,
 } from './map-search-tool-service';
 
 const NOW = () => new Date('2026-08-11T12:00:00.000Z');
@@ -46,9 +48,9 @@ describe('map search tool service', () => {
     expect(outcome.card.body.places?.[0]?.label).toContain('Travis County');
   });
 
-  it('still ships a link-only card when the query cannot be geocoded', async () => {
+  it('says map results are not available, with one maps search link, when no place is found', async () => {
     const outcome = await executeMapSearchTool(
-      { query: 'somewhere that does not resolve' },
+      { query: 'somewhere that does not resolve', title: 'Coffee near somewhere' },
       { toolCallId: 'fixture-unresolved', now: NOW, resolveView: async () => null },
     );
 
@@ -56,7 +58,14 @@ describe('map search tool service', () => {
     if (!outcome.ok || !outcome.card.recognized || outcome.card.kind !== 'map-search.v1') return;
     expect(outcome.card.body.view).toBeUndefined();
     expect(outcome.card.body.places).toBeUndefined();
-    expect(outcome.card.body.actions).toHaveLength(2);
+    expect(outcome.card.body.title).toBe(MAP_RESULTS_UNAVAILABLE_TITLE);
+    expect(outcome.card.fallback.headline).toBe(MAP_RESULTS_UNAVAILABLE_TITLE);
+    expect(outcome.card.body.actions).toHaveLength(1);
+    expect(outcome.card.body.actions[0]?.provider).toBe('google_maps');
+    expect(outcome.card.body.actions[0]?.url).toContain('somewhere+that+does+not+resolve');
+    expect(outcome.content).toContain('No place data');
+    expect(outcome.content).toContain(`Do not call ${MAP_SEARCH_TOOL_NAME} again`);
+    expect(outcome.content).not.toContain('Rendered a map card');
   });
 
   it('keeps an unresolved stop on the card and tells the model it is missing', async () => {

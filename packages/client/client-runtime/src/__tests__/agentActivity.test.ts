@@ -29,6 +29,126 @@ function envelope(sequence: number, event: AgentEvent): AgentEventEnvelope {
   };
 }
 
+describe('a declined tool call', () => {
+  it('stays declined when the server ends it without an error', () => {
+    const start = startAgentActivityLocally({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      summary: 'Starting',
+      startedAtMs: 900,
+    });
+    let state = applyAgentActivityEvent(
+      start,
+      envelope(0, {
+        type: 'approval-requested',
+        approvalId: 'search-1',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Search the web',
+        input: { query: 'headline' },
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(1, { type: 'approval-resolved', approvalId: 'search-1', decision: 'denied' }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(2, {
+        type: 'tool-execution-end',
+        toolCallId: 'search-1',
+        name: 'web_search',
+        output: 'The user denied permission to run this tool.',
+        isError: false,
+        elapsedMs: 0,
+      }),
+    );
+    const entry = state.entries.find((candidate) => candidate.id === 'tool:search-1');
+    expect(isToolEntry(entry) && entry.approval?.decision).toBe('denied');
+    expect(isToolEntry(entry) && entry.status).toBe('failed');
+    expect(isToolEntry(entry) && entry.summary).toBe('Search the web');
+    expect(isToolEntry(entry) && entry.error).toBe('Tool use denied');
+    expect(isToolEntry(entry) && entry.completedAtMs).toBe(1_200);
+
+    state = applyAgentActivityEvent(state, envelope(3, { type: 'stop', reason: 'end-turn' }));
+    expect(state.status).toBe('completed');
+  });
+
+  it('asks afresh when a decided call id is requested again for another tool', () => {
+    let state = applyAgentActivityEvent(
+      undefined,
+      envelope(0, {
+        type: 'approval-requested',
+        approvalId: 'call-1',
+        toolCallId: 'call-1',
+        name: 'web_search',
+        category: 'web-search',
+        summary: 'Search the web',
+        input: { query: 'headline' },
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(1, { type: 'approval-resolved', approvalId: 'call-1', decision: 'denied' }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(2, {
+        type: 'tool-execution-end',
+        toolCallId: 'call-1',
+        name: 'web_search',
+        output: 'The user denied permission to run this tool.',
+        isError: false,
+        elapsedMs: 0,
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(3, {
+        type: 'source-list',
+        toolCallId: 'call-1',
+        query: 'headline',
+        sources: [{ url: 'https://example.com/news', title: 'News' }],
+      }),
+    );
+    state = applyAgentActivityEvent(
+      state,
+      envelope(4, {
+        type: 'approval-requested',
+        approvalId: 'call-1-again',
+        toolCallId: 'call-1',
+        name: 'run_command',
+        category: 'shell',
+        summary: 'Run a command',
+        input: { command: 'ls' },
+      }),
+    );
+
+    const tools = state.entries.filter(isToolEntry);
+    expect(tools).toHaveLength(1);
+    const [entry] = tools;
+    expect(entry).toMatchObject({
+      name: 'run_command',
+      category: 'shell',
+      summary: 'Run a command',
+      input: { command: 'ls' },
+      status: 'awaiting-approval',
+      approval: { id: 'call-1-again' },
+    });
+    expect(entry?.approval?.decision).toBeUndefined();
+    expect(entry).not.toHaveProperty('error');
+    expect(entry).not.toHaveProperty('output');
+    expect(entry).not.toHaveProperty('elapsedMs');
+    expect(entry).not.toHaveProperty('completedAtMs');
+    expect(entry).not.toHaveProperty('unavailable');
+    expect(entry).not.toHaveProperty('sources');
+    expect(entry).not.toHaveProperty('query');
+    expect(entry?.startedAtMs).toBe(1_400);
+    expect(state.status).toBe('awaiting-approval');
+  });
+});
+
 describe('portable agent activity projection', () => {
   it('creates a local starting action that canonical provider activity replaces', () => {
     const starting = startAgentActivityLocally({

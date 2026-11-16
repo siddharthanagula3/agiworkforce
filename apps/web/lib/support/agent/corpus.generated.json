@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 46,
-  "chunkCount": 259,
+  "chunkCount": 262,
   "documents": [
     {
       "id": "account-security",
@@ -924,34 +924,55 @@
         "account erasure",
         "remove my data"
       ],
-      "description": "How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.",
-      "updated": "2026-11-12",
+      "description": "How to delete your account on the web or in the AGI Mobile app, what is deleted and what is kept, how to cancel a scheduled deletion and how to delete conversations without deleting the account.",
+      "updated": "2026-11-15",
       "source": "content/support/delete-your-account.md",
       "chunks": [
         {
           "id": "delete-your-account#0",
           "ordinal": 0,
+          "heading": "Delete your account on the web",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › Delete your account on the web",
+          "text": "You can delete your AGI Mobile account here on the web, without the app. Sign\nin at [agiworkforce.com/settings/account](https://agiworkforce.com/settings/account)\nwith the account you use in the app and choose **Delete account**. It is the\nsame request the app makes, with the same cancellation window.\n\nIf you cannot sign in, email\n[{{CONTACT.email}}](mailto:{{CONTACT.email}}?subject=Privacy%20request) from\nyour account address with the subject line \"Privacy request\", or use the form\nat [agiworkforce.com/privacy/requests](https://agiworkforce.com/privacy/requests),\nwhich gives you a reference. Requests are worked by a person, not by an\nautomatic process.\n\nIf you created the account in the iPhone app with Sign in with Apple and the\nsign-in page here has no Apple button, use the form at\n[agiworkforce.com/privacy/requests](https://agiworkforce.com/privacy/requests),\nchoose Erasure and say in the details that you signed up with Apple."
+        },
+        {
+          "id": "delete-your-account#1",
+          "ordinal": 1,
           "heading": "How deletion works",
           "headingPath": "Delete your account, or cancel a scheduled deletion › How deletion works",
           "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and its Cloud data are scheduled for permanent deletion,\nand erasure starts after a cancellation deadline 24 hours later. It also says\nthat anything the law or an active legal hold requires us to keep is kept.\n\nIn the AGI Mobile app for iPhone and Android, Settings, Account carries\n**Delete Account**.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes.\n\nIf an active legal hold covers your account, for example one your workspace has\nplaced, nothing is erased until the hold is released."
         },
         {
-          "id": "delete-your-account#1",
-          "ordinal": 1,
+          "id": "delete-your-account#2",
+          "ordinal": 2,
+          "heading": "What is deleted and what is kept",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › What is deleted and what is kept",
+          "text": "The daily job erases your user-scoped records and stored objects and deletes\nyour identity at our authentication provider. Section 05 of the\n[privacy policy](https://agiworkforce.com/privacy#s-05) holds the full retention\nschedule and says why each of these is kept after erasure:\n\n- Security and organisation audit log entries naming you. Erasure does not purge\n  them. The security audit log keeps an entry for 90 days. Organisation audit log\n  entries have no automatic end date: a separate privileged routine exists to\n  purge them, and it is not part of the automatic path.\n- A record that you were erased, so the system can tell that you must stay\n  erased.\n- Double-charge protection keys, deleted once their 24-hour window closes, and\n  any payment still moving when you delete.\n- Rows that belong to an organisation rather than to you, such as its billing\n  ledger row with your user id removed. Books of account are kept\n  {{RETENTION.statutoryRecordYears}} years and then deleted.\n- Stripe's own record of your payments and invoices, under Stripe's retention.\n- Platform logs and database or object-storage snapshots, retained according to\n  our hosting vendors' own configuration."
+        },
+        {
+          "id": "delete-your-account#3",
+          "ordinal": 3,
           "heading": "Changing your mind",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Changing your mind",
           "text": "The 24 hours are a real cancellation window, not a formality. Sign back in\nbefore the deadline and Settings, Account shows **Account deletion scheduled**\nwith the erasure time and a **Cancel deletion** button. Cancelling keeps the\naccount active and removes nothing. If deleting the account stops your web plan\nfrom renewing, cancelling the deletion turns its renewal back on.\n\nOnce the window closes the button is gone and the page says the cancellation\nwindow has closed and erasure is already underway."
         },
         {
-          "id": "delete-your-account#2",
-          "ordinal": 2,
+          "id": "delete-your-account#4",
+          "ordinal": 4,
+          "heading": "If you signed in with Apple",
+          "headingPath": "Delete your account, or cancel a scheduled deletion › If you signed in with Apple",
+          "text": "Apple keeps AGI Mobile in the list of apps that use Sign in with Apple until you\nremove it there. On iPhone, open Settings, tap your name, tap **Sign in with\nApple**, choose the app and tap **Delete**. Apple's guide is\n[Manage your apps with Sign in with Apple](https://support.apple.com/en-us/102571)."
+        },
+        {
+          "id": "delete-your-account#5",
+          "ordinal": 5,
           "heading": "Before you confirm",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Before you confirm",
           "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf your plan is billed on the web and still renews, deleting your account turns\nits renewal off, so you are not charged again. If you bought the plan from Apple\nor Google, deleting your account does not cancel it: the confirmation says so\nand links to the page where you cancel it with the store. A plan you have already cancelled does not block deletion: it ends when\nerasure runs, and its unused time is not refunded. While a payment on the plan\nis still being collected, the request is refused and nothing is scheduled.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
         },
         {
-          "id": "delete-your-account#3",
-          "ordinal": 3,
+          "id": "delete-your-account#6",
+          "ordinal": 6,
           "heading": "Deleting conversations without deleting the account",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Deleting conversations without deleting the account",
           "text": "Settings, Privacy has narrower controls for the workspace you are currently\nusing. **Archive all chats** moves that workspace's chats out of the sidebar and\ncan be undone from Archived chats. **Delete all chats** moves that workspace's\nactive and archived conversations to Recently deleted, where you can restore\nthem. Both ask first and name the current-workspace scope."
@@ -1205,7 +1226,7 @@
         "install"
       ],
       "description": "How to create an account, start a chat, choose a model route and decide what to set up first.",
-      "updated": "2026-11-10",
+      "updated": "2026-11-16",
       "source": "content/support/getting-started.md",
       "chunks": [
         {
@@ -1213,14 +1234,14 @@
           "ordinal": 0,
           "heading": "Create an account and start a chat",
           "headingPath": "Getting started with AGI › Create an account and start a chat",
-          "text": "Open [Sign up](https://agiworkforce.com/signup), create an account, then open the\nweb chat and send a message. Consult [Plans](https://agiworkforce.com/pricing) and\n[Billing and plans](https://agiworkforce.com/help/billing-and-plans) before\nchoosing an upgrade."
+          "text": "Open [Sign up](https://agiworkforce.com/signup), create an account, then open the\nweb chat and send a message."
         },
         {
           "id": "getting-started#1",
           "ordinal": 1,
           "heading": "Choose a model route",
           "headingPath": "Getting started with AGI › Choose a model route",
-          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI or another client.\n\n- **Local** uses a model served by a local runtime. With an installed CLI and\n  local model server, select Ollama or LM Studio. See\n  [Local mode](https://agiworkforce.com/help/local-mode) for setup.\n- **BYOK** means bringing your own provider API key. See\n  [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login\n  commands, key storage and custom endpoints. Review your provider's billing and\n  data-use terms before using a key.\n- **Managed cloud** uses your AGI account. Review the current plan details on the\n  pricing page.\n\nDesktop chat uses Cloud and Desktop does not accept provider keys; its local\ncoding sessions run the CLI, which can use a local model or a provider key you set\nup there."
+          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI or another client.\n\n- **Local** uses a model served by a local runtime. With an installed CLI and\n  local model server, select Ollama or LM Studio. See\n  [Local mode](https://agiworkforce.com/help/local-mode) for setup.\n- **BYOK** means bringing your own provider API key. See\n  [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login\n  commands, key storage and custom endpoints. Review your provider's billing and\n  data-use terms before using a key.\n- **Managed cloud** uses your AGI account.\n\nDesktop chat uses Cloud and Desktop does not accept provider keys; its local\ncoding sessions run the CLI, which can use a local model or a provider key you set\nup there."
         },
         {
           "id": "getting-started#2",
@@ -2121,7 +2142,7 @@
         "automation"
       ],
       "description": "How to create a schedule or a trigger, what an unattended run means and the limits that apply.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/schedules-and-triggers.md",
       "chunks": [
         {
@@ -2157,7 +2178,7 @@
           "ordinal": 4,
           "heading": "Limits",
           "headingPath": "Schedule a task, or run it on a trigger › Limits",
-          "text": "How many scheduled tasks you can keep depends on your plan, and free and\nBYOK-only accounts have none. A workspace administrator can turn Schedules and\nEvent triggers off for a managed workspace. The pricing page carries the current\nper-plan figures."
+          "text": "How many scheduled tasks you can keep depends on your plan, and free and\nBYOK-only accounts have none. A workspace administrator can turn Schedules and\nEvent triggers off for a managed workspace."
         }
       ]
     },

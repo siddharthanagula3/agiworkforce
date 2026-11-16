@@ -22,6 +22,7 @@ import {
   isCloudAgentRunHumanHeld,
   requestCloudAgentRunCancellation,
 } from '@/lib/services/cloud-agent-run-service';
+import { recordStoppedRunAssistantTurn } from '../../lib/stopped-run-turn';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -82,6 +83,11 @@ async function handleCancel(request: NextRequest, context: RouteContext) {
     const run = isCloudAgentRunHumanHeld(parked)
       ? await cancelHumanHeldCloudAgentRun(db, { userId, runId })
       : requested;
+    await recordStoppedRunAssistantTurn({
+      userId,
+      organizationId: organizationId ?? null,
+      runId,
+    });
     await recordAuditEvent({
       userId,
       organizationId,

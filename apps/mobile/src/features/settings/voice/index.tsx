@@ -34,6 +34,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
 import { SPEECH_LANGUAGE_AUTO } from '@/src/features/voice/speechLanguage';
+import { onDeviceRecognizerGuaranteed } from '@/src/features/voice/services/voiceInput';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { DEFAULT_LOCAL_MODEL_ID, getDisplayName } from '@/src/features/model-picker/service';
@@ -503,19 +504,21 @@ export default function VoiceSettingsScreen() {
         })}
       </SettingsGroup>
 
-      <SettingsGroup>
-        <SettingsRow
-          label="Open Voice Companion"
-          icon={Play}
-          onPress={() =>
-            router.push({
-              pathname: '/(app)/voice',
-              params: { returnTo: '/(app)/settings/voice' },
-            } as Parameters<typeof router.push>[0])
-          }
-          isLast
-        />
-      </SettingsGroup>
+      {onDeviceRecognizerGuaranteed() ? (
+        <SettingsGroup>
+          <SettingsRow
+            label="Open Voice Companion"
+            icon={Play}
+            onPress={() =>
+              router.push({
+                pathname: '/(app)/voice',
+                params: { returnTo: '/(app)/settings/voice' },
+              } as Parameters<typeof router.push>[0])
+            }
+            isLast
+          />
+        </SettingsGroup>
+      ) : null}
 
       <SpeechLanguageModal
         visible={languagePickerOpen}

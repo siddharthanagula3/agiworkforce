@@ -178,7 +178,7 @@ async function handlePost(request: NextRequest) {
           select public.assert_user_resource_limit(
                  'projects',
                  $1,
-                   case when dependency.admitted_count > 0 then $3 else null end
+                   case when dependency.admitted_count > 0 then $3::integer else null end
                  )
             from (
               select (select count(*) from inserted)

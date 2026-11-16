@@ -7,14 +7,17 @@ import {
 import { ROUTING_PROFILE_CHOICES } from '@agiworkforce/types';
 
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
+import { fileSearchToolDefinitions, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
 import type { CloudAgentApprovalCheckpoint } from '@/lib/services/cloud-agent-run-service';
 import type { ModelSelection } from './capability-preamble';
 import { retargetMessagesToModel } from './managed-failover';
 import type {
   CallerToolFields,
   ChatCompletionRequest,
+  LargeFileTurn,
   ProcessedRequest,
 } from './request-processor';
+import { functionToolName } from './tool-loop-routing';
 import { TurnToolProhibitionSchema, type TurnToolProhibition } from './turn-tool-prohibition';
 import {
   ToolSchemaStateSchema,
@@ -26,13 +29,25 @@ import {
 const CHECKPOINT_TURN_ATTACHMENTS_KEY = 'x_turn_attachments';
 const CHECKPOINT_MODEL_SELECTION_KEY = 'x_model_selection';
 const CHECKPOINT_TURN_TOOL_PROHIBITION_KEY = 'x_turn_tool_prohibition';
+export const CHECKPOINT_LARGE_FILE_TURN_KEY = 'x_large_file_turn';
 const CHECKPOINT_PRIVATE_KEYS: readonly string[] = [
   CONTEXT_POLICY_SNAPSHOT_KEY,
   CHECKPOINT_TURN_ATTACHMENTS_KEY,
   CHECKPOINT_MODEL_SELECTION_KEY,
   CHECKPOINT_TURN_TOOL_PROHIBITION_KEY,
   TOOL_SCHEMA_STATE_CHECKPOINT_KEY,
+  CHECKPOINT_LARGE_FILE_TURN_KEY,
 ];
+
+const CheckpointLargeFileTurnSchema = z.object({
+  assetIds: z.array(z.string().uuid()).min(1),
+  attachmentAssetIds: z.array(z.string().uuid()),
+  limitTokens: z.number().int().nonnegative(),
+  charged: z.number().nonnegative(),
+  readingClosed: z.boolean(),
+  fileToolsOffered: z.boolean(),
+  stepAllowanceLeft: z.number().nonnegative().optional(),
+});
 
 const CheckpointTurnAttachmentsSchema = z.array(
   z.object({
@@ -60,6 +75,7 @@ export function buildApprovalCheckpointRequest(
   turnToolProhibition?: TurnToolProhibition | null,
   toolSchemaState?: ToolSchemaState,
   contextPolicySnapshot?: ContextPolicySnapshot,
+  largeFileTurn?: LargeFileTurn,
 ): Record<string, unknown> {
   const {
     messages: _messages,
@@ -71,6 +87,9 @@ export function buildApprovalCheckpointRequest(
   const publicRequest = replayableCheckpointRequest(withoutToolSchemaState(request));
   const policySnapshot = ContextPolicySnapshotSchema.safeParse(contextPolicySnapshot);
   const schemaState = ToolSchemaStateSchema.safeParse(toolSchemaState);
+  const savedLargeFileTurn = largeFileTurn
+    ? CheckpointLargeFileTurnSchema.safeParse(largeFileTurn)
+    : null;
   return {
     ...publicRequest,
     ...callerToolFields,
@@ -80,7 +99,40 @@ export function buildApprovalCheckpointRequest(
     ...(modelSelection ? { [CHECKPOINT_MODEL_SELECTION_KEY]: modelSelection } : {}),
     ...(turnToolProhibition ? { [CHECKPOINT_TURN_TOOL_PROHIBITION_KEY]: turnToolProhibition } : {}),
     ...(schemaState.success ? { [TOOL_SCHEMA_STATE_CHECKPOINT_KEY]: schemaState.data } : {}),
+    ...(savedLargeFileTurn?.success
+      ? { [CHECKPOINT_LARGE_FILE_TURN_KEY]: savedLargeFileTurn.data }
+      : {}),
   };
+}
+
+/**
+ * The ledger a resumed turn continues from. A checkpoint without the key was
+ * saved by a turn with no large file, or by a build without the feature, and
+ * resumes with no ledger. The asset ids are only a claim here; every read of
+ * them repeats the owner check.
+ */
+function checkpointLargeFileTurn(request: Record<string, unknown>): LargeFileTurn | undefined {
+  const parsed = CheckpointLargeFileTurnSchema.safeParse(request[CHECKPOINT_LARGE_FILE_TURN_KEY]);
+  return parsed.success ? parsed.data : undefined;
+}
+
+/**
+ * A resumed request carries no file part, so processing it offers no file
+ * tools; the paused turn offered them, and its tool list must not change.
+ */
+function restoreLargeFileTools(processed: ProcessedRequest): void {
+  const ledger = processed.largeFileTurn;
+  if (!ledger?.fileToolsOffered) return;
+  if (processed.turnToolProhibition?.allTools === true) {
+    ledger.fileToolsOffered = false;
+    return;
+  }
+  processed.llmRequest.tools = [
+    ...(processed.llmRequest.tools ?? []).filter(
+      (tool) => !isFileSearchTool(functionToolName(tool)),
+    ),
+    ...fileSearchToolDefinitions({ largeFileTurn: true }),
+  ];
 }
 
 function replayableCheckpointRequest(request: Record<string, unknown>): Record<string, unknown> {
@@ -127,6 +179,8 @@ export function restoreCheckpointedTurn(
   );
   processed.toolSchemaState = schemaState.success ? schemaState.data : undefined;
   processed.turnAttachments = checkpointTurnAttachments(checkpoint.request);
+  processed.largeFileTurn = checkpointLargeFileTurn(checkpoint.request);
+  restoreLargeFileTools(processed);
   const renderedModel = checkpoint.request['model'];
   const selection = CheckpointModelSelectionSchema.safeParse(
     checkpoint.request[CHECKPOINT_MODEL_SELECTION_KEY],

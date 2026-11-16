@@ -4,7 +4,9 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, Archive, Trash2, AlertCircle, RotateCcw } from 'lucide-react-native';
+import { Archive, Trash2, AlertCircle, RotateCcw } from 'lucide-react-native';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
+import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 
 import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
@@ -29,6 +31,7 @@ import {
   type ArchivedConversation,
 } from '@/src/features/archived-chats';
 import { translatePlural } from '@/src/i18n/plural';
+import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 
 interface ArchivedList {
   conversations: ArchivedConversation[];
@@ -71,6 +74,10 @@ export default function ArchivedChatsScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [scope, setScope] = useState(() => ({ account: captureCloudAccountEpoch() }));
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const [searchable, setSearchable] = useState(false);
+  const queryRef = useRef('');
   const sessionRef = useRef<ArchivedSession | null>(null);
 
   const isCurrent = useCallback((owner: ArchivedSession) => {
@@ -115,12 +122,15 @@ export default function ArchivedChatsScreen() {
       const ownsRead = () =>
         isCurrent(owner) && owner.read === request && (!more || owner.list === base);
       try {
+        const pageQuery = queryRef.current;
         const page = await fetchArchivedConversations(
           more && base ? base.nextOffset : 0,
           owner.account,
           request.controller.signal,
+          pageQuery,
         );
         if (!ownsRead()) return;
+        if (!pageQuery) setSearchable(page.conversations.length > 0);
         const seen = new Set(base?.conversations.map((conversation) => conversation.id));
         const next: ArchivedList = {
           ...page,
@@ -163,6 +173,10 @@ export default function ArchivedChatsScreen() {
       setLoadingMore(false);
       setBusyId(null);
       setState({ kind: 'loading', owner: null });
+      queryRef.current = '';
+      setSearch('');
+      setQuery('');
+      setSearchable(false);
       setScope({ account: captureCloudAccountEpoch() });
     };
     const stopEpoch = subscribeCloudAccountEpochChange(invalidate);
@@ -216,6 +230,18 @@ export default function ArchivedChatsScreen() {
       };
     }, [appMode, isClerkLoaded, isClerkSignedIn, clerkUserId, scope, load, retire]),
   );
+
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search.trim()), SEARCH_INPUT_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    if (queryRef.current === query) return;
+    queryRef.current = query;
+    const owner = sessionRef.current;
+    if (owner && isCurrent(owner)) void load(owner);
+  }, [query, isCurrent, load]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -365,38 +391,9 @@ export default function ArchivedChatsScreen() {
 
   const visibleState: LoadState =
     state.owner && isCurrent(state.owner) ? state : { kind: 'loading', owner: null };
+  const showSearch = appMode === 'cloud' && (searchable || search.length > 0);
 
-  const header = (
-    <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
-      <Pressable
-        onPress={handleBack}
-        hitSlop={8}
-        style={({ pressed }) => ({
-          width: 42,
-          height: 42,
-          borderRadius: 21,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: pressed ? c.surfaceHover : c.transparent,
-        })}
-        accessibilityLabel="Go back"
-        accessibilityRole="button"
-      >
-        <ArrowLeft size={22} color={c.textPrimary} />
-      </Pressable>
-      <Text
-        style={{
-          flex: 1,
-          color: c.textPrimary,
-          fontSize: typeScale.title3,
-          fontWeight: '700',
-          marginLeft: 4,
-        }}
-      >
-        Archived Chats
-      </Text>
-    </View>
-  );
+  const header = <ScreenHeader title="Archived Chats" onBack={handleBack} />;
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
@@ -414,7 +411,7 @@ export default function ArchivedChatsScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       <StatusBar style={statusBarStyle} />
       {header}
 
@@ -478,45 +475,57 @@ export default function ArchivedChatsScreen() {
           </View>
         )}
 
-        {visibleState.kind === 'ready' && visibleState.conversations.length === 0 && (
-          <Card>
-            <View className="items-center py-8 gap-3">
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 14,
-                  backgroundColor: c.accentSurface,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Archive size={26} color={c.teal} strokeWidth={1.5} />
+        {visibleState.kind === 'ready' &&
+          visibleState.conversations.length === 0 &&
+          query.length > 0 && (
+            <Text
+              style={{ color: c.textSecondary, fontSize: typeScale.footnote, paddingVertical: 24 }}
+            >
+              No archived chats match this search.
+            </Text>
+          )}
+
+        {visibleState.kind === 'ready' &&
+          visibleState.conversations.length === 0 &&
+          query.length === 0 && (
+            <Card>
+              <View className="items-center py-8 gap-3">
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 14,
+                    backgroundColor: c.accentSurface,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Archive size={26} color={c.teal} strokeWidth={1.5} />
+                </View>
+                <Text
+                  style={{
+                    fontSize: typeScale.headline,
+                    fontWeight: '600',
+                    color: c.textPrimary,
+                    textAlign: 'center',
+                  }}
+                >
+                  No archived chats
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    color: c.textSecondary,
+                    textAlign: 'center',
+                    lineHeight: 18,
+                    maxWidth: 280,
+                  }}
+                >
+                  Chats you archive appear here to restore any time.
+                </Text>
               </View>
-              <Text
-                style={{
-                  fontSize: typeScale.headline,
-                  fontWeight: '600',
-                  color: c.textPrimary,
-                  textAlign: 'center',
-                }}
-              >
-                No archived chats
-              </Text>
-              <Text
-                style={{
-                  fontSize: typeScale.footnote,
-                  color: c.textSecondary,
-                  textAlign: 'center',
-                  lineHeight: 18,
-                  maxWidth: 280,
-                }}
-              >
-                Chats you archive appear here to restore any time.
-              </Text>
-            </View>
-          </Card>
-        )}
+            </Card>
+          )}
 
         {visibleState.kind === 'ready' &&
           visibleState.conversations.map((conversation) => (
@@ -584,20 +593,35 @@ export default function ArchivedChatsScreen() {
           </Pressable>
         )}
 
-        {visibleState.kind === 'ready' && visibleState.conversations.length > 0 && (
-          <Pressable
-            onPress={() => handleDeleteAll(visibleState.owner)}
-            disabled={busyId !== null}
-            accessibilityRole="button"
-            accessibilityLabel="Delete all archived chats"
-            style={{ alignSelf: 'center', paddingVertical: 14, marginTop: 4 }}
-          >
-            <Text style={{ color: c.agentError, fontSize: typeScale.footnote, fontWeight: '600' }}>
-              Delete all archived chats
-            </Text>
-          </Pressable>
-        )}
+        {visibleState.kind === 'ready' &&
+          visibleState.conversations.length > 0 &&
+          query.length === 0 && (
+            <Pressable
+              onPress={() => handleDeleteAll(visibleState.owner)}
+              disabled={busyId !== null}
+              accessibilityRole="button"
+              accessibilityLabel="Delete all archived chats"
+              style={{ alignSelf: 'center', paddingVertical: 14, marginTop: 4 }}
+            >
+              <Text
+                style={{ color: c.agentError, fontSize: typeScale.footnote, fontWeight: '600' }}
+              >
+                Delete all archived chats
+              </Text>
+            </Pressable>
+          )}
       </ScrollView>
+
+      {showSearch ? (
+        <BottomSearchBar
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search archived chats"
+          accessibilityLabel="Search archived chats"
+          clearAccessibilityLabel="Clear archived chat search"
+          testID="archived-chats-search"
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

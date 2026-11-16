@@ -1,4 +1,5 @@
 jest.mock('@/lib/safeOpenURL', () => ({
+  ...jest.requireActual('@/lib/safeOpenURL'),
   openUntrustedUrlInAppBrowser: jest.fn(async () => true),
 }));
 
@@ -34,7 +35,7 @@ describe('mobile answer surface controls', () => {
     expect(onFollowUp).not.toHaveBeenCalled();
     expect(screen.getByText('Enter a valid value for City.')).toBeTruthy();
 
-    fireEvent.changeText(screen.getByLabelText('City'), 'Kyoto');
+    fireEvent.changeText(screen.getByLabelText('City, required'), 'Kyoto');
     fireEvent.press(screen.getByRole('checkbox', { name: 'Map' }));
     fireEvent.press(screen.getByRole('button', { name: 'Plan it (send to chat)' }));
 

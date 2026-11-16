@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform/infrastructure
-Last updated: 2026-09-20
+Last updated: 2026-11-15
 
 Every value this product stores that was computed from something else, with the
 five facts each one needs: what it derives from, how it is regenerated, how a
@@ -18,21 +18,22 @@ rebuilt. Nothing below is a second copy of the truth.
 `apps/web/lib/services/deletion-manifest.ts` classifies every store in the
 product, and `derived_content` is one of its five data classes. The membership
 of that class is the list in the code, not a list maintained here:
-`context_manifests`, `file_lineage`, `retrieval_chunks`, `retrieval_documents`
-and `web_artifact_index`. `docs/architecture/RETENTION_MATRIX.md` is rendered
-from the same module, and `deletion-manifest.test.ts` fails when the document
+`chat_file_preparations`, `context_manifests`, `file_lineage`,
+`retrieval_chunks`, `retrieval_documents` and `web_artifact_index`.
+`docs/architecture/RETENTION_MATRIX.md` is rendered from the same module, and `deletion-manifest.test.ts` fails when the document
 and the code disagree, so a new derived store appears in the matrix without
 anyone remembering to add it.
 
 ## 2. The stored derived values
 
-| Value                 | Derives from                                                      | Regeneration                                                     | Version marker                                                  | Invalidation                                                       | Deletion propagation                                                                  |
-| --------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| `retrieval_documents` | One source row, exactly one of six kinds                          | The indexer leases a due row and re-reads the source             | `chunk_version`, plus `content_sha256` and `embedding_model`    | `status` returns to `stale`; `next_attempt_at` schedules the retry | Foreign key `on delete cascade` from each of the six source tables                    |
-| `retrieval_chunks`    | Its `retrieval_documents` row                                     | Rewritten wholesale at the next `chunk_version`                  | `chunk_version` (at least 1) and `chunk_index`                  | A new document version replaces the whole chunk set                | `on delete cascade` from `retrieval_documents`, and from `organizations`              |
-| `context_manifests`   | The context assembled for one turn                                | Not regenerated: a turn happens once                             | `content_digest`, a sha256 over the assembled ids and text      | None; the row records a past decision                              | Cascade from `organizations`; erased with the account                                 |
-| `file_lineage`        | An edit, export, conversion, extraction or copy between two files | Written when the derivation happens                              | None; the row is the event                                      | None                                                               | `conversation_id` is `on delete set null`, so lineage survives a deleted conversation |
-| `web_artifact_index`  | Artifact blocks in one assistant message markdown                 | `deriveArtifacts` re-derives from the message, which never moves | The deterministic id `uuidv5(conversationId:messageId:ordinal)` | Re-indexing the source message replaces its rows                   | `on delete cascade` from both `web_conversations` and `web_messages`                  |
+| Value                    | Derives from                                                                                        | Regeneration                                                                                                         | Version marker                                                                                     | Invalidation                                                                                       | Deletion propagation                                                                                                                                       |
+| ------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `retrieval_documents`    | One source row, exactly one of six kinds                                                            | The indexer leases a due row and re-reads the source                                                                 | `chunk_version`, plus `content_sha256` and `embedding_model`                                       | `status` returns to `stale`; `next_attempt_at` schedules the retry                                 | Foreign key `on delete cascade` from each of the six source tables                                                                                         |
+| `retrieval_chunks`       | Its `retrieval_documents` row                                                                       | Rewritten wholesale at the next `chunk_version`                                                                      | `chunk_version` (at least 1) and `chunk_index`                                                     | A new document version replaces the whole chunk set                                                | `on delete cascade` from `retrieval_documents`, and from `organizations`                                                                                   |
+| `context_manifests`      | The context assembled for one turn                                                                  | Not regenerated: a turn happens once                                                                                 | `content_digest`, a sha256 over the assembled ids and text                                         | None; the row records a past decision                                                              | Cascade from `organizations`; erased with the account                                                                                                      |
+| `file_lineage`           | An edit, export, conversion, extraction or copy between two files                                   | Written when the derivation happens                                                                                  | None; the row is the event                                                                         | None                                                                                               | `conversation_id` is `on delete set null`, so lineage survives a deleted conversation                                                                      |
+| `web_artifact_index`     | Artifact blocks in one assistant message markdown                                                   | `deriveArtifacts` re-derives from the message, which never moves                                                     | The deterministic id `uuidv5(conversationId:messageId:ordinal)`                                    | Re-indexing the source message replaces its rows                                                   | `on delete cascade` from both `web_conversations` and `web_messages`                                                                                       |
+| `chat_file_preparations` | One sealed chat attachment above the inline limit, and the derived objects listed in `derived_keys` | `prepareChatFileStep` re-reads the stored asset from `cursor`; with the row gone it opens a new one and starts again | `preparer_version` from the chat attachment policy, which also names the derived-object key prefix | None for a finished row; the intake sweeper marks a row stalled in `preparing` as `prepare_failed` | `media_asset_id` is `on delete set null`; the intake sweeper then deletes the listed objects and the row, and account and organization erasure delete both |
 
 Two details in that table are load-bearing:
 
@@ -46,7 +47,9 @@ not a migration.
 Deleting a conversation does not delete the record that a file was derived from
 another file; it only forgets which conversation it happened in. That is
 deliberate, and it is the one place in this table where derived state outlives
-part of its source.
+part of its source for good. A `chat_file_preparations` row also outlives its
+asset, but only until the intake sweeper has deleted the objects it lists: the
+row is the only record of those keys.
 
 ## 3. Derived values that are never stored
 

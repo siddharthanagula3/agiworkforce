@@ -57,9 +57,9 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-const mockOpenExternalUrl = jest.fn(async (_url: string) => true);
+const mockOpenInAppBrowser = jest.fn(async (_url: string) => true);
 jest.mock('../lib/safeOpenURL', () => ({
-  openExternalUrl: (url: string) => mockOpenExternalUrl(url),
+  openInAppBrowser: (url: string) => mockOpenInAppBrowser(url),
 }));
 
 jest.mock('../services/authSession', () => ({
@@ -296,8 +296,8 @@ describe('Personalization page', () => {
     expect(getByText(`${PRODUCT_BRAND} uses your nickname in chat.`)).toBeTruthy();
     fireEvent.press(getByText('acceptable use policy'));
 
-    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
-      new URL('/acceptable-use', API_URL).toString(),
+    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(
+      `${new URL('/acceptable-use', API_URL).toString()}?from=mobile`,
     );
   });
 

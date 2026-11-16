@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Alert, Clipboard, Image, TextInput, View } from 'react-native';
+import { Alert, Clipboard, TextInput, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import {
   Copy,
@@ -37,8 +37,10 @@ import {
   CloudAccountRequired,
   SettingsScreenShell,
 } from '@/src/features/settings/Common';
+import { EMAIL_SCREEN_TITLE } from '@/src/features/settings/screenTitles';
 import { beginCloudPostAuthIntentForDestination } from '@/src/features/auth/services/postAuthIntent';
 import { useAuthStore } from '@/src/features/auth/store';
+import { forgetRememberedAccount } from '@/src/features/auth/services/rememberedAccount';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
@@ -55,6 +57,8 @@ import {
   shareCloudDataExport,
 } from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { openWebAccountPage } from '@/src/platform/webContentPage';
+import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import { syncNow } from '@/services/cloudSyncEngine';
@@ -104,7 +108,7 @@ export default function CloudAccountScreen() {
 
   if (!isClerkLoaded || !isClerkSignedIn) {
     return (
-      <SettingsScreenShell title="Account">
+      <SettingsScreenShell title={EMAIL_SCREEN_TITLE}>
         <CloudAccountRequired
           isLoading={!isClerkLoaded}
           onSignIn={() =>
@@ -148,6 +152,7 @@ function SignedInCloudAccount() {
   const displayName =
     storedProfileName || (rawDisplayName ? normalizeDisplayName(rawDisplayName) : null);
   const avatarUrl = storedProfileAvatar ?? null;
+  const shownName = displayName || 'AGI Cloud account';
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -180,6 +185,9 @@ function SignedInCloudAccount() {
     if (userId) void loadProfileName(userId);
   }, [loadProfileName, userId]);
 
+  const nameChanged = nameDraft.trim() !== (displayName ?? '').trim();
+  const canSaveName = nameChanged && !!nameDraft.trim() && !savingName;
+
   const handleSaveName = useCallback(async () => {
     if (!userId) return;
     if (await saveProfileName(userId, nameDraft)) setEditingName(false);
@@ -195,6 +203,7 @@ function SignedInCloudAccount() {
   const refreshDeletionStatus = useCallback(
     async (owner: DeletionOwner, account = owner.account) => {
       if (
+        appMode !== 'cloud' ||
         !owner.active ||
         deletionOwner.current !== owner ||
         !isCloudAccountEpochCurrent(owner.account) ||
@@ -227,7 +236,7 @@ function SignedInCloudAccount() {
         if (current()) setDeletionStatusError(true);
       }
     },
-    [retireConfirmation, userId],
+    [appMode, retireConfirmation, userId],
   );
 
   useFocusEffect(
@@ -400,7 +409,7 @@ function SignedInCloudAccount() {
               );
               return;
             }
-            void openExternalUrl('https://agiworkforce.com/settings/account');
+            void openWebAccountPage('https://agiworkforce.com/settings/account', 'system');
           },
         },
       ],
@@ -444,14 +453,11 @@ function SignedInCloudAccount() {
     ]);
   }, [captureVisibleAccount, signOut]);
 
-  const handleExportCloudData = useCallback(() => {
-    const account = captureVisibleAccount();
-    if (!account) return;
-
-    if (appMode !== 'cloud') {
+  const confirmSwitchToCloud = useCallback(
+    (account: CloudAccountEpoch, reason: string) => {
       Alert.alert(
         'Switch to AGI Cloud',
-        'Cloud export needs AGI Cloud. Switching does not upload your Local Mode chats or files.',
+        `${reason} Switching does not upload your Local Mode chats or files.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -469,6 +475,22 @@ function SignedInCloudAccount() {
           },
         ],
       );
+    },
+    [setAppMode],
+  );
+
+  const handleSwitchForDeletion = useCallback(() => {
+    const account = captureVisibleAccount();
+    if (!account) return;
+    confirmSwitchToCloud(account, 'Account deletion is managed in AGI Cloud.');
+  }, [captureVisibleAccount, confirmSwitchToCloud]);
+
+  const handleExportCloudData = useCallback(() => {
+    const account = captureVisibleAccount();
+    if (!account) return;
+
+    if (appMode !== 'cloud') {
+      confirmSwitchToCloud(account, 'Cloud export needs AGI Cloud.');
       return;
     }
 
@@ -525,7 +547,7 @@ function SignedInCloudAccount() {
         });
     };
     runExport(exportCloudUserData(account));
-  }, [appMode, captureVisibleAccount, router, setAppMode]);
+  }, [appMode, captureVisibleAccount, confirmSwitchToCloud, router]);
 
   const handleDeleteAccount = useCallback(() => {
     const intent = beginDeletionIntent('schedule');
@@ -555,6 +577,7 @@ function SignedInCloudAccount() {
               .then(async (res) => {
                 if (!deletionIntentIsCurrent(intent)) return;
                 const receipt = parseAccountDeletionScheduleReceipt(res);
+                await forgetRememberedAccount();
                 await signOut().catch(() => {});
                 const storeBilling = receipt.storeBilling;
                 if (!storeBilling) {
@@ -717,7 +740,7 @@ function SignedInCloudAccount() {
   ]);
 
   return (
-    <SettingsScreenShell title="Account">
+    <SettingsScreenShell title={EMAIL_SCREEN_TITLE}>
       {stepUpModal}
       <View
         style={{
@@ -741,26 +764,12 @@ function SignedInCloudAccount() {
           onPress={() => void changePhoto()}
           style={{ width: 52, height: 52 }}
         >
-          {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={{ width: 52, height: 52, borderRadius: 26 }}
-              accessibilityLabel="Profile picture"
-            />
-          ) : (
-            <View
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 26,
-                backgroundColor: colors.surfaceHover,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <UserRound size={24} color={colors.textMuted} />
-            </View>
-          )}
+          <UserAvatar
+            size={52}
+            uri={avatarUrl}
+            initials={shownName}
+            testID="cloud-account-avatar"
+          />
           <View
             style={{
               position: 'absolute',
@@ -803,10 +812,14 @@ function SignedInCloudAccount() {
                 <Pressable
                   testID="cloud-account-save-name"
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: savingName || !nameDraft.trim() }}
-                  disabled={savingName || !nameDraft.trim()}
+                  accessibilityState={{ disabled: !canSaveName }}
+                  disabled={!canSaveName}
                   onPress={() => void handleSaveName()}
-                  style={{ minHeight: 44, justifyContent: 'center' }}
+                  style={{
+                    minHeight: 44,
+                    justifyContent: 'center',
+                    opacity: canSaveName ? 1 : 0.5,
+                  }}
                 >
                   <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>
                     {savingName ? 'Saving…' : 'Save'}
@@ -845,7 +858,7 @@ function SignedInCloudAccount() {
                   flexShrink: 1,
                 }}
               >
-                {displayName || 'AGI Cloud account'}
+                {shownName}
               </Text>
               <Pencil size={13} color={colors.textMuted} />
             </Pressable>
@@ -988,7 +1001,14 @@ function SignedInCloudAccount() {
             Danger Zone
           </Text>
         </View>
-        {deletionStatus?.ownerId !== userId ? (
+        {appMode !== 'cloud' ? (
+          <SettingsRow
+            label="Deletion is managed in AGI Cloud. Switch to Cloud"
+            icon={Trash2}
+            onPress={handleSwitchForDeletion}
+            isLast
+          />
+        ) : deletionStatus?.ownerId !== userId ? (
           <SettingsRow
             label={
               deletionStatusError

@@ -89,6 +89,11 @@ function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOpt
     clearAccountScopedArtifactState();
   });
 
+  runTeardownStep('recent searches', () => {
+    const { clearCloudRecentSearches } = require('@/src/features/search/recentSearches');
+    clearCloudRecentSearches();
+  });
+
   if (!keepUnsentWork) clearUnsentCloudWorkNow();
 
   runTeardownStep('composer handoff', () => {
@@ -166,9 +171,13 @@ function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOpt
   runTeardownStep('promotional model selection', () => {
     const { useModelStore } = require('@/src/features/model-picker/store');
     const { getProviderOffering } = require('@agiworkforce/types');
-    const { DEFAULT_LOCAL_MODEL_ID } = require('@/src/features/model-picker/service');
+    const {
+      DEFAULT_LOCAL_MODEL_ID,
+      isCloudManagedModelId,
+    } = require('@/src/features/model-picker/service');
     const selected = useModelStore.getState().selectedModel;
     if (getProviderOffering(selected)) useModelStore.getState().setModel(DEFAULT_LOCAL_MODEL_ID);
+    else if (isCloudManagedModelId(selected)) useModelStore.getState().restoreNewChatModel();
   });
 
   runTeardownStep('schedule cache', () => {
@@ -194,6 +203,11 @@ function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOpt
   runTeardownStep('notification center', () => {
     const { notificationCenterStore } = require('@/services/notifications');
     notificationCenterStore.clear();
+  });
+
+  runTeardownStep('delivered notifications and badge', () => {
+    const { clearDeliveredNotifications } = require('@/services/notifications');
+    void clearDeliveredNotifications();
   });
 
   runTeardownStep('account notification feed', () => {

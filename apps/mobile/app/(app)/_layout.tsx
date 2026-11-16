@@ -9,6 +9,7 @@ import { drawerGestureOptions } from '@/src/features/shell';
 import { WorkspaceMfaBanner } from '@/src/features/settings/account-security/WorkspaceMfaBanner';
 import { useReleaseUpdateNotice } from '@/src/features/release-state/releaseUpdateNotice';
 import { ServiceNoticesBanner } from '@/src/features/service-notices/ServiceNoticesBanner';
+import { LocalDataResetNotice } from '@/src/features/edge-cases/components/LocalDataResetNotice';
 
 export { default as ErrorBoundary } from './error';
 
@@ -114,6 +115,7 @@ export default function AppLayout() {
       <ContinuityOnboardingGate />
       <WorkspaceMfaBanner />
       <ServiceNoticesBanner />
+      <LocalDataResetNotice />
       <AppLockOffer />
     </>
   );

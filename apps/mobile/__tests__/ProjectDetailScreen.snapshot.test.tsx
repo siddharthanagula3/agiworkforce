@@ -214,7 +214,10 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
     fireEvent.press(getByLabelText('New chat in this project'));
     expect(mockSetActiveLocal).toHaveBeenCalledWith('proj_snapshot');
     expect(mockSetActiveCloud).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/(tabs)/chat',
+      params: { from: 'project' },
+    });
   });
 
   it('requires an explicit switch before opening a Cloud project from Local mode', async () => {
@@ -235,7 +238,10 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
     fireEvent.press(getByLabelText('New chat in this project'));
     expect(mockSetActiveCloud).toHaveBeenCalledWith('proj_snapshot');
     expect(mockSetActiveLocal).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/(tabs)/chat',
+      params: { from: 'project' },
+    });
   });
 
   it('does not offer chat or source actions for an unavailable project', () => {

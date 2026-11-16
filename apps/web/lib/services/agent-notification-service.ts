@@ -190,6 +190,20 @@ export interface ResearchReportNotice {
   title: string;
   status: string;
   sourcesConsulted: number;
+  conversationId?: string | null;
+  runId?: string | null;
+}
+
+function researchReadyPushData(notice: ResearchReportNotice): Record<string, string> {
+  return {
+    type: 'research_completed',
+    priority: 'normal',
+    route: RESEARCH_MOBILE_ROUTE,
+    target: 'research',
+    targetId: notice.reportId,
+    ...(notice.conversationId ? { conversationId: notice.conversationId } : {}),
+    ...(notice.runId ? { runId: notice.runId } : {}),
+  };
 }
 
 export async function notifyResearchReportSettled(
@@ -231,13 +245,15 @@ export async function notifyResearchReportSettled(
       {
         title,
         body,
-        data: {
-          type: completed ? 'task_completed' : 'agent_failed',
-          priority: completed ? 'normal' : 'critical',
-          route: RESEARCH_MOBILE_ROUTE,
-          target: 'research',
-          targetId: notice.reportId,
-        },
+        data: completed
+          ? researchReadyPushData(notice)
+          : {
+              type: 'agent_failed',
+              priority: 'critical',
+              route: RESEARCH_MOBILE_ROUTE,
+              target: 'research',
+              targetId: notice.reportId,
+            },
       },
       { expo: toExpo, web: true },
     ).catch(() => null);
@@ -271,6 +287,12 @@ export function cloudCodeTurnNotificationEvent(
       return null;
   }
 }
+
+const CODE_SESSION_PUSH_TYPE: Record<CloudCodeTurnNotificationEvent, string> = {
+  approval_required: 'code_session_needs_input',
+  completed: 'code_session_completed',
+  failed: 'code_session_failed',
+};
 
 export interface CloudCodeTurnNotice {
   userId: string;
@@ -316,7 +338,7 @@ export async function notifyCloudCodeTurnEvent(
         title,
         body,
         data: {
-          type: MOBILE_NOTIFICATION_TYPE[notice.event],
+          type: CODE_SESSION_PUSH_TYPE[notice.event],
           priority: MOBILE_PRIORITY[notice.event],
           codeSessionId: notice.sessionId,
         },

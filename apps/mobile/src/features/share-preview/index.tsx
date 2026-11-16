@@ -12,9 +12,11 @@ import {
   MessageCircleQuestionMark,
   Paperclip,
 } from 'lucide-react-native';
+import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { useChatStore, useChatMessageStore, useChatCloudMessageStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -37,7 +39,11 @@ import { executionModeForConversation } from '@/src/features/chat/utils/conversa
 import { createSharePreviewAdmission, type SharePreviewStatus } from './sharePreviewAdmission';
 import { createShareReceiptSettlement, omittedSharedFilesNotice } from './shareReceiptSettlement';
 
-const MAX_SHARED_BYTES = 100 * 1024;
+const BYTES_PER_KILOBYTE = 1024;
+const MAX_SHARED_BYTES = 100 * BYTES_PER_KILOBYTE;
+export const SHARED_TEXT_TRUNCATED_NOTICE = `Content was truncated to ${formatAttachmentSize(
+  MAX_SHARED_BYTES,
+)} before sending.`;
 const NEW_CHAT_DRAFT_KEY = 'new-chat';
 const SHARED_URL = /\bhttps?:\/\/[^\s<>"]+/i;
 const SUMMARIZE_PROMPT = 'Summarize this page.';
@@ -208,20 +214,21 @@ export default function SharePreviewScreen() {
     router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
   };
 
+  const newChatModel = () => {
+    useModelStore.getState().endConversationModel();
+    return useModelStore.getState().selectedModel;
+  };
+
   const handleSend = () => {
     const previewTitle = rawText.length > 40 ? rawText.slice(0, 40).trim() + '...' : rawText;
-    return admission.send(previewTitle, sanitised, useModelStore.getState().selectedModel);
+    return admission.send(previewTitle, sanitised, newChatModel());
   };
 
   const pageUrl = sharedPageUrl(rawText);
 
   const handleSummarize = () => {
     if (!pageUrl) return;
-    return admission.send(
-      SUMMARIZE_PROMPT,
-      `${SUMMARIZE_PROMPT}\n\n${sanitised}`,
-      useModelStore.getState().selectedModel,
-    );
+    return admission.send(SUMMARIZE_PROMPT, `${SUMMARIZE_PROMPT}\n\n${sanitised}`, newChatModel());
   };
 
   const handleAskAbout = () => {
@@ -335,7 +342,7 @@ export default function SharePreviewScreen() {
             <Text
               style={{ flex: 1, color: themeColors.agentWarning, fontSize: typeScale.footnote }}
             >
-              Content was truncated to 100 KB before sending.
+              {SHARED_TEXT_TRUNCATED_NOTICE}
             </Text>
           </View>
         )}
@@ -428,7 +435,7 @@ export default function SharePreviewScreen() {
                 color: themeColors.textSecondary,
                 fontSize: typeScale.footnote,
                 lineHeight: 20,
-                fontFamily: 'monospace',
+                fontFamily: codeFontFamily,
               }}
               selectable
             >

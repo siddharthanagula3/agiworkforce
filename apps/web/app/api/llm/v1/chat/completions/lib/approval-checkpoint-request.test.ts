@@ -8,6 +8,7 @@ import {
   checkpointTurnToolProhibition,
   restoreCheckpointedTurn,
 } from './approval-checkpoint-request';
+import { fileSearchToolDefinitions } from '@/lib/server/tools/file-search-tool';
 import { ToolSchemaStateSchema, createToolSchemaState } from './tool-schema-state';
 import type { ModelSelection } from './capability-preamble';
 import type { ChatCompletionRequest, ProcessedRequest } from './request-processor';
@@ -291,5 +292,114 @@ describe('server-owned context policy snapshot', () => {
       messages: [],
     });
     expect(processed.contextPolicySnapshot).toBe(saved);
+  });
+});
+
+describe('the large-file ledger a checkpoint keeps', () => {
+  const turn = { model: 'fixture-model', messages: [], stream: true } as ChatCompletionRequest;
+  const ledger = {
+    assetIds: ['11111111-1111-4111-8111-111111111111'],
+    attachmentAssetIds: [
+      '11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222',
+    ],
+    limitTokens: 6_666,
+    charged: 4_210,
+    readingClosed: true,
+    fileToolsOffered: true,
+  };
+
+  function saved(largeFileTurn?: typeof ledger) {
+    return buildApprovalCheckpointRequest(
+      turn,
+      {},
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      largeFileTurn,
+    );
+  }
+
+  function resumed(
+    request: Record<string, unknown>,
+    overrides: Partial<Pick<ProcessedRequest, 'turnToolProhibition'>> & { tools?: unknown[] } = {},
+  ): ProcessedRequest {
+    const { tools, ...rest } = overrides;
+    const processed = {
+      chatRequest: { ...turn },
+      llmRequest: { messages: [], ...(tools ? { tools } : {}) },
+      largeFileTurn: { ...ledger, charged: 0, readingClosed: false, pendingStepAllowance: 900 },
+      ...rest,
+    } as unknown as ProcessedRequest;
+    restoreCheckpointedTurn(processed, JSON.parse(JSON.stringify({ request, messages: [] })));
+    return processed;
+  }
+
+  it('saves and restores largeFileTurn', () => {
+    const request = saved({ ...ledger, pendingStepAllowance: 900 } as typeof ledger);
+
+    expect(request['x_large_file_turn']).toEqual(ledger);
+    expect(resumed(request).largeFileTurn).toEqual(ledger);
+    for (const isFree of [true, false]) {
+      expect(checkpointRequestForResume(request, isFree)).not.toHaveProperty('x_large_file_turn');
+    }
+  });
+
+  it('keeps what the paused step had left of its file-tool allowance', () => {
+    const request = saved({
+      ...ledger,
+      readingClosed: false,
+      stepAllowanceLeft: 1_250,
+    } as typeof ledger);
+
+    expect(resumed(request).largeFileTurn).toEqual({
+      ...ledger,
+      readingClosed: false,
+      stepAllowanceLeft: 1_250,
+    });
+  });
+
+  it('a checkpoint without the key resumes with no ledger', () => {
+    expect(resumed(saved()).largeFileTurn).toBeUndefined();
+  });
+
+  it('gives the resumed turn back the file tools the paused turn offered, once each', () => {
+    const plainFileTools = fileSearchToolDefinitions();
+    const processed = resumed(saved(ledger), { tools: [internalTool, ...plainFileTools] });
+
+    expect(processed.llmRequest.tools).toEqual([
+      internalTool,
+      ...fileSearchToolDefinitions({ largeFileTurn: true }),
+    ]);
+    expect(processed.largeFileTurn?.fileToolsOffered).toBe(true);
+  });
+
+  it('a resumed turn whose tools are all refused offers no file tools and its cards say so', () => {
+    const processed = resumed(saved(ledger), {
+      turnToolProhibition: { allTools: true } as ProcessedRequest['turnToolProhibition'],
+    });
+
+    expect(processed.llmRequest.tools).toBeUndefined();
+    expect(processed.largeFileTurn?.fileToolsOffered).toBe(false);
+  });
+
+  it('leaves the tools of a resumed turn that never offered the file tools as they are', () => {
+    const processed = resumed(saved({ ...ledger, fileToolsOffered: false }), {
+      tools: [internalTool],
+    });
+    expect(processed.llmRequest.tools).toEqual([internalTool]);
+    expect(resumed(saved(), { tools: [internalTool] }).llmRequest.tools).toEqual([internalTool]);
+  });
+
+  it('never keeps a ledger the caller sent, nor one that does not parse', () => {
+    const incoming = { ...turn, x_large_file_turn: ledger } as unknown as ChatCompletionRequest;
+    expect(buildApprovalCheckpointRequest(incoming)).not.toHaveProperty('x_large_file_turn');
+    const forged = saved({ ...ledger, assetIds: ['not-a-uuid'] });
+    expect(forged).not.toHaveProperty('x_large_file_turn');
+    expect(
+      resumed({ x_large_file_turn: { ...ledger, charged: -1 } }).largeFileTurn,
+    ).toBeUndefined();
   });
 });

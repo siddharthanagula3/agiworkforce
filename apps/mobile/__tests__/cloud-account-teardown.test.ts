@@ -76,6 +76,7 @@ jest.mock('../src/features/model-picker/store', () => ({
 
 jest.mock('../src/features/model-picker/service', () => ({
   DEFAULT_LOCAL_MODEL_ID: 'fixture-local-model',
+  isCloudManagedModelId: (id: string) => id === 'fixture-cloud-model',
 }));
 
 jest.mock('../src/features/schedules/store', () => ({
@@ -96,6 +97,7 @@ jest.mock('../src/features/chat/upload/uploadLifecycle', () => ({
 
 jest.mock('../services/notifications', () => ({
   notificationCenterStore: { clear: jest.fn() },
+  clearDeliveredNotifications: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../src/features/notifications/accountFeed', () => ({
@@ -126,6 +128,7 @@ jest.mock('../lib/mmkv', () => ({
     getString: jest.fn().mockReturnValue(undefined),
     set: jest.fn(),
     delete: jest.fn(),
+    getAllKeys: jest.fn().mockReturnValue([]),
   },
 }));
 
@@ -215,9 +218,11 @@ const { invalidateConnectorPolicy } = require('../services/connectors') as {
 const { useUploadLifecycleStore } = require('../src/features/chat/upload/uploadLifecycle') as {
   useUploadLifecycleStore: { getState: jest.Mock };
 };
-const { notificationCenterStore } = require('../services/notifications') as {
-  notificationCenterStore: { clear: jest.Mock };
-};
+const { notificationCenterStore, clearDeliveredNotifications } =
+  require('../services/notifications') as {
+    notificationCenterStore: { clear: jest.Mock };
+    clearDeliveredNotifications: jest.Mock;
+  };
 const { useAccountNotificationFeed } = require('../src/features/notifications/accountFeed') as {
   useAccountNotificationFeed: { getState: jest.Mock };
 };
@@ -244,7 +249,7 @@ const { useChatMessageStore } = require('../stores/chat/chatMessageStore') as {
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
-import { mmkvStorage } from '../lib/mmkv';
+import { mmkvStorage, storage } from '../lib/mmkv';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { applyCloudSettings, toCloudSettings } from '../services/cloudSettingsMapping';
 import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
@@ -347,6 +352,7 @@ describe('clearLocalCloudAccountState', () => {
     expect(invalidateConnectorPolicy).toHaveBeenCalledTimes(1);
     expect(resetCloudUploads).toHaveBeenCalledTimes(1);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
+    expect(clearDeliveredNotifications).toHaveBeenCalledTimes(1);
     expect(resetAccountNotificationFeed).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
     expect(clearCloudSearch).toHaveBeenCalledTimes(1);
@@ -356,6 +362,37 @@ describe('clearLocalCloudAccountState', () => {
 
     expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();
     expect(useChatMessageStore.setState).not.toHaveBeenCalled();
+  });
+
+  it('removes every account’s recent Cloud searches from the phone and keeps the Local ones', () => {
+    (storage.getAllKeys as jest.Mock).mockReturnValueOnce([
+      'recent-searches:v1:local',
+      'recent-searches:v1:cloud:account-a',
+      'recent-searches:v1:cloud:account-b',
+      'unrelated-key',
+    ]);
+
+    clearLocalCloudAccountState();
+
+    expect(storage.delete).toHaveBeenCalledWith('recent-searches:v1:cloud:account-a');
+    expect(storage.delete).toHaveBeenCalledWith('recent-searches:v1:cloud:account-b');
+    expect(storage.delete).not.toHaveBeenCalledWith('recent-searches:v1:local');
+    expect(storage.delete).not.toHaveBeenCalledWith('unrelated-key');
+  });
+
+  it('moves a Cloud model selection to the Local choice and keeps the Cloud choice for that account', () => {
+    const setModel = jest.fn();
+    const restoreNewChatModel = jest.fn();
+    useModelStore.getState.mockReturnValue({
+      selectedModel: 'fixture-cloud-model',
+      setModel,
+      restoreNewChatModel,
+    });
+
+    clearLocalCloudAccountState();
+
+    expect(restoreNewChatModel).toHaveBeenCalledTimes(1);
+    expect(setModel).not.toHaveBeenCalled();
   });
 
   it('drops shared text and files staged for account A before account B opens a composer', () => {

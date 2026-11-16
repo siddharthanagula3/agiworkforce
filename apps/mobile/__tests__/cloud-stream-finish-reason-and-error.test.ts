@@ -686,6 +686,53 @@ describe('cloud send: canonical agent activity', () => {
     });
   });
 
+  it('settles an activity the stream never closed as complete when the answer ends normally', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        x_agent_event: {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: 'session-mobile-unclosed',
+          turnId: 'turn-mobile-unclosed',
+          sequence: 0,
+          emittedAtMs: 4_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      callbacks.onDelta({ content: 'The whole answer.' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'answer this', CLOUD_MODEL);
+
+    const activity = lastAssistantMessage()?.metadata?.agentActivity as
+      { status?: string; completedAtMs?: number } | undefined;
+    expect(activity?.status).toBe('completed');
+    expect(typeof activity?.completedAtMs).toBe('number');
+  });
+
+  it('leaves an unclosed activity open when the answer was stopped or failed', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({
+        x_agent_event: {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: 'session-mobile-stopped',
+          turnId: 'turn-mobile-stopped',
+          sequence: 0,
+          emittedAtMs: 5_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      callbacks.onDelta({ content: 'Partial answer', finish_reason: 'stopped' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'answer this', CLOUD_MODEL);
+
+    const activity = lastAssistantMessage()?.metadata?.agentActivity as
+      { status?: string } | undefined;
+    expect(activity?.status).not.toBe('completed');
+  });
+
   it('settles a started activity as failed with safe UI copy on transport error', async () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
       callbacks.onDelta({

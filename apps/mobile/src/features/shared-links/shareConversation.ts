@@ -1,4 +1,4 @@
-import { Alert, Share } from 'react-native';
+import { Alert, Platform, Share, type ShareContent } from 'react-native';
 import { toUserMessage } from '@/services/userMessage';
 import { createSharedLink, type SharedLinkMessage } from './service';
 
@@ -8,6 +8,10 @@ export interface ShareConversationInput {
   modelId: string | null;
   readMessages: () => Promise<SharedLinkMessage[]> | SharedLinkMessage[];
   isCurrent: () => boolean;
+}
+
+function shareLinkContent(url: string): ShareContent {
+  return Platform.OS === 'ios' ? { url } : { message: url };
 }
 
 export function confirmShareConversation(input: ShareConversationInput): void {
@@ -31,7 +35,7 @@ export function confirmShareConversation(input: ShareConversationInput): void {
                 messages,
               });
               if (!input.isCurrent()) return;
-              await Share.share({ message: link.shareUrl, url: link.shareUrl });
+              await Share.share(shareLinkContent(link.shareUrl));
             } catch (error: unknown) {
               if (!input.isCurrent()) return;
               Alert.alert(

@@ -145,7 +145,7 @@ describe('Cloud AI provider consent', () => {
     pressAlertButton(CLOUD_PROVIDER_CONSENT_DETAILS_LABEL);
     await flush();
 
-    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(CLOUD_PROVIDER_LIST_URL);
+    expect(mockOpenInAppBrowser).toHaveBeenCalledWith(`${CLOUD_PROVIDER_LIST_URL}?from=mobile`);
     expect(alertSpy).toHaveBeenCalledTimes(2);
     expect(readCloudProviderConsent()).toBeNull();
 

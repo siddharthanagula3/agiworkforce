@@ -10,4 +10,4 @@ export {
   MAX_FILENAME_CHARS,
   filenameIsUnsafe,
   sanitizeFilename,
-} from './filename';
+} from '@agiworkforce/unified-chat/filename';

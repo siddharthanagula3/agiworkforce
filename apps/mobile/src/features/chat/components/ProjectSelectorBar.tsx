@@ -328,6 +328,7 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
                   onPress={() => setDropdownVisible(false)}
                   accessibilityLabel="Close project picker"
                   accessibilityRole="button"
+                  hitSlop={5}
                   style={({ pressed }) => ({
                     width: 34,
                     height: 34,

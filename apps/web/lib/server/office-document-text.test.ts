@@ -20,7 +20,14 @@ import {
   officeDocumentKind,
   OfficeDocumentUnreadableError,
   OFFICE_DOCUMENT_FAILURE_REASONS,
+  xmlTextRuns,
 } from './office-document-text';
+
+function patternTextRuns(xml: string, tag: string): string {
+  return [...xml.matchAll(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'g'))]
+    .map((match) => match[1] ?? '')
+    .join('');
+}
 
 function cell(text: string): TableCell {
   return new TableCell({ children: [new Paragraph({ children: [new TextRun({ text })] })] });
@@ -236,6 +243,37 @@ describe('extractOfficeDocumentText', () => {
     expect(text).toContain('MANGO-3308-DELTA');
   });
 
+  it('stops a sheet at the row cap a caller sets and says the rest were omitted', async () => {
+    const workbook = await buildXlsx();
+
+    const capped = await extractOfficeDocumentText(workbook, 'operations.xlsx', 'xlsx', {
+      maxSheetRows: 1,
+    });
+    const whole = await extractOfficeDocumentText(workbook, 'operations.xlsx', 'xlsx');
+
+    expect(capped).toContain('## Sheet: Revenue\nRow 1: A: Month\n[Remaining rows omitted.]');
+    expect(capped).not.toContain('Row 2:');
+    expect(whole).toContain('Row 2: A: Jan');
+    expect(whole).not.toContain('[Remaining rows omitted.]');
+  });
+
+  it('reads only the slides and characters a caller allows', async () => {
+    const deck = await buildPptx();
+
+    const oneSlide = await extractOfficeDocumentText(deck, 'launch-deck.pptx', 'pptx', {
+      maxSlides: 1,
+    });
+    const short = await extractOfficeDocumentText(deck, 'launch-deck.pptx', 'pptx', {
+      maxChars: 40,
+    });
+
+    expect(oneSlide).toContain('## Slide 1');
+    expect(oneSlide).not.toContain('## Slide 2');
+    expect(oneSlide).not.toContain('WALNUT-7742-ECHO');
+    expect(short).not.toContain('WALNUT-7742-ECHO');
+    expect(short.startsWith('## Slide 1')).toBe(true);
+  });
+
   it('numbers slides and carries speaker notes', async () => {
     const text = await extractOfficeDocumentText(await buildPptx(), 'launch-deck.pptx', 'pptx');
 
@@ -311,5 +349,35 @@ describe('a file that cannot be read says why in words a reader can act on', () 
     );
     expect(new Set(messages).size).toBe(OFFICE_DOCUMENT_FAILURE_REASONS.length);
     for (const message of messages) expect(message.startsWith('a.docx ')).toBe(true);
+  });
+});
+
+describe('XML text runs', () => {
+  it('reads the runs the element pattern matched, by index scans', () => {
+    let state = 7;
+    const random = () => {
+      state = (Math.imul(state, 1_103_515_245) + 12_345) >>> 0;
+      return state / 4_294_967_296;
+    };
+    const pieces = [
+      '<a:t>',
+      '<a:t x="1">',
+      '</a:t>',
+      '<a:tab/>',
+      '<a:t/>',
+      '<a:t',
+      '>',
+      'x',
+      ' ',
+      '<',
+      '/',
+    ];
+    for (let sample = 0; sample < 5_000; sample += 1) {
+      let xml = '';
+      const length = Math.floor(random() * 16);
+      for (let index = 0; index < length; index += 1)
+        xml += pieces[Math.floor(random() * pieces.length)]!;
+      expect(xmlTextRuns(xml, 'a:t'), xml).toBe(patternTextRuns(xml, 'a:t'));
+    }
   });
 });

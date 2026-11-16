@@ -4,10 +4,29 @@ title: Delete your account, or cancel a scheduled deletion
 path: /privacy
 category: account
 tags: delete account, close account, erase, deletion, cancel deletion, undo deletion, permanently delete, account erasure, remove my data
-updated: 2026-11-12
-description: How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.
+updated: 2026-11-15
+description: How to delete your account on the web or in the AGI Mobile app, what is deleted and what is kept, how to cancel a scheduled deletion and how to delete conversations without deleting the account.
 scope: public
 ---
+
+## Delete your account on the web
+
+You can delete your AGI Mobile account here on the web, without the app. Sign
+in at [agiworkforce.com/settings/account](https://agiworkforce.com/settings/account)
+with the account you use in the app and choose **Delete account**. It is the
+same request the app makes, with the same cancellation window.
+
+If you cannot sign in, email
+[{{CONTACT.email}}](mailto:{{CONTACT.email}}?subject=Privacy%20request) from
+your account address with the subject line "Privacy request", or use the form
+at [agiworkforce.com/privacy/requests](https://agiworkforce.com/privacy/requests),
+which gives you a reference. Requests are worked by a person, not by an
+automatic process.
+
+If you created the account in the iPhone app with Sign in with Apple and the
+sign-in page here has no Apple button, use the form at
+[agiworkforce.com/privacy/requests](https://agiworkforce.com/privacy/requests),
+choose Erasure and say in the details that you signed up with Apple.
 
 ## How deletion works
 
@@ -28,6 +47,28 @@ so the work starts on the first daily run after that deadline passes.
 If an active legal hold covers your account, for example one your workspace has
 placed, nothing is erased until the hold is released.
 
+## What is deleted and what is kept
+
+The daily job erases your user-scoped records and stored objects and deletes
+your identity at our authentication provider. Section 05 of the
+[privacy policy](https://agiworkforce.com/privacy#s-05) holds the full retention
+schedule and says why each of these is kept after erasure:
+
+- Security and organisation audit log entries naming you. Erasure does not purge
+  them. The security audit log keeps an entry for 90 days. Organisation audit log
+  entries have no automatic end date: a separate privileged routine exists to
+  purge them, and it is not part of the automatic path.
+- A record that you were erased, so the system can tell that you must stay
+  erased.
+- Double-charge protection keys, deleted once their 24-hour window closes, and
+  any payment still moving when you delete.
+- Rows that belong to an organisation rather than to you, such as its billing
+  ledger row with your user id removed. Books of account are kept
+  {{RETENTION.statutoryRecordYears}} years and then deleted.
+- Stripe's own record of your payments and invoices, under Stripe's retention.
+- Platform logs and database or object-storage snapshots, retained according to
+  our hosting vendors' own configuration.
+
 ## Changing your mind
 
 The 24 hours are a real cancellation window, not a formality. Sign back in
@@ -38,6 +79,13 @@ from renewing, cancelling the deletion turns its renewal back on.
 
 Once the window closes the button is gone and the page says the cancellation
 window has closed and erasure is already underway.
+
+## If you signed in with Apple
+
+Apple keeps AGI Mobile in the list of apps that use Sign in with Apple until you
+remove it there. On iPhone, open Settings, tap your name, tap **Sign in with
+Apple**, choose the app and tap **Delete**. Apple's guide is
+[Manage your apps with Sign in with Apple](https://support.apple.com/en-us/102571).
 
 ## Before you confirm
 
