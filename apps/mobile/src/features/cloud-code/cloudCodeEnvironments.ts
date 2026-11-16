@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isCloudCodeEnvironmentsUnavailable } from '@agiworkforce/cloud-contracts';
-import { CLOUD_CODE_BUILT_IN_ENVIRONMENT, type CloudCodeEnvironment } from '@agiworkforce/types';
+import type { CloudCodeEnvironment } from '@agiworkforce/types';
 import { networkAccessLabel } from './networkAccessOptions';
 import { cloudCodeApi } from './service';
 
 export const CLOUD_ENVIRONMENTS_SCREEN_TITLE = 'Cloud environments';
 export const CLOUD_ENVIRONMENTS_LOAD_FAILED = 'Environments could not be loaded.';
-export const CLOUD_ENVIRONMENT_DEFAULT_FAILED = 'The default could not be changed';
 export const CLOUD_ENVIRONMENT_DELETE_FAILED = 'The environment could not be deleted';
 
 export function cloudEnvironmentVariablesLabel(count: number): string {
@@ -23,12 +22,6 @@ export function describeCloudEnvironment(
   }
   return parts.join(' · ');
 }
-
-export const BUILT_IN_ENVIRONMENT_SUMMARY = describeCloudEnvironment({
-  networkAccess: CLOUD_CODE_BUILT_IN_ENVIRONMENT.networkAccess,
-  setupScript: '',
-  variableNames: [],
-});
 
 export function deleteEnvironmentConfirmation(name: string): { title: string; message: string } {
   return {
@@ -47,7 +40,6 @@ export type CloudEnvironmentsLoad =
 export interface CloudEnvironments {
   load: CloudEnvironmentsLoad;
   retry: () => void;
-  setDefault: (environmentId: string | null) => Promise<void>;
   remove: (environmentId: string) => Promise<void>;
 }
 
@@ -88,30 +80,6 @@ export function useCloudCodeEnvironments(): CloudEnvironments {
     void read();
   }, [read]);
 
-  const setDefault = useCallback(async (environmentId: string | null) => {
-    const shown = current.current;
-    if (shown.status !== 'ready') return;
-    const target = environmentId ?? shown.environments.find((entry) => entry.isDefault)?.id;
-    if (!target) return;
-    request.current += 1;
-    const updated = await cloudCodeApi.updateEnvironment(target, {
-      isDefault: environmentId !== null,
-    });
-    if (!mounted.current) return;
-    setLoad((previous) =>
-      previous.status === 'ready'
-        ? {
-            ...previous,
-            environments: previous.environments.map((entry) =>
-              entry.id === updated.id
-                ? updated
-                : { ...entry, isDefault: updated.isDefault ? false : entry.isDefault },
-            ),
-          }
-        : previous,
-    );
-  }, []);
-
   const remove = useCallback(async (environmentId: string) => {
     request.current += 1;
     await cloudCodeApi.deleteEnvironment(environmentId);
@@ -126,5 +94,5 @@ export function useCloudCodeEnvironments(): CloudEnvironments {
     );
   }, []);
 
-  return { load, retry, setDefault, remove };
+  return { load, retry, remove };
 }

@@ -1,8 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react';
 import { Alert, View, type AccessibilityActionEvent } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import { Check, Layers } from 'lucide-react-native';
-import { CLOUD_CODE_BUILT_IN_ENVIRONMENT } from '@agiworkforce/types';
+import { Layers } from 'lucide-react-native';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -21,19 +20,15 @@ import {
 import { useCloudCodeAccess } from '@/src/features/cloud-code/useCloudCodeAccess';
 import { describeCloudCodeError } from '@/src/features/cloud-code/service';
 import {
-  BUILT_IN_ENVIRONMENT_SUMMARY,
   CLOUD_ENVIRONMENTS_LOAD_FAILED,
   CLOUD_ENVIRONMENTS_SCREEN_TITLE,
-  CLOUD_ENVIRONMENT_DEFAULT_FAILED,
   CLOUD_ENVIRONMENT_DELETE_FAILED,
   deleteEnvironmentConfirmation,
   describeCloudEnvironment,
   useCloudCodeEnvironments,
 } from '@/src/features/cloud-code/cloudCodeEnvironments';
 
-const SET_AS_DEFAULT = 'Set as default';
 const DELETE = 'Delete';
-const BUILT_IN_KEY = 'built-in';
 
 function RowFrame({ children, isLast }: { children: ReactNode; isLast?: boolean }) {
   const colors = useThemeColors();
@@ -104,7 +99,6 @@ function EnvironmentRow({
   testID,
   name,
   summary,
-  isDefault,
   busy,
   actions,
   onOpenMenu,
@@ -113,7 +107,6 @@ function EnvironmentRow({
   testID: string;
   name: string;
   summary: string;
-  isDefault: boolean;
   busy: boolean;
   actions: ConversationMenuAction[];
   onOpenMenu: () => void;
@@ -134,7 +127,7 @@ function EnvironmentRow({
       onLongPress={offersActions ? onOpenMenu : undefined}
       accessible
       accessibilityLabel={`${name}. ${summary}`}
-      accessibilityState={{ selected: isDefault, busy }}
+      accessibilityState={{ busy }}
       accessibilityActions={
         offersActions ? actions.map((action) => ({ name: action.key, label: action.label })) : []
       }
@@ -149,11 +142,7 @@ function EnvironmentRow({
             {summary}
           </Text>
         </View>
-        {busy ? (
-          <LoadingIndicator size="small" />
-        ) : isDefault ? (
-          <Check size={18} color={colors.textPrimary} />
-        ) : null}
+        {busy ? <LoadingIndicator size="small" /> : null}
       </RowFrame>
     </Pressable>
   );
@@ -177,25 +166,10 @@ function EnvironmentRow({
 
 function EnvironmentList() {
   const colors = useThemeColors();
-  const { load, retry, setDefault, remove } = useCloudCodeEnvironments();
+  const { load, retry, remove } = useCloudCodeEnvironments();
   const actionMenu = useActionMenu();
   const [pending, setPending] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const changeDefault = useCallback(
-    async (key: string, environmentId: string | null) => {
-      setPending(key);
-      setNotice(null);
-      try {
-        await setDefault(environmentId);
-      } catch (error: unknown) {
-        setNotice(describeCloudCodeError(error, CLOUD_ENVIRONMENT_DEFAULT_FAILED));
-      } finally {
-        setPending(null);
-      }
-    },
-    [setDefault],
-  );
 
   const deleteEnvironment = useCallback(
     async (environmentId: string) => {
@@ -282,42 +256,24 @@ function EnvironmentList() {
     );
   }
 
-  const savedDefault = load.environments.some((environment) => environment.isDefault);
+  if (load.environments.length === 0) {
+    return (
+      <SettingsInfo
+        testID="cloud-environments-empty"
+        icon={Layers}
+        title="No environments yet"
+        body="Environments you save are listed here."
+      />
+    );
+  }
+
   const locked = pending !== null;
-  const builtInActions: ConversationMenuAction[] = savedDefault
-    ? [
-        {
-          key: 'setDefault',
-          label: SET_AS_DEFAULT,
-          run: () => void changeDefault(BUILT_IN_KEY, null),
-        },
-      ]
-    : [];
 
   return (
     <>
       <SettingsGroup>
-        <EnvironmentRow
-          testID="cloud-environment-built-in"
-          name={CLOUD_CODE_BUILT_IN_ENVIRONMENT.name}
-          summary={BUILT_IN_ENVIRONMENT_SUMMARY}
-          isDefault={!savedDefault}
-          busy={pending === BUILT_IN_KEY}
-          actions={locked ? [] : builtInActions}
-          onOpenMenu={() => actionMenu.open(CLOUD_CODE_BUILT_IN_ENVIRONMENT.name, builtInActions)}
-          isLast={load.environments.length === 0 && !notice}
-        />
         {load.environments.map((environment, index) => {
           const actions: ConversationMenuAction[] = [
-            ...(environment.isDefault
-              ? []
-              : [
-                  {
-                    key: 'setDefault',
-                    label: SET_AS_DEFAULT,
-                    run: () => void changeDefault(environment.id, environment.id),
-                  },
-                ]),
             {
               key: 'delete',
               label: DELETE,
@@ -331,7 +287,6 @@ function EnvironmentList() {
               testID={`cloud-environment-${environment.id}`}
               name={environment.name}
               summary={describeCloudEnvironment(environment)}
-              isDefault={environment.isDefault}
               busy={pending === environment.id}
               actions={locked ? [] : actions}
               onOpenMenu={() => actionMenu.open(environment.name, actions)}
