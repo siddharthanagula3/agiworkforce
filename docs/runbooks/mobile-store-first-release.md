@@ -307,7 +307,8 @@ leaving a decision alone keeps it.
   pinned by commit, with the compile SDK and NDK that `expo-build-properties`
   sets in `apps/mobile/app.config.js`; then
   `pnpm --filter @agiworkforce/mobile exec expo prebuild --platform android --no-install`,
-  `./gradlew :app:assembleRelease` in `apps/mobile/android`, and
+  `./gradlew :app:assembleRelease` in the Android project that prebuild
+  generates, and
   `reactivecircus/android-emulator-runner` (pinned) installing the APK and
   checking that the launcher activity starts
   (`adb shell am start -W -n com.agiworkforce.app/.MainActivity`, then
