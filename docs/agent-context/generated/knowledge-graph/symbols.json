@@ -15074,9 +15074,6 @@
       "packages/ui/unified-chat/src/index.ts",
       "packages/ui/unified-chat/src/lib/slashCommands.ts"
     ],
-    "BUILT_IN_ENVIRONMENT_SUMMARY": [
-      "apps/mobile/src/features/cloud-code/cloudCodeEnvironments.ts"
-    ],
     "BUILT_IN_ORGANIZATION_ROLE_KEYS": [
       "packages/contracts/types/src/enterprise/permissions.ts"
     ],
@@ -22444,9 +22441,6 @@
     ],
     "CLOUD_DRAFT_SAVE": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
-    ],
-    "CLOUD_ENVIRONMENT_DEFAULT_FAILED": [
-      "apps/mobile/src/features/cloud-code/cloudCodeEnvironments.ts"
     ],
     "CLOUD_ENVIRONMENT_DELETE_FAILED": [
       "apps/mobile/src/features/cloud-code/cloudCodeEnvironments.ts"
