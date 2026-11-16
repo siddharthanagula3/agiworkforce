@@ -846,7 +846,8 @@ export default function RootLayout() {
       handledChatArrival.current = linkArrival.id;
       return;
     }
-    if (!isClerkLoaded || segments[0] !== '(app)' || segments[1] !== 'chat') return;
+    const routeSegments: readonly string[] = segments;
+    if (!isClerkLoaded || routeSegments[0] !== '(app)' || routeSegments[1] !== 'chat') return;
     handledChatArrival.current = linkArrival.id;
     if (isClerkSignedIn || isLocalChatOnThisDevice(chatId)) return;
     router.replace(beginCloudPostAuthIntentForChat(chatId));

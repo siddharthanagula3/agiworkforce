@@ -137,49 +137,39 @@ beforeEach(() => {
 });
 
 describe('Cloud environments screen', () => {
-  it('shows the built-in Default with the check when no saved environment is the default', async () => {
-    listed([WEB]);
+  it('lists the saved environments with no default control or default marker', async () => {
+    listed([DOCS, WEB]);
 
     render(<CloudEnvironmentsScreen />);
 
     expect(await screen.findByText('Web app')).toBeTruthy();
     expect(screen.getByText('Cloud environments')).toBeTruthy();
-    expect(screen.getByText('Default')).toBeTruthy();
-    expect(screen.getByText('Trusted hosts')).toBeTruthy();
     expect(screen.getByText('Trusted hosts · setup script · 2 variables')).toBeTruthy();
-    expect(screen.getByTestId('cloud-environment-built-in').props.accessibilityState).toMatchObject(
-      {
-        selected: true,
-      },
-    );
-    expect(row(WEB.id).props.accessibilityState).toMatchObject({ selected: false });
+    expect(screen.getByText('Isolated · 1 variable')).toBeTruthy();
+    expect(screen.queryByTestId('cloud-environment-built-in')).toBeNull();
+    expect(screen.queryByText('Default')).toBeNull();
+    expect(screen.queryByText(/default/i)).toBeNull();
+    expect(screen.queryByLabelText(/default/i)).toBeNull();
+    expect(screen.queryByTestId('environment-swipe-setDefault')).toBeNull();
+    for (const id of [WEB.id, DOCS.id]) {
+      expect(row(id).props.accessibilityState?.selected).toBeUndefined();
+      expect(row(id).props.accessibilityActions).toEqual([{ name: 'delete', label: 'Delete' }]);
+    }
+    openMenu(DOCS.id);
+    expect(screen.getByTestId('conversation-action-delete')).toBeTruthy();
+    expect(screen.queryByTestId('conversation-action-setDefault')).toBeNull();
+    expect(screen.queryByText('Set as default')).toBeNull();
+    expect(mockApi.updateEnvironment).not.toHaveBeenCalled();
   });
 
-  it('moves the check to a saved default and names one variable in the singular', async () => {
-    listed([DOCS, WEB]);
-
-    render(<CloudEnvironmentsScreen />);
-
-    expect(await screen.findByText('Isolated · 1 variable')).toBeTruthy();
-    expect(row(DOCS.id).props.accessibilityState).toMatchObject({ selected: true });
-    expect(screen.getByTestId('cloud-environment-built-in').props.accessibilityState).toMatchObject(
-      {
-        selected: false,
-      },
-    );
-  });
-
-  it('lists only the built-in Default when nothing is saved, with nothing to do on it', async () => {
+  it('says so when no environment is saved', async () => {
     listed([]);
 
     render(<CloudEnvironmentsScreen />);
 
-    await waitFor(() => expect(screen.getByText('Default')).toBeTruthy());
-    const builtIn = screen.getByTestId('cloud-environment-built-in');
-    expect(builtIn.props.accessibilityActions).toEqual([]);
-    fireEvent(builtIn, 'longPress');
-    expect(screen.queryByTestId('conversation-action-setDefault')).toBeNull();
-    expect(screen.queryByTestId('environment-swipe-setDefault')).toBeNull();
+    expect(await screen.findByTestId('cloud-environments-empty')).toBeTruthy();
+    expect(screen.getByText('No environments yet')).toBeTruthy();
+    expect(screen.queryByText(/default/i)).toBeNull();
   });
 
   it('says the feature is not available when the server has no environments route', async () => {
@@ -188,7 +178,6 @@ describe('Cloud environments screen', () => {
     render(<CloudEnvironmentsScreen />);
 
     expect(await screen.findByTestId('cloud-environments-unavailable')).toBeTruthy();
-    expect(screen.queryByText('Default')).toBeNull();
     expect(screen.queryByTestId('cloud-environments-retry')).toBeNull();
   });
 
@@ -205,41 +194,6 @@ describe('Cloud environments screen', () => {
 
     expect(await screen.findByText('Web app')).toBeTruthy();
     expect(mockApi.listEnvironments).toHaveBeenCalledTimes(2);
-  });
-
-  it('sets a saved environment as the default from the long-press menu', async () => {
-    listed([DOCS, WEB]);
-    mockApi.updateEnvironment.mockResolvedValue({ ...WEB, isDefault: true });
-    render(<CloudEnvironmentsScreen />);
-    await screen.findByText('Web app');
-
-    openMenu(WEB.id);
-    expect(screen.getByTestId('conversation-action-delete')).toBeTruthy();
-    chooseMenuAction('setDefault');
-
-    await waitFor(() =>
-      expect(row(WEB.id).props.accessibilityState).toMatchObject({ selected: true }),
-    );
-    expect(mockApi.updateEnvironment).toHaveBeenCalledWith(WEB.id, { isDefault: true });
-    expect(row(DOCS.id).props.accessibilityState).toMatchObject({ selected: false });
-  });
-
-  it('gives the default back to the built-in environment', async () => {
-    listed([DOCS]);
-    mockApi.updateEnvironment.mockResolvedValue({ ...DOCS, isDefault: false });
-    render(<CloudEnvironmentsScreen />);
-    await screen.findByText('Docs');
-
-    openMenu('built-in');
-    expect(screen.queryByTestId('conversation-action-delete')).toBeNull();
-    chooseMenuAction('setDefault');
-
-    await waitFor(() =>
-      expect(
-        screen.getByTestId('cloud-environment-built-in').props.accessibilityState,
-      ).toMatchObject({ selected: true }),
-    );
-    expect(mockApi.updateEnvironment).toHaveBeenCalledWith(DOCS.id, { isDefault: false });
   });
 
   it('asks before deleting, names the consequence, and removes the row', async () => {
@@ -291,28 +245,24 @@ describe('Cloud environments screen', () => {
     expect(row(WEB.id).props.accessibilityLabel).toBe(
       'Web app. Trusted hosts · setup script · 2 variables',
     );
-    expect(row(WEB.id).props.accessibilityActions).toEqual([
-      { name: 'setDefault', label: 'Set as default' },
-      { name: 'delete', label: 'Delete' },
-    ]);
+    expect(row(WEB.id).props.accessibilityActions).toEqual([{ name: 'delete', label: 'Delete' }]);
     fireEvent(row(WEB.id), 'accessibilityAction', { nativeEvent: { actionName: 'delete' } });
 
     expect(alert).toHaveBeenCalledWith('Delete Web app?', expect.any(String), expect.any(Array));
     alert.mockRestore();
   });
 
-  it('runs a swipe action and closes the swiped row', async () => {
+  it('runs the delete swipe action and closes the swiped row', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     listed([WEB]);
-    mockApi.updateEnvironment.mockResolvedValue({ ...WEB, isDefault: true });
     render(<CloudEnvironmentsScreen />);
     await screen.findByText('Web app');
 
-    fireEvent.press(screen.getByTestId('environment-swipe-setDefault'));
+    fireEvent.press(screen.getByTestId('environment-swipe-delete'));
 
     expect(mockSwipeClose).toHaveBeenCalled();
-    await waitFor(() =>
-      expect(row(WEB.id).props.accessibilityState).toMatchObject({ selected: true }),
-    );
+    expect(alert).toHaveBeenCalledWith('Delete Web app?', expect.any(String), expect.any(Array));
+    alert.mockRestore();
   });
 
   it('asks a signed-in person in Local Mode to switch to AGI Cloud without loading', () => {

@@ -55,7 +55,6 @@ import {
   type AgentRunNotice,
 } from './agent-notification-service';
 import { isPhoneChatReply, notifyChatReplyReady } from './chat-reply-notification-service';
-import { getResearchReportByRequestId } from './research-report-service';
 
 const TERMINAL_STATE_VALUES: string[] = [...TERMINAL_AGENT_TASK_STATES];
 
@@ -137,6 +136,10 @@ async function isResearchReportReady(
   event: AgentRunNotice['event'],
 ): Promise<boolean> {
   if (event !== 'completed' || run.workMode !== 'research') return false;
+  // Loaded on use: a static import closes a cycle through the research loop,
+  // the tool loop and schedule-service back to this module, and the production
+  // build then fails while schedule-service is still initializing.
+  const { getResearchReportByRequestId } = await import('./research-report-service');
   const report = await getResearchReportByRequestId(db, {
     userId: run.userId,
     requestId: run.requestId,
