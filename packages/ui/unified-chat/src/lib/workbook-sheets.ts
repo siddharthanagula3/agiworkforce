@@ -1,12 +1,21 @@
 import { DecodeUTF8, Inflate, strFromU8 } from 'fflate';
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import {
+  builtInNumberFormat,
+  displayCellNumber,
+  parseNumberFormat,
+  type NumberFormat,
+} from './workbook-number-formats';
 
 const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const DEFAULT_SHEET_PATH = 'xl/worksheets/sheet1.xml';
 const WORKBOOK_PATH = 'xl/workbook.xml';
 const WORKBOOK_RELS_PATH = 'xl/_rels/workbook.xml.rels';
 const SHARED_STRINGS_PATH = 'xl/sharedStrings.xml';
+const DEFAULT_STYLES_PATH = 'xl/styles.xml';
+const STYLES_RELATIONSHIP_SUFFIX = '/styles';
 export const MAX_WORKBOOK_SHEETS = 50;
+const MAX_CELL_FORMATS = 65_490;
 const MAX_ARCHIVE_MEMBERS = 2_000;
 const MAX_DECOMPRESSION_RATIO = 120;
 const MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
@@ -260,19 +269,38 @@ function resolveTarget(fromPath: string, target: string): string {
   return parts.join('/');
 }
 
-function sheetEntries(archive: WorkbookArchive): { name: string; path: string }[] {
+interface WorkbookLayout {
+  sheets: { name: string; path: string }[];
+  stylesPath: string;
+  date1904: boolean;
+}
+
+function memberPath(target: string): string {
+  return target.startsWith('/') ? target.slice(1) : resolveTarget(WORKBOOK_PATH, target);
+}
+
+function workbookLayout(archive: WorkbookArchive): WorkbookLayout {
   if (!archive.members.has(WORKBOOK_PATH) || !archive.members.has(WORKBOOK_RELS_PATH)) {
-    return [{ name: 'Sheet1', path: DEFAULT_SHEET_PATH }];
+    return {
+      sheets: [{ name: 'Sheet1', path: DEFAULT_SHEET_PATH }],
+      stylesPath: DEFAULT_STYLES_PATH,
+      date1904: false,
+    };
   }
   const relationshipPrefixes = new Set<string>();
   const declared: { name: string; id: string }[] = [];
   let seen = 0;
+  let date1904 = false;
   readMember(archive, WORKBOOK_PATH, {
     open(name, attributes) {
       for (const [key, value] of Object.entries(attributes)) {
         if (key.startsWith('xmlns:') && value === RELATIONSHIP_NS) {
           relationshipPrefixes.add(key.slice('xmlns:'.length));
         }
+      }
+      if (name === 'workbookPr') {
+        const flag = attributes['date1904']?.trim();
+        date1904 = flag === '1' || flag === 'true';
       }
       if (name !== 'sheet') return;
       seen += 1;
@@ -284,30 +312,71 @@ function sheetEntries(archive: WorkbookArchive): { name: string; path: string }[
   });
   const wanted = new Set(declared.map((sheet) => sheet.id));
   const targets = new Map<string, string>();
+  let stylesTarget = '';
   readMember(archive, WORKBOOK_RELS_PATH, {
     open(name, attributes) {
+      if (name !== 'Relationship') return;
       const id = attributes['Id'] ?? '';
-      if (name === 'Relationship' && wanted.has(id)) targets.set(id, attributes['Target'] ?? '');
+      if (wanted.has(id)) targets.set(id, attributes['Target'] ?? '');
+      else if ((attributes['Type'] ?? '').endsWith(STYLES_RELATIONSHIP_SUFFIX)) {
+        stylesTarget ||= attributes['Target'] ?? '';
+      }
     },
   });
   const entries: { name: string; path: string }[] = [];
   for (const sheet of declared) {
     const target = targets.get(sheet.id);
     if (!target || !sheet.name) continue;
-    entries.push({
-      name: sheet.name,
-      path: target.startsWith('/') ? target.slice(1) : resolveTarget(WORKBOOK_PATH, target),
-    });
+    entries.push({ name: sheet.name, path: memberPath(target) });
   }
-  return entries;
+  return {
+    sheets: entries,
+    stylesPath: stylesTarget ? memberPath(stylesTarget) : DEFAULT_STYLES_PATH,
+    date1904,
+  };
 }
 
-type CellValue = readonly string[] | number;
+interface StyledNumber {
+  readonly stored: string;
+  readonly style: number;
+}
+
+type CellValue = readonly string[] | number | StyledNumber;
+
+interface SheetRow {
+  readonly index: number;
+  readonly cells: Map<number, CellValue>;
+}
 
 interface ParsedSheet {
   name: string;
-  rows: Map<number, CellValue>[];
+  rows: SheetRow[];
+  rowCount: number;
   width: number;
+  numbers: boolean;
+}
+
+interface CellFormats {
+  formats: readonly (NumberFormat | null)[];
+  date1904: boolean;
+}
+
+function storedParts(value: readonly string[] | StyledNumber): readonly string[] {
+  return 'stored' in value ? [value.stored] : value;
+}
+
+function isBlankCell(value: CellValue): boolean {
+  return typeof value !== 'number' && !('stored' in value) && value.every((part) => part === '');
+}
+
+function styleIndex(raw: string | undefined): number {
+  return raw !== undefined && /^\d{1,9}$/.test(raw) ? Number(raw) : -1;
+}
+
+function rowIndex(raw: string | undefined, previous: number): number {
+  const reference = raw?.trim() ?? '';
+  const index = /^\d+$/.test(reference) ? Number(reference) - 1 : -1;
+  return index > previous ? index : previous + 1;
 }
 
 function columnIndex(reference: string, remaining: number): number {
@@ -352,13 +421,18 @@ function parseSheet(
   budget: number,
   referenced: Set<number>,
 ): { sheet: ParsedSheet; lowerBound: number } | null {
-  const rows: Map<number, CellValue>[] = [];
+  const rows: SheetRow[] = [];
+  let rowCount = 0;
   let width = 0;
   let known = 0;
+  let numbers = false;
+  let inRow = false;
+  let rowAt = -1;
   let row: Map<number, CellValue> | null = null;
   let cell: {
     index: number;
     type: string | undefined;
+    style: number;
     formula: boolean;
     value: string | undefined;
     inline: string[];
@@ -368,8 +442,7 @@ function parseSheet(
   let phoneticDepth = 0;
   let previous = -1;
 
-  const lowerBound = () =>
-    Math.max(0, rows.length - 1) + rows.length * Math.max(0, width - 1) + known;
+  const lowerBound = () => Math.max(0, rowCount - 1) + rowCount * Math.max(0, width - 1) + known;
   const check = () => {
     if (lowerBound() > budget) throw new WorkbookPreviewLimitError();
   };
@@ -377,17 +450,23 @@ function parseSheet(
   const found = readMember(archive, entry.path, {
     open(name, attributes) {
       if (name === 'row') {
-        if (rows.length > budget) throw new WorkbookPreviewLimitError();
-        row = new Map();
-        rows.push(row);
+        rowAt = rowIndex(attributes['r'], rowAt);
+        inRow = true;
+        row = null;
         previous = -1;
-        check();
-      } else if (name === 'c' && row) {
+      } else if (name === 'c' && inRow) {
         const reference = attributes['r'];
         const index = reference ? columnIndex(reference, budget) : previous + 1;
         previous = index;
         width = Math.max(width, index + 1);
-        cell = { index, type: attributes['t'], formula: false, value: undefined, inline: [] };
+        cell = {
+          index,
+          type: attributes['t'],
+          style: styleIndex(attributes['s'] ?? '0'),
+          formula: false,
+          value: undefined,
+          inline: [],
+        };
         check();
       } else if (cell) {
         if (name === 'v') {
@@ -411,8 +490,10 @@ function parseSheet(
       if (name === 'v') inValue = false;
       else if (name === 't') inInlineText = false;
       else if (name === 'rPh') phoneticDepth = Math.max(0, phoneticDepth - 1);
-      else if (name === 'row') row = null;
-      else if (name === 'c' && cell && row) {
+      else if (name === 'row') {
+        inRow = false;
+        row = null;
+      } else if (name === 'c' && cell && inRow) {
         const done = cell;
         cell = null;
         let value: CellValue;
@@ -423,22 +504,80 @@ function parseSheet(
           value = Number.isInteger(shared) && shared >= 0 ? shared : [''];
         } else if (done.type === 'inlineStr') {
           value = done.inline;
+        } else if ((done.type === undefined || done.type === 'n') && done.value) {
+          value = { stored: done.value, style: done.style };
+          numbers = true;
         } else {
           value = [done.value ?? ''];
         }
+        if (!row) {
+          if (isBlankCell(value)) return;
+          if (rowAt > budget) throw new WorkbookPreviewLimitError();
+          row = new Map();
+          rows.push({ index: rowAt, cells: row });
+          rowCount = rowAt + 1;
+        }
         const replaced = row.get(done.index);
         if (replaced !== undefined && typeof replaced !== 'number') {
-          known -= escapedCellLength(replaced, Number.MAX_SAFE_INTEGER);
+          known -= escapedCellLength(storedParts(replaced), Number.MAX_SAFE_INTEGER);
         }
         row.set(done.index, value);
         if (typeof value === 'number') referenced.add(value);
-        else known += escapedCellLength(value, budget - lowerBound());
+        else known += escapedCellLength(storedParts(value), budget - lowerBound());
         check();
       }
     },
   });
   if (!found) return null;
-  return { sheet: { name: entry.name, rows, width }, lowerBound: lowerBound() };
+  return { sheet: { name: entry.name, rows, rowCount, width, numbers }, lowerBound: lowerBound() };
+}
+
+class CellFormatsRead extends Error {}
+
+function readCellFormats(archive: WorkbookArchive, path: string): (NumberFormat | null)[] {
+  const custom = new Map<number, string>();
+  let customChars = 0;
+  const formatIds: number[] = [];
+  let section: 'numFmts' | 'cellXfs' | null = null;
+  try {
+    readMember(archive, path, {
+      open(name, attributes) {
+        if (name === 'numFmts' || name === 'cellXfs') {
+          section = name;
+        } else if (name === 'numFmt' && section === 'numFmts') {
+          if (custom.size >= MAX_CELL_FORMATS) throw new WorkbookPreviewLimitError();
+          const id = styleIndex(attributes['numFmtId']);
+          const code = attributes['formatCode'] ?? '';
+          customChars += code.length;
+          if (customChars > MAX_FILE_TEXT_CHARS) throw new WorkbookPreviewLimitError();
+          if (id >= 0) custom.set(id, code);
+        } else if (name === 'xf' && section === 'cellXfs') {
+          if (formatIds.length >= MAX_CELL_FORMATS) throw new WorkbookPreviewLimitError();
+          formatIds.push(styleIndex(attributes['numFmtId'] ?? '0'));
+        }
+      },
+      close(name) {
+        if (name === 'cellXfs') throw new CellFormatsRead();
+        if (name === 'numFmts') section = null;
+      },
+    });
+  } catch (error) {
+    if (error instanceof CellFormatsRead) {
+      const parsed = new Map<number, NumberFormat | null>();
+      return formatIds.map((id) => {
+        if (id < 0) return null;
+        const code = custom.get(id);
+        if (code === undefined) return builtInNumberFormat(id);
+        let format = parsed.get(id);
+        if (format === undefined) {
+          format = parseNumberFormat(code);
+          parsed.set(id, format);
+        }
+        return format;
+      });
+    }
+  }
+  return [];
 }
 
 function readSharedStrings(archive: WorkbookArchive, referenced: Set<number>): Map<number, string> {
@@ -485,68 +624,91 @@ function csvCell(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-function sheetCsv(sheet: ParsedSheet, shared: Map<number, string>, remaining: number): string {
-  const rows = sheet.rows.map(
-    (row) =>
-      new Map(
-        [...row.entries()].map(([index, value]): [number, readonly string[]] => [
-          index,
-          typeof value === 'number' ? [shared.get(value) ?? ''] : value,
-        ]),
-      ),
-  );
+function shownParts(
+  value: CellValue,
+  shared: Map<number, string>,
+  cellFormats: CellFormats,
+): readonly string[] {
+  if (typeof value === 'number') return [shared.get(value) ?? ''];
+  if (!('stored' in value)) return value;
+  const format = cellFormats.formats[value.style] ?? null;
+  return [displayCellNumber(value.stored, format, cellFormats.date1904)];
+}
+
+function sheetCsv(
+  sheet: ParsedSheet,
+  shared: Map<number, string>,
+  cellFormats: CellFormats,
+  remaining: number,
+): string {
   const width = sheet.width;
-  if (rows.length - 1 > remaining) throw new WorkbookPreviewLimitError();
-  const newlines = Math.max(0, rows.length - 1);
+  const rowCount = sheet.rowCount;
+  if (rowCount - 1 > remaining) throw new WorkbookPreviewLimitError();
+  const newlines = Math.max(0, rowCount - 1);
   const commasPerRow = Math.max(0, width - 1);
   if (
     newlines > remaining ||
-    (rows.length > 0 && commasPerRow > Math.floor((remaining - newlines) / rows.length))
+    (rowCount > 0 && commasPerRow > Math.floor((remaining - newlines) / rowCount))
   ) {
     throw new WorkbookPreviewLimitError();
   }
-  let length = newlines + rows.length * commasPerRow;
-  for (const row of rows) {
-    for (const parts of row.values()) {
+  let length = newlines + rowCount * commasPerRow;
+  const rows = sheet.rows.map((row) => {
+    const cells = new Map<number, readonly string[]>();
+    for (const [index, value] of row.cells) {
+      const parts = shownParts(value, shared, cellFormats);
       length += escapedCellLength(parts, remaining - length);
+      cells.set(index, parts);
     }
+    return { index: row.index, cells };
+  });
+  const emptyLine = ','.repeat(commasPerRow);
+  const lines: string[] = [];
+  for (const row of rows) {
+    while (lines.length < row.index) lines.push(emptyLine);
+    const chunks: string[] = [];
+    let previous = 0;
+    for (const [index, parts] of [...row.cells.entries()].sort(([a], [b]) => a - b)) {
+      chunks.push(','.repeat(index - previous), csvCell(parts.join('')));
+      previous = index;
+    }
+    chunks.push(','.repeat(Math.max(0, width - 1 - previous)));
+    lines.push(chunks.join(''));
   }
-  return rows
-    .map((row) => {
-      const chunks: string[] = [];
-      let previous = 0;
-      for (const [index, parts] of [...row.entries()].sort(([a], [b]) => a - b)) {
-        chunks.push(','.repeat(index - previous), csvCell(parts.join('')));
-        previous = index;
-      }
-      chunks.push(','.repeat(Math.max(0, width - 1 - previous)));
-      return chunks.join('');
-    })
-    .join('\n');
+  return lines.join('\n');
 }
 
 /**
  * Reads the worksheets of an XLSX file on the device, in tab order, as CSV. It never
  * evaluates formulas: a formula cell shows its cached value or {@link XLSX_NOT_CALCULATED}.
+ * A number shows as its cell format displays it when that format can be shown faithfully,
+ * and as the stored value otherwise or when the styles part cannot be read.
  * Throws {@link WorkbookPreviewLimitError} past the preview text limit and
  * {@link WorkbookFormatError} for a file it cannot read.
  */
 export function readWorkbookSheets(data: Uint8Array): WorkbookSheet[] {
   const archive = openArchive(data);
+  const layout = workbookLayout(archive);
   const referenced = new Set<number>();
   const parsed: ParsedSheet[] = [];
   let consumed = 0;
-  for (const entry of sheetEntries(archive)) {
+  for (const entry of layout.sheets) {
     const result = parseSheet(archive, entry, MAX_FILE_TEXT_CHARS - consumed, referenced);
     if (!result) continue;
     consumed += result.lowerBound;
     parsed.push(result.sheet);
   }
   const shared = readSharedStrings(archive, referenced);
+  const cellFormats: CellFormats = {
+    formats: parsed.some((sheet) => sheet.numbers)
+      ? readCellFormats(archive, layout.stylesPath)
+      : [],
+    date1904: layout.date1904,
+  };
   const sheets: WorkbookSheet[] = [];
   let remaining = MAX_FILE_TEXT_CHARS;
   for (const sheet of parsed) {
-    const csv = sheetCsv(sheet, shared, remaining);
+    const csv = sheetCsv(sheet, shared, cellFormats, remaining);
     remaining -= csv.length;
     sheets.push({ name: sheet.name, csv });
   }

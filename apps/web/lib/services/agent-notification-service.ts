@@ -376,9 +376,19 @@ export async function notifyLocalCodeSessionEvent(
   notice: LocalCodeSessionNotice,
 ): Promise<{ pushed: boolean }> {
   try {
-    if (!(await loadAgentPushPreference(db, notice.userId))) return { pushed: false };
     const { title, body } = describeLocalCodeSessionEvent(notice);
-    const { event, rootId, threadId, approvalId } = notice.activity;
+    const { event, rootId, threadId, turnId, approvalId } = notice.activity;
+    const occurrence = event === 'approval_required' ? `${event}:${approvalId ?? ''}` : event;
+    await recordNotification(db, {
+      userId: notice.userId,
+      category: 'agent_run',
+      severity: FEED_SEVERITY[event],
+      title,
+      message: body,
+      dedupeKey: `local-code-turn:${turnId}:${occurrence}`,
+    });
+
+    if (!(await loadAgentPushPreference(db, notice.userId))) return { pushed: false };
     const result = await sendPushToUser(
       notice.userId,
       {

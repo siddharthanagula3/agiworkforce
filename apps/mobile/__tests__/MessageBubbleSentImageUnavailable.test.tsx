@@ -1,8 +1,26 @@
 import { Alert } from 'react-native';
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
+import { SENT_FILE_UNAVAILABLE_MESSAGE } from '@/src/features/chat/utils/sentAttachment';
 import type { ChatMessage } from '@/types/chat';
+
+type FileSystemLegacyModule = typeof import('expo-file-system/legacy');
+
+const mockGetInfoAsync = jest.fn();
+jest.mock('expo-file-system/legacy', () => ({
+  ...jest.requireActual<FileSystemLegacyModule>('expo-file-system/legacy'),
+  documentDirectory: 'file:///documents/',
+  getInfoAsync: (...args: unknown[]) => mockGetInfoAsync(...args),
+}));
+
+const mockFileViewer = jest.fn();
+jest.mock('@/src/features/chat/components/artifact-viewers/FileViewerScreen', () => ({
+  FileViewerScreen: (props: { source: unknown }) => {
+    mockFileViewer(props.source);
+    return null;
+  },
+}));
 
 const mockExpoImage = jest.fn();
 jest.mock('expo-image', () => ({
@@ -99,5 +117,81 @@ describe('a sent image tile', () => {
         mimeType: 'image/svg+xml',
       },
     ]);
+  });
+});
+
+const OLD_DOCUMENTS = 'file:///var/old-container/documents/';
+const KEPT = 'chat-attachments/conversation-1/copy-1/';
+
+describe('a Local copy kept before an app update moved the app folder', () => {
+  beforeEach(() => {
+    mockExpoImage.mockClear();
+    mockViewer.mockClear();
+    mockViewerImages.mockClear();
+    mockFileViewer.mockClear();
+    mockGetInfoAsync.mockReset();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('shows and opens the picture from the current documents folder', () => {
+    show({
+      url: `${OLD_DOCUMENTS}${KEPT}beach.jpg`,
+      mimeType: 'image/jpeg',
+      fileName: 'beach.jpg',
+    });
+
+    expect(mockExpoImage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: { uri: `file:///documents/${KEPT}beach.jpg` } }),
+    );
+    expect(mockViewerImages).toHaveBeenLastCalledWith([
+      expect.objectContaining({ url: `file:///documents/${KEPT}beach.jpg` }),
+    ]);
+    fireEvent.press(screen.getByRole('button', { name: 'Attached image: beach.jpg' }));
+    expect(mockViewer).toHaveBeenLastCalledWith(true);
+  });
+
+  it('opens a sent file from the current documents folder', async () => {
+    mockGetInfoAsync.mockResolvedValue({ exists: true });
+    show({
+      url: `${OLD_DOCUMENTS}${KEPT}lease.pdf`,
+      mimeType: 'application/pdf',
+      fileName: 'lease.pdf',
+    });
+
+    fireEvent.press(screen.getByTestId('sent-file-chip'));
+
+    await waitFor(() =>
+      expect(mockFileViewer).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: `file:///documents/${KEPT}lease.pdf`,
+          fileName: 'lease.pdf',
+        }),
+      ),
+    );
+    expect(mockGetInfoAsync).toHaveBeenCalledWith(`file:///documents/${KEPT}lease.pdf`);
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('says a sent file is no longer on the phone instead of opening a viewer that cannot read it', async () => {
+    mockGetInfoAsync.mockResolvedValue({ exists: false });
+    show({
+      url: `file:///documents/${KEPT}lease.pdf`,
+      mimeType: 'application/pdf',
+      fileName: 'lease.pdf',
+    });
+
+    fireEvent.press(screen.getByTestId('sent-file-chip'));
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Could not open file',
+        SENT_FILE_UNAVAILABLE_MESSAGE,
+      ),
+    );
+    expect(mockFileViewer).not.toHaveBeenCalledWith(
+      expect.objectContaining({ fileName: 'lease.pdf' }),
+    );
   });
 });

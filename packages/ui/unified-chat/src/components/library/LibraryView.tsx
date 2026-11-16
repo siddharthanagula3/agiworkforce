@@ -43,6 +43,7 @@ import {
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
   LIBRARY_DEFAULT_SORT,
+  MAX_CHAT_ATTACHMENT_BYTES,
   type LibraryItem,
   type LibraryKind,
   type LibraryOrigin,
@@ -255,6 +256,11 @@ export interface LibraryTransport {
   isSignedIn: boolean;
   listPage(params: URLSearchParams): Promise<Response>;
   fetchAsset(uri: string): Promise<Response>;
+  /** Saves an uploaded file above the inline chat attachment limit, other than
+   *  a video, through the browser's own download, which the server may hand to
+   *  storage. Hosts without it read every download into the page with
+   *  `fetchAsset`. */
+  downloadInBrowser?: (uri: string) => void;
   deleteItem(id: string): Promise<Response>;
   permanentlyDeleteItem(id: string): Promise<Response>;
   restoreItem(id: string): Promise<Response>;
@@ -301,6 +307,17 @@ async function requireSuccessfulMutation(response: Response): Promise<void> {
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const body = (await response.json()) as { success?: unknown };
   if (body.success !== true) throw new Error('The file is no longer available');
+}
+
+const DOWNLOADS_USED_UP_MESSAGE = 'This file is larger than the file downloads left this month.';
+
+function largeUploadBytes(item: LibraryItem): number | null {
+  return item.origin === 'uploaded' &&
+    !isVideoItem(item) &&
+    item.byte_count !== null &&
+    item.byte_count > MAX_CHAT_ATTACHMENT_BYTES
+    ? item.byte_count
+    : null;
 }
 
 function isImageItem(item: LibraryItem): boolean {
@@ -533,6 +550,17 @@ export function LibraryView({
 
   const handleDownload = useCallback(
     async (item: LibraryItem) => {
+      const { downloadInBrowser } = transport;
+      const largeBytes = downloadInBrowser ? largeUploadBytes(item) : null;
+      if (downloadInBrowser && largeBytes !== null) {
+        if (downloads !== null && downloads.usedBytes + largeBytes > downloads.limitBytes) {
+          setRowError(item.id, DOWNLOADS_USED_UP_MESSAGE);
+          return;
+        }
+        downloadInBrowser(item.uri);
+        setRowError(item.id, null);
+        return;
+      }
       try {
         const res = await transport.fetchAsset(item.uri);
         if (!res.ok) {
@@ -553,7 +581,7 @@ export function LibraryView({
         setRowError(item.id, toUserMessageWithStatus(err, 'That file could not be downloaded.'));
       }
     },
-    [transport, setRowError],
+    [transport, downloads, setRowError],
   );
 
   const probedThumbnailIds = useRef<Set<string>>(new Set());

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-14
+Last updated: 2026-11-16
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -117,7 +117,13 @@ Each line is one approval; engineering edits the page and its claim test after i
   cookie controls.
 - Decision 37: DEF-2262, DEF-3308 upload retention (kept with the chat until it is deleted); DEF-1206,
   DEF-1207 confirm live voice keeps the transcript and no audio, then the voice-retention line and its
-  Learn more target; DEF-3366 confirm whether de-identified or promotional-route copies survive
+  Learn more target; the live voice disclosure wording, now in
+  `apps/mobile/src/features/voice/components/VoiceOnboardingSheet.tsx` (`VOICE_DISCLOSURE.live`), the
+  Voice mode row of `apps/mobile/src/features/settings/cloud-privacy/DataUseScreen.tsx`, both
+  `LISTING-METADATA` files, `android/data-safety.json`, the Audio Data entry of
+  `ios/PrivacyInfo.xcprivacy` and both reviewer notes under `apps/mobile/store-listing/`, needs the
+  lawyer review recorded on 2026-11-13 (`docs/decisions/2026-11-13-founder-decisions.md`) before it
+  is final; DEF-3366 confirm whether de-identified or promotional-route copies survive
   deletion, then the retention statement.
 - Decision 38, approve first: DEF-2366, DEF-0161 notice that feedback and reports may be reviewed;
   DEF-1828 warning on approvals that read untrusted content or send data out; DEF-1174 the mobile
@@ -1312,3 +1318,30 @@ version 16 adds, so the run above measures regressions against version 6, not th
 Engineering adds those rows before the next version is measured.
 **Impact** NOT BLOCKING. Production keeps serving version 6 until this is done.
 **Status** FOUNDER ACTION REQUIRED
+
+## [Mobile] Confirm or reverse hiding two-step setup in AGI Mobile (D-2026-09-28-01)
+
+**Why founder assistance is required**
+D-2026-09-28-01 in `docs/decisions/2026-09-27-founder-decisions.md` keeps the authenticator app and
+backup code controls visible, saying "Temporarily unavailable", while the identity plan that provides
+them is not bought. On 2026-11-16 AGI Mobile was changed to hide them instead, ahead of its first App
+Store submission: while setup is unavailable, an account without two-factor sees no two-factor
+section, and an enrolled account keeps Authenticator app, Backup codes and Turn off two-factor but not
+Generate new backup codes. The web app still follows the decision. Changing a recorded decision is
+your call.
+
+**Exact action** Confirm the phone change, or reverse it so the phone shows "Temporarily unavailable"
+like the web app.
+**Where** `apps/mobile/src/features/settings/account-security/TwoFactorSection.tsx`, pinned by
+`apps/mobile/__tests__/AccountSecurityScreen.test.tsx`; the help article
+`apps/web/content/support/account-security.md`, which now describes both apps.
+**Needed input** Confirm or reverse.
+**How to verify completion** D-2026-09-28-01 describes what each app does, and the phone test pins
+that behaviour.
+**What remains after founder action** If confirmed, D-2026-09-28-01 is amended to name the phone's
+behaviour, and the mobile cell of S86.04 in `audit/ledger/ecosystem-capability-ledger.jsonl`, which
+still cites "Temporarily unavailable", is updated. If reversed, engineering restores the rows on the
+phone, and the help article and its claim in `apps/web/content/support/support-claims.json` return to
+one wording for both apps.
+**Impact** NON-BLOCKING.
+**Status** FOUNDER DECISION REQUIRED

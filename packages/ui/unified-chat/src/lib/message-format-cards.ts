@@ -186,8 +186,8 @@ export function parseComparison(content: string): ParsedComparison {
     }
   }
 
-  const vsMatch = title.match(/^(.+?)\s+vs\.?\s+(.+?)$/i);
-  if (vsMatch) {
+  const vsMatch = /^(.|.*?\S)\s+vs\.?\s+(\S.*|[^\S\n\r\u2028\u2029])/i.exec(title);
+  if (vsMatch && vsMatch[0].length === title.length) {
     items[0].name = (vsMatch[1] ?? '').trim();
     items[1].name = (vsMatch[2] ?? '').trim();
   }
@@ -234,7 +234,9 @@ export function parseComparison(content: string): ParsedComparison {
       continue;
     }
 
-    const prosHeading = trimmed.match(/^#{2,4}\s*\*?\*?(pros|advantages|strengths)\*?\*?\s*(.*)$/i);
+    const prosHeading = trimmed.match(
+      /^#{2,4}\s*\*?\*?(pros|advantages|strengths)\*?\*?\s*(\S.*)?$/i,
+    );
     if (prosHeading) {
       if (currentSection === 'item0' || currentSection === 'pros0' || currentSection === 'cons0') {
         currentSection = 'pros0';
@@ -246,7 +248,7 @@ export function parseComparison(content: string): ParsedComparison {
       continue;
     }
     const consHeading = trimmed.match(
-      /^#{2,4}\s*\*?\*?(cons|disadvantages|weaknesses)\*?\*?\s*(.*)$/i,
+      /^#{2,4}\s*\*?\*?(cons|disadvantages|weaknesses)\*?\*?\s*(\S.*)?$/i,
     );
     if (consHeading) {
       if (currentSection === 'item0' || currentSection === 'pros0' || currentSection === 'cons0') {
@@ -260,7 +262,7 @@ export function parseComparison(content: string): ParsedComparison {
     }
 
     const winnerHeading = trimmed.match(
-      /^#{2,4}\s*\*?\*?(winner|verdict|recommendation|conclusion)\*?\*?\s*(.*)$/i,
+      /^#{2,4}\s*\*?\*?(winner|verdict|recommendation|conclusion)\*?\*?\s*(\S.*)?$/i,
     );
     if (winnerHeading) {
       currentSection = 'winner';
@@ -358,6 +360,19 @@ export interface ParsedSteps {
   extraSections: ExtraSection[];
 }
 
+const STEP_HEADER_RE = /^(?:#{2,4}\s+)?(?:step\s+)?\d+[.:)\s]+(?:([^.:)\s].*)|([.:)\s]))$/i;
+const BOLD_STEP_HEADER_RE = /^(?:#{2,4}\s+)?\*?\*?step\s+\d+[.:)\s]+(?:([^.:)\s].*)|([.:)\s]))$/i;
+const MARKED_TITLE_RE = /^\*?\*?(.+?)\*?\*?$/;
+const TRAILING_MARKED_TITLE_RE = /^(.+?)\*?\*?$/;
+
+function stepHeaderTitle(line: string): string | null {
+  const plain = STEP_HEADER_RE.exec(line);
+  if (plain) return plain[2] ?? MARKED_TITLE_RE.exec(plain[1] ?? '')?.[1] ?? '';
+  const bold = BOLD_STEP_HEADER_RE.exec(line);
+  if (bold) return bold[2] ?? TRAILING_MARKED_TITLE_RE.exec(bold[1] ?? '')?.[1] ?? '';
+  return null;
+}
+
 export function parseSteps(content: string): ParsedSteps {
   const lines = content.split('\n');
 
@@ -378,25 +393,18 @@ export function parseSteps(content: string): ParsedSteps {
       continue;
     }
 
-    const stepHeaderMatch = trimmed.match(
-      /^(?:#{2,4}\s+)?(?:step\s+)?(\d+)[.:)\s]+\s*\*?\*?(.+?)\*?\*?\s*$/i,
-    );
-    const altStepMatch = trimmed.match(
-      /^(?:#{2,4}\s+)?\*?\*?step\s+(\d+)[.:)\s]+\s*(.+?)\*?\*?\s*$/i,
-    );
-
-    const match = stepHeaderMatch || altStepMatch;
-    if (match) {
+    const stepTitle = stepHeaderTitle(trimmed);
+    if (stepTitle !== null) {
       inPreamble = false;
       extraHeading = null;
       steps.push({
-        title: (match[2] ?? '').replace(/\*\*/g, '').trim(),
+        title: stepTitle.replace(/\*\*/g, '').trim(),
         details: [],
       });
       continue;
     }
 
-    const heading = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    const heading = trimmed.match(/^(#{1,6})\s+(\S.*)?$/);
     if (heading) {
       const level = (heading[1] ?? '').length;
       const text = (heading[2] ?? '').replace(/\*\*/g, '').trim();
@@ -445,7 +453,34 @@ export function parseSteps(content: string): ParsedSteps {
   };
 }
 
-const LATEX_ENVIRONMENT_TAG = /\\(?:begin|end)\{[^}]*\}(?:\{[^}]*\})?/g;
+const LATEX_ENVIRONMENT_TAG = /\\(?:begin|end)\{[^}\\]*\}(?:\{[^}]*\})?/g;
+const DISPLAY_MATH_OPEN = '\\[';
+const DISPLAY_MATH_CLOSE = '\\]';
+const CALCULATION_STEP_RE =
+  /^(?:(?:#{2,4}\s+)?step\s+\d+[.:]|\d+\.\s)\s*([^\s:=][^:=]*|[:=][^:=]*)[:=]\s*(.+)/i;
+
+function displayMathSpans(text: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  let open = text.indexOf(DISPLAY_MATH_OPEN);
+  while (open !== -1) {
+    const close = text.indexOf(DISPLAY_MATH_CLOSE, open + DISPLAY_MATH_OPEN.length + 1);
+    if (close === -1) break;
+    const end = close + DISPLAY_MATH_CLOSE.length;
+    spans.push([open, end]);
+    open = text.indexOf(DISPLAY_MATH_OPEN, end);
+  }
+  return spans;
+}
+
+function withoutDisplayMath(text: string): string {
+  let prose = '';
+  let from = 0;
+  for (const [start, end] of displayMathSpans(text)) {
+    prose += `${text.slice(from, start)}\n`;
+    from = end;
+  }
+  return prose + text.slice(from);
+}
 
 export interface ParsedCalculation {
   title: string;
@@ -497,15 +532,16 @@ export function parseCalculation(answer: string): ParsedCalculation {
     formulas.push({ label: '', expression: expr, isLatex: true });
   }
 
-  const displayMathBlocks = content.match(/\\\[([\s\S]+?)\\\]/g) || [];
-  for (const block of displayMathBlocks) {
-    const expr = block.replace(/^\\\[/, '').replace(/\\\]$/, '').trim();
+  for (const [start, end] of displayMathSpans(content)) {
+    const expr = content
+      .slice(start + DISPLAY_MATH_OPEN.length, end - DISPLAY_MATH_CLOSE.length)
+      .trim();
     formulas.push({ label: '', expression: expr, isLatex: true });
   }
 
   // Math blocks are already captured above; dropping them here keeps their
   // inner lines from being re-read as prose.
-  const prose = content.replace(/\$\$[\s\S]+?\$\$/g, '\n').replace(/\\\[[\s\S]+?\\\]/g, '\n');
+  const prose = withoutDisplayMath(content.replace(/\$\$[\s\S]+?\$\$/g, '\n'));
 
   for (const line of prose.split('\n')) {
     const trimmed = line.trim();
@@ -532,18 +568,19 @@ export function parseCalculation(answer: string): ParsedCalculation {
       continue;
     }
 
-    const stepMatch = trimmed.match(
-      /^(?:(?:#{2,4}\s+)?step\s+\d+[.:]\s*|^\d+\.\s+)\*?\*?(.+?)\*?\*?\s*[:=]\s*(.+)/i,
-    );
-    if (stepMatch) {
+    const stepMatch = CALCULATION_STEP_RE.exec(trimmed);
+    const stepLabel = stepMatch
+      ? MARKED_TITLE_RE.exec((stepMatch[1] ?? '').trimEnd())?.[1]
+      : undefined;
+    if (stepMatch && stepLabel !== undefined) {
       steps.push({
-        label: (stepMatch[1] ?? '').replace(/\*\*/g, '').trim(),
+        label: stepLabel.replace(/\*\*/g, '').trim(),
         value: (stepMatch[2] ?? '').replace(/\*\*/g, '').trim(),
       });
       continue;
     }
 
-    const inlineCodeMatch = trimmed.match(/`([^`]+[=+\-*/^][^`]+)`/);
+    const inlineCodeMatch = trimmed.match(/`([^`][^`=+\-*/^]*[=+\-*/^][^`]+)`/);
     if (inlineCodeMatch) {
       const start = inlineCodeMatch.index ?? 0;
       const before = trimmed.slice(0, start);
@@ -555,7 +592,7 @@ export function parseCalculation(answer: string): ParsedCalculation {
       continue;
     }
 
-    const heading = trimmed.match(/^#{1,6}\s+(.*)$/);
+    const heading = trimmed.match(/^#{1,6}\s+(\S.*)?$/);
     if (heading) {
       extraHeading = (heading[1] ?? '').replace(/\*\*/g, '').trim();
       openExtraSection(extraSections, extraHeading);

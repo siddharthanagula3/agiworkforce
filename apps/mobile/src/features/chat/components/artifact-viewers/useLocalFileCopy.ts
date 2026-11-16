@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { getInfoAsync } from 'expo-file-system/legacy';
 import { downloadGeneratedFile, viewerFileCopy } from '@/services/fileCreation';
 import { toUserMessage } from '@/services/userMessage';
 import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
@@ -17,12 +18,30 @@ function copyKey(url: string, fileName: string): string {
   return [scope, url, fileName].join('\u0000');
 }
 
-/** One exported copy per file and account for the session, so sharing a file again does not fetch it again. */
-export function localFileCopy(url: string, fileName: string): Promise<string> {
-  if (url.startsWith('file://')) return Promise.resolve(url);
+async function stillOnDevice(uri: string): Promise<boolean> {
+  try {
+    return (await getInfoAsync(uri)).exists;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One exported copy per file and account for the session, so sharing a file again does not
+ * fetch it again. Exports live in the cache, which the system or Clear cache can empty, so a
+ * remembered copy is used only while its file is still there.
+ */
+export async function localFileCopy(url: string, fileName: string): Promise<string> {
+  if (url.startsWith('file://')) return url;
   const key = copyKey(url, fileName);
   const existing = copies.get(key);
-  if (existing) return existing;
+  if (existing) {
+    const uri = await existing.catch(() => null);
+    if (uri !== null && (await stillOnDevice(uri))) return uri;
+    const current = copies.get(key);
+    if (current && current !== existing) return current;
+    copies.delete(key);
+  }
   const pending = downloadGeneratedFile(url, fileName);
   copies.set(key, pending);
   pending.catch(() => {

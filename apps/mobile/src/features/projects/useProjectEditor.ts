@@ -2,16 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { syncNow } from '@/services/cloudSyncEngine';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAuthStore } from '@/src/features/auth/store';
-import {
-  captureCloudAccountEpoch,
-  isCloudAccountEpochCurrent,
-  isStaleCloudAccountOperation,
-} from '@/src/features/auth/services/cloudAccountSession';
-import { updateCloudProjectDetails } from '@/src/features/projects/service';
 import { useProjectStore } from '@/src/features/projects/store';
-import { showToast } from '@/src/shared/components/Toast';
-import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
-import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import {
   accountScopedUiStateKey,
@@ -28,9 +19,6 @@ export interface EditableProject {
 }
 
 export type NewProjectMemoryScope = 'default' | 'projectOnly';
-
-const MEMORY_SCOPE_NOT_SAVED_MESSAGE =
-  'Project created. Memory setting was not saved; change it in Project settings.';
 
 export interface ProjectEditor {
   visible: boolean;
@@ -70,53 +58,6 @@ const EMPTY_FIELDS: EditorFields = {
   templateId: 'blank',
   memoryScope: 'default',
 };
-
-function isProjectLive(projectId: string): boolean {
-  return useCloudProjectStore
-    .getState()
-    .projects.some((project) => project.id === projectId && project.deletedAt === null);
-}
-
-function waitUntilProjectSettled(projectId: string): Promise<void> {
-  return new Promise((resolve) => {
-    const settled = () =>
-      !useProjectSyncStateStore.getState().dirtyProjectIds.includes(projectId) ||
-      !isProjectLive(projectId);
-    if (settled()) {
-      resolve();
-      return;
-    }
-    const release = () => {
-      unsubscribeSync();
-      unsubscribeProjects();
-    };
-    const check = () => {
-      if (!settled()) return;
-      release();
-      resolve();
-    };
-    const unsubscribeSync = useProjectSyncStateStore.subscribe(check);
-    const unsubscribeProjects = useCloudProjectStore.subscribe(check);
-  });
-}
-
-async function applyProjectOnlyMemory(projectId: string): Promise<void> {
-  const account = captureCloudAccountEpoch();
-  void syncNow().catch(() => undefined);
-  try {
-    await waitUntilProjectSettled(projectId);
-    if (account && !isCloudAccountEpochCurrent(account)) return;
-    if (!isProjectLive(projectId)) return;
-    await updateCloudProjectDetails(projectId, { usesGlobalMemory: false });
-  } catch (error) {
-    if (isStaleCloudAccountOperation(error)) return;
-    const store = useCloudProjectStore.getState();
-    if (store.details[projectId]?.usesGlobalMemory === false) {
-      store.patchCloudProjectDetails(projectId, { usesGlobalMemory: true });
-    }
-    showToast(MEMORY_SCOPE_NOT_SAVED_MESSAGE);
-  }
-}
 
 export function useProjectEditor(onScopeChange?: () => void): ProjectEditor {
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -236,8 +177,14 @@ export function useProjectEditor(onScopeChange?: () => void): ProjectEditor {
         instructions: formInstructions.trim(),
       });
     } else {
-      const projectId = createProject(trimmedName, formDescription.trim(), formInstructions.trim());
-      if (isCloud && memoryScope === 'projectOnly') void applyProjectOnlyMemory(projectId);
+      const projectOnly = isCloud && memoryScope === 'projectOnly';
+      createProject(
+        trimmedName,
+        formDescription.trim(),
+        formInstructions.trim(),
+        projectOnly ? { usesGlobalMemory: false } : undefined,
+      );
+      if (projectOnly) void syncNow().catch(() => undefined);
     }
     close();
   }, [

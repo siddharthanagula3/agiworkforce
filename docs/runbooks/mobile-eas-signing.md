@@ -167,6 +167,11 @@ overbroad, or unavailable document blocks the Play build before store upload.
   pairing flow. While `apps/mobile/app.config.js` still declares them as
   Android App Links, they open the app and do nothing; verify that, and verify
   they open the pairing flow only in a build where `companion` is `true`.
+- On an iPhone with the TestFlight build installed, open
+  `https://agiworkforce.com/pair/ABC123` from Notes or Messages. It must open
+  in Safari, not the app, while `companion` is `false`, because the Apple
+  association file no longer claims `/pair`. Repeat it in a build where
+  `companion` is `true` only after the association file claims `/pair` again.
 - Verify unrelated and extra-segment paths remain in the browser.
 - Verify the redirect-only `www.agiworkforce.com` host remains in the browser;
   only the canonical apex host is declared for verified app links.

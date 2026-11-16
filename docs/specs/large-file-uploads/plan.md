@@ -277,8 +277,11 @@ false` (checked on 2026-11-14), so a merge does not deploy.
      corpus, a 1,240-page PDF in a turn, a 300 MB CSV staged in the sandbox
      (record the sandbox template's envd version, memory and disk, and the
      staging time against the route's 300 s), a download redirect for a
-     navigation in Chrome and Safari, the Library's download button and
-     attach-from-Library answering `413` for the same file, and the
+     navigation in Chrome and Safari, the Library's download button saving the
+     same file through an anchor download (a `302` to storage) in Chrome,
+     Firefox, Safari and the Electron window, adding it from the Library page (Use in chat, remix, Add to project) showing
+     the too-large message while the composer's Files menu shows the generic
+     could-not-be-added copy, and the
      Playwright spec against the preview.
    - **PDF range loading in the function runtime.** Prepare the 480 MB PDF and
      the 3,000-page PDF from the step 4 corpus with `kinds.pdf.rangeLoading`

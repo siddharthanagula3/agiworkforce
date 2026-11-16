@@ -63,6 +63,12 @@ describe('researchReportFilename', () => {
     expect(researchReportFilename(makeReport())).toBe('node-js-release-status');
     expect(researchReportFilename(makeReport({ title: '   ' }))).toBe('research-report');
   });
+
+  it('joins words across runs of separators and drops them at both ends', () => {
+    expect(researchReportFilename({ title: '--Node -- JS: 2026!--' })).toBe('node-js-2026');
+    expect(researchReportFilename({ title: `Node${'-'.repeat(100_000)}js` })).toBe('node-js');
+    expect(researchReportFilename({ title: '!!!' })).toBe('research-report');
+  });
 });
 
 describe('researchReportToArtifact', () => {

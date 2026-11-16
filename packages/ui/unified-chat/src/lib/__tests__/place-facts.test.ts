@@ -41,6 +41,17 @@ describe('assistantNoteForPlace', () => {
     expect(note).not.toBeNull();
     expect((note as string).length).toBeLessThanOrEqual(ASSISTANT_NOTE_MAX_LENGTH + 1);
   });
+
+  it('drops a link target and reads a sentence full of unclosed link openers', () => {
+    expect(
+      assistantNoteForPlace('[Blue Bottle](https://example.com) pours well.', 'Blue Bottle'),
+    ).toBe('Blue Bottle pours well.');
+
+    const hostile = `Blue Bottle pours ${']('.repeat(150_000)}`;
+    expect(assistantNoteForPlace(hostile, 'Blue Bottle')).toBe(
+      `${hostile.slice(0, ASSISTANT_NOTE_MAX_LENGTH).trimEnd()}…`,
+    );
+  });
 });
 
 describe('place facts', () => {

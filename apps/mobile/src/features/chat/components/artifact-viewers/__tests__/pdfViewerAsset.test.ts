@@ -6,6 +6,19 @@ const viewer: { pdfjsVersion: string; html: string } = JSON.parse(
   readFileSync(join(ASSET_DIR, 'pdf-viewer.json'), 'utf8'),
 );
 const template = readFileSync(join(ASSET_DIR, 'viewer.template.html'), 'utf8');
+const SCRIPT_ELEMENT = /<script\b[^>]*>([\s\S]*?)<\/script(?:[\s/][^>]*)?>/gi;
+
+function scriptElements(html: string): { bodies: string[]; shell: string } {
+  const bodies: string[] = [];
+  let shell = '';
+  let end = 0;
+  for (const element of html.matchAll(SCRIPT_ELEMENT)) {
+    bodies.push(element[1]!);
+    shell += html.slice(end, element.index);
+    end = element.index + element[0].length;
+  }
+  return { bodies, shell: shell + html.slice(end) };
+}
 
 function contentSecurityPolicy(): Map<string, string> {
   const meta = /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/.exec(viewer.html);
@@ -20,13 +33,15 @@ function contentSecurityPolicy(): Map<string, string> {
 describe('bundled pdf.js viewer', () => {
   it('is one page with its scripts inline and nothing to fetch', () => {
     const scripts = viewer.html.match(/<script\b[^>]*>/gi) ?? [];
-    const shell = viewer.html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+    const { bodies, shell } = scriptElements(viewer.html);
 
     expect(scripts).toEqual([
       '<script type="module">',
       '<script type="module">',
       '<script type="module">',
     ]);
+    expect(bodies).toHaveLength(scripts.length);
+    expect(shell).not.toMatch(/<\/?script\b/i);
     expect(shell).not.toMatch(/<(link|iframe|object|embed|img|form|a|base)\b/i);
     expect(shell).not.toMatch(/\b(?:src|href|action)\s*=/i);
     expect(shell).not.toMatch(/https?:|\/\/[a-z]/i);
@@ -54,10 +69,8 @@ describe('bundled pdf.js viewer', () => {
   });
 
   it('carries the viewer script of its template, so the two cannot drift apart', () => {
-    const opening = '<script type="module">';
-    const script = template
-      .slice(template.lastIndexOf(opening) + opening.length, template.lastIndexOf('</script>'))
-      .trim();
+    const { bodies } = scriptElements(template);
+    const script = (bodies.at(-1) ?? '').trim();
 
     expect(script.startsWith('{')).toBe(true);
     expect(viewer.html).toContain(script);

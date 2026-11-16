@@ -1,7 +1,6 @@
 import {
   cacheDirectory,
   deleteAsync,
-  documentDirectory,
   getInfoAsync,
   moveAsync,
   readDirectoryAsync,
@@ -31,7 +30,23 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 
-export const EXPORTS_DIR = `${documentDirectory}exports/`;
+export const EXPORTS_DIR = `${cacheDirectory}exports/`;
+
+const STALE_EXPORT_AGE_MS = 24 * 60 * 60 * 1000;
+let staleExportSweep: Promise<void> | null = null;
+
+// Android resolves shareAsync before the receiving app has read the file, so an export is only
+// removed once it is a day old, never as soon as the share sheet closes.
+export async function removeStaleExports(): Promise<void> {
+  const now = Date.now();
+  for (const entry of await readDirectoryAsync(EXPORTS_DIR)) {
+    const uri = `${EXPORTS_DIR}${entry}/`;
+    const info = await getInfoAsync(uri);
+    if (info.exists && now - info.modificationTime * 1000 > STALE_EXPORT_AGE_MS) {
+      await deleteAsync(uri, { idempotent: true });
+    }
+  }
+}
 
 async function ensureExportsDir(): Promise<void> {
   const info = await getInfoAsync(EXPORTS_DIR);
@@ -43,6 +58,7 @@ async function ensureExportsDir(): Promise<void> {
 // Keep every returned URI tied to its original export, even when titles repeat.
 // Allocation failure must not fall back to overwriting an earlier file.
 async function allocateExportPath(fileName: string): Promise<string> {
+  staleExportSweep ??= removeStaleExports().catch(() => undefined);
   await ensureExportsDir();
   const directory = `${EXPORTS_DIR}${Crypto.randomUUID()}/`;
   if ((await getInfoAsync(directory)).exists) {

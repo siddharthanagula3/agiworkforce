@@ -294,14 +294,19 @@ leaving a decision alone keeps it.
   Alternatives: hide billing entries in the embedded view (a field on each
   release in `apps/web/lib/changelog-entries.ts`), or stop linking release
   notes from the phone in version 1. Needed before the web deploy in 4.2.
-- **D19. Pairing links on iPhone.** True now: Android declares no `/pair` App
-  Link while Remote Control is off, but the web's Apple association file still
-  lists `/pair` and `/pair/*` (`apps/web/lib/server/mobile-app-association.ts`),
-  so on an iPhone a pairing link opens the app and nothing happens.
-  Alternative: drop those paths while Remote Control is off, with the same
-  change to `EXPECTED_IOS_PATHS` in
-  `apps/mobile/scripts/release/verify-production-associations.mjs`, deployed
-  before the tagged release. Needed before the tagged release (9.4).
+- **D19. Pairing links on iPhone.** Android declares no `/pair` App Link while
+  Remote Control is off. The working tree now drops `/pair` and `/pair/*` from
+  the web's Apple association file
+  (`apps/web/lib/server/mobile-app-association.ts`) and sets
+  `EXPECTED_IOS_PATHS` in
+  `apps/mobile/scripts/release/verify-production-associations.mjs` to the three
+  paths the file then serves (`/auth/reset-password`, `/github/installed`,
+  `/open/*`). Production main `e822c4fda6` still serves five (those three plus
+  the two pairing paths), so the Android job's association check fails until
+  the web deploy lands: deploy the web app before the tagged release (9.4),
+  never after it. A change to either path list needs the other in the same
+  commit, and a test compares them. When Remote Control ships, add the pairing
+  paths back to both together. Needed before the tagged release (9.4).
 - **D20. An Android build gate before the Play upload.** True now: the release
   workflow builds and runs only iOS simulators before your approval, so the
   first time CI compiles the Android app is the upload to Internal testing, as
@@ -375,7 +380,22 @@ on 2026-11-15:
    (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`,
    `packages/contracts/types/src/managed-usage-limits.ts`). Deploy it before a
    build made from this tree reaches review or testers.
-6. **Your choices in D18 and D19**, if they change web files.
+6. **Project-only memory on a new project.** A project created on the phone
+   with project-only memory is stored that way by the server only once the web
+   app carrying the change to the projects sync route
+   (`apps/web/app/api/projects/sync/route.ts`, which reads `usesGlobalMemory` on
+   create) is deployed. Against the server deployed before it, the project uses
+   memory from other chats until the phone's follow-up request confirms the
+   setting.
+7. **The help search.** The phone's help search is the hosted help page. Until
+   `apps/web/app/api/help/search/route.ts` with the change that leaves out
+   purchase articles is deployed, searching `upgrade`, `pricing` or `billing`
+   in Settings, Help still lists billing and plan articles and the static
+   getting-started article, which App Review would see inside an app that sells
+   nothing.
+8. **Your choices in D18 and D19**, if they change web files. The deploy also
+   carries the association file change from D19, which must land before the
+   tag (9.1, item 4).
 
 Deploying is yours to authorise. After a deploy, check:
 
@@ -448,7 +468,7 @@ Still to do:
   alpha channel (`apps/mobile/scripts/screenshots/compositor.ts`); both stores
   refuse that. Section 8.8 has the conversion until the compositor is changed.
 - **Decisions that become code:** D11 (health connectors), D12 (server-side
-  hide), D19 (pairing paths), D20 (Android build gate), and D8 if you turn
+  hide), D20 (Android build gate), and D8 if you turn
   update checks off.
 - **Commit all of it**, then the store builds can start (9.1, item 3).
 
@@ -1300,6 +1320,19 @@ Each store build spends Expo build minutes. Nothing here starts one for you.
    and the preflight refuses a dirty tree. The working tree held about 1,600
    uncommitted changes on 2026-11-15; the store build is made from what is
    committed, not from what the simulator rounds ran.
+4. **The web deploy.** The tagged release checks the production association
+   files (`apps/mobile/scripts/release/verify-production-associations.mjs`),
+   which expect the paths in the working tree, and production serves different
+   ones until the web deploy (4.2, D19). Deploy first, then check:
+
+   ```bash
+   curl -fsS https://agiworkforce.com/.well-known/apple-app-site-association | grep -c '"/pair'
+   curl -fsS https://agiworkforce.com/.well-known/apple-app-site-association | grep -c '"/open/\*"'
+   ```
+
+   The first must print `0` and the second `1` before you push the tag. A
+   failed request prints an error and no number, so a missing answer is not a
+   pass.
 
 ### 9.2 What the commands do
 
@@ -1451,7 +1484,8 @@ If it goes wrong:
   before a missing-profile error: section 6.2, including the App Store Connect
   key's role, is incomplete.
 - The Android job fails at "Verify deployed Apple and Android association
-  documents": section 6.3 is incomplete.
+  documents": section 6.3 is incomplete, or the web deploy (9.1, item 4) did
+  not precede the tag.
 - Any failure that needs a code change needs a new tag on the fixed commit.
   Delete the old tag on GitHub and on your Mac:
 

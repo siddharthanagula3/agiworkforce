@@ -111,3 +111,26 @@ describe('Continue generating after the server copy of an answer arrives', () =>
     );
   });
 });
+
+describe('Continue generating while the server may still be writing the answer', () => {
+  const cutOff = assistant('a1', CUT_OFF, { finishReason: 'length' });
+
+  it.each(['running', 'checking', 'unknown', 'waiting'] as const)(
+    'is hidden while the turn is %s, so a second answer is never started',
+    (turn) => {
+      expect(continuableCloudModel(conversation, cutOff, turn)).toBeNull();
+    },
+  );
+
+  it.each(['idle', 'stalled'] as const)('is offered once the turn is %s', (turn) => {
+    expect(continuableCloudModel(conversation, cutOff, turn)).toBe(CLOUD_MODEL);
+  });
+
+  it('is hidden for an answer reopened mid-run until the server has answered', () => {
+    const reopened = assistant('a1', CUT_OFF);
+
+    expect(continuableCloudModel(conversation, reopened, 'checking')).toBeNull();
+    expect(continuableCloudModel(conversation, reopened, 'running')).toBeNull();
+    expect(continuableCloudModel(conversation, reopened, 'idle')).toBe(CLOUD_MODEL);
+  });
+});

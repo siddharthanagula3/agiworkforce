@@ -128,14 +128,14 @@ describe('copies made to view a file', () => {
   it('removes viewed copies at sign-out and leaves a download the person asked for', async () => {
     await viewerFileCopy(FILE_URL, 'report.pdf');
     const exported = await downloadGeneratedFile(FILE_URL, 'report.pdf');
-    expect(exported.startsWith('file:///docs/exports/')).toBe(true);
+    expect(exported.startsWith('file:///cache/exports/')).toBe(true);
 
     invalidateCloudAccount();
     clearAccountScopedArtifactState();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(underCache()).toEqual([]);
-    expect(underDocuments()).toEqual([exported]);
+    expect(underCache()).toEqual([exported]);
+    expect(underDocuments()).toEqual([]);
   });
 
   it('removes video previews at sign-out', async () => {

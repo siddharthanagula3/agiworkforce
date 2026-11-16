@@ -241,7 +241,7 @@ describe('ArtifactViewer', () => {
       expect(screen.getByTestId('artifact-viewer-study')).toBeTruthy();
       expect(screen.getByText('Which organelle makes ATP?')).toBeTruthy();
       expect(screen.queryByText(/~~~quiz/)).toBeNull();
-      expect(screen.queryByText(/<!-- @artifact -->/)).toBeNull();
+      expect(screen.queryByText(/<!-{2} @artifact -->/)).toBeNull();
       expect(screen.queryByText('Mitochondria run cellular respiration.')).toBeNull();
     });
 

@@ -7,8 +7,11 @@ import { isAutoModeModelId } from '@agiworkforce/types';
 import { STREAM_INTERRUPTED_FAILURE_CODE } from '@/services/streamConnectionLost';
 import { isCloudManagedModelId, isFreeQuotaTurnModelId } from '@/src/features/model-picker/service';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
+import type { InFlightTurnVerdict } from '../inFlightTurnRecovery';
 import { executionModeForConversation } from './conversationMode';
 import { getMessageStreamErrorCode, hasMessageStreamError } from './messageStreamError';
+
+const TURN_OVER: ReadonlySet<InFlightTurnVerdict> = new Set(['idle', 'stalled']);
 
 function isInterruptedPartialAnswer(message: ChatMessage): boolean {
   return (
@@ -26,12 +29,16 @@ function isInterruptedPartialAnswer(message: ChatMessage): boolean {
  * the text, and a stopped answer is offered Try again rather than Continue,
  * as on web. Of the failed answers, only one whose stream was interrupted after
  * its text began is continued, from that text. Media, research and paused runs
- * each resume through their own flow.
+ * each resume through their own flow. While the server may still be writing
+ * the turn, Continue would start and bill a second answer, so it waits until
+ * the turn is known to be over.
  */
 export function continuableCloudModel(
   conversation: Pick<ConversationSummary, 'executionMode' | 'model' | 'provider'>,
   message: ChatMessage,
+  turn: InFlightTurnVerdict = 'idle',
 ): string | null {
+  if (!TURN_OVER.has(turn)) return null;
   if (executionModeForConversation(conversation) !== 'cloud') return null;
   if ((message.type ?? 'text') !== 'text' || message.status === 'error') return null;
   if (message.pendingToolInput) return null;

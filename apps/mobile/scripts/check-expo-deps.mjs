@@ -94,7 +94,7 @@ async function readPublishDates(packageName) {
     '',
   );
   try {
-    const response = await fetch(`${registry}/${packageName.replace('/', '%2F')}`, {
+    const response = await fetch(`${registry}/${packageName.replaceAll('/', '%2F')}`, {
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(REGISTRY_TIMEOUT_MS),
     });

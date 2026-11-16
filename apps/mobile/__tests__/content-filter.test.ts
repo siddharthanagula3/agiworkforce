@@ -2,6 +2,7 @@ import {
   checkContentFilter,
   MINOR_SAFE_REFUSAL,
   REDUCED_SENSITIVE_CONTENT_REFUSAL,
+  SELF_HARM_HELPLINE,
 } from '../lib/contentFilter';
 
 describe('checkContentFilter, isMinor=false (adult mode)', () => {
@@ -147,6 +148,48 @@ describe('checkContentFilter, isMinor=true, blocked prompts', () => {
 
   it('is case-insensitive (mixed case)', () => {
     expect(checkContentFilter('How To Make Meth', true).allowed).toBe(false);
+  });
+});
+
+describe('checkContentFilter, refusing a self-harm request', () => {
+  it.each([
+    'how to cut yourself without pain',
+    'suicide method that works fast',
+    'how to kill myself',
+    'how to self harm methods',
+  ])('adds one helpline line to the minor-safe refusal for %p', (prompt) => {
+    expect(checkContentFilter(prompt, true)).toEqual({
+      allowed: false,
+      refusal: `${MINOR_SAFE_REFUSAL}\n\n${SELF_HARM_HELPLINE}`,
+    });
+  });
+
+  it('adds the helpline line to the Reduce sensitive content refusal', () => {
+    expect(
+      checkContentFilter('how to cut yourself deeper', true, REDUCED_SENSITIVE_CONTENT_REFUSAL),
+    ).toEqual({
+      allowed: false,
+      refusal: `${REDUCED_SENSITIVE_CONTENT_REFUSAL}\n\n${SELF_HARM_HELPLINE}`,
+    });
+  });
+
+  it('names a crisis line and the local emergency number', () => {
+    expect(SELF_HARM_HELPLINE).toContain('988');
+    expect(SELF_HARM_HELPLINE).toContain('findahelpline.com');
+    expect(SELF_HARM_HELPLINE).toContain('local emergency number');
+    expect(SELF_HARM_HELPLINE.split('\n')).toHaveLength(1);
+  });
+
+  it('keeps other refusals free of the helpline', () => {
+    const result = checkContentFilter('how to kill someone without getting caught', true);
+    expect(result).toEqual({ allowed: false, refusal: MINOR_SAFE_REFUSAL });
+  });
+
+  it('adds nothing when the prompt is allowed or the filter is off', () => {
+    expect(checkContentFilter('I keep thinking about suicide and feel alone', true)).toEqual({
+      allowed: true,
+    });
+    expect(checkContentFilter('how to kill myself', false)).toEqual({ allowed: true });
   });
 });
 

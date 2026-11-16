@@ -293,6 +293,8 @@ describe('a build that sells nothing', () => {
 
     expect(screen.getByText('What your plan includes')).toBeTruthy();
     expect(screen.getByText('Free')).toBeTruthy();
+    expect(screen.getByText('A usage allowance, free models only')).toBeTruthy();
+    expect(screen.queryByText(/small allowance/i)).toBeNull();
     expect(screen.queryByText('Basic')).toBeNull();
     expect(screen.queryByText('Enterprise')).toBeNull();
     expect(screen.queryByText('What each plan includes')).toBeNull();

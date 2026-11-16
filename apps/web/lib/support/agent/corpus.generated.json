@@ -29,7 +29,7 @@
         "api keys"
       ],
       "description": "How to manage passkeys, two-factor authentication, your password, active sessions and API keys.",
-      "updated": "2026-11-08",
+      "updated": "2026-11-16",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -44,7 +44,7 @@
           "ordinal": 1,
           "heading": "Second factors",
           "headingPath": "Passkeys, two-factor and active sessions › Second factors",
-          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Setting up an authenticator app (TOTP) and replacing backup codes can be\nswitched off for a time: while it is, Settings, Security shows **Temporarily\nunavailable** where you would set one up or replace your backup codes, and a\nworkspace cannot start requiring multi-factor authentication until they return.\nSMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security. An account with an\nauthenticator app already set up keeps it, and the parts of this page about\nauthenticator codes and backup codes apply to those accounts.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one.\n{{AVAILABILITY.summary}}"
+          "text": "Settings, Security manages passkeys and two-factor authentication. Passkeys sign\nyou in. Setting up an authenticator app (TOTP) and replacing backup codes can be\nswitched off for a time: while it is, Settings, Security on the web shows\n**Temporarily unavailable** where you would set one up or replace your backup\ncodes, the AGI Mobile app leaves out those options, and a workspace cannot start\nrequiring multi-factor authentication until they return.\nSMS MFA is not part of the\ncurrent account contract, so it is not offered rather than silently ignored.\nHardware security keys work with Advanced Account Security. An account with an\nauthenticator app already set up keeps it, and the parts of this page about\nauthenticator codes and backup codes apply to those accounts.\n\nNo device skips the sign-in checks. Devices you linked, such as the CLI, VS\nCode, the Chrome extension or the desktop app, are listed in Settings, Account\nunder **Linked devices**, where you can unlink each one.\n{{AVAILABILITY.summary}}"
         },
         {
           "id": "account-security#2",
@@ -818,7 +818,7 @@
         "safety"
       ],
       "description": "Who to contact in an emergency and how AGI responds to a message about self-harm.",
-      "updated": "2026-10-08",
+      "updated": "2026-11-16",
       "source": "content/support/crisis-resources.md",
       "chunks": [
         {
@@ -840,7 +840,7 @@
           "ordinal": 2,
           "heading": "What AGI does when a message is about self-harm",
           "headingPath": "Crisis and self-harm resources › What AGI does when a message is about self-harm",
-          "text": "Nothing special, and you should know that before you rely on it.\n\n- AGI has no feature that detects a message about suicide or self-harm.\n- A chat shows no crisis banner, helpline number or pop-up.\n- A message about self-harm alerts no person at AGI.\n- The model you picked answers under its provider's own safety rules. What it\n  says, and whether it mentions a helpline, differs from one model to another.\n\nOne setting touches this subject. **Reduce sensitive content**, in Settings under\nSafety, is off unless you turn it on. When it is on, AGI refuses a short list of\nexplicit or harmful how-to prompts before they reach a Managed Cloud model, and\nrequests for suicide or self-harm methods are on that list. The refusal says the\ncontent is unavailable while the setting is on. It shows no helpline."
+          "text": "Very little, and you should know that before you rely on it.\n\n- Apart from the Reduce sensitive content check below, AGI does not scan chats\n  for messages about suicide or self-harm, and a message about self-harm alerts\n  no person at AGI.\n- AGI adds no crisis banner or pop-up to a chat, and the only crisis note it\n  adds is in the phone refusal described below.\n- In Managed Cloud and with your own provider key, the model you picked answers\n  under its provider's own safety rules. What it says, and whether it mentions\n  a helpline, differs from one model to another.\n- In Local mode in the AGI Mobile app, the model runs on your phone with a short\n  instruction from AGI: give no methods or instructions for suicide or\n  self-harm, respond with care, and point to a local crisis line or emergency\n  number when a message suggests you may be at risk. A small model on a phone\n  can still get this wrong.\n\nOne setting touches this subject. **Reduce sensitive content**, in Settings under\nSafety, is off unless you turn it on. When it is on, AGI refuses a short list of\nexplicit or harmful how-to prompts before they reach a Managed Cloud model, and\nrequests for suicide or self-harm methods are on that list. On the web, the\nrefusal says the content is unavailable while the setting is on. It shows no\nhelpline. In the AGI Mobile app the same check runs on the phone before a chat\nmessage you type or dictate reaches any model, in Local mode as well, and when\nit refuses a request about suicide or self-harm, the pop-up that says so adds a\nnote that points to a crisis line and your local emergency number. A phone in\nminor-safe mode runs the check whether or not the setting is on."
         },
         {
           "id": "crisis-resources#3",
@@ -1952,7 +1952,7 @@
         "anonymized usage"
       ],
       "description": "What is stored where, how diagnostics and temporary chats work and how to manage your data and sessions.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-16",
       "source": "content/support/privacy-controls.md",
       "chunks": [
         {
@@ -1960,7 +1960,7 @@
           "ordinal": 0,
           "heading": "What is stored where",
           "headingPath": "Privacy controls in Settings › What is stored where",
-          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select. The CLI is\n{{STATUS.cli}} and VS Code is {{STATUS.vscode}}. Web, Mobile, Desktop and Chrome\nuse managed cloud and do not accept provider keys. Managed cloud conversations\nare encrypted in transit, and at rest by the database and object-storage vendors\nthat hold them, as a property of those vendors' platforms and not a layer AGI\nadds. AGI does not sell your\ndata, and does not use customer conversation content to train AGI-owned models.\nThe {{PLAN.free}} plan is served by free capacity from model providers, AGI picks the\nprovider for the default model, and some of those providers' terms may allow\ntraining on what you send; to keep your chats out of training, turn on\n**Only use models that do not train on your chats** in Settings, Privacy."
+          "text": "In Local mode on the CLI, conversations stay on your device and are never\nuploaded. CLI BYOK sends requests directly to the provider you select. The CLI is\n{{STATUS.cli}} and VS Code is {{STATUS.vscode}}. Web, Mobile, Desktop and Chrome\nuse managed cloud and do not accept provider keys. Managed cloud conversations\nare encrypted in transit, and at rest by the database and object-storage vendors\nthat hold them, as a property of those vendors' platforms and not a layer AGI\nadds. AGI does not sell your\ndata, and does not use customer conversation content to train AGI-owned models.\nOn the {{PLAN.free}} plan, AGI picks the provider for the default model, a chat\non another model the plan includes goes to that model's provider, and some\nproviders' terms may allow training on what you send; to keep your chats out of\ntraining, turn on\n**Only use models that do not train on your chats** in Settings, Privacy."
         },
         {
           "id": "privacy-controls#1",

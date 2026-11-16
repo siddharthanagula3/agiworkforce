@@ -40,6 +40,7 @@ import {
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
+import { getInfoAsync } from 'expo-file-system/legacy';
 import { AuthorizedImage } from '@/src/features/image/components/AuthorizedImage';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/Text';
@@ -174,6 +175,7 @@ import { ReportSheet } from './ReportFlagButton';
 import { ResponseRatingDetails } from './ResponseRatingDetails';
 import type { ResponseRatingDetailsInput } from '@/src/features/chat/services/cloudMessageMutations';
 import { reportAssetFor } from '@/services/contentReportAsset';
+import { resolveLocalChatAttachment } from '@/services/localChatAttachments';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { showToast } from '@/src/shared/components/Toast';
 import { storage } from '@/lib/mmkv';
@@ -707,6 +709,14 @@ const SENT_FILE_ICON = {
   document: FileText,
 } as const;
 
+async function sentFileOnPhone(uri: string): Promise<boolean> {
+  try {
+    return (await getInfoAsync(uri)).exists;
+  } catch {
+    return false;
+  }
+}
+
 function SentFileChip({
   attachment,
   onOpen,
@@ -719,8 +729,18 @@ function SentFileChip({
   const detail = sentAttachmentDetail(attachment);
   const open = () => {
     const source = sentAttachmentViewerSource(attachment);
-    if (source) onOpen(source);
-    else Alert.alert('Could not open file', SENT_FILE_UNAVAILABLE_MESSAGE);
+    if (!source) {
+      Alert.alert('Could not open file', SENT_FILE_UNAVAILABLE_MESSAGE);
+      return;
+    }
+    if (!source.url.startsWith('file://')) {
+      onOpen(source);
+      return;
+    }
+    void sentFileOnPhone(source.url).then((onPhone) => {
+      if (onPhone) onOpen(source);
+      else Alert.alert('Could not open file', SENT_FILE_UNAVAILABLE_MESSAGE);
+    });
   };
   return (
     <PressableBox
@@ -1060,8 +1080,12 @@ export const MessageBubble = memo(function MessageBubble({
     () => (isAssistant ? imageVersionsFromMetadata(message.metadata) : []),
     [isAssistant, message.metadata],
   );
+  const sentAttachments = useMemo(
+    () => (message.attachments ?? []).map(resolveLocalChatAttachment),
+    [message.attachments],
+  );
   const viewerImages = useMemo<ViewerImage[]>(() => {
-    const attachedImages = (message.attachments ?? [])
+    const attachedImages = sentAttachments
       .filter((attachment) => attachment.mimeType.startsWith('image/'))
       .map((attachment): ViewerImage => ({
         url: attachment.url,
@@ -1089,7 +1113,7 @@ export const MessageBubble = memo(function MessageBubble({
     ];
   }, [
     isUser,
-    message.attachments,
+    sentAttachments,
     message.imageUrl,
     message.imageGenPrompt,
     message.revisedPrompt,
@@ -2160,10 +2184,10 @@ export const MessageBubble = memo(function MessageBubble({
   const imageWidth = Math.min(width - 80, 320);
   const createdAtParsed = Date.parse(message.createdAt);
   const createdAtMs = Number.isFinite(createdAtParsed) ? createdAtParsed : undefined;
-  const imageAttachments = (message.attachments ?? []).filter((attachment) =>
+  const imageAttachments = sentAttachments.filter((attachment) =>
     attachment.mimeType.startsWith('image/'),
   );
-  const fileAttachments = (message.attachments ?? []).filter(
+  const fileAttachments = sentAttachments.filter(
     (attachment) => !attachment.mimeType.startsWith('image/'),
   );
   const isGroupedMessage = !isAssistant && !canonicalActivity;

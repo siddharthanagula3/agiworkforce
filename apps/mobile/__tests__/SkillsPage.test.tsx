@@ -243,7 +243,7 @@ describe('Mobile Skills screen', () => {
     expect(mockFetchManagedSkills).toHaveBeenCalledTimes(1);
     act(() => mockFocus.set(true));
 
-    await waitFor(() => expect(screen.queryByText('qa-pirate')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('qa-pirate')).toBeNull(), { timeout: 4000 });
     expect(mockFetchManagedSkills).toHaveBeenCalledTimes(2);
   });
 

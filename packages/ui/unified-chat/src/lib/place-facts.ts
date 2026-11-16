@@ -46,14 +46,35 @@ export const ASSISTANT_NOTE_HEADING = 'About, from this answer';
 export const ASSISTANT_NOTE_MAX_LENGTH = 320;
 export const ASSISTANT_NOTE_MIN_NAME_LENGTH = 3;
 
-const MARKDOWN_MARKS_RE = /[*_`~]|\[|\]\([^)]*\)/gu;
+const MARKDOWN_MARK_CHARS = new Set(['*', '_', '`', '~', '[']);
+const LINK_TARGET_OPEN = '](';
+const LINK_TARGET_CLOSE = ')';
 const SENTENCE_SPLIT_RE = /(?<=[.!?])\s+(?=[A-Z0-9"'(])/u;
 const LIST_MARKER_RE = /^\s*(?:[-*+]|\d+[.)])\s+/u;
 const WHITESPACE_RE = /\s+/gu;
 const NAME_HEAD_RE = /^[^,\-\u{2013}\u{2014}(]+/u;
 
+function withoutMarkdownMarks(markdown: string): string {
+  const lastClose = markdown.lastIndexOf(LINK_TARGET_CLOSE);
+  let text = '';
+  let index = 0;
+  while (index < markdown.length) {
+    if (
+      markdown.startsWith(LINK_TARGET_OPEN, index) &&
+      lastClose >= index + LINK_TARGET_OPEN.length
+    ) {
+      index = markdown.indexOf(LINK_TARGET_CLOSE, index + LINK_TARGET_OPEN.length) + 1;
+      continue;
+    }
+    const char = markdown.charAt(index);
+    if (!MARKDOWN_MARK_CHARS.has(char)) text += char;
+    index += 1;
+  }
+  return text;
+}
+
 function plainText(markdown: string): string {
-  return markdown.replace(MARKDOWN_MARKS_RE, '').replace(WHITESPACE_RE, ' ').trim();
+  return withoutMarkdownMarks(markdown).replace(WHITESPACE_RE, ' ').trim();
 }
 
 function candidateNames(placeName: string): string[] {

@@ -242,6 +242,35 @@ describe('POST /api/projects/sync, shared cloud contract', () => {
     expect(pushed[0].updatedAt).toBeUndefined();
   });
 
+  it('creates a project with the memory scope its push carries and never rewrites it on an edit', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '5', current: null },
+    ]);
+
+    const res = await POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projects: [
+            { id: PROJ_ID, name: 'Client work', usesGlobalMemory: false, baseVersion: '0' },
+          ],
+        }),
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(JSON.parse(String(params[1]))[0].usesGlobalMemory).toBe(false);
+    expect(sql).toContain(
+      "coalesce((item ->> 'usesGlobalMemory')::boolean, true) as uses_global_memory",
+    );
+    expect(sql).toContain('uses_global_memory, created_at, updated_at, deleted_at)');
+    expect(sql).toContain('incoming.uses_global_memory, now(), now()');
+    const updateClause = sql.slice(sql.indexOf('updated as ('), sql.indexOf('inserted as ('));
+    expect(updateClause).not.toContain('uses_global_memory');
+  });
+
   it.each([
     ['an unrecognised tier', { plan_tier: 'starter', status: 'active' }],
     ['a lapsed Pro subscription', { plan_tier: 'pro', status: 'canceled' }],

@@ -74,16 +74,9 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 import { updateCloudProjectDetails } from '@/src/features/projects/service';
-import { showToast } from '@/src/shared/components/Toast';
-import {
-  captureCloudAccountEpoch,
-  isCloudAccountEpochCurrent,
-} from '@/src/features/auth/services/cloudAccountSession';
+import { syncNow } from '@/services/cloudSyncEngine';
 
 const updateDetails = updateCloudProjectDetails as jest.Mock;
-const toast = showToast as jest.Mock;
-const captureEpoch = captureCloudAccountEpoch as jest.Mock;
-const epochIsCurrent = isCloudAccountEpochCurrent as unknown as jest.Mock;
 
 const existing: EditableProject = {
   id: 'project-1',
@@ -265,13 +258,10 @@ describe('Done and Cancel in the project settings sheet', () => {
   });
 });
 
-describe('applying the memory scope after the project is created', () => {
+describe('keeping the memory scope with a new Cloud project', () => {
   beforeEach(() => {
     editorRef = null;
     jest.clearAllMocks();
-    updateDetails.mockResolvedValue(undefined);
-    captureEpoch.mockReturnValue({ ownerId: 'user-1', epoch: 1 });
-    epochIsCurrent.mockReturnValue(true);
     act(() => {
       useProjectSyncStateStore.getState().resetProjectSync();
       useCloudProjectStore.getState().clearCloudProjectData();
@@ -286,94 +276,38 @@ describe('applying the memory scope after the project is created', () => {
     fireEvent.press(screen.getByTestId('project-editor-submit'));
   }
 
-  async function finishSync(id: string) {
-    await act(async () => {
-      useProjectSyncStateStore.getState().clearProjectDirty([id]);
-    });
-  }
-
-  it('waits until the new project has left the sync queue, then sets project-only memory', async () => {
+  it('stores project-only memory with the project the moment it is created and starts a sync', () => {
     openCreateSheet();
     chooseProjectOnlyAndConfirm();
     createWithName('Trip plan');
 
     const id = createdProjectId();
     expect(id).not.toBe('');
-    expect(useProjectSyncStateStore.getState().dirtyProjectIds).toContain(id);
-    await act(async () => undefined);
-    expect(updateDetails).not.toHaveBeenCalled();
-
-    await finishSync(id);
-
-    expect(updateDetails).toHaveBeenCalledTimes(1);
-    expect(updateDetails).toHaveBeenCalledWith(id, { usesGlobalMemory: false });
-    expect(toast).not.toHaveBeenCalled();
-  });
-
-  it('leaves the account setting alone when Default memory stays chosen', async () => {
-    openCreateSheet();
-    createWithName('Trip plan');
-
-    await finishSync(createdProjectId());
-
+    const syncState = useProjectSyncStateStore.getState();
+    expect(syncState.dirtyProjectIds).toEqual([id]);
+    expect(syncState.projectOnlyMemoryPendingIds).toEqual([id]);
+    expect(useCloudProjectStore.getState().details[id]?.usesGlobalMemory).toBe(false);
+    expect(syncNow).toHaveBeenCalledTimes(1);
     expect(updateDetails).not.toHaveBeenCalled();
   });
 
-  it('keeps the project and says the memory setting was not saved when the update fails', async () => {
-    updateDetails.mockRejectedValue(new Error('offline'));
+  it('stores no memory scope when Default memory stays chosen', () => {
     openCreateSheet();
-    chooseProjectOnlyAndConfirm();
     createWithName('Trip plan');
 
-    const id = createdProjectId();
-    await finishSync(id);
-
-    expect(toast).toHaveBeenCalledWith(
-      'Project created. Memory setting was not saved; change it in Project settings.',
-    );
-    expect(useCloudProjectStore.getState().projects.some((p) => p.id === id)).toBe(true);
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(useCloudProjectStore.getState().details[createdProjectId()]).toBeUndefined();
+    expect(syncNow).not.toHaveBeenCalled();
   });
 
-  it('puts the switch back to Default memory when the update fails after the optimistic write', async () => {
-    updateDetails.mockImplementation(async (id: string) => {
-      useCloudProjectStore.getState().patchCloudProjectDetails(id, { usesGlobalMemory: false });
-      throw new Error('offline');
-    });
+  it('stores no memory scope for a Local project', () => {
+    setMode('local');
     openCreateSheet();
-    chooseProjectOnlyAndConfirm();
+    act(() => editorRef?.setMemoryScope('projectOnly'));
     createWithName('Trip plan');
 
-    const id = createdProjectId();
-    await finishSync(id);
-
-    expect(useCloudProjectStore.getState().details[id]?.usesGlobalMemory).not.toBe(false);
-    expect(toast).toHaveBeenCalledTimes(1);
-  });
-
-  it('says nothing and sends nothing when the project is deleted before its first push finishes', async () => {
-    openCreateSheet();
-    chooseProjectOnlyAndConfirm();
-    createWithName('Trip plan');
-
-    const id = createdProjectId();
-    await act(async () => {
-      useCloudProjectStore.getState().hardDeleteCloudProject(id);
-    });
-    await finishSync(id);
-
-    expect(updateDetails).not.toHaveBeenCalled();
-    expect(toast).not.toHaveBeenCalled();
-  });
-
-  it('does nothing when the account changed while the project waited to sync', async () => {
-    openCreateSheet();
-    chooseProjectOnlyAndConfirm();
-    createWithName('Trip plan');
-    epochIsCurrent.mockReturnValue(false);
-
-    await finishSync(createdProjectId());
-
-    expect(updateDetails).not.toHaveBeenCalled();
-    expect(toast).not.toHaveBeenCalled();
+    expect(useCloudProjectStore.getState().projects).toEqual([]);
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(syncNow).not.toHaveBeenCalled();
   });
 });

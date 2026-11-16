@@ -154,9 +154,6 @@ import { CHAT_TURN_PHASE, CHAT_TURN_SPAN } from './lib/turn-phases';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
-import { scheduleToolShortlistShadow } from '@/lib/services/semantic-decisions/consumers/tool-shortlist';
-import { lastUserTurnText } from './lib/tool-loop';
-import { toolShortlistShadowInput } from './lib/tool-shortlist-shadow';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import { servedOnIsolatedPromotionCredential } from '@/lib/server/free-model-promotion';
 
@@ -866,18 +863,6 @@ async function dispatchChatCompletions(
       agentAllowsConnector(processed.agentTurn?.config ?? null, tool.serverId),
     );
     const mcpTools = [...operatorTools, ...connectorTools];
-
-    // Shadow only: the lexical shortlist below still builds the turn, and a
-    // tool it defers stays one load_connector_tools call away either way.
-    if (processed.decisionScope && mcpTools.length > 0) {
-      scheduleToolShortlistShadow(
-        toolShortlistShadowInput({
-          scope: processed.decisionScope,
-          tools: mcpTools,
-          turnText: () => lastUserTurnText(processed.chatRequest?.messages),
-        }),
-      );
-    }
 
     // A provider-native search runs inside the provider's own turn, so it never
     // reaches the tool loop as a call and cannot be gated there. When the

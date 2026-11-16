@@ -101,7 +101,8 @@ async function inRolledBackTransaction(
           (
             await tx.query<StoredProject>(
               `select name, instructions, deleted_at is not null as "deleted",
-                      server_version::text as "serverVersion"
+                      server_version::text as "serverVersion",
+                      uses_global_memory as "usesGlobalMemory"
                  from public.user_projects
                 where id = $1 and user_id = $2`,
               [id, scope.userId],
@@ -123,6 +124,7 @@ interface StoredProject {
   instructions: string | null;
   deleted: boolean;
   serverVersion: string;
+  usesGlobalMemory: boolean;
 }
 
 async function appliedVersion(response: Response, id: string): Promise<string> {
@@ -149,6 +151,7 @@ describe.skipIf(!live)('projects sync push against the real statement', () => {
         instructions: 'Keep it short',
         deleted: false,
         serverVersion: created,
+        usesGlobalMemory: true,
       });
 
       const edited = await appliedVersion(
@@ -174,6 +177,32 @@ describe.skipIf(!live)('projects sync push against the real statement', () => {
       );
       expect(BigInt(removed)).toBeGreaterThan(BigInt(edited));
       expect((await stored(id))?.deleted).toBe(true);
+    });
+  });
+
+  it('creates a project with the memory scope its push carries and keeps it through an edit', async () => {
+    await inRolledBackTransaction(async (push, stored) => {
+      const projectOnly = randomUUID();
+      const created = await appliedVersion(
+        await push({
+          id: projectOnly,
+          name: 'Client work',
+          usesGlobalMemory: false,
+          baseVersion: '0',
+        }),
+        projectOnly,
+      );
+      expect((await stored(projectOnly))?.usesGlobalMemory).toBe(false);
+
+      await appliedVersion(
+        await push({ id: projectOnly, name: 'Client work, phase two', baseVersion: created }),
+        projectOnly,
+      );
+      expect((await stored(projectOnly))?.usesGlobalMemory).toBe(false);
+
+      const unstated = randomUUID();
+      await appliedVersion(await push({ id: unstated, name: 'Notes', baseVersion: '0' }), unstated);
+      expect((await stored(unstated))?.usesGlobalMemory).toBe(true);
     });
   });
 

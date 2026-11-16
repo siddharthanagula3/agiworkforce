@@ -131,6 +131,7 @@ async function handlePost(request: NextRequest) {
                  coalesce((item ->> 'isArchived')::boolean, false) as is_archived,
                  case when item ? 'metadata' then item -> 'metadata' else 'null'::jsonb end
                    as metadata,
+                 coalesce((item ->> 'usesGlobalMemory')::boolean, true) as uses_global_memory,
                  (item ->> 'baseVersion')::bigint as base_version,
                  nullif(item ->> 'deletedAt', '') is not null as should_delete
             from jsonb_array_elements($2::jsonb) as source(item)
@@ -162,9 +163,10 @@ async function handlePost(request: NextRequest) {
         ), inserted as (
           insert into user_projects
             (id, user_id, organization_id, name, description, instructions, color, is_archived, metadata,
-             created_at, updated_at, deleted_at)
+             uses_global_memory, created_at, updated_at, deleted_at)
           select incoming.id, $1, $4, incoming.name, incoming.description, incoming.instructions,
-                 incoming.color, incoming.is_archived, incoming.metadata, now(), now(),
+                 incoming.color, incoming.is_archived, incoming.metadata,
+                 incoming.uses_global_memory, now(), now(),
                  case when incoming.should_delete then now() else null end
             from input as incoming
            where incoming.base_version = 0

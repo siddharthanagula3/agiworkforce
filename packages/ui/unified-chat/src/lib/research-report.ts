@@ -79,8 +79,9 @@ export function researchReportToArtifact(report: ResearchReportDocument): Report
 export function researchReportFilename(report: Pick<ResearchReport, 'title'>): string {
   const base = (report.title || 'research-report')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .join('-')
     .slice(0, 80);
   return base || 'research-report';
 }

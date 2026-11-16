@@ -175,6 +175,8 @@ import {
   toolSchemaBudgetFor,
   TOOL_DIRECTORY_TOOL_NAME,
 } from './tool-schema-loader';
+import { toolShortlistShadowInput } from './tool-shortlist-shadow';
+import { scheduleToolShortlistShadow } from '@/lib/services/semantic-decisions/consumers/tool-shortlist';
 import { resolveToolAccessMode } from '@/lib/server/tool-access-policy';
 import { DEFAULT_TOOL_ACCESS_MODE, type ToolAccessMode } from '@/lib/tool-access-mode';
 import {
@@ -3940,6 +3942,16 @@ export async function* runToolLoop(
       : [],
     budget: toolSchemaBudgetFor(toolAccessMode),
   });
+  if (processed.decisionScope && schemaTools.length > 0) {
+    scheduleToolShortlistShadow(
+      toolShortlistShadowInput({
+        scope: processed.decisionScope,
+        tools: schemaTools,
+        turnText: () => lastUserTurnText(processed.chatRequest?.messages),
+        budget: toolSchemaBudgetFor(toolAccessMode),
+      }),
+    );
+  }
   const loadedToolNames = new Set(toolSchemaSelection.tools.map((tool) => tool.qualifiedName));
   processed.toolSchemaState = createToolSchemaState(loadedToolNames);
   let deferredToolSchemas = toolSchemaSelection.deferred;

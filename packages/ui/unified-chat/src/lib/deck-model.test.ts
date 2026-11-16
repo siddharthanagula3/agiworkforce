@@ -85,6 +85,24 @@ describe('deck model', () => {
     expect(slideTitle('', 4)).toBe('Slide 5');
   });
 
+  it('names a slide whose heading is a long run of spaces by its number', () => {
+    expect(slideTitle(`#${'  '.repeat(100_000)}`, 2)).toBe('Slide 3');
+    expect(slideTitle(`#${' '.repeat(100_000)}\nRoadmap`, 2)).toBe('Roadmap');
+  });
+
+  it('keeps a fence line with a long run of spaces as text', () => {
+    const line = `\`\`\`${' '.repeat(200_000)}!`;
+    expect(slideSegments(line)).toEqual([{ kind: 'markdown', text: line }]);
+    expect(slideSegments('```chart   \n{}\n```').map((segment) => segment.kind)).toEqual(['chart']);
+  });
+
+  it('reads no setting from a long run of letters in the deck line', () => {
+    expect(parseDeck(`<!-- deck ${'a'.repeat(200_000)} theme=midnight -->\n\n# A`)).toEqual({
+      meta: { theme: 'midnight' },
+      slides: ['# A'],
+    });
+  });
+
   it('splits kpi and insights fences out of a slide as their own segments', () => {
     const slide = '## Analysis\n\n```kpi\nA | 1\n```\n\n```insights\n- x\n```';
     expect(slideSegments(slide).map((segment) => segment.kind)).toEqual([

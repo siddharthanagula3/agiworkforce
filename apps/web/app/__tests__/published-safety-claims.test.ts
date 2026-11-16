@@ -20,6 +20,13 @@ import { resolveSubscriptionAccess } from '@/lib/services/subscription-access-po
 import { RELEASED_SURFACES } from '@/lib/surface-status';
 import { SUPPORTED_BROWSERS, UNSUPPORTED_BROWSER_NOTICE } from '@/lib/browser-support';
 import { SELECTABLE_LANGUAGES } from '@agiworkforce/i18n/languages';
+import {
+  CHAT_SYSTEM_PROMPT_ID,
+  CHAT_SYSTEM_PROMPT_PINNED_VERSION,
+  CHAT_SYSTEM_PROMPT_VERSIONS,
+  chatSystemPromptSections,
+} from '@/lib/prompts/chat-system-prompt';
+import { promptReleaseAdmits, promptReleaseChannel } from '@/lib/prompts/prompt-release';
 
 type LoggerModule = typeof import('@/lib/logger');
 
@@ -314,16 +321,89 @@ describe('the two help articles', () => {
     expect([...RELEASED_SURFACES]).toEqual(['web']);
   });
 
-  it('prints crisis numbers and admits that no crisis feature exists', () => {
+  it('prints crisis numbers and keeps crisis copy off the web chat page', () => {
     const file = article('crisis-resources');
     expect(existsSync(file)).toBe(true);
     const text = readFileSync(file, 'utf8').replace(/\s+/g, ' ');
     expect(text).toContain('Call or text 988');
     expect(text).toContain('Tele MANAS on 14416');
-    expect(text).toContain('AGI has no feature that detects a message about suicide or self-harm.');
-    expect(text).toContain('A chat shows no crisis banner, helpline number or pop-up.');
+    expect(text).toContain(
+      'Apart from the Reduce sensitive content check below, AGI does not scan chats for messages about suicide or self-harm, and a message about self-harm alerts no person at AGI.',
+    );
+    expect(text).toContain(
+      'AGI adds no crisis banner or pop-up to a chat, and the only crisis note it adds is in the phone refusal described below.',
+    );
+    expect(text).not.toMatch(/Nothing special|has no feature that detects/u);
     const chat = read('features/chat/pages/WebChatPage.tsx');
     expect(chat).not.toMatch(/988|helpline|crisis/iu);
+  });
+});
+
+describe('what the crisis article says each mode does', () => {
+  const ARTICLE = prose('content/support/crisis-resources.md');
+  const MOBILE_ROOT = path.resolve(WEB_ROOT, '..', 'mobile');
+  const mobile = (relative: string) => readFileSync(path.join(MOBILE_ROOT, relative), 'utf8');
+
+  it('leaves Cloud answers to the provider because no public chat prompt carries a wellbeing section', () => {
+    const publicVersions = CHAT_SYSTEM_PROMPT_VERSIONS.filter(({ version }) =>
+      promptReleaseAdmits(promptReleaseChannel(CHAT_SYSTEM_PROMPT_ID, version), {
+        internalStaff: false,
+      }),
+    ).map(({ version }) => version);
+    expect(publicVersions).toContain(CHAT_SYSTEM_PROMPT_PINNED_VERSION);
+    for (const version of publicVersions) {
+      expect(
+        chatSystemPromptSections(version)['wellbeing'],
+        `chat.system@${version} now reaches everyone with a wellbeing section; say so in the crisis article`,
+      ).toBeUndefined();
+    }
+    expect(ARTICLE).toContain(
+      "In Managed Cloud and with your own provider key, the model you picked answers under its provider's own safety rules.",
+    );
+  });
+
+  it('gives a Local mode chat on the phone the self-harm floor ahead of everything else', () => {
+    const floor = mobile('stores/chat/localSystemPrompt.ts');
+    expect(floor).toContain(
+      'Never give methods, means, doses or instructions for suicide or self-harm',
+    );
+    expect(floor).toContain('respond with care');
+    expect(floor).toContain('a local crisis line or emergency number can help right now');
+    expect(floor).toContain(
+      "return [{ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT }, ...rest];",
+    );
+    expect(mobile('stores/chat/chatExecutionStore.ts')).toContain(
+      'const localMessages: LocalLlmMessage[] = ensureLocalSystemPrompt(',
+    );
+    expect(ARTICLE).toContain(
+      'In Local mode in the AGI Mobile app, the model runs on your phone with a short instruction from AGI: give no methods or instructions for suicide or self-harm, respond with care, and point to a local crisis line or emergency number when a message suggests you may be at risk.',
+    );
+  });
+
+  it('adds a helpline to a refused self-harm request on the phone, Local mode included, and not on the web', () => {
+    const filter = mobile('lib/contentFilter.ts');
+    expect(filter).toContain('export const SELF_HARM_HELPLINE');
+    expect(filter).toContain('988');
+    expect(filter).toContain('your local emergency number');
+    const store = mobile('stores/chat/chatExecutionStore.ts');
+    expect(filter).toContain('refusal: `${verdict.refusal}\\n\\n${SELF_HARM_HELPLINE}`');
+    const send = store.slice(store.indexOf('  sendMessage: async ('));
+    const filtered = send.indexOf('if (minorMode || reduceSensitiveContent) {');
+    expect(filtered).toBeGreaterThan(-1);
+    expect(filtered).toBeLessThan(send.indexOf('const shouldUseLocalRuntime ='));
+    expect(send.slice(filtered)).toMatch(
+      /^if \(minorMode \|\| reduceSensitiveContent\) \{\s+const verdict = checkContentFilter\([^)]*\);\s+if \(!verdict\.allowed\) \{\s+Alert\.alert\('Content not available', verdict\.refusal\);/u,
+    );
+    expect(REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL).not.toMatch(/988|helpline|crisis/iu);
+    expect(ARTICLE).toContain(
+      'On the web, the refusal says the content is unavailable while the setting is on. It shows no helpline.',
+    );
+    expect(ARTICLE).toContain(
+      'In the AGI Mobile app the same check runs on the phone before a chat message you type or dictate reaches any model, in Local mode as well, and when it refuses a request about suicide or self-harm, the pop-up that says so adds a note that points to a crisis line and your local emergency number.',
+    );
+    expect(ARTICLE).toContain(
+      'A phone in minor-safe mode runs the check whether or not the setting is on.',
+    );
   });
 });
 

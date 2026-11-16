@@ -24,6 +24,7 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 import { managedCloudProjects } from '@/services/managedCloudProjects';
 import { updateCloudProjectDetails } from '@/src/features/projects/service';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 
 const PROJECT_ID = '0190a000-0000-7000-8000-000000000001';
 
@@ -144,5 +145,38 @@ describe('updateCloudProjectDetails when the save fails', () => {
     const held = useCloudProjectStore.getState().details[PROJECT_ID];
     expect(held?.usesGlobalMemory).toBe(false);
     expect(held?.usesAccountStyle).toBe(true);
+  });
+});
+
+describe('updateCloudProjectDetails and a memory scope still waiting to sync', () => {
+  beforeEach(() => {
+    useProjectSyncStateStore.getState().resetProjectSync();
+    useProjectSyncStateStore.getState().markProjectOnlyMemoryPending(PROJECT_ID);
+  });
+
+  it('lets a memory choice the server accepted replace the one waiting from creation', async () => {
+    update.mockResolvedValue(managedProject({ usesGlobalMemory: true }));
+
+    await updateCloudProjectDetails(PROJECT_ID, { usesGlobalMemory: true });
+
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+  });
+
+  it('keeps the choice from creation waiting when the server did not accept the change', async () => {
+    update.mockRejectedValue(new Error('HTTP 500'));
+
+    await expect(updateCloudProjectDetails(PROJECT_ID, { usesGlobalMemory: true })).rejects.toThrow(
+      'HTTP 500',
+    );
+
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([PROJECT_ID]);
+  });
+
+  it('keeps the choice from creation waiting when another setting is saved', async () => {
+    update.mockResolvedValue(managedProject({ usesAccountStyle: false }));
+
+    await updateCloudProjectDetails(PROJECT_ID, { usesAccountStyle: false });
+
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([PROJECT_ID]);
   });
 });

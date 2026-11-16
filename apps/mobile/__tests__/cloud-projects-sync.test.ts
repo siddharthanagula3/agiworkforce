@@ -1,21 +1,31 @@
-jest.mock('../lib/mmkv', () => ({
-  whenMmkvReady: jest.fn((cb: () => void) => cb()),
-  rehydrateWhenMmkvReady: jest.fn(),
-  mmkvStorage: {
-    getItem: jest.fn().mockReturnValue(null),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-  },
-  storage: {
-    getString: jest.fn().mockReturnValue(undefined),
-    set: jest.fn(),
-    delete: jest.fn(),
-  },
-}));
+jest.mock('../lib/mmkv', () => {
+  const persisted = new Map<string, string>();
+  return {
+    persistedForTests: persisted,
+    whenMmkvReady: jest.fn((cb: () => void) => cb()),
+    rehydrateWhenMmkvReady: jest.fn(),
+    mmkvStorage: {
+      getItem: (key: string) => persisted.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        persisted.set(key, value);
+      },
+      removeItem: (key: string) => {
+        persisted.delete(key);
+      },
+    },
+    storage: {
+      getString: jest.fn().mockReturnValue(undefined),
+      set: jest.fn(),
+      delete: jest.fn(),
+    },
+  };
+});
 
 jest.mock('../services/api', () => ({
-  api: { get: jest.fn(), post: jest.fn() },
+  api: { get: jest.fn(), post: jest.fn(), put: jest.fn() },
 }));
+
+jest.mock('../src/shared/components/Toast', () => ({ showToast: jest.fn() }));
 
 jest.mock('@agiworkforce/utils', () => ({
   uuidv7: jest.fn(() => `00000000-0000-7000-8000-${Date.now().toString(16).padStart(12, '0')}`),
@@ -34,6 +44,9 @@ jest.mock('../storage/memory', () => ({
 }));
 
 import { api } from '../services/api';
+import { ApiHttpError } from '../services/apiErrors';
+import * as mmkv from '../lib/mmkv';
+import { showToast } from '../src/shared/components/Toast';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import { useProjectSyncStateStore } from '../stores/projects/projectSyncStateStore';
@@ -41,6 +54,7 @@ import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useMemorySyncStateStore } from '../stores/memory/memorySyncStateStore';
 import { syncNow, markProjectForSync } from '../services/cloudSyncEngine';
 import { useProjectStore } from '../src/features/projects/store';
+import { updateCloudProjectDetails } from '../src/features/projects/service';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -48,6 +62,8 @@ import {
 
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
+const mockPut = api.put as jest.MockedFunction<typeof api.put>;
+const persisted = (mmkv as unknown as { persistedForTests: Map<string, string> }).persistedForTests;
 
 const T = '2026-06-22T00:00:00.000Z';
 const PROJECTS_SYNC_PATH = '/api/projects/sync';
@@ -106,6 +122,7 @@ function seedCloudProject(id: string, name = 'test project', deletedAt: string |
 
 beforeEach(() => {
   jest.clearAllMocks();
+  persisted.clear();
   __resetCloudAccountSessionForTests();
   activateCloudAccount('project-sync-test-user');
   useCloudSyncStateStore.getState().reset();
@@ -666,5 +683,304 @@ describe('project store, local/cloud separation', () => {
     const id = useProjectStore.getState().createProject('local', '', '');
     expect(id).toMatch(/^proj_/);
     expect(useProjectSyncStateStore.getState().dirtyProjectIds).not.toContain(id);
+  });
+});
+
+describe('project-only memory chosen when a Cloud project is created', () => {
+  const OWNER = 'project-sync-test-user';
+
+  function managedProject(id: string, usesGlobalMemory: boolean) {
+    return {
+      id,
+      ownerUserId: OWNER,
+      name: 'Client work',
+      usesGlobalMemory,
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedGateway',
+      allowedSurfaces: [],
+      createdAt: T,
+      updatedAt: T,
+    };
+  }
+
+  function offline(): never {
+    throw new TypeError('Network request failed');
+  }
+
+  async function restartApp() {
+    const saved = new Map(persisted);
+    useCloudProjectStore.setState({ projects: [], details: {}, activeProjectId: null });
+    useProjectSyncStateStore.setState({
+      projectCursor: '0',
+      dirtyProjectIds: [],
+      projectOnlyMemoryPendingIds: [],
+    });
+    persisted.clear();
+    for (const [key, value] of saved) persisted.set(key, value);
+    await useCloudProjectStore.persist.rehydrate();
+    await useProjectSyncStateStore.persist.rehydrate();
+  }
+
+  function createProjectOnly(): string {
+    return useProjectStore
+      .getState()
+      .createProject('Client work', '', '', { usesGlobalMemory: false });
+  }
+
+  function pushedProjects(): Array<Record<string, unknown>> {
+    return mockPost.mock.calls
+      .filter((call) => call[0] === PROJECTS_SYNC_PATH)
+      .flatMap((call) => (call[1] as { projects: Array<Record<string, unknown>> }).projects);
+  }
+
+  let serverProjectRead: (id: string) => Promise<unknown>;
+
+  function heldPut() {
+    let release!: (usesGlobalMemory: boolean) => void;
+    let path = '';
+    const answer = new Promise<unknown>((resolve) => {
+      release = (usesGlobalMemory) =>
+        resolve({ project: managedProject(path.slice('/api/projects/'.length), usesGlobalMemory) });
+    });
+    return {
+      answer: (putPath: string) => {
+        path = putPath;
+        return answer;
+      },
+      release,
+    };
+  }
+
+  async function settleUntil(done: () => boolean) {
+    for (let turn = 0; turn < 100 && !done(); turn += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+
+  function seedProjectOnlyAwaitingConfirmation(id: string) {
+    seedCloudProject(id, 'Client work');
+    useProjectSyncStateStore.getState().markProjectOnlyMemoryPending(id);
+    useCloudProjectStore.getState().patchCloudProjectDetails(id, { usesGlobalMemory: false });
+  }
+
+  function memoryPutsFor(id: string) {
+    return mockPut.mock.calls
+      .filter((call) => call[0] === `/api/projects/${id}`)
+      .map((call) => call[1]);
+  }
+
+  beforeEach(() => {
+    mockPut.mockImplementation(async (path: string) => {
+      const id = path.slice('/api/projects/'.length);
+      return { project: managedProject(id, false) } as never;
+    });
+    serverProjectRead = async (id) => ({ project: managedProject(id, true) });
+    const listAndSyncReads = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/projects/') && !path.startsWith(PROJECTS_SYNC_PATH)) {
+        return (await serverProjectRead(path.slice('/api/projects/'.length))) as never;
+      }
+      return (await listAndSyncReads(path)) as never;
+    });
+  });
+
+  it('creates the project as project-only after an offline creation and a restart', async () => {
+    const online = { get: mockGet.getMockImplementation(), post: mockPost.getMockImplementation() };
+    mockGet.mockImplementation(offline);
+    mockPost.mockImplementation(offline);
+
+    const id = createProjectOnly();
+    await syncNow();
+    expect(useCloudSyncStateStore.getState().failedSyncSteps).toContain('projects');
+
+    await restartApp();
+    expect(useCloudProjectStore.getState().projects.map((p) => p.id)).toEqual([id]);
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([id]);
+
+    mockGet.mockImplementation(online.get!);
+    mockPost.mockImplementation(online.post!);
+    mockPost.mockClear();
+    await syncNow();
+
+    expect(pushedProjects()).toEqual([
+      expect.objectContaining({ id, usesGlobalMemory: false, baseVersion: '0' }),
+    ]);
+    expect(mockPut).toHaveBeenCalledWith(`/api/projects/${id}`, { usesGlobalMemory: false });
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(useCloudProjectStore.getState().details[id]?.usesGlobalMemory).toBe(false);
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it('confirms project-only memory when the app closed after the push and before the update', async () => {
+    mockPut.mockImplementationOnce(offline);
+
+    const id = createProjectOnly();
+    await syncNow();
+    expect(pushedProjects()).toEqual([expect.objectContaining({ id, usesGlobalMemory: false })]);
+    expect(useCloudSyncStateStore.getState().failedSyncSteps).toContain('projects');
+
+    await restartApp();
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([id]);
+
+    mockPost.mockClear();
+    mockPut.mockClear();
+    await syncNow();
+
+    expect(pushedProjects()).toEqual([]);
+    expect(mockPut).toHaveBeenCalledTimes(1);
+    expect(mockPut).toHaveBeenCalledWith(`/api/projects/${id}`, { usesGlobalMemory: false });
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(useCloudSyncStateStore.getState().failedSyncSteps).not.toContain('projects');
+  });
+
+  it('keeps asking on every sync while the update fails for a reason that can pass', async () => {
+    mockPut.mockImplementation(offline);
+
+    const id = createProjectOnly();
+    await syncNow();
+    await syncNow();
+
+    expect(mockPut).toHaveBeenCalledTimes(2);
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([id]);
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['refuses the update', () => Promise.reject(new ApiHttpError('Not allowed', 403))],
+    [
+      'answers that the project still uses memories from other chats',
+      (path: string) =>
+        Promise.resolve({
+          project: managedProject(path.slice('/api/projects/'.length), true),
+        }),
+    ],
+  ])('says the memory setting was not saved when the server %s', async (_case, answer) => {
+    mockPut.mockImplementation(answer as never);
+
+    const id = createProjectOnly();
+    await syncNow();
+
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith(
+      'Project created. Memory setting was not saved; change it in Project settings.',
+    );
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(useCloudProjectStore.getState().details[id]?.usesGlobalMemory).toBe(true);
+    expect(useCloudProjectStore.getState().projects.some((p) => p.id === id)).toBe(true);
+  });
+
+  it('says nothing when the update is refused but the server already holds project-only memory', async () => {
+    mockPut.mockRejectedValue(new ApiHttpError('Not allowed', 403));
+    serverProjectRead = async (id) => ({ project: managedProject(id, false) });
+
+    const id = createProjectOnly();
+    await syncNow();
+
+    expect(mockGet).toHaveBeenCalledWith(`/api/projects/${id}`);
+    expect(showToast).not.toHaveBeenCalled();
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(useCloudProjectStore.getState().details[id]?.usesGlobalMemory).toBe(false);
+    expect(useCloudSyncStateStore.getState().failedSyncSteps).not.toContain('projects');
+  });
+
+  it('says the memory setting was not saved when the server refuses both the update and the read', async () => {
+    mockPut.mockRejectedValue(new ApiHttpError('Not allowed', 403));
+    serverProjectRead = () => Promise.reject(new ApiHttpError('Not allowed', 403));
+
+    const id = createProjectOnly();
+    await syncNow();
+
+    expect(showToast).toHaveBeenCalledWith(
+      'Project created. Memory setting was not saved; change it in Project settings.',
+    );
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(useCloudProjectStore.getState().details[id]?.usesGlobalMemory).toBe(true);
+  });
+
+  it('keeps the choice and says nothing when the read after a refused update cannot reach the server', async () => {
+    mockPut.mockRejectedValue(new ApiHttpError('Not allowed', 403));
+    serverProjectRead = () => Promise.reject(new TypeError('Network request failed'));
+
+    const id = createProjectOnly();
+    await syncNow();
+
+    expect(showToast).not.toHaveBeenCalled();
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([id]);
+    expect(useCloudProjectStore.getState().details[id]?.usesGlobalMemory).toBe(false);
+    expect(useCloudSyncStateStore.getState().failedSyncSteps).toContain('projects');
+  });
+
+  it('does not overwrite a memory choice made in Project settings while the sync waits on another project', async () => {
+    const first = '01986b80-0000-7000-8000-0000000000a1';
+    const second = '01986b80-0000-7000-8000-0000000000a2';
+    seedProjectOnlyAwaitingConfirmation(first);
+    seedProjectOnlyAwaitingConfirmation(second);
+    const firstPut = heldPut();
+    mockPut.mockImplementation(async (path: string, body: unknown) => {
+      if (path === `/api/projects/${first}`) return (await firstPut.answer(path)) as never;
+      const { usesGlobalMemory } = body as { usesGlobalMemory: boolean };
+      return { project: managedProject(second, usesGlobalMemory) } as never;
+    });
+
+    const sync = syncNow();
+    await settleUntil(() => memoryPutsFor(first).length > 0);
+    await updateCloudProjectDetails(second, { usesGlobalMemory: true });
+    firstPut.release(false);
+    await sync;
+
+    expect(memoryPutsFor(second)).toEqual([{ usesGlobalMemory: true }]);
+    expect(useCloudProjectStore.getState().details[second]?.usesGlobalMemory).toBe(true);
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it('sends a memory choice made in Project settings only after the confirmation already in flight', async () => {
+    const id = '01986b80-0000-7000-8000-0000000000a3';
+    seedProjectOnlyAwaitingConfirmation(id);
+    const confirmation = heldPut();
+    mockPut.mockImplementation(async (path: string, body: unknown) => {
+      const { usesGlobalMemory } = body as { usesGlobalMemory: boolean };
+      if (usesGlobalMemory === false) return (await confirmation.answer(path)) as never;
+      return { project: managedProject(id, true) } as never;
+    });
+
+    const sync = syncNow();
+    await settleUntil(() => memoryPutsFor(id).length > 0);
+    const choice = updateCloudProjectDetails(id, { usesGlobalMemory: true });
+    await settleUntil(() => memoryPutsFor(id).length > 1);
+    const sentWhileConfirming = memoryPutsFor(id);
+
+    confirmation.release(false);
+    await sync;
+    await choice;
+
+    expect(sentWhileConfirming).toEqual([{ usesGlobalMemory: false }]);
+    expect(memoryPutsFor(id)).toEqual([{ usesGlobalMemory: false }, { usesGlobalMemory: true }]);
+    expect(useCloudProjectStore.getState().details[id]?.usesGlobalMemory).toBe(true);
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+    expect(showToast).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing and says nothing when the project is deleted before it reaches the server', async () => {
+    const id = createProjectOnly();
+    useProjectStore.getState().deleteProject(id);
+
+    await syncNow();
+
+    expect(mockPut).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
+  });
+
+  it('pushes no memory scope for a project created with Default memory', async () => {
+    const id = useProjectStore.getState().createProject('Notes', '', '');
+
+    await syncNow();
+
+    const [pushed] = pushedProjects();
+    expect(pushed).toEqual(expect.objectContaining({ id }));
+    expect(pushed).not.toHaveProperty('usesGlobalMemory');
+    expect(mockPut).not.toHaveBeenCalled();
+    expect(useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds).toEqual([]);
   });
 });

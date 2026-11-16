@@ -34,7 +34,9 @@ interface PageOptions {
 }
 
 function pageScript(html: string): string {
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]!);
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script(?:[\s/][^>]*)?>/gi)].map(
+    (match) => match[1]!,
+  );
   return scripts[scripts.length - 1]!;
 }
 

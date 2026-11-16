@@ -1,3 +1,5 @@
+import { stripTrailingSlashes } from '@agiworkforce/types';
+
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
 const MARKER_RUN = /(?<!\])(?:\[\d{1,3}\])+(?![(:[])/g;
 
@@ -18,7 +20,7 @@ export function normalizeCitationUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
     const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-    const path = parsed.pathname.replace(/\/+$/, '');
+    const path = stripTrailingSlashes(parsed.pathname);
     const params = Array.from(parsed.searchParams.entries())
       .filter(([key]) => !TRACKING_PARAM_PATTERN.test(key))
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
@@ -40,7 +42,7 @@ function registrableDomain(url: string): string | null {
 function isBareDomainHref(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.pathname.replace(/\/+$/, '') === '' && parsed.search === '';
+    return stripTrailingSlashes(parsed.pathname) === '' && parsed.search === '';
   } catch {
     return false;
   }
@@ -261,15 +263,11 @@ export function deliveredCitationSpans(
 const CITATION_MARKER_TEXT_PATTERN = /^(?:\[\d{1,3}\])+$/;
 const URL_SCHEME_PREFIX = /^[a-z][a-z0-9+.-]*:\/\//i;
 const WWW_PREFIX = /^www\./;
-const TRAILING_SLASHES = /\/+$/;
 
 function bareLinkTextShape(text: string): string {
-  return text
-    .trim()
-    .toLowerCase()
-    .replace(URL_SCHEME_PREFIX, '')
-    .replace(WWW_PREFIX, '')
-    .replace(TRAILING_SLASHES, '');
+  return stripTrailingSlashes(
+    text.trim().toLowerCase().replace(URL_SCHEME_PREFIX, '').replace(WWW_PREFIX, ''),
+  );
 }
 
 /**

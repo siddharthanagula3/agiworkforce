@@ -63,7 +63,6 @@
     "download",
     "github/install",
     "github/installations",
-    "help/search",
     "llm/v1/chat/completions/runs/[runId]/resume/stream",
     "mcp-apps/payload/[payloadId]",
     "mcp-apps/sandbox",

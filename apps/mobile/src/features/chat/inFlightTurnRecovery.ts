@@ -10,9 +10,11 @@ export const IN_FLIGHT_TURN_RECHECK_MS = 5_000;
 export const IN_FLIGHT_TURN_STALL_DEADLINE_MS = 150_000;
 export const IN_FLIGHT_TURN_STALLED_MESSAGE =
   'This turn stopped running on the server and will not finish. Send it again to retry.';
+export const IN_FLIGHT_TURN_WAITING_MESSAGE =
+  'Waiting for the answer. It appears here when it is ready.';
 
 export type InFlightTurnVerdict =
-  Extract<LifecycleStatus, 'running' | 'idle'> | 'stalled' | 'checking' | 'unknown';
+  Extract<LifecycleStatus, 'running' | 'idle'> | 'stalled' | 'checking' | 'unknown' | 'waiting';
 
 export interface InFlightRunLiveness {
   state: string;
@@ -23,7 +25,14 @@ type TurnRow = Pick<ChatMessage, 'role'> &
   Partial<
     Pick<
       ChatMessage,
-      'isStreaming' | 'isQueued' | 'queueFailed' | 'metadata' | 'toolCalls' | 'content'
+      | 'id'
+      | 'createdAt'
+      | 'isStreaming'
+      | 'isQueued'
+      | 'queueFailed'
+      | 'metadata'
+      | 'toolCalls'
+      | 'content'
     >
   >;
 
@@ -65,7 +74,7 @@ export function lastAnswerLiveRun(input: {
   if (!input.isCloud) return 'ended';
   if (input.verdict === 'running') return 'live';
   if (input.verdict === 'stalled') return 'ended';
-  if (input.verdict === 'unknown') return 'unknown';
+  if (input.verdict === 'unknown' || input.verdict === 'waiting') return 'unknown';
   return undefined;
 }
 
@@ -104,18 +113,45 @@ export async function askWhetherTurnIsRunning(
   return readInFlightTurnVerdict(runs);
 }
 
+/**
+ * A turn started on another device may be a plain answer that leaves no run to
+ * find, so a recent question with no run is waited on rather than called
+ * stopped, which would invite a second paid answer. The wait is bounded from
+ * the earlier of when it was sent and when this phone first asked, so a clock
+ * ahead of this phone's cannot hold it open.
+ */
+function questionMayStillBeAnswered(
+  sentAt: string | undefined,
+  firstAskedAtMs: number,
+  nowMs: number,
+): boolean {
+  const sentAtMs = Date.parse(sentAt ?? '');
+  if (!Number.isFinite(sentAtMs)) return false;
+  return nowMs - Math.min(sentAtMs, firstAskedAtMs) < IN_FLIGHT_TURN_STALL_DEADLINE_MS;
+}
+
+interface TurnVerdictState {
+  turn: string | null;
+  verdict: InFlightTurnVerdict;
+}
+
+const NO_TURN: TurnVerdictState = { turn: null, verdict: 'idle' };
+
 export function useInFlightTurnRecovery(
   input: InFlightTurnInput & { isOnline: boolean; onFinished: () => void },
 ): InFlightTurnVerdict {
-  const [verdict, setVerdict] = useState<InFlightTurnVerdict>('idle');
+  const [answer, setAnswer] = useState<TurnVerdictState>(NO_TURN);
   const [recheckTick, setRecheckTick] = useState(0);
   const wasOnline = useRef(input.isOnline);
   const onFinishedRef = useRef(input.onFinished);
   onFinishedRef.current = input.onFinished;
   const runningSeen = useRef<string | null>(null);
-  const askedFor = useRef<string | null>(null);
+  const firstAsked = useRef<{ turn: string; atMs: number } | null>(null);
   const asking = turnToAsk(input);
   const conversationId = input.conversationId;
+  const last = input.messages[input.messages.length - 1];
+  const turn = asking && conversationId ? `${conversationId}:${asking}:${last?.id ?? ''}` : null;
+  const questionSentAt = asking === 'question' ? last?.createdAt : undefined;
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -130,16 +166,13 @@ export function useInFlightTurnRecovery(
   }, [input.isOnline]);
 
   useEffect(() => {
-    if (!asking || !conversationId) {
-      askedFor.current = null;
-      setVerdict('idle');
+    if (!turn || !conversationId) {
+      setAnswer(NO_TURN);
       return undefined;
     }
-    const turn = `${conversationId}:${asking}`;
-    if (askedFor.current !== turn) {
-      askedFor.current = turn;
-      setVerdict('checking');
-    }
+    const firstAskedAtMs = firstAsked.current?.turn === turn ? firstAsked.current.atMs : Date.now();
+    firstAsked.current = { turn, atMs: firstAskedAtMs };
+    const settle = (verdict: InFlightTurnVerdict): void => setAnswer({ turn, verdict });
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const askAgainLater = (): void => {
@@ -155,13 +188,13 @@ export function useInFlightTurnRecovery(
       }
       if (controller.signal.aborted) return;
       if (next === 'running') {
-        setVerdict(next);
+        settle(next);
         runningSeen.current = conversationId;
         askAgainLater();
         return;
       }
       if (next === 'unknown') {
-        setVerdict(next);
+        settle(next);
         if (runningSeen.current === conversationId) askAgainLater();
         return;
       }
@@ -169,11 +202,20 @@ export function useInFlightTurnRecovery(
       runningSeen.current = null;
       if (finished) {
         onFinishedRef.current();
-        setVerdict('checking');
+        settle('checking');
         askAgainLater();
         return;
       }
-      setVerdict('stalled');
+      if (
+        next === 'idle' &&
+        asking === 'question' &&
+        questionMayStillBeAnswered(questionSentAt, firstAskedAtMs, Date.now())
+      ) {
+        settle('waiting');
+        askAgainLater();
+        return;
+      }
+      settle('stalled');
     };
 
     void ask();
@@ -181,7 +223,8 @@ export function useInFlightTurnRecovery(
       controller.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [asking, conversationId, recheckTick]);
+  }, [asking, conversationId, questionSentAt, recheckTick, turn]);
 
-  return verdict;
+  if (turn === null) return 'idle';
+  return answer.turn === turn ? answer.verdict : 'checking';
 }

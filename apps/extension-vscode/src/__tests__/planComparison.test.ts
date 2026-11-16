@@ -41,7 +41,7 @@ describe('plan comparison', () => {
     expect(planUsagePhrase('max')).toBe(`5x more usage than ${PRO}`);
     expect(planUsagePhrase('max_15x')).toBe(`10x more weekly usage than ${PRO}`);
     expect(planUsagePhrase('team')).toBe(`Same usage as ${PRO} for every seat`);
-    expect(planUsagePhrase('free')).toBe('A small allowance, free models only');
+    expect(planUsagePhrase('free')).toBe('A usage allowance, free models only');
     expect(planUsagePhrase('enterprise')).toBe('Usage set by your contract');
     for (const plan of COMPARED_PLANS) expect(planUsagePhrase(plan)).not.toMatch(/\$|credits/);
   });

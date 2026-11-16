@@ -311,3 +311,22 @@ describe('withoutCitationMarkers', () => {
     );
   });
 });
+
+describe('long crafted link text and hrefs', () => {
+  it('compares link text ending in a long run of slashes in linear time', () => {
+    expect(isCitationOnlyLinkText(`${'/'.repeat(100_000)}x`, 'https://frame.work')).toBe(false);
+  });
+
+  it('normalises an href whose path holds a long run of slashes in linear time', () => {
+    const sources = [{ url: 'https://blog.google/innovation-and-ai/' }];
+    expect(
+      findCitationIndexForUrl(`https://blog.google/${'/'.repeat(100_000)}x`, sources),
+    ).toBeUndefined();
+  });
+
+  it('still resolves a bare domain link that ends in several slashes', () => {
+    const sources = [{ url: 'https://blog.google/innovation-and-ai/' }];
+    expect(findCitationIndexForUrl('https://blog.google///', sources)).toBe(1);
+    expect(isCitationOnlyLinkText('https://frame.work///', 'https://frame.work')).toBe(true);
+  });
+});

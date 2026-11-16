@@ -202,7 +202,9 @@ export function TwoFactorSection({
     const current = () => operation.current === request && isCloudAccountEpochCurrent(account);
     Alert.alert(
       'Turn off two-factor sign-in?',
-      'Signing in will need only your password or sign-in method, and your backup codes stop working.',
+      `Signing in will need only your password or sign-in method, and your backup codes stop working.${
+        available ? '' : " You can't turn it back on until setup is available again."
+      }`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -228,52 +230,56 @@ export function TwoFactorSection({
         },
       ],
     );
-  }, [account, fail, onChanged, withStepUp]);
+  }, [account, available, fail, onChanged, withStepUp]);
 
   const codesText = stage.name === 'codes' ? stage.codes.join('\n') : '';
 
+  const showSection = status !== null && (available || enabled);
+
   return (
     <>
-      <SettingsInfo
-        title="Two-factor sign-in"
-        body="Require a code from an authenticator app each time you sign in."
-        icon={ShieldCheck}
-      />
-      <SettingsGroup>
-        <SettingsRow label="Authenticator app" icon={KeyRound} value={statusLabel} />
-        {status && !enabled ? (
-          <SettingsRow
-            label="Set up authenticator app"
+      {showSection ? (
+        <>
+          <SettingsInfo
+            title="Two-factor sign-in"
+            body="Require a code from an authenticator app each time you sign in."
             icon={ShieldCheck}
-            value={available ? undefined : 'Temporarily unavailable'}
-            {...(available && !busy ? { onPress: () => void startSetup() } : {})}
           />
-        ) : null}
-        {enabled ? (
-          <SettingsRow
-            label="Backup codes"
-            icon={KeyRound}
-            value={status?.backupCodesReady ? 'Ready' : 'Not set'}
-          />
-        ) : null}
-        {enabled ? (
-          <SettingsRow
-            label="Generate new backup codes"
-            icon={KeyRound}
-            {...(available ? {} : { value: 'Temporarily unavailable' })}
-            {...(available && !busy ? { onPress: () => void regenerate() } : {})}
-          />
-        ) : null}
-        {enabled ? (
-          <SettingsRow
-            label="Turn off two-factor"
-            icon={ShieldOff}
-            destructive
-            isLast
-            {...(busy ? {} : { onPress: turnOff })}
-          />
-        ) : null}
-      </SettingsGroup>
+          <SettingsGroup>
+            <SettingsRow label="Authenticator app" icon={KeyRound} value={statusLabel} />
+            {!enabled ? (
+              <SettingsRow
+                label="Set up authenticator app"
+                icon={ShieldCheck}
+                {...(busy ? {} : { onPress: () => void startSetup() })}
+              />
+            ) : null}
+            {enabled ? (
+              <SettingsRow
+                label="Backup codes"
+                icon={KeyRound}
+                value={status?.backupCodesReady ? 'Ready' : 'Not set'}
+              />
+            ) : null}
+            {enabled && available ? (
+              <SettingsRow
+                label="Generate new backup codes"
+                icon={KeyRound}
+                {...(busy ? {} : { onPress: () => void regenerate() })}
+              />
+            ) : null}
+            {enabled ? (
+              <SettingsRow
+                label="Turn off two-factor"
+                icon={ShieldOff}
+                destructive
+                isLast
+                {...(busy ? {} : { onPress: turnOff })}
+              />
+            ) : null}
+          </SettingsGroup>
+        </>
+      ) : null}
 
       <Modal
         visible={stage.name !== 'idle'}

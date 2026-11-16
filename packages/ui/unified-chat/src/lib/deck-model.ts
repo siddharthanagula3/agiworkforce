@@ -3,7 +3,7 @@ import { splitSlides } from './presentation-slides';
 export const SLIDE_SEPARATOR = '\n\n---\n\n';
 export const NEW_SLIDE_MARKDOWN = '## New slide\n\n- First point\n- Second point';
 const DECK_META = /^\s*<!--\s*deck\b([^>]*)-->[ \t]*\n?/;
-const META_PAIR = /([a-z]+)=("[^"]*"|\S+)/gi;
+const META_PAIR = /(?<![a-z])([a-z]+)=("[^"]*"|\S+)/gi;
 
 export interface DeckDocument {
   meta: Record<string, string>;
@@ -70,7 +70,7 @@ export function appendToSlide(slide: string, block: string): string {
 }
 
 export function slideTitle(slide: string, index: number): string {
-  const heading = /^#{1,6}\s+(.+)$/m.exec(slide);
+  const heading = /^#{1,6}\s+(\S.*|[^\S\n\r\u2028\u2029])$/m.exec(slide);
   const text = (heading?.[1] ?? slide.split('\n').find((line) => line.trim()) ?? '')
     .replace(/[*_`[\]]/g, '')
     .trim();
@@ -83,7 +83,7 @@ export type SlideSegment =
   | { kind: 'markdown'; text: string }
   | { kind: VisualKind; source: string; start: number; end: number };
 
-const FENCE_OPEN = /^(`{3,}|~{3,})\s*([a-z0-9-]*)\s*$/i;
+const FENCE_OPEN = /^(`{3,}|~{3,})\s*(?:([a-z0-9-]+)\s*)?$/i;
 const VISUAL_LANGUAGES = new Set(['chart', 'mermaid', 'shapes', 'kpi', 'insights']);
 
 export function slideSegments(slide: string): SlideSegment[] {

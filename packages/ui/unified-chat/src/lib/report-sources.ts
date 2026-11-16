@@ -1,7 +1,7 @@
 import { findCitationIndexForUrl } from '../components/markdown/citationMarkers';
 
 const SOURCES_HEADING =
-  /^(?:#{1,6}\s*)?(?:\*\*|__)?\s*(?:sources|references|citations|works cited)\s*:?\s*(?:\*\*|__)?\s*$/i;
+  /^(?:#{1,6}\s*(?:(?:\*\*|__)\s*)?|(?:\*\*|__)\s*|\s*)(?:sources|references|citations|works cited)\s*(?::\s*)?(?:(?:\*\*|__)\s*)?$/i;
 
 /**
  * A deep-research report ends with a numbered source list whose entries are raw
@@ -14,7 +14,7 @@ const SOURCES_HEADING =
  * survives intact.
  */
 const SOURCES_LABEL_WITH_ENTRIES =
-  /^(?:\*\*|__)?\s*(?:sources|references|citations|works cited)\s*:\s*(?:\*\*|__)?\s*(\S.*)$/i;
+  /^(?:\*\*|__)?\s*(?:sources|references|citations|works cited)\s*:\s*(?:(?:\*\*|__)\s*)?(\S.*)$/i;
 
 interface TrailingSourceBlock {
   bodyEnd: number;
@@ -45,6 +45,13 @@ const FENCE_LINE = /^\s{0,3}(`{3,}|~{3,})/;
 const NUMBERED_SOURCE_LINE = /^\s*(?:[-*]\s*)?(?:\[(\d{1,3})\]:?|(\d{1,3})[.)])\s+/;
 const SOURCE_URL = /https?:\/\/[^\s<>)\]]+/g;
 const SOURCE_HEADING_END = /\b(?:sources|references|citations|works cited|urls|links)\s*:?$/i;
+const URL_TRAILING_PUNCTUATION = '.,;';
+
+function withoutTrailingCharacters(text: string, characters: string): string {
+  let end = text.length;
+  while (end > 0 && characters.includes(text[end - 1]!)) end -= 1;
+  return text.slice(0, end);
+}
 
 interface NumberedSourceLine {
   declared: number;
@@ -95,7 +102,7 @@ function mapNumberedSources(
   const mapping = new Map<number, number>();
   for (const entry of entries) {
     const urls = [...entry.text.matchAll(SOURCE_URL)].map((match) =>
-      (match[0] ?? '').replace(/[.,;]+$/, ''),
+      withoutTrailingCharacters(match[0] ?? '', URL_TRAILING_PUNCTUATION),
     );
     if (urls.length !== 1) return null;
     const resolved = findCitationIndexForUrl(urls[0]!, citations);
@@ -170,19 +177,27 @@ function isSourceListOnly(rest: string[]): boolean {
 
 const MARKER_TOKEN = /\[\d{1,3}\]/;
 const MARKER_TOKEN_G = /\[\d{1,3}\]/g;
-const LINK_TOKEN_G = /\[[^\]\n]*\]\([^)\n]*\)/g;
+// The second alternative of each consumes, and keeps, the text a failed attempt
+// already scanned; no later start inside it can match, and retrying from each of
+// them made a long crafted line quadratic.
+const LINK_TOKEN_G = /(\[[^\]\n]*\]\([^)\n]*\))|\[[^\]\n]*(?:\]\([^)\n]*)?/g;
 const BARE_HOST_TOKEN_G =
-  /\(?\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\)?/gi;
+  /(\(?\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+\)?)|\b[a-z0-9][a-z0-9-]*/gi;
+
+function removeMatchedTokens(text: string, pattern: RegExp): string {
+  return text.replace(pattern, (whole, token: string | undefined) =>
+    token === undefined ? whole : '',
+  );
+}
 
 function isCitationOnlyLine(raw: string): boolean {
   const line = raw.trim();
   if (!line) return false;
   if (!MARKER_TOKEN.test(line)) return false;
-  const residue = line
-    .replace(MARKER_TOKEN_G, '')
-    .replace(LINK_TOKEN_G, '')
-    .replace(BARE_HOST_TOKEN_G, '')
-    .replace(/[()\s,;·|]/g, '');
+  const residue = removeMatchedTokens(
+    removeMatchedTokens(line.replace(MARKER_TOKEN_G, ''), LINK_TOKEN_G),
+    BARE_HOST_TOKEN_G,
+  ).replace(/[()\s,;·|]/g, '');
   return residue.length === 0;
 }
 

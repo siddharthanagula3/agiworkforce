@@ -247,7 +247,7 @@ describe('the size report', () => {
       false,
       getColors('light', 'light', false),
     );
-    const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? '';
+    const script = html.match(/<script>([\s\S]*)<\/script(?:[\s/][^>]*)?>/i)?.[1] ?? '';
     const box = { bottom: 30, height: 30, width: 80 };
     const posted: string[] = [];
     vm.runInNewContext(script, {

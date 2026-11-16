@@ -93,7 +93,7 @@ beforeEach(() => {
   mockRandomUUID.mockImplementation(() => `export-${++nextExportId}`);
   (globalThis as Record<string, unknown>).FileReader = FakeFileReader;
   mockGetInfoAsync.mockImplementation(async (uri: string) => ({
-    exists: uri === 'file:///docs/exports/',
+    exists: uri === 'file:///cache/exports/',
   }));
   mockWriteAsStringAsync.mockResolvedValue(undefined);
   mockPhotoPermission.mockResolvedValue({ granted: true });
@@ -109,7 +109,10 @@ describe('artifact exports are the artifact', () => {
 
   it('writes a text export byte for byte', async () => {
     await exportToText('one\ntwo', 'Notes');
-    expect(written()).toEqual({ uri: 'file:///docs/exports/export-1/Notes.txt', body: 'one\ntwo' });
+    expect(written()).toEqual({
+      uri: 'file:///cache/exports/export-1/Notes.txt',
+      body: 'one\ntwo',
+    });
   });
 
   it('guards formula cells of a CSV artifact exactly as the shared spreadsheet export does', async () => {
@@ -119,7 +122,7 @@ describe('artifact exports are the artifact', () => {
 
     const uri = await exportArtifact(csv, 'People', option!);
 
-    expect(uri).toBe('file:///docs/exports/export-1/People.csv');
+    expect(uri).toBe('file:///cache/exports/export-1/People.csv');
     expect(written().body).toBe(spreadsheetSafeExport(csv, 'csv').body);
     expect(written().body).not.toBe(csv);
   });
@@ -128,7 +131,7 @@ describe('artifact exports are the artifact', () => {
     const code = '=notAFormula()';
     const [option] = artifactExportOptions({ type: 'code', language: 'python' });
     await exportArtifact(code, 'script', option!);
-    expect(written()).toEqual({ uri: 'file:///docs/exports/export-1/script.py', body: code });
+    expect(written()).toEqual({ uri: 'file:///cache/exports/export-1/script.py', body: code });
   });
 
   it('saves a Dockerfile under its whole name, with no extension added', async () => {
@@ -137,12 +140,12 @@ describe('artifact exports are the artifact', () => {
 
     await exportArtifact('FROM node:22\n', 'Build image', option!);
 
-    expect(written().uri).toBe('file:///docs/exports/export-1/Dockerfile');
+    expect(written().uri).toBe('file:///cache/exports/export-1/Dockerfile');
   });
 
   it('keeps an empty extension empty when a code block is saved', async () => {
     await exportSourceFile('all:\n\techo hi\n', 'Makefile', '');
-    expect(written().uri).toBe('file:///docs/exports/export-1/Makefile');
+    expect(written().uri).toBe('file:///cache/exports/export-1/Makefile');
   });
 
   it('names source files from the shared code file names, keeping .mmd for diagrams', () => {
@@ -161,7 +164,7 @@ describe('file names', () => {
     expect(report.fileName).toBe('Résumé 2026.md');
     expect(quarterly.fileName).toBe('季度报告.txt');
     expect(report.uri).toBe(
-      `file:///docs/exports/export-1/${encodeURIComponent('Résumé 2026.md')}`,
+      `file:///cache/exports/export-1/${encodeURIComponent('Résumé 2026.md')}`,
     );
     expect(decodeURIComponent(quarterly.uri.split('/').pop()!)).toBe('季度报告.txt');
   });
@@ -175,13 +178,13 @@ describe('file names', () => {
   it('cannot leave its export folder through a title that looks like a path', async () => {
     const result = await exportToText('body', '../../Library/Preferences');
     expect(result.fileName).toBe('Preferences.txt');
-    expect(result.uri).toBe('file:///docs/exports/export-1/Preferences.txt');
+    expect(result.uri).toBe('file:///cache/exports/export-1/Preferences.txt');
   });
 
   it('keeps a hash or percent sign in the name instead of reading it as part of the address', async () => {
     const result = await exportToText('body', 'Week #3 at 50%');
     expect(result.fileName).toBe('Week #3 at 50%.txt');
-    expect(result.uri).toBe('file:///docs/exports/export-1/Week%20%233%20at%2050%25.txt');
+    expect(result.uri).toBe('file:///cache/exports/export-1/Week%20%233%20at%2050%25.txt');
   });
 
   it('saves downloaded files under the name the server gave them', async () => {
@@ -206,13 +209,13 @@ describe('downloaded files', () => {
   it('gives a name without an extension the type the server sent', async () => {
     respond('text/csv');
     const uri = await downloadGeneratedFile('https://agiworkforce.com/api/files/gf-1', 'data');
-    expect(uri).toBe('file:///docs/exports/export-1/data.csv');
+    expect(uri).toBe('file:///cache/exports/export-1/data.csv');
   });
 
   it('keeps a name whose extension is already a known type', async () => {
     respond('text/plain');
     const uri = await downloadGeneratedFile('https://agiworkforce.com/api/files/gf-1', 'notes.md');
-    expect(uri).toBe('file:///docs/exports/export-1/notes.md');
+    expect(uri).toBe('file:///cache/exports/export-1/notes.md');
   });
 
   it('says a deleted file no longer exists and a signed-out download needs sign in', async () => {
@@ -254,7 +257,7 @@ describe('stored GIF, AVIF and HEIC images', () => {
     respond(mimeType);
     await shareGeneratedImage('/api/files/22222222-2222-4222-8222-222222222222', 'party');
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/party.${extension}`,
+      `file:///cache/exports/export-1/party.${extension}`,
       expect.objectContaining({ mimeType }),
     );
   });
@@ -262,15 +265,15 @@ describe('stored GIF, AVIF and HEIC images', () => {
   it('saves a GIF to Photos and copies it', async () => {
     respond('image/gif');
     await saveGeneratedImageToPhotos('/api/files/22222222-2222-4222-8222-222222222222', 'party');
-    expect(mockSaveToLibrary).toHaveBeenCalledWith('file:///docs/exports/export-1/party.gif');
+    expect(mockSaveToLibrary).toHaveBeenCalledWith('file:///cache/exports/export-1/party.gif');
 
     await copyGeneratedImage('/api/files/22222222-2222-4222-8222-222222222222');
     expect(mockSetImage).toHaveBeenCalledWith('R0lGODlh');
   });
 
   it('shares a .heic file with the HEIC type', async () => {
-    await shareFile('file:///docs/exports/export-1/photo.heic');
-    expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///docs/exports/export-1/photo.heic', {
+    await shareFile('file:///cache/exports/export-1/photo.heic');
+    expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///cache/exports/export-1/photo.heic', {
       UTI: 'public.heic',
       mimeType: 'image/heic',
     });

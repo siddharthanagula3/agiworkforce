@@ -5,6 +5,7 @@ import type { AddressInfo, Socket } from 'node:net';
 import type { FetchSource } from '../src/source-fetch.ts';
 
 export const SOURCE_HOST = 'storage.test-bucket.example';
+const REDIRECT_TARGET = '/chat-attachments/staging/object-moved';
 
 export type FakeSourceMode = 'serve' | 'redirect' | 'expired' | 'drop' | 'slow';
 
@@ -84,7 +85,7 @@ export async function startFakeSource(): Promise<FakeSource> {
       return;
     }
     if (object.mode === 'redirect') {
-      res.writeHead(302, { Location: `${path}-moved` }).end();
+      res.writeHead(302, { Location: REDIRECT_TARGET }).end();
       return;
     }
     if (object.mode === 'expired') {

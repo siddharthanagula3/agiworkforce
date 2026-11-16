@@ -30,10 +30,20 @@ export const REDUCED_SENSITIVE_CONTENT_REFUSAL =
   'This content is unavailable while Reduce sensitive content is on. ' +
   'You can change this in Settings > Safety & Security.';
 
+export const SELF_HARM_HELPLINE =
+  "If you're thinking about hurting yourself, a crisis line can help right now: call or text " +
+  '988 in the US, or find one for your country at findahelpline.com. In an emergency, call ' +
+  'your local emergency number.';
+
+const SELF_HARM_TOPIC =
+  /\b(suicid\w*|self[\s-]?harm\w*|(kill(ing)?|hurt(ing)?|harm(ing)?|cut(ting)?)\s+(myself|yourself|themselves|oneself)|end(ing)?\s+(my|your|their)\s+(own\s+)?life)\b/i;
+
 export function checkContentFilter(
   prompt: string,
   enabled: boolean,
   refusal = MINOR_SAFE_REFUSAL,
 ): ContentFilterResult {
-  return checkSharedContentFilter(prompt, enabled, refusal);
+  const verdict = checkSharedContentFilter(prompt, enabled, refusal);
+  if (verdict.allowed || !SELF_HARM_TOPIC.test(prompt)) return verdict;
+  return { allowed: false, refusal: `${verdict.refusal}\n\n${SELF_HARM_HELPLINE}` };
 }

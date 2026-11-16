@@ -6,6 +6,7 @@ const mockMoveAsync = jest.fn();
 const mockDeleteAsync = jest.fn();
 const mockMakeDirectoryAsync = jest.fn();
 jest.mock('expo-file-system/legacy', () => ({
+  cacheDirectory: 'file:///cache/',
   documentDirectory: 'file:///docs/',
   getInfoAsync: (...args: unknown[]) => mockGetInfoAsync(...args),
   deleteAsync: (...args: unknown[]) => mockDeleteAsync(...args),
@@ -81,7 +82,7 @@ describe('mobile exports speak the shared File model', () => {
   it('gives a pdf export the pdf media type', async () => {
     const result = await exportToPDF('body', 'Notes');
     expect(result.file.mediaType).toBe('application/pdf');
-    expect(result.uri).toBe('file:///docs/exports/export-1/Notes.pdf');
+    expect(result.uri).toBe('file:///cache/exports/export-1/Notes.pdf');
   });
 
   it('prints prepared HTML on the page size it is given', async () => {
@@ -116,7 +117,7 @@ describe('mobile exports speak the shared File model', () => {
 
     expect(file.lineage.derivedFromFileId).toBe('gf-1');
     expect(file.lineage.derivation).toBe('copy');
-    expect(file.uri).toBe('file:///docs/exports/export-1/report.pdf');
+    expect(file.uri).toBe('file:///cache/exports/export-1/report.pdf');
   });
 
   it('preserves same-title exports in separate directories with the same display name', async () => {
@@ -159,7 +160,7 @@ describe('mobile exports speak the shared File model', () => {
   it('propagates directory allocation failure without falling back to a shared filename', async () => {
     const failure = new Error('disk full');
     mockGetInfoAsync.mockImplementation(async (uri: string) => ({
-      exists: uri === 'file:///docs/exports/',
+      exists: uri === 'file:///cache/exports/',
     }));
     mockMakeDirectoryAsync.mockRejectedValueOnce(failure);
     await expect(exportToText('body', 'Notes')).rejects.toBe(failure);

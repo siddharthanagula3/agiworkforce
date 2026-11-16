@@ -28,4 +28,21 @@ describe('markdown headings', () => {
     ]);
     expect(slugifyHeading('  Q3: Revenue & Costs ')).toBe('q3-revenue-costs');
   });
+
+  it('drops a closing # sequence and keeps a heading that is only #', () => {
+    expect(extractMarkdownHeadings('## Closed ##\n### Spaced  #  \n# ##')).toEqual([
+      { id: 'closed', text: 'Closed', level: 2 },
+      { id: 'spaced', text: 'Spaced', level: 3 },
+      { id: 'section-3', text: '#', level: 1 },
+    ]);
+  });
+
+  it('reads a heading with a long run of inner spaces', () => {
+    const text = `a${' '.repeat(4_000)}a`;
+    expect(extractMarkdownHeadings(`# ${text}`)).toEqual([{ id: 'a-a', text, level: 1 }]);
+  });
+
+  it('trims long runs of separators from a slug', () => {
+    expect(slugifyHeading(`${'-'.repeat(100_000)}Notes${'-'.repeat(100_000)}`)).toBe('notes');
+  });
 });

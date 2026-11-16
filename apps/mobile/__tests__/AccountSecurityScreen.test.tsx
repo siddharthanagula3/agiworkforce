@@ -1236,6 +1236,139 @@ describe('Mobile Account Security screen', () => {
     });
   });
 
+  describe('two-factor rows while enrolment is not offered', () => {
+    const settled = (screen: ReturnType<typeof render>) =>
+      waitFor(() => expect(screen.getByLabelText('Passkeys and security keys. 1')).toBeTruthy());
+
+    it('draws nothing for the section when enrolment is unavailable and two-factor is off', async () => {
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: false,
+        backupCodesReady: false,
+        enrollmentAvailable: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+      await settled(screen);
+
+      expect(mockFetchStatus).toHaveBeenCalled();
+      expect(screen.queryByText('Two-factor sign-in')).toBeNull();
+      expect(screen.queryByText('Authenticator app')).toBeNull();
+      expect(screen.queryByText('Set up authenticator app')).toBeNull();
+      expect(screen.queryByText('Temporarily unavailable')).toBeNull();
+      expect(screen.getByLabelText('Advanced Account Security')).toBeTruthy();
+    });
+
+    it('keeps only working rows for an enrolled account while enrolment is unavailable', async () => {
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: true,
+        backupCodesReady: true,
+        enrollmentAvailable: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+      await settled(screen);
+
+      expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
+      expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy();
+      expect(screen.getByLabelText('Turn off two-factor')).toBeTruthy();
+      expect(screen.queryByText('Generate new backup codes')).toBeNull();
+      expect(screen.queryByText('Temporarily unavailable')).toBeNull();
+    });
+
+    it('offers setup and new backup codes when enrolment is available', async () => {
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: false,
+        backupCodesReady: false,
+        enrollmentAvailable: true,
+      });
+      const off = render(<AccountSecurityScreen />);
+      await settled(off);
+      expect(off.getByText('Two-factor sign-in')).toBeTruthy();
+      expect(off.getByLabelText('Authenticator app. Off')).toBeTruthy();
+      expect(off.getByLabelText('Set up authenticator app').props.accessibilityRole).toBe('button');
+      off.unmount();
+
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: true,
+        backupCodesReady: true,
+        enrollmentAvailable: true,
+      });
+      const on = render(<AccountSecurityScreen />);
+      await settled(on);
+      expect(on.getByLabelText('Generate new backup codes').props.accessibilityRole).toBe('button');
+      expect(on.getByLabelText('Turn off two-factor')).toBeTruthy();
+      expect(on.queryByText('Temporarily unavailable')).toBeNull();
+    });
+
+    it('draws nothing while the status is still loading', async () => {
+      mockFetchStatus.mockReturnValue(new Promise(() => undefined));
+      const screen = render(<AccountSecurityScreen />);
+      await settled(screen);
+
+      expect(screen.queryByText('Two-factor sign-in')).toBeNull();
+      expect(screen.queryByText('Authenticator app')).toBeNull();
+    });
+
+    it('draws nothing when the status never loaded', async () => {
+      mockFetchStatus.mockRejectedValue(new Error('offline'));
+      const screen = render(<AccountSecurityScreen />);
+      await settled(screen);
+
+      expect(screen.queryByText('Two-factor sign-in')).toBeNull();
+      expect(screen.queryByText('Authenticator app')).toBeNull();
+    });
+
+    it.each([
+      [false, true],
+      [true, false],
+    ])(
+      'names the cannot-turn-back-on consequence only while setup is unavailable (available %s)',
+      async (enrollmentAvailable, warned) => {
+        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+        mockFetchStatus.mockResolvedValue({
+          twoFactorEnabled: true,
+          backupCodesReady: true,
+          enrollmentAvailable,
+        });
+        const screen = render(<AccountSecurityScreen />);
+        await waitFor(() => expect(screen.getByLabelText('Turn off two-factor')).toBeTruthy());
+        fireEvent.press(screen.getByLabelText('Turn off two-factor'));
+
+        const body = alertSpy.mock.calls.at(-1)?.[1] ?? '';
+        expect(body.includes("You can't turn it back on until setup is available again.")).toBe(
+          warned,
+        );
+        alertSpy.mockRestore();
+      },
+    );
+
+    it('keeps Turn off for an enrolled account when a later status read fails', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      mockFetchStatus.mockResolvedValue({
+        twoFactorEnabled: true,
+        backupCodesReady: true,
+        enrollmentAvailable: false,
+      });
+      mockTurnOffTwoFactor.mockResolvedValue(undefined);
+      const screen = render(<AccountSecurityScreen />);
+      await waitFor(() => expect(screen.getByLabelText('Turn off two-factor')).toBeTruthy());
+
+      mockFetchStatus.mockRejectedValue(new Error('offline'));
+      const readsBefore = mockFetchStatus.mock.calls.length;
+      fireEvent.press(screen.getByLabelText('Turn off two-factor'));
+      const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Turn off');
+      await act(async () => {
+        confirm?.onPress?.();
+      });
+      await waitFor(() => expect(mockFetchStatus.mock.calls.length).toBeGreaterThan(readsBefore));
+      await waitFor(() =>
+        expect(screen.getByLabelText('Authenticator app. Unavailable')).toBeTruthy(),
+      );
+
+      expect(screen.getByLabelText('Turn off two-factor')).toBeTruthy();
+      expect(screen.queryByText('Temporarily unavailable')).toBeNull();
+      alertSpy.mockRestore();
+    });
+  });
+
   describe('authenticator setup QR code', () => {
     const startSetup = async (otpauthUrl: string) => {
       mockFetchStatus.mockResolvedValue({

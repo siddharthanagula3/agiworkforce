@@ -45,14 +45,85 @@ export function withoutCodeFences(content: string): string {
   return kept.join('\n');
 }
 
+const LINE_TERMINATORS: ReadonlySet<string> = new Set(['\n', '\r', '\u2028', '\u2029']);
+const WHITESPACE = /\s/;
+const ARITHMETIC_OPERATORS: ReadonlySet<string> = new Set(['+', '-', '*', '/', '^']);
+const NUMBER_CHARACTER = /[-\d.,]/;
+
+function hasEquationBetween(text: string, open: string, close: string): boolean {
+  const start = text.indexOf(open);
+  if (start < 0) return false;
+  const equals = text.indexOf('=', start + open.length + 1);
+  return equals >= 0 && text.indexOf(close, equals + 2) >= 0;
+}
+
+function spanHasArithmeticResult(span: string): boolean {
+  let operatorSeen = false;
+  for (let index = 0; index < span.length; index += 1) {
+    const char = span.charAt(index);
+    if (char === '=' && operatorSeen) {
+      let next = index + 1;
+      while (next < span.length && WHITESPACE.test(span.charAt(next))) next += 1;
+      if (next < span.length && NUMBER_CHARACTER.test(span.charAt(next))) return true;
+    }
+    if (ARITHMETIC_OPERATORS.has(char)) operatorSeen = true;
+  }
+  return false;
+}
+
+function hasInlineCodeArithmetic(text: string): boolean {
+  const spans = text.split('`');
+  return spans.slice(1, -1).some(spanHasArithmeticResult);
+}
+
+// Each whitespace run may cross lines.
+function hasVsHeadingText(content: string): boolean {
+  let lastNonTerminator = content.length - 1;
+  while (lastNonTerminator >= 0 && LINE_TERMINATORS.has(content.charAt(lastNonTerminator))) {
+    lastNonTerminator -= 1;
+  }
+  let hashOnLine = false;
+  let hashCarriedToLine = false;
+  let previousChar = '';
+  let previousIsAfterHash = false;
+  let firstHorizontalSpace = -1;
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content.charAt(index);
+    if (WHITESPACE.test(char)) {
+      if (LINE_TERMINATORS.has(char)) {
+        hashOnLine = false;
+        hashCarriedToLine = previousChar === '#';
+      } else if (firstHorizontalSpace < 0) {
+        firstHorizontalSpace = index;
+      }
+      continue;
+    }
+    if (
+      (char === 'v' || char === 'V') &&
+      (content.charAt(index + 1) === 's' || content.charAt(index + 1) === 'S') &&
+      WHITESPACE.test(content.charAt(index - 1)) &&
+      (previousIsAfterHash ||
+        (previousChar === '#' && firstHorizontalSpace >= 0 && firstHorizontalSpace <= index - 2))
+    ) {
+      const spaceAt = content.charAt(index + 2) === '.' ? index + 3 : index + 2;
+      if (WHITESPACE.test(content.charAt(spaceAt)) && lastNonTerminator > spaceAt) return true;
+    }
+    previousIsAfterHash = hashOnLine || hashCarriedToLine;
+    previousChar = char;
+    firstHorizontalSpace = -1;
+    if (char === '#') hashOnLine = true;
+  }
+  return false;
+}
+
 export function detectCardType(content: string): CardType {
   if (!content || content.length < 40) return null;
 
   const lower = content.toLowerCase();
 
-  const hasIngredients = /#+\s*ingredients/i.test(content) || /\*\*ingredients\*\*/i.test(content);
+  const hasIngredients = /#\s*ingredients/i.test(content) || /\*\*ingredients\*\*/i.test(content);
   const hasInstructions =
-    /#+\s*(instructions|directions|steps|method|preparation)/i.test(content) ||
+    /#\s*(instructions|directions|steps|method|preparation)/i.test(content) ||
     /\*\*(instructions|directions|steps|method|preparation)\*\*/i.test(content);
   const hasRecipeSignals =
     (lower.includes('prep time') || lower.includes('cook time') || lower.includes('servings')) &&
@@ -60,20 +131,20 @@ export function detectCardType(content: string): CardType {
   if (hasIngredients && hasInstructions) return 'recipe';
   if (hasRecipeSignals) return 'recipe';
 
-  const calcPatterns = [
-    /(?:^|\n)\s*(?:result|answer|total|sum|difference|product|quotient)\s*[:=]\s*[-\d.,]+/im,
-    /\$\$[\s\S]+?=[\s\S]+?\$\$/m,
-    /`[^`]*[+\-*/^]+[^`]*=\s*[-\d.,]+[^`]*`/m,
-    /\\\[[\s\S]+?=[\s\S]+?\\\]/m,
-  ];
   const prose = withoutCodeFences(content);
-  const hasCalcHeader = /#+\s*(calculation|result|formula|equation|math)/i.test(prose);
-  const hasCalcPattern = calcPatterns.some((p) => p.test(prose));
+  const hasCalcHeader = /#\s*(calculation|result|formula|equation|math)/i.test(prose);
+  const hasCalcPattern =
+    /(?:^|\n)[^\S\n\r\u2028\u2029]*(?:result|answer|total|sum|difference|product|quotient)\s*[:=]\s*[-\d.,]+/im.test(
+      prose,
+    ) ||
+    hasEquationBetween(prose, '$$', '$$') ||
+    hasInlineCodeArithmetic(prose) ||
+    hasEquationBetween(prose, '\\[', '\\]');
   if (hasCalcHeader && hasCalcPattern) return 'calculation';
   const latexBlocks = prose.match(/\$\$[\s\S]+?\$\$/g);
   if (latexBlocks && latexBlocks.length >= 2 && hasCalcPattern) return 'calculation';
 
-  const hasVsHeading = /#+\s*.+\s+vs\.?\s+.+/i.test(content);
+  const hasVsHeading = hasVsHeadingText(content);
   const hasComparisonTable = /\|.*\|.*\|/.test(content) && lower.includes('vs');
   const prosConsCount = (
     lower.match(/\b(pros?|cons?|advantages?|disadvantages?|strengths?|weaknesses?)\b/g) || []
@@ -83,10 +154,10 @@ export function detectCardType(content: string): CardType {
   if (prosConsCount >= 3 && (lower.includes(' vs ') || lower.includes(' versus ')))
     return 'comparison';
 
-  const explicitSteps = content.match(/(?:^|\n)\s*(?:#{1,4}\s*)?step\s+\d+\b/gi);
-  const orderedLeadIns = content.match(/(?:^|\n)\s*\d+\.\s+\*\*[^*\n]+\*\*/g);
+  const explicitSteps = content.match(/(?:^|\n)[^\S\n]*(?:#{1,4}\s*)?step\s+\d+\b/gi);
+  const orderedLeadIns = content.match(/(?:^|\n)[^\S\n]*\d+\.\s+\*\*[^*\n]+\*\*/g);
   const hasProcedureHeading =
-    /#+\s*(guide|how to|tutorial|walkthrough|step-by-step|troubleshooting)/i.test(content);
+    /#\s*(guide|how to|tutorial|walkthrough|step-by-step|troubleshooting)/i.test(content);
   if (explicitSteps && explicitSteps.length >= 3) return 'steps';
   if (
     hasProcedureHeading &&

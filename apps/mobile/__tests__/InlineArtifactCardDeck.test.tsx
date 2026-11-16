@@ -36,7 +36,7 @@ describe('InlineArtifactCard deck summary', () => {
         <InlineArtifactCard artifact={artifact(type, DECK)} onExpand={onExpand} />,
       );
       expect(screen.getByText('Presentation, 3 slides')).toBeTruthy();
-      expect(screen.queryByText(/<!-- deck -->/)).toBeNull();
+      expect(screen.queryByText(/<!-{2} deck -->/)).toBeNull();
       fireEvent.press(screen.getByLabelText(/Launch plan/));
       expect(onExpand).toHaveBeenCalledWith(artifact(type, DECK));
       unmount();

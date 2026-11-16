@@ -1431,10 +1431,10 @@ throughput unmeasured until step 4; HTML and script normalisation limits;
 DLP limited to the first 256,000 bytes; native admission capped at 25 MiB;
 small history files over the inline budget not excerpted; chat files over
 25 MiB without a backup replica (Owner decisions, L); the temporary-chat storage exposure;
-the web Library's download button (`LibraryView.tsx` `handleDownload`) and
 attach-from-Library (`ComposerFilesMenu.tsx` `libraryItemToFile`) answering
-`413` for a chat file above 30 MiB, because both fetch the file and only a
-navigation is redirected; a chat file above 30 MiB not opening on the phone,
+`413` for a chat file above 30 MiB, with a message only on the Library page's
+handoffs (`readLibraryItemFile`) and the generic could-not-be-added copy from
+the composer, because it fetches the file and only a navigation is redirected; a chat file above 30 MiB not opening on the phone,
 with the Library's share alert keeping its fixed "Try again" copy; and the
 existing harness page cap of 600 for the Anthropic messages route, where the
 provider's page says 100 when the request's context window is under 1M tokens
@@ -1495,17 +1495,19 @@ content_preserved`, about lines 101 to 103) and reads no object.
   `scripts/check-legal-hold-coverage.baseline.json`: unchanged; `P2` and `P12`
   satisfy those guards in the SQL and statements themselves.
 - `apps/web/features/chat/components/Composer/ComposerFilesMenu.tsx`
-  (`libraryItemToFile`, lines 164 to 175) and
-  `packages/ui/unified-chat/src/components/library/LibraryView.tsx`
-  (`handleDownload`, lines 533 to 555): renderer-area files, unchanged. Both
-  read a file with `fetch` and `res.blob()`; a fetch sends
-  `Sec-Fetch-Mode: cors` and no capability token (`P16` sends the token on
-  the `/api/me` request only), so `P13` answers them today's `413` for a
-  large file, exactly as for any asset above 30 MiB today. Their behaviour
-  for a large file is therefore today's, and no package edits them in the
-  first version; the gap is a known-flaws row (`P18`). Letting them reach a
-  large file means a navigation (an anchor to the file URL) in place of the
-  fetch, a renderer-workstream change for a later version.
+  (`libraryItemToFile`) reads a file with `fetch` and `res.blob()`; a fetch
+  sends `Sec-Fetch-Mode: cors` and no capability token (`P16` sends the token
+  on the `/api/me` request only), so `P13` answers it today's `413` for a
+  large file, exactly as for any asset above 30 MiB today. Attach-from-Library
+  therefore still refuses a large file: the Library page's handoffs (Use in
+  chat, remix, Add to project, through `readLibraryItemFile` in
+  `apps/web/features/library/lib/library-chat-handoff.ts`) say so with a
+  message, the composer's Files menu does not, and the gap is a known-flaws
+  row (`P18`). The Library's download button
+  (`packages/ui/unified-chat/src/components/library/LibraryView.tsx`,
+  `handleDownload`) no longer fetches an uploaded file above the inline limit:
+  it saves it through a browser download, an anchor navigation that the files
+  route redirects to storage and charges once.
 - `apps/mobile/src/features/chat/components/artifact-viewers/useLocalFileCopy.ts`,
   `apps/mobile/src/features/chat/utils/sentAttachment.ts` and
   `apps/mobile/src/features/library/index.tsx`: unchanged; they reach a

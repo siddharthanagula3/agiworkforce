@@ -70,7 +70,7 @@ describe('downloadGeneratedFile', () => {
     mockRandomUUID.mockImplementation(() => `export-${++nextExportId}`);
     (globalThis as Record<string, unknown>).FileReader = FakeFileReader;
     mockGetInfoAsync.mockImplementation(async (uri: string) => ({
-      exists: uri === 'file:///docs/exports/',
+      exists: uri === 'file:///cache/exports/',
     }));
     mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer test-jwt' });
     mockGuardedFetch.mockResolvedValue({
@@ -97,11 +97,11 @@ describe('downloadGeneratedFile', () => {
       headers: { Authorization: 'Bearer test-jwt' },
     });
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/export-1/report.pdf',
+      'file:///cache/exports/export-1/report.pdf',
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
-    expect(uri).toBe('file:///docs/exports/export-1/report.pdf');
+    expect(uri).toBe('file:///cache/exports/export-1/report.pdf');
   });
 
   it('does NOT attach the Bearer token for non-our-cloud hosts (no JWT leak)', async () => {
@@ -142,12 +142,12 @@ describe('downloadGeneratedFile', () => {
       { headers: { Authorization: 'Bearer test-jwt' } },
     );
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/export-1/generated-image.png',
+      'file:///cache/exports/export-1/generated-image.png',
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/export-1/generated-image.png',
+      'file:///cache/exports/export-1/generated-image.png',
       {
         mimeType: 'image/png',
         dialogTitle: 'Share generated image',
@@ -177,12 +177,12 @@ describe('downloadGeneratedFile', () => {
     await shareGeneratedImage('/api/files/22222222-2222-4222-8222-222222222222');
 
     expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/generated-image.${extension}`,
+      `file:///cache/exports/export-1/generated-image.${extension}`,
       'JVBERi0xLjc=',
       { encoding: 'base64' },
     );
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/generated-image.${extension}`,
+      `file:///cache/exports/export-1/generated-image.${extension}`,
       expect.objectContaining({ mimeType }),
     );
   });
@@ -197,7 +197,7 @@ describe('downloadGeneratedFile', () => {
   }
 
   function trackWrittenFiles(): Set<string> {
-    const files = new Set<string>(['file:///docs/exports/']);
+    const files = new Set<string>(['file:///cache/exports/']);
     const fileSystem = jest.requireMock('expo-file-system/legacy') as {
       moveAsync: jest.Mock;
     };
@@ -316,10 +316,10 @@ describe('downloadGeneratedFile', () => {
     ['mov', 'com.apple.quicktime-movie', 'video/quicktime'],
     ['webm', 'public.movie', 'video/webm'],
   ])('shares a .%s file with video metadata', async (extension, uti, mimeType) => {
-    await shareFile(`file:///docs/exports/export-1/video.${extension}`);
+    await shareFile(`file:///cache/exports/export-1/video.${extension}`);
 
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/video.${extension}`,
+      `file:///cache/exports/export-1/video.${extension}`,
       { UTI: uti, mimeType },
     );
   });
@@ -332,10 +332,10 @@ describe('downloadGeneratedFile', () => {
     ['m4a', 'public.mpeg-4-audio', 'audio/mp4'],
     ['txt', 'public.plain-text', 'text/plain'],
   ])('shares a .%s file with its own type', async (extension, uti, mimeType) => {
-    await shareFile(`file:///docs/exports/export-1/file.${extension}`);
+    await shareFile(`file:///cache/exports/export-1/file.${extension}`);
 
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      `file:///docs/exports/export-1/file.${extension}`,
+      `file:///cache/exports/export-1/file.${extension}`,
       { UTI: uti, mimeType },
     );
   });
@@ -343,20 +343,20 @@ describe('downloadGeneratedFile', () => {
   it.each(['ts', 'tsx', 'mts', 'cts', 'py', 'rs', 'kt', 'swift', 'sh', 'yml', 'sql'])(
     'shares a .%s source file as plain text and keeps its name',
     async (extension) => {
-      await shareFile(`file:///docs/exports/export-1/code.${extension}`);
+      await shareFile(`file:///cache/exports/export-1/code.${extension}`);
 
       expect(Sharing.shareAsync).toHaveBeenCalledWith(
-        `file:///docs/exports/export-1/code.${extension}`,
+        `file:///cache/exports/export-1/code.${extension}`,
         { UTI: 'public.plain-text', mimeType: 'text/plain' },
       );
     },
   );
 
   it('does not claim a type it does not know when sharing', async () => {
-    await shareFile('file:///docs/exports/export-1/notes.unknownext');
+    await shareFile('file:///cache/exports/export-1/notes.unknownext');
 
     expect(Sharing.shareAsync).toHaveBeenCalledWith(
-      'file:///docs/exports/export-1/notes.unknownext',
+      'file:///cache/exports/export-1/notes.unknownext',
       {},
     );
   });
@@ -437,7 +437,7 @@ describe('downloadGeneratedFile', () => {
   it('preserves default Photos and Clipboard callers and exact bytes', async () => {
     const path = '/api/files/22222222-2222-4222-8222-222222222222';
     await saveGeneratedImageToPhotos(path, 'kept-name');
-    expect(mockSaveToLibrary).toHaveBeenCalledWith('file:///docs/exports/export-1/kept-name.png');
+    expect(mockSaveToLibrary).toHaveBeenCalledWith('file:///cache/exports/export-1/kept-name.png');
     await copyGeneratedImage(path);
     expect(mockSetImage).toHaveBeenCalledWith('JVBERi0xLjc=');
   });

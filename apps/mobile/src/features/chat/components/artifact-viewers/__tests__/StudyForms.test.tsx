@@ -231,7 +231,7 @@ describe('the study answer the server stored on the simulator', () => {
     const longTitle = `Photosynthesis\n${'review '.repeat(60)}`;
     const longQuiz = quiz!.content.replace(
       'Photosynthesis: Question 1 of 2',
-      longTitle.replace('\n', '\\n'),
+      longTitle.replaceAll('\n', '\\n'),
     );
     const boundedTitle = studyArtifactTitle(quiz!.language, longQuiz);
     expect(boundedTitle).toBe(normalizeArtifactTitle(longTitle));

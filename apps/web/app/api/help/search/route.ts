@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
+import { hasEmbeddedPageMarker } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -9,7 +10,8 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getSupportCorpus } from '@/lib/support/agent/corpus';
 import { retrieveSupportChunks } from '@/lib/support/agent/retrieval/retrieve';
-import { helpResultPath } from '@/lib/support/help-articles';
+import type { CorpusChunk } from '@/lib/support/agent/types';
+import { helpResultPath, PURCHASE_HELP_CATEGORY } from '@/lib/support/help-articles';
 import { absoluteUrl } from '@/lib/seo/site';
 
 export const runtime = 'nodejs';
@@ -44,6 +46,10 @@ export interface HelpSearchResponse {
   corpus: 'available' | 'unavailable';
 }
 
+function listedInPhoneHelpIndex(chunk: Pick<CorpusChunk, 'origin' | 'category'>): boolean {
+  return chunk.origin === 'markdown' && chunk.category !== PURCHASE_HELP_CATEGORY;
+}
+
 async function handleSearch(request: NextRequest) {
   const rateLimited = await withRateLimit(request, 'help-search');
   if (rateLimited) return rateLimited;
@@ -74,10 +80,12 @@ async function handleSearch(request: NextRequest) {
     ...(parsed.data.limit ? { limit: parsed.data.limit } : {}),
   });
 
+  const fromPhone = hasEmbeddedPageMarker(url.searchParams);
   const seen = new Set<string>();
   const results: HelpSearchResult[] = [];
   for (const hit of retrieval.chunks) {
     if (seen.has(hit.chunk.docId)) continue;
+    if (fromPhone && !listedInPhoneHelpIndex(hit.chunk)) continue;
     seen.add(hit.chunk.docId);
     results.push({
       docId: hit.chunk.docId,

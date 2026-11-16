@@ -143,8 +143,21 @@ describe('Data use & access', () => {
 
     expect(screen.getByText('Where each feature processes your data')).toBeTruthy();
     expect(screen.getByText('Chat in Local Mode')).toBeTruthy();
-    expect(screen.getByText('Read aloud, text scanning and translation')).toBeTruthy();
+    expect(screen.getByText('Read aloud')).toBeTruthy();
     expect(screen.getByLabelText('Export Cloud data. Sign in')).toBeTruthy();
+  });
+
+  it('says Read aloud in AGI Cloud goes to the speech provider and keeps scanning and translation on the device', () => {
+    render(<DataUseScreen />);
+
+    expect(
+      screen.getByLabelText(
+        'Read aloud. In AGI Cloud, the answer’s text goes from AGI Cloud to OpenAI’s speech service. In Local Mode, this device’s voice reads it.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Text scanning and translation. On this device.')).toBeTruthy();
+    expect(screen.queryByText('Read aloud, text scanning and translation')).toBeNull();
+    expect(screen.queryByLabelText(/^Read aloud[^.]*\. On this device\.$/)).toBeNull();
   });
 
   it.each([
@@ -156,7 +169,8 @@ describe('Data use & access', () => {
     try {
       render(<DataUseScreen />);
       expect(screen.queryByText('Ask from Siri') !== null).toBe(listed);
-      expect(screen.getByText('Read aloud, text scanning and translation')).toBeTruthy();
+      expect(screen.getByText('Read aloud')).toBeTruthy();
+      expect(screen.getByText('Text scanning and translation')).toBeTruthy();
     } finally {
       Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
     }

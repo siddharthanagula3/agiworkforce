@@ -9,6 +9,11 @@ import {
 } from '@agiworkforce/client-runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { announceReplyReadyInBackground } from '@/services/replyReadyNotice';
+import {
+  keepLocalChatAttachments,
+  resolveLocalChatAttachment,
+  resolveLocalChatAttachmentUrl,
+} from '@/services/localChatAttachments';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import {
@@ -257,13 +262,20 @@ import type { Attachment } from '@/src/features/chat/components/AttachmentPrevie
 import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 import { getConversationMessageStore } from './conversationRepository';
 import { persistedAttachmentMetadata } from './messageAttachments';
+import { ensureLocalSystemPrompt } from './localSystemPrompt';
 import { useChatCloudMessageStore } from './chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
 import {
+  hasUnfinishedRun,
   isStoppedFinishReason,
   settledTurnActivity,
 } from '@/src/features/chat/utils/agentActivity';
+import {
+  askWhetherTurnIsRunning,
+  IN_FLIGHT_TURN_WAITING_MESSAGE,
+  type InFlightTurnVerdict,
+} from '@/src/features/chat/inFlightTurnRecovery';
 import {
   EMPTY_RESPONSE_FAILURE,
   parseStreamFailure,
@@ -408,7 +420,11 @@ interface ExecutionState {
     guidance?: string,
   ) => Promise<void>;
   continuePausedCloudTurn: (conversationId: string, assistantMessageId: string) => Promise<void>;
-  continueCloudAnswer: (conversationId: string, assistantMessageId: string) => Promise<boolean>;
+  continueCloudAnswer: (
+    conversationId: string,
+    assistantMessageId: string,
+    turn?: InFlightTurnVerdict,
+  ) => Promise<boolean>;
   answerToolInput: (
     conversationId: string,
     assistantMessageId: string,
@@ -439,6 +455,7 @@ const CLOUD_CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
 const deferredSends = new Map<string, DeferredSend[]>();
 const streamingConversations = new Set<string>();
 const cloudStreamingConversations = new Set<string>();
+const cloudRunChecks = new Set<string>();
 let cloudExecutionGeneration = 0;
 const activeCloudRuns = new Map<string, ManagedCloudAgentRunReference>();
 
@@ -1104,8 +1121,6 @@ function takeBannerModelChoice(conversationId: string): string | undefined {
 const thinkingStartTimes = new Map<string, number>();
 const thinkingEndTimes = new Map<string, number>();
 const lastDeltaTimes = new Map<string, number>();
-const DEFAULT_LOCAL_SYSTEM_PROMPT =
-  "You are AGI, a concise helpful assistant running locally on this device. Answer the user's current request directly. Keep final answers separate from any thinking or reasoning text. Do not invent a different prompt or test unless the user explicitly asks you to create one.";
 
 const CHAT_MODE_PROMPTS: Record<ChatMode, string | null> = {
   chat: null,
@@ -1134,7 +1149,7 @@ function createLocalAttachmentReferences(
 ): MessageAttachment[] | undefined {
   if (!attachments || attachments.length === 0) return undefined;
   return attachments.map((attachment) => ({
-    url: attachment.uri,
+    url: resolveLocalChatAttachmentUrl(attachment.uri),
     mimeType: attachment.mimeType,
     fileName: attachment.fileName,
     ...(attachment.fileSize != null ? { fileSize: attachment.fileSize } : {}),
@@ -1202,15 +1217,6 @@ function normalizeLocalMessageContent(
     })
     .filter(Boolean)
     .join('\n');
-}
-
-function ensureLocalSystemPrompt(messages: LocalLlmMessage[]): LocalLlmMessage[] {
-  const hasBase = messages.some(
-    (message) =>
-      message.role === 'system' && message.content.trim() === DEFAULT_LOCAL_SYSTEM_PROMPT,
-  );
-  if (hasBase) return messages;
-  return [{ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT }, ...messages];
 }
 
 function buildChatViewSystemPrompt(
@@ -1563,6 +1569,30 @@ function historyMessagesForConversation(
   const conversation = state.conversations.find((candidate) => candidate.id === conversationId);
   if (executionMode !== 'cloud') return visibleThreadFor(owned, conversation);
   return visibleThreadFor(conversationRowsInOrder(conversationId), conversation);
+}
+
+function cloudAnswerToContinue(
+  conversationId: string,
+  assistantMessageId: string,
+  turn: InFlightTurnVerdict,
+) {
+  if (
+    abortControllers.has(conversationId) ||
+    streamingConversations.has(conversationId) ||
+    cloudRunChecks.has(conversationId)
+  ) {
+    return null;
+  }
+  const conversation = getConversationMessageStore(conversationId)
+    .getState()
+    .conversations.find((c) => c.id === conversationId);
+  if (!conversation) return null;
+  const thread = historyMessagesForConversation(conversationId, 'cloud');
+  const answer = thread[thread.length - 1];
+  if (!answer || answer.id !== assistantMessageId) return null;
+  if (hasUnfinishedRun(answer) && turn !== 'stalled') return null;
+  const model = continuableCloudModel(conversation, answer, turn);
+  return model ? { conversation, thread, answer, model } : null;
 }
 
 /**
@@ -2468,6 +2498,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       : undefined;
     if (regenerateAnchorId && !regenerateAnchor) return false;
     const resumesCardTurn = options?.interactiveCardResume === true;
+    if (
+      shouldUseLocalRuntime &&
+      uploadedAttachments &&
+      !temporaryConversation &&
+      !regenerateAnchor &&
+      !resumesCardTurn
+    ) {
+      uploadedAttachments = await keepLocalChatAttachments(conversationId, uploadedAttachments);
+      if (!isTurnAccountCurrent()) return false;
+    }
     const userMessageParentId = regenerateAnchor
       ? undefined
       : branchParentId !== undefined
@@ -2556,11 +2596,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (executionMode !== 'cloud') {
       for (const earlier of existingMessages) {
         if (earlier.isStreaming || earlier.role !== 'user') continue;
-        const earlierDocuments =
-          earlier.attachments?.filter((a) => !a.assetId && !a.mimeType.startsWith('image/')) ?? [];
+        const earlierAttachments = earlier.attachments?.map(resolveLocalChatAttachment) ?? [];
+        const earlierDocuments = earlierAttachments.filter(
+          (a) => !a.assetId && !a.mimeType.startsWith('image/'),
+        );
         const earlierImages = shouldUseLocalRuntime
-          ? (earlier.attachments?.filter((a) => !a.assetId && a.mimeType.startsWith('image/')) ??
-            [])
+          ? earlierAttachments.filter((a) => !a.assetId && a.mimeType.startsWith('image/'))
           : [];
         if (earlierDocuments.length === 0 && earlierImages.length === 0) continue;
         const documentContext =
@@ -4866,19 +4907,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
   },
 
-  continueCloudAnswer: async (conversationId, assistantMessageId) => {
+  continueCloudAnswer: async (conversationId, assistantMessageId, turn) => {
     const set = failureScopedSet(conversationId);
-    if (abortControllers.has(conversationId) || streamingConversations.has(conversationId)) {
-      return false;
-    }
-    const msgStore = getConversationMessageStore(conversationId);
-    const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
-    if (!conversation) return false;
-    const thread = historyMessagesForConversation(conversationId, 'cloud');
-    const answer = thread[thread.length - 1];
-    if (!answer || answer.id !== assistantMessageId) return false;
-    const model = continuableCloudModel(conversation, answer);
-    if (!model) return false;
+    const unchecked =
+      turn === undefined
+        ? cloudAnswerToContinue(conversationId, assistantMessageId, 'stalled')
+        : null;
+    const mustCheckRun = unchecked !== null && hasUnfinishedRun(unchecked.answer);
+    let target = mustCheckRun
+      ? unchecked
+      : cloudAnswerToContinue(conversationId, assistantMessageId, turn ?? 'idle');
+    if (!target) return false;
 
     const accountEpoch = captureCloudAccountEpoch();
     const { isClerkLoaded, isClerkSignedIn } = useAuthStore.getState();
@@ -4886,6 +4925,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       set({ error: 'Sign in to use AGI Cloud.', paywallError: null });
       return false;
     }
+
+    if (mustCheckRun) {
+      cloudRunChecks.add(conversationId);
+      let verdict: InFlightTurnVerdict;
+      try {
+        verdict = await askWhetherTurnIsRunning(conversationId, new AbortController().signal);
+      } catch {
+        verdict = 'unknown';
+      } finally {
+        cloudRunChecks.delete(conversationId);
+      }
+      if (!isCloudAccountEpochCurrent(accountEpoch)) return false;
+      if (verdict === 'running' || verdict === 'waiting') {
+        set({ error: IN_FLIGHT_TURN_WAITING_MESSAGE, paywallError: null });
+        return false;
+      }
+      if (verdict !== 'stalled' && verdict !== 'idle') {
+        set({
+          error: 'Could not continue the Cloud response. Check your connection and retry.',
+          paywallError: null,
+        });
+        return false;
+      }
+      target = cloudAnswerToContinue(conversationId, assistantMessageId, 'stalled');
+      if (!target || !hasUnfinishedRun(target.answer)) return false;
+    }
+    const { conversation, thread, answer, model } = target;
     const generation = cloudExecutionGeneration;
     const isAccountCurrent = () =>
       generation === cloudExecutionGeneration && isCloudAccountEpochCurrent(accountEpoch);

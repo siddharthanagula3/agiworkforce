@@ -182,9 +182,7 @@ describe('the scan stage of the intake workflow', () => {
   });
 
   it('caps a sleep longer than the give-up window that a step hands back, whatever step it is', async () => {
-    const actual = await vi.importActual<typeof import('@/lib/server/chat-file-intake/steps')>(
-      '@/lib/server/chat-file-intake/steps',
-    );
+    const actual = await vi.importActual<StepsModule>('@/lib/server/chat-file-intake/steps');
     let calls = 0;
     vi.mocked(runChatFileIntakeStep).mockImplementation(async (...args) => {
       const next = await actual.runChatFileIntakeStep(...args);

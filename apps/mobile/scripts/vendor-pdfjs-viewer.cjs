@@ -14,6 +14,7 @@ const TEMPLATE_FILE = join(ASSET_DIR, 'viewer.template.html');
 const WEB_DIR = resolve(__dirname, '../../web');
 const EXPORT_LIST = /export\{([^}]*)\};?\s*$/;
 const MODULE_END = /<\/script|<!--/i;
+const SCRIPT_ELEMENT = /<script\b[^>]*>([\s\S]*?)<\/script(?:[\s/][^>]*)?>/gi;
 
 function pdfjsDist() {
   const packageJson = require.resolve('pdfjs-dist/package.json', { paths: [WEB_DIR] });
@@ -61,10 +62,8 @@ function buildPdfViewer() {
   const worker = readFileSync(join(build, 'pdf.worker.min.mjs'), 'utf8');
   const library = exportedAsGlobal(readFileSync(join(build, 'pdf.min.mjs'), 'utf8'));
   const template = readFileSync(TEMPLATE_FILE, 'utf8');
-  const opening = '<script type="module">';
-  const viewer = template
-    .slice(template.lastIndexOf(opening) + opening.length, template.lastIndexOf('</script>'))
-    .trim();
+  const scriptBodies = Array.from(template.matchAll(SCRIPT_ELEMENT), (element) => element[1]);
+  const viewer = (scriptBodies.at(-1) ?? '').trim();
   if (!viewer.startsWith('{') || viewer.includes('__PDFJS_')) {
     throw new Error('viewer.template.html lost its viewer script');
   }

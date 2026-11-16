@@ -73,6 +73,7 @@ import { ConversationExportSheet } from '@/src/features/chat/components/Conversa
 import { ContextDetailsSheet } from '@/src/features/chat/components/ContextDetailsSheet';
 import {
   IN_FLIGHT_TURN_STALLED_MESSAGE,
+  IN_FLIGHT_TURN_WAITING_MESSAGE,
   lastAnswerLiveRun,
   useInFlightTurnRecovery,
 } from '@/src/features/chat/inFlightTurnRecovery';
@@ -157,6 +158,7 @@ import {
   useModelInstallStore,
 } from '@/src/features/model-picker/installStore';
 import { visibleThreadFor } from '@/src/features/chat/utils/conversationThread';
+import { hasUnfinishedRun } from '@/src/features/chat/utils/agentActivity';
 import { continuableCloudModel } from '@/src/features/chat/utils/continuableAnswer';
 import {
   captureImageAssetsFromCamera,
@@ -1214,9 +1216,14 @@ export default function ChatScreen() {
     inFlightTurn === 'stalled' &&
     dismissedStallFor !== null &&
     dismissedStallFor === conversationMessages[conversationMessages.length - 1]?.id;
-  const stalledNoticeHidden =
-    stalledNoticeDismissed ||
-    Boolean(sendError || paywallError || providerConsentError || freeCapacityError);
+  const turnErrorShown = Boolean(
+    sendError || paywallError || providerConsentError || freeCapacityError,
+  );
+  const stalledNoticeHidden = stalledNoticeDismissed || turnErrorShown;
+  const inFlightNoticeShown =
+    inFlightTurn === 'running' ||
+    (inFlightTurn === 'waiting' && !turnErrorShown) ||
+    (inFlightTurn === 'stalled' && !stalledNoticeHidden);
   const retiredNotice = retiredModelNotice(conversation?.model);
   const retiredNoticeKey = `${id ?? ''}:${conversation?.model ?? ''}`;
   const [dismissedRetiredNotice, setDismissedRetiredNotice] = useState<string | null>(null);
@@ -1760,10 +1767,14 @@ export default function ChatScreen() {
     return !isStreaming &&
       conversation &&
       lastVisibleMessage &&
-      continuableCloudModel(conversation, lastVisibleMessage)
+      continuableCloudModel(
+        conversation,
+        lastVisibleMessage,
+        isLoadingMessages && hasUnfinishedRun(lastVisibleMessage) ? 'checking' : inFlightTurn,
+      )
       ? lastVisibleMessage.id
       : null;
-  }, [conversation, conversationMessages, isStreaming]);
+  }, [conversation, conversationMessages, inFlightTurn, isLoadingMessages, isStreaming]);
 
   const handleContinueMessage = useCallback(
     (messageId: string) => {
@@ -2480,8 +2491,7 @@ export default function ChatScreen() {
         {/* Context-budget warning. The component computes its own threshold and
             renders null below it, so it is mounted unconditionally, it appears
             only once the thread crosses ~70% of the model's context window. */}
-        {(inFlightTurn === 'running' || (inFlightTurn === 'stalled' && !stalledNoticeHidden)) &&
-        !liveVoiceVisible ? (
+        {inFlightNoticeShown && !liveVoiceVisible ? (
           <View
             accessibilityRole={inFlightTurn === 'stalled' ? 'alert' : undefined}
             accessibilityLiveRegion="polite"
@@ -2494,7 +2504,7 @@ export default function ChatScreen() {
               paddingVertical: 8,
             }}
           >
-            {inFlightTurn === 'running' ? <LoadingIndicator size="small" /> : null}
+            {inFlightTurn !== 'stalled' ? <LoadingIndicator size="small" /> : null}
             <Text
               style={{
                 flex: 1,
@@ -2504,7 +2514,9 @@ export default function ChatScreen() {
             >
               {inFlightTurn === 'running'
                 ? 'Still answering. The reply appears here when it is ready.'
-                : IN_FLIGHT_TURN_STALLED_MESSAGE}
+                : inFlightTurn === 'waiting'
+                  ? IN_FLIGHT_TURN_WAITING_MESSAGE
+                  : IN_FLIGHT_TURN_STALLED_MESSAGE}
             </Text>
             {inFlightTurn === 'stalled' ? (
               <>

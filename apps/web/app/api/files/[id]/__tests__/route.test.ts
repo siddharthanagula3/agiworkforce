@@ -736,6 +736,27 @@ describe.each([
     );
   });
 
+  it('redirects the browser download the web Library starts and charges it once', async () => {
+    const res = await GET(
+      makeRequest(ASSET_ID, '', {
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+      }),
+      makeContext(ASSET_ID),
+    );
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('location')).toBe(PRESIGNED_URL);
+    expect(mockAssertDownloadAllowance).toHaveBeenCalledTimes(1);
+    expect(mockRecordEgressBytes).toHaveBeenCalledTimes(1);
+    expect(mockRecordEgressBytes).toHaveBeenCalledWith(
+      expect.objectContaining({ bytes: 400 * MIB, downloadAllowanceExempt: false }),
+    );
+    expect(mockStreamObject).not.toHaveBeenCalled();
+  });
+
   it('a request carrying large-chat-files-v1 is redirected', async () => {
     const res = await GET(
       makeRequest(ASSET_ID, '', {

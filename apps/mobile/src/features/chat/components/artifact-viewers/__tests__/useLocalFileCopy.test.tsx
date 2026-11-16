@@ -1,5 +1,13 @@
+type FileSystemLegacyModule = typeof import('expo-file-system/legacy');
+
 const mockDownloadGeneratedFile = jest.fn();
 const mockViewerFileCopy = jest.fn();
+const mockGetInfoAsync = jest.fn();
+
+jest.mock('expo-file-system/legacy', () => ({
+  ...jest.requireActual<FileSystemLegacyModule>('expo-file-system/legacy'),
+  getInfoAsync: (...args: unknown[]) => mockGetInfoAsync(...args),
+}));
 
 jest.mock('@/services/fileCreation', () => ({
   downloadGeneratedFile: (...args: unknown[]) => mockDownloadGeneratedFile(...args),
@@ -15,6 +23,7 @@ import { localFileCopy, useLocalFileCopy } from '../useLocalFileCopy';
 describe('local file copies', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetInfoAsync.mockResolvedValue({ exists: true });
   });
 
   it('views a cloud file from a cache copy and never writes it to the exports folder', async () => {
@@ -54,6 +63,62 @@ describe('local file copies', () => {
       'file:///docs/exports/e-1/c.pdf',
     );
     expect(mockViewerFileCopy).not.toHaveBeenCalled();
+  });
+
+  it('shares the remembered export again without fetching it while its file is still there', async () => {
+    const url = 'https://files.example.test/api/files/v-4';
+    mockDownloadGeneratedFile.mockResolvedValue('file:///cache/exports/e-4/d.pdf');
+
+    await expect(localFileCopy(url, 'd.pdf')).resolves.toBe('file:///cache/exports/e-4/d.pdf');
+    await expect(localFileCopy(url, 'd.pdf')).resolves.toBe('file:///cache/exports/e-4/d.pdf');
+
+    expect(mockGetInfoAsync).toHaveBeenCalledWith('file:///cache/exports/e-4/d.pdf');
+    expect(mockDownloadGeneratedFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes a fresh export when the remembered one was cleared from the cache', async () => {
+    const url = 'https://files.example.test/api/files/v-5';
+    mockDownloadGeneratedFile
+      .mockResolvedValueOnce('file:///cache/exports/e-5/e.pdf')
+      .mockResolvedValueOnce('file:///cache/exports/e-6/e.pdf');
+    await localFileCopy(url, 'e.pdf');
+    mockGetInfoAsync.mockResolvedValueOnce({ exists: false });
+
+    await expect(localFileCopy(url, 'e.pdf')).resolves.toBe('file:///cache/exports/e-6/e.pdf');
+    await expect(localFileCopy(url, 'e.pdf')).resolves.toBe('file:///cache/exports/e-6/e.pdf');
+
+    expect(mockDownloadGeneratedFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('makes a fresh export when the remembered one cannot be checked', async () => {
+    const url = 'https://files.example.test/api/files/v-7';
+    mockDownloadGeneratedFile
+      .mockResolvedValueOnce('file:///cache/exports/e-7/f.pdf')
+      .mockResolvedValueOnce('file:///cache/exports/e-8/f.pdf');
+    await localFileCopy(url, 'f.pdf');
+    mockGetInfoAsync.mockRejectedValueOnce(new Error('No such directory'));
+
+    await expect(localFileCopy(url, 'f.pdf')).resolves.toBe('file:///cache/exports/e-8/f.pdf');
+    expect(mockDownloadGeneratedFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('makes one fresh export when two shares find the remembered one gone at once', async () => {
+    const url = 'https://files.example.test/api/files/v-9';
+    mockDownloadGeneratedFile
+      .mockResolvedValueOnce('file:///cache/exports/e-9/g.pdf')
+      .mockResolvedValueOnce('file:///cache/exports/e-10/g.pdf');
+    await localFileCopy(url, 'g.pdf');
+    mockGetInfoAsync
+      .mockResolvedValueOnce({ exists: false })
+      .mockResolvedValueOnce({ exists: false });
+
+    const shares = await Promise.all([localFileCopy(url, 'g.pdf'), localFileCopy(url, 'g.pdf')]);
+
+    expect(shares).toEqual([
+      'file:///cache/exports/e-10/g.pdf',
+      'file:///cache/exports/e-10/g.pdf',
+    ]);
+    expect(mockDownloadGeneratedFile).toHaveBeenCalledTimes(2);
   });
 
   it('passes a file already on the device through untouched', async () => {

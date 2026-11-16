@@ -1,5 +1,7 @@
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
+type CloudAccountSessionModule = typeof import('../src/features/auth/services/cloudAccountSession');
+
 const MODEL_ID = requireMobileCloudModel().id;
 const OPERATION_ID = '0190a000-0000-7000-8000-000000000071';
 const guardedFetchMock = jest.fn();
@@ -31,9 +33,7 @@ function load() {
     phoneDeviceHostHeaders: jest.fn().mockResolvedValue({}),
   }));
   jest
-    .requireActual<typeof import('../src/features/auth/services/cloudAccountSession')>(
-      '../src/features/auth/services/cloudAccountSession',
-    )
+    .requireActual<CloudAccountSessionModule>('../src/features/auth/services/cloudAccountSession')
     .activateCloudAccount('connection-account');
   /* eslint-disable @typescript-eslint/no-require-imports */
   const streaming = require('../services/streaming') as typeof import('../services/streaming');

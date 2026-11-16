@@ -298,8 +298,9 @@ describe('help articles follow the plan catalogue', () => {
   it('keeps the authenticator sentence true whichever way the enrollment switch is set', () => {
     const security = article('account-security').replace(/\s+/g, ' ');
     expect(security).toContain(
-      'can be switched off for a time: while it is, Settings, Security shows',
+      'can be switched off for a time: while it is, Settings, Security on the web shows',
     );
+    expect(security).toContain('the AGI Mobile app leaves out those options');
     expect(security).not.toMatch(/backup codes are temporarily unavailable:/);
   });
 });

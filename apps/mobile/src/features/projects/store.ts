@@ -37,6 +37,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 import { markProjectForSync } from '@/services/cloudSyncEngine';
 
 export interface ProjectSource {
@@ -59,11 +60,20 @@ export interface Project {
   updatedAt: string;
 }
 
+export interface CreateProjectOptions {
+  usesGlobalMemory?: boolean;
+}
+
 interface ProjectState {
   projects: Project[];
   activeProjectId: string | null;
 
-  createProject: (name: string, description: string, instructions: string) => string;
+  createProject: (
+    name: string,
+    description: string,
+    instructions: string,
+    options?: CreateProjectOptions,
+  ) => string;
   updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => void;
   deleteProject: (id: string) => void;
   setProjectPinned: (id: string, pinned: boolean) => void;
@@ -377,12 +387,18 @@ export const useProjectStore = create<ProjectState>()(
       projects: [],
       activeProjectId: null,
 
-      createProject: (name, description, instructions) => {
+      createProject: (name, description, instructions, options) => {
         const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
 
         if (isCloud) {
           const id = uuidv7();
           const now = new Date().toISOString();
+          if (options?.usesGlobalMemory === false) {
+            useProjectSyncStateStore.getState().markProjectOnlyMemoryPending(id);
+            useCloudProjectStore.getState().patchCloudProjectDetails(id, {
+              usesGlobalMemory: false,
+            });
+          }
           useCloudProjectStore.getState().upsertCloudProject({
             id,
             name: name.trim(),

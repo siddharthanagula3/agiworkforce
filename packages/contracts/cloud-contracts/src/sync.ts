@@ -373,6 +373,8 @@ export const ProjectSyncPushItemSchema = z.object({
   color: z.string().max(50).nullable().optional(),
   isArchived: z.boolean().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+  /** Read only when the push creates the project; later changes go through the project update route. */
+  usesGlobalMemory: z.boolean().optional(),
   baseVersion: ServerVersionSchema,
   deletedAt: z.string().datetime().nullable().optional(),
 });

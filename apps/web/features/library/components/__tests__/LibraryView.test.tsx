@@ -651,6 +651,110 @@ describe('library and conversation attachment lifecycle', () => {
   });
 });
 
+describe('library downloads by size', () => {
+  const large = makeItem({
+    id: '77777777-7777-4777-8777-777777777777',
+    file_name: 'site-survey.zip',
+    mime_type: 'application/zip',
+    byte_count: MAX_CHAT_ATTACHMENT_BYTES + 1,
+    origin: 'uploaded',
+    uri: '/api/files/77777777-7777-4777-8777-777777777777',
+  });
+  const small = makeItem();
+  const originalCreateObjectURL = URL.createObjectURL;
+  const originalRevokeObjectURL = URL.revokeObjectURL;
+  let clicked: Array<{ href: string; download: string | null }> = [];
+  let anchorClick: { mockRestore: () => void } | null = null;
+
+  function stubFiles(items: unknown[], fileResponse: () => Response) {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/projects')) return projectsResponse([]);
+      if (url.startsWith('/api/files/')) return fileResponse();
+      return pageResponse(items);
+    });
+  }
+
+  function fileRequests(): string[] {
+    return fetchMock.mock.calls
+      .map((call) => String(call[0]))
+      .filter((url) => url.startsWith('/api/files/'));
+  }
+
+  async function chooseFromRowMenu(fileName: string, action: string) {
+    fireEvent.click(await screen.findByRole('button', { name: `Actions for ${fileName}` }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: action }));
+  }
+
+  beforeEach(() => {
+    clicked = [];
+    URL.createObjectURL = vi.fn(() => 'blob:library-download');
+    URL.revokeObjectURL = vi.fn();
+    anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicked.push({
+        href: this.getAttribute('href') ?? '',
+        download: this.getAttribute('download'),
+      });
+    });
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = originalCreateObjectURL;
+    URL.revokeObjectURL = originalRevokeObjectURL;
+    anchorClick?.mockRestore();
+    anchorClick = null;
+    takeStagedLibraryAttachments();
+  });
+
+  it('saves a file above the inline limit through a browser download of its file URL', async () => {
+    stubFiles([large], () => ({ ok: true, status: 200 }) as Response);
+    render(<LibraryView />);
+
+    await chooseFromRowMenu('site-survey.zip', 'Download');
+
+    await waitFor(() => expect(clicked).toEqual([{ href: large.uri, download: '' }]));
+    expect(fileRequests()).toEqual([]);
+    expect(screen.queryByText(/could not be downloaded/i)).toBeNull();
+  });
+
+  it('keeps reading a small file with the session fetch and saving its bytes', async () => {
+    stubFiles(
+      [small],
+      () =>
+        ({
+          ok: true,
+          status: 200,
+          blob: async () => new Blob(['%PDF'], { type: 'application/pdf' }),
+        }) as Response,
+    );
+    render(<LibraryView />);
+
+    await chooseFromRowMenu('report.pdf', 'Download');
+
+    await waitFor(() =>
+      expect(clicked).toEqual([{ href: 'blob:library-download', download: 'report.pdf' }]),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(small.uri, { credentials: 'same-origin' });
+  });
+
+  it('says why a file the server will not hand to the page cannot be added to a chat', async () => {
+    stubFiles([large], () => ({ ok: false, status: 413, headers: new Headers() }) as Response);
+    render(<LibraryView />);
+
+    await chooseFromRowMenu('site-survey.zip', 'Add to chat');
+
+    expect(
+      await screen.findByText(
+        'This file is too large to add from the Library. Download it, then add it from your device.',
+      ),
+    ).toBeInTheDocument();
+    expect(push).not.toHaveBeenCalled();
+    expect(takeStagedLibraryAttachments()).toBeNull();
+  });
+});
+
 describe('library share trust boundary', () => {
   it('refuses to publish an artifact produced outside managed cloud', async () => {
     const byokArtifact = makeItem({

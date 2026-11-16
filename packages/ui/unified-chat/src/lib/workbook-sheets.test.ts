@@ -1,13 +1,27 @@
 import { strToU8, zipSync, type Zippable } from 'fflate';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
 import {
   MAX_WORKBOOK_SHEETS,
   WorkbookFormatError,
   WorkbookPreviewLimitError,
   XLSX_NOT_CALCULATED,
+  parseCsvTable,
   readWorkbookSheets,
+  toCsv,
 } from './tabular';
+import { displayCellNumber, parseNumberFormat } from './workbook-number-formats';
+
+type NumberFormatsModule = typeof import('./workbook-number-formats');
+
+vi.mock('./workbook-number-formats', async (importOriginal) => {
+  const actual = await importOriginal<NumberFormatsModule>();
+  return {
+    ...actual,
+    displayCellNumber: vi.fn(actual.displayCellNumber),
+    parseNumberFormat: vi.fn(actual.parseNumberFormat),
+  };
+});
 
 const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -53,6 +67,11 @@ function relsXml(targets: Record<string, string>): string {
 function sheetXml(rows: string, prefix = ''): string {
   const p = prefix ? `${prefix}:` : '';
   return `<?xml version="1.0"?><${p}worksheet xmlns${prefix ? `:${prefix}` : ''}="${MAIN_NS}"><${p}sheetData>${rows}</${p}sheetData></${p}worksheet>`;
+}
+
+function sheetCsv(rows: string): string {
+  const sheets = readWorkbookSheets(workbook({ 'xl/worksheets/sheet1.xml': sheetXml(rows) }));
+  return sheets[0]!.csv;
 }
 
 const SHARED = `<sst xmlns="${MAIN_NS}" count="3" uniqueCount="3">
@@ -210,6 +229,94 @@ describe('readWorkbookSheets', () => {
     );
   });
 
+  it('keeps the empty rows a sheet leaves out between its rows', () => {
+    const csv = sheetCsv(
+      '<row r="1"><c r="A1" t="inlineStr"><is><t>Heading</t></is></c></row>' +
+        '<row r="4"><c r="A4"><v>42</v></c></row>',
+    );
+
+    expect(csv).toBe('Heading\n\n\n42');
+    const grid = parseCsvTable(csv);
+    expect(grid?.columns).toEqual(['Heading']);
+    expect(grid?.rows).toEqual([[''], [''], ['42']]);
+    expect(toCsv(grid!)).toBe('Heading\n\n\n42');
+  });
+
+  it('keeps the empty rows before the first row', () => {
+    expect(sheetCsv('<row r="3"><c r="A3"><v>1</v></c><c r="B3"><v>2</v></c></row>')).toBe(
+      ',\n,\n1,2',
+    );
+  });
+
+  it('places a row without an index after the row before it', () => {
+    expect(sheetCsv('<row r="2"><c r="A2"><v>1</v></c></row><row><c><v>2</v></c></row>')).toBe(
+      '\n1\n2',
+    );
+  });
+
+  it('places a repeated, descending or unreadable row index after the row before it', () => {
+    expect(
+      sheetCsv(
+        '<row r="3"><c><v>1</v></c></row><row r="3"><c><v>2</v></c></row>' +
+          '<row r="2"><c><v>3</v></c></row><row r="0"><c><v>4</v></c></row>' +
+          '<row r="x"><c><v>5</v></c></row><row r="-9"><c><v>6</v></c></row>',
+      ),
+    ).toBe('\n\n1\n2\n3\n4\n5\n6');
+  });
+
+  it('places a row after a gap and each cell in its own column', () => {
+    expect(
+      sheetCsv(
+        '<row r="1"><c r="A1"><v>1</v></c><c r="C1"><v>3</v></c></row>' +
+          '<row r="3"><c r="B3"><v>5</v></c></row>',
+      ),
+    ).toBe('1,,3\n,,\n,5,');
+  });
+
+  it('adds no empty rows after the last row that holds a cell', () => {
+    expect(
+      sheetCsv('<row r="1"><c r="A1"><v>1</v></c></row><row r="1048576" customHeight="1"/>'),
+    ).toBe('1');
+  });
+
+  it('adds no rows for cells that keep a format but hold no value', () => {
+    const first = Array.from(
+      { length: 10 },
+      (_, index) => `<c r="${String.fromCharCode(65 + index)}1"><v>${index}</v></c>`,
+    ).join('');
+
+    expect(
+      sheetCsv(
+        `<row r="1">${first}</row>` +
+          '<row r="25000"><c r="A25000" s="1"/></row>' +
+          '<row r="30000"><c r="B30000"><v></v></c>' +
+          '<c r="C30000" t="inlineStr"><is><t></t></is></c></row>',
+      ),
+    ).toBe('0,1,2,3,4,5,6,7,8,9');
+    expect(
+      sheetCsv(
+        '<row r="1"><c r="A1"><v>1</v></c></row><row r="2"><c r="A2" s="1"/></row>' +
+          '<row r="3"><c r="A3"><v>3</v></c></row>',
+      ),
+    ).toBe('1\n\n3');
+    expect(sheetCsv('<row r="2"><c r="A2" s="1"/><c r="B2"><v>2</v></c></row>')).toBe(',\n,2');
+  });
+
+  it('counts the empty rows it keeps against the preview limit', () => {
+    expect(() => sheetCsv('<row r="1048576"><c r="A1048576"><v>1</v></c></row>')).toThrow(
+      WorkbookPreviewLimitError,
+    );
+    expect(() =>
+      sheetCsv(`<row r="${'9'.repeat(400)}"><c><v>1</v></c></row><row><c><v>2</v></c></row>`),
+    ).toThrow(WorkbookPreviewLimitError);
+    expect(() => sheetCsv(`<row r="${MAX_FILE_TEXT_CHARS + 1}"><c><v>1</v></c></row>`)).toThrow(
+      WorkbookPreviewLimitError,
+    );
+    const atLimit = sheetCsv(`<row r="${MAX_FILE_TEXT_CHARS}"><c><v>1</v></c></row>`);
+    expect(atLimit).toHaveLength(MAX_FILE_TEXT_CHARS);
+    expect(atLimit.endsWith('\n1')).toBe(true);
+  });
+
   it('fails on a truncated archive without calling it too large', () => {
     const bytes = workbook({
       'xl/worksheets/sheet1.xml': sheetXml('<row><c><v>1</v></c></row>'),
@@ -218,5 +325,328 @@ describe('readWorkbookSheets', () => {
 
     expect(() => readWorkbookSheets(broken)).toThrow();
     expect(() => readWorkbookSheets(broken)).not.toThrow(WorkbookPreviewLimitError);
+  });
+});
+
+function xmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function stylesXml(cellFormats: number[], custom: Record<number, string> = {}): string {
+  const numFmts = Object.entries(custom)
+    .map(([id, code]) => `<numFmt numFmtId="${id}" formatCode="${xmlAttribute(code)}"/>`)
+    .join('');
+  return `<?xml version="1.0"?><styleSheet xmlns="${MAIN_NS}">${
+    numFmts ? `<numFmts>${numFmts}</numFmts>` : ''
+  }<cellStyleXfs count="2"><xf numFmtId="14"/><xf numFmtId="9"/></cellStyleXfs><cellXfs count="${
+    cellFormats.length
+  }">${cellFormats
+    .map((id) => `<xf numFmtId="${id}" applyNumberFormat="1"><alignment/></xf>`)
+    .join(
+      '',
+    )}</cellXfs><dxfs count="1"><dxf><numFmt numFmtId="14" formatCode="0.00%"/></dxf></dxfs></styleSheet>`;
+}
+
+interface StyledCell {
+  value: string;
+  style?: string;
+  type?: string;
+}
+
+function styledWorkbook(
+  cells: StyledCell[],
+  styles: string | null,
+  options: { date1904?: boolean; stylesTarget?: string } = {},
+): Uint8Array {
+  const stylesPath = options.stylesTarget ? `xl/${options.stylesTarget}` : 'xl/styles.xml';
+  const members: Record<string, string> = {
+    'xl/workbook.xml': `<workbook xmlns="${MAIN_NS}" xmlns:r="${REL_NS}">${
+      options.date1904 === undefined
+        ? ''
+        : `<workbookPr date1904="${options.date1904 ? '1' : '0'}"/>`
+    }<sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL_NS}/worksheet" Target="worksheets/sheet1.xml"/>${
+      options.stylesTarget
+        ? `<Relationship Id="rId9" Type="${REL_NS}/styles" Target="${options.stylesTarget}"/>`
+        : ''
+    }</Relationships>`,
+    'xl/worksheets/sheet1.xml': sheetXml(
+      cells
+        .map(
+          (cell, index) =>
+            `<row r="${index + 1}"><c r="A${index + 1}"${
+              cell.style === undefined ? '' : ` s="${cell.style}"`
+            }${cell.type ? ` t="${cell.type}"` : ''}><v>${cell.value}</v></c></row>`,
+        )
+        .join(''),
+    ),
+  };
+  if (styles !== null) members[stylesPath] = styles;
+  return workbook(members);
+}
+
+function shown(
+  cells: StyledCell[],
+  styles: string | null,
+  options: { date1904?: boolean; stylesTarget?: string } = {},
+): string[] {
+  const sheets = readWorkbookSheets(styledWorkbook(cells, styles, options));
+  return sheets[0]!.csv.split('\n');
+}
+
+describe('readWorkbookSheets number formats', () => {
+  it('shows a cell with the built-in short date format as an ISO date', () => {
+    expect(shown([{ value: '45292', style: '1' }], stylesXml([0, 14]))).toEqual(['2024-01-01']);
+  });
+
+  it('counts the 1900 system false leap day like the file does', () => {
+    const styles = stylesXml([0, 14]);
+    expect(
+      shown(
+        ['1', '59', '60', '61', '0', '-1'].map((value) => ({ value, style: '1' })),
+        styles,
+      ),
+    ).toEqual(['1900-01-01', '1900-02-28', '1900-02-29', '1900-03-01', '0', '-1']);
+  });
+
+  it('reads serials in the 1904 date system when the workbook says so', () => {
+    const cells = [
+      { value: '43830', style: '1' },
+      { value: '0', style: '1' },
+    ];
+    expect(shown(cells, stylesXml([0, 14]), { date1904: true })).toEqual([
+      '2024-01-01',
+      '1904-01-01',
+    ]);
+    expect(shown(cells, stylesXml([0, 14]), { date1904: false })).toEqual(['2019-12-31', '0']);
+    expect(shown(cells, stylesXml([0, 14]))).toEqual(['2019-12-31', '0']);
+  });
+
+  it('shows a date and time, and a time only, from the fraction of the serial', () => {
+    const afternoon = String(45292 + (13 * 3600 + 47 * 60 + 30) / 86400);
+    const evening = String(18 / 24);
+    expect(
+      shown(
+        [
+          { value: afternoon, style: '1' },
+          { value: afternoon, style: '2' },
+          { value: afternoon, style: '3' },
+          { value: evening, style: '4' },
+          { value: afternoon, style: '5' },
+          { value: String(45292 + 86399.6 / 86400), style: '3' },
+          { value: afternoon, style: '6' },
+        ],
+        stylesXml([0, 22, 20, 21, 18, 164, 45], { 164: 'yyyy-mm-dd hh:mm:ss' }),
+      ),
+    ).toEqual([
+      '2024-01-01 13:47',
+      '13:47',
+      '13:47:30',
+      '18:00',
+      '2024-01-01 13:47:30',
+      '00:00:00',
+      '13:47:30',
+    ]);
+  });
+
+  it('rounds to the nearest second before hiding the seconds, and never moves a date alone', () => {
+    const almostHalfPast = String(45292 + (10 * 3600 + 30 * 60 + 59.7) / 86400);
+    const halfPastAndThirty = String(45292 + (10 * 3600 + 30 * 60 + 30) / 86400);
+    const almostMidnight = String(45292 + 86399.7 / 86400);
+    expect(
+      shown(
+        [
+          { value: almostHalfPast, style: '1' },
+          { value: almostHalfPast, style: '2' },
+          { value: halfPastAndThirty, style: '1' },
+          { value: almostMidnight, style: '2' },
+          { value: almostMidnight, style: '3' },
+        ],
+        stylesXml([0, 20, 22, 14]),
+      ),
+    ).toEqual(['10:31', '2024-01-01 10:31', '10:30', '2024-01-02 00:00', '2024-01-01']);
+  });
+
+  it('shows percentages with the decimal places of their format', () => {
+    expect(
+      shown(
+        [
+          { value: '0', style: '1' },
+          { value: '0', style: '2' },
+          { value: '0.285', style: '1' },
+          { value: '0.12345', style: '2' },
+          { value: '-0.5', style: '1' },
+        ],
+        stylesXml([0, 9, 10]),
+      ),
+    ).toEqual(['0%', '0.00%', '29%', '12.35%', '-50%']);
+  });
+
+  it('shows plain, fixed-decimal and thousands-separated numbers', () => {
+    expect(
+      shown(
+        [
+          { value: '1234567.4', style: '1' },
+          { value: '-1234.5', style: '2' },
+          { value: '1.005', style: '3' },
+          { value: '2.5', style: '4' },
+          { value: '1234.5', style: '5' },
+          { value: '0.5', style: '6' },
+          { value: '42', style: '7' },
+          { value: '42', style: '0' },
+        ],
+        stylesXml([0, 3, 4, 2, 1, 164, 165, 166], {
+          164: '"$"#,##0.00',
+          165: '#.00',
+          166: '00000',
+        }),
+      ),
+    ).toEqual(['"1,234,567"', '"-1,234.50"', '1.01', '3', '"$1,234.50"', '.50', '00042', '42']);
+  });
+
+  it('keeps letters inside quotes and after a backslash as text when finding dates', () => {
+    expect(
+      shown(
+        [
+          { value: '45292', style: '1' },
+          { value: '2.5', style: '2' },
+          { value: '7', style: '3' },
+          { value: '45292', style: '4' },
+          { value: '45292', style: '5' },
+        ],
+        stylesXml([0, 164, 165, 166, 167, 168], {
+          164: '"Due "d mmm yyyy',
+          165: '0.00" days"',
+          166: '0\\h',
+          167: '[$-409]mmmm d, yyyy;@',
+          168: 'dd.mm.yyyy',
+        }),
+      ),
+    ).toEqual(['2024-01-01', '2.50 days', '7h', '2024-01-01', '2024-01-01']);
+  });
+
+  it('shows the stored value for a format it cannot show faithfully', () => {
+    const cells = Array.from({ length: 10 }, (_, index) => ({
+      value: '12345.678',
+      style: String(index + 1),
+    }));
+    expect(
+      shown(
+        cells,
+        stylesXml([0, 11, 12, 46, 37, 164, 165, 166, 167, 168, 49], {
+          164: '[Red]0.00',
+          165: '0.00;(0.00)',
+          166: '[>100]0;0.0',
+          167: '#,##0,',
+          168: '0.0#',
+        }),
+      ),
+    ).toEqual(Array.from({ length: 10 }, () => '12345.678'));
+    expect(shown([{ value: '-0.001', style: '1' }], stylesXml([0, 2]))).toEqual(['-0.001']);
+    expect(shown([{ value: '0x1A', style: '1' }], stylesXml([0, 1]))).toEqual(['0x1A']);
+  });
+
+  it('shows the stored value when the style index is not one the file declares', () => {
+    expect(
+      shown(
+        [{ value: '45292', style: '9' }, { value: '45292', style: 'x' }, { value: '45292' }],
+        stylesXml([0, 14]),
+      ),
+    ).toEqual(['45292', '45292', '45292']);
+  });
+
+  it('formats only number cells, not text, booleans or uncalculated formulas', () => {
+    const bytes = workbook({
+      'xl/worksheets/sheet1.xml': sheetXml(
+        '<row><c r="A1" s="1" t="str"><v>45292</v></c><c r="B1" s="1" t="b"><v>1</v></c>' +
+          '<c r="C1" s="1"><f>TODAY()</f></c><c r="D1" s="1" t="n"><f>A1</f><v>45292</v></c></row>',
+      ),
+      'xl/styles.xml': stylesXml([0, 14]),
+    });
+    expect(readWorkbookSheets(bytes)).toEqual([
+      { name: 'Sheet1', csv: `45292,1,${XLSX_NOT_CALCULATED},2024-01-01` },
+    ]);
+  });
+
+  it('finds the styles part through the workbook relationships', () => {
+    expect(
+      shown([{ value: '0.25', style: '1' }], stylesXml([0, 9]), { stylesTarget: 'theme/s.xml' }),
+    ).toEqual(['25%']);
+  });
+
+  it('shows stored values when the styles part is missing, broken or oversized', () => {
+    const cells = [{ value: '45292', style: '1' }];
+    expect(shown(cells, null)).toEqual(['45292']);
+    expect(shown(cells, '<styleSheet><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/>')).toEqual([
+      '45292',
+    ]);
+    expect(shown(cells, `<!DOCTYPE x>${stylesXml([0, 14])}`)).toEqual(['45292']);
+    expect(shown(cells, `<styleSheet>${'<a/>'.repeat(6_000_000)}</styleSheet>`)).toEqual(['45292']);
+    expect(
+      shown(
+        cells,
+        `<styleSheet><numFmts><numFmt numFmtId="164" formatCode="${'y'.repeat(
+          MAX_FILE_TEXT_CHARS + 1,
+        )}"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>`,
+      ),
+    ).toEqual(['45292']);
+  });
+
+  it('reads only the custom formats a cell format uses', () => {
+    const custom = Object.fromEntries(
+      Array.from({ length: 50 }, (_, index) => [164 + index, `0.${'0'.repeat(index % 5)}" u"`]),
+    );
+    vi.mocked(parseNumberFormat).mockClear();
+    expect(
+      shown(
+        [
+          { value: '2.5', style: '1' },
+          { value: '3.5', style: '2' },
+        ],
+        stylesXml([0, 166, 166, 14], custom),
+      ),
+    ).toEqual(['2.50 u', '3.50 u']);
+    expect(parseNumberFormat).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows stored values when the custom format codes pass the preview limit', () => {
+    const code = `"${'x'.repeat(250)}"0`;
+    const count = Math.ceil(MAX_FILE_TEXT_CHARS / code.length) + 1;
+    const custom = Object.fromEntries(
+      Array.from({ length: count }, (_, index) => [164 + index, code]),
+    );
+    custom[164 + count] = 'yyyy-mm-dd';
+    expect(shown([{ value: '45292', style: '1' }], stylesXml([0, 164 + count], custom))).toEqual([
+      '45292',
+    ]);
+  });
+
+  it('stops formatting once the shown text passes the preview limit', () => {
+    const literal = 'x'.repeat(250);
+    const cells = Array.from({ length: 2_000 }, () => ({ value: '1', style: '1' }));
+    const bytes = styledWorkbook(cells, stylesXml([0, 164], { 164: `"${literal}"0` }));
+    vi.mocked(displayCellNumber).mockClear();
+    expect(() => readWorkbookSheets(bytes)).toThrow(WorkbookPreviewLimitError);
+    const cellChars = literal.length + 1;
+    expect(vi.mocked(displayCellNumber).mock.calls.length).toBeLessThanOrEqual(
+      Math.ceil(MAX_FILE_TEXT_CHARS / cellChars) + 1,
+    );
+  });
+
+  it('shares the shown values as CSV', () => {
+    const bytes = workbook({
+      'xl/worksheets/sheet1.xml': sheetXml(
+        '<row><c r="A1" s="1"><v>45292</v></c><c r="B1" s="2"><v>0.5</v></c>' +
+          '<c r="C1" s="3"><v>1234</v></c><c r="D1"><v>7</v></c></row>',
+      ),
+      'xl/styles.xml': stylesXml([0, 14, 9, 3]),
+    });
+    expect(readWorkbookSheets(bytes)).toEqual([
+      { name: 'Sheet1', csv: '2024-01-01,50%,"1,234",7' },
+    ]);
   });
 });

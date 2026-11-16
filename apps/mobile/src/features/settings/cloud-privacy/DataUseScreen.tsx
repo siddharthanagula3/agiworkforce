@@ -65,7 +65,12 @@ const PROCESSING_LOCATIONS: readonly ProcessingLocation[] = [
     iosOnly: true,
   },
   {
-    feature: 'Read aloud, text scanning and translation',
+    feature: 'Read aloud',
+    where:
+      'In AGI Cloud, the answer’s text goes from AGI Cloud to OpenAI’s speech service. In Local Mode, this device’s voice reads it.',
+  },
+  {
+    feature: 'Text scanning and translation',
     where: 'On this device.',
   },
 ];

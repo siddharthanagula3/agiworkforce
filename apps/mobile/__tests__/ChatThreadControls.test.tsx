@@ -147,6 +147,7 @@ interface MockMessageListProps {
   highlightMessageId?: string;
   onFollowUp?: (prompt: string) => void;
   lastAnswerLiveRun?: string;
+  continuableMessageId?: string | null;
   onDeleteMessage?: (messageId: string) => void;
   messages?: Array<{ content: string }>;
   footer?: React.ReactElement<{
@@ -193,7 +194,7 @@ jest.mock('@/lib/mmkv', () => {
   };
 });
 
-let mockTurnVerdict: 'idle' | 'running' | 'stalled' | 'checking' | 'unknown' = 'idle';
+let mockTurnVerdict: 'idle' | 'running' | 'stalled' | 'checking' | 'unknown' | 'waiting' = 'idle';
 jest.mock('@/src/features/chat/inFlightTurnRecovery', () => ({
   ...jest.requireActual('@/src/features/chat/inFlightTurnRecovery'),
   useInFlightTurnRecovery: () => mockTurnVerdict,
@@ -252,7 +253,8 @@ import {
   RESPONSE_RATING_RATE_LIMITED,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
-import { requireCatalogModel } from '../test-utils/modelFixtures';
+import { requireCatalogModel, requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
+import { IN_FLIGHT_TURN_WAITING_MESSAGE } from '../src/features/chat/inFlightTurnRecovery';
 import { ResponseRatingError } from '../stores/chat/responseRatingError';
 import {
   applyServerAttachmentLimits,
@@ -308,6 +310,7 @@ beforeEach(() => {
   useChatStore.setState({
     missingConversationId: null,
     messageLoadErrorConversationId: null,
+    isLoadingMessages: false,
   } as never);
   useChatExecutionStore.setState({
     error: null,
@@ -494,6 +497,102 @@ describe('an answer that stopped arriving', () => {
     mockTurnVerdict = 'checking';
     screen.rerender(<ChatScreen />);
     expect(screen.queryByTestId('chat-in-flight-turn')).toBeNull();
+  });
+
+  it('waits for an answer written elsewhere with no Retry and no Dismiss', () => {
+    seedCloudThread();
+    useChatStore.setState({ messages: { 'thread-1': [QUESTION] } } as never);
+    mockTurnVerdict = 'waiting';
+    const retryMessage = jest.fn();
+    useChatExecutionStore.setState({ retryMessage });
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByTestId('chat-in-flight-turn')).toBeTruthy();
+    expect(screen.getByText(IN_FLIGHT_TURN_WAITING_MESSAGE)).toBeTruthy();
+    expect(screen.queryByLabelText('Retry')).toBeNull();
+    expect(screen.queryByLabelText('Dismiss')).toBeNull();
+    expect(retryMessage).not.toHaveBeenCalled();
+  });
+
+  it('leaves the wait to the error banner of a send that failed on this phone', () => {
+    seedThread();
+    mockTurnVerdict = 'waiting';
+    useChatExecutionStore.setState({
+      error: 'Message could not be sent. Please try again.',
+      errorConversationId: 'thread-1',
+    });
+    const screen = render(<ChatScreen />);
+
+    expect(screen.queryByTestId('chat-in-flight-turn')).toBeNull();
+  });
+
+  describe('Continue under a cut-off Cloud answer', () => {
+    const RUN_MARKED_RUNNING = {
+      schemaVersion: 1,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      lastSequence: 0,
+      status: 'running',
+      startedAtMs: 1_000,
+      updatedAtMs: 1_000,
+      entries: [],
+    };
+
+    function seedCutOffCloudAnswer(metadata: Record<string, unknown> = {}): void {
+      seedCloudThread();
+      useChatStore.setState(
+        (state) =>
+          ({
+            conversations: state.conversations.map((conversation) => ({
+              ...conversation,
+              model: requireFreeMobileCloudModel().id,
+            })),
+            messages: {
+              'thread-1': [
+                QUESTION,
+                { ...PARTIAL_ANSWER, metadata: { finishReason: 'length', ...metadata } },
+              ],
+            },
+          }) as never,
+      );
+    }
+
+    it('is hidden while history loads for an answer whose run is still marked running', () => {
+      seedCutOffCloudAnswer({ agentActivity: RUN_MARKED_RUNNING });
+      useChatStore.setState({ isLoadingMessages: true } as never);
+      mockTurnVerdict = 'idle';
+      render(<ChatScreen />);
+
+      expect(mockMessageListProps.continuableMessageId).toBeNull();
+    });
+
+    it('stays offered while history loads for an answer with no run left unfinished', () => {
+      seedCutOffCloudAnswer();
+      useChatStore.setState({ isLoadingMessages: true } as never);
+      mockTurnVerdict = 'idle';
+      render(<ChatScreen />);
+
+      expect(mockMessageListProps.continuableMessageId).toBe('answer-partial');
+    });
+
+    it.each(['idle', 'stalled'] as const)('is offered once the turn is %s', (verdict) => {
+      seedCutOffCloudAnswer();
+      mockTurnVerdict = verdict;
+      render(<ChatScreen />);
+
+      expect(mockMessageListProps.continuableMessageId).toBe('answer-partial');
+    });
+
+    it.each(['running', 'checking', 'unknown'] as const)(
+      'is hidden while the turn is %s, so a second answer is never started',
+      (verdict) => {
+        seedCutOffCloudAnswer();
+        mockTurnVerdict = verdict;
+        render(<ChatScreen />);
+
+        expect(mockMessageListProps.continuableMessageId).toBeNull();
+      },
+    );
   });
 });
 

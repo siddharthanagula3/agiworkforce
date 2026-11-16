@@ -460,6 +460,9 @@ export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): P
 
   await deleteAsync(EXPORT_DIR, { idempotent: true });
 
+  const { removeAllLocalChatAttachments } = await import('@/services/localChatAttachments');
+  await removeAllLocalChatAttachments();
+
   const { EXPORTS_DIR, removeViewerFileCopies } = await import('@/services/fileCreation');
   await deleteAsync(EXPORTS_DIR, { idempotent: true });
   await removeViewerFileCopies();

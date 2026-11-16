@@ -40,9 +40,7 @@ import {
 } from './inline-executor';
 import { intakeRow } from './memory-intake-store';
 
-const actualUploadScan = await vi.importActual<typeof import('@/lib/security/upload-scan')>(
-  '@/lib/security/upload-scan',
-);
+const actualUploadScan = await vi.importActual<UploadScanModule>('@/lib/security/upload-scan');
 const MIB = 1024 * 1024;
 const LIVE_LEASE = START_MS + 60_000;
 const EXPIRED_LEASE = START_MS - 1;

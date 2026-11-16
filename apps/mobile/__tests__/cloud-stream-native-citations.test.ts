@@ -2,6 +2,8 @@ import type { StreamCallbacks, StreamDelta } from '../services/streaming';
 import { WEB_SEARCH_CITATION_DELTA_KEY } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
+type CloudAccountSessionModule = typeof import('../src/features/auth/services/cloudAccountSession');
+
 const MODEL = requireMobileCloudModel();
 const RUN_ID = '0190a000-0000-7000-8000-000000000002';
 const guardedFetchMock = jest.fn();
@@ -34,9 +36,7 @@ function load() {
     streamAuthRefusal: jest.fn().mockReturnValue(null),
   }));
   jest
-    .requireActual<typeof import('../src/features/auth/services/cloudAccountSession')>(
-      '../src/features/auth/services/cloudAccountSession',
-    )
+    .requireActual<CloudAccountSessionModule>('../src/features/auth/services/cloudAccountSession')
     .activateCloudAccount('citation-account');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   return require('../services/streaming') as typeof import('../services/streaming');

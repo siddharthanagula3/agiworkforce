@@ -283,3 +283,48 @@ describe('reconcileCitationMarkersFromSourceList', () => {
     expect(out).toContain('rows[2]');
   });
 });
+
+describe('long crafted lines', () => {
+  it('reads a Sources word followed by a long run of spaces in linear time', () => {
+    const answer = `Body.\n\nsources${' '.repeat(4_000)}continued prose`;
+    expect(stripTrailingSourceList(answer)).toBe(answer);
+  });
+
+  it('reads a Sources label whose entries hold a line separator in linear time', () => {
+    const answer = `Body.\n\nSources:${' '.repeat(100_000)}[1]\r(example.com)`;
+    expect(stripTrailingSourceList(answer)).toBe(answer);
+  });
+
+  it('trims the punctuation after a source url in linear time', () => {
+    const report = [
+      'One claim [1].',
+      '',
+      'Sources:',
+      `1. https://example.com/${','.repeat(100_000)}x`,
+    ].join('\n');
+
+    expect(
+      reconcileCitationMarkersFromSourceList(report, [{ url: 'https://example.com/' }]),
+    ).toEqual({ markdown: report, canLinkNumericCitations: false });
+  });
+
+  it('reads a long hyphenated word on a citation line in linear time', () => {
+    const answer = `Body.\n\n[1] ${'a-'.repeat(80_000)}`;
+    expect(stripTrailingCitationOnlyBlock(answer)).toBe(answer);
+  });
+
+  it('reads a long run of unclosed links on a citation line in linear time', () => {
+    const answer = `Body.\n\n[1] ${'[]('.repeat(64_000)}`;
+    expect(stripTrailingCitationOnlyBlock(answer)).toBe(answer);
+  });
+
+  it('still drops a tail of hyphenated hosts and markdown links', () => {
+    const answer = [
+      'Body [1] [2].',
+      '',
+      '[1] docs-site.example.com, [2] [Guide](https://guide.example.org/a)',
+      '[3] (my-host.example.net)',
+    ].join('\n');
+    expect(stripTrailingCitationOnlyBlock(answer)).toBe('Body [1] [2].');
+  });
+});

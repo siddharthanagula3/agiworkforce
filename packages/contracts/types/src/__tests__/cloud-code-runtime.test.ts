@@ -39,4 +39,15 @@ describe('describeCloudCodeRuntime', () => {
       'Droid, コーディングエージェント',
     );
   });
+
+  it('drops a closing run of mixed full stops', () => {
+    expect(describeCloudCodeRuntime(runtime({ summary: 'Coding agent..。' }))).toBe(
+      'Droid, Coding agent',
+    );
+  });
+
+  it('keeps a long run of stops that does not close the summary, in linear time', () => {
+    const summary = `${'.'.repeat(200_000)}x`;
+    expect(describeCloudCodeRuntime(runtime({ summary }))).toBe(`Droid, ${summary}`);
+  });
 });

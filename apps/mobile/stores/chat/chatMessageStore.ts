@@ -51,6 +51,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { api } from '@/services/api';
 import { managedCloudChat } from '@/services/managedCloudChat';
+import { releaseDeletedConversationAttachments } from '@/services/localChatAttachments';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import {
   recordResponseRatingRemote,
@@ -739,6 +740,7 @@ export const useChatMessageStore = create<MessageState>()(
           );
           return;
         }
+        const deletedMessages = get().messages[id] ?? [];
         set((state) => {
           const { [id]: _, ...remainingMessages } = state.messages;
           return {
@@ -747,6 +749,12 @@ export const useChatMessageStore = create<MessageState>()(
             currentConversationId:
               state.currentConversationId === id ? null : state.currentConversationId,
           };
+        });
+        await releaseDeletedConversationAttachments(deletedMessages, {
+          ...getCloudStore().getState().messages,
+          ...get().messages,
+        }).catch((error: unknown) => {
+          console.warn('[chatMessageStore] Could not remove the files of a deleted chat:', error);
         });
       },
 

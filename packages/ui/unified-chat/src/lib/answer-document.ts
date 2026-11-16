@@ -9,7 +9,7 @@ export function normalizeArtifactTitle(title: string): string {
 }
 
 export function documentTitleFromAnswer(content: string): string {
-  const heading = /^#{1,6}\s+(.+)$/m.exec(content)?.[1];
+  const heading = /^#{1,6}\s+(\S.*|[^\S\n\r\u2028\u2029])$/m.exec(content)?.[1];
   const firstLine = content.split('\n').find((line) => line.trim().length > 0) ?? '';
   const source = (heading ?? firstLine)
     .replace(/[*_`#>[\]()!]/g, '')

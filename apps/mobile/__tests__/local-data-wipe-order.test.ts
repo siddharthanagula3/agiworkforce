@@ -234,6 +234,14 @@ describe('local wipe cleanup ordering', () => {
     );
   });
 
+  it('removes the files kept for Local chats', async () => {
+    await wipeAllLocalData();
+
+    expect(mockDeleteFile.mock.calls.map(([uri]) => uri)).toContain(
+      'file:///documents/chat-attachments/',
+    );
+  });
+
   it('waits for the viewing copies to be removed after the exports folder', async () => {
     const removal = deferred<void>();
     mockRemoveViewerFileCopies.mockImplementation(() => removal.promise);

@@ -5440,6 +5440,9 @@
       "packages/ai/routing/src/index.ts",
       "packages/ai/routing/src/response-budget.ts"
     ],
+    "answerFormatCardType": [
+      "packages/ui/unified-chat/src/lib/message-format.ts"
+    ],
     "AnswerFormSurface": [
       "apps/mobile/src/features/chat/components/AnswerFormSurface.tsx"
     ],
@@ -9409,6 +9412,9 @@
     "AssistantMessageEvent": [
       "apps/cli/src/sdk_io/mod.rs",
       "apps/cli/src/sdk_io/protocol.rs"
+    ],
+    "assistantNoteForPlace": [
+      "packages/ui/unified-chat/src/lib/place-facts.ts"
     ],
     "AssistantPanelTarget": [
       "apps/extension/src/features/surface/assistantPanel.ts"
@@ -15107,6 +15113,9 @@
     ],
     "builtInDirectoryEntry": [
       "apps/web/features/plugins/server/directory/merge.ts"
+    ],
+    "builtInNumberFormat": [
+      "packages/ui/unified-chat/src/lib/workbook-number-formats.ts"
     ],
     "BuiltInOrganizationRoleDefinition": [
       "packages/contracts/types/src/enterprise/permissions.ts"
@@ -28441,6 +28450,9 @@
     "confirmPairing": [
       "apps/extension/src/features/native-bridge/pairing.ts"
     ],
+    "confirmPendingProjectOnlyMemory": [
+      "apps/mobile/src/features/projects/service.ts"
+    ],
     "confirmReplacementRecoveryKeys": [
       "apps/web/features/account-security/lib/account-security-client.ts",
       "apps/web/lib/server/account-security/service.ts"
@@ -34124,6 +34136,9 @@
     "createProjectKnowledgeUploadAuthorization": [
       "apps/web/lib/server/project-knowledge-object-storage.ts"
     ],
+    "CreateProjectOptions": [
+      "apps/mobile/src/features/projects/store.ts"
+    ],
     "createProjectUploadFixture": [
       "apps/desktop/gpui/scripts/project-upload-fixture.mjs"
     ],
@@ -35791,6 +35806,9 @@
     "datedVersions": [
       "scripts/lib/policy-archive.mjs"
     ],
+    "DateTimeFormat": [
+      "packages/ui/unified-chat/src/lib/workbook-number-formats.ts"
+    ],
     "dayNumber": [
       "packages/platform/utils/src/scheduling/zoned-time.ts"
     ],
@@ -36014,6 +36032,9 @@
     ],
     "decideViewerStart": [
       "apps/desktop/src/features/browser/browserSelection.ts"
+    ],
+    "DecimalFormat": [
+      "packages/ui/unified-chat/src/lib/workbook-number-formats.ts"
     ],
     "decision": [
       "crates/agiworkforce-execpolicy/src/lib.rs",
@@ -37500,6 +37521,9 @@
     ],
     "DEFAULT_LOCAL_MODEL_ID": [
       "apps/mobile/src/features/model-picker/service.ts"
+    ],
+    "DEFAULT_LOCAL_SYSTEM_PROMPT": [
+      "apps/mobile/stores/chat/localSystemPrompt.ts"
     ],
     "DEFAULT_LOCALE": [
       "apps/extension-vscode/src/l10n/index.ts"
@@ -43846,6 +43870,9 @@
     "DisplayCandidate": [
       "apps/desktop/electron/runtime/computerUseProtocol.ts"
     ],
+    "displayCellNumber": [
+      "packages/ui/unified-chat/src/lib/workbook-number-formats.ts"
+    ],
     "displayedCodeMessages": [
       "apps/mobile/src/features/companion/components/codeSessionTimeline.ts"
     ],
@@ -47038,6 +47065,9 @@
     "ensureLlmGateOpen": [
       "apps/mobile/services/llmGate.ts"
     ],
+    "ensureLocalSystemPrompt": [
+      "apps/mobile/stores/chat/localSystemPrompt.ts"
+    ],
     "ensureMigrationLedger": [
       "scripts/lib/neon-migrations.mjs"
     ],
@@ -49376,6 +49406,9 @@
     ],
     "expectCloudShellReady": [
       "apps/desktop/e2e/utils/mock-cloud-api.ts"
+    ],
+    "EXPECTED_IOS_PATHS": [
+      "apps/mobile/scripts/release/verify-production-associations.mjs"
     ],
     "EXPECTED_SHA256_PARAM": [
       "apps/desktop/src-tauri/src/core/llm/tool_executor/file_tools.rs"
@@ -64981,6 +65014,9 @@
     "IN_FLIGHT_TURN_STALLED_MESSAGE": [
       "apps/mobile/src/features/chat/inFlightTurnRecovery.ts"
     ],
+    "IN_FLIGHT_TURN_WAITING_MESSAGE": [
+      "apps/mobile/src/features/chat/inFlightTurnRecovery.ts"
+    ],
     "in_memory": [
       "apps/cli/src/agent/checkpoints.rs",
       "apps/cli/src/tui/prompt_history.rs",
@@ -71601,6 +71637,9 @@
     "keepGeneratedImage": [
       "apps/mobile/src/features/image/services/keepMedia.ts"
     ],
+    "keepLocalChatAttachments": [
+      "apps/mobile/services/localChatAttachments.ts"
+    ],
     "keepOpenForMenuEscape": [
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/sidebar/escape-guard.ts",
@@ -72894,6 +72933,9 @@
     ],
     "LIBRARY_DEFAULT_SORT": [
       "packages/contracts/cloud-contracts/src/library.ts"
+    ],
+    "LIBRARY_FILE_TOO_LARGE_MESSAGE": [
+      "apps/web/features/library/lib/library-chat-handoff.ts"
     ],
     "LIBRARY_ITEM_QUERY_PARAM": [
       "apps/web/features/library/components/LibraryView.tsx"
@@ -76107,6 +76149,9 @@
     "LOCAL_CHAT_ATTACHMENT_POLICY": [
       "apps/desktop/src/runtime/localChatTurn.ts"
     ],
+    "LOCAL_CHAT_ATTACHMENTS_DIR": [
+      "apps/mobile/services/localChatAttachments.ts"
+    ],
     "LOCAL_CHAT_SEARCH_MIN_CHARS": [
       "apps/desktop/src/features/chat/useLocalChatSearch.ts"
     ],
@@ -76348,6 +76393,9 @@
     ],
     "LOCAL_TURN_IN_CLOUD_CHAT": [
       "apps/web/features/chat/lib/local-turn.ts"
+    ],
+    "LOCAL_WELLBEING_FLOOR": [
+      "apps/mobile/stores/chat/localSystemPrompt.ts"
     ],
     "LOCAL_WORKTREE_SETTINGS_COPY": [
       "apps/web/features/code/local-code.ts"
@@ -91391,6 +91439,9 @@
     "number_lines": [
       "tools/skill-vetting/src/skillspector/llm_analyzer_base.py"
     ],
+    "NumberFormat": [
+      "packages/ui/unified-chat/src/lib/workbook-number-formats.ts"
+    ],
     "numberTexts": [
       "apps/web/app/legal/open-source/notices.ts"
     ],
@@ -96503,6 +96554,9 @@
     "parseNewChatSource": [
       "apps/web/features/chat/lib/new-chat-entry.ts"
     ],
+    "parseNumberFormat": [
+      "packages/ui/unified-chat/src/lib/workbook-number-formats.ts"
+    ],
     "parseOllamaParameterCount": [
       "packages/ai/providers/ollama/src/index.ts",
       "packages/ai/providers/ollama/src/model-size.ts"
@@ -97942,6 +97996,9 @@
     "PendingMultipartUpload": [
       "packages/platform/object-storage/src/index.ts",
       "packages/platform/object-storage/src/types.ts"
+    ],
+    "PendingProjectOnlyMemoryOutcome": [
+      "apps/mobile/src/features/projects/service.ts"
     ],
     "PendingRegionMove": [
       "apps/web/lib/server/data-region.ts"
@@ -109266,6 +109323,9 @@
     "readLegalHold": [
       "apps/web/lib/services/ediscovery-export-service.ts"
     ],
+    "readLibraryItemFile": [
+      "apps/web/features/library/lib/library-chat-handoff.ts"
+    ],
     "readLifecycleVocabulary": [
       "scripts/check-enterprise-contracts.mjs"
     ],
@@ -113461,6 +113521,9 @@
     "releaseDebugger": [
       "apps/extension/src/features/computer-use/debuggerSession.ts"
     ],
+    "releaseDeletedConversationAttachments": [
+      "apps/mobile/services/localChatAttachments.ts"
+    ],
     "releaseDeletedProjectContents": [
       "apps/web/lib/server/project-deletion.ts"
     ],
@@ -113532,6 +113595,9 @@
     ],
     "releaseLegalHold": [
       "apps/web/lib/services/retention-service.ts"
+    ],
+    "releaseLocalChatAttachments": [
+      "apps/mobile/services/localChatAttachments.ts"
     ],
     "releaseLocalModelMemory": [
       "apps/mobile/src/features/model-picker/useLocalModelMemoryRelease.ts"
@@ -114235,6 +114301,9 @@
       "apps/cli/src/platform/policy/engine.rs",
       "apps/cli/src/platform/policy/mod.rs"
     ],
+    "removeAllLocalChatAttachments": [
+      "apps/mobile/services/localChatAttachments.ts"
+    ],
     "removeAnswerRating": [
       "apps/extension-vscode/src/features/feedback/submitFeedback.ts"
     ],
@@ -114353,6 +114422,9 @@
     ],
     "removeSkill": [
       "apps/web/features/directory/services/skills-directory.ts"
+    ],
+    "removeStaleExports": [
+      "apps/mobile/services/fileCreation.ts"
     ],
     "RemoveTabFromGroupMessage": [
       "apps/extension/src/types.ts"
@@ -118216,6 +118288,12 @@
     ],
     "resolveLocalBinding": [
       "scripts/check-usage-reservation-replay.mjs"
+    ],
+    "resolveLocalChatAttachment": [
+      "apps/mobile/services/localChatAttachments.ts"
+    ],
+    "resolveLocalChatAttachmentUrl": [
+      "apps/mobile/services/localChatAttachments.ts"
     ],
     "resolveLocale": [
       "apps/extension-vscode/src/l10n/index.ts"
@@ -127892,6 +127970,9 @@
     "selectWorkEscalation": [
       "apps/web/features/work/escalation.ts",
       "apps/web/features/work/index.ts"
+    ],
+    "SELF_HARM_HELPLINE": [
+      "apps/mobile/lib/contentFilter.ts"
     ],
     "SELF_HOSTED_KEY_PROVIDERS": [
       "apps/web/lib/byok-providers.ts"

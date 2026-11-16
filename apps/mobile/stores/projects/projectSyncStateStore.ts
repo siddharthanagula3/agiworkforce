@@ -5,10 +5,13 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 interface ProjectSyncState {
   projectCursor: string;
   dirtyProjectIds: string[];
+  projectOnlyMemoryPendingIds: string[];
 
   setProjectCursor: (cursor: string) => void;
   markProjectDirty: (id: string) => void;
   clearProjectDirty: (ids: string[]) => void;
+  markProjectOnlyMemoryPending: (id: string) => void;
+  clearProjectOnlyMemoryPending: (id: string) => void;
   resetProjectSync: () => void;
 }
 
@@ -17,6 +20,7 @@ export const useProjectSyncStateStore = create<ProjectSyncState>()(
     (set) => ({
       projectCursor: '0',
       dirtyProjectIds: [],
+      projectOnlyMemoryPendingIds: [],
 
       setProjectCursor: (cursor) => set({ projectCursor: cursor }),
 
@@ -28,10 +32,29 @@ export const useProjectSyncStateStore = create<ProjectSyncState>()(
       clearProjectDirty: (ids) =>
         set((s) => ({ dirtyProjectIds: s.dirtyProjectIds.filter((id) => !ids.includes(id)) })),
 
+      markProjectOnlyMemoryPending: (id) =>
+        set((s) =>
+          s.projectOnlyMemoryPendingIds.includes(id)
+            ? s
+            : { projectOnlyMemoryPendingIds: [...s.projectOnlyMemoryPendingIds, id] },
+        ),
+
+      clearProjectOnlyMemoryPending: (id) =>
+        set((s) =>
+          s.projectOnlyMemoryPendingIds.includes(id)
+            ? {
+                projectOnlyMemoryPendingIds: s.projectOnlyMemoryPendingIds.filter(
+                  (pending) => pending !== id,
+                ),
+              }
+            : s,
+        ),
+
       resetProjectSync: () =>
         set({
           projectCursor: '0',
           dirtyProjectIds: [],
+          projectOnlyMemoryPendingIds: [],
         }),
     }),
     {
@@ -41,6 +64,7 @@ export const useProjectSyncStateStore = create<ProjectSyncState>()(
       partialize: (s) => ({
         projectCursor: s.projectCursor,
         dirtyProjectIds: s.dirtyProjectIds,
+        projectOnlyMemoryPendingIds: s.projectOnlyMemoryPendingIds,
       }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[projectSyncStateStore] Hydration failed:', error);

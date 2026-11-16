@@ -70,6 +70,13 @@ export interface CloudCodeRuntime {
 
 const RUNTIME_MB_PER_GB = 1024;
 export const CLOUD_CODE_RUNTIME_NEEDS_KEY = 'needs your own API key';
+const SUMMARY_CLOSING_STOPS = '.。';
+
+function withoutClosingStops(summary: string): string {
+  let end = summary.length;
+  while (end > 0 && SUMMARY_CLOSING_STOPS.includes(summary[end - 1]!)) end -= 1;
+  return summary.slice(0, end);
+}
 
 export function describeCloudCodeRuntime(
   runtime: Pick<
@@ -80,7 +87,7 @@ export function describeCloudCodeRuntime(
   const cores = runtime.cpuCount > 0 ? `${runtime.cpuCount} vCPU` : null;
   const memory =
     runtime.memoryMB > 0 ? `${Math.round(runtime.memoryMB / RUNTIME_MB_PER_GB)} GB RAM` : null;
-  const summary = runtime.summary.replace(/[.。]+$/u, '');
+  const summary = withoutClosingStops(runtime.summary);
   const detail = [summary, [cores, memory].filter(Boolean).join(', ')].filter(Boolean).join(' · ');
   const label = detail ? `${runtime.name}, ${detail}` : runtime.name;
   return runtime.needsUserCredential ? `${label}, ${CLOUD_CODE_RUNTIME_NEEDS_KEY}` : label;

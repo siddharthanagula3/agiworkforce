@@ -6,6 +6,7 @@ import type {
   GeneratedFile,
 } from '@agiworkforce/types';
 import type { ToolApprovalDecisionValue, ToolApprovalReview } from '@agiworkforce/cloud-contracts';
+import type { MessageSource } from '@/src/features/chat/utils/messageSources';
 
 export type { CanonicalChatMessage };
 
@@ -136,7 +137,7 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   videoTaskId?: string;
   videoGenCancelRequested?: boolean;
   videoGenCancelError?: string;
-  citations?: import('@/src/features/chat/utils/messageSources').MessageSource[];
+  citations?: MessageSource[];
   interactiveCards?: InteractiveCard[];
   isQueued?: boolean;
   offlineQueueId?: string;

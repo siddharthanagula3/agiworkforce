@@ -147,3 +147,97 @@ describe('message format card parsers', () => {
     expect(stripListMarker('1. **Bold** step')).toBe('Bold step');
   });
 });
+
+describe('message format card parsers on hostile model output', () => {
+  const spaces = (count: number): string => ' '.repeat(count);
+
+  it('does not take a pros heading padded with spaces before a stray carriage return as pros', () => {
+    const comparison = parseComparison(
+      ['# A vs B', '## A', `## Pros${spaces(250_000)}x\ry`, '- Fast'].join('\n'),
+    );
+    expect(comparison.items[0].pros).toEqual([]);
+    expect(comparison.extraSections[comparison.extraSections.length - 1]?.lines).toEqual(['Fast']);
+  });
+
+  it('does not take a cons heading padded with spaces before a stray carriage return as cons', () => {
+    const comparison = parseComparison(
+      ['# A vs B', '## A', `## Cons${spaces(250_000)}x\ry`, '- Slow'].join('\n'),
+    );
+    expect(comparison.items[0].cons).toEqual([]);
+    expect(comparison.extraSections[comparison.extraSections.length - 1]?.lines).toEqual(['Slow']);
+  });
+
+  it('does not take a winner heading padded with spaces before a stray carriage return as the verdict', () => {
+    const comparison = parseComparison(
+      ['# A vs B', `## Winner${spaces(250_000)}x\ry`, 'A wins.'].join('\n'),
+    );
+    expect(comparison.winner).toBe('');
+    expect(comparison.winnerReason).toBe('');
+  });
+
+  it('reads a numbered step whose title or separator is a long run of spaces', () => {
+    expect(parseSteps(`0\t${spaces(1_500)}x\ry`).steps).toEqual([]);
+    expect(parseSteps(`1. a${spaces(250_000)}b`).steps).toEqual([
+      { title: `a${spaces(250_000)}b`, details: [] },
+    ]);
+  });
+
+  it('reads a bold step whose title or separator is a long run of spaces', () => {
+    expect(parseSteps(`**step 0\t${spaces(1_500)}x\ry`).steps).toEqual([]);
+    expect(parseSteps(`**Step 2: a${spaces(250_000)}b**`).steps).toEqual([
+      { title: `a${spaces(250_000)}b`, details: [] },
+    ]);
+  });
+
+  it('keeps a heading padded with spaces before a stray carriage return out of the steps', () => {
+    const steps = parseSteps(['# Guide', `#${spaces(200_000)}x\ry`, 'Read this first.'].join('\n'));
+    expect(steps.steps).toEqual([]);
+    expect(steps.extraSections).toEqual([]);
+    expect(steps.description).toBe('Read this first.');
+  });
+
+  it('reads display math after many unclosed openers', () => {
+    expect(parseCalculation(`\\[${'\\[a'.repeat(200_000)}`).formulas).toEqual([]);
+    expect(parseCalculation('Area:\n\\[ A = 12 \\]').formulas).toEqual([
+      { label: '', expression: 'A = 12', isLatex: true },
+    ]);
+  });
+
+  it('reads the last line of a formula that holds many unclosed environment tags', () => {
+    const calculation = parseCalculation(`$$${'\\end{{'.repeat(100_000)}\\\\ x = 4$$`);
+    expect(calculation.result).toBe('4');
+    expect(calculation.resultIsLatex).toBe(true);
+  });
+
+  it('keeps a calculation heading padded with spaces before a stray carriage return out of the sections', () => {
+    const calculation = parseCalculation(
+      ['# Calc', `#${spaces(200_000)}x\ry`, 'Total: 7 apples'].join('\n'),
+    );
+    expect(calculation.extraSections).toEqual([]);
+    expect(calculation.result).toBe('7 apples');
+  });
+
+  it('reads a calculation step whose label or separator is a long run of spaces', () => {
+    expect(parseCalculation(`step 1:${spaces(8_000)}x`).steps).toEqual([]);
+    expect(parseCalculation(`1. a${spaces(250_000)}b = 5`).steps).toEqual([
+      { label: `a${spaces(250_000)}b`, value: '5' },
+    ]);
+  });
+
+  it('reads inline code after an unclosed backtick full of operators', () => {
+    expect(parseCalculation(`\`${'='.repeat(250_000)}`).formulas).toEqual([]);
+    expect(parseCalculation('Use `a + b` here.').formulas).toEqual([
+      { label: '', expression: 'a + b', isLatex: false },
+    ]);
+  });
+
+  it('names both sides of a comparison whose title pads them with spaces', () => {
+    expect(
+      parseComparison(`# Postgres${spaces(200_000)}vs MySQL`).items.map((item) => item.name),
+    ).toEqual(['Postgres', 'MySQL']);
+    expect(parseComparison(`# a${spaces(200_000)}b`).items.map((item) => item.name)).toEqual([
+      'Option A',
+      'Option B',
+    ]);
+  });
+});

@@ -28,6 +28,7 @@ import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/clou
 import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
 import { useCloudProjectStore, type CloudProject } from '@/stores/projects/cloudProjectStore';
 import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
+import { confirmPendingProjectOnlyMemory } from '@/src/features/projects/service';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useSettingsSyncStateStore } from '@/stores/settings/settingsSyncStateStore';
 import { toCloudSettings, applyCloudSettings, type CloudSettings } from './cloudSettingsMapping';
@@ -767,6 +768,9 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
   const liveIds: string[] = [];
   const deadIds: string[] = [];
   const payload: ProjectSyncPushItem[] = [];
+  const projectOnlyMemoryIds = new Set(
+    useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds,
+  );
 
   for (const id of dirtyProjectIds) {
     const project = projectById.get(id);
@@ -783,6 +787,7 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
       color: project.color,
       isArchived: project.isArchived,
       metadata: project.metadata,
+      ...(projectOnlyMemoryIds.has(id) ? { usesGlobalMemory: false } : {}),
       baseVersion: project.serverVersion ?? '0',
       deletedAt: project.deletedAt,
     });
@@ -841,6 +846,42 @@ async function pushProjects(account: CloudAccountEpoch): Promise<void> {
 
   const toClear = [...deadIds, ...resolvedConflictIds];
   useProjectSyncStateStore.getState().clearProjectDirty(toClear);
+}
+
+const PROJECT_MEMORY_SCOPE_NOT_SAVED_MESSAGE =
+  'Project created. Memory setting was not saved; change it in Project settings.';
+
+function refuseProjectOnlyMemory(id: string): void {
+  useProjectSyncStateStore.getState().clearProjectOnlyMemoryPending(id);
+  useCloudProjectStore.getState().patchCloudProjectDetails(id, { usesGlobalMemory: true });
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { showToast } =
+    require('@/src/shared/components/Toast') as typeof import('@/src/shared/components/Toast');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  showToast(PROJECT_MEMORY_SCOPE_NOT_SAVED_MESSAGE);
+}
+
+async function applyPendingProjectOnlyMemory(account: CloudAccountEpoch): Promise<void> {
+  let retryLater: unknown = null;
+  for (const id of useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds) {
+    if (!useProjectSyncStateStore.getState().projectOnlyMemoryPendingIds.includes(id)) continue;
+    const project = useCloudProjectStore.getState().projects.find((p) => p.id === id);
+    if (!project || project.deletedAt !== null) {
+      useProjectSyncStateStore.getState().clearProjectOnlyMemoryPending(id);
+      continue;
+    }
+    if (!project.serverVersion || project.serverVersion === '0') continue;
+    try {
+      const outcome = await confirmPendingProjectOnlyMemory(id, account);
+      assertCloudAccountEpochCurrent(account);
+      if (outcome === 'refused') refuseProjectOnlyMemory(id);
+    } catch (error) {
+      if (isStaleCloudAccountOperation(error)) throw error;
+      assertCloudAccountEpochCurrent(account);
+      retryLater ??= error;
+    }
+  }
+  if (retryLater !== null) throw retryLater;
 }
 
 function projectSyncContentMatches(left: CloudProject, right: CloudProject): boolean {
@@ -994,6 +1035,7 @@ export async function syncNow(): Promise<void> {
     await runStep('projects', async () => {
       await pushProjects(account);
       await pullProjects(account);
+      await applyPendingProjectOnlyMemory(account);
     });
     await runStep('settings', async () => {
       const settingsRequestBase = await pushSettings(account);
