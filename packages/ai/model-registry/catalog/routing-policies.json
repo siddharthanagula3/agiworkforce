@@ -439,8 +439,14 @@
       "byok": "premium"
     },
     "tierAllowedSlots": {
-      "free": ["free_workhorse", "free_workhorse_fast"],
-      "basic": ["workhorse_general", "reasoning_economy", "coding_fast", "vision_fast"],
+      "free": ["free_workhorse", "free_workhorse_fast", "fast_anthropic"],
+      "basic": [
+        "workhorse_general",
+        "reasoning_economy",
+        "coding_fast",
+        "vision_fast",
+        "fast_anthropic"
+      ],
       "pro": [
         "workhorse_general",
         "general_balanced",
@@ -455,7 +461,8 @@
         "search_premium",
         "computer_use_balanced",
         "image_generation",
-        "vision_fast"
+        "vision_fast",
+        "fast_anthropic"
       ],
       "max": [
         "workhorse_general",
@@ -475,7 +482,8 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast"
+        "vision_fast",
+        "fast_anthropic"
       ],
       "enterprise": [
         "workhorse_general",
@@ -495,7 +503,8 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast"
+        "vision_fast",
+        "fast_anthropic"
       ],
       "byok": [
         "workhorse_general",
@@ -515,7 +524,8 @@
         "computer_use_balanced",
         "computer_use_premium",
         "image_generation",
-        "vision_fast"
+        "vision_fast",
+        "fast_anthropic"
       ]
     },
     "providerPolicies": {
@@ -788,6 +798,9 @@
       },
       "free_workhorse_fast": {
         "modelKey": "family:openai/gpt-fast"
+      },
+      "fast_anthropic": {
+        "modelKey": "family:anthropic/claude-haiku"
       },
       "general_fast": {
         "modelKey": "family:openai/gpt-fast"

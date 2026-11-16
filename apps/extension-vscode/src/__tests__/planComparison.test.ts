@@ -36,7 +36,7 @@ describe('plan comparison', () => {
   });
 
   it('states each plan relative to the plan below it, never in credits or dollars', () => {
-    expect(planUsagePhrase('basic')).toBe('5x more usage per session than Free');
+    expect(planUsagePhrase('basic')).toBe('Included');
     expect(planUsagePhrase('pro')).toBe('5x more usage than Basic');
     expect(planUsagePhrase('max')).toBe(`5x more usage than ${PRO}`);
     expect(planUsagePhrase('max_15x')).toBe(`10x more weekly usage than ${PRO}`);

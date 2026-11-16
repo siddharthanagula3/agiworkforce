@@ -62,7 +62,9 @@ function shownCapabilities(capabilities: BillingPlanCapability[]): BillingPlanCa
 function usageLine(plan: BillingPlanTier): string | null {
   if (PLAN_CREDIT_ALLOWANCES[plan].unlimited) return 'Usage set by your contract';
   if (isFreeBillingPlanTier(plan)) return 'A small allowance, free models only';
-  return NATIVE_PURCHASES_AVAILABLE ? managedUsageComparisonLines(plan).join(', ') : null;
+  if (!NATIVE_PURCHASES_AVAILABLE) return null;
+  const lines = managedUsageComparisonLines(plan);
+  return lines.length > 0 ? lines.join(', ') : 'Included';
 }
 
 function contextLine(plan: BillingPlanTier): string {

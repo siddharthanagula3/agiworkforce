@@ -64,9 +64,9 @@ import { LLMCostCalculator } from './llm-cost-calculator';
 const FIVE_HOUR_OLDEST = '2026-07-22T12:00:00.000Z';
 const WEEKLY_OLDEST = '2026-07-20T08:00:00.000Z';
 const PERIOD_END = '2026-08-01T00:00:00.000Z';
-const FIVE_HOUR_BUDGET = 2 * MICROUSD_PER_CREDIT;
-const WEEKLY_BUDGET = 15 * MICROUSD_PER_CREDIT;
-const MONTHLY_BUDGET = 20 * MICROUSD_PER_CREDIT;
+const FIVE_HOUR_BUDGET = 200 * MICROUSD_PER_CREDIT;
+const WEEKLY_BUDGET = 1_500 * MICROUSD_PER_CREDIT;
+const MONTHLY_BUDGET = 2_000 * MICROUSD_PER_CREDIT;
 
 const TIERED_MODEL = (() => {
   const candidate = listCanonicalModels().find(
@@ -192,7 +192,7 @@ beforeEach(() => {
 });
 
 describe('the Free usage windows', () => {
-  it('holds Free to the plan table: 2, 15 and 20 credits per 5 hours, week and month', () => {
+  it('holds Free to the plan table: 200, 1,500 and 2,000 credits per 5 hours, week and month', () => {
     expect(FREE_TRIAL_INTERNAL_USAGE_POLICY).toEqual({
       fiveHourBudgetMicrousd: FIVE_HOUR_BUDGET,
       fiveHourWindowHours: 5,
@@ -298,7 +298,7 @@ describe('beginFreeTrialRequest', () => {
   });
 
   it('refuses a call the five-hour window cannot cover and names when it resets', async () => {
-    useWindows({ fiveHour: 8_000, weekly: 8_000, monthly: 8_000 });
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET - 2_000, weekly: 8_000, monthly: 8_000 });
 
     await expect(beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 3_000 })).resolves.toEqual({
       ok: false,

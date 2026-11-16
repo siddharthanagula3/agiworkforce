@@ -28,7 +28,7 @@ allowance costs at most half its monthly price.
 
 | plan         | 5-hour   | weekly   | monthly           |
 | ------------ | -------- | -------- | ----------------- |
-| Free         | 2        | 15       | 20                |
+| Free         | 200      | 1,500    | 2,000             |
 | Basic        | 10       | 100      | 400               |
 | Premium      | 50       | 500      | 2,000             |
 | Max          | 250      | 2,500    | 10,000            |

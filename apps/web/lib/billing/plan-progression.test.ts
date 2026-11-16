@@ -42,6 +42,16 @@ const ADJACENT_PAIRS: ReadonlyArray<readonly [BillingPlanTier, BillingPlanTier]>
     return next === undefined ? [] : [[tier, next] as [BillingPlanTier, BillingPlanTier]];
   });
 
+/**
+ * PLAN-PAID-ALLOWANCES-BELOW-FREE-01: Free was raised a hundredfold on
+ * 2026-11-16 while no plan is on sale, and the paid allowances have not been
+ * set against it yet. The usage promise is held from Basic upward until they
+ * are, and the open step is pinned below so it cannot outlive that change.
+ */
+const USAGE_PAIRS = ADJACENT_PAIRS.filter(([lower]) => lower !== 'free');
+
+const USAGE_WINDOWS = ['monthlyCredits', 'weeklyCredits', 'fiveHourCredits'] as const;
+
 const LIMIT_KEYS = Object.keys(
   BILLING_PLAN_PRODUCT_LIMITS.free,
 ) as (keyof BillingPlanProductLimits)[];
@@ -71,8 +81,8 @@ describe('moving up the ladder never takes something away', () => {
     }
   });
 
-  it.each(ADJACENT_PAIRS)('%s to %s raises or holds every usage window', (lower, higher) => {
-    for (const window of ['monthlyCredits', 'weeklyCredits', 'fiveHourCredits'] as const) {
+  it.each(USAGE_PAIRS)('%s to %s raises or holds every usage window', (lower, higher) => {
+    for (const window of USAGE_WINDOWS) {
       const before = MANAGED_USAGE_LIMITS[lower].unlimited
         ? Number.POSITIVE_INFINITY
         : (MANAGED_USAGE_LIMITS[lower][window] ?? Number.POSITIVE_INFINITY);
@@ -81,6 +91,20 @@ describe('moving up the ladder never takes something away', () => {
         : (MANAGED_USAGE_LIMITS[higher][window] ?? Number.POSITIVE_INFINITY);
       expect(after, `${higher} shrinks ${window}`).toBeGreaterThanOrEqual(before);
     }
+  });
+
+  it('leaves the free to basic usage step open only while Free is above Basic in every window', () => {
+    for (const window of USAGE_WINDOWS) {
+      expect(MANAGED_USAGE_LIMITS.free[window], `free ${window}`).toBeGreaterThan(
+        MANAGED_USAGE_LIMITS.basic[window] ?? Number.POSITIVE_INFINITY,
+      );
+    }
+    expect(MANAGED_USAGE_LIMITS.free.weeklyCredits).toBeGreaterThan(
+      MANAGED_USAGE_LIMITS.pro.weeklyCredits,
+    );
+    expect(MANAGED_USAGE_LIMITS.free.fiveHourCredits).toBeGreaterThan(
+      MANAGED_USAGE_LIMITS.pro.fiveHourCredits ?? Number.POSITIVE_INFINITY,
+    );
   });
 
   it.each(ADJACENT_PAIRS)('%s to %s costs more than the step below', (lower, higher) => {

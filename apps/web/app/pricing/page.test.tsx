@@ -1214,7 +1214,7 @@ describe('PricingPage', () => {
       training: 'Not by AGI. Free model providers may.',
     });
     column('basic', {
-      usage: '5x more usage per session than Free',
+      usage: INCLUDED,
       projects: 'noSetLimit',
       storage: '1 GB',
       downloads: '1 GB',
@@ -1560,10 +1560,9 @@ describe('PricingPage', () => {
 
     const cardOf = (name: string) =>
       within(screen.getByRole('heading', { name }).closest('article')!);
-    expect(cardOf('Basic').queryByText('5x more usage per session than Free')).toBeNull();
-    expect(comparisonRow('compareRowManagedUsage').cells['Basic']).toBe(
-      '5x more usage per session than Free',
-    );
+    expect(cardOf('Basic').queryByText(/than Free/)).toBeNull();
+    expect(comparisonRow('compareRowManagedUsage').cells['Basic']).toBe(INCLUDED);
+    expect(screen.queryByText(/more usage per session than Free/)).toBeNull();
     expect(cardOf('Premium').getByText('cardExpandedUsage')).toBeVisible();
     expect(cardOf('Max').getByText('cardExtendedUsage')).toBeVisible();
     expect(cardOf('Ultra').getByText('cardHighestUsage')).toBeVisible();

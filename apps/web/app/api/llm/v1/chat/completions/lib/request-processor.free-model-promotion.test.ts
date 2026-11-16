@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { getDefaultModelFor, modelsById, type ModelMetadata } from '@agiworkforce/types';
+import {
+  getAllowedModelsForTier,
+  getDefaultModelFor,
+  getRoutingSlotModel,
+  modelsById,
+  type ModelMetadata,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/server/rls-db');
 type ScanModule1 = typeof import('@/lib/services/managed-content-safety-service');
 type ScanModule2 = typeof import('./chat-attachment-hydration');
@@ -15,6 +21,8 @@ const FREE_CHAT_MODEL = getDefaultModelFor('free', 'chat');
 const PROMOTED = Object.values(modelsById).find(
   (model: ModelMetadata) => model.provider === 'anthropic' && model.qualityTier === 'fast',
 ) as ModelMetadata;
+const FAST_ANTHROPIC_MODEL = getRoutingSlotModel('fast_anthropic');
+const PAID_ONLY_MODEL = getAllowedModelsForTier('pro_additions')[0]!;
 
 const mocks = vi.hoisted(() => ({
   enforceSafety: vi.fn(),
@@ -30,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   admit: vi.fn(),
   handOver: vi.fn(),
   release: vi.fn(),
+  namedPromotionModel: { current: null as string | null },
 }));
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
@@ -85,7 +94,8 @@ vi.mock('@/lib/server/free-model-promotion', async (importOriginal) => {
   );
   return {
     ...actual,
-    namesFreeModelPromotionModel: (selection: string) => selection === promoted?.id,
+    namesFreeModelPromotionModel: (selection: string) =>
+      selection === (mocks.namedPromotionModel.current ?? promoted?.id),
   };
 });
 
@@ -170,6 +180,7 @@ function turn(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.namedPromotionModel.current = null;
   mocks.enforceSafety.mockResolvedValue({ enabled: false, allowed: true });
   mocks.hydrate.mockResolvedValue(undefined);
   mocks.loadPolicy.mockResolvedValue({
@@ -258,21 +269,30 @@ describe('processRequest under the free model promotion', () => {
     expect(mocks.handOver).not.toHaveBeenCalled();
   });
 
-  it('answers a Free account that picked the promoted model on the Free model once the promotion refuses it', async () => {
+  it('answers a Free pick of the fast Anthropic model on that model, metered on the Free windows, once the promotion refuses it', async () => {
     mocks.admit.mockResolvedValue(null);
+    expect(PROMOTED.id).toBe(FAST_ANTHROPIC_MODEL);
 
-    const result = await turn('promotion-turn-7', PROMOTED.id);
+    const result = await turn('promotion-turn-7', FAST_ANTHROPIC_MODEL);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.requestedModel).toBe(FREE_CHAT_MODEL);
+    expect(result.requestedModel).toBe(FAST_ANTHROPIC_MODEL);
+    expect(result.chatRequest.model).toBe(FAST_ANTHROPIC_MODEL);
+    expect(result.provider).toBe('anthropic');
+    expect(result.selectedModel).toBeUndefined();
     expect(result.freeTrial?.promotion).toBeUndefined();
+    expect(result.freeTrial?.unmetered).toBeUndefined();
+    const begun = mocks.beginFree.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(begun['model']).toBe(FAST_ANTHROPIC_MODEL);
+    expect(begun['promotion']).toBeUndefined();
   });
 
-  it('keeps the pick the promotion refused beside the Free model that answers it (REGEN-01)', async () => {
+  it('keeps a refused promoted pick that is not a Free model beside the Free model that answers it (REGEN-01)', async () => {
     mocks.admit.mockResolvedValue(null);
+    mocks.namedPromotionModel.current = PAID_ONLY_MODEL;
 
-    const refused = await turn('promotion-turn-8', PROMOTED.id);
+    const refused = await turn('promotion-turn-8', PAID_ONLY_MODEL);
     const unpromoted = await turn('promotion-turn-9', FREE_CHAT_MODEL);
     mocks.admit.mockResolvedValue({
       promotion: PROMOTION,
@@ -282,12 +302,12 @@ describe('processRequest under the free model promotion', () => {
         releaseUnlessHandedOver: mocks.release,
       },
     });
-    const admitted = await turn('promotion-turn-10', PROMOTED.id);
+    const admitted = await turn('promotion-turn-10', PAID_ONLY_MODEL);
 
     expect(refused.ok && unpromoted.ok && admitted.ok).toBe(true);
     if (!refused.ok || !unpromoted.ok || !admitted.ok) return;
     expect(refused.chatRequest.model).toBe(FREE_CHAT_MODEL);
-    expect(refused.selectedModel).toBe(PROMOTED.id);
+    expect(refused.selectedModel).toBe(PAID_ONLY_MODEL);
     expect(unpromoted.selectedModel).toBeUndefined();
     expect(admitted.selectedModel).toBeUndefined();
   });

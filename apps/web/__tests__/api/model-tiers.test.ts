@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getAllowedModelsForTier } from '@agiworkforce/types';
+import {
+  getAllowedModelsForTier,
+  getDefaultModelFor,
+  getMinimumRequiredTier,
+  getRoutingSlotModel,
+  resolveModelFamilySlot,
+} from '@agiworkforce/types';
 
 import { canAccessModel } from '@/lib/model-tiers';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
@@ -20,6 +26,17 @@ describe('shared subscription model gate', () => {
       if (freeRoster.has(model)) continue;
       expect(canAccessModel(model, 'free')).toBe(false);
     }
+  });
+
+  it('gives Free the fast OpenAI and fast Anthropic models, with Auto still on the fast OpenAI one', () => {
+    const fastOpenAI = resolveModelFamilySlot('openai/gpt-fast');
+    const fastAnthropic = getRoutingSlotModel('fast_anthropic');
+    expect([...FREE_TRIAL_MODELS].sort()).toEqual([fastOpenAI, fastAnthropic].sort());
+    for (const model of [fastOpenAI, fastAnthropic]) {
+      expect(canAccessModel(model, 'free')).toBe(true);
+      expect(getMinimumRequiredTier(model)).toBe('free');
+    }
+    expect(getDefaultModelFor('free', 'chat')).toBe(fastOpenAI);
   });
 
   it('fails closed for local-only, BYOK, and unrecognized tiers', () => {

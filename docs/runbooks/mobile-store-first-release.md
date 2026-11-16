@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-15
+Last updated: 2026-11-16
 
 This is the whole submission of AGI Mobile version 0.0.1 to the Apple App Store
 and to Google Play, written for the owner, who follows it himself. Work through
@@ -158,8 +158,13 @@ leaving a decision alone keeps it.
   not bought: a Stripe checkout with a 100 percent coupon would itself be a
   sale, through a checkout that must stay closed. Section 10, item 4 says how
   to grant it, and production schedules the deletion of a granted plan only
-  after the delete-account change is deployed (4.2). Alternative: Free, which
-  leaves the reviewer two messages per five hours. Needed before section 10.
+  after the delete-account change is deployed (4.2). Alternative: Free, whose
+  allowance you raised a hundredfold on 2026-11-16, to 200 credits per five
+  hours, once the web app carrying it is deployed (4.2, item 5). That is more
+  per five hours than a granted Premium plan (50) or Basic plan (10), so the
+  reason for this decision no longer holds after the deploy: Free gives the
+  reviewer more session usage than the paid plan this decision grants. The
+  same deploy carries the second Free model. Needed before section 10.
 - **D7. Store payment rules and the sales date.** True now: the app sells
   nothing, and nothing is sold on any platform before 1 January 2027, so every
   plan that exists was granted without a purchase.
@@ -359,7 +364,18 @@ on 2026-11-15:
    (`apps/web/content/support/delete-your-account.md`, with the regenerated
    help corpus and the `RETENTION.statutoryRecordYears` value) now gives the web
    pathway. Deploy it before you enter the URL in Play Console (7.5).
-5. **Your choices in D18 and D19**, if they change web files.
+5. **The Free plan's allowance and its two models** (decided 2026-11-16). The
+   phone reads which models Free may pick from the catalogue built into it
+   (`apps/mobile/src/features/model-picker/service.ts`), not from the server,
+   so a build made after that change lists the fast OpenAI and the fast
+   Anthropic model for Free, and Compare offers them side by side. Production
+   until this deploy rewrites a Free pick of the Anthropic model to the OpenAI
+   one, so the picker would name one model and the other would answer, and it
+   keeps Free at 2 credits per five hours
+   (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`,
+   `packages/contracts/types/src/managed-usage-limits.ts`). Deploy it before a
+   build made from this tree reaches review or testers.
+6. **Your choices in D18 and D19**, if they change web files.
 
 Deploying is yours to authorise. After a deploy, check:
 
@@ -1464,13 +1480,15 @@ that needs only an email and a password.
    Clerk asks for a code sent by email on a new device, Client Trust is on:
    turn it off in the production Clerk dashboard (Configure, Attack
    protection), or the reviewer cannot get in.
-4. **Grant it a plan by hand** (D6). The Free plan allows 2 credits per five
-   hours (`fiveHourCredits` for `free` in
-   `packages/contracts/types/src/managed-usage-limits.ts`), and a credit is
+4. **Grant it a plan by hand** (D6). On 2026-11-14 the Free plan allowed 2
+   credits per five hours, and in the iPhone simulator a Free account's photo
+   message was refused at the limit after one earlier short message. The Free
+   allowance is now 200 credits per five hours (`fiveHourCredits` for `free`
+   in `packages/contracts/types/src/managed-usage-limits.ts`), and a credit is
    5,000 micro-dollars (`MICROUSD_PER_CREDIT` in
-   `packages/contracts/types/src/credits.ts`), about one cent. In the iPhone
-   simulator on 2026-11-14 a Free account's photo message was refused at the
-   limit after one earlier short message.
+   `packages/contracts/types/src/credits.ts`), so 200 credits is one dollar;
+   production applies it, and serves the second Free model, only once the web
+   app is deployed (4.2, item 5).
 
    The plan is granted, not bought: nothing is sold before 1 January 2027, and
    the reviewer notes say the plan was granted for review. Do not use the web

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-25",
+  "lastUpdated": "2026-11-16",
   "verificationLog": [
     {
       "date": "2026-10-25",
@@ -565,6 +565,12 @@
       "verifiedBy": "official-google-omni-guide-interactions-reference-pricing-and-deprecations-no-live-call",
       "status": "CORRECTION",
       "notes": "gemini-omni-1.1-flash gains its video generation block, on the owner's decision of 2026-10-22 that it replaces Veo 3.1 for video. Read on 2026-10-22 from https://ai.google.dev/gemini-api/docs/omni, https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash, https://ai.google.dev/api/interactions-api (VideoResponseFormat and VideoConfig), https://ai.google.dev/gemini-api/docs/background-execution, https://ai.google.dev/gemini-api/docs/pricing and https://ai.google.dev/gemini-api/docs/deprecations, which names gemini-omni-1.1-flash as the replacement for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview, all shut down 2026-10-22. The model is served on POST v1beta/interactions, not on predictLongRunning: input is text plus inline image parts, response_format takes type video, aspect_ratio 16:9 or 9:16, resolution 360p, 720p (default), 1080p (upscaled) or 4k (upscaled) and a duration string, generation_config.video_config.task takes text_to_video, image_to_video (first image is the starting frame), reference_to_video, edit or extend, and background true returns an interaction id to poll. Output is 3 to 10 seconds at 24 frames per second, and the model generates an audio track with every video; the API has no switch to turn audio off, no seed for video and no negative prompt. Input is text, image and video (video up to 10 seconds, for editing and extension, which the managed route does not offer). Google publishes no maximum for reference images and its prompt guide shows six, so imageInput.maxImagesPerRequest is 4, the managed route's own limit. Pricing: $1.50 per million input tokens and $17.50 per million video output tokens, billed at 5,792 tokens per second of 720p video, which is $0.10136 per second; videoPerSecondCost moves from the rounded 0.1 to 0.10136 and videoPerSecondCostByResolution carries 720p only. Google publishes no token rate for 360p, 1080p or 4K, so the output sizes list 720p in both orientations and the other three resolutions stay out until their rate is published or measured; the managed contract has no 360p value either. No live provider call was made; the duration string format and background execution for this model are documented but were not exercised. The lifecycle stage stays registered: the model has no answered probe and no eval measurement, so no family slot moves with this entry."
+    },
+    {
+      "date": "2026-11-16",
+      "verifiedBy": "owner-direction-2026-11-16",
+      "status": "ROSTER",
+      "notes": "On the owner's instruction of 2026-11-16 that Free accounts get the fast OpenAI model and Claude Haiku 5.5, the anthropic/claude-haiku family joins tierAllowedModels.economy and claude-haiku-5-5 takes tierPolicy.minTier free. Together those are what admit a model to the Free plan, as they already do for the openai/gpt-fast family, so the Free roster, the web and phone pickers and the server's Free admission all read the same answer. A Free turn on it is metered against the Free usage windows in packages/contracts/types/src/managed-usage-limits.ts like any other Free turn; it does not go through the ended free model promotion. Paid plans already reached the model, because its price put its derived floor at Basic, so no paid plan gains or loses a model. No routing slot, task route or default changes: Auto on Free stays on the free_workhorse slot. The row lists $0.10/$0.50 per million input/output for prompts up to 100,000 tokens, the same as gpt-6-luna. No provider call was made."
     }
   ],
   "providers": {
@@ -1581,7 +1587,7 @@
         }
       },
       "tierPolicy": {
-        "minTier": "pro"
+        "minTier": "free"
       },
       "costOverride": {
         "inputCost": 0.1,
@@ -3916,7 +3922,8 @@
       "family:openai/gpt-fast",
       "family:google/gemini-flash-lite",
       "family:google/gemini-flash",
-      "family:qwen/qwen-flash"
+      "family:qwen/qwen-flash",
+      "family:anthropic/claude-haiku"
     ],
     "pro_additions": [
       "family:openai/gpt-balanced",

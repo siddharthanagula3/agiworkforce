@@ -35,7 +35,8 @@ function capabilityList(capabilities: readonly BillingPlanCapability[]): string 
 export function planUsagePhrase(plan: BillingPlanTier): string {
   if (PLAN_CREDIT_ALLOWANCES[plan].unlimited) return 'Usage set by your contract';
   if (isFreeBillingPlanTier(plan)) return 'A small allowance, free models only';
-  return managedUsageComparisonLines(plan).join(', ');
+  const lines = managedUsageComparisonLines(plan);
+  return lines.length > 0 ? lines.join(', ') : 'Included';
 }
 
 export function planComparisonRows(currentPlan: string | null | undefined): PlanComparisonRow[] {

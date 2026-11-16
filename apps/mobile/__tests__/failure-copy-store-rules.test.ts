@@ -61,12 +61,12 @@ describe('what this app is allowed to say about paying us', () => {
 
   it('names no access code and no waitlist, whatever the gateway sent', () => {
     const rewritten = withoutExternalPurchaseSteering(
-      'The Free plan includes the free model only. Select it in the model picker, or use your own provider key. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
+      'The Free plan includes the free models only. Select one in the model picker, or use your own provider key. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.',
     );
     expect(rewritten).not.toMatch(/access code/i);
     expect(rewritten).not.toMatch(/waitlist/i);
     expect(rewritten).toBe(
-      'The Free plan includes the free model only. Select it in the model picker, or use your own provider key.',
+      'The Free plan includes the free models only. Select one in the model picker, or use your own provider key.',
     );
   });
 
@@ -123,8 +123,8 @@ describe('what this app is allowed to say about paying us', () => {
       'Auto could not find a model for this request on your plan. Choose a model from the picker.',
     ],
     [
-      `The Free plan includes the free model only. Select it in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
-      'The Free plan includes the free model only. Select it in the model picker, or use your own provider key.',
+      `The Free plan includes the free models only. Select one in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
+      'The Free plan includes the free models only. Select one in the model picker, or use your own provider key.',
     ],
     [
       `Model fixture-model is on the Premium plan, not yours. Choose a model your plan includes. ${PAID_UPGRADE_ACCESS_NOTE}`,

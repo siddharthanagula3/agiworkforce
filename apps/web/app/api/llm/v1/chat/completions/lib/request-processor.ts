@@ -3900,7 +3900,8 @@ async function processAdmittedRequest(
     applyFreeModelPromotion(chatRequest, promotionTurn.promotion);
   } else if (
     freeModelPromotionCoversPlan(subscription.plan_tier) &&
-    namesFreeModelPromotionModel(chatRequest.model)
+    namesFreeModelPromotionModel(chatRequest.model) &&
+    !isFreeTrialRequest({ requestedModel: chatRequest.model, planTier: subscription.plan_tier })
   ) {
     selectedModel = chatRequest.model;
     chatRequest.model = FREE_TRIAL_MODEL;
@@ -4600,7 +4601,7 @@ async function processAdmittedRequest(
       response: NextResponse.json(
         {
           error: {
-            message: `The Free plan includes the free model only. Select it in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
+            message: `The Free plan includes the free models only. Select one in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
             type: 'invalid_request_error',
             code: 'free_trial_model_only',
             ...(recovery ? { recovery } : {}),
@@ -5043,6 +5044,7 @@ async function processAdmittedRequest(
         ? 'off'
         : resolveFreeLaneMode(),
     isFreePlan: isFreePlanTier(subscription.plan_tier),
+    requestedModel: chatRequest.model,
   });
   const freeLaneMode = freeLane.mode;
   // The slot preference rides this branch and no other, so it reaches the
