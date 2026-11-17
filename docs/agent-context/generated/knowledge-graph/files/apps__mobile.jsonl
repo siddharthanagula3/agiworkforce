@@ -819,6 +819,7 @@
 {"path":"apps/mobile/__tests__/voice-on-device-android-version.test.ts","unit":"apps/mobile","role":"test","imports":["apps/mobile/src/features/voice/services/voiceFailure.ts","apps/mobile/src/features/voice/services/voiceInput.ts","spec:expo-speech-recognition","spec:react-native"]}
 {"path":"apps/mobile/__tests__/voice-permission-alert.test.ts","unit":"apps/mobile","role":"test","imports":["apps/mobile/src/features/voice/components/voicePermissionAlert.ts","spec:react-native"]}
 {"path":"apps/mobile/__tests__/voice-recognition-locale-and-timeout.test.ts","unit":"apps/mobile","role":"test","imports":["apps/mobile/src/features/voice/services/voiceInput.ts","spec:expo-speech-recognition"]}
+{"path":"apps/mobile/__tests__/voice-route-drawer-swipe.test.ts","unit":"apps/mobile","role":"test","imports":["spec:node:fs","spec:node:path"]}
 {"path":"apps/mobile/__tests__/voice-service-natural-stop.test.ts","unit":"apps/mobile","role":"test","imports":["apps/mobile/src/features/voice/services/voice.ts","apps/mobile/src/features/voice/services/voiceInput.ts"]}
 {"path":"apps/mobile/__tests__/voice-single-presentation.test.ts","unit":"apps/mobile","role":"test","imports":["spec:node:fs","spec:node:path"]}
 {"path":"apps/mobile/__tests__/voice-wave2.test.ts","unit":"apps/mobile","role":"test","imports":["apps/mobile/src/features/voice/services/tts.ts","apps/mobile/src/features/voice/services/voice.ts","apps/mobile/src/features/voice/services/voiceInput.ts","apps/mobile/src/features/voice/services/voiceOutput.ts","spec:expo-speech-recognition","spec:react-native"]}

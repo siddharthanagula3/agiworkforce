@@ -17,6 +17,9 @@ const HIDDEN = { drawerItemStyle: { display: 'none' as const } };
 // The settings pages sit on a native stack whose edge swipe goes Back; the
 // drawer's own edge swipe would claim the same drag.
 const SETTINGS_STACK = { ...HIDDEN, swipeEnabled: false };
+// The voice screen is always dark and asks for light status bar text; the
+// themed drawer pulled over it would sit under that light text.
+const VOICE_SCREEN = { ...HIDDEN, swipeEnabled: false };
 
 export default function AppLayout() {
   const colors = useThemeColors();
@@ -108,7 +111,7 @@ export default function AppLayout() {
         <Drawer.Screen name="compare" options={HIDDEN} />
         <Drawer.Screen name="scan" options={HIDDEN} />
         <Drawer.Screen name="translate" options={HIDDEN} />
-        <Drawer.Screen name="voice" options={HIDDEN} />
+        <Drawer.Screen name="voice" options={VOICE_SCREEN} />
         <Drawer.Screen name="widget-setup" options={HIDDEN} />
         <Drawer.Screen name="open/[target]/[id]" options={HIDDEN} />
       </Drawer>

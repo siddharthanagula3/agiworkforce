@@ -91,7 +91,7 @@ weight:
 | Nobody has confirmed that checkout is closed in production, that no access code was given out and that no Stripe subscription is live                                                                                                                                                                                                                                                                                                                                                                 | Both    | Owner              | 4.5        |
 | The review account does not exist, and its plan must be granted by hand                                                                                                                                                                                                                                                                                                                                                                                                                               | Both    | Owner              | 10         |
 | Export compliance is open with counsel                                                                                                                                                                                                                                                                                                                                                                                                                                                                | iOS     | Owner, counsel     | D9, 8.6    |
-| Three iPhone frames for the required slot were captured on 2026-11-17 (8.8). No iPad frame, no Play phone frames, no Play feature graphic, no 512 px Play icon                                                                                                                                                                                                                                                                                                                                        | Both    | Owner and Claude   | 8.8, 7.7   |
+| Four iPhone frames for the required slot were captured on 2026-11-17 (8.8). No iPad frame, no Play phone frames, no Play feature graphic, no 512 px Play icon                                                                                                                                                                                                                                                                                                                                         | Both    | Owner and Claude   | 8.8, 7.7   |
 | The Android app has never been built or run, and no workflow builds it before the Play upload                                                                                                                                                                                                                                                                                                                                                                                                         | Android | Owner, then Claude | D20, 9, 11 |
 
 ## 3. The order of everything
@@ -1287,13 +1287,14 @@ splash screen.
 | iPad 13-inch display                        | 2064 x 2752 or 2048 x 2732              | `ipad-pro-13`       | Required if D2 keeps iPad |
 
 How to make them is in `apps/mobile/store-listing/screenshots/RUNBOOK.md`. On
-2026-11-17 three frames for the iPhone medium display slot (`01-local-demo-chat`,
+2026-11-17 four frames for the iPhone medium display slot (`01-local-demo-chat`,
+`02-onboarding-local`, which shows the signed-out Local start,
 `03-first-message` and `04-cloud-sign-in`, which now shows a signed-in Cloud
 chat) were captured by hand at 1206 x 2622 from a release build on the iPhone 17
 Pro simulator, composited, converted to JPEG and checked one by one against
-guidelines 2.3.1 and 2.3.3. They are in the captures folder that git ignores, under the iPhone 17 Pro class
-(the screenshot runbook's Step 4 gives the layout); upload the `.jpg` files only. Frame `02-onboarding-local` must be retaken in the morning
-(its greeting read as a late-night line), frame `06-voice-recording` was not
+guidelines 2.3.1 and 2.3.3. They are in the captures folder that git ignores,
+under the iPhone 17 Pro class (the screenshot runbook's Step 4 gives the
+layout); upload the `.jpg` files only. Frame `06-voice-recording` was not
 captured, and no large display, iPad or Android frame exists. Convert each
 composited PNG to JPEG before uploading, which removes the alpha channel:
 
@@ -1659,6 +1660,13 @@ Claude what you saw for each line.
   options": Apple must appear wherever Google or GitHub appears (Guideline 4.8).
 - Cloud chat, web search, a photo attachment, a photo taken with the camera
   and attached, dictation (Android 13 and later only), live voice.
+- Hold the microphone in a Local chat and in a Cloud chat, in light and in
+  dark appearance: the bar's notice, its pill and the mute and exit controls
+  are readable. The simulator has no speech recognition, so only one Cloud
+  capture in light appearance was seen there. Open the full-screen voice
+  screen and leave it by its close control: the clock is readable on the next
+  screen. An edge swipe on the voice screen does not open the drawer; that
+  last change is held by a test and was not seen on a build.
 - The review account (section 10): Settings, Subscription is titled
   Subscription and shows the plan with "Billing: Included with your account",
   and no price, no upgrade and no restore. The model picker and Schedules offer

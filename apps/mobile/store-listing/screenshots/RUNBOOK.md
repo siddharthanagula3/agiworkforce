@@ -144,17 +144,19 @@ Upload `final/` contents, converted to JPEG as above:
 Apple accepts one to ten screenshots per slot; Play accepts up to eight per
 device type. The pipeline is configured for five frames.
 
-State on 2026-11-17: frames `01-local-demo-chat`, `03-first-message` and
-`04-cloud-sign-in` for `ios/iphone-17-pro` were captured by hand on the booted
-iPhone 17 Pro simulator from a release build, with `xcrun simctl io <udid>
-screenshot` and a 9:41 status bar override, then composited with
-`pnpm screenshots:composite` and converted to JPEG. Each was checked against
-Apple's guidelines 2.3.1 and 2.3.3 and is 1206 × 2622 with no alpha channel.
-Still to capture: `02-onboarding-local` (the hand capture shows the signed-out
-Local start, and its late-night greeting sits badly beside a 9:41 status bar, so
-retake it between 07:00 and 11:59), `06-voice-recording`, and every large
-display, iPad and Android frame. The Detox pipeline has not been run against the
-current app.
+State on 2026-11-17: frames `01-local-demo-chat`, `02-onboarding-local`,
+`03-first-message` and `04-cloud-sign-in` for `ios/iphone-17-pro` were captured
+by hand on the booted iPhone 17 Pro simulator from a release build, with
+`xcrun simctl io <udid> screenshot` and a 9:41 status bar override, then
+composited with `pnpm screenshots:composite` and converted to JPEG. Each was
+checked against Apple's guidelines 2.3.1 and 2.3.3 and is 1206 × 2622 with no
+alpha channel. Frame `02-onboarding-local` shows the signed-out Local start. Its
+greeting follows the app's local hour, and a late-night line sits badly beside a
+9:41 status bar, so capture it in the morning or start the app in a time zone
+where it is morning, which changes nothing on the Mac or the simulator:
+`SIMCTL_CHILD_TZ=Europe/Berlin xcrun simctl launch --terminate-running-process <udid> com.agiworkforce.app`.
+Still to capture: `06-voice-recording`, and every large display, iPad and
+Android frame. The Detox pipeline has not been run against the current app.
 
 Re-run just the compositing (no simulator needed) after a heading or subhead edit:
 
