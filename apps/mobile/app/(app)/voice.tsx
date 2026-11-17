@@ -37,7 +37,7 @@ import {
 } from '@/src/features/voice/services/voiceInput';
 import { showVoiceCaptureFailureAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
-import { colors, motion, zIndex } from '@/src/ui/theme';
+import { colors, motion, useThemeColors, zIndex } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CapabilityUnavailable, useCapabilityDenialReason } from '@/src/lib/Capabilities';
 import { getDisplayName } from '@/src/features/model-picker/service';
@@ -177,6 +177,7 @@ function VoiceCompanion() {
   const router = useRouter();
   const params = useLocalSearchParams<{ returnTo?: string; audioUri?: string }>();
   const insets = useSafeAreaInsets();
+  const themeColors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const voiceDenial = useCapabilityDenialReason('canUseVoice');
   const voiceAllowed = voiceDenial === null;
@@ -416,7 +417,10 @@ function VoiceCompanion() {
 
   if (!voiceAllowed) {
     return (
-      <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <SafeAreaView
+        style={[styles.root, { backgroundColor: themeColors.background }]}
+        edges={['top', 'bottom']}
+      >
         <CapabilityUnavailable label="Voice mode" reason={voiceDenial} onDismiss={handleClose} />
       </SafeAreaView>
     );

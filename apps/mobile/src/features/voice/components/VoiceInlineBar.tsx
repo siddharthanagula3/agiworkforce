@@ -5,7 +5,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Plus, Mic, MicOff, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/Text';
-import { colors, motion } from '@/src/ui/theme';
+import { motion, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
@@ -53,6 +53,7 @@ export function VoiceInlineBar({
   onToggleMic,
   onExit,
 }: VoiceInlineBarProps) {
+  const colors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const insets = useSafeAreaInsets();
 
@@ -173,7 +174,7 @@ export function VoiceInlineBar({
           )}
         </Pressable>
 
-        {/* Solid white, unlike every other control here: leaving voice is the
+        {/* A solid fill, unlike every other control here: leaving voice is the
             one action that must never be mistaken for a mute. */}
         <Pressable
           onPress={tap(onExit)}

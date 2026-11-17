@@ -74,22 +74,25 @@ Version 1 is free, sells nothing and hides Remote Control.
 - **Not in version 1:** purchases, Remote Control, the phone's large-file upload
   and over-the-air updates. Section 15 says what each needs later.
 
-## 2. Where things stand on 2026-11-15
+## 2. Where things stand on 2026-11-16
 
 Neither store can be submitted to today. What stops each one, in order of
 weight:
 
-| Blocks                                                                                                                                               | Store   | Who                | Section    |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------ | ---------- |
-| No store build has ever succeeded. Three Android builds on 2026-10-17 and 18 failed or were cancelled; no iOS store build has been attempted         | Both    | Owner, then Claude | 9          |
-| The work of the last two days is uncommitted, and store builds are made only from committed code                                                     | Both    | Claude, then owner | 9.1        |
-| The first iOS signing credentials must be made in an interactive session signed in to Apple, unless the App Store Connect key has the role EAS needs | iOS     | Owner              | 6.2        |
-| The web changes the review builds rely on are not deployed                                                                                           | Both    | Owner's deploy     | 4.2        |
-| Nobody has confirmed that checkout is closed in production, that no access code was given out and that no Stripe subscription is live                | Both    | Owner              | 4.5        |
-| The review account does not exist, and its plan must be granted by hand                                                                              | Both    | Owner              | 10         |
-| Export compliance is open with counsel                                                                                                               | iOS     | Owner, counsel     | D9, 8.6    |
-| No screenshots usable today, no Play feature graphic, no 512 px Play icon                                                                            | Both    | Owner and Claude   | 8.8, 7.7   |
-| The Android app has never been built or run, and no workflow builds it before the Play upload                                                        | Android | Owner, then Claude | D20, 9, 11 |
+| Blocks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Store   | Who                | Section    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------ | ---------- |
+| The work is committed on pull request 602, which is not merged. Store builds are made by the tagged release from committed code on `main`, so the pull request must be merged first.                                                                                                                                                                                                                                                                                                                  | Both    | Owner              | 9.1, 9.4   |
+| No store build has ever succeeded. Three Android builds on 2026-10-17 and 18 failed or were cancelled; no iOS store build has been attempted. Every iPhone build so far is a local release build for the simulator, made with Xcode 27.1. The store image in `apps/mobile/eas.json` (`macos-tahoe-26.5-xcode-26.6`) leaves out the iOS 27 error mapping in `apps/mobile/native/ios/AGIFoundationModels.swift` (two regions guarded by `compiler(>=6.4)`), and that configuration has never been built | Both    | Owner, then Claude | 9          |
+| The first iOS signing credentials must be made in an interactive session signed in to Apple, unless the App Store Connect key has the role EAS needs                                                                                                                                                                                                                                                                                                                                                  | iOS     | Owner              | 6.2        |
+| The web changes the review builds rely on are not deployed. Nothing on the pull request is deployed, and its migrations 0422 and 0423 are applied nowhere; both must be applied to production with the deploy                                                                                                                                                                                                                                                                                         | Both    | Owner's deploy     | 4.2        |
+| The built-in Apple model in Local, Help and Support against production, and the Reduce sensitive content switch have not been checked on a real iPhone. The built-in model shows ready on the simulator but cannot generate there                                                                                                                                                                                                                                                                     | iOS     | Owner              | 11.2       |
+| The build supports iPad, so a 13-inch iPad screenshot is required and App Review can test on iPad. Every check so far ran on one iPhone simulator                                                                                                                                                                                                                                                                                                                                                     | iOS     | Owner              | D2, 8.8    |
+| Counsel has not confirmed 13 as the minimum age on `/privacy` and `/terms`; the Parental Controls answer is yours                                                                                                                                                                                                                                                                                                                                                                                     | Both    | Owner, counsel     | D14, D13   |
+| Nobody has confirmed that checkout is closed in production, that no access code was given out and that no Stripe subscription is live                                                                                                                                                                                                                                                                                                                                                                 | Both    | Owner              | 4.5        |
+| The review account does not exist, and its plan must be granted by hand                                                                                                                                                                                                                                                                                                                                                                                                                               | Both    | Owner              | 10         |
+| Export compliance is open with counsel                                                                                                                                                                                                                                                                                                                                                                                                                                                                | iOS     | Owner, counsel     | D9, 8.6    |
+| Three iPhone frames for the required slot were captured on 2026-11-17 (8.8). No iPad frame, no Play phone frames, no Play feature graphic, no 512 px Play icon                                                                                                                                                                                                                                                                                                                                        | Both    | Owner and Claude   | 8.8, 7.7   |
+| The Android app has never been built or run, and no workflow builds it before the Play upload                                                                                                                                                                                                                                                                                                                                                                                                         | Android | Owner, then Claude | D20, 9, 11 |
 
 ## 3. The order of everything
 
@@ -100,27 +103,27 @@ is live, and Google's release page says to set up the store listing and prepare
 the app for review before you create a release (Source, read 2026-11-15:
 https://support.google.com/googleplay/android-developer/answer/9859348).
 
-| #   | Step                                                                            | Who                | Where                                                | Rough time               | Blocked by                                         |
-| --- | ------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------- | ------------------------ | -------------------------------------------------- |
-| 1   | Make the owner decisions in 4.1                                                 | Owner              | This file, section 4.1                               | 1 to 2 hours             | Nothing                                            |
-| 2   | Engineering work in section 4.3, then commit                                    | Claude             | The repository                                       | 1 to 2 days              | Decisions D11, D12, D19, D20                       |
-| 3   | Founder-actions items in 4.4 and the sales check in 4.5                         | Owner, counsel     | Vercel, Clerk, the operator dashboard, counsel       | Varies                   | Nothing                                            |
-| 4   | Deploy the web changes the phone depends on (4.2)                               | Owner's go-ahead   | Vercel production                                    | 30 minutes               | Step 2 committed                                   |
-| 5   | Apple and Google accounts and agreements (5)                                    | Owner              | developer.apple.com, App Store Connect, Play Console | 1 hour                   | Nothing                                            |
-| 6   | Create the Play app and give the upload account access (7.1, 7.2)               | Owner              | Play Console                                         | 20 minutes               | Step 5                                             |
-| 7   | First iOS credentials, interactively (6.2)                                      | Owner              | Terminal, `eas credentials`                          | 30 minutes               | Steps 2, 5                                         |
-| 8   | First Android bundle by hand, rolled out to Internal testing (9.3)              | Owner              | Terminal, Play Console                               | 1 hour plus build        | Steps 2, 6                                         |
-| 9   | App signing fingerprint into GitHub and the web (6.3)                           | Owner              | Play Console, GitHub, Vercel                         | 20 minutes               | Step 8                                             |
-| 10  | Review account (10)                                                             | Owner              | agiworkforce.com, Clerk, the production database     | 45 minutes               | D6, step 4                                         |
-| 11  | Screenshots, feature graphic, icon (8.8, 7.7)                                   | Owner and Claude   | Simulator and emulator, design tool                  | Half a day               | Step 2                                             |
-| 12  | Play store listing, App content, Data safety (7.4 to 7.7)                       | Owner              | Play Console                                         | 2 hours                  | Steps 4, 6, 10, 11                                 |
-| 13  | Personal Play account only: start the 12-tester closed test (7.8)               | Owner              | Play Console                                         | 30 minutes, then 14 days | Steps 8, 12                                        |
-| 14  | App Store version page, App Privacy, age rating, export compliance (8.1 to 8.8) | Owner              | App Store Connect                                    | 2 hours                  | Steps 3, 10, 11                                    |
-| 15  | Tagged release: iOS to TestFlight, Android to Internal testing (9.4)            | Owner              | GitHub, Play Console                                 | 30 minutes plus builds   | Steps 2, 7, 9                                      |
-| 16  | Emulator and real-device checks (11)                                            | Owner              | Emulator, TestFlight, Play Internal testing          | Half a day               | Step 15                                            |
-| 17  | Submit to App Review (8.10)                                                     | Owner              | App Store Connect                                    | 15 minutes               | Steps 3, 14, 16                                    |
-| 18  | Release to Production and send for review (7.10)                                | Owner              | Play Console                                         | 15 minutes               | Steps 3, 12, 16, and step 13's 14 days if personal |
-| 19  | After approval (14)                                                             | Owner, then Claude | Both consoles, the repository                        | 30 minutes               | Approval                                           |
+| #   | Step                                                                                       | Who                | Where                                                | Rough time               | Blocked by                                         |
+| --- | ------------------------------------------------------------------------------------------ | ------------------ | ---------------------------------------------------- | ------------------------ | -------------------------------------------------- |
+| 1   | Make the owner decisions in 4.1                                                            | Owner              | This file, section 4.1                               | 1 to 2 hours             | Nothing                                            |
+| 2   | The engineering work left in section 4.3, then merge pull request 602 once its checks pass | Claude, then owner | The repository, GitHub                               | 1 to 2 days              | Decisions D11, D12, D20, D21, D22                  |
+| 3   | Founder-actions items in 4.4 and the sales check in 4.5                                    | Owner, counsel     | Vercel, Clerk, the operator dashboard, counsel       | Varies                   | Nothing                                            |
+| 4   | Deploy the web changes the phone depends on (4.2)                                          | Owner's go-ahead   | Vercel production                                    | 30 minutes               | Step 2 merged                                      |
+| 5   | Apple and Google accounts and agreements (5)                                               | Owner              | developer.apple.com, App Store Connect, Play Console | 1 hour                   | Nothing                                            |
+| 6   | Create the Play app and give the upload account access (7.1, 7.2)                          | Owner              | Play Console                                         | 20 minutes               | Step 5                                             |
+| 7   | First iOS credentials, interactively (6.2)                                                 | Owner              | Terminal, `eas credentials`                          | 30 minutes               | Steps 2, 5                                         |
+| 8   | First Android bundle by hand, rolled out to Internal testing (9.3)                         | Owner              | Terminal, Play Console                               | 1 hour plus build        | Steps 2, 6                                         |
+| 9   | App signing fingerprint into GitHub and the web (6.3)                                      | Owner              | Play Console, GitHub, Vercel                         | 20 minutes               | Step 8                                             |
+| 10  | Review account (10)                                                                        | Owner              | agiworkforce.com, Clerk, the production database     | 45 minutes               | D6, step 4                                         |
+| 11  | Screenshots, feature graphic, icon (8.8, 7.7)                                              | Owner and Claude   | Simulator and emulator, design tool                  | Half a day               | Step 2                                             |
+| 12  | Play store listing, App content, Data safety (7.4 to 7.7)                                  | Owner              | Play Console                                         | 2 hours                  | Steps 4, 6, 10, 11                                 |
+| 13  | Personal Play account only: start the 12-tester closed test (7.8)                          | Owner              | Play Console                                         | 30 minutes, then 14 days | Steps 8, 12                                        |
+| 14  | App Store version page, App Privacy, age rating, export compliance (8.1 to 8.8)            | Owner              | App Store Connect                                    | 2 hours                  | Steps 3, 10, 11                                    |
+| 15  | Tagged release: iOS to TestFlight, Android to Internal testing (9.4)                       | Owner              | GitHub, Play Console                                 | 30 minutes plus builds   | Steps 2, 7, 9                                      |
+| 16  | Emulator and real-device checks (11)                                                       | Owner              | Emulator, TestFlight, Play Internal testing          | Half a day               | Step 15                                            |
+| 17  | Submit to App Review (8.10)                                                                | Owner              | App Store Connect                                    | 15 minutes               | Steps 3, 14, 16                                    |
+| 18  | Release to Production and send for review (7.10)                                           | Owner              | Play Console                                         | 15 minutes               | Steps 3, 12, 16, and step 13's 14 days if personal |
+| 19  | After approval (14)                                                                        | Owner, then Claude | Both consoles, the repository                        | 30 minutes               | Approval                                           |
 
 ## 4. Before anything
 
@@ -295,13 +298,14 @@ leaving a decision alone keeps it.
   release in `apps/web/lib/changelog-entries.ts`), or stop linking release
   notes from the phone in version 1. Needed before the web deploy in 4.2.
 - **D19. Pairing links on iPhone.** Android declares no `/pair` App Link while
-  Remote Control is off. The working tree now drops `/pair` and `/pair/*` from
+  Remote Control is off. Pull request 602 drops `/pair` and `/pair/*` from
   the web's Apple association file
   (`apps/web/lib/server/mobile-app-association.ts`) and sets
   `EXPECTED_IOS_PATHS` in
   `apps/mobile/scripts/release/verify-production-associations.mjs` to the three
   paths the file then serves (`/auth/reset-password`, `/github/installed`,
-  `/open/*`). Production main `e822c4fda6` still serves five (those three plus
+  `/open/*`). Production, at `e822c4fda6` on 2026-11-15 and with none of this
+  work deployed, serves five (those three plus
   the two pairing paths), so the Android job's association check fails until
   the web deploy lands: deploy the web app before the tagged release (9.4),
   never after it. A change to either path list needs the other in the same
@@ -324,6 +328,28 @@ leaving a decision alone keeps it.
   (`adb shell am start -W -n com.agiworkforce.app/.MainActivity`, then
   `pidof`). The workflow uses none of these actions today. Needed before the
   tagged release, if you want it.
+- **D21. Two choices already made in this build, both reversible.** True now:
+  (a) Local Mode sends the on-device model no wellbeing instruction
+  (`apps/mobile/stores/chat/localSystemPrompt.ts`). It was removed on
+  2026-11-16 because it made the small on-device model refuse harmless
+  messages; with it removed, the four risk prompts gave no method, means or
+  dose on the small model in the simulator, and Reduce sensitive content, when
+  on, refuses the two self-harm method prompts before sending, with a helpline.
+  Whether Local needs an instruction again waits for an on-device evaluation.
+  (b) The phone hides two-step setup while the identity plan that provides it
+  is not bought, which reverses D-2026-09-28-01 for the phone
+  (audit/decisions/founder-actions.md, "[Mobile] Confirm or reverse hiding
+  two-step setup in AGI Mobile"). Alternative: reverse either; each needs a new
+  build. Needed: only if you reverse one, before the store build.
+- **D22. Two sentences in the build.** True now: the delete-account
+  confirmation says "A plan bought on the web stops renewing now, and
+  cancelling the deletion turns renewal back on."
+  (`apps/mobile/src/features/settings/cloud-account/deleteAccountConfirmation.ts`),
+  although nothing is sold before 2027; and a Cloud run's detail sheet shows
+  its cost as "Metered against your free trial allowance"
+  (`apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx`), while
+  the plan is called Free elsewhere. Alternative: Claude rewords either.
+  Needed before the store builds.
 
 Settled since the first draft of this file: the Android label is "AGI Mobile"
 (was D5); dictation is not offered below Android 13; code is monospaced on both
@@ -345,8 +371,14 @@ What is already true in production:
   mobile code exists in production's route tree (checked 2026-11-15; changes to
   request or response shapes are not covered by that check).
 
-What needs the web deploy before the review builds are used, all uncommitted
-on 2026-11-15:
+What needs the web deploy before the review builds are used. On 2026-11-16 all
+of it is on pull request 602, which is not merged, and none of it is deployed.
+The pull request also adds migrations 0422 (`chat_file_intakes`) and 0423
+(`cloud_code_environments`), which are applied nowhere. Apply both to
+production with the deploy
+(`pnpm db:migrate -- apply --target production --confirm-production`):
+account deletion also deletes from the table that 0423 creates, and does not
+complete without it.
 
 1. **The embedded web pages.** The app opens Terms, Privacy, Help, Support,
    Status and the account pages with `from=mobile`
@@ -358,7 +390,7 @@ on 2026-11-15:
 2. **Deleting a granted plan.** In production,
    `apps/web/app/api/user/delete-account/route.ts` refuses a renewing paid plan
    whose billing source is manual and tells the person to email support. The
-   working tree schedules it instead when the plan is a personal plan with no
+   pull request schedules it instead when the plan is a personal plan with no
    Stripe customer behind it, which is how the review account's plan is given
    (D6). Until this is deployed, the reviewer's Delete Account is refused.
 3. **The Sign in with Apple sentence in the deletion message.** The same route
@@ -378,8 +410,10 @@ on 2026-11-15:
    one, so the picker would name one model and the other would answer, and it
    keeps Free at 2 credits per five hours
    (`apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`,
-   `packages/contracts/types/src/managed-usage-limits.ts`). Deploy it before a
-   build made from this tree reaches review or testers.
+   `packages/contracts/types/src/managed-usage-limits.ts`). After the deploy
+   Free allows 200 credits per five hours, 1,500 a week and 2,000 a month.
+   Deploy it before a build made from the pull request reaches review or
+   testers.
 6. **Project-only memory on a new project.** A project created on the phone
    with project-only memory is stored that way by the server only once the web
    app carrying the change to the projects sync route
@@ -387,15 +421,42 @@ on 2026-11-15:
    create) is deployed. Against the server deployed before it, the project uses
    memory from other chats until the phone's follow-up request confirms the
    setting.
-7. **The help search.** The phone's help search is the hosted help page. Until
-   `apps/web/app/api/help/search/route.ts` with the change that leaves out
-   purchase articles is deployed, searching `upgrade`, `pricing` or `billing`
-   in Settings, Help still lists billing and plan articles and the static
-   getting-started article, which App Review would see inside an app that sells
-   nothing.
+7. **Help and Support for a phone request.** The phone's help search is the
+   hosted help page. Until `apps/web/app/api/help/search/route.ts` with the
+   change that leaves out purchase articles is deployed, searching `upgrade`,
+   `pricing` or `billing` in Settings, Help still lists billing and plan
+   articles and the static getting-started article, which App Review would see
+   inside an app that sells nothing. The same deploy filters the help index and
+   every article for a phone request (`apps/web/app/help/phone-request.ts`) and
+   serves the phone view of `/support` (`apps/web/app/support/page.tsx`). Read
+   over HTTP from a local server with the phone marker on 2026-11-16, the help
+   index (43 articles), every article and the support page carried nothing
+   about buying; inside the app this was not checked, because the app opens
+   only HTTPS links on the product's own hosts.
 8. **Your choices in D18 and D19**, if they change web files. The deploy also
    carries the association file change from D19, which must land before the
    tag (9.1, item 4).
+9. **Recovering an answer that finished while the app was closed.** The phone
+   records the turn before it posts, and asks the runs route for it by request
+   id when it opens again. Only the deployed
+   `apps/web/app/api/llm/v1/chat/completions/runs/route.ts` finds a chat run in
+   any state by its request id.
+10. **Pictures and PDF pages on Free.** The Free budget costs a picture or a PDF
+    page by the provider's documented bound for one image or page, not by its
+    encoded size (`apps/web/lib/services/free-trial-service.ts`). Without it, a
+    Free picture on the second Free model is refused as "limit reached".
+11. **The deletion notice's settings section.** The deletion notice names its
+    own settings section (`settingsSection: 'account-deletion'` in
+    `apps/web/lib/services/identity-events/catalogue.ts`), which opens the
+    Account screen on the phone.
+12. **Content-safety patterns.** The corrected patterns behind Reduce
+    sensitive content (`packages/contracts/types/src/content-safety.ts`) reach
+    the server only with the deploy.
+13. **Privacy and terms wording.** The pull request changes `/privacy`,
+    `/privacy/requests`, `/privacy/india` and `/terms`
+    (`apps/web/app/privacy/page.tsx`, `apps/web/app/privacy/requests/page.tsx`,
+    `apps/web/app/privacy/india/page.tsx`, `apps/web/app/terms/page.tsx`).
+    Their counsel review is yours (founder-actions).
 
 Deploying is yours to authorise. After a deploy, check:
 
@@ -419,7 +480,7 @@ show the sign-in page with no site header, pricing link or footer.
 These are Claude's, not yours. Each is listed so you know what the build waits
 for.
 
-Landed in the working tree on 2026-11-15, not yet committed:
+Done, committed on pull request 602 (not merged on 2026-11-16):
 
 - **The release workflow's build commands.** Both store jobs in
   `.github/workflows/release-mobile.yml` pass `--auto-submit` straight after
@@ -432,9 +493,8 @@ Landed in the working tree on 2026-11-15, not yet committed:
   `apps/mobile/scripts/release/verify-privacy-declarations.mjs` fails the
   release when the manifest, the submission copy
   `apps/mobile/store-listing/ios/PrivacyInfo.xcprivacy` and
-  `apps/mobile/store-listing/android/data-safety.json` disagree. The iOS build
-  being tested on the simulator predates this; the review build must be a new
-  one.
+  `apps/mobile/store-listing/android/data-safety.json` disagree. The review
+  build is the store build made from `main` (9.4), never a simulator build.
 - **The iOS extensions declared to EAS.** `extra.eas.build.experimental.ios.appExtensions`
   in `apps/mobile/app.config.js` names `AGIShareExtension`
   (`com.agiworkforce.app.share-extension`) and `AGIWidgets`
@@ -468,9 +528,15 @@ Still to do:
   alpha channel (`apps/mobile/scripts/screenshots/compositor.ts`); both stores
   refuse that. Section 8.8 has the conversion until the compositor is changed.
 - **Decisions that become code:** D11 (health connectors), D12 (server-side
-  hide), D20 (Android build gate), and D8 if you turn
-  update checks off.
-- **Commit all of it**, then the store builds can start (9.1, item 3).
+  hide), D20 (Android build gate), D21 and D22 if you change them, and D8 if
+  you turn update checks off.
+- **The first store build's iOS log.** Read it for the compile of
+  `apps/mobile/native/ios/AGIFoundationModels.swift` on the store image
+  (`macos-tahoe-26.5-xcode-26.6`), which leaves out the iOS 27 error mapping
+  guarded by `compiler(>=6.4)` (two regions). No build has used that image
+  yet.
+- **Merging.** The store builds start only after pull request 602 is merged
+  (9.1, item 3); merging is yours, once its checks pass.
 
 ### 4.4 Founder-actions items that must be done before the review builds are used
 
@@ -1199,6 +1265,9 @@ https://developer.apple.com/help/app-store-connect/reference/app-information/exp
   Store territories excluding: Mainland China, Russia, Iran, North Korea,
   Syria, Cuba, Crimea". France stays in unless D9 removes it.
 - Pre-order: off.
+- Mac and Apple Vision Pro: whether the iPhone build is offered on them is
+  your call in App Store Connect, before submission. Where App Store Connect
+  sets this has not been checked.
 
 ### 8.8 Screenshots
 
@@ -1217,10 +1286,17 @@ splash screen.
 | iPhone with Dynamic Island (large display)  | 1260 x 2736, 1290 x 2796 or 1320 x 2868 | `iphone-17-pro-max` | Upload as well            |
 | iPad 13-inch display                        | 2064 x 2752 or 2048 x 2732              | `ipad-pro-13`       | Required if D2 keeps iPad |
 
-How to make them is in `apps/mobile/store-listing/screenshots/RUNBOOK.md`. The
-captures from 2026-09-26 and 27 predate later chat changes, and four of the
-five iPhone frames have an alpha channel, so recapture. Convert each composited
-PNG to JPEG before uploading, which removes the alpha channel:
+How to make them is in `apps/mobile/store-listing/screenshots/RUNBOOK.md`. On
+2026-11-17 three frames for the iPhone medium display slot (`01-local-demo-chat`,
+`03-first-message` and `04-cloud-sign-in`, which now shows a signed-in Cloud
+chat) were captured by hand at 1206 x 2622 from a release build on the iPhone 17
+Pro simulator, composited, converted to JPEG and checked one by one against
+guidelines 2.3.1 and 2.3.3. They are in the ignored folder
+`apps/mobile/store-listing/screenshots/captures/ios/iphone-17-pro/final/`; upload
+the `.jpg` files only. Frame `02-onboarding-local` must be retaken in the morning
+(its greeting read as a late-night line), frame `06-voice-recording` was not
+captured, and no large display, iPad or Android frame exists. Convert each
+composited PNG to JPEG before uploading, which removes the alpha channel:
 
 ```bash
 sips -s format jpeg 01-local-demo-chat.png --out 01-local-demo-chat.jpg
@@ -1317,12 +1393,12 @@ Each store build spends Expo build minutes. Nothing here starts one for you.
    (`build/evaluateConfigWithEnvVarsAsync.js` in the EAS command line source,
    version 24.8.0). Section 6.2 has the two `export` lines.
 3. **A clean, committed checkout.** `apps/mobile/eas.json` sets `requireCommit`,
-   and the preflight refuses a dirty tree. The working tree held about 1,600
-   uncommitted changes on 2026-11-15; the store build is made from what is
-   committed, not from what the simulator rounds ran.
+   and the preflight refuses a dirty tree. On 2026-11-16 the work is committed
+   on pull request 602 and not merged; the tagged release builds from `main`,
+   so merge first (9.4).
 4. **The web deploy.** The tagged release checks the production association
    files (`apps/mobile/scripts/release/verify-production-associations.mjs`),
-   which expect the paths in the working tree, and production serves different
+   which expect the paths on pull request 602, and production serves different
    ones until the web deploy (4.2, D19). Deploy first, then check:
 
    ```bash
@@ -1582,14 +1658,19 @@ Claude what you saw for each line.
 - Sign up, sign out, sign in with email and password, with an emailed code,
   then with Apple (iPhone) and Google. On the iPhone, open "More sign-in
   options": Apple must appear wherever Google or GitHub appears (Guideline 4.8).
-- Cloud chat, web search, a photo attachment, dictation (Android 13 and later
-  only), live voice.
-- The review account (section 10): Settings, Subscription is titled Plan and
-  shows the plan with "Billing: Included with your account", and no price, no
-  upgrade and no restore. The model picker and Schedules offer no plan.
+- Cloud chat, web search, a photo attachment, a photo taken with the camera
+  and attached, dictation (Android 13 and later only), live voice.
+- The review account (section 10): Settings, Subscription is titled
+  Subscription and shows the plan with "Billing: Included with your account",
+  and no price, no upgrade and no restore. The model picker and Schedules offer
+  no plan.
 - Open Terms, Privacy, Help, Status, Support and the "Delete your account" help
   page from About and Settings, after the web deploy (4.2): none may show a site
-  header, a pricing link or a contact-sales link. On the deletion page the
+  header, a pricing link or a contact-sales link. In Help, the index, a search
+  for `upgrade`, `pricing` and `billing`, and the articles show nothing about
+  buying, and Support shows its phone view (4.2, item 7). This path was never
+  run inside the app before: the simulator rounds used a local HTTP server, and
+  the app opens only HTTPS links on the product's own hosts. On the deletion page the
   `agiworkforce.com/settings/account` link keeps `from=mobile`, and the email
   link and the `/privacy/requests` form open. On Android these pages open in a
   Custom Tab.
@@ -1601,6 +1682,10 @@ Claude what you saw for each line.
   sent later.
 - Hide something shared with you from a second account, then check whether
   that person's items come back on another device or on the web (D12).
+- Settings, Safety & Security, Reduce sensitive content: one ordinary tap
+  turns the switch on and one turns it off. On the simulator it needed a
+  longer press. With it on, a self-harm method question in Local is refused
+  before it is sent and the alert names a helpline.
 - Delete the account, then cancel (section 10, item 5).
 - Settings, Connectors: note whether a "Health" or "Life sciences" chip
   appears with an empty list (D11).
@@ -1615,6 +1700,17 @@ Claude what you saw for each line.
 
 ### 11.2 iPhone only
 
+- **The built-in Apple model.** On an iPhone that has it, in Local with
+  Auto: an ordinary prompt is answered by the built-in model with no
+  download; a refused prompt and a prompt in a language the model does not
+  support each show their own message. It has never answered in this app: on
+  the iPhone simulator it shows ready but cannot generate, and a standalone
+  probe of Apple's framework fails the same way there and answers on the Mac
+  itself. If it fails before any text, the turn ends with a failure notice and
+  Retry; the retry uses another Local model only if one is downloaded, and
+  otherwise asks for a download
+  (`MOBILE-LOCAL-AUTO-NO-SAME-TURN-FALLBACK-01` in
+  `audit/registers/known-flaws.md`).
 - Force-quit, then cold-launch the TestFlight build: it must open.
   `expo-background-task` registers its task at launch although version 1 no
   longer permits that identifier; Apple documents that registration then
@@ -1969,7 +2065,7 @@ its revision date).
 
 ## 16. Listing and reviewer-note statements that are wrong today
 
-Checked in the files on 2026-11-15. One remains, in both listing files (D15):
+Checked in the files on 2026-11-16. One remains, in both listing files (D15):
 
 - `apps/mobile/store-listing/LISTING-METADATA-ANDROID.json`, `full_description`:
   "Free plan" twice and "India DPDP notice and open items"; and

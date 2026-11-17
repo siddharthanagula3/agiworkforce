@@ -1,6 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { AppState, BackHandler, Platform } from 'react-native';
+import {
+  AppState,
+  BackHandler,
+  Platform,
+  StyleSheet,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
@@ -148,10 +155,23 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
+jest.mock('react-native-safe-area-context', () => {
+  const { View } = require('react-native');
+  return {
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    SafeAreaView: ({
+      children,
+      style,
+    }: {
+      children: React.ReactNode;
+      style?: StyleProp<ViewStyle>;
+    }) => (
+      <View testID="voice.safe-area" style={style}>
+        {children}
+      </View>
+    ),
+  };
+});
 
 const mockReportSheet = jest.fn();
 jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
@@ -181,6 +201,9 @@ import {
 } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+import { useRemoteCapabilityStore } from '@/src/lib/Capabilities';
+import { colors, lightColors, type ColorScheme } from '@/src/ui/theme/tokens';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -934,5 +957,47 @@ describe('Voice route on a phone without on-device recognition', () => {
     expect(screen.getByLabelText('Close voice companion')).toBeTruthy();
     await waitFor(() => expect(transcribe).toHaveBeenCalled());
     expect(mockRouterReplace).not.toHaveBeenCalledWith('/(app)/(tabs)/chat');
+  });
+});
+
+describe.each<['light' | 'dark', ColorScheme]>([
+  ['light', lightColors],
+  ['dark', colors],
+])('Voice route in %s appearance', (themeMode, palette) => {
+  const initialThemeMode = useLocalSettingsStore.getState().themeMode;
+  const safeAreaBackground = (screen: ReturnType<typeof render>) =>
+    StyleSheet.flatten(screen.getByTestId('voice.safe-area').props.style).backgroundColor;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAudioUri = undefined;
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useSettingsStore.setState({ hapticsEnabled: false, voiceEnabled: true });
+    useTierStore.setState({ capabilityDocument: null });
+    useLocalSettingsStore.setState({ themeMode });
+  });
+
+  afterEach(() => {
+    useRemoteCapabilityStore.setState({ switchedOff: {}, loadedAt: null });
+    useLocalSettingsStore.setState({ themeMode: initialThemeMode });
+  });
+
+  it('frames the voice-off notice in the theme background, not the dark companion', () => {
+    useRemoteCapabilityStore.setState({
+      switchedOff: { canUseVoice: true },
+      loadedAt: new Date().toISOString(),
+    });
+
+    const screen = render(<VoiceScreen />);
+
+    expect(screen.getByTestId('capability.unavailable')).toBeTruthy();
+    expect(safeAreaBackground(screen)).toBe(palette.background);
+  });
+
+  it('keeps the companion dark', () => {
+    const screen = render(<VoiceScreen />);
+
+    expect(screen.getByLabelText('Close voice companion')).toBeTruthy();
+    expect(safeAreaBackground(screen)).toBe(colors.voiceCompanionBgEnd);
   });
 });

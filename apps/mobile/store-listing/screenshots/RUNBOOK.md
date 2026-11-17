@@ -28,8 +28,7 @@ direct 2064 × 2752 capture for the 13" iPad slot; the pipeline's branded canvas
 uses 2048 × 2732. Upload the 6.9" set too: the same page also describes the
 large-display sizes as a fallback chain, and uploading both avoids depending on
 it. `pnpm screenshots:required` does not include `iphone-17-pro`; capture it
-with the single-class command in step 3. The `storeSlot` text for
-`iphone-17-pro` in `scripts/screenshots/catalog.ts` still says it has no slot.
+with the single-class command in step 3.
 
 **No transparency.** Apple says images "can't include alpha channels or
 transparencies", and Play requires JPEG or 24-bit PNG with no alpha
@@ -143,19 +142,19 @@ Upload `final/` contents, converted to JPEG as above:
 - Play Console → phone screenshots ← `android/phone/final/`
 
 Apple accepts one to ten screenshots per slot; Play accepts up to eight per
-device type. The pipeline is configured for five frames. The captures described in the rest of this paragraph predate the
-November chat changes and must be retaken from a current release build before
-upload. On 2026-09-26, `02-onboarding-local` was captured and visually
-checked on isolated iPhone 17 Pro Max and iPad Pro 13 Simulators. Their `final/`
-files are opaque direct JPEG captures at 1320 × 2868 and 2064 × 2752. A later
-current-source iPhone run captured `01-local-demo-chat` and verified the
-capture wiring with Detox cleanup. On 2026-09-27, `03-first-message` passed on
-the iPhone 17 Pro Max Release Simulator: the send action streamed and completed
-an Apple Intelligence reply, and the 1320 × 2868 final frame was visually
-reviewed. The `04-cloud-sign-in` iPhone frame also passed on 2026-09-27. The spec completed
-the signed-out Cloud age review, opened the native sign-in screen, and produced
-a visually reviewed 1320 × 2868 frame. The remaining iPhone voice frame and
-iPad frames beyond onboarding still need capture and review.
+device type. The pipeline is configured for five frames.
+
+State on 2026-11-17: frames `01-local-demo-chat`, `03-first-message` and
+`04-cloud-sign-in` for `ios/iphone-17-pro` were captured by hand on the booted
+iPhone 17 Pro simulator from a release build, with `xcrun simctl io <udid>
+screenshot` and a 9:41 status bar override, then composited with
+`pnpm screenshots:composite` and converted to JPEG. Each was checked against
+Apple's guidelines 2.3.1 and 2.3.3 and is 1206 × 2622 with no alpha channel.
+Still to capture: `02-onboarding-local` (the hand capture shows the signed-out
+Local start, and its late-night greeting sits badly beside a 9:41 status bar, so
+retake it between 07:00 and 11:59), `06-voice-recording`, and every large
+display, iPad and Android frame. The Detox pipeline has not been run against the
+current app.
 
 Re-run just the compositing (no simulator needed) after a heading or subhead edit:
 
@@ -165,16 +164,23 @@ pnpm screenshots:composite
 
 ## The five frames
 
-| File                  | Spec                                | Heading                  |
-| --------------------- | ----------------------------------- | ------------------------ |
-| `01-local-demo-chat`  | `01-multi-provider.spec.ts`         | Local chat first         |
-| `02-onboarding-local` | `02-onboarding-local.spec.ts`       | Start without an account |
-| `03-first-message`    | `03-chat-first-message.spec.ts`     | Chat with local models   |
-| `04-cloud-sign-in`    | `04-mode-toggle-to-sign-in.spec.ts` | Sign in for Cloud        |
-| `06-voice-recording`  | `06-voice-record-and-send.spec.ts`  | Hold to speak            |
+| File                  | Spec                                | Heading                    |
+| --------------------- | ----------------------------------- | -------------------------- |
+| `01-local-demo-chat`  | `01-multi-provider.spec.ts`         | Local chat first           |
+| `02-onboarding-local` | `02-onboarding-local.spec.ts`       | Start without an account   |
+| `03-first-message`    | `03-chat-first-message.spec.ts`     | Chat with local models     |
+| `04-cloud-sign-in`    | `04-mode-toggle-to-sign-in.spec.ts` | AGI Cloud when you sign in |
+| `06-voice-recording`  | `06-voice-record-and-send.spec.ts`  | Hold to speak              |
 
 Headings and subheads live in `scripts/screenshots/catalog.ts` and are the single source of
 truth for both the pipeline and the compositor.
+
+Frame 04 is a signed-in AGI Cloud chat with a complete answer. Apple's guideline
+2.3.3 says screenshots must show the app in use and "not merely the title art,
+login page, or splash screen", so a sign-in form is not a store frame. Spec
+`04-mode-toggle-to-sign-in.spec.ts` still stops at the sign-in form: change it to
+sign in and capture a finished Cloud answer before using the pipeline for this
+frame, or it will overwrite the hand capture with a login page.
 
 ## Troubleshooting
 
