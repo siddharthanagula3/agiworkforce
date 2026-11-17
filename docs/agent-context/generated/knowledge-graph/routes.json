@@ -13593,6 +13593,15 @@
     },
     {
       "surface": "web",
+      "kind": "loading",
+      "url": "/support",
+      "file": "apps/web/app/support/loading.tsx",
+      "segments": [
+        "support"
+      ]
+    },
+    {
+      "surface": "web",
       "kind": "page",
       "url": "/support",
       "file": "apps/web/app/support/page.tsx",

@@ -2615,7 +2615,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8534,
+      "files": 8535,
       "roles": {
         "asset": 58,
         "config": 94,
@@ -2623,7 +2623,7 @@
         "generated": 2,
         "migration": 750,
         "other": 37,
-        "source": 3591,
+        "source": 3592,
         "style": 37,
         "test": 3914
       }

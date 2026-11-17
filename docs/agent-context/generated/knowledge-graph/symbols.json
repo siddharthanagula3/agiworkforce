@@ -37159,6 +37159,7 @@
       "apps/web/app/status/page.tsx",
       "apps/web/app/subprocessors/page.tsx",
       "apps/web/app/support/layout.tsx",
+      "apps/web/app/support/loading.tsx",
       "apps/web/app/support/page.tsx",
       "apps/web/app/supported-countries/page.tsx",
       "apps/web/app/tasks/layout.tsx",
@@ -139530,6 +139531,9 @@
     ],
     "SupportLayout": [
       "apps/web/app/support/layout.tsx"
+    ],
+    "SupportLoading": [
+      "apps/web/app/support/loading.tsx"
     ],
     "SupportModelCallGate": [
       "apps/web/lib/support/agent/index.ts",
