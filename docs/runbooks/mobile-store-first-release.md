@@ -1665,8 +1665,13 @@ Claude what you saw for each line.
   are readable. The simulator has no speech recognition, so only one Cloud
   capture in light appearance was seen there. Open the full-screen voice
   screen and leave it by its close control: the clock is readable on the next
-  screen. An edge swipe on the voice screen does not open the drawer; that
-  last change is held by a test and was not seen on a build.
+  screen. An edge swipe on the voice screen does not open the drawer (seen on
+  the simulator on 2026-11-17, in light and dark appearance).
+- Export a chat whose title is long and written in Chinese, Japanese or emoji
+  as PDF and as Markdown: the share sheet opens and the saved name ends in a
+  whole character and the extension. On the simulator a 100-character Chinese
+  title exported as PDF, Markdown and text; a long emoji title was not tried
+  there.
 - The review account (section 10): Settings, Subscription is titled
   Subscription and shows the plan with "Billing: Included with your account",
   and no price, no upgrade and no restore. The model picker and Schedules offer
