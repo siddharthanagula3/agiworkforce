@@ -1291,9 +1291,8 @@ How to make them is in `apps/mobile/store-listing/screenshots/RUNBOOK.md`. On
 `03-first-message` and `04-cloud-sign-in`, which now shows a signed-in Cloud
 chat) were captured by hand at 1206 x 2622 from a release build on the iPhone 17
 Pro simulator, composited, converted to JPEG and checked one by one against
-guidelines 2.3.1 and 2.3.3. They are in the ignored folder
-`apps/mobile/store-listing/screenshots/captures/ios/iphone-17-pro/final/`; upload
-the `.jpg` files only. Frame `02-onboarding-local` must be retaken in the morning
+guidelines 2.3.1 and 2.3.3. They are in the captures folder that git ignores, under the iPhone 17 Pro class
+(the screenshot runbook's Step 4 gives the layout); upload the `.jpg` files only. Frame `02-onboarding-local` must be retaken in the morning
 (its greeting read as a late-night line), frame `06-voice-recording` was not
 captured, and no large display, iPad or Android frame exists. Convert each
 composited PNG to JPEG before uploading, which removes the alpha channel:
