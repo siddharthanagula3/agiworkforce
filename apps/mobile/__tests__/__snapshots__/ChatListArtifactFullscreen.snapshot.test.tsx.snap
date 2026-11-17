@@ -300,8 +300,11 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (Regenera
     <RCTScrollView
       contentContainerStyle={
         {
+          "alignSelf": "center",
+          "maxWidth": 720,
           "padding": 16,
           "paddingBottom": 58,
+          "width": "100%",
         }
       }
       horizontal={false}
@@ -312,6 +315,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (Regenera
           "flex": 1,
         }
       }
+      testID="artifact-fullscreen-document"
     >
       <View>
         <Text
@@ -756,8 +760,11 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
     <RCTScrollView
       contentContainerStyle={
         {
+          "alignSelf": "center",
+          "maxWidth": 720,
           "padding": 16,
           "paddingBottom": 58,
+          "width": "100%",
         }
       }
       horizontal={false}
@@ -768,6 +775,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
           "flex": 1,
         }
       }
+      testID="artifact-fullscreen-document"
     >
       <View>
         <Text

@@ -35,6 +35,7 @@ import { ActionMenuSheet } from '@/src/features/conversation-actions/RenameConve
 import type { ConversationMenuState } from '@/src/features/conversation-actions/useConversationActions';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import {
@@ -285,6 +286,7 @@ export default function ProjectsTabScreen() {
         <ScrollView
           testID="projects-empty-scroll"
           contentContainerStyle={{
+            ...contentColumn('reading'),
             flexGrow: 1,
             alignItems: 'center',
             justifyContent: 'center',
@@ -385,6 +387,7 @@ export default function ProjectsTabScreen() {
             ) : null
           }
           contentContainerStyle={{
+            ...contentColumn('reading'),
             padding: 12,
             paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
           }}

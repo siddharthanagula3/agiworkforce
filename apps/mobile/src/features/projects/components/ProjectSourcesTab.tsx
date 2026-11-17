@@ -37,6 +37,7 @@ import {
 import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { FileViewerScreen } from '@/src/features/chat/components/artifact-viewers/FileViewerScreen';
 import type { FileViewerSource } from '@/src/features/chat/components/artifact-viewers/viewerKind';
@@ -761,6 +762,7 @@ export function ProjectSourcesTab({ projectId, openFileId, openPage }: ProjectSo
         >
           <View
             style={{
+              ...contentColumn('reading'),
               backgroundColor: colors.surfaceElevated,
               borderTopLeftRadius: 16,
               borderTopRightRadius: 16,

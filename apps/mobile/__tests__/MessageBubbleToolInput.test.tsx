@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 import type { ChatMessage } from '@/types/chat';
 
 jest.mock('@/src/ui/theme', () => {
@@ -437,5 +438,22 @@ describe('MessageBubble: when a message was sent', () => {
     );
     fireEvent(getByLabelText('Your message: What time is it?'), 'longPress');
     expect(getByTestId('message-sent-at').props.children).toMatch(/^Sent at /);
+  });
+
+  it('stops the message actions at the reading column on a wide window', () => {
+    const { getByLabelText, getByTestId } = render(
+      <MessageBubble
+        message={{
+          id: 'm-wide',
+          role: 'user',
+          conversationId: 'c-wide',
+          content: 'What time is it?',
+          createdAt: new Date().toISOString(),
+        }}
+      />,
+    );
+    fireEvent(getByLabelText('Your message: What time is it?'), 'longPress');
+
+    expect(sitsInColumn(getByTestId('message-action-rows'), 'reading')).toBe(true);
   });
 });

@@ -41,6 +41,7 @@ import {
   type CloudCodeSessionSort,
   type CloudCodeSessionView,
 } from './presentation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function Header({
   onBack,
@@ -370,6 +371,7 @@ function SessionList({ accountKey, onBack }: { accountKey: string; onBack: () =>
       />
     ),
     contentContainerStyle: {
+      ...contentColumn('reading'),
       paddingHorizontal: 4,
       paddingBottom: FLOATING_PRIMARY_ACTION_LIST_PADDING,
       flexGrow: 1,

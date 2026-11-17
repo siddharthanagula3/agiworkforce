@@ -6,6 +6,7 @@ import { Paperclip, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, dialogPadding } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import type { MessageAttachment } from '@/types/chat';
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   dialog: {
-    width: '100%',
+    ...contentColumn('reading'),
     borderRadius: 14,
     padding: dialogPadding,
     borderWidth: 1,

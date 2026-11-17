@@ -58,7 +58,7 @@ export function AuthenticatorQrCode({ value }: { value: string }) {
           textAlign: 'center',
         }}
       >
-        Scan with your authenticator app, or open it on this phone
+        Scan with your authenticator app, or open it on this device
       </Text>
       <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
         Or enter this key

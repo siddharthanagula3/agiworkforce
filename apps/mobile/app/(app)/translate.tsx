@@ -8,6 +8,7 @@ import {
   Platform,
   Modal,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +19,7 @@ import { Text } from '@/components/ui/Text';
 import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
 import {
   translate,
   translateBackendLabel,
@@ -70,6 +72,7 @@ const initialState = (): TranslateState => ({
 
 export default function TranslateScreen() {
   const colors = useThemeColors();
+  const { width: windowWidth } = useWindowDimensions();
   const router = useRouter();
   const params = useLocalSearchParams<{ text?: string; targetLanguage?: string }>();
 
@@ -581,6 +584,7 @@ export default function TranslateScreen() {
               bottom: 0,
               left: 0,
               right: 0,
+              marginHorizontal: contentColumnInset('reading', windowWidth),
               backgroundColor: colors.surfaceElevated,
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,

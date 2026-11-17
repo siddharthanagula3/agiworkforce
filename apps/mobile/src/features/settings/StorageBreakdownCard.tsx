@@ -7,7 +7,8 @@ import { Text } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
 import { Separator } from '@/components/ui/Separator';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { ROW_LABEL_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
@@ -41,6 +42,20 @@ function BreakdownRow({
   testID: string;
 }) {
   const c = useThemeColors();
+  const stacked = useLargeTextRows();
+  const valueText = (
+    <Text
+      testID={`${testID}-size`}
+      style={{
+        color: c.textPrimary,
+        fontSize: typeScale.subhead,
+        fontWeight: '500',
+        ...(stacked ? {} : { flexShrink: 0 }),
+      }}
+    >
+      {value}
+    </Text>
+  );
   return (
     <Pressable
       testID={testID}
@@ -56,13 +71,31 @@ function BreakdownRow({
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <Text style={{ flex: 1, color: c.textSecondary, fontSize: typeScale.subhead }}>{label}</Text>
-      <Text
-        testID={`${testID}-size`}
-        style={{ color: c.textPrimary, fontSize: typeScale.subhead, fontWeight: '500' }}
-      >
-        {value}
-      </Text>
+      {stacked ? (
+        <View testID={`${testID}-stack`} style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text
+            maxFontSizeMultiplier={ROW_LABEL_TEXT_SCALE_LIMIT}
+            style={{ color: c.textSecondary, fontSize: typeScale.subhead }}
+          >
+            {label}
+          </Text>
+          {valueText}
+        </View>
+      ) : (
+        <>
+          <Text
+            style={{
+              flex: 1,
+              flexShrink: 1,
+              color: c.textSecondary,
+              fontSize: typeScale.subhead,
+            }}
+          >
+            {label}
+          </Text>
+          {valueText}
+        </>
+      )}
       <ChevronRight size={17} color={c.textMuted} />
     </Pressable>
   );

@@ -45,6 +45,7 @@ import {
   MEMORY_IMPORT_UNCERTAIN_MESSAGE,
   type MemoryImportOperation,
 } from '@/src/features/memory/services/memoryImportOperation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 type ImportStep = 'compose' | 'preview' | 'done';
 
@@ -373,7 +374,11 @@ export default function MemoryImportScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 16,
+          paddingBottom: 40,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

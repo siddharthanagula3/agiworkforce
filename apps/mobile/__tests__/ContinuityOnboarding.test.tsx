@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 
@@ -169,7 +170,7 @@ describe('Mobile cross-device continuity onboarding', () => {
     expect(getByText(PRODUCT_NAMES.work)).toBeTruthy();
     expect(getByText('Beta')).toBeTruthy();
     expect(getByText("Keep Cloud work going when you're on the go")).toBeTruthy();
-    expect(getByText('Start and steer tasks from your phone')).toBeTruthy();
+    expect(getByText('Start and steer tasks from your device')).toBeTruthy();
     expect(getByText('Check in from any signed-in surface')).toBeTruthy();
     expect(getByText('Work continues when the app is closed')).toBeTruthy();
 
@@ -179,6 +180,22 @@ describe('Mobile cross-device continuity onboarding', () => {
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
     expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
     expect(useChatStore.getState().workMode).toBe('chat');
+  });
+
+  it('names this device rather than a phone', () => {
+    const { getByText, queryByText } = render(<ContinuityOnboardingScreen />);
+
+    expect(getByText('The same task on your device, browser and desktop.')).toBeTruthy();
+    expect(queryByText(/phone/i)).toBeNull();
+  });
+
+  it('holds the screen to a centred form column that never exceeds an iPhone window', () => {
+    const { UNSAFE_getByType } = render(<ContinuityOnboardingScreen />);
+
+    const style = StyleSheet.flatten(UNSAFE_getByType(ScrollView).props.contentContainerStyle);
+    expect(style.maxWidth).toBe(440);
+    expect(style.width).toBe('100%');
+    expect(style.alignSelf).toBe('center');
   });
 
   it('lands an owner whose plan includes Work in the Work composer', () => {

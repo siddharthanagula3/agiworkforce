@@ -276,8 +276,11 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
     <RCTScrollView
       contentContainerStyle={
         {
+          "alignSelf": "center",
+          "maxWidth": 720,
           "padding": 16,
           "paddingBottom": 24,
+          "width": "100%",
         }
       }
       horizontal={false}
@@ -288,6 +291,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           "flex": 1,
         }
       }
+      testID="artifact-fullscreen-document"
     >
       <View>
         <View

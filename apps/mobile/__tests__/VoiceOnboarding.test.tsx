@@ -6,6 +6,7 @@ import {
   VOICE_DISCLOSURE,
 } from '@/src/features/voice/components/VoiceOnboardingSheet';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 
 const METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
@@ -84,5 +85,11 @@ describe('VoiceOnboardingSheet', () => {
   it('does not re-show once acknowledged', () => {
     useSettingsStore.setState({ voiceOnboardingSeen: true });
     expect(useSettingsStore.getState().voiceOnboardingSeen).toBe(true);
+  });
+
+  it('stops the intro sheet at the reading column on a wide window', () => {
+    const { getByText } = renderSheet();
+
+    expect(sitsInColumn(getByText('Meet Voice'), 'reading')).toBe(true);
   });
 });

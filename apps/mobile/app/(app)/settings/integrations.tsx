@@ -23,6 +23,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function statusLabel(status: PermissionStatus): string {
   switch (status) {
@@ -148,7 +149,12 @@ export default function IntegrationsScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 24 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 16,
+          paddingBottom: 40,
+          gap: 24,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <Text className="text-sm leading-5 mt-2" style={{ color: colors.textMuted }}>

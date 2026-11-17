@@ -85,6 +85,8 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { radii, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { recentMobileFiles } from '@/src/features/search/mobileGlobalSearch';
@@ -195,6 +197,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const router = useRouter();
   const { colors: themeColors } = useTheme();
   const { height: windowHeight } = useWindowDimensions();
+  const { contentWidth } = useResponsiveLayout();
   const cameraAllowed = useCapability('canUseCamera');
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
@@ -595,6 +598,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       ref={ref}
       index={-1}
       accessible={false}
+      style={{ marginHorizontal: contentColumnInset('reading', contentWidth) }}
       onAnimate={sheetPresence.onAnimate}
       onClose={sheetPresence.onClose}
       onChange={(index) => {

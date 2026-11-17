@@ -55,6 +55,7 @@ jest.mock('@/lib/clipboard', () => ({
 }));
 
 import { FileExportButton } from '@/src/features/chat/components/FileExportButton';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 import { answerClipboardText, answerPlainText } from '@/src/features/chat/utils/markdownPlainText';
 
 const RICH_ANSWER = [
@@ -201,5 +202,13 @@ describe('FileExportButton', () => {
     await findByText('Done!');
     expect(share).toHaveBeenLastCalledWith({ message: answerPlainText(RICH_ANSWER) });
     share.mockRestore();
+  });
+
+  it('stops the export sheet at the reading column on a wide window', () => {
+    const { getByText } = render(
+      <FileExportButton content="Hello world" visible onClose={jest.fn()} />,
+    );
+
+    expect(sitsInColumn(getByText('Export Message'), 'reading')).toBe(true);
   });
 });

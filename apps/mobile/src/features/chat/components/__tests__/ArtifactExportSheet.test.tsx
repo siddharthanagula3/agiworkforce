@@ -53,6 +53,7 @@ jest.mock('@/services/fileCreation', () => ({
 }));
 
 import { ArtifactExportSheet } from '../ArtifactExportSheet';
+import { sitsInColumn } from '../../../../../test-utils/sheetColumn';
 
 const REPORT = '# Findings\n\nSales grew in **every** region.';
 
@@ -231,5 +232,18 @@ describe('ArtifactExportSheet', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(mockExportToMarkdown).not.toHaveBeenCalled();
+  });
+
+  it('stops the sheet at the reading column on a wide window', () => {
+    const { getByText } = render(
+      <ArtifactExportSheet
+        artifact={{ type: 'research', title: 'Market report' }}
+        content={REPORT}
+        visible
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(sitsInColumn(getByText('Download as'), 'reading')).toBe(true);
   });
 });

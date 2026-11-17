@@ -23,6 +23,7 @@ import {
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 import { TimezonePickerField } from './TimezonePickerField';
 import { ScheduleAccessSection } from './ScheduleAccessSection';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 interface ScheduleFormProps {
   initialData?: Partial<Schedule>;
@@ -218,7 +219,7 @@ export function ScheduleForm({
     >
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ ...contentColumn('reading'), paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >

@@ -30,6 +30,8 @@ import {
 } from '@/src/shared/components/BottomSearchBar';
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
+import { contentColumn, contentColumnInset } from '@/src/shared/layout/contentColumn';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { AttachmentPreview } from '@/src/features/chat/components/AttachmentPreview';
 import { SendButton } from '@/src/features/chat/components/SendButton';
@@ -55,6 +57,8 @@ export interface ImagePromptTile {
 type ImagesTab = 'templates' | 'ideas';
 
 const TILE_ASPECT_RATIO = 190 / 238;
+const PHONE_TILE_COLUMNS = 2;
+const TILE_BASIS: Readonly<Record<number, `${number}%`>> = { 2: '45%', 3: '30%' };
 const PROMPT_MAX_HEIGHT = 132;
 const TAB_HEIGHT = 44;
 
@@ -74,6 +78,7 @@ function ImagesSwitch({ tab, onChange }: { tab: ImagesTab; onChange: (next: Imag
       testID="images.switch"
       accessibilityRole="tablist"
       style={{
+        ...contentColumn('grid'),
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.xs,
@@ -123,9 +128,13 @@ function ImageTileGrid({
   onPick: (tile: ImagePromptTile) => void;
 }) {
   const { colors } = useTheme();
+  const { gridColumns } = useResponsiveLayout();
+  const tileBasis = TILE_BASIS[Math.max(PHONE_TILE_COLUMNS, gridColumns)];
   return (
     <View
+      testID="images.tile-grid"
       style={{
+        ...contentColumn('grid'),
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: spacing.lg,
@@ -141,7 +150,7 @@ function ImageTileGrid({
           accessibilityLabel={tile.label}
           accessibilityHint="Adds this idea to your description"
           style={{
-            flexBasis: '45%',
+            flexBasis: tileBasis,
             flexGrow: 1,
             aspectRatio: TILE_ASPECT_RATIO,
             borderRadius: radii.xl,
@@ -197,6 +206,7 @@ export function ImagesScreen({
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { contentWidth } = useResponsiveLayout();
   const keyboardOverlap = useKeyboardOverlap();
   const access = useCloudFeatureAccess();
   const goBack = useGoBack('/(app)/(tabs)/chat');
@@ -293,6 +303,7 @@ export function ImagesScreen({
     (keyboardOverlap > 0 ? keyboardOverlap : insets.bottom) + BOTTOM_SEARCH_BAR_MARGIN;
   const barSpace = barHeight + barBottom + spacing.lg;
   const textEndsAboveBar = available && tiles.length === 0;
+  const describeBarInset = contentColumnInset('reading', contentWidth);
 
   return (
     <View testID="images.screen" style={{ flex: 1, backgroundColor: pageBackground }}>
@@ -371,8 +382,8 @@ export function ImagesScreen({
           onLayout={handleBarLayout}
           style={{
             position: 'absolute',
-            left: spacing.lg,
-            right: spacing.lg,
+            left: spacing.lg + describeBarInset,
+            right: spacing.lg + describeBarInset,
             bottom: barBottom,
             gap: spacing.xs,
           }}

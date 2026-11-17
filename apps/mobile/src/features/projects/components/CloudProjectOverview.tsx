@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Alert, Modal, ScrollView, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check } from 'lucide-react-native';
@@ -20,6 +20,7 @@ import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 import { formatRelativeTime } from '@/src/lib/time';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn, contentColumnInset } from '@/src/shared/layout/contentColumn';
 
 function projectSyncLine(failed: boolean, pending: boolean): string {
   if (failed && pending) {
@@ -58,6 +59,8 @@ export function CloudProjectOverview({
   const lastUsedAt = lastChatAt && lastChatAt > project.updatedAt ? lastChatAt : project.updatedAt;
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const dimsBesideSheet = contentColumnInset('reading', windowWidth) > 0;
   const [pickerOpen, setPickerOpen] = useState(false);
   const Icon = projectIcon(details?.iconEmoji);
   const accent = projectAccentHex(details?.accentColor) ?? colors.teal;
@@ -140,15 +143,25 @@ export function CloudProjectOverview({
         statusBarTranslucent
         onRequestClose={() => setPickerOpen(false)}
       >
+        {dimsBesideSheet ? (
+          <PressableBox
+            testID="project-appearance-scrim"
+            accessible={false}
+            importantForAccessibility="no"
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.scrim }]}
+            onPress={() => setPickerOpen(false)}
+          />
+        ) : null}
         <PressableBox
           accessibilityViewIsModal
-          style={{ flex: 1, backgroundColor: colors.scrim }}
+          style={{ flex: 1, backgroundColor: dimsBesideSheet ? undefined : colors.scrim }}
           onPress={() => setPickerOpen(false)}
           accessibilityRole="button"
           accessibilityLabel="Close"
         />
         <View
           style={{
+            ...contentColumn('reading'),
             backgroundColor: colors.surfaceElevated,
             borderTopLeftRadius: 16,
             borderTopRightRadius: 16,

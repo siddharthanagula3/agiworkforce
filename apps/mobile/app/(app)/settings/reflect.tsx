@@ -23,6 +23,7 @@ import {
   type ReflectRecap,
 } from '@/src/features/reflect';
 import { translatePlural } from '@/src/i18n/plural';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 type ReflectRecapOngoingWork = NonNullable<ReflectRecap['ongoingWork']>[number];
 
@@ -162,7 +163,7 @@ export default function ReflectScreen() {
 
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingTop: 6, paddingBottom: 44 }}
+        contentContainerStyle={{ ...contentColumn('reading'), paddingTop: 6, paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={c.teal} />

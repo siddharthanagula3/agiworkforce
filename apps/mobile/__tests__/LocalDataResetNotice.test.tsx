@@ -48,7 +48,10 @@ describe('Local data not restored from another phone', () => {
     expect(alerts).toHaveBeenCalledTimes(1);
     const [title, body] = alerts.mock.calls[0] as [string, string];
     expect(title).toBe('Local chats and saved memories not restored');
-    expect(body).toContain('previous phone');
+    expect(body).toBe(
+      'Local chats and saved memories from your previous device are encrypted with a key that never leaves that device, so this device starts fresh. Download on-device models again to use them.',
+    );
+    expect(body).toContain('previous device');
     expect(body).toContain('key that never leaves');
     expect(body).toContain('Download on-device models again');
     expect(`${title} ${body}`).not.toContain(String.fromCharCode(8212));

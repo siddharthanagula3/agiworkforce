@@ -3,7 +3,8 @@ jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
 }));
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert, Platform, ScrollView, StyleSheet } from 'react-native';
+import { Alert, FlatList, Platform, ScrollView, StyleSheet } from 'react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 
 const mockPush = jest.fn();
@@ -291,6 +292,48 @@ describe('Schedules screen Cloud boundary', () => {
 
     const row = UNSAFE_getAllByType(ScrollView).find((node) => node.props.horizontal);
     expect(row?.props.style).toMatchObject({ flexGrow: 0, flexShrink: 0 });
+  });
+
+  it('holds the chip row and the schedule list to the reading column on a wide pane', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useScheduleStore.setState({
+      schedules: [
+        {
+          id: 'schedule-active',
+          name: 'Morning briefing',
+          prompt: 'Summarize inbox',
+          model: 'test-model-fixture',
+          recurrence: 'daily' as const,
+          cronExpression: undefined,
+          scheduledAt: null,
+          timeOfDay: '09:00',
+          timezone: 'UTC',
+          lastRunAt: null,
+          nextRunAt: null,
+          lastRunStatus: null,
+          isActive: true,
+          createdAt: '2026-07-17T09:00:00.000Z',
+          updatedAt: '2026-07-17T09:00:00.000Z',
+        },
+      ],
+    });
+
+    const { UNSAFE_getAllByType, UNSAFE_getByType } = render(<SchedulesScreen />);
+
+    const row = UNSAFE_getAllByType(ScrollView).find((node) => node.props.horizontal);
+    expect(StyleSheet.flatten(row?.props.style)).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+    });
+    expect(
+      StyleSheet.flatten(UNSAFE_getByType(FlatList).props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 16,
+    });
   });
 
   it('filters the list to completed schedules by their finished status', () => {

@@ -18,6 +18,7 @@ import type { UseStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled, StepUpCancelledError } from '@/src/features/auth/services/stepUp';
 import { SettingsGroup, SettingsRow } from '@/src/features/settings/Common';
 import { removeSignInKey, type SignInKey, type SignInKeys } from './service';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const FOOTNOTE =
   'Use passkeys or security keys to sign in. They resist phishing better than passwords.';
@@ -204,7 +205,12 @@ export function PasskeysSection({
           <ScreenHeader title={PAGE_TITLE} onBack={() => onOpenChange(false)} />
           <ScrollView
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 36 }}
+            contentContainerStyle={{
+              ...contentColumn('reading'),
+              paddingHorizontal: 16,
+              paddingTop: 8,
+              paddingBottom: 36,
+            }}
           >
             {keys?.state === 'listed' ? (
               keys.items.length + webKeys.length === 0 ? (

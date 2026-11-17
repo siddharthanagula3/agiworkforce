@@ -24,6 +24,7 @@ import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { spacing, typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
+import { contentColumnWidth } from '@/src/shared/layout/contentColumn';
 import {
   useArtifactStore,
   accentColorForKind,
@@ -635,7 +636,7 @@ function ImageArtifactPreview({
             <GeneratedImage
               imageUrl={artifact.content}
               revisedPrompt={artifact.previewLines[0]}
-              width={Math.max(0, windowWidth - 2 * spacing.xl)}
+              width={contentColumnWidth('reading', windowWidth - 2 * spacing.xl)}
             />
           </View>
         </ScrollView>

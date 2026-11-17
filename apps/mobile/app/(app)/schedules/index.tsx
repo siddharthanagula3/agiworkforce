@@ -37,6 +37,7 @@ import {
   type ScheduleStatusFilter,
 } from '@/src/features/schedules/sort';
 import { confirmScheduleDeletion } from '@/src/features/schedules/deleteConfirmation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const SCHEDULE_FILTERS: readonly { key: ScheduleStatusFilter; label: string }[] = [
   { key: 'all', label: 'All' },
@@ -262,7 +263,7 @@ export default function SchedulesScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0, flexShrink: 0 }}
+          style={{ ...contentColumn('reading'), flexGrow: 0, flexShrink: 0 }}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}
         >
           {SCHEDULE_FILTERS.map((item) => {
@@ -366,7 +367,11 @@ export default function SchedulesScreen() {
       ) : (
         <FlatList
           data={visibleSchedules}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+          contentContainerStyle={{
+            ...contentColumn('reading'),
+            paddingHorizontal: 16,
+            paddingBottom: 100,
+          }}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -483,7 +488,11 @@ function EmptyState({
       <ScrollView
         testID="schedules-empty-scroll"
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 24,
+          paddingBottom: 24,
+        }}
       >
         <Animated.View entering={FadeIn.duration(motion.moved)} className="items-center pt-6">
           <View

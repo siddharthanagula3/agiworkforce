@@ -66,6 +66,18 @@ jest.mock('@/src/navigation/openNearestDrawer', () => ({
   openNearestDrawer: jest.fn(),
 }));
 
+let mockLayoutWidth: number | null = null;
+jest.mock('@/src/shared/hooks/useResponsiveLayout', () => {
+  const actual = jest.requireActual('@/src/shared/hooks/useResponsiveLayout');
+  return {
+    ...actual,
+    useResponsiveLayout: () =>
+      mockLayoutWidth === null
+        ? actual.useResponsiveLayout()
+        : actual.getResponsiveLayout(mockLayoutWidth),
+  };
+});
+
 jest.mock('@clerk/expo', () => ({ useSession: () => ({ session: null }) }));
 
 jest.mock('@/src/features/chat/components/Composer/Composer', () => {
@@ -125,6 +137,7 @@ jest.mock('@/lib/mmkv', () => {
 });
 
 import ChatScreen from '../app/(app)/chat/[id]';
+import { openNearestDrawer } from '../src/navigation/openNearestDrawer';
 import { handOffConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
 import { useChatExecutionStore, useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
@@ -437,6 +450,39 @@ describe('Thread header', () => {
     expect(screen.getByTestId('conversation-action-export')).toBeTruthy();
     expect(screen.getByTestId('conversation-action-context')).toBeTruthy();
     expect(screen.getByTestId('conversation-action-delete')).toBeTruthy();
+  });
+
+  describe('beside the permanent sidebar', () => {
+    afterEach(() => {
+      mockLayoutWidth = null;
+    });
+
+    it.each([402, 820])('opens the drawer from the header at %ipt', (width) => {
+      mockLayoutWidth = width;
+      seedThread();
+      const screen = render(<ChatScreen />);
+
+      fireEvent.press(screen.getByRole('button', { name: 'Open menu' }));
+      expect(openNearestDrawer).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId('chat.thread-header.drawer-slot')).toBeNull();
+    });
+
+    it.each([1032, 1376])(
+      'offers no menu button that would do nothing at %ipt and keeps its slot',
+      (width) => {
+        mockLayoutWidth = width;
+        seedThread();
+        const screen = render(<ChatScreen />);
+
+        expect(screen.queryByRole('button', { name: 'Open menu' })).toBeNull();
+        expect(screen.getByTestId('chat.thread-header.drawer-slot')).toHaveStyle({
+          width: 44,
+          height: 44,
+        });
+        expect(screen.getByRole('button', { name: 'New chat' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Conversation menu' })).toBeTruthy();
+      },
+    );
   });
 
   it('opens the same menu from the ellipsis and offers Unpin for a pinned thread', () => {

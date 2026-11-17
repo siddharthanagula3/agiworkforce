@@ -12,6 +12,7 @@ import { ROW_LABEL_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
 import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { HelpArticleLink, type MobileHelpArticleId } from '@/src/features/support/HelpArticleLink';
 
 export function SettingsScreenShell({
@@ -43,6 +44,7 @@ export function SettingsScreenShell({
         className="flex-1"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
+          ...contentColumn('reading'),
           flexGrow: 1,
           paddingHorizontal: 16,
           paddingTop: 8,

@@ -18,7 +18,7 @@ export function localDataResetCopy(kinds: readonly LocalDataResetKind[]): {
   const models = memory ? ' Download on-device models again to use them.' : '';
   return {
     title: `${lost} not restored`,
-    body: `${lost} from your previous phone are encrypted with a key that never leaves that phone, so this phone starts fresh.${models}`,
+    body: `${lost} from your previous device are encrypted with a key that never leaves that device, so this device starts fresh.${models}`,
   };
 }
 

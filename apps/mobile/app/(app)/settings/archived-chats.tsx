@@ -32,6 +32,7 @@ import {
 } from '@/src/features/archived-chats';
 import { translatePlural } from '@/src/i18n/plural';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 interface ArchivedList {
   conversations: ArchivedConversation[];
@@ -417,7 +418,7 @@ export default function ArchivedChatsScreen() {
 
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingTop: 10, paddingBottom: 44 }}
+        contentContainerStyle={{ ...contentColumn('reading'), paddingTop: 10, paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={c.teal} />

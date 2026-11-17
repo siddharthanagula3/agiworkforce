@@ -4,6 +4,12 @@ import { StyleSheet, TextInput } from 'react-native';
 
 const mockPush = jest.fn();
 
+let mockViewportWidth = 402;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockViewportWidth, height: 852, scale: 3, fontScale: 1 }),
+}));
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
@@ -65,6 +71,8 @@ jest.mock('../src/features/image/startImageCreation', () => ({
 
 import { ImagesScreen, type ImagePromptTile } from '../src/features/image/ImagesScreen';
 import { BOTTOM_SEARCH_BAR_MARGIN } from '../src/shared/components/BottomSearchBar';
+import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
+import { MAX_GRID_CONTENT_WIDTH } from '../src/shared/hooks/useResponsiveLayout';
 import { spacing } from '../src/ui/theme/tokens';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
@@ -142,6 +150,7 @@ function signInToCloud() {
 describe('ImagesScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockViewportWidth = 402;
     mockImagesAvailable = true;
     mockCloudAccount = { ownerId: 'images-owner', epoch: 1 };
     useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseImages'] } as never);
@@ -432,6 +441,68 @@ describe('ImagesScreen', () => {
 
       expect(marginBottom).toBe(0);
       expect(paddingBottom).toBe(barSpace);
+    });
+  });
+
+  describe('on a wide window', () => {
+    const TILES: ImagePromptTile[] = [
+      { id: 'a', label: 'A', phrase: 'a ', image: 1 },
+      { id: 'b', label: 'B', phrase: 'b ', image: 2 },
+      { id: 'c', label: 'C', phrase: 'c ', image: 3 },
+      { id: 'd', label: 'D', phrase: 'd ', image: 4 },
+      { id: 'e', label: 'E', phrase: 'e ', image: 5 },
+      { id: 'f', label: 'F', phrase: 'f ', image: 6 },
+    ];
+    const WINDOWS = [
+      { name: 'iPhone', window: 402, pane: 402, columns: 2 },
+      { name: 'narrow phone', window: 320, pane: 320, columns: 2 },
+      { name: '11-inch iPad portrait', window: 820, pane: 820, columns: 3 },
+      { name: '13-inch iPad portrait', window: 1032, pane: 752, columns: 3 },
+      { name: '13-inch iPad landscape', window: 1376, pane: 1096, columns: 3 },
+    ] as const;
+
+    function flat(node: { props: { style?: unknown } }) {
+      return StyleSheet.flatten(node.props.style as never) as Record<string, unknown>;
+    }
+
+    it.each(WINDOWS)(
+      'holds the tile grid to the grid column with $columns tiles across at $name',
+      ({ window, columns }) => {
+        mockViewportWidth = window;
+        const screen = render(<ImagesScreen templates={TILES} />);
+
+        expect(flat(screen.getByTestId('images.tile-grid'))).toMatchObject({
+          width: '100%',
+          maxWidth: MAX_GRID_CONTENT_WIDTH,
+          alignSelf: 'center',
+        });
+        expect(flat(screen.getByTestId('images.tile.a')).flexBasis).toBe(
+          columns === 3 ? '30%' : '45%',
+        );
+      },
+    );
+
+    it.each(WINDOWS)('keeps the describe bar inside the reading column at $name', ({ pane }) => {
+      mockViewportWidth = WINDOWS.find((entry) => entry.pane === pane)!.window;
+      const screen = render(<ImagesScreen />);
+
+      const bar = flat(screen.getByTestId('images.describe-bar'));
+      const inset = Math.max(0, (pane - READING_COLUMN_MAX_WIDTH) / 2);
+      expect(bar.left).toBe(spacing.lg + inset);
+      expect(bar.right).toBe(spacing.lg + inset);
+      expect(pane - Number(bar.left) - Number(bar.right)).toBeLessThanOrEqual(
+        READING_COLUMN_MAX_WIDTH,
+      );
+    });
+
+    it('aligns the Templates and Ideas switch with the tile grid', () => {
+      mockViewportWidth = 1376;
+      const screen = render(<ImagesScreen templates={TEMPLATES} ideas={IDEAS} />);
+
+      expect(flat(screen.getByTestId('images.switch'))).toMatchObject({
+        maxWidth: MAX_GRID_CONTENT_WIDTH,
+        alignSelf: 'center',
+      });
     });
   });
 });

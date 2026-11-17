@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 
 const mockModelPicker = jest.fn().mockReturnValue(null);
 
@@ -90,6 +91,19 @@ describe('Mobile schedule form', () => {
       }),
     );
     expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('attachments');
+  });
+
+  it('holds the form to the reading column on a wide pane', () => {
+    const screen = render(<ScheduleForm onSubmit={jest.fn()} onCancel={jest.fn()} />);
+
+    expect(
+      StyleSheet.flatten(screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingBottom: 40,
+    });
   });
 
   it('draws the Prompt field as one bordered box that grows with the text', () => {

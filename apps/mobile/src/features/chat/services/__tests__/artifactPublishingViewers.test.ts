@@ -90,6 +90,9 @@ describe('publish failure wording', () => {
     const failure = new EgressBlockedError('agiworkforce.com');
 
     expect(publishFailureMessage(failure)).toBe(LOCAL_MODE_PUBLISH_MESSAGE);
+    expect(LOCAL_MODE_PUBLISH_MESSAGE).toBe(
+      'This device is in Local mode, so nothing was published. Switch to AGI Cloud mode and try again.',
+    );
     expect(isPublicationOutcomeUncertain(failure)).toBe(false);
   });
 

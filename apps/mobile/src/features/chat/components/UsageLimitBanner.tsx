@@ -20,6 +20,7 @@ import {
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import type { UsageSnapshot } from '@/services/usage';
 
 function inCredits(window: ManagedUsageCreditWindow | null | undefined) {
@@ -155,100 +156,102 @@ export function UsageLimitBanner({
   const reminderState = resetReminder.reminder?.state ?? null;
 
   return (
-    <View
-      testID="chat.usage-limit"
-      accessibilityRole="summary"
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        marginHorizontal: 12,
-        marginBottom: 8,
-        paddingLeft: 12,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: critical ? colors.warningBorder : colors.border,
-        backgroundColor: critical ? colors.warningSurface : colors.surfaceElevated,
-      }}
-    >
-      <Gauge size={16} color={critical ? colors.agentWarning : colors.textSecondary} />
-      <View style={{ flex: 1, minWidth: 0, paddingVertical: 8 }}>
-        <Text
-          numberOfLines={2}
-          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '500' }}
-        >
-          {warning.headline}
-        </Text>
-        {warning.resetLabel ? (
-          <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
-            {warning.resetLabel}
-          </Text>
-        ) : null}
-        {resetReminder.available && reminderState === 'set' ? (
+    <View testID="chat.usage-limit.column" style={contentColumn('reading')}>
+      <View
+        testID="chat.usage-limit"
+        accessibilityRole="summary"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          marginHorizontal: 12,
+          marginBottom: 8,
+          paddingLeft: 12,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: critical ? colors.warningBorder : colors.border,
+          backgroundColor: critical ? colors.warningSurface : colors.surfaceElevated,
+        }}
+      >
+        <Gauge size={16} color={critical ? colors.agentWarning : colors.textSecondary} />
+        <View style={{ flex: 1, minWidth: 0, paddingVertical: 8 }}>
           <Text
-            testID="chat.usage-limit.reminder-set"
-            style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
+            numberOfLines={2}
+            style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '500' }}
           >
-            {USAGE_RESET_REMINDER_SET}
+            {warning.headline}
           </Text>
-        ) : null}
-        {resetReminder.available && reminderState !== 'set' ? (
+          {warning.resetLabel ? (
+            <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
+              {warning.resetLabel}
+            </Text>
+          ) : null}
+          {resetReminder.available && reminderState === 'set' ? (
+            <Text
+              testID="chat.usage-limit.reminder-set"
+              style={{ color: colors.textSecondary, fontSize: typeScale.caption }}
+            >
+              {USAGE_RESET_REMINDER_SET}
+            </Text>
+          ) : null}
+          {resetReminder.available && reminderState !== 'set' ? (
+            <PressableBox
+              testID="chat.usage-limit.remind"
+              onPress={() => void resetReminder.remind()}
+              disabled={reminderState === 'pending'}
+              accessibilityRole="button"
+              accessibilityLabel={USAGE_RESET_REMINDER_ACTION}
+              accessibilityState={{
+                disabled: reminderState === 'pending',
+                busy: reminderState === 'pending',
+              }}
+              style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
+            >
+              <Text
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                  opacity: reminderState === 'pending' ? 0.6 : 1,
+                }}
+              >
+                {USAGE_RESET_REMINDER_ACTION}
+              </Text>
+            </PressableBox>
+          ) : null}
+          {resetReminder.reminder?.state === 'error' ? (
+            <Text
+              testID="chat.usage-limit.reminder-error"
+              style={{ color: colors.textPrimary, fontSize: typeScale.caption }}
+            >
+              {resetReminder.reminder.message}
+            </Text>
+          ) : null}
+        </View>
+        {actionLabel ? (
           <PressableBox
-            testID="chat.usage-limit.remind"
-            onPress={() => void resetReminder.remind()}
-            disabled={reminderState === 'pending'}
+            testID="chat.usage-limit.action"
+            onPress={onAction}
             accessibilityRole="button"
-            accessibilityLabel={USAGE_RESET_REMINDER_ACTION}
-            accessibilityState={{
-              disabled: reminderState === 'pending',
-              busy: reminderState === 'pending',
-            }}
-            style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}
+            accessibilityLabel={actionLabel}
+            style={{ minHeight: 44, justifyContent: 'center' }}
           >
             <Text
-              style={{
-                color: colors.textPrimary,
-                fontSize: typeScale.footnote,
-                fontWeight: '600',
-                opacity: reminderState === 'pending' ? 0.6 : 1,
-              }}
+              style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
             >
-              {USAGE_RESET_REMINDER_ACTION}
+              {actionLabel}
             </Text>
           </PressableBox>
         ) : null}
-        {resetReminder.reminder?.state === 'error' ? (
-          <Text
-            testID="chat.usage-limit.reminder-error"
-            style={{ color: colors.textPrimary, fontSize: typeScale.caption }}
-          >
-            {resetReminder.reminder.message}
-          </Text>
-        ) : null}
-      </View>
-      {actionLabel ? (
         <PressableBox
-          testID="chat.usage-limit.action"
-          onPress={onAction}
+          onPress={onDismiss}
           accessibilityRole="button"
-          accessibilityLabel={actionLabel}
-          style={{ minHeight: 44, justifyContent: 'center' }}
+          accessibilityLabel="Dismiss usage warning"
+          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Text
-            style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
-          >
-            {actionLabel}
-          </Text>
+          <X size={16} color={colors.textSecondary} />
         </PressableBox>
-      ) : null}
-      <PressableBox
-        onPress={onDismiss}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss usage warning"
-        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <X size={16} color={colors.textSecondary} />
-      </PressableBox>
+      </View>
     </View>
   );
 }

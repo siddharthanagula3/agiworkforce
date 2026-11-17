@@ -16,6 +16,7 @@ import { Text } from '@/components/ui/Text';
 import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useAuthStore } from '@/src/features/auth/store';
 import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
 import { assureAgeWithOs } from '@/src/features/age-assurance';
@@ -301,6 +302,7 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   scrollContent: {
+    ...contentColumn('form'),
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',

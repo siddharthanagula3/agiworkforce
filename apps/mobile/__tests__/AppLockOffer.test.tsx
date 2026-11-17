@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockHasHardware = jest.fn();
@@ -97,6 +97,15 @@ describe('App Lock offer', () => {
     const unenrolled = render(<AppLockOffer />);
     await waitFor(() => expect(mockIsEnrolled).toHaveBeenCalled());
     expect(unenrolled.queryByLabelText('Turn on App Lock')).toBeNull();
+  });
+
+  it('keeps the card to a centred form column that never exceeds an iPhone window', async () => {
+    const screen = render(<AppLockOffer />);
+    const card = await screen.findByTestId('app-lock-offer-card');
+    const style = StyleSheet.flatten(card.props.style);
+    expect(style.maxWidth).toBe(440);
+    expect(style.width).toBe('100%');
+    expect(style.alignSelf).toBe('center');
   });
 
   it('waits until first Cloud continuity onboarding is finished', async () => {

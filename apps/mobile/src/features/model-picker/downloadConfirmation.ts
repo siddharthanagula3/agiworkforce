@@ -36,16 +36,16 @@ export async function confirmModelDownload(
   if (onMobileData && !allowCellularDownloads) {
     Alert.alert(
       'Wi-Fi needed',
-      `${model.name}${size ? ` is ${size}, and` : ' is a large download, and'} your phone is on mobile data. Connect to Wi-Fi, or turn on ${CELLULAR_CONSENT_SETTING_PATH} to use mobile data.`,
+      `${model.name}${size ? ` is ${size}, and` : ' is a large download, and'} your device is on mobile data. Connect to Wi-Fi, or turn on ${CELLULAR_CONSENT_SETTING_PATH} to use mobile data.`,
       [{ text: 'OK', style: 'cancel' }],
     );
     return false;
   }
 
   const storage = size
-    ? `It is ${size}. It starts downloading now and uses that much storage on this phone.`
-    : 'It starts downloading now and uses storage on this phone.';
-  const data = onMobileData ? ' Your phone is on mobile data, so this download will use it.' : '';
+    ? `It is ${size}. It starts downloading now and uses that much storage on this device.`
+    : 'It starts downloading now and uses storage on this device.';
+  const data = onMobileData ? ' Your device is on mobile data, so this download will use it.' : '';
 
   return new Promise<boolean>((resolve) => {
     Alert.alert(

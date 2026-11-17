@@ -471,7 +471,11 @@ export function MessageList({
           contentContainerStyle={{ paddingVertical: 8 }}
           ListFooterComponent={
             footer ? (
-              <View testID="chat.message-list.footer" onLayout={handleFooterLayout}>
+              <View
+                testID="chat.message-list.footer"
+                style={contentColumn('reading')}
+                onLayout={handleFooterLayout}
+              >
                 {footer}
               </View>
             ) : null

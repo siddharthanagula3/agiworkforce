@@ -1,5 +1,6 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, SectionList, StyleSheet } from 'react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -181,6 +182,25 @@ describe('mobile agents', () => {
     const { getByText } = render(<AgentsScreen />);
     expect(getByText('Agents are available in AGI Cloud')).toBeTruthy();
     expect(mockListAgents).not.toHaveBeenCalled();
+  });
+
+  it('holds the segment bar and the list to the reading column on a wide pane', async () => {
+    const { getByText, getByTestId, UNSAFE_getByType } = render(<AgentsScreen />);
+    await waitFor(() => expect(getByText('Planner')).toBeTruthy());
+
+    expect(StyleSheet.flatten(getByTestId('agents.segments.column').props.style)).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+    });
+    expect(
+      StyleSheet.flatten(UNSAFE_getByType(SectionList).props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 16,
+    });
   });
 
   it('lists agents with their state and starts a chat with one', async () => {

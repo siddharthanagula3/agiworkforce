@@ -3,6 +3,12 @@ import React from 'react';
 import { BackHandler } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
+let mockWindowWidth = 750;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 1334, scale: 2, fontScale: 1 }),
+}));
+
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   rehydrateWhenMmkvReady: jest.fn(),
@@ -24,6 +30,7 @@ const mockSheetProps: {
     onClose?: () => void;
     onChange?: (index: number) => void;
     onAnimate?: (fromIndex: number, toIndex: number) => void;
+    style?: unknown;
   } | null;
 } = { current: null };
 
@@ -88,12 +95,13 @@ const [FIRST, SECOND] = LOCAL_MODEL_LIST.filter((model) => model.availability !=
 
 const sheetRef = { current: { snapToIndex: jest.fn(), close: jest.fn() } };
 
-function pickerElement(openSignal = 0) {
+function pickerElement(openSignal = 0, paneWidth?: number) {
   return (
     <ModelPickerSheet
       sheetRef={sheetRef as unknown as React.RefObject<never>}
       modelScope="local"
       openSignal={openSignal}
+      paneWidth={paneWidth}
     />
   );
 }
@@ -233,5 +241,33 @@ describe('model picker hardware back', () => {
     act(() => mockSheetProps.current?.onClose?.());
     expect(remove).toHaveBeenCalledTimes(1);
     add.mockRestore();
+  });
+
+  describe('sheet width', () => {
+    afterEach(() => {
+      mockWindowWidth = 750;
+    });
+
+    it.each([
+      [402, 0],
+      [820, 50],
+      [1032, 16],
+      [1376, 188],
+    ])(
+      'insets the sheet to the reading column of the pane in a %d point window',
+      (width, inset) => {
+        mockWindowWidth = width;
+        renderPicker();
+
+        expect(mockSheetProps.current?.style).toEqual({ marginHorizontal: inset });
+      },
+    );
+
+    it('insets by the width it is given when it is not beside the sidebar', () => {
+      mockWindowWidth = 1032;
+      render(pickerElement(0, 1032));
+
+      expect(mockSheetProps.current?.style).toEqual({ marginHorizontal: 156 });
+    });
   });
 });

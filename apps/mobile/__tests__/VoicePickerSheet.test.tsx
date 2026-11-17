@@ -1,7 +1,13 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { BackHandler } from 'react-native';
+import { BackHandler, FlatList, StyleSheet, View } from 'react-native';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
+
+let mockWindowWidth = 750;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 1334, scale: 2, fontScale: 1 }),
+}));
 
 const mockSheetProps: { current: Record<string, unknown> | null } = { current: null };
 const mockSheetCalls = { snapToIndex: jest.fn(), close: jest.fn() };
@@ -58,12 +64,20 @@ const METRICS: Metrics = {
   insets: { top: 47, left: 0, right: 0, bottom: 34 },
 };
 
+function layoutPager(view: ReturnType<typeof render>, width: number) {
+  fireEvent(view.getByTestId('voice-picker-pager'), 'layout', {
+    nativeEvent: { layout: { width, height: 300, x: 0, y: 0 } },
+  });
+}
+
 function renderSheet(props: Partial<React.ComponentProps<typeof VoicePickerSheet>> = {}) {
-  return render(
+  const view = render(
     <SafeAreaProvider initialMetrics={METRICS}>
       <VoicePickerSheet visible onStart={jest.fn()} onDismiss={jest.fn()} {...props} />
     </SafeAreaProvider>,
   );
+  if (props.visible !== false) layoutPager(view, 750);
+  return view;
 }
 
 describe('VoicePickerSheet', () => {
@@ -71,6 +85,7 @@ describe('VoicePickerSheet', () => {
     jest.clearAllMocks();
     mockSheetProps.current = null;
     mockSheetState.index = 0;
+    mockWindowWidth = 750;
     mockGetVoicesForLanguage.mockReset().mockResolvedValue([]);
     useSettingsStore.setState({
       selectedPresetId: null,
@@ -275,5 +290,95 @@ describe('VoicePickerSheet', () => {
     );
     expect(remove).toHaveBeenCalledTimes(1);
     add.mockRestore();
+  });
+  describe('on a window wider than the pane beside the permanent sidebar', () => {
+    const PANE = 752;
+    const WINDOW = 1032;
+
+    beforeEach(() => {
+      mockWindowWidth = WINDOW;
+    });
+
+    it('draws the pages on the first frame at the width the sheet is inset to, then follows the measured list', () => {
+      const view = render(
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <VoicePickerSheet visible onStart={jest.fn()} onDismiss={jest.fn()} />
+        </SafeAreaProvider>,
+      );
+      const seeded = view.UNSAFE_getByType(FlatList).props.getItemLayout as (
+        data: unknown,
+        index: number,
+      ) => { length: number };
+      expect(seeded(null, 1).length).toBe(720);
+
+      layoutPager(view, PANE);
+      const measured = view.UNSAFE_getByType(FlatList).props.getItemLayout as (
+        data: unknown,
+        index: number,
+      ) => { length: number };
+      expect(measured(null, 1).length).toBe(PANE);
+    });
+
+    it('draws the pages at the window width on a phone before the list is measured', () => {
+      mockWindowWidth = 402;
+      const view = render(
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <VoicePickerSheet visible onStart={jest.fn()} onDismiss={jest.fn()} />
+        </SafeAreaProvider>,
+      );
+
+      const getItemLayout = view.UNSAFE_getByType(FlatList).props.getItemLayout as (
+        data: unknown,
+        index: number,
+      ) => { length: number; offset: number };
+      expect(getItemLayout(null, 1)).toMatchObject({ length: 402, offset: 402 });
+    });
+
+    it('sizes every page and its offset to the measured list, not to the window', () => {
+      const view = renderSheet();
+      layoutPager(view, PANE);
+
+      const list = view.UNSAFE_getByType(FlatList);
+      const getItemLayout = list.props.getItemLayout as (
+        data: unknown,
+        index: number,
+      ) => { length: number; offset: number; index: number };
+      expect(getItemLayout(null, 1)).toEqual({ length: PANE, offset: PANE, index: 1 });
+
+      const pageWidths = view
+        .UNSAFE_getAllByType(View)
+        .map((node) => StyleSheet.flatten(node.props.style)?.width)
+        .filter((width) => width === PANE || width === WINDOW);
+      expect(pageWidths.length).toBeGreaterThan(0);
+      expect(pageWidths.every((width) => width === PANE)).toBe(true);
+    });
+
+    it('turns one swipe of the list into the next voice', () => {
+      const view = renderSheet();
+      layoutPager(view, PANE);
+
+      fireEvent(view.getByLabelText('Voices'), 'momentumScrollEnd', {
+        nativeEvent: { contentOffset: { x: PANE, y: 0 } },
+      });
+
+      expect(view.getByLabelText('Voices').props.accessibilityValue).toEqual({
+        text: voicePositionLabel(1, VOICE_PRESETS.length),
+      });
+    });
+
+    it('insets the sheet to the reading column of the pane', () => {
+      renderSheet();
+
+      expect(mockSheetProps.current).toMatchObject({
+        style: { marginHorizontal: (PANE - 720) / 2 },
+      });
+    });
+
+    it('leaves the sheet edge to edge on a phone window', () => {
+      mockWindowWidth = 402;
+      renderSheet();
+
+      expect(mockSheetProps.current).toMatchObject({ style: { marginHorizontal: 0 } });
+    });
   });
 });

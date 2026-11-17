@@ -53,8 +53,10 @@ import {
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { FULL_SCREEN_TOUCH_TARGET } from '@/src/features/chat/chrome/fullScreenChrome';
 import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
+import { contentColumn, contentColumnInset } from '@/src/shared/layout/contentColumn';
 
 const VOICE_GLOW_HEIGHT = 320;
+const COMPOSER_SIDE_MARGIN = 20;
 
 const REPORT_THIS_RESPONSE = 'Report this response';
 
@@ -178,6 +180,11 @@ function VoiceCompanion() {
   const isFocused = useIsFocused();
   const params = useLocalSearchParams<{ returnTo?: string; audioUri?: string }>();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const composerSideMargin = Math.max(
+    COMPOSER_SIDE_MARGIN,
+    contentColumnInset('reading', windowWidth),
+  );
   const themeColors = useThemeColors();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const voiceDenial = useCapabilityDenialReason('canUseVoice');
@@ -497,7 +504,11 @@ function VoiceCompanion() {
           )}
 
           {visibleSessionMessages?.length || showCurrentPreview ? (
-            <Animated.View entering={FadeIn.duration(motion.quick)} style={styles.transcriptBox}>
+            <Animated.View
+              testID="voice-transcript-column"
+              entering={FadeIn.duration(motion.quick)}
+              style={styles.transcriptBox}
+            >
               <ScrollView
                 keyboardShouldPersistTaps="handled"
                 testID="voice-session-transcript"
@@ -556,7 +567,10 @@ function VoiceCompanion() {
           ) : null}
         </View>
 
-        <View style={styles.composer}>
+        <View
+          testID="voice-composer"
+          style={[styles.composer, { marginHorizontal: composerSideMargin }]}
+        >
           <TextInput
             value={typedDraft}
             onChangeText={(text) => {
@@ -716,7 +730,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.voiceTranscriptSurface,
     borderWidth: 1,
     borderColor: colors.voiceAccentBorder,
-    width: '100%',
+    ...contentColumn('reading'),
   },
   transcriptScroll: {
     flexGrow: 0,
@@ -777,7 +791,7 @@ const styles = StyleSheet.create({
   },
   composer: {
     minHeight: 52,
-    marginHorizontal: 20,
+    marginHorizontal: COMPOSER_SIDE_MARGIN,
     marginBottom: 12,
     paddingLeft: 16,
     paddingRight: 6,

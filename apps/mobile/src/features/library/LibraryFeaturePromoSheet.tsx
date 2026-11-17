@@ -10,6 +10,7 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { openHelpArticle } from '@/src/features/support/HelpArticleLink';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const PROMO_STORE_NAME = 'library-feature-promo';
 
@@ -82,6 +83,7 @@ export function LibraryFeaturePromoSheet() {
           testID="library-promo-sheet"
           accessibilityViewIsModal
           style={{
+            ...contentColumn('reading'),
             backgroundColor: colors.surfaceElevated,
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,

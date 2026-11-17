@@ -88,7 +88,10 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
     className="flex-1 px-4"
     contentContainerStyle={
       {
+        "alignSelf": "center",
+        "maxWidth": 720,
         "paddingBottom": 44,
+        "width": "100%",
       }
     }
     showsVerticalScrollIndicator={false}
@@ -405,10 +408,13 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
     className="flex-1"
     contentContainerStyle={
       {
+        "alignSelf": "center",
         "flexGrow": 1,
+        "maxWidth": 720,
         "paddingBottom": 36,
         "paddingHorizontal": 16,
         "paddingTop": 8,
+        "width": "100%",
       }
     }
     keyboardShouldPersistTaps="handled"

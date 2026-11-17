@@ -20,6 +20,7 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useTierStore } from '@/src/features/billing/store';
 import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
 import { spacing, useThemeColors } from '@/src/ui/theme';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import {
   AUTO_MODES,
   LOCAL_MODEL_LIST,
@@ -172,6 +173,7 @@ export default function ModelsScreen() {
         testID="models-scroll"
         style={{ flex: 1 }}
         contentContainerStyle={{
+          ...contentColumn('reading'),
           gap: spacing.lg,
           paddingBottom: spacing['2xl'],
           paddingHorizontal: spacing.lg,

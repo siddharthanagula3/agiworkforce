@@ -39,6 +39,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
 import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 import { buildThinkingSteps, ThinkingChip } from '@/src/features/chat/components/ThinkingChip';
 
 function searchActivity(): AgentActivityState {
@@ -335,5 +336,15 @@ describe('ThinkingChip', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('stops the reasoning sheet at the reading column on a wide window', () => {
+    const { getByLabelText, getByText } = render(
+      <ThinkingChip thinkingText="Considering the options." isStreaming={false} duration={4} />,
+    );
+
+    fireEvent.press(getByLabelText('Show reasoning'));
+
+    expect(sitsInColumn(getByText('Considering the options.'), 'reading')).toBe(true);
   });
 });

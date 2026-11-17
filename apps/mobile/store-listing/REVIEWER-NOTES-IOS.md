@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-11-15
+Last updated: 2026-11-17
 Applies to: `com.agiworkforce.app`, version 0.0.1
 
 `store-listing/LISTING-METADATA-IOS.json` points
@@ -24,7 +24,7 @@ or less, so the filled-in credentials still fit under Apple's limit.
 
 ```text
 AGI Mobile is an AI assistant with two modes.
-- Local Mode: chats run on a model on this iPhone. No account is needed, and no chat content leaves the device unless the person chooses to send a report.
+- Local Mode: chats run on a model on this device. No account is needed, and no chat content leaves the device unless the person chooses to send a report.
 - AGI Cloud: optional, needs sign-in. Chats run on AGI's servers and the AI provider that serves the chosen model.
 
 Demo account (also in the Sign-In Information fields; no one-time code is needed):
@@ -72,7 +72,7 @@ AGI is an AI assistant with two independent modes.
 Apple Intelligence on the device without a model download. Other devices use a
 quantized open-weight model downloaded on first run and executed through
 ExecuTorch or llama.rn. Inference happens entirely on-device; no prompt or
-response leaves the phone unless the person chooses to send a report about it
+response leaves the device unless the person chooses to send a report about it
 (see "Reporting AI-generated content"). Chats are stored in an encrypted
 on-device store (MMKV, AES-128 in CFB mode, keyed by 16 random printable
 characters, about 105 bits, held in the iOS Keychain); on-device memory and
@@ -80,7 +80,7 @@ model records use a local SQLite database encrypted with SQLCipher (AES-256-CBC
 with HMAC-SHA512 through Apple CommonCrypto, under a random 256-bit key).
 Both keys are kept on this device only (`WHEN_UNLOCKED_THIS_DEVICE_ONLY`,
 `lib/mmkv.ts`, `storage/db.ts`), so Local chats restored from a backup onto a
-different iPhone cannot be opened there: the app sets that copy aside rather
+different iPhone or iPad cannot be opened there: the app sets that copy aside rather
 than deleting it, and tells the person once that their Local chats were not
 restored (`src/features/edge-cases/components/LocalDataResetNotice.tsx`).
 Downloaded model files are excluded from iCloud and computer backups, because
@@ -153,7 +153,7 @@ allowed, and never shows the prompt (`app/_layout.tsx`,
 `services/notifications.ts` → `registerForPushNotifications`).
 Declining any one of them leaves the rest of the app fully usable. Settings →
 Permissions shows the current status of Microphone, Speech Recognition, Camera,
-Photos & Files, Notifications, Calendar, Reminders and, on an iPhone with Face
+Photos & Files, Notifications, Calendar, Reminders and, on a device with Face
 ID, Face ID (`src/features/settings/permissions/registry.ts`).
 
 | Permission                                                 | Where it is used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -512,7 +512,7 @@ saves the report on the device first, then sends it to
 In Local Mode the egress guard blocks that send, and the sheet asks **Send this
 report to AGI?**: only a tap on **Send** lets that one report through
 (`consentedReport` in `lib/egressGuard.ts`). Otherwise the report stays on the
-phone and the sheet says "Saved on this device. Nothing was sent." **Email
+device and the sheet says "Saved on this device. Nothing was sent." **Email
 support instead** hands it to the mail app.
 
 ## Export compliance

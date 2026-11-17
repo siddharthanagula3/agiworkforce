@@ -25,19 +25,19 @@ export interface PhoneStepOutcome {
 }
 
 export const PHONE_STEP_DECLINED: PhoneStepOutcome = {
-  content: 'The user declined this on their phone, so nothing was added.',
+  content: 'The user declined this on their device, so nothing was added.',
   isError: true,
 };
 
 const CALENDAR_OFF: PhoneStepOutcome = {
   content:
-    "Calendar access is off for AGI Mobile on this phone, so nothing was read or added. The user can turn it on for AGI Mobile in the phone's Settings app.",
+    "Calendar access is off for AGI Mobile on this device, so nothing was read or added. The user can turn it on for AGI Mobile in the device's Settings app.",
   isError: true,
 };
 
 const REMINDERS_OFF: PhoneStepOutcome = {
   content:
-    "Reminders access is off for AGI Mobile on this phone, so nothing was added. The user can turn it on for AGI Mobile in the phone's Settings app.",
+    "Reminders access is off for AGI Mobile on this device, so nothing was added. The user can turn it on for AGI Mobile in the device's Settings app.",
   isError: true,
 };
 
@@ -88,7 +88,7 @@ function wallClock(value: string | Date): string {
 
 function stepTime(value: string | undefined): Date {
   const date = value ? parsePhoneStepTime(value) : null;
-  if (!date) throw new PhoneStepRefused('The step has no time the phone can read.');
+  if (!date) throw new PhoneStepRefused('The step has no time the device can read.');
   return date;
 }
 
@@ -201,7 +201,7 @@ async function createEvent(request: PhoneStepRequest): Promise<PhoneStepOutcome>
   const calendar = await writableCalendar();
   if (!calendar) {
     return {
-      content: 'There is no calendar on this phone that events can be added to.',
+      content: 'There is no calendar on this device that events can be added to.',
       isError: true,
     };
   }
@@ -228,7 +228,7 @@ async function createEvent(request: PhoneStepRequest): Promise<PhoneStepOutcome>
 
 async function createReminder(request: PhoneStepRequest): Promise<PhoneStepOutcome> {
   if (Platform.OS !== 'ios') {
-    return { content: 'Reminders can be added only from an iPhone.', isError: true };
+    return { content: 'Reminders can be added only from an iPhone or iPad.', isError: true };
   }
   const granted = await accessGranted(
     Calendar.getRemindersPermissionsAsync,
@@ -259,7 +259,7 @@ async function createReminder(request: PhoneStepRequest): Promise<PhoneStepOutco
 export async function runPhoneDeviceStep(step: PhoneDeviceStep): Promise<PhoneStepOutcome> {
   if (step.deviceId !== (await getDeviceId())) {
     return {
-      content: 'This step was meant for another device, so this phone did not run it.',
+      content: 'This step was meant for another device, so this device did not run it.',
       isError: true,
     };
   }
@@ -274,6 +274,6 @@ export async function runPhoneDeviceStep(step: PhoneDeviceStep): Promise<PhoneSt
     if (error instanceof PhoneStepRefused) return { content: error.message, isError: true };
     const reason =
       error instanceof Error && error.message ? `: ${error.message.slice(0, 300)}` : '.';
-    return { content: `The phone could not complete this step${reason}`, isError: true };
+    return { content: `The device could not complete this step${reason}`, isError: true };
   }
 }

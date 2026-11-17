@@ -1,5 +1,7 @@
 import React from 'react';
+import { ScrollView, StyleSheet } from 'react-native';
 import { act, render, waitFor } from '@testing-library/react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 
 const mockInstallations = jest.fn();
 const mockFocus: { callback: (() => void) | null } = { callback: null };
@@ -73,6 +75,21 @@ describe('customize plugins row', () => {
     const { findByLabelText, getByText } = render(<CustomizeScreen />);
     expect(await findByLabelText('Plugins, 2 added')).toBeTruthy();
     expect(getByText('2 added')).toBeTruthy();
+  });
+
+  it('holds the list to the reading column on a wide pane', async () => {
+    mockInstallations.mockResolvedValue([]);
+    const { UNSAFE_getByType } = render(<CustomizeScreen />);
+    await waitFor(() => expect(mockInstallations).toHaveBeenCalled());
+
+    expect(
+      StyleSheet.flatten(UNSAFE_getByType(ScrollView).props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 16,
+    });
   });
 
   it('shows no count when nothing is added', async () => {

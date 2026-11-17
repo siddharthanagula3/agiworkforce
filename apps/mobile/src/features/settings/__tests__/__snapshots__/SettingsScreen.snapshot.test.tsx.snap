@@ -148,8 +148,11 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
     className="flex-1"
     contentContainerStyle={
       {
+        "alignSelf": "center",
+        "maxWidth": 720,
         "paddingBottom": 36,
         "paddingHorizontal": 16,
+        "width": "100%",
       }
     }
     keyboardShouldPersistTaps="handled"

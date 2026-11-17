@@ -17,6 +17,8 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
 import { spacing, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { appAuthoredDownloadMessage, ModelDownloadError } from '@/services/modelDownload';
 import { getInstalledModel } from '@/storage/installedModels';
 import {
@@ -66,7 +68,7 @@ const HERO_NOTICES: readonly { id: string; icon: LucideIcon; text: string }[] = 
   {
     id: 'history',
     icon: Clock,
-    text: 'Local chats stay on this phone. AGI Cloud chats are saved to your account, and you can delete them.',
+    text: 'Local chats stay on this device. AGI Cloud chats are saved to your account, and you can delete them.',
   },
   {
     id: 'mistakes',
@@ -137,6 +139,7 @@ type ScreenId = 'hero' | 'about-you' | 'device-tier' | 'download';
 
 export default function OnboardingScreen() {
   const { colors, isDark } = useTheme();
+  const { viewportWidth } = useResponsiveLayout();
   const router = useRouter();
   const primaryButtonTextColor = isDark ? colors.black : colors.white;
 
@@ -407,9 +410,10 @@ export default function OnboardingScreen() {
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>
       <Reanimated.View
         key={screen}
+        testID="onboarding-column"
         entering={FadeIn.duration(motion.moved)}
         exiting={FadeOut.duration(motion.quick)}
-        style={{ flex: 1 }}
+        style={[{ flex: 1 }, contentColumn('form')]}
       >
         {screen === 'hero' && (
           <HeroScreen
@@ -461,7 +465,12 @@ export default function OnboardingScreen() {
 
       {/* Model picker sheet, overlays the full screen, only shown when user
           taps "Pick a different model" on the device-tier screen. */}
-      <ModelPickerSheet sheetRef={modelPickerRef} modelScope="local" onSelect={handleSelectModel} />
+      <ModelPickerSheet
+        sheetRef={modelPickerRef}
+        modelScope="local"
+        paneWidth={viewportWidth}
+        onSelect={handleSelectModel}
+      />
     </SafeAreaView>
   );
 }

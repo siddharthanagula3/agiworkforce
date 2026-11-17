@@ -10,6 +10,7 @@ import { Text } from '@/components/ui/Text';
 import { ShimmerText } from '@/components/ui/ShimmerText';
 import { motion, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/utils/reasoning';
@@ -466,9 +467,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  safeArea: {
-    width: '100%',
-  },
+  safeArea: contentColumn('reading'),
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

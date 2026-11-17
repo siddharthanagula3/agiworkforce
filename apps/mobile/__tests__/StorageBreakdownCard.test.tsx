@@ -62,6 +62,11 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { StorageBreakdownCard } from '@/src/features/settings/StorageBreakdownCard';
 import StorageManagerScreen from '@/app/(app)/settings/storage';
+import { StyleSheet } from 'react-native';
+import { TextScaleContext } from '@/components/ui/textScale';
+import { ROW_LABEL_TEXT_SCALE_LIMIT } from '@/src/ui/theme/tokens';
+
+const LARGEST_ACCESSIBILITY_SCALE = 3.571;
 
 const MB = 1024 * 1024;
 const fetchBreakdown = fetchCloudFileBreakdown as jest.Mock;
@@ -102,6 +107,42 @@ describe('the Cloud files card in Storage', () => {
     expect(screen.getByTestId('storage-breakdown-images-size')).toHaveTextContent('289 MB');
     expect(screen.getByLabelText('Documents. 37 MB')).toBeTruthy();
     expect(screen.getByLabelText('Images. 289 MB')).toBeTruthy();
+  });
+
+  it('puts each size below its label at the largest text size, so no word breaks in the middle', async () => {
+    const screen = render(
+      <TextScaleContext.Provider value={LARGEST_ACCESSIBILITY_SCALE}>
+        <StorageBreakdownCard />
+      </TextScaleContext.Provider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('storage-breakdown-documents-size')).toHaveTextContent('37 MB'),
+    );
+    for (const row of ['storage-breakdown-documents', 'storage-breakdown-images']) {
+      const stack = screen.getByTestId(`${row}-stack`);
+      expect(StyleSheet.flatten(stack.props.style)).toMatchObject({ flex: 1, minWidth: 0 });
+      const [label, value] = stack.children as { props: Record<string, unknown> }[];
+      expect(label?.props['maxFontSizeMultiplier']).toBe(ROW_LABEL_TEXT_SCALE_LIMIT);
+      expect(value?.props['testID']).toBe(`${row}-size`);
+    }
+    expect(screen.getByLabelText('Documents. 37 MB')).toBeTruthy();
+  });
+
+  it('keeps the label and its size on one line at the default text size', async () => {
+    const screen = render(
+      <TextScaleContext.Provider value={1}>
+        <StorageBreakdownCard />
+      </TextScaleContext.Provider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('storage-breakdown-documents-size')).toHaveTextContent('37 MB'),
+    );
+    expect(screen.queryByTestId('storage-breakdown-documents-stack')).toBeNull();
+    expect(
+      StyleSheet.flatten(screen.getByTestId('storage-breakdown-documents-size').props.style),
+    ).toMatchObject({ flexShrink: 0 });
   });
 
   it('shows 0 B for a kind the account has none of', async () => {

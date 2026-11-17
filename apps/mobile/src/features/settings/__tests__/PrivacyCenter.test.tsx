@@ -72,6 +72,7 @@ import { webContentPageUrl } from '@/src/platform/webContentPage';
 import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
 import { ROW_LABEL_TEXT_SCALE_LIMIT } from '@/src/ui/theme/tokens';
 import { LARGEST_IOS_TEXT_SCALE, setTextScale } from '@/test-utils/textScale';
+import { contentColumnWidth } from '@/src/shared/layout/contentColumn';
 
 const mockOpenInAppBrowser = openInAppBrowser as jest.Mock;
 
@@ -334,7 +335,7 @@ describe('the Privacy article cards at large text sizes', () => {
     ['the largest text size', LARGEST_IOS_TEXT_SCALE],
   ])('give each title room to wrap between words at %s', (_size, scale) => {
     const startingScale = Dimensions.get('window').fontScale;
-    const { width } = Dimensions.get('window');
+    const column = contentColumnWidth('reading', Dimensions.get('window').width);
     setTextScale(scale);
     try {
       render(
@@ -347,11 +348,11 @@ describe('the Privacy article cards at large text sizes', () => {
         const cardWidth = StyleSheet.flatten(card.props.style).width as number;
         const title = screen.getByTestId(`privacy-article-title-${article.docId}`);
         if (scale === 1) {
-          expect(cardWidth).toBe(Math.round(width * 0.56));
+          expect(cardWidth).toBe(Math.round(column * 0.56));
           expect(title.props.numberOfLines).toBe(2);
         } else {
-          expect(cardWidth).toBeGreaterThanOrEqual(Math.round(width * 0.8));
-          expect(cardWidth).toBeLessThan(width);
+          expect(cardWidth).toBeGreaterThanOrEqual(Math.round(column * 0.8));
+          expect(cardWidth).toBeLessThan(column);
           expect(title.props.numberOfLines).toBeUndefined();
         }
       }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, RefreshControl } from 'react-native';
+import { Alert, FlatList, RefreshControl, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -64,7 +64,9 @@ jest.mock('@/src/shared/components/cloud-screen', () => ({
 }));
 
 import { API_URL } from '@/lib/constants';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 import { ApiHttpError } from '@/services/api';
+import { confirmIrreversible } from '@/src/shared/components/cloud-screen';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -432,6 +434,39 @@ describe('Hiding an invited site and untitled sites', () => {
     expect(JSON.parse(mockStore.get('sites:hidden-shared-sites:v1:user-1') ?? '[]')).toEqual([
       'invited_one',
     ]);
+  });
+
+  it('names the device the site is hidden on and keeps the list in the reading column', async () => {
+    route({
+      shared: () => ({
+        items: [INVITED],
+        nextCursor: null,
+        hasMore: false,
+        emailVerified: true,
+      }),
+    });
+    render(<SitesScreen />);
+    await openShared();
+    await screen.findByText(INVITED.title);
+    expect(
+      screen
+        .UNSAFE_getAllByType(FlatList)
+        .some(
+          (list) =>
+            StyleSheet.flatten(list.props.contentContainerStyle)?.maxWidth ===
+            READING_COLUMN_MAX_WIDTH,
+        ),
+    ).toBe(true);
+
+    fireEvent.press(screen.getByLabelText('More options for Wedding page'));
+    const hide = lastAlertButtons().find((button) => button.text === 'Hide this site');
+    act(() => hide?.onPress?.());
+
+    expect(confirmIrreversible).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        consequence: 'It will no longer show in Shared with you on this device.',
+      }),
+    );
   });
 
   it('names an untitled shared site the same way for every reader', async () => {

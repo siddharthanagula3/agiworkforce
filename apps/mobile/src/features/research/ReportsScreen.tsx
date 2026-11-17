@@ -50,6 +50,7 @@ import { spacing, typeScale } from '@/src/ui/theme/tokens';
 import type { ToolSearchResult } from '@/types/chat';
 import { extractReportSections } from './reportSections';
 import { fetchResearchReports, researchReportLabel, type MobileResearchReport } from './service';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function formatCreatedAt(iso: string): string {
   const date = new Date(iso);
@@ -369,7 +370,12 @@ function ReportDetail({ report, onBack }: { report: MobileResearchReport; onBack
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('screen')}>
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}
+          contentContainerStyle={{
+            ...contentColumn('reading'),
+            paddingHorizontal: 16,
+            paddingBottom: 32,
+            gap: 12,
+          }}
           keyboardShouldPersistTaps="handled"
           testID="research-report-detail"
         >
@@ -646,7 +652,12 @@ export function ReportsScreen() {
         <FlatList
           data={reports}
           keyExtractor={(report) => report.id}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 8 }}
+          contentContainerStyle={{
+            ...contentColumn('reading'),
+            paddingHorizontal: 16,
+            paddingBottom: 24,
+            gap: 8,
+          }}
           renderItem={({ item }) => <ReportRow report={item} onOpen={() => setOpenReport(item)} />}
           onEndReached={() => {
             if (!moreFailed) void loadMore();

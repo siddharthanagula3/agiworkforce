@@ -39,6 +39,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { spacing, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useArtifactStore } from '@/src/features/artifacts/store';
@@ -276,7 +277,7 @@ async function confirmPublish(title: string): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     Alert.alert(
       'Publish to a public link?',
-      `“${title}” will be uploaded from this phone to AGI Cloud, and anyone with the link can open it.`,
+      `“${title}” will be uploaded from this device to AGI Cloud, and anyone with the link can open it.`,
       [
         { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
         { text: 'Publish', style: 'default', onPress: () => resolve(true) },
@@ -1769,9 +1770,11 @@ export function ArtifactFullScreen({
           ) : (
             <ScrollView
               ref={documentScrollRef}
+              testID="artifact-fullscreen-document"
               keyboardShouldPersistTaps="handled"
               style={{ flex: 1 }}
               contentContainerStyle={{
+                ...contentColumn('reading'),
                 padding: 16,
                 paddingBottom: insets.bottom + 24,
               }}

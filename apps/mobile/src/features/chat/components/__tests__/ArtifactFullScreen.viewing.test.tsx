@@ -115,6 +115,7 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 import { NavigationContext } from 'expo-router/react-navigation';
 import { ArtifactFullScreen } from '../ArtifactFullScreen';
 import { FULL_SCREEN_TOUCH_TARGET } from '../../chrome/fullScreenChrome';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 import { spaceAbove, tapTarget } from '@/test-utils/viewerChrome';
 import { copyToClipboard } from '@/lib/clipboard';
 import { FileDownloadError } from '@/services/fileCreation';
@@ -202,6 +203,24 @@ beforeEach(() => {
 });
 
 afterEach(() => alert.mockRestore());
+
+describe('the artifact viewer on a wide window', () => {
+  it('holds a document to the reading column and keeps its padding', () => {
+    const screen = render(
+      <ArtifactFullScreen artifact={documentArtifact} visible onClose={() => undefined} />,
+    );
+
+    const style = StyleSheet.flatten(
+      screen.getByTestId('artifact-fullscreen-document').props.contentContainerStyle,
+    );
+    expect(style).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      padding: 16,
+    });
+  });
+});
 
 describe('the artifact viewer header', () => {
   afterEach(() => {

@@ -9,6 +9,7 @@ import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { Text } from '@/components/ui/Text';
 import { colors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -125,6 +126,7 @@ export function VoiceOnboardingSheet({
         <Animated.View
           style={[
             {
+              ...contentColumn('reading'),
               flex: 1,
               marginTop: insets.top + 8,
               backgroundColor: colors.surfaceElevated,

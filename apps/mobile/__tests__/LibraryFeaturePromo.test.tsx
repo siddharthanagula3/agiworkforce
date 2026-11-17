@@ -33,6 +33,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
 }));
 
 import { openInAppBrowser } from '@/lib/safeOpenURL';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 import { helpArticleUrl } from '@/src/features/support/HelpArticleLink';
 import {
   LibraryFeaturePromoSheet,
@@ -101,5 +102,11 @@ describe('Library feature promo sheet', () => {
     const { existsSync } = require('fs');
     const { join } = require('path');
     expect(existsSync(join(__dirname, '../../web/content/support/library.md'))).toBe(true);
+  });
+
+  it('stops the sheet at the reading column on a wide window', () => {
+    const screen = render(<LibraryFeaturePromoSheet />);
+
+    expect(sitsInColumn(screen.getByTestId('library-promo-sheet'), 'reading')).toBe(true);
   });
 });

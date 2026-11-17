@@ -1,11 +1,12 @@
-import { Drawer } from 'expo-router/drawer';
+import { useEffect } from 'react';
+import { Drawer, type DrawerContentComponentProps } from 'expo-router/drawer';
 import { DrawerContent } from '@/src/features/drawer/components/DrawerContent';
 import { ContinuityOnboardingGate } from '@/src/features/continuity';
 import { AppLockOffer } from '@/src/features/auth/components/AppLockOffer';
 import { useDeviceRegistryHeartbeat } from '@/src/features/device-registry';
 import { useThemeColors } from '@/src/ui/theme';
 import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
-import { drawerGestureOptions } from '@/src/features/shell';
+import { drawerGestureOptions, isDrawerOpen } from '@/src/features/shell';
 import { WorkspaceMfaBanner } from '@/src/features/settings/account-security/WorkspaceMfaBanner';
 import { useReleaseUpdateNotice } from '@/src/features/release-state/releaseUpdateNotice';
 import { ServiceNoticesBanner } from '@/src/features/service-notices/ServiceNoticesBanner';
@@ -17,9 +18,24 @@ const HIDDEN = { drawerItemStyle: { display: 'none' as const } };
 // The settings pages sit on a native stack whose edge swipe goes Back; the
 // drawer's own edge swipe would claim the same drag.
 const SETTINGS_STACK = { ...HIDDEN, swipeEnabled: false };
+// A full-screen page takes the whole window even where the sidebar is
+// permanent: the camera pages lay out against the window size.
+const FULL_SCREEN = { ...HIDDEN, drawerType: 'front' as const };
 // The voice screen is always dark and asks for light status bar text; the
 // themed drawer pulled over it would sit under that light text.
-const VOICE_SCREEN = { ...HIDDEN, swipeEnabled: false };
+const VOICE_SCREEN = { ...FULL_SCREEN, swipeEnabled: false };
+
+// The permanent sidebar draws itself open whatever the drawer state says, so an
+// open state left from the overlay would come back open when the window narrows.
+function AppDrawerContent(props: DrawerContentComponentProps) {
+  const { usesPersistentDrawer } = useTabletLayout();
+  const staleOpen = usesPersistentDrawer && isDrawerOpen(props.state);
+  const { navigation } = props;
+  useEffect(() => {
+    if (staleOpen) navigation.closeDrawer();
+  }, [staleOpen, navigation]);
+  return <DrawerContent {...props} />;
+}
 
 export default function AppLayout() {
   const colors = useThemeColors();
@@ -32,7 +48,7 @@ export default function AppLayout() {
     <>
       <Drawer
         backBehavior="history"
-        drawerContent={(props) => <DrawerContent {...props} />}
+        drawerContent={(props) => <AppDrawerContent {...props} />}
         screenOptions={{
           headerShown: false,
           drawerType: gestures.drawerType,
@@ -107,9 +123,9 @@ export default function AppLayout() {
         <Drawer.Screen name="support/[ticketId]" options={HIDDEN} />
         <Drawer.Screen name="feedback" options={HIDDEN} />
         <Drawer.Screen name="about" options={HIDDEN} />
-        <Drawer.Screen name="camera" options={HIDDEN} />
+        <Drawer.Screen name="camera" options={FULL_SCREEN} />
         <Drawer.Screen name="compare" options={HIDDEN} />
-        <Drawer.Screen name="scan" options={HIDDEN} />
+        <Drawer.Screen name="scan" options={FULL_SCREEN} />
         <Drawer.Screen name="translate" options={HIDDEN} />
         <Drawer.Screen name="voice" options={VOICE_SCREEN} />
         <Drawer.Screen name="widget-setup" options={HIDDEN} />

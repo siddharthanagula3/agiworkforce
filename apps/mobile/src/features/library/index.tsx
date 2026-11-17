@@ -1094,6 +1094,7 @@ export function LibraryScreen({
           accessibilityLabel="Search library"
           clearAccessibilityLabel="Clear library search"
           testID="library-search"
+          columnKind="grid"
         />
       )}
 

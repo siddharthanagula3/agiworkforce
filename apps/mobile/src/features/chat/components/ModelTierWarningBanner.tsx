@@ -4,6 +4,7 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { getModelById } from '@/lib/models';
@@ -20,44 +21,51 @@ export function ModelTierWarningBanner({ onChooseModel }: { onChooseModel?: () =
   return (
     <View
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingLeft: 16,
-        paddingRight: onChooseModel ? 4 : 16,
-        paddingVertical: onChooseModel ? 0 : 8,
         backgroundColor: colors.warningSurface,
         borderTopWidth: 1,
         borderTopColor: colors.warningBorder,
-        gap: 8,
       }}
       accessibilityRole="alert"
     >
-      <Zap size={13} color={colors.agentWarning} strokeWidth={2} />
-      <Text
+      <View
+        testID="model-tier-warning-banner.content"
         style={{
-          fontSize: typeScale.caption,
-          color: colors.agentWarning,
-          fontWeight: '500',
-          flex: 1,
+          ...contentColumn('reading'),
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingLeft: 16,
+          paddingRight: onChooseModel ? 4 : 16,
+          paddingVertical: onChooseModel ? 0 : 8,
+          gap: 8,
         }}
-        numberOfLines={2}
       >
-        {model.name} is not included in your plan. Choose an available model.
-      </Text>
-      {onChooseModel ? (
-        <PressableBox
-          onPress={onChooseModel}
-          accessibilityRole="button"
-          accessibilityLabel="Choose a model"
-          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}
+        <Zap size={13} color={colors.agentWarning} strokeWidth={2} />
+        <Text
+          style={{
+            fontSize: typeScale.caption,
+            color: colors.agentWarning,
+            fontWeight: '500',
+            flex: 1,
+          }}
+          numberOfLines={2}
         >
-          <Text
-            style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textPrimary }}
+          {model.name} is not included in your plan. Choose an available model.
+        </Text>
+        {onChooseModel ? (
+          <PressableBox
+            onPress={onChooseModel}
+            accessibilityRole="button"
+            accessibilityLabel="Choose a model"
+            style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 12 }}
           >
-            Choose model
-          </Text>
-        </PressableBox>
-      ) : null}
+            <Text
+              style={{ fontSize: typeScale.caption, fontWeight: '600', color: colors.textPrimary }}
+            >
+              Choose model
+            </Text>
+          </PressableBox>
+        ) : null}
+      </View>
     </View>
   );
 }

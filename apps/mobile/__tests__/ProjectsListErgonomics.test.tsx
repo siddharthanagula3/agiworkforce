@@ -166,6 +166,7 @@ jest.mock('../stores/projects/cloudProjectStore', () => ({
 
 import ProjectsTabScreen from '../app/(app)/(tabs)/projects';
 import { lightColors } from '../src/ui/theme/tokens';
+import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
 
 type AlertButton = { text?: string; onPress?: () => void };
 
@@ -286,6 +287,19 @@ describe('Projects list ergonomics', () => {
     expect(ids.indexOf('projects-list')).toBeLessThan(ids.indexOf('projects-search'));
   });
 
+  it('holds the project cards to the reading column on a wide pane', () => {
+    const screen = render(<ProjectsTabScreen />);
+
+    expect(
+      StyleSheet.flatten(screen.getByTestId('projects-list').props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      padding: 12,
+    });
+  });
+
   it('creates from a labelled pill that meets the 44pt minimum target', () => {
     const screen = render(<ProjectsTabScreen />);
 
@@ -348,6 +362,21 @@ describe('Projects list ergonomics', () => {
     fireEvent.press(screen.getByLabelText('Start from Research'));
 
     expect(screen.getByLabelText('Project name').props.value).toBe('Q4 strategy');
+  });
+
+  it('holds the empty state to the reading column on a wide pane', () => {
+    mockAppMode = 'cloud';
+    mockClerkUserId = 'user-1';
+    const screen = render(<ProjectsTabScreen />);
+
+    expect(
+      StyleSheet.flatten(screen.getByTestId('projects-empty-scroll').props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 32,
+    });
   });
 
   it('starts Cloud sync on entry and lets an empty list be pulled to refresh', async () => {

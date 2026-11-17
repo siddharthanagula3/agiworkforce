@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { toolApprovalPolicyOption } from '@agiworkforce/types';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 
 const mockPush = jest.fn();
 const mockApproval: { ready: boolean; status: string; policy: string } = {
@@ -157,5 +158,11 @@ describe('CodeApprovalNotice', () => {
     const screen = render(<CodeApprovalNotice accountKey="account-a" />);
 
     expect(screen.queryByText(CODE_APPROVAL_NOTICE_TITLE)).toBeNull();
+  });
+
+  it('keeps the card at the form column on a wide window', () => {
+    const { getByTestId } = render(<CodeApprovalNotice />);
+
+    expect(sitsInColumn(getByTestId('code-approval-notice'), 'form')).toBe(true);
   });
 });

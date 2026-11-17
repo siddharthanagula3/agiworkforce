@@ -12,6 +12,8 @@ import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING, PAYWALL_FEATURE_COPY, isBillingPlanTier } from '@agiworkforce/types';
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
@@ -108,6 +110,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
   ) {
     const colors = useThemeColors();
     const router = useRouter();
+    const { contentWidth } = useResponsiveLayout();
     const sheetRef = useRef<BottomSheet>(null);
     const [presented, sheetPresence] = useBottomSheetPresence();
     useHardwareBackDismiss(presented, () => sheetRef.current?.close());
@@ -216,6 +219,7 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
         ref={sheetRef}
         index={-1}
         accessible={false}
+        style={{ marginHorizontal: contentColumnInset('reading', contentWidth) }}
         onChange={handleSheetChange}
         onAnimate={sheetPresence.onAnimate}
         onClose={sheetPresence.onClose}

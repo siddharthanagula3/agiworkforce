@@ -125,7 +125,7 @@ export function pluginCompatibility(entry: PluginDirectoryEntryWire): PluginComp
       installable: false,
       warning:
         entry.runtime?.note ??
-        'Runs in the Desktop app and the CLI. Cloud chats on this phone cannot load it.',
+        'Runs in the Desktop app and the CLI. Cloud chats on this device cannot load it.',
     };
   }
   return { installable: true, warning: entry.runtime?.note ?? null };

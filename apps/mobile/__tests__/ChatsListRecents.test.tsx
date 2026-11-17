@@ -347,7 +347,9 @@ describe('ChatsListScreen recent searches and recent chats', () => {
 
     const [title, message, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
     expect(title).toBe('Clear recent searches?');
-    expect(message).toContain('cannot be undone');
+    expect(message).toBe(
+      'Your recent searches in this mode will be removed from this device. This cannot be undone.',
+    );
     expect(buttons.map((button: { text: string }) => button.text)).toEqual(['Cancel', 'Clear']);
     expect(readRecentSearches(LOCAL)).toEqual(['budget']);
     expect(screen.getByText('budget')).toBeTruthy();

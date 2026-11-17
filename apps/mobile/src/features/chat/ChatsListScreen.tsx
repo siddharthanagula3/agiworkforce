@@ -416,7 +416,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   const clearRecents = useCallback(() => {
     Alert.alert(
       'Clear recent searches?',
-      'Your recent searches in this mode will be removed from this phone. This cannot be undone.',
+      'Your recent searches in this mode will be removed from this device. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

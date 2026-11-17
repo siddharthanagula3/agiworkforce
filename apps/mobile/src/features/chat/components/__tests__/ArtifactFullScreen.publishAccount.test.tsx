@@ -173,7 +173,7 @@ describe('ArtifactFullScreen publish by account state', () => {
       await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
       expect(lastAlert().title).toBe('Switch to AGI Cloud to publish');
       expect(lastAlert().message).toBe(
-        'This phone is in Local mode. Publishing puts a copy of this artifact on AGI Cloud, so switch to AGI Cloud mode first. Nothing has been uploaded.',
+        'This device is in Local mode. Publishing puts a copy of this artifact on AGI Cloud, so switch to AGI Cloud mode first. Nothing has been uploaded.',
       );
       expect(Alert.alert).not.toHaveBeenCalledWith(
         'Publish to a public link?',
@@ -225,7 +225,7 @@ describe('ArtifactFullScreen publish by account state', () => {
       await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
       expect(lastAlert().title).toBe('Publish to a public link?');
       expect(lastAlert().message).toBe(
-        '“Landing page” will be uploaded from this phone to AGI Cloud, and anyone with the link can open it.',
+        '“Landing page” will be uploaded from this device to AGI Cloud, and anyone with the link can open it.',
       );
       expect(mockPost).not.toHaveBeenCalled();
       tapAlertButton('Publish');

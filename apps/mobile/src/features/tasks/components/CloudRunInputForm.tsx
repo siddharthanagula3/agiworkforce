@@ -65,7 +65,7 @@ const PUNYCODE_WARNING =
   'This address uses characters that can imitate another site. Check the domain before you open it.';
 const UNOPENABLE_LINK_NOTE = "This link can't be opened from here.";
 const UNSUPPORTED_NOTE =
-  'This question needs a form the phone cannot show. Answer it on the web, or decline it here.';
+  'This question needs a form this device cannot show. Answer it on the web, or decline it here.';
 
 function draftKey(toolCallId: string, promptKey: string): string {
   return `${toolCallId}:${promptKey}`;

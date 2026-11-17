@@ -80,6 +80,7 @@ import { withoutCitationMarkers } from '@agiworkforce/unified-chat/citation-mark
 import { MessageFormatCard } from './MessageFormatCard';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { API_URL } from '@/lib/constants';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { RunningAgentActivityTimeline } from './RunningAgentActivityTimeline';
 import {
   explainAutoRouteReason,
@@ -347,7 +348,7 @@ function MessageActionSheet({
         accessibilityRole="button"
         accessible={false}
       >
-        <SafeAreaView edges={['bottom']} style={{ width: '100%' }}>
+        <SafeAreaView edges={['bottom']} style={contentColumn('reading')}>
           <PressableBox
             style={{
               backgroundColor: colors.surfaceElevated,

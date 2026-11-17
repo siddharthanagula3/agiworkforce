@@ -123,6 +123,7 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
@@ -1280,7 +1281,10 @@ export default function ChatTabScreen() {
               </View>
             ) : null}
             {activeMode === 'local' && !hasReadyLocalModel ? (
-              <View style={{ width: '100%', marginTop: 16 }}>
+              <View
+                testID="download-model-banner.column"
+                style={{ ...contentColumn('reading'), marginTop: 16 }}
+              >
                 <DownloadModelBanner
                   onPress={() => pushFromComposer('/(app)/models' as RouterHref)}
                 />

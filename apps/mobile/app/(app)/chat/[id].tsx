@@ -223,6 +223,7 @@ import { clearNewChatProjectScope } from '@/stores/projects/newChatProjectScope'
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import {
   captureAccountScopedUiState,
@@ -1535,6 +1536,7 @@ export default function ChatScreen() {
   const handleOpenDrawer = useCallback(() => {
     openNearestDrawer(navigation);
   }, [navigation]);
+  const { usesPersistentDrawer } = useResponsiveLayout();
 
   const handleQuoteReply = useCallback(
     (message: ChatMessage) => {
@@ -2167,6 +2169,8 @@ export default function ChatScreen() {
               projectName={conversationProject?.name}
               onPress={handleBack}
             />
+          ) : usesPersistentDrawer ? (
+            <View testID="chat.thread-header.drawer-slot" style={{ width: 44, height: 44 }} />
           ) : (
             <Pressable
               onPress={handleOpenDrawer}

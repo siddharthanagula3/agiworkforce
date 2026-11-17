@@ -40,6 +40,7 @@ import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { DEFAULT_LOCAL_MODEL_ID, getDisplayName } from '@/src/features/model-picker/service';
 import { useTierStore } from '@/src/features/billing/store';
 import { resolveNewConversationModel } from '@/src/features/chat/utils/newConversationModel';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const CONVERSATION_MODES = [
   {
@@ -200,7 +201,11 @@ function SpeechLanguageModal({
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
         onPress={onClose}
       >
-        <Pressable accessible={false} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          accessible={false}
+          style={contentColumn('reading')}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View
             accessibilityViewIsModal
             style={{

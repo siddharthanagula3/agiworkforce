@@ -35,6 +35,7 @@ import {
 } from './service';
 import { hiddenSharedSiteTokens, hideSharedSite } from './hiddenSharedSites';
 import { useSitesListLifetime, type SitesListLifetime } from './useSitesListLifetime';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 type LoadMode = 'first' | 'more' | 'refresh';
 
@@ -213,7 +214,7 @@ export function SharedSitesList({ access }: { access: CloudFeatureAccess }) {
                 onPress: () =>
                   void confirmIrreversible({
                     title: `Hide ${name}?`,
-                    consequence: 'It will no longer show in Shared with you on this phone.',
+                    consequence: 'It will no longer show in Shared with you on this device.',
                     actionLabel: 'Hide',
                   }).then((confirmed) => {
                     if (!confirmed) return;
@@ -241,7 +242,13 @@ export function SharedSitesList({ access }: { access: CloudFeatureAccess }) {
         data={rows}
         extraData={visible}
         keyExtractor={(site) => site.token}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 10, flexGrow: 1 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 16,
+          paddingBottom: 40,
+          gap: 10,
+          flexGrow: 1,
+        }}
         ListHeaderComponent={
           <View style={{ gap: 10, paddingBottom: 4 }}>
             {failure && failure.mode !== 'more' ? (

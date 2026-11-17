@@ -1,12 +1,14 @@
 import { CircleUserRound, Download, EyeOff, ShieldCheck, Trash2 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { openHelpArticle, type MobileHelpArticleId } from '@/src/features/support/HelpArticleLink';
 import { useThemeColors } from '@/src/ui/theme';
 import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { radii, typeScale } from '@/src/ui/theme/tokens';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
+import { contentColumnWidth } from '@/src/shared/layout/contentColumn';
 import { CAROUSEL_GAP, CAROUSEL_GUTTER, PrivacyCenterSection } from './PrivacyCenterSection';
 import { openOrAlert } from './privacyCenterLinks';
 
@@ -45,10 +47,11 @@ const LARGE_TEXT_CARD_WIDTH_SHARE = 0.85;
 
 export function PrivacyArticleCards() {
   const colors = useThemeColors();
-  const { width } = useWindowDimensions();
+  const { contentWidth } = useResponsiveLayout();
   const largeText = useLargeTextRows();
   const cardWidth = Math.round(
-    width * (largeText ? LARGE_TEXT_CARD_WIDTH_SHARE : CARD_WIDTH_SHARE),
+    contentColumnWidth('reading', contentWidth) *
+      (largeText ? LARGE_TEXT_CARD_WIDTH_SHARE : CARD_WIDTH_SHARE),
   );
 
   return (

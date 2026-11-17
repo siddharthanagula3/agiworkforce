@@ -24,6 +24,7 @@ import { SUPPORT_EMAIL } from '@/src/features/support/contact';
 import { useNoMailAppAlert } from '@/src/features/support/useNoMailAppAlert';
 import { feedbackClientContext } from './clientContext';
 import { FEEDBACK_SCREEN_TITLE } from './presentation';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 type FeedbackType = 'bug' | 'feature' | 'general';
 
@@ -151,6 +152,7 @@ export default function FeedbackScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
+            ...contentColumn('reading'),
             flexGrow: 1,
             paddingHorizontal: 16,
             paddingTop: 8,

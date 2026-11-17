@@ -1,11 +1,20 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState, useCallback, useRef } from 'react';
-import { View, TextInput, KeyboardAvoidingView, Platform, Modal, Keyboard } from 'react-native';
+import {
+  View,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Modal,
+  Keyboard,
+  useWindowDimensions,
+} from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Zap, X, Plus, ArrowUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
 import {
   VoiceInputButton,
   type VoiceInputHandle,
@@ -332,6 +341,7 @@ export function QuickSchedule({
   onDetailedCreate,
 }: QuickScheduleProps) {
   const colors = useThemeColors();
+  const { width: windowWidth } = useWindowDimensions();
   const voiceControlRef = useRef<VoiceInputHandle | null>(null);
   const [visible, setVisible] = useState(false);
   const [input, setInput] = useState('');
@@ -506,7 +516,10 @@ export function QuickSchedule({
             <PressableBox
               onPress={(e) => e.stopPropagation()}
               className="absolute bottom-0 left-0 right-0 rounded-t-3xl"
-              style={{ backgroundColor: colors.surfaceOverlay }}
+              style={{
+                backgroundColor: colors.surfaceOverlay,
+                marginHorizontal: contentColumnInset('reading', windowWidth),
+              }}
             >
               <View className="flex-row items-center justify-between px-4 pt-5 pb-3">
                 <View className="flex-row items-center gap-2">

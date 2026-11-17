@@ -16,6 +16,7 @@ import {
 import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import {
   exportConversationToPDF,
@@ -307,9 +308,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  safeArea: {
-    width: '100%',
-  },
+  safeArea: contentColumn('reading'),
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

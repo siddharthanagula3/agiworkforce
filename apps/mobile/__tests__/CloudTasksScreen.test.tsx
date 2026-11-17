@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { AppState, StyleSheet, type AppStateStatus } from 'react-native';
+import { AppState, ScrollView, SectionList, StyleSheet, type AppStateStatus } from 'react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -170,6 +171,26 @@ describe('Mobile Cloud tasks screen', () => {
     } finally {
       useCloudSettingsStore.setState({ themeMode: 'system' });
     }
+  });
+
+  it('holds the filter chips and the run list to the reading column on a wide pane', async () => {
+    const { getByText, UNSAFE_getAllByType, UNSAFE_getByType } = render(<CloudTasksScreen />);
+    await waitFor(() => expect(getByText('Audit the launch checklist')).toBeTruthy());
+
+    const chips = UNSAFE_getAllByType(ScrollView).find((node) => node.props.horizontal);
+    expect(StyleSheet.flatten(chips?.props.style)).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+    });
+    expect(
+      StyleSheet.flatten(UNSAFE_getByType(SectionList).props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 16,
+    });
   });
 
   it('loads real active Cloud runs from the server state query', async () => {

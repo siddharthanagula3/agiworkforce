@@ -59,6 +59,7 @@ import {
   isAccountScopedUiStateCurrent,
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const FILTER_CATEGORIES = ['All', 'Pinned'] as const;
 
@@ -734,7 +735,7 @@ export default function MemoryScreen() {
         stickySectionHeadersEnabled={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ ...contentColumn('reading'), paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={listHeader}
         ListEmptyComponent={

@@ -18,6 +18,7 @@ import {
   type MobilePermissionKind,
   type OsPermissionStatus,
 } from './types';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function isMobilePermissionKind(value: string | undefined): value is MobilePermissionKind {
   return typeof value === 'string' && value in PERMISSION_REGISTRY;
@@ -203,7 +204,7 @@ export default function PermissionDetailScreen() {
 
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingBottom: 44 }}
+        contentContainerStyle={{ ...contentColumn('reading'), paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
       >
         <View

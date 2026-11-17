@@ -16,7 +16,8 @@ import { Card } from '@/components/ui/Card';
 import { Separator } from '@/components/ui/Separator';
 import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { ROW_LABEL_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { listInstalledModels, deleteInstalledModel } from '@/storage/installedModels';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import {
@@ -62,6 +63,51 @@ function formatReading(reading: Reading<number>): string {
   return formatAttachmentSize(reading.value);
 }
 
+function DeviceStorageRow({
+  label,
+  value,
+  valueTestID,
+}: {
+  label: string;
+  value: string;
+  valueTestID: string;
+}) {
+  const c = useThemeColors();
+  const stacked = useLargeTextRows();
+  const labelText = (
+    <Text
+      {...(stacked ? { maxFontSizeMultiplier: ROW_LABEL_TEXT_SCALE_LIMIT } : {})}
+      className="text-sm"
+      style={{ color: c.textSecondary, ...(stacked ? {} : { flexShrink: 1 }) }}
+    >
+      {label}
+    </Text>
+  );
+  const valueText = (
+    <Text
+      testID={valueTestID}
+      className="text-sm font-medium"
+      style={{ color: c.textPrimary, ...(stacked ? {} : { flexShrink: 0, textAlign: 'right' }) }}
+    >
+      {value}
+    </Text>
+  );
+  if (stacked) {
+    return (
+      <View testID={`${valueTestID}-row`} style={{ gap: 2 }}>
+        {labelText}
+        {valueText}
+      </View>
+    );
+  }
+  return (
+    <View testID={`${valueTestID}-row`} className="flex-row justify-between" style={{ gap: 8 }}>
+      {labelText}
+      {valueText}
+    </View>
+  );
+}
+
 function AgiStorageSummary({
   models,
   cache,
@@ -85,11 +131,11 @@ function AgiStorageSummary({
   if (capacity.status !== 'ready') {
     return (
       <Text testID="storage-agi-summary" style={textStyle}>
-        {`AGI uses ${formatAttachmentSize(agiBytes)} on this phone`}
+        {`AGI uses ${formatAttachmentSize(agiBytes)} on this device`}
       </Text>
     );
   }
-  const summary = `AGI uses ${formatAttachmentSize(agiBytes)} of ${formatAttachmentSize(capacity.value)} on this phone`;
+  const summary = `AGI uses ${formatAttachmentSize(agiBytes)} of ${formatAttachmentSize(capacity.value)} on this device`;
   return (
     <View style={{ gap: 8 }}>
       <Text
@@ -345,43 +391,22 @@ export default function StorageManagerScreen() {
           </View>
 
           <View className="gap-2">
-            <View className="flex-row justify-between">
-              <Text className="text-sm" style={{ color: c.textSecondary }}>
-                Downloaded models (estimated)
-              </Text>
-              <Text
-                testID="storage-model-bytes"
-                className="text-sm font-medium"
-                style={{ color: c.textPrimary }}
-              >
-                {formatReading(displayedModelStorageBytes)}
-              </Text>
-            </View>
-            <View className="flex-row justify-between">
-              <Text className="text-sm" style={{ color: c.textSecondary }}>
-                Cache
-              </Text>
-              <Text
-                testID="storage-cache-bytes"
-                className="text-sm font-medium"
-                style={{ color: c.textPrimary }}
-              >
-                {formatReading(cacheBytes)}
-              </Text>
-            </View>
+            <DeviceStorageRow
+              label="Downloaded models (estimated)"
+              value={formatReading(displayedModelStorageBytes)}
+              valueTestID="storage-model-bytes"
+            />
+            <DeviceStorageRow
+              label="Cache"
+              value={formatReading(cacheBytes)}
+              valueTestID="storage-cache-bytes"
+            />
             {freeBytes !== null && (
-              <View className="flex-row justify-between">
-                <Text className="text-sm" style={{ color: c.textSecondary }}>
-                  Free space
-                </Text>
-                <Text
-                  testID="storage-free-space"
-                  className="text-sm font-medium"
-                  style={{ color: c.textPrimary }}
-                >
-                  {formatAttachmentSize(freeBytes)}
-                </Text>
-              </View>
+              <DeviceStorageRow
+                label="Free space"
+                value={formatAttachmentSize(freeBytes)}
+                valueTestID="storage-free-space"
+              />
             )}
             {deviceReadFailed ? retryButton : null}
           </View>

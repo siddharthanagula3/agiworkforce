@@ -89,13 +89,13 @@ describe('the AGI storage meter at the top of Storage', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('storage-agi-summary')).toHaveTextContent(
-        'AGI uses 2.5 GB of 128 GB on this phone',
+        'AGI uses 2.5 GB of 128 GB on this device',
       ),
     );
     const fill = StyleSheet.flatten(screen.getByTestId('storage-agi-meter-fill').props.style);
     expect(fill.width).toBe(`${((MODEL_BYTES + CACHE_BYTES) / (128 * GIB)) * 100}%`);
     expect(screen.getByTestId('storage-agi-meter').props.accessibilityLabel).toBe(
-      'AGI uses 2.5 GB of 128 GB on this phone',
+      'AGI uses 2.5 GB of 128 GB on this device',
     );
   });
 
@@ -108,7 +108,7 @@ describe('the AGI storage meter at the top of Storage', () => {
       expect(screen.getByTestId('storage-cache-bytes')).toHaveTextContent('512 MB'),
     );
     expect(screen.getByTestId('storage-agi-summary')).toHaveTextContent(
-      'AGI uses 2.5 GB on this phone',
+      'AGI uses 2.5 GB on this device',
     );
     expect(screen.queryByTestId('storage-agi-meter')).toBeNull();
 
@@ -116,7 +116,7 @@ describe('the AGI storage meter at the top of Storage', () => {
       capacity.resolve(128 * GIB);
     });
     expect(screen.getByTestId('storage-agi-summary')).toHaveTextContent(
-      'AGI uses 2.5 GB of 128 GB on this phone',
+      'AGI uses 2.5 GB of 128 GB on this device',
     );
     expect(screen.getByTestId('storage-agi-meter')).toBeTruthy();
     expect(screen.getByTestId('storage-agi-summary').props.accessible).toBe(false);
@@ -162,7 +162,7 @@ describe('the AGI storage meter at the top of Storage', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('storage-agi-summary')).toHaveTextContent(
-        'AGI uses 2.5 GB of 128 GB on this phone',
+        'AGI uses 2.5 GB of 128 GB on this device',
       ),
     );
   });
@@ -173,7 +173,7 @@ describe('the AGI storage meter at the top of Storage', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('storage-agi-summary')).toHaveTextContent(
-        'AGI uses 2.5 GB on this phone',
+        'AGI uses 2.5 GB on this device',
       ),
     );
     expect(screen.queryByTestId('storage-agi-meter')).toBeNull();

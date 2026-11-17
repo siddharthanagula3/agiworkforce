@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, X } from 'lucide-react-native';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn, type ContentColumnKind } from '@/src/shared/layout/contentColumn';
 
 export const BOTTOM_SEARCH_BAR_HEIGHT = 44;
 
@@ -52,6 +53,7 @@ export function BottomSearchBar({
   autoFocus = false,
   onSubmitEditing,
   testID,
+  columnKind = 'reading',
 }: {
   value: string;
   onChangeText: (next: string) => void;
@@ -62,6 +64,7 @@ export function BottomSearchBar({
   autoFocus?: boolean;
   onSubmitEditing?: () => void;
   testID?: string;
+  columnKind?: ContentColumnKind;
 }) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -70,52 +73,58 @@ export function BottomSearchBar({
 
   return (
     <View
-      testID={testID}
-      style={{
-        minHeight: BOTTOM_SEARCH_BAR_HEIGHT,
-        marginHorizontal: 16,
-        marginBottom:
-          (keyboardOverlap > 0 ? keyboardOverlap : insets.bottom) + BOTTOM_SEARCH_BAR_MARGIN,
-        borderRadius: BOTTOM_SEARCH_BAR_HEIGHT / 2,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surfaceElevated,
-        paddingHorizontal: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-      }}
+      testID="bottom-search-bar.column"
+      pointerEvents="box-none"
+      style={contentColumn(columnKind)}
     >
-      <Search size={17} color={colors.textMuted} />
-      <TextInput
-        ref={inputRef}
-        autoFocus={autoFocus}
-        value={value}
-        onChangeText={onChangeText}
-        onSubmitEditing={onSubmitEditing}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        accessibilityLabel={accessibilityLabel}
-        autoCapitalize="none"
-        autoCorrect={false}
-        returnKeyType="search"
+      <View
+        testID={testID}
         style={{
-          flex: 1,
-          color: colors.textPrimary,
-          fontSize: typeScale.subhead,
-          paddingVertical: 0,
+          minHeight: BOTTOM_SEARCH_BAR_HEIGHT,
+          marginHorizontal: 16,
+          marginBottom:
+            (keyboardOverlap > 0 ? keyboardOverlap : insets.bottom) + BOTTOM_SEARCH_BAR_MARGIN,
+          borderRadius: BOTTOM_SEARCH_BAR_HEIGHT / 2,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.surfaceElevated,
+          paddingHorizontal: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 8,
         }}
-      />
-      {hasQuery ? (
-        <PressableBox
-          onPress={() => onChangeText('')}
-          accessibilityRole="button"
-          accessibilityLabel={clearAccessibilityLabel}
-          hitSlop={8}
-        >
-          <X size={17} color={colors.textMuted} />
-        </PressableBox>
-      ) : null}
+      >
+        <Search size={17} color={colors.textMuted} />
+        <TextInput
+          ref={inputRef}
+          autoFocus={autoFocus}
+          value={value}
+          onChangeText={onChangeText}
+          onSubmitEditing={onSubmitEditing}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textMuted}
+          accessibilityLabel={accessibilityLabel}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          style={{
+            flex: 1,
+            color: colors.textPrimary,
+            fontSize: typeScale.subhead,
+            paddingVertical: 0,
+          }}
+        />
+        {hasQuery ? (
+          <PressableBox
+            onPress={() => onChangeText('')}
+            accessibilityRole="button"
+            accessibilityLabel={clearAccessibilityLabel}
+            hitSlop={8}
+          >
+            <X size={17} color={colors.textMuted} />
+          </PressableBox>
+        ) : null}
+      </View>
     </View>
   );
 }

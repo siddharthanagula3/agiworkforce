@@ -11,6 +11,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 interface ProjectOption {
   id: string;
@@ -244,9 +245,11 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
           accessibilityViewIsModal
         >
           <Pressable
+            testID="project-selector-sheet"
             accessible={false}
             onPress={(e) => e.stopPropagation()}
             style={{
+              ...contentColumn('reading'),
               backgroundColor: colors.surfaceOverlay,
               borderTopLeftRadius: 28,
               borderTopRightRadius: 28,

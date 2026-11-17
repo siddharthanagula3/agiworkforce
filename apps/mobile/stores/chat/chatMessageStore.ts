@@ -1428,7 +1428,7 @@ export const useChatMessageStore = create<MessageState>()(
           .catch(() =>
             patchGenerationMessage(conversationId, assistantMessageId, {
               imageGenError:
-                'Stopped on this phone, but AGI Cloud could not be reached to stop the job, so it may still finish.',
+                'Stopped on this device, but AGI Cloud could not be reached to stop the job, so it may still finish.',
             }),
           );
         patchGenerationMessage(conversationId, assistantMessageId, {

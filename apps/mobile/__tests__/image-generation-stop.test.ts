@@ -213,6 +213,9 @@ describe('stopping an image generation', () => {
       await settle();
 
       expect(assistantMessage()?.imageGenError).toMatch(/may still finish/);
+      expect(assistantMessage()?.imageGenError).toBe(
+        'Stopped on this device, but AGI Cloud could not be reached to stop the job, so it may still finish.',
+      );
     });
 
     it('shows the image when the server had already finished it', async () => {

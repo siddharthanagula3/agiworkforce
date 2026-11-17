@@ -66,6 +66,8 @@ import { matchesModelFilters, type ModelFilterId } from '@/src/features/model-pi
 import { getConversationMessageStore } from '@/stores/chat/conversationRepository';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { radii, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumnInset } from '@/src/shared/layout/contentColumn';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 
 function establishedCloudModel(
   conversationId: string,
@@ -254,6 +256,7 @@ interface ModelPickerSheetProps {
   conversationId?: string;
   showSpeed?: boolean;
   showEffort?: boolean;
+  paneWidth?: number;
 }
 
 export function ModelPickerSheet({
@@ -266,8 +269,11 @@ export function ModelPickerSheet({
   conversationId,
   showSpeed = true,
   showEffort = true,
+  paneWidth,
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
+  const layout = useResponsiveLayout();
+  const sheetInset = contentColumnInset('reading', paneWidth ?? layout.contentWidth);
   const router = useRouter();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
@@ -672,6 +678,7 @@ export function ModelPickerSheet({
         ref={sheetRef as React.RefObject<BottomSheet>}
         index={-1}
         accessible={false}
+        style={{ marginHorizontal: sheetInset }}
         snapPoints={snapPoints}
         enablePanDownToClose
         onClose={handleSheetClose}

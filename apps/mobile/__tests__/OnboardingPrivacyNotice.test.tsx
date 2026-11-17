@@ -1,3 +1,4 @@
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, within } from '@testing-library/react-native';
 
 const mockOpenInAppBrowser = jest.fn().mockResolvedValue(true);
@@ -88,6 +89,14 @@ describe('onboarding first-run disclosure shows a privacy notice', () => {
     expect(
       within(getByTestId('disclosure-privacy-card')).queryByText(/Check important/),
     ).toBeNull();
+  });
+
+  it('keeps the sheet to a centred reading column that never exceeds an iPhone window', () => {
+    const { getByTestId } = renderModal();
+    const style = StyleSheet.flatten(getByTestId('disclosure-sheet').props.style);
+    expect(style.maxWidth).toBe(720);
+    expect(style.width).toBe('100%');
+    expect(style.alignSelf).toBe('center');
   });
 
   it('opens the India DPDP notice in the in-app browser', () => {

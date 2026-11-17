@@ -11,6 +11,7 @@ import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { preferredImpactHaptic, preferredNotificationHaptic } from '@/src/shared/utils/haptics';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { exportToPDF, exportToText, shareFile } from '@/services/fileCreation';
 import { answerClipboardText, answerPlainText } from '@/src/features/chat/utils/markdownPlainText';
 
@@ -274,9 +275,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
   },
-  safeArea: {
-    width: '100%',
-  },
+  safeArea: contentColumn('reading'),
   sheet: {
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,

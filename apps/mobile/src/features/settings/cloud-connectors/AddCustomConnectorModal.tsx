@@ -16,6 +16,7 @@ import {
   type AccountScopedUiState,
 } from '@/src/features/auth/services/accountScopedUiState';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export interface AddCustomConnectorModalProps {
   visible: boolean;
@@ -144,6 +145,7 @@ export function AddCustomConnectorModal({
       >
         <View
           style={{
+            ...contentColumn('reading'),
             backgroundColor: colors.surfaceBase,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,

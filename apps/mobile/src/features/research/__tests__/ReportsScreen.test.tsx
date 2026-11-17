@@ -1,5 +1,6 @@
 import React from 'react';
-import { FlatList } from 'react-native';
+import { FlatList, StyleSheet } from 'react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockFetchResearchReports = jest.fn();
@@ -109,6 +110,21 @@ describe('Reports list paging', () => {
     await waitFor(() =>
       expect(UNSAFE_getByType(FlatList).props.data).toHaveLength(RESEARCH_REPORTS_LIMIT + 3),
     );
+  });
+
+  it('holds the report list to the reading column on a wide pane', async () => {
+    mockFetchResearchReports.mockResolvedValueOnce(page(0, 3, null));
+    const { findByText, UNSAFE_getByType } = render(<ReportsScreen />);
+
+    await findByText('Report 0');
+    expect(
+      StyleSheet.flatten(UNSAFE_getByType(FlatList).props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 16,
+    });
   });
 
   it('stops asking for more once the server sends no cursor, whatever the page size', async () => {

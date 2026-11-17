@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { FlatList, SectionList, StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -166,6 +168,18 @@ describe('AGI Code sessions search', () => {
       'Write docs',
     ]);
     expect(mockUseSessions).toHaveBeenLastCalledWith('open');
+  });
+
+  it('holds the session list to the reading column on a wide pane', () => {
+    const screen = render(<CloudCodeSessionsScreen />);
+
+    const list = screen.UNSAFE_queryByType(FlatList) ?? screen.UNSAFE_getByType(SectionList);
+    expect(StyleSheet.flatten(list.props.contentContainerStyle)).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 4,
+    });
   });
 
   it('narrows the list by title', () => {

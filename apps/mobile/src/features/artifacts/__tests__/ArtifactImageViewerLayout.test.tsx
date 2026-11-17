@@ -4,6 +4,12 @@ import { StyleSheet, useWindowDimensions } from 'react-native';
 import { render } from '@testing-library/react-native';
 
 const mockGeneratedImage = jest.fn();
+let mockViewportWidth = 750;
+
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockViewportWidth, height: 1334, scale: 2, fontScale: 1 }),
+}));
 
 jest.mock('@clerk/expo', () => ({ getClerkInstance: jest.fn() }));
 jest.mock('@/lib/clipboard', () => ({ copyToClipboard: jest.fn().mockResolvedValue(true) }));
@@ -78,6 +84,7 @@ function WindowWidth({ onWidth }: { onWidth: (width: number) => void }) {
 describe('image artifact viewer layout', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockViewportWidth = 750;
     __resetCloudAccountSessionForTests();
     activateCloudAccount('user-1');
     useArtifactStore.setState({ artifacts: [], cloudArtifacts: [], cloudArtifactsOwnerId: null });
@@ -106,4 +113,21 @@ describe('image artifact viewer layout', () => {
     const { width } = mockGeneratedImage.mock.calls.at(-1)?.[0] as { width: number };
     expect(width).toBe(windowWidth - 2 * spacing.xl);
   });
+
+  it.each([
+    [402, 402 - 2 * spacing.xl],
+    [820, 720],
+    [1032, 720],
+    [1376, 720],
+  ])(
+    'draws the picture and its failed or loading frame at %i points wide',
+    (viewport, expected) => {
+      mockViewportWidth = viewport;
+      useArtifactStore.setState({ artifacts: [IMAGE] });
+      render(<ArtifactsGalleryScreen initialArtifactId={IMAGE.id} />);
+
+      const { width } = mockGeneratedImage.mock.calls.at(-1)?.[0] as { width: number };
+      expect(width).toBe(expected);
+    },
+  );
 });

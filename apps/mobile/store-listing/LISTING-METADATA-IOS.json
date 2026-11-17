@@ -3,7 +3,7 @@
     "schema": "app-store-connect-2026",
     "bundle_id": "com.agiworkforce.app",
     "version": "0.0.1",
-    "last_updated": "2026-11-15",
+    "last_updated": "2026-11-17",
     "char_limits": {
       "name": 30,
       "subtitle": 30,
@@ -15,17 +15,17 @@
     "char_counts": {
       "name": 10,
       "subtitle": 22,
-      "promotional_text": 116,
+      "promotional_text": 117,
       "keywords": 55,
-      "description": 837,
+      "description": 838,
       "whats_new": 359
     }
   },
   "app_name": "AGI Mobile",
   "subtitle": "On-device AI assistant",
-  "promotional_text": "Chat with AI on your phone, even offline. Local chats stay on your device; sign in for AGI Cloud when you want more.",
+  "promotional_text": "Chat with AI on your device, even offline. Local chats stay on your device; sign in for AGI Cloud when you want more.",
   "keywords": "chat,assistant,local,offline,privacy,llm,dpdp,on-device",
-  "description": "AGI is an AI assistant that runs on your phone first.\n\nLOCAL MODE\n• Chat with an on-device model, even offline or in airplane mode\n• No account needed; local chats stay on this device, encrypted at rest\n• Supported devices use a built-in model; others download one once\n\nAGI CLOUD (optional, sign-in)\n• Cloud chat and web search on the Free plan\n• Projects, memory and skills on the Free plan\n• The app is free and has no in-app purchases\n\nPRIVACY\n• Cloud messages go to the AI provider that serves the request\n• Limit which AI providers may be used in Settings > Privacy\n• Export or delete your data any time in Settings\n• India DPDP notice and open items: https://agiworkforce.com/trust\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy\nTerms: https://agiworkforce.com/terms",
+  "description": "AGI is an AI assistant that runs on your device first.\n\nLOCAL MODE\n• Chat with an on-device model, even offline or in airplane mode\n• No account needed; local chats stay on this device, encrypted at rest\n• Supported devices use a built-in model; others download one once\n\nAGI CLOUD (optional, sign-in)\n• Cloud chat and web search on the Free plan\n• Projects, memory and skills on the Free plan\n• The app is free and has no in-app purchases\n\nPRIVACY\n• Cloud messages go to the AI provider that serves the request\n• Limit which AI providers may be used in Settings > Privacy\n• Export or delete your data any time in Settings\n• India DPDP notice and open items: https://agiworkforce.com/trust\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy\nTerms: https://agiworkforce.com/terms",
   "whats_new": "AGI 0.0.1, first release.\n\n• On-device AI chat works offline, no account needed\n• Supported devices use a built-in model; others download a local model once\n• Sign in to AGI Cloud for cloud chat, web search, projects, memory and skills on the Free plan\n• No in-app purchases\n• On-device voice transcription\n\nEmail support@agiworkforce.com, we read everything.",
   "categories": {
     "primary": "Productivity",

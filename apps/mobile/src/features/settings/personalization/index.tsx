@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { View, ScrollView, TextInput, Alert } from 'react-native';
+import { View, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -44,6 +44,8 @@ import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard
 import { toUserMessage } from '@/services/userMessage';
 import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { openWebContentPage } from '@/src/platform/webContentPage';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 const MAX_ABOUT_YOU_CHARS = 1500;
 
@@ -452,166 +454,173 @@ export default function PersonalizationScreen() {
         }
       />
 
-      <ScrollView
-        className="flex-1 px-4"
-        contentContainerStyle={{ paddingBottom: 40, gap: 16 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={keyboardAvoidingBehavior('screen')}
+        enabled={Platform.OS !== 'ios'}
       >
-        <Card className="gap-4 mt-2">
-          <LabeledInput
-            label="Full Name"
-            value={fullName}
-            onChangeText={(value) => {
-              draftDirtyRef.current = true;
-              setFullName(value);
-            }}
-            placeholder="Your full name"
-            error={fullNameError}
-          />
-          <LabeledInput
-            label="Nickname"
-            value={nickname}
-            onChangeText={(value) => {
-              draftDirtyRef.current = true;
-              setNickname(value);
-            }}
-            placeholder="What should AGI call you?"
-            maxLength={PERSONALIZATION_NICKNAME_MAX_LENGTH}
-            helper={`${PRODUCT_BRAND} uses your nickname in chat.`}
-          />
-          <LabeledInput
-            label="Occupation"
-            value={occupation}
-            onChangeText={(value) => {
-              draftDirtyRef.current = true;
-              setOccupation(value);
-            }}
-            placeholder="e.g. Founder & Engineer"
-            maxLength={PERSONALIZATION_OCCUPATION_MAX_LENGTH}
-          />
-          <LabeledInput
-            label="More about you"
-            value={aboutYou}
-            onChangeText={(value) => {
-              draftDirtyRef.current = true;
-              setAboutYou(value.slice(0, MAX_ABOUT_YOU_CHARS));
-            }}
-            placeholder="Interests, values or background to keep in mind"
-            multiline
-          />
-          <LabeledInput
-            label="Custom Instructions"
-            value={instructions}
-            onChangeText={(value) => {
-              draftDirtyRef.current = true;
-              setInstructions(value);
-            }}
-            placeholder="e.g. I prefer direct, technical answers..."
-            multiline
-            helper={
-              <>
-                Used in every chat, within our{' '}
-                <Text
-                  className="text-sm leading-5"
-                  style={{ color: c.teal }}
-                  accessibilityRole="link"
-                  onPress={() => void openWebContentPage(ACCEPTABLE_USE_PATH)}
-                >
-                  acceptable use policy
-                </Text>
-                .
-              </>
-            }
-          />
-        </Card>
-
-        <Card className="mt-2 gap-4">
-          <ChoiceChips
-            label="Style Preset"
-            options={PERSONALIZATION_STYLES}
-            value={style}
-            optionAccessibilityLabel={(optionLabel) => `${optionLabel} style`}
-            onChange={(value) => {
-              draftDirtyRef.current = true;
-              setStyle(value);
-            }}
-          />
-          <ChoiceChips
-            label="Response Length"
-            options={PERSONALIZATION_LENGTHS}
-            value={preferredLength}
-            onChange={(value) => {
-              draftDirtyRef.current = true;
-              setPreferredLength(value);
-            }}
-          />
-          <ChoiceChips
-            label="Technical Level"
-            options={PERSONALIZATION_TECHNICAL_LEVELS}
-            value={technicalLevel}
-            onChange={(value) => {
-              draftDirtyRef.current = true;
-              setTechnicalLevel(value);
-            }}
-          />
-          <ChoiceChips
-            label="Response Language"
-            options={RESPONSE_LANGUAGE_OPTIONS}
-            value={responseLanguage}
-            onChange={(value) => {
-              draftDirtyRef.current = true;
-              setResponseLanguage(value);
-            }}
-          />
-        </Card>
-
-        <View>
-          <Text
-            className="text-sm uppercase tracking-wider font-semibold mb-3 px-1"
-            style={{ color: c.textMuted }}
-          >
-            Response Style
-          </Text>
-          <Card style={{ paddingVertical: 0 }}>
-            {RESPONSE_STYLE_TRAITS.map((trait, index) => (
-              <TraitRow
-                key={trait.key}
-                label={trait.label}
-                level={responseStyleTraitLevel(traitScores[trait.key])}
-                onPress={() => setOpenTrait(trait.key)}
-                isFirst={index === 0}
-              />
-            ))}
+        <ScrollView
+          className="flex-1 px-4"
+          contentContainerStyle={{ ...contentColumn('reading'), paddingBottom: 40, gap: 16 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+        >
+          <Card className="gap-4 mt-2">
+            <LabeledInput
+              label="Full Name"
+              value={fullName}
+              onChangeText={(value) => {
+                draftDirtyRef.current = true;
+                setFullName(value);
+              }}
+              placeholder="Your full name"
+              error={fullNameError}
+            />
+            <LabeledInput
+              label="Nickname"
+              value={nickname}
+              onChangeText={(value) => {
+                draftDirtyRef.current = true;
+                setNickname(value);
+              }}
+              placeholder="What should AGI call you?"
+              maxLength={PERSONALIZATION_NICKNAME_MAX_LENGTH}
+              helper={`${PRODUCT_BRAND} uses your nickname in chat.`}
+            />
+            <LabeledInput
+              label="Occupation"
+              value={occupation}
+              onChangeText={(value) => {
+                draftDirtyRef.current = true;
+                setOccupation(value);
+              }}
+              placeholder="e.g. Founder & Engineer"
+              maxLength={PERSONALIZATION_OCCUPATION_MAX_LENGTH}
+            />
+            <LabeledInput
+              label="More about you"
+              value={aboutYou}
+              onChangeText={(value) => {
+                draftDirtyRef.current = true;
+                setAboutYou(value.slice(0, MAX_ABOUT_YOU_CHARS));
+              }}
+              placeholder="Interests, values or background to keep in mind"
+              multiline
+            />
+            <LabeledInput
+              label="Custom Instructions"
+              value={instructions}
+              onChangeText={(value) => {
+                draftDirtyRef.current = true;
+                setInstructions(value);
+              }}
+              placeholder="e.g. I prefer direct, technical answers..."
+              multiline
+              helper={
+                <>
+                  Used in every chat, within our{' '}
+                  <Text
+                    className="text-sm leading-5"
+                    style={{ color: c.teal }}
+                    accessibilityRole="link"
+                    onPress={() => void openWebContentPage(ACCEPTABLE_USE_PATH)}
+                  >
+                    acceptable use policy
+                  </Text>
+                  .
+                </>
+              }
+            />
           </Card>
-        </View>
 
-        <Pressable
-          onPress={handleResetStyle}
-          className="self-start px-3 py-2 rounded-xl"
-          style={{ borderWidth: 1, borderColor: c.border }}
-          accessibilityRole="button"
-          accessibilityLabel="Reset response style"
-          accessibilityHint="Puts style, length, level, language and the Less, Default or More levels back to their defaults. Save to keep it."
-        >
-          <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
-            Reset response style
-          </Text>
-        </Pressable>
+          <Card className="mt-2 gap-4">
+            <ChoiceChips
+              label="Style Preset"
+              options={PERSONALIZATION_STYLES}
+              value={style}
+              optionAccessibilityLabel={(optionLabel) => `${optionLabel} style`}
+              onChange={(value) => {
+                draftDirtyRef.current = true;
+                setStyle(value);
+              }}
+            />
+            <ChoiceChips
+              label="Response Length"
+              options={PERSONALIZATION_LENGTHS}
+              value={preferredLength}
+              onChange={(value) => {
+                draftDirtyRef.current = true;
+                setPreferredLength(value);
+              }}
+            />
+            <ChoiceChips
+              label="Technical Level"
+              options={PERSONALIZATION_TECHNICAL_LEVELS}
+              value={technicalLevel}
+              onChange={(value) => {
+                draftDirtyRef.current = true;
+                setTechnicalLevel(value);
+              }}
+            />
+            <ChoiceChips
+              label="Response Language"
+              options={RESPONSE_LANGUAGE_OPTIONS}
+              value={responseLanguage}
+              onChange={(value) => {
+                draftDirtyRef.current = true;
+                setResponseLanguage(value);
+              }}
+            />
+          </Card>
 
-        <View
-          className="mx-1 px-3 py-2.5 rounded-lg"
-          style={{
-            backgroundColor: c.surfaceElevated,
-            borderWidth: 1,
-            borderColor: c.border,
-          }}
-        >
-          <Text className="text-sm leading-5" style={{ color: c.textMuted }}>
-            Your name, instructions and preferences apply to every chat.
-          </Text>
-        </View>
-      </ScrollView>
+          <View>
+            <Text
+              className="text-sm uppercase tracking-wider font-semibold mb-3 px-1"
+              style={{ color: c.textMuted }}
+            >
+              Response Style
+            </Text>
+            <Card style={{ paddingVertical: 0 }}>
+              {RESPONSE_STYLE_TRAITS.map((trait, index) => (
+                <TraitRow
+                  key={trait.key}
+                  label={trait.label}
+                  level={responseStyleTraitLevel(traitScores[trait.key])}
+                  onPress={() => setOpenTrait(trait.key)}
+                  isFirst={index === 0}
+                />
+              ))}
+            </Card>
+          </View>
+
+          <Pressable
+            onPress={handleResetStyle}
+            className="self-start px-3 py-2 rounded-xl"
+            style={{ borderWidth: 1, borderColor: c.border }}
+            accessibilityRole="button"
+            accessibilityLabel="Reset response style"
+            accessibilityHint="Puts style, length, level, language and the Less, Default or More levels back to their defaults. Save to keep it."
+          >
+            <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
+              Reset response style
+            </Text>
+          </Pressable>
+
+          <View
+            className="mx-1 px-3 py-2.5 rounded-lg"
+            style={{
+              backgroundColor: c.surfaceElevated,
+              borderWidth: 1,
+              borderColor: c.border,
+            }}
+          >
+            <Text className="text-sm leading-5" style={{ color: c.textMuted }}>
+              Your name, instructions and preferences apply to every chat.
+            </Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
       <TraitLevelSheet
         trait={RESPONSE_STYLE_TRAITS.find((trait) => trait.key === openTrait) ?? null}
         level={openTrait ? responseStyleTraitLevel(traitScores[openTrait]) : 'default'}

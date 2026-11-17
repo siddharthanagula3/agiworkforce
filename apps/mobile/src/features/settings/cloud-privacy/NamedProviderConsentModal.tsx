@@ -7,6 +7,7 @@ import { openWebContentPage } from '@/src/platform/webContentPage';
 import { PRIVACY_POLICY_URL } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import type { ChineseHqProviderId } from '@/services/providerConsent';
 import { chineseHqProviderDisplayName } from '@/services/providerConsent';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export const PROVIDER_CONSENT_CONFIRM_TEST_ID = 'provider-consent-confirm';
 export const PROVIDER_CONSENT_CANCEL_TEST_ID = 'provider-consent-cancel';
@@ -39,6 +40,7 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
       >
         <View
           style={{
+            ...contentColumn('form'),
             backgroundColor: colors.surfaceBase,
             borderRadius: 20,
             borderWidth: 1,

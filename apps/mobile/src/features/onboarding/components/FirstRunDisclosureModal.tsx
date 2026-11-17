@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/Text';
 import { Switch } from '@/components/ui/Switch';
 import { useThemeColors, elevation } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { openWebContentPage } from '@/src/platform/webContentPage';
 import { API_URL } from '@/lib/constants';
 import type { ChineseHqProviderId, ShortDisclosureCopy } from '@agiworkforce/compliance';
@@ -64,6 +65,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
     >
       <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
         <View
+          testID="disclosure-sheet"
           style={[
             styles.sheet,
             {
@@ -236,6 +238,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
+    ...contentColumn('reading'),
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '80%',

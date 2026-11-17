@@ -719,6 +719,32 @@ describe('the text pasted into the store review fields', () => {
     expect(text.includes(String.fromCodePoint(0x2014))).toBe(false);
   });
 
+  it('names the device neutrally in the App Store copy and the App Review notes, which iPad readers share', () => {
+    const DEVICE_WORDS = /\b(?:phone|iPhone)\b/i;
+    const surfaces: Array<[string, string]> = [
+      ['subtitle', listingIos.subtitle],
+      ['promotional_text', listingIos.promotional_text],
+      ['description', listingIos.description],
+      ['whats_new', listingIos.whats_new],
+      [
+        'iOS paste block',
+        pasteBlock('REVIEWER-NOTES-IOS.md', '## Paste this into App Review notes'),
+      ],
+    ];
+    for (const [surface, text] of surfaces) {
+      expect([surface, DEVICE_WORDS.exec(text)?.[0] ?? null]).toEqual([surface, null]);
+    }
+    const notes = collapseWhitespace(surfaceText('REVIEWER-NOTES-IOS.md'));
+    for (const phrase of [
+      'leaves the phone',
+      'onto a different iPhone cannot',
+      'on an iPhone with Face ID',
+      'stays on the phone',
+    ]) {
+      expect([phrase, notes.includes(phrase)]).toEqual([phrase, false]);
+    }
+  });
+
   it('gives Play a short App access text that is complete on its own', () => {
     const text = pasteBlock('REVIEWER-NOTES-ANDROID.md', '## Paste this into App access');
     for (const needed of [

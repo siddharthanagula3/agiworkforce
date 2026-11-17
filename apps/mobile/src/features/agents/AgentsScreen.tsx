@@ -49,6 +49,7 @@ import {
   startAgentConversation,
   startCatalogAgentConversation,
 } from './service';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export const AGENTS_ROUTE = '/(app)/agents';
 export const NEW_AGENT_ID = 'new';
@@ -139,53 +140,55 @@ function SegmentBar({
 }) {
   const colors = useThemeColors();
   return (
-    <View
-      accessibilityRole="tablist"
-      style={{
-        flexDirection: 'row',
-        marginHorizontal: 16,
-        marginTop: 4,
-        marginBottom: 4,
-        borderRadius: 10,
-        backgroundColor: colors.surfaceElevated,
-        borderWidth: 1,
-        borderColor: colors.border,
-        padding: 3,
-      }}
-    >
-      {segments.map((segment) => {
-        const isSelected = selected === segment;
-        return (
-          <PressableBox
-            key={segment}
-            onPress={() => onSelect(segment)}
-            accessibilityRole="tab"
-            accessibilityLabel={SEGMENT_LABELS[segment]}
-            accessibilityState={{ selected: isSelected }}
-            hitSlop={{ top: 4, bottom: 4 }}
-            style={{
-              flex: 1,
-              minHeight: 36,
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: 8,
-              backgroundColor: isSelected ? colors.surfaceOverlay : colors.transparent,
-            }}
-          >
-            <Text
-              numberOfLines={1}
-              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+    <View testID="agents.segments.column" style={contentColumn('reading')}>
+      <View
+        accessibilityRole="tablist"
+        style={{
+          flexDirection: 'row',
+          marginHorizontal: 16,
+          marginTop: 4,
+          marginBottom: 4,
+          borderRadius: 10,
+          backgroundColor: colors.surfaceElevated,
+          borderWidth: 1,
+          borderColor: colors.border,
+          padding: 3,
+        }}
+      >
+        {segments.map((segment) => {
+          const isSelected = selected === segment;
+          return (
+            <PressableBox
+              key={segment}
+              onPress={() => onSelect(segment)}
+              accessibilityRole="tab"
+              accessibilityLabel={SEGMENT_LABELS[segment]}
+              accessibilityState={{ selected: isSelected }}
+              hitSlop={{ top: 4, bottom: 4 }}
               style={{
-                fontSize: typeScale.footnote,
-                fontWeight: isSelected ? '600' : '500',
-                color: isSelected ? colors.textPrimary : colors.textMuted,
+                flex: 1,
+                minHeight: 36,
+                justifyContent: 'center',
+                alignItems: 'center',
+                borderRadius: 8,
+                backgroundColor: isSelected ? colors.surfaceOverlay : colors.transparent,
               }}
             >
-              {SEGMENT_LABELS[segment]}
-            </Text>
-          </PressableBox>
-        );
-      })}
+              <Text
+                numberOfLines={1}
+                maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                style={{
+                  fontSize: typeScale.footnote,
+                  fontWeight: isSelected ? '600' : '500',
+                  color: isSelected ? colors.textPrimary : colors.textMuted,
+                }}
+              >
+                {SEGMENT_LABELS[segment]}
+              </Text>
+            </PressableBox>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -525,6 +528,7 @@ export function AgentsScreen() {
             }
             stickySectionHeadersEnabled={false}
             contentContainerStyle={{
+              ...contentColumn('reading'),
               paddingHorizontal: 16,
               paddingBottom: 40,
               gap: 10,

@@ -1,7 +1,14 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+
+let mockWindowWidth = 750;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 1334, scale: 2, fontScale: 1 }),
+}));
 
 const mockVideoSlot: { modelId: string | undefined } = { modelId: undefined };
 
@@ -32,15 +39,23 @@ jest.mock('@gorhom/bottom-sheet', () => {
         onChange,
         onAnimate,
         onClose,
+        style,
       }: {
         children: React.ReactNode;
+        style?: unknown;
         onChange: (index: number) => void;
         onAnimate?: (fromIndex: number, toIndex: number) => void;
         onClose?: () => void;
       },
       _ref: React.Ref<unknown>,
     ) => (
-      <View testID="bottom-sheet" onChange={onChange} onAnimate={onAnimate} onClose={onClose}>
+      <View
+        testID="bottom-sheet"
+        style={style as never}
+        onChange={onChange}
+        onAnimate={onAnimate}
+        onClose={onClose}
+      >
         {children}
       </View>
     ),
@@ -242,6 +257,26 @@ function renderSheet(overrides = {}) {
 }
 
 describe('AddToChatSheet', () => {
+  describe('beside the permanent sidebar', () => {
+    afterEach(() => {
+      mockWindowWidth = 750;
+    });
+
+    it.each([
+      [402, 0],
+      [820, 50],
+      [1032, 16],
+      [1376, 188],
+    ])('insets the sheet to the reading column of a %d point window', (windowWidth, inset) => {
+      mockWindowWidth = windowWidth;
+      const view = renderSheet();
+
+      expect(StyleSheet.flatten(view.getByTestId('bottom-sheet').props.style)).toEqual({
+        marginHorizontal: inset,
+      });
+    });
+  });
+
   it('reloads an open Library on destination changes and revokes old row callbacks', async () => {
     activateCloudAccount('picker-owner');
     useChatAppModeStore.setState({ appMode: 'cloud' });

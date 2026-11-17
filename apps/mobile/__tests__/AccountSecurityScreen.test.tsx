@@ -1390,7 +1390,7 @@ describe('Mobile Account Security screen', () => {
 
       expect(screen.getByLabelText('QR code for your authenticator app')).toBeTruthy();
       expect(
-        screen.getByText('Scan with your authenticator app, or open it on this phone'),
+        screen.getByText('Scan with your authenticator app, or open it on this device'),
       ).toBeTruthy();
       const tree = JSON.stringify(screen.toJSON());
       const at = (text: string) => tree.indexOf(text);

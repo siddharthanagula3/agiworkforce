@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { AgeGateRecord } from '../src/features/auth/services/ageGate';
 
 const mockPush = jest.fn();
@@ -93,9 +93,17 @@ jest.mock('../src/features/auth/services/ageGate', () => ({
   readAgeGateRecord: () => mockAgeRecord,
 }));
 
-import { AccessibilityInfo, Alert, Dimensions, Platform } from 'react-native';
+import {
+  AccessibilityInfo,
+  Alert,
+  Dimensions,
+  Platform,
+  ScrollView,
+  StyleSheet,
+} from 'react-native';
 import { EMBEDDED_PAGE_PARAM, EMBEDDED_PAGE_PARAM_VALUE } from '@agiworkforce/types';
 import SettingsTabScreen from '../src/features/settings';
+import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
 import { TextScaleBoundary } from '../src/shared/components/TextScaleBoundary';
 import { ROW_LABEL_TEXT_SCALE_LIMIT } from '../src/ui/theme/tokens';
 import { LARGEST_IOS_TEXT_SCALE, setTextScale } from '../test-utils/textScale';
@@ -587,5 +595,42 @@ describe('Settings home Help Center', () => {
     );
     expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
     alert.mockRestore();
+  });
+});
+
+describe('Settings home on a tablet', () => {
+  const startingWindow = Dimensions.get('window');
+  const startingScreen = Dimensions.get('screen');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAgeRecord = null;
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
+  });
+
+  afterEach(() => {
+    act(() => {
+      Dimensions.set({ window: startingWindow, screen: startingScreen });
+    });
+  });
+
+  it.each([402, 820, 1032, 1376])('holds the list in a 720 point column at %i points', (width) => {
+    act(() => {
+      Dimensions.set({
+        window: { ...startingWindow, width, height: 1376 },
+        screen: { ...startingScreen, width, height: 1376 },
+      });
+    });
+    const { UNSAFE_getByType } = render(<SettingsTabScreen />);
+
+    const content = StyleSheet.flatten(UNSAFE_getByType(ScrollView).props.contentContainerStyle);
+
+    expect(content).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 16,
+    });
   });
 });

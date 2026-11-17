@@ -339,7 +339,7 @@ export default function LoginScreen() {
             paddingHorizontal: 24,
           }}
         >
-          Your other accounts stay signed in on this phone.
+          Your other accounts stay signed in on this device.
         </Text>
       ) : null}
       <View style={{ flex: 1 }} testID="cloud-sign-in-screen">

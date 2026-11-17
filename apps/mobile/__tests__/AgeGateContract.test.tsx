@@ -1,6 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
 import {
@@ -237,6 +237,29 @@ describe('the age screen when the answer does not work', () => {
 
     fireEvent.changeText(screen.getByTestId('age-gate-input'), '21');
     expect(screen.queryByTestId('age-gate-error')).toBeNull();
+  });
+
+  it('keeps the question to a centred form column that never exceeds an iPhone window', () => {
+    render(<AgeGateScreen />);
+
+    const style = StyleSheet.flatten(
+      screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle,
+    );
+    expect(style.maxWidth).toBe(440);
+    expect(style.width).toBe('100%');
+    expect(style.alignSelf).toBe('center');
+  });
+
+  it('keeps the refusal in the same form column', () => {
+    render(<AgeGateScreen />);
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), String(ACCOUNT_MINIMUM_AGE - 1));
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    const style = StyleSheet.flatten(
+      screen.UNSAFE_getByType(ScrollView).props.contentContainerStyle,
+    );
+    expect(style.maxWidth).toBe(440);
+    expect(style.alignSelf).toBe('center');
   });
 
   it('refuses anyone under the account minimum with the Terms wording and moves them nowhere', () => {

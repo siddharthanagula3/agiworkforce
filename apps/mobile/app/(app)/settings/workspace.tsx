@@ -43,6 +43,7 @@ import {
   subscribeCloudAccountEpochChange,
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const WEB_TEAM_URL = 'https://agiworkforce.com/settings/team';
 
@@ -359,7 +360,7 @@ export default function WorkspaceScreen() {
 
       <ScrollView
         className="flex-1 px-4"
-        contentContainerStyle={{ paddingTop: 6, paddingBottom: 44 }}
+        contentContainerStyle={{ ...contentColumn('reading'), paddingTop: 6, paddingBottom: 44 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={c.teal} />

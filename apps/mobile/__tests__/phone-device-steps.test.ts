@@ -1,21 +1,28 @@
+import { Platform } from 'react-native';
 import { MAX_DEVICE_STEP_OUTPUT_LENGTH } from '@agiworkforce/cloud-contracts';
 
 const mockGetCalendars = jest.fn();
 const mockGetEvents = jest.fn();
+const mockCalendarPermission = jest.fn();
+const mockGetDefaultCalendar = jest.fn();
 
 jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
   EventStatus: { CANCELED: 'canceled' },
   Availability: { FREE: 'free', BUSY: 'busy' },
-  getCalendarPermissionsAsync: async () => ({ granted: true, canAskAgain: true }),
-  requestCalendarPermissionsAsync: async () => ({ granted: true, canAskAgain: true }),
+  getCalendarPermissionsAsync: () => mockCalendarPermission(),
+  requestCalendarPermissionsAsync: () => mockCalendarPermission(),
   getCalendarsAsync: () => mockGetCalendars(),
   getEventsAsync: (...args: unknown[]) => mockGetEvents(...args),
+  getDefaultCalendarAsync: () => mockGetDefaultCalendar(),
 }));
 
 jest.mock('@/lib/deviceId', () => ({ getDeviceId: async () => 'this-phone' }));
 
-import { runPhoneDeviceStep } from '../src/features/integrations/services/phoneDeviceSteps';
+import {
+  PHONE_STEP_DECLINED,
+  runPhoneDeviceStep,
+} from '../src/features/integrations/services/phoneDeviceSteps';
 
 function availability(start: string, end: string) {
   return runPhoneDeviceStep({
@@ -42,12 +49,94 @@ function separateEvents(count: number) {
   });
 }
 
+const originalOS = Platform.OS;
+
 beforeEach(() => {
   mockGetCalendars.mockResolvedValue([{ id: 'cal', title: 'Home' }]);
+  mockCalendarPermission.mockResolvedValue({ granted: true, canAskAgain: true });
 });
 
 afterEach(() => {
+  Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
   jest.clearAllMocks();
+});
+
+describe('phone step outcomes name the device neutrally', () => {
+  it('says the user declined on their device', () => {
+    expect(PHONE_STEP_DECLINED.content).toBe(
+      'The user declined this on their device, so nothing was added.',
+    );
+  });
+
+  it('points to the device Settings app when calendar access is off', async () => {
+    mockCalendarPermission.mockResolvedValue({ granted: false, canAskAgain: false });
+
+    const outcome = await availability('2030-01-02T00:00', '2030-01-03T00:00');
+
+    expect(outcome).toEqual({
+      content:
+        "Calendar access is off for AGI Mobile on this device, so nothing was read or added. The user can turn it on for AGI Mobile in the device's Settings app.",
+      isError: true,
+    });
+  });
+
+  it('does not run a step meant for another device', async () => {
+    const outcome = await runPhoneDeviceStep({
+      toolCallId: 'call-2',
+      name: 'device_calendar_availability',
+      deviceId: 'another-phone',
+      input: { start: '2030-01-02T00:00', end: '2030-01-03T00:00' },
+    });
+
+    expect(outcome).toEqual({
+      content: 'This step was meant for another device, so this device did not run it.',
+      isError: true,
+    });
+  });
+
+  it('says when the device has no calendar an event can be added to', async () => {
+    Object.defineProperty(Platform, 'OS', { get: () => 'ios', configurable: true });
+    mockGetDefaultCalendar.mockResolvedValue(null);
+
+    const outcome = await runPhoneDeviceStep({
+      toolCallId: 'call-3',
+      name: 'device_calendar_create_event',
+      deviceId: 'this-phone',
+      input: { title: 'Lunch', start: '2030-01-02T12:00', end: '2030-01-02T13:00' },
+    });
+
+    expect(outcome).toEqual({
+      content: 'There is no calendar on this device that events can be added to.',
+      isError: true,
+    });
+  });
+
+  it('reports a failed step as the device failing', async () => {
+    mockGetEvents.mockRejectedValue(new Error('Calendar store unavailable'));
+
+    const outcome = await availability('2030-01-02T00:00', '2030-01-03T00:00');
+
+    expect(outcome).toEqual({
+      content: 'The device could not complete this step: Calendar store unavailable',
+      isError: true,
+    });
+  });
+
+  it('names both Apple devices that can add reminders', async () => {
+    Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
+
+    const outcome = await runPhoneDeviceStep({
+      toolCallId: 'call-4',
+      name: 'device_reminder_create',
+      deviceId: 'this-phone',
+      input: { title: 'Call back' },
+    });
+
+    expect(outcome).toEqual({
+      content: 'Reminders can be added only from an iPhone or iPad.',
+      isError: true,
+    });
+  });
 });
 
 describe('phone calendar availability result size', () => {

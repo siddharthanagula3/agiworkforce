@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-import { Alert } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { act, render, fireEvent } from '@testing-library/react-native';
 import { PRODUCT_BRAND } from '@agiworkforce/types';
 
@@ -431,5 +431,51 @@ describe('Personalization theme card removal', () => {
       alertSpy.mockRestore();
       useLocalSettingsStore.setState({ setThemeMode: originalSetThemeMode } as never);
     }
+  });
+});
+
+describe('Personalization page with the keyboard open', () => {
+  const originalOS = Platform.OS;
+  const setOS = (os: 'ios' | 'android') =>
+    Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+
+  beforeEach(() => {
+    resetSettingsStore();
+    useAuthStore.setState({ clerkUserId: null });
+    useChatAppModeStore.setState({ appMode: 'local' });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+  });
+
+  it('on iPhone lets the form scroll the focused field above the keyboard', () => {
+    setOS('ios');
+    const { UNSAFE_getByType } = render(<PersonalizationScreen />);
+
+    expect(UNSAFE_getByType(ScrollView).props.automaticallyAdjustKeyboardInsets).toBe(true);
+    expect(UNSAFE_getByType(KeyboardAvoidingView).props.enabled).toBe(false);
+  });
+
+  it('on Android pads the form by the keyboard so the focused field stays in view', () => {
+    setOS('android');
+    const { UNSAFE_getByType } = render(<PersonalizationScreen />);
+
+    const avoiding = UNSAFE_getByType(KeyboardAvoidingView).props;
+    expect(avoiding.enabled).toBe(true);
+    expect(avoiding.behavior).toBe('padding');
+  });
+
+  it('keeps Save in the header outside the part that shrinks for the keyboard', () => {
+    const { UNSAFE_getByType, getByLabelText } = render(<PersonalizationScreen />);
+
+    const avoiding = UNSAFE_getByType(KeyboardAvoidingView);
+    expect(
+      avoiding.findAll((node) => node.props.accessibilityLabel === 'Save personalization settings'),
+    ).toHaveLength(0);
+    expect(getByLabelText('Save personalization settings')).toBeTruthy();
+    expect(
+      avoiding.findAll((node) => node.props.accessibilityLabel === 'Custom Instructions').length,
+    ).toBeGreaterThan(0);
   });
 });

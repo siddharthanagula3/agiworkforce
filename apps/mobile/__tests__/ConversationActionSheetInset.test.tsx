@@ -14,7 +14,11 @@ jest.mock(
   () => new Proxy({}, { get: () => jest.fn().mockReturnValue(null) }),
 );
 
-import { ActionMenuSheet } from '../src/features/conversation-actions';
+import { ActionMenuSheet, RenameConversationModal } from '../src/features/conversation-actions';
+import {
+  FORM_COLUMN_MAX_WIDTH,
+  READING_COLUMN_MAX_WIDTH,
+} from '../src/shared/layout/contentColumn';
 
 const menu = {
   visible: true,
@@ -59,5 +63,35 @@ describe('Chat action sheet position', () => {
     const { getByTestId } = render(<ActionMenuSheet menu={menu} />);
 
     expect(sheetStyle(getByTestId).paddingBottom).toBe(8);
+  });
+
+  it('stops the sheet at the reading column on a tablet window instead of spanning it', () => {
+    const { getByTestId } = render(<ActionMenuSheet menu={menu} />);
+
+    expect(sheetStyle(getByTestId)).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+    });
+  });
+
+  it('keeps the rename dialog at the form column on a tablet window', () => {
+    const rename = {
+      visible: true,
+      conversationId: 'c-1',
+      title: 'Launch checklist',
+      text: 'Launch checklist',
+      setText: jest.fn(),
+      submit: jest.fn(),
+      cancel: jest.fn(),
+      menu: { ...menu, visible: false },
+    };
+    const { getByTestId } = render(<RenameConversationModal rename={rename} />);
+
+    expect(StyleSheet.flatten(getByTestId('rename-chat-dialog').props.style)).toMatchObject({
+      width: '100%',
+      maxWidth: FORM_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+    });
   });
 });

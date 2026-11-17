@@ -27,6 +27,7 @@ import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
+import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   loadMissingCloudProject,
@@ -336,6 +337,7 @@ export default function ProjectDetailScreen() {
   const handleOpenDrawer = useCallback(() => {
     openNearestDrawer(navigation);
   }, [navigation]);
+  const { usesPersistentDrawer } = useResponsiveLayout();
 
   const { openActions } = projectActions;
   const handleOpenActions = useCallback(() => {
@@ -469,14 +471,16 @@ export default function ProjectDetailScreen() {
             <MoreHorizontal size={22} color={colors.textSecondary} />
           </PressableBox>
         ) : null}
-        <PressableBox
-          onPress={handleOpenDrawer}
-          style={{ padding: 8, borderRadius: 8 }}
-          accessibilityLabel="Open menu"
-          accessibilityRole="button"
-        >
-          <Menu size={22} color={colors.textSecondary} />
-        </PressableBox>
+        {usesPersistentDrawer ? null : (
+          <PressableBox
+            onPress={handleOpenDrawer}
+            style={{ padding: 8, borderRadius: 8 }}
+            accessibilityLabel="Open menu"
+            accessibilityRole="button"
+          >
+            <Menu size={22} color={colors.textSecondary} />
+          </PressableBox>
+        )}
       </View>
 
       <View style={{ flex: 1 }} testID="project-detail-scroll">

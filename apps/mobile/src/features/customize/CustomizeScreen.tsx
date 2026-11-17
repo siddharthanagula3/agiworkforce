@@ -28,6 +28,7 @@ import {
 import { customizeSearchTerm } from './customizeSearchModel';
 import { DiscoverSection } from './DiscoverSection';
 import { PersonalSourceRows } from './PersonalSourceRows';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export interface CustomizeDestination {
   key: 'skills' | 'plugins' | 'connectors' | 'agents';
@@ -129,7 +130,12 @@ export function CustomizeScreen() {
       <ScrollView
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 10 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 16,
+          paddingBottom: 40,
+          gap: 10,
+        }}
       >
         {searching ? (
           <CustomizeSearchResults query={query} destinations={destinations} onClear={clearSearch} />

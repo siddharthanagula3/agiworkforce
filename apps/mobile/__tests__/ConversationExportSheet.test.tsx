@@ -60,6 +60,7 @@ jest.mock('@/lib/clipboard', () => ({
 
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
 import type { ChatMessage } from '@/types/chat';
+import { sitsInColumn } from '../test-utils/sheetColumn';
 
 const messages: ChatMessage[] = [
   {
@@ -213,5 +214,13 @@ describe('ConversationExportSheet', () => {
     } finally {
       alert.mockRestore();
     }
+  });
+
+  it('stops the sheet at the reading column on a wide window', () => {
+    const { getByText } = render(
+      <ConversationExportSheet visible onClose={jest.fn()} messages={messages} title="Chat" />,
+    );
+
+    expect(sitsInColumn(getByText('Export Conversation'), 'reading')).toBe(true);
   });
 });

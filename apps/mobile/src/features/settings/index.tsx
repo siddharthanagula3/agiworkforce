@@ -80,6 +80,7 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
 import { ROW_LABEL_TEXT_SCALE_LIMIT, typeScale } from '@/src/ui/theme/tokens';
 import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
@@ -1012,6 +1013,7 @@ export default function SettingsTabScreen() {
         className="flex-1"
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
+          ...contentColumn('reading'),
           paddingHorizontal: 16,
           paddingBottom: 36,
         }}

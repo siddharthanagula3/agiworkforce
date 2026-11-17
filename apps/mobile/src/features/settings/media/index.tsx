@@ -14,6 +14,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { MEDIA_SCREEN_TITLE } from '../screenTitles';
 import { useImageModelChoosable } from './useImageModelChoosable';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const IMAGE_MODEL_LABEL = 'Image generation model';
 const DEFAULT_CHOICE_LABEL = 'Default';
@@ -137,6 +138,7 @@ function ImageModelSheet({
           onPress={() => undefined}
           accessible={false}
           style={{
+            ...contentColumn('reading'),
             backgroundColor: colors.surfaceElevated,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,

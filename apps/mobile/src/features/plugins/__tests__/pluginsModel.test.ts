@@ -109,6 +109,10 @@ describe('plugins model', () => {
   it('explains why a plugin cannot install on mobile', () => {
     expect(pluginCompatibility(pluginEntry({})).installable).toBe(true);
     expect(pluginCompatibility(pluginEntry({ webInstallable: false })).warning).toMatch(/Desktop/);
+    expect(pluginCompatibility(pluginEntry({ webInstallable: false }))).toEqual({
+      installable: false,
+      warning: 'Runs in the Desktop app and the CLI. Cloud chats on this device cannot load it.',
+    });
     expect(pluginCompatibility(pluginEntry({ status: 'preview' }))).toEqual({
       installable: false,
       warning: 'Coming later. This plugin is not published yet.',

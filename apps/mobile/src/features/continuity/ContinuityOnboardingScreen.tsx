@@ -14,6 +14,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { acknowledgeContinuityOnboarding } from './continuity-onboarding';
 
 interface ContinuityBenefit {
@@ -25,13 +26,13 @@ interface ContinuityBenefit {
 const BENEFITS: ContinuityBenefit[] = [
   {
     icon: ListChecks,
-    title: 'Start and steer tasks from your phone',
+    title: 'Start and steer tasks from your device',
     description: 'Send work, answer follow-ups and review results.',
   },
   {
     icon: Globe2,
     title: 'Check in from any signed-in surface',
-    description: 'The same task on your phone, browser and desktop.',
+    description: 'The same task on your device, browser and desktop.',
   },
   {
     icon: Clock3,
@@ -96,6 +97,7 @@ export default function ContinuityOnboardingScreen() {
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{
+          ...contentColumn('form'),
           flexGrow: 1,
           paddingHorizontal: 22,
           paddingTop: 8,

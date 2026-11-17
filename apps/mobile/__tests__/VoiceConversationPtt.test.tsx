@@ -14,6 +14,18 @@ import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 let mockAudioUri: string | undefined;
 let mockSelectedModel = 'test-model';
+let mockWindowWidth: number | null = null;
+
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => {
+  const actual = jest.requireActual('react-native/Libraries/Utilities/useWindowDimensions');
+  return {
+    __esModule: true,
+    default: () => {
+      const dimensions = actual.default();
+      return mockWindowWidth === null ? dimensions : { ...dimensions, width: mockWindowWidth };
+    },
+  };
+});
 
 jest.mock('../lib/mmkv', () => ({
   storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
@@ -194,6 +206,7 @@ jest.mock('@/src/features/model-picker/store', () => ({
 }));
 
 import VoiceScreen from '@/app/(app)/voice';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
 import { useSettingsStore } from '../stores/settingsStore';
 import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
@@ -256,6 +269,7 @@ describe('Voice conversation PTT + hands-free', () => {
     chatState().messages = {};
     chatState().error = null;
     mockSelectedModel = 'test-model';
+    mockWindowWidth = null;
     mockEndConversationModel.mockReset();
     useChatAppModeStore.setState({ appMode: 'local' });
     useSettingsStore.setState({
@@ -310,6 +324,45 @@ describe('Voice conversation PTT + hands-free', () => {
     expect(screen.getAllByText('You')).toHaveLength(1);
     expect(screen.getAllByText('AGI')).toHaveLength(1);
   });
+
+  it('caps the transcript at the reading column, centred under the orb', async () => {
+    const state = chatState();
+    state.messages['voice-conv-1'] = [
+      { id: 'voice-user', role: 'user', content: 'What happened?' },
+      { id: 'voice-reply', role: 'assistant', content: 'A short answer.' },
+    ];
+    state.sendMessage.mockResolvedValue(true);
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'Continue');
+    await act(async () => fireEvent.press(screen.getByLabelText('Send typed message')));
+
+    expect(screen.getByTestId('voice-transcript-column')).toHaveStyle({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+    });
+  });
+
+  it('keeps the typed composer at its iPhone margin on a 402pt window', () => {
+    mockWindowWidth = 402;
+    const screen = render(<VoiceScreen />);
+
+    expect(screen.getByTestId('voice-composer')).toHaveStyle({ marginHorizontal: 20 });
+  });
+
+  it.each([820, 1032, 1376])(
+    'lines the typed composer up with the transcript column on a %ipt window',
+    (width) => {
+      mockWindowWidth = width;
+      const screen = render(<VoiceScreen />);
+
+      const { marginHorizontal } = StyleSheet.flatten(
+        screen.getByTestId('voice-composer').props.style as StyleProp<ViewStyle>,
+      );
+      expect(width - 2 * Number(marginHorizontal)).toBe(READING_COLUMN_MAX_WIDTH);
+    },
+  );
 
   it('lets a transcript line be selected and copied', async () => {
     const state = chatState();

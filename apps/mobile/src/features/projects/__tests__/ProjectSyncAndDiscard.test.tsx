@@ -1,4 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+let mockWindowWidth = 750;
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ width: mockWindowWidth, height: 1334, scale: 2, fontScale: 1 }),
+}));
 jest.mock('@/src/features/chat/components/WorkModeSwitch', () => ({ HEADER_TEXT_SCALE_LIMIT: 2 }));
 jest.mock('@/lib/mmkv', () => ({
   rehydrateWhenMmkvReady: jest.fn(),
@@ -50,7 +55,7 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { CloudProjectOverview } from '../components/CloudProjectOverview';
 import { ProjectEditorModal } from '../components/ProjectEditorModal';
@@ -58,6 +63,7 @@ import { useProjectEditor, type EditableProject } from '../useProjectEditor';
 import { useCloudSyncStateStore } from '@/stores/chat/cloudSyncStateStore';
 import { useProjectSyncStateStore } from '@/stores/projects/projectSyncStateStore';
 import type { CloudProject } from '@/stores/projects/cloudProjectStore';
+import { sitsInColumn } from '@/test-utils/sheetColumn';
 
 const project: CloudProject = {
   id: 'project-1',
@@ -143,6 +149,68 @@ function EditorHarness() {
   editorRef = editor;
   return <ProjectEditorModal editor={editor} />;
 }
+
+describe('the project appearance sheet', () => {
+  beforeEach(() => {
+    mockWindowWidth = 750;
+  });
+
+  it.each([[820], [1032], [1376]])(
+    'dims the whole window and closes from beside the sheet at %d points',
+    (width) => {
+      mockWindowWidth = width;
+      render(<CloudProjectOverview project={project} details={undefined} />);
+      fireEvent.press(screen.getByLabelText('Change project icon and colour'));
+
+      const scrim = screen.getByTestId('project-appearance-scrim', {
+        includeHiddenElements: true,
+      });
+      expect(StyleSheet.flatten(scrim.props.style)).toMatchObject({
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: expect.any(String),
+      });
+      expect(
+        StyleSheet.flatten(
+          screen.getByLabelText('Close', { includeHiddenElements: true }).props.style,
+        ).backgroundColor,
+      ).toBe(undefined);
+      fireEvent.press(scrim);
+      expect(screen.queryByText('Project appearance', { includeHiddenElements: true })).toBeNull();
+    },
+  );
+
+  it('leaves a phone window drawn exactly as before', () => {
+    mockWindowWidth = 402;
+    render(<CloudProjectOverview project={project} details={undefined} />);
+    fireEvent.press(screen.getByLabelText('Change project icon and colour'));
+
+    expect(
+      screen.queryByTestId('project-appearance-scrim', { includeHiddenElements: true }),
+    ).toBeNull();
+    expect(
+      StyleSheet.flatten(
+        screen.getByLabelText('Close', { includeHiddenElements: true }).props.style,
+      ),
+    ).toMatchObject({ flex: 1, backgroundColor: expect.any(String) });
+  });
+
+  it('stays in the reading column on a wide window', () => {
+    render(<CloudProjectOverview project={project} details={undefined} />);
+
+    fireEvent.press(screen.getByLabelText('Change project icon and colour'));
+
+    expect(
+      sitsInColumn(
+        screen.getByText('Project appearance', { includeHiddenElements: true }),
+        'reading',
+      ),
+    ).toBe(true);
+  });
+});
 
 describe('closing the project editor', () => {
   let alert: jest.SpyInstance;

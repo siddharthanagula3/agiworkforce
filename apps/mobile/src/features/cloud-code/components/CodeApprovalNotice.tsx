@@ -9,6 +9,7 @@ import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approval
 import { useCodePreferences, useCodePreferencesHydrated } from '@/src/features/settings/code/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export const CODE_APPROVAL_NOTICE_TITLE = 'Code sessions use your approval setting';
 export const CODE_APPROVAL_NOTICE_GOT_IT = 'Got it';
@@ -52,6 +53,7 @@ function ApprovalNoticeCard({ accountKey }: { accountKey: string }) {
           testID="code-approval-notice"
           onAccessibilityEscape={dismiss}
           style={{
+            ...contentColumn('form'),
             maxHeight: '80%',
             backgroundColor: colors.surfaceBase,
             borderRadius: 20,

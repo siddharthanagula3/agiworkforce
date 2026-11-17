@@ -48,6 +48,7 @@ import {
 } from '@/services/performanceMonitor';
 import { readMemoryFootprintMB } from '@/services/processFootprint';
 import { formatAttachmentSize } from '@/src/features/chat/utils/attachmentSize';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export const PERF_CHIP_SHOW_KEY = 'perf-show-chip-v1';
 
@@ -578,7 +579,12 @@ export default function PerformanceScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          padding: 16,
+          gap: 16,
+          paddingBottom: 48,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <Card>

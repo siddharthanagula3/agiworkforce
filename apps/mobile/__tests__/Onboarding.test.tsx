@@ -287,7 +287,7 @@ describe('Onboarding', () => {
       ).toBeTruthy();
       expect(
         getByText(
-          'Local chats stay on this phone. AGI Cloud chats are saved to your account, and you can delete them.',
+          'Local chats stay on this device. AGI Cloud chats are saved to your account, and you can delete them.',
         ),
       ).toBeTruthy();
       expect(getByText('AI can make mistakes, so check important information.')).toBeTruthy();
@@ -303,6 +303,19 @@ describe('Onboarding', () => {
       );
       expect(style.fontSize).toBe(17);
       expect(style.textAlign).toBe('left');
+    });
+
+    it('holds every step to one centred form column that never exceeds an iPhone window', () => {
+      const { getByTestId } = render(<OnboardingScreen />);
+      const style = StyleSheet.flatten(getByTestId('onboarding-column').props.style);
+      expect(style.maxWidth).toBe(440);
+      expect(style.width).toBe('100%');
+      expect(style.alignSelf).toBe('center');
+    });
+
+    it('names this device, not a phone, in the history notice', () => {
+      const { getByTestId } = render(<OnboardingScreen />);
+      expect(getByTestId('hero-notice-history')).not.toHaveTextContent(/phone/i);
     });
 
     it('shows the agreement line above the button with both links', () => {

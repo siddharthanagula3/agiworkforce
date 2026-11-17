@@ -30,6 +30,7 @@ import { readAppBuild } from '@/src/features/feedback/clientContext';
 import { FEEDBACK_SCREEN_TITLE } from '@/src/features/feedback/presentation';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import pkg from '../../package.json';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 const ABOUT_SYMBOL_SIZE = 68;
 
@@ -174,7 +175,12 @@ export default function AboutScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 14 }}
+        contentContainerStyle={{
+          ...contentColumn('reading'),
+          paddingHorizontal: 16,
+          paddingBottom: 40,
+          gap: 14,
+        }}
       >
         <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 2, gap: 8 }}>
           <AgiMark size={ABOUT_SYMBOL_SIZE} testID="about.brand-symbol" />
@@ -193,7 +199,7 @@ export default function AboutScreen() {
               lineHeight: 19,
             }}
           >
-            Private Local Mode and AGI Cloud, on your phone.
+            Private Local Mode and AGI Cloud, on your device.
           </Text>
         </View>
 

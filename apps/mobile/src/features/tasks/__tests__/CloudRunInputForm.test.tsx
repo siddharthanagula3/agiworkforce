@@ -472,6 +472,28 @@ describe('CloudRunInputForm', () => {
     expect(responses.labels.content).not.toHaveProperty('priority');
   });
 
+  it('says a request it cannot show needs the web, naming the device neutrally', () => {
+    const input: PendingInput = {
+      requestedAt: '2026-11-15T09:10:00.000Z',
+      toolCalls: [
+        {
+          toolCallId: 'call_sampling',
+          name: TOOL_NAME,
+          connectorId: 'github',
+          round: 0,
+          inputRequests: { sample: { method: 'sampling/createMessage', params: {} } },
+        },
+      ],
+    };
+    render(<CloudRunInputForm pendingInput={input} busy={false} onSubmit={jest.fn()} />);
+
+    expect(
+      screen.getByText(
+        'This question needs a form this device cannot show. Answer it on the web, or decline it here.',
+      ),
+    ).toBeTruthy();
+  });
+
   it('lists no fields for a request that was declined', () => {
     const view = render(
       <CloudRunInputForm pendingInput={FORM_INPUT} busy={false} onSubmit={jest.fn()} />,

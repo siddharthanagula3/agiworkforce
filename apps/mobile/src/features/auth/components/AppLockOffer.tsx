@@ -16,6 +16,7 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { hasAcknowledgedContinuityOnboarding } from '@/src/features/continuity/continuity-onboarding';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 function canOfferToAccount(account: CloudAccountEpoch | null): account is CloudAccountEpoch {
   return (
@@ -129,7 +130,9 @@ export function AppLockOffer() {
         }}
       >
         <View
+          testID="app-lock-offer-card"
           style={{
+            ...contentColumn('form'),
             backgroundColor: colors.surfaceElevated,
             borderRadius: 20,
             padding: dialogPadding,

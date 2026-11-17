@@ -59,6 +59,7 @@ import {
 import { useCloudTaskStore } from './store';
 import { useCloudRunApprovalSignal } from './useApprovalSignal';
 import { canRerunCloudRun, loadRerunGoal, shareCloudRun } from './taskActions';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 export const CLOUD_TASK_LIST_POLL_INTERVAL_MS = 15_000;
 export const CLOUD_TASK_SEARCH_DEBOUNCE_MS = 300;
@@ -680,7 +681,7 @@ export function CloudTasksScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, flexShrink: 0 }}
+        style={{ ...contentColumn('reading'), flexGrow: 0, flexShrink: 0 }}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 14, gap: 8 }}
       >
         {CLOUD_RUN_FILTERS.map((item) => {
@@ -733,6 +734,7 @@ export function CloudTasksScreen() {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           contentContainerStyle={{
+            ...contentColumn('reading'),
             paddingHorizontal: 16,
             paddingBottom: FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
             gap: 10,

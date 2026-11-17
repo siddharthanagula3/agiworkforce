@@ -3,7 +3,8 @@ jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
 }));
 import React from 'react';
 import { fireEvent, render, within } from '@testing-library/react-native';
-import { ScrollView } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
+import { READING_COLUMN_MAX_WIDTH } from '@/src/shared/layout/contentColumn';
 import type { ReactTestInstance } from 'react-test-renderer';
 
 const mockPush = jest.fn();
@@ -127,6 +128,19 @@ describe('Schedules empty state at large text sizes', () => {
 
     fireEvent.press(create);
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/schedules/create' });
+  });
+
+  it('holds the empty page to the reading column on a wide pane', () => {
+    const { getByTestId } = render(<SchedulesScreen />);
+
+    expect(
+      StyleSheet.flatten(getByTestId('schedules-empty-scroll').props.contentContainerStyle),
+    ).toMatchObject({
+      width: '100%',
+      maxWidth: READING_COLUMN_MAX_WIDTH,
+      alignSelf: 'center',
+      paddingHorizontal: 24,
+    });
   });
 
   it('shows no action and no purchase wording when the plan has no scheduled tasks', () => {

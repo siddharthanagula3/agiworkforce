@@ -355,10 +355,10 @@ export const SIGNED_OUT_PUBLISH_MESSAGE =
   'You are signed out of AGI Cloud, so nothing was published.';
 
 export const LOCAL_MODE_PUBLISH_PROMPT =
-  'This phone is in Local mode. Publishing puts a copy of this artifact on AGI Cloud, so switch to AGI Cloud mode first. Nothing has been uploaded.';
+  'This device is in Local mode. Publishing puts a copy of this artifact on AGI Cloud, so switch to AGI Cloud mode first. Nothing has been uploaded.';
 
 export const LOCAL_MODE_PUBLISH_MESSAGE =
-  'This phone is in Local mode, so nothing was published. Switch to AGI Cloud mode and try again.';
+  'This device is in Local mode, so nothing was published. Switch to AGI Cloud mode and try again.';
 
 export const VIEWERS_FAILED_MESSAGE = 'Could not update who this is shared with. Try again.';
 

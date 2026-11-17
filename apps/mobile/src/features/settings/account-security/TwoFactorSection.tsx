@@ -34,6 +34,7 @@ import { AuthenticatorQrCode } from './AuthenticatorQrCode';
 import { codeFontFamily } from '@/src/ui/theme/codeFont';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { contentColumn } from '@/src/shared/layout/contentColumn';
 
 type Stage =
   | { name: 'idle' }
@@ -295,6 +296,7 @@ export function TwoFactorSection({
         >
           <ScrollView
             style={{
+              ...contentColumn('reading'),
               flexGrow: 0,
               backgroundColor: colors.surfaceElevated,
               borderTopLeftRadius: 16,
