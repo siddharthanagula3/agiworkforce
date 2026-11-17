@@ -20,6 +20,7 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import {
   getBillingPlanPricing,
+  isAppSession,
   isBillingPlanTier,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
@@ -28,6 +29,7 @@ import {
   subscriptionAccessRank,
 } from '@/lib/services/subscription-access-policy';
 import { formatBillingDateFromSeconds } from '@/features/billing/lib/billing-format';
+import { sessionDeviceLabel } from '@/features/settings/lib/session-device-label';
 import {
   STORE_BILLING_NAME,
   STORE_SUBSCRIPTION_MANAGEMENT_URL,
@@ -91,6 +93,8 @@ interface AccountSession {
   id: string;
   status: string;
   device: string;
+  os?: string | null;
+  surface?: string | null;
   browser: string | null;
   location: string | null;
   createdAt: string | null;
@@ -703,8 +707,8 @@ export function AccountSection({
                             fontWeight: 500,
                           }}
                         >
-                          <div>{row.device}</div>
-                          {row.browser ? (
+                          <div>{sessionDeviceLabel(row)}</div>
+                          {row.browser && !isAppSession(row) ? (
                             <div
                               style={{
                                 marginTop: 'var(--space-1)',
@@ -786,7 +790,7 @@ export function AccountSection({
                               confirm({
                                 title: row.isCurrent
                                   ? 'Log out this session?'
-                                  : `Revoke the ${row.device} session?`,
+                                  : `Revoke the ${sessionDeviceLabel(row)} session?`,
                                 description: row.isCurrent
                                   ? 'You will be signed out on this device and returned to the sign-in page.'
                                   : 'That device is signed out immediately and has to sign in again to regain access.',
@@ -798,7 +802,7 @@ export function AccountSection({
                             aria-label={
                               row.isCurrent
                                 ? 'Log out current session'
-                                : `Revoke ${row.device} session`
+                                : `Revoke ${sessionDeviceLabel(row)} session`
                             }
                             style={{
                               padding: 'var(--space-2) var(--space-3)',

@@ -105,6 +105,7 @@ export * from './user';
 export * from './billing-catalog';
 
 export * from './product-names';
+export * from './account-session-label';
 export * from './billing-plan-catalog';
 export * from './product-plan';
 export * from './credits';
