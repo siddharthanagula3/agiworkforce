@@ -267,12 +267,49 @@ export const storage = new Proxy({} as MMKV, {
   },
 });
 
+/**
+ * Zustand's persist middleware saves on every `setState`, so a write that lands
+ * after MMKV opens but before the store has rehydrated would replace what was
+ * saved with the still-empty initial state, and the rehydrate would then read
+ * that back. Until a store's rehydrate succeeds its writes are dropped, except
+ * those made once its saved state has been read back (a migration, a
+ * rehydrate callback), which are written when the rehydrate succeeds.
+ */
+interface HydrationGate {
+  savedStateRead: boolean;
+  heldWrite: string | null;
+}
+
+const awaitingHydration = new Map<string, HydrationGate>();
+
+function keepUnreadableValue(name: string): boolean {
+  const store = getStorage();
+  const saved = store.getString(name);
+  if (saved === undefined) return true;
+  const prefix = `${name}${SET_ASIDE_MARKER}`;
+  const copies = store.getAllKeys().filter((key) => key.startsWith(prefix));
+  if (copies.some((key) => store.getString(key) === saved)) return true;
+  const stamp = Date.now();
+  let aside = `${prefix}${stamp}`;
+  for (let attempt = 1; copies.includes(aside); attempt += 1)
+    aside = `${prefix}${stamp}-${attempt}`;
+  store.set(aside, saved);
+  return store.getString(aside) === saved;
+}
+
 export const mmkvStorage: StateStorage = {
   getItem: (name: string) => {
     const value = getStorage().getString(name);
+    const gate = awaitingHydration.get(name);
+    if (gate && _storage) gate.savedStateRead = true;
     return value ?? null;
   },
   setItem: (name: string, value: string) => {
+    const gate = awaitingHydration.get(name);
+    if (gate) {
+      if (gate.savedStateRead) gate.heldWrite = value;
+      return;
+    }
     getStorage().set(name, value);
   },
   removeItem: (name: string) => {
@@ -293,22 +330,62 @@ export const mmkvStorage: StateStorage = {
  *
  * Use this in new persist-enabled stores; existing call sites can migrate
  * opportunistically.
+ *
+ * The store saves nothing until its rehydrate has succeeded. When a rehydrate
+ * fails after reading the saved state, that state is copied aside unchanged
+ * before the store may save again, so the same failure at every launch can
+ * neither lose it nor stop the store from saving. A rehydrate that fails before
+ * reading anything leaves the saved state as it is for the session.
  */
 export interface RehydratableStore {
   persist: {
     rehydrate: () => Promise<void> | void;
+    hasHydrated: () => boolean;
+    getOptions: () => { name?: string };
   };
 }
 
 export function rehydrateWhenMmkvReady(store: RehydratableStore, storeName: string): void {
+  const persistedName = store.persist.getOptions().name;
+  if (persistedName) {
+    awaitingHydration.set(persistedName, { savedStateRead: false, heldWrite: null });
+  }
+
+  const allowWritesOnceHydrated = (): void => {
+    if (!persistedName || !store.persist.hasHydrated()) return;
+    const gate = awaitingHydration.get(persistedName);
+    if (!gate) return;
+    awaitingHydration.delete(persistedName);
+    if (gate.heldWrite !== null) getStorage().set(persistedName, gate.heldWrite);
+  };
+  const reportIfNotHydrated = (): void => {
+    allowWritesOnceHydrated();
+    if (!persistedName) return;
+    const gate = awaitingHydration.get(persistedName);
+    if (!gate) return;
+    if (gate.savedStateRead && keepUnreadableValue(persistedName)) {
+      awaitingHydration.delete(persistedName);
+      if (gate.heldWrite !== null) getStorage().set(persistedName, gate.heldWrite);
+      console.warn(`[mmkv] ${storeName} did not rehydrate, so its saved state was copied aside`);
+      return;
+    }
+    console.warn(`[mmkv] ${storeName} did not rehydrate, so its saved state is left unchanged`);
+  };
+
   whenMmkvReady(() => {
     try {
       const result = store.persist.rehydrate();
-      if (result && typeof (result as Promise<void>).catch === 'function') {
-        return (result as Promise<void>).catch((err) => {
+      allowWritesOnceHydrated();
+      // With synchronous storage zustand returns a thenable that has already
+      // settled, and its failed form never calls back, so awaiting it would
+      // stall every store queued after this one.
+      if (result instanceof Promise) {
+        return result.then(reportIfNotHydrated, (err: unknown) => {
           console.warn(`[mmkv] ${storeName} async rehydrate failed:`, err);
+          reportIfNotHydrated();
         });
       }
+      reportIfNotHydrated();
     } catch (err) {
       console.warn(`[mmkv] ${storeName} sync rehydrate threw:`, err);
     }

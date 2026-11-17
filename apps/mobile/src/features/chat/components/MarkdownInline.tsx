@@ -54,7 +54,7 @@ export interface InlineRenderOptions {
 
 const NO_FOOTNOTES: InlineFootnotes = {};
 const NO_OPTIONS: InlineRenderOptions = {};
-const CITATION_HIT_SLOP = { top: 16, bottom: 16, left: 12, right: 12 };
+const CITATION_HIT_SLOP = { top: 16, bottom: 16, left: 16, right: 16 };
 const PAREN_OPEN_TAIL = /\(\s*$/;
 const PAREN_CLOSE_HEAD = /^\s*\)/;
 const LINK_OPEN_FAILED_TITLE = 'Could not open link';
@@ -208,7 +208,8 @@ function citedSources(
   const cited: CitedSource[] = [];
   for (const number of numbers) {
     const source = citations[number - 1];
-    if (source && canPreviewCitation(source)) cited.push({ number, source });
+    if (!source || !canPreviewCitation(source)) continue;
+    if (!cited.some((entry) => entry.number === number)) cited.push({ number, source });
   }
   return cited;
 }
@@ -259,10 +260,7 @@ function CitationMarker({
   cited: readonly CitedSource[];
   colors: ColorScheme;
 }) {
-  const [first] = cited;
-  if (!first) return null;
-  const publisher = publisherOf(first.source);
-  const label = cited.length > 1 ? `${publisher} +${cited.length - 1}` : publisher;
+  if (cited.length === 0) return null;
   const numbers = cited.map((entry) => entry.number).join(', ');
   return (
     <Pressable
@@ -271,11 +269,70 @@ function CitationMarker({
       accessibilityRole="link"
       accessibilityLabel={`Citation ${numbers}: ${cited.map(citationName).join('; ')}`}
     >
-      <Text variant="inline" style={{ color: renderColors.teal, fontWeight: '600' }}>
-        {label}
+      <Text variant="inline" style={{ color: renderColors.teal, fontSize: typeScale.caption }}>
+        {`[${numbers}]`}
       </Text>
     </Pressable>
   );
+}
+
+type InlineItem =
+  | { readonly kind: 'node'; readonly node: InlineNode }
+  | { readonly kind: 'cited'; readonly cited: readonly CitedSource[] };
+
+type TextNode = Extract<InlineNode, { readonly type: 'text' }>;
+
+const SPACES_ONLY = /^[ \t]*$/;
+
+function withNewSources(
+  cited: readonly CitedSource[],
+  added: readonly CitedSource[],
+): readonly CitedSource[] {
+  const fresh = added.filter((entry) => !cited.some((known) => known.number === entry.number));
+  return fresh.length > 0 ? [...cited, ...fresh] : cited;
+}
+
+function sharesSource(cited: readonly CitedSource[], added: readonly CitedSource[]): boolean {
+  return added.some((entry) => cited.some((known) => known.number === entry.number));
+}
+
+/**
+ * A model often links a source and then writes its marker too, or repeats a
+ * marker. Markers that touch are drawn as one marker, as on the web; a marker
+ * parted from the one before it only by spaces joins it only when it repeats
+ * one of its sources. A line break always keeps markers apart.
+ */
+function joinAdjacentCitations(
+  nodes: readonly InlineNode[],
+  citations: readonly CitationSource[],
+): InlineItem[] {
+  const items: InlineItem[] = [];
+  let gap: TextNode | null = null;
+  for (const node of nodes) {
+    const cited = sourcesOfNode(node, citations);
+    const last = items[items.length - 1];
+    if (
+      cited.length > 0 &&
+      last?.kind === 'cited' &&
+      (gap === null || gap.value === '' || sharesSource(last.cited, cited))
+    ) {
+      items[items.length - 1] = { kind: 'cited', cited: withNewSources(last.cited, cited) };
+      gap = null;
+      continue;
+    }
+    if (gap) items.push({ kind: 'node', node: gap });
+    gap = null;
+    const previous = items[items.length - 1];
+    if (cited.length > 0) {
+      items.push({ kind: 'cited', cited });
+    } else if (previous?.kind === 'cited' && node.type === 'text' && SPACES_ONLY.test(node.value)) {
+      gap = node;
+    } else {
+      items.push({ kind: 'node', node });
+    }
+  }
+  if (gap) items.push({ kind: 'node', node: gap });
+  return items;
 }
 
 function unwrapCitationParens(
@@ -299,7 +356,7 @@ function unwrapCitationParens(
 }
 
 function renderNode(node: InlineNode, key: string, context: InlineRenderContext): React.ReactNode {
-  const { colors: renderColors, citations, footnotes } = context;
+  const { colors: renderColors, footnotes } = context;
   switch (node.type) {
     case 'text':
       return node.value;
@@ -336,8 +393,6 @@ function renderNode(node: InlineNode, key: string, context: InlineRenderContext)
       );
     }
     case 'link': {
-      const cited = sourcesOfNode(node, citations);
-      if (cited.length > 0) return <CitationMarker key={key} cited={cited} colors={renderColors} />;
       const label = renderNodes(node.children, key, context);
       if (resolveAnswerLink(node.href).kind === 'plain') {
         return (
@@ -400,11 +455,8 @@ function renderNode(node: InlineNode, key: string, context: InlineRenderContext)
           </Text>
         </View>
       );
-    case 'citation': {
-      const cited = citedSources(node.markers, citations);
-      if (cited.length === 0) return node.raw;
-      return <CitationMarker key={key} cited={cited} colors={renderColors} />;
-    }
+    case 'citation':
+      return node.raw;
   }
 }
 
@@ -413,8 +465,14 @@ function renderNodes(
   keyBase: string,
   context: InlineRenderContext,
 ): React.ReactNode[] {
-  return unwrapCitationParens(nodes, context.citations).map((node, index) =>
-    renderNode(node, `${keyBase}-${index}`, context),
+  const { citations } = context;
+  return joinAdjacentCitations(unwrapCitationParens(nodes, citations), citations).map(
+    (item, index) =>
+      item.kind === 'cited' ? (
+        <CitationMarker key={`${keyBase}-${index}`} cited={item.cited} colors={context.colors} />
+      ) : (
+        renderNode(item.node, `${keyBase}-${index}`, context)
+      ),
   );
 }
 

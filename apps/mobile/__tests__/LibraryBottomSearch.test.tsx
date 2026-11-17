@@ -136,6 +136,9 @@ import { HEADER_TEXT_SCALE_LIMIT } from '../src/features/chat/components/WorkMod
 
 const mockApi = api as unknown as { get: jest.Mock; delete: jest.Mock };
 
+// The screen waits before it searches, then asks the server again.
+const AFTER_SEARCH_DELAY = { timeout: 4000 };
+
 const HOSTED_DOCUMENT = {
   id: '22222222-2222-4222-8222-222222222222',
   file_name: 'launch-plan.pdf',
@@ -209,12 +212,12 @@ describe('Library bottom-anchored search', () => {
     fireEvent.changeText(screen.getByLabelText('Search library'), 'nothing matches this');
     await waitFor(() => {
       expect(screen.queryByText('launch-plan.pdf')).toBeNull();
-    });
+    }, AFTER_SEARCH_DELAY);
 
     fireEvent.press(screen.getByLabelText('Clear library search'));
     await waitFor(() => {
       expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
-    });
+    }, AFTER_SEARCH_DELAY);
   });
 
   it('requests the selected sort order from hosted Library', async () => {

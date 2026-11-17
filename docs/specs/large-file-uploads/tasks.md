@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Chat attachments maintainers
-Last updated: 2026-11-15
+Last updated: 2026-11-16
 
 Work packages for `spec.md`. Each package is one engineer's work and one pull
 request. Rules for the list:
@@ -1005,7 +1005,8 @@ Delivers:
 - Re-entry (`spec.md`, Intake states, Re-entry): the inspect, scan and seal
   steps each accept their own state when `workflow_run_id` is the same run
   or `lease_until` has passed, as the seal does, and redo the step from its
-  start: inspect again (HEAD, 256,000-byte read, `inspectUploadHead`); for
+  start: inspect again (HEAD, 256,000-byte read, `inspectUploadHead`, and for
+  a text type the credential scan of the rest from its first byte); for
   `scanning`, poll the recorded `scan_job_id` and resubmit a new attempt on
   `unknown`. A re-dispatched run starts at the step matching the row's state.
   A step whose compare-and-set matches nothing ends the run and never falls
@@ -1020,7 +1021,9 @@ Delivers:
 - Compare-and-set transitions keyed on the run id, the re-entry rule of the
   inspect, scan and seal steps (`spec.md`, Intake states); workflow steps
   inspect (HEAD plus a
-  256,000-byte ranged read through `inspectUploadHead`), submit with per-user
+  256,000-byte ranged read through `inspectUploadHead`, then for a text type
+  the credential scan of every later byte in steps of at most 64 MiB,
+  `full-inspection.ts`), submit with per-user
   fairness and `first_submitted_at`, poll on the schedule with the attempt
   rules of the retry table, seal (`spec.md`, Seal, including the row-gone
   case), prepare (loops `P8`), index (`P11`'s reindex request), finish; the
@@ -1384,9 +1387,13 @@ attachments and the Library. The stated size is the server's
 `MAX_SERVE_BYTES` (30 MiB), signalled by its `413`: above it the app refuses
 with copy and never builds a blob, and it never downloads such a file. A
 `413` already throws `FileDownloadError` before `res.blob()`, so
-the change is the copy: `FileDownloadError` for `413` says "This file is too
-large to open on your phone. Open it on the web.", and `downloadFailureMessage`
-passes it through as it passes 401, 403, 404 and 410. The file request keeps
+the change is the copy, built ahead of this package on 2026-11-16 in answer
+to a review finding: `FileDownloadError` for `413` says "This file is too
+large to open on this device." (not "Open it on the web", because every other
+asset above the limit is refused on the web too), carries the code
+`file_too_large` so `toUserMessage` passes it through to the viewer and the
+share buttons, and `downloadFailureMessage` passes it through as it passes
+401, 403, 404 and 410. The file request keeps
 sending `getAuthHeaders()` only, never `platformRequestHeaders()`, so the
 capability token never reaches a file request and no native client is sent
 the redirect, with `FEATURES.largeChatFiles` true or false. A disk download
@@ -1394,10 +1401,19 @@ through the file system download API with the token was rejected for the
 first version: the pinned transport refuses a response from an unpinned
 storage host, and React Native replays the request's credentials on the
 second hop before that check runs (`services/secureFetch.ts`,
-`redirectVerdict` and `checkResponseOrigin`). Callers that
-show fixed copy instead of the error's (the Library's share alert,
-`features/library/index.tsx`, the "Could not open this file" alert) are not changed; `P18` records
-it in known flaws. No request in `services/api.ts`, which carries
+`redirectVerdict` and `checkResponseOrigin`), and the app has no configured
+storage host to check the second hop against. The Library's share alert
+(`features/library/index.tsx`, "Could not open this file") now shows the
+error's sentence through `toUserMessage`, as do the cloud task and voice file
+rows (`CloudRunFilesSection.tsx`, `VoiceToolFiles.tsx`), and the file viewer
+hides Retry for a `413` (`useLocalFileCopy.ts`, `retryable`). Done on
+2026-11-16, with the cases "a 413 gives the too-large copy and builds no
+blob" and "no file request carries x-agi-client-capabilities" in
+`generated-file-download.test.ts`, the same header check on the request as it
+leaves `secureFetch` in `file-download-wire-headers.test.ts`, the Library share
+cases in `LibraryActionMenus.test.tsx`, the file row cases in
+`GeneratedFileRowsRefusal.test.tsx` and the no-Retry cases in the viewer
+tests; what stays for this package is the flag half of the header case. No request in `services/api.ts`, which carries
 `platformRequestHeaders()`, names `/api/files/:id` (checked on 2026-11-15).
 
 Tested locally (Jest in chunks): no capability header with the flag false;
@@ -1428,7 +1444,8 @@ Files:
 Delivers: the upload pipeline, scanner protocol 2, the rollback floor and the
 degradation rules in their canonical home; known-flaws rows for: scanner
 throughput unmeasured until step 4; HTML and script normalisation limits;
-DLP limited to the first 256,000 bytes; native admission capped at 25 MiB;
+credential and DLP checks that read no content of a binary type and only the
+first 256,000 bytes of an inline file; native admission capped at 25 MiB;
 small history files over the inline budget not excerpted; chat files over
 25 MiB without a backup replica (Owner decisions, L); the temporary-chat storage exposure;
 attach-from-Library (`ComposerFilesMenu.tsx` `libraryItemToFile`) answering
@@ -1508,10 +1525,13 @@ content_preserved`, about lines 101 to 103) and reads no object.
   `handleDownload`) no longer fetches an uploaded file above the inline limit:
   it saves it through a browser download, an anchor navigation that the files
   route redirects to storage and charges once.
-- `apps/mobile/src/features/chat/components/artifact-viewers/useLocalFileCopy.ts`,
-  `apps/mobile/src/features/chat/utils/sentAttachment.ts` and
-  `apps/mobile/src/features/library/index.tsx`: unchanged; they reach a
-  download only through `fileCreation.ts` (`P17`), which keeps the `413`.
+- `apps/mobile/src/features/chat/utils/sentAttachment.ts`: unchanged; it
+  reaches a download only through `fileCreation.ts`, which keeps the `413` and
+  gives it its own copy. `apps/mobile/src/features/library/index.tsx` changes
+  only its share alert, which now shows that copy, and
+  `apps/mobile/src/features/chat/components/artifact-viewers/useLocalFileCopy.ts`
+  only marks a `413` as not retryable, so the viewers hide Retry for it
+  (2026-11-16).
 - `apps/mobile/services/secureFetch.ts` and `apps/mobile/lib/egressGuard.ts`:
   unchanged; no native client is sent the redirect.
 - `apps/web/features/chat/components/**` (other than the file named above),

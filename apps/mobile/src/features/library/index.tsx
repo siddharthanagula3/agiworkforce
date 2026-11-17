@@ -433,9 +433,12 @@ export function LibraryScreen({
     try {
       const localUri = await downloadGeneratedFile(absoluteAssetUrl(asset.uri), asset.fileName);
       await shareFile(localUri, { isCurrent });
-    } catch {
+    } catch (error) {
       if (!isCurrent()) return;
-      Alert.alert('Could not open this file', 'The file could not be downloaded. Try again.');
+      Alert.alert(
+        'Could not open this file',
+        toUserMessage(error, 'The file could not be downloaded. Try again.'),
+      );
     }
   }, []);
 

@@ -1,13 +1,22 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getInfoAsync } from 'expo-file-system/legacy';
+import { ApiHttpError } from '@/services/apiErrors';
 import { downloadGeneratedFile, viewerFileCopy } from '@/services/fileCreation';
 import { toUserMessage } from '@/services/userMessage';
 import { captureCloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
 export type LocalFileCopy =
-  { status: 'loading' } | { status: 'ready'; uri: string } | { status: 'failed'; message: string };
+  | { status: 'loading' }
+  | { status: 'ready'; uri: string }
+  | { status: 'failed'; message: string; retryable: boolean };
 
 export const FILE_UNAVAILABLE_MESSAGE = 'This file could not be opened. Check your connection.';
+
+const TOO_LARGE_FOR_THIS_DEVICE_STATUS = 413;
+
+function answersTheSameAgain(error: unknown): boolean {
+  return error instanceof ApiHttpError && error.status === TOO_LARGE_FOR_THIS_DEVICE_STATUS;
+}
 
 const copies = new Map<string, Promise<string>>();
 const viewing = new Map<string, Promise<string>>();
@@ -81,7 +90,11 @@ export function useLocalFileCopy(
       },
       (error: unknown) => {
         if (live) {
-          setCopy({ status: 'failed', message: toUserMessage(error, FILE_UNAVAILABLE_MESSAGE) });
+          setCopy({
+            status: 'failed',
+            message: toUserMessage(error, FILE_UNAVAILABLE_MESSAGE),
+            retryable: !answersTheSameAgain(error),
+          });
         }
       },
     );

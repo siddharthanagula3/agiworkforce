@@ -6,6 +6,7 @@ type LoggerModule = typeof import('@/lib/logger');
 type ArchiveBoundsModule = typeof import('@/lib/security/archive-bounds');
 
 const inflated = vi.hoisted(() => [] as string[]);
+const exhaustsBudget = vi.hoisted(() => new Set<string>());
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
@@ -16,17 +17,22 @@ vi.mock('@/lib/security/archive-bounds', async (importOriginal) => {
   const actual = await importOriginal<ArchiveBoundsModule>();
   return {
     ...actual,
-    readArchiveMember: (...args: Parameters<typeof actual.readArchiveMember>) => {
+    readArchiveMember: async (...args: Parameters<typeof actual.readArchiveMember>) => {
       inflated.push(args[0].name);
-      return actual.readArchiveMember(...args);
+      const member = await actual.readArchiveMember(...args);
+      const [entry, budget] = args;
+      if (exhaustsBudget.has(entry.name)) budget.spend(budget.ceiling - budget.spent);
+      return member;
     },
   };
 });
 
+import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { MAX_CELL_FORMATS } from '@agiworkforce/unified-chat/workbook-cell-formats';
 import { CHAT_LARGE_FILE_POLICY, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { extractOfficeDocumentText } from '@/lib/server/office-document-text';
 import { prepareChatFileStep, readPreparedCard, readPreparedText } from '..';
-import { MAX_SHEET_PROFILES_BYTES } from '../spreadsheet';
+import { MAX_SHEET_PROFILES_BYTES, type SheetProfile } from '../spreadsheet';
 import {
   createCountingStorage,
   FakePreparationDb,
@@ -43,9 +49,11 @@ const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.s
 const OVER_BUDGET_BYTES = 300 * MIB;
 const LEDGER_ROWS = 600;
 const SAMPLE_ROWS = CHAT_LARGE_FILE_POLICY.kinds.spreadsheet.sampleRows;
+const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 beforeEach(() => {
   inflated.length = 0;
+  exhaustsBudget.clear();
 });
 
 function ledgerSheet(): string {
@@ -123,17 +131,30 @@ async function singleSheetWorkbook(options: {
   sheetName: string;
   sheetXml: string;
   sharedStringsXml?: string;
+  stylesXml?: string;
+  stylesTarget?: string;
+  date1904?: boolean;
 }): Promise<Buffer> {
   const zip = new JSZip();
+  const workbookPr =
+    options.date1904 === undefined
+      ? ''
+      : `<workbookPr date1904="${options.date1904 ? '1' : '0'}"/>`;
   zip.file(
     'xl/workbook.xml',
-    `<?xml version="1.0"?><workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${options.sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    `<?xml version="1.0"?><workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${workbookPr}<sheets><sheet name="${options.sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
   );
+  const stylesRelationship = options.stylesTarget
+    ? `<Relationship Id="rId9" Type="${RELATIONSHIP_NS}/styles" Target="${options.stylesTarget}"/>`
+    : '';
   zip.file(
     'xl/_rels/workbook.xml.rels',
-    '<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    `<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/>${stylesRelationship}</Relationships>`,
   );
   if (options.sharedStringsXml) zip.file('xl/sharedStrings.xml', options.sharedStringsXml);
+  if (options.stylesXml !== undefined) {
+    zip.file(`xl/${options.stylesTarget ?? 'styles.xml'}`, options.stylesXml);
+  }
   zip.file('xl/worksheets/sheet1.xml', options.sheetXml);
   zip.file('xl/media/chart-cache.bin', Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, 0x5a), {
     compression: 'STORE',
@@ -537,5 +558,367 @@ describe('workbook preparation', () => {
       error: 'source_size_mismatch',
     });
     expect(storage.stats.reads).toBe(0);
+  });
+});
+
+function xmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function stylesXml(cellFormats: number[], custom: Record<number, string> = {}): string {
+  const numFmts = Object.entries(custom)
+    .map(([id, code]) => `<numFmt numFmtId="${id}" formatCode="${xmlAttribute(code)}"/>`)
+    .join('');
+  const cellXfs = cellFormats
+    .map((id) => `<xf numFmtId="${id}" applyNumberFormat="1"><alignment/></xf>`)
+    .join('');
+  return `<?xml version="1.0"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${
+    numFmts ? `<numFmts count="${Object.keys(custom).length}">${numFmts}</numFmts>` : ''
+  }<cellStyleXfs count="2"><xf numFmtId="14"/><xf numFmtId="9"/></cellStyleXfs><cellXfs count="${
+    cellFormats.length
+  }">${cellXfs}</cellXfs><dxfs count="1"><dxf><numFmt numFmtId="14" formatCode="0.00%"/></dxf></dxfs></styleSheet>`;
+}
+
+/** Style 1 is the built-in date format; the rest pad the part to the given counts. */
+function boundedStylesXml(cellFormats: number, customFormats: number): string {
+  const numFmts = Array.from(
+    { length: customFormats },
+    (_, index) => `<numFmt numFmtId="${164 + index}" formatCode=""/>`,
+  ).join('');
+  return `<styleSheet><numFmts>${numFmts}</numFmts><cellXfs><xf numFmtId="0"/>${'<xf numFmtId="14"/>'.repeat(
+    cellFormats - 1,
+  )}</cellXfs></styleSheet>`;
+}
+
+interface StyledCell {
+  value: string;
+  style?: string;
+}
+
+function styledSheet(header: string[], rows: StyledCell[][]): string {
+  const column = (index: number) => String.fromCharCode(65 + index);
+  const headerRow = `<row r="1">${header
+    .map((name, index) => `<c r="${column(index)}1" t="inlineStr"><is><t>${name}</t></is></c>`)
+    .join('')}</row>`;
+  const dataRows = rows.map(
+    (cells, rowIndex) =>
+      `<row r="${rowIndex + 2}">${cells
+        .map(
+          (cell, index) =>
+            `<c r="${column(index)}${rowIndex + 2}"${
+              cell.style === undefined ? '' : ` s="${cell.style}"`
+            }><v>${cell.value}</v></c>`,
+        )
+        .join('')}</row>`,
+  );
+  return sheetXml(headerRow + dataRows.join(''));
+}
+
+async function preparedSheet(data: Buffer): Promise<{ profile: SheetProfile; text: string }> {
+  const db = new FakePreparationDb();
+  const storage = createCountingStorage();
+  const id = await sealed(db, storage, data);
+
+  await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+  expect(db.rowForAsset(id)).toMatchObject({ state: 'ready', sheet_count: 1 });
+  const profiles = db.rowForAsset(id)!.coverage['sheets'] as SheetProfile[];
+  const text = (await readPreparedText(
+    id,
+    { startChar: 0, maxChars: 100_000 },
+    { userId: USER, db, storage },
+  ))!.text;
+  return { profile: profiles[0]!, text };
+}
+
+function columnTypes(profile: SheetProfile): string[] {
+  return (profile.columns ?? []).map((column) => `${column.name}: ${column.type}`);
+}
+
+describe('workbook preparation number formats', () => {
+  it('gives the model dates, percentages and separated numbers as the workbook shows them and types a date column as dates', async () => {
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Ledger',
+        sheetXml: styledSheet(
+          ['Day', 'Share', 'Rate', 'Units', 'Balance', 'Price', 'Cost', 'Count'],
+          [
+            [
+              { value: '45292', style: '1' },
+              { value: '0.285', style: '2' },
+              { value: '0.12345', style: '3' },
+              { value: '1234567.4', style: '4' },
+              { value: '-1234.5', style: '5' },
+              { value: '1.005', style: '6' },
+              { value: '1234.5', style: '7' },
+              { value: '42' },
+            ],
+            [
+              { value: '45293', style: '1' },
+              { value: '0.5', style: '2' },
+              { value: '0', style: '3' },
+              { value: '1000', style: '4' },
+              { value: '2.5', style: '5' },
+              { value: '3', style: '6' },
+              { value: '7', style: '7' },
+              { value: '8' },
+            ],
+          ],
+        ),
+        stylesXml: stylesXml([0, 14, 9, 10, 3, 4, 2, 164], { 164: '"$"#,##0.00' }),
+      }),
+    );
+
+    expect(text).toContain(
+      [
+        'First 2 rows:',
+        'Day,Share,Rate,Units,Balance,Price,Cost,Count',
+        '2024-01-01,29%,12.35%,"1,234,567","-1,234.50",1.01,"$1,234.50",42',
+        '2024-01-02,50%,0.00%,"1,000",2.50,3.00,$7.00,8',
+      ].join('\n'),
+    );
+    expect(columnTypes(profile)).toEqual([
+      'Day: date',
+      'Share: number',
+      'Rate: number',
+      'Units: number',
+      'Balance: number',
+      'Price: number',
+      'Cost: number',
+      'Count: integer',
+    ]);
+    expect(text).toContain('- Day: date\n- Share: number');
+  });
+
+  it('reads serials in the 1904 date system when the workbook says so', async () => {
+    const sheet = styledSheet(
+      ['Day'],
+      [[{ value: '43830', style: '1' }], [{ value: '0', style: '1' }]],
+    );
+    const styles = stylesXml([0, 14]);
+
+    const in1904 = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: styles,
+        date1904: true,
+      }),
+    );
+    const in1900 = await preparedSheet(
+      await singleSheetWorkbook({ sheetName: 'Days', sheetXml: sheet, stylesXml: styles }),
+    );
+
+    expect(in1904.text).toContain('First 2 rows:\nDay\n2024-01-01\n1904-01-01');
+    expect(columnTypes(in1904.profile)).toEqual(['Day: date']);
+    expect(in1900.text).toContain('First 2 rows:\nDay\n2019-12-31\n0');
+  });
+
+  it('gives a date and time, and a time only, from the fraction of the serial', async () => {
+    const afternoon = String(45292 + (13 * 3600 + 47 * 60 + 30) / 86400);
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Shifts',
+        sheetXml: styledSheet(
+          ['At', 'Clock', 'Precise', 'Stamp'],
+          [
+            [
+              { value: afternoon, style: '1' },
+              { value: afternoon, style: '2' },
+              { value: afternoon, style: '3' },
+              { value: afternoon, style: '4' },
+            ],
+          ],
+        ),
+        stylesXml: stylesXml([0, 22, 20, 21, 164], { 164: 'yyyy-mm-dd hh:mm:ss' }),
+      }),
+    );
+
+    expect(text).toContain(
+      'At,Clock,Precise,Stamp\n2024-01-01 13:47,13:47,13:47:30,2024-01-01 13:47:30',
+    );
+    expect(columnTypes(profile)).toEqual([
+      'At: date',
+      'Clock: text',
+      'Precise: text',
+      'Stamp: date',
+    ]);
+  });
+
+  it('keeps the stored value for a format it cannot show faithfully or a style the file does not declare', async () => {
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Raw',
+        sheetXml: styledSheet(
+          ['Science', 'Red', 'Signed', 'Thousands', 'Missing', 'Broken'],
+          [
+            [
+              { value: '12345.678', style: '1' },
+              { value: '12345.678', style: '2' },
+              { value: '12345.678', style: '3' },
+              { value: '12345.678', style: '4' },
+              { value: '45292', style: '9' },
+              { value: '45292', style: 'x' },
+            ],
+          ],
+        ),
+        stylesXml: stylesXml([0, 11, 164, 165, 166], {
+          164: '[Red]0.00',
+          165: '0.00;(0.00)',
+          166: '#,##0,',
+        }),
+      }),
+    );
+
+    expect(text).toContain(
+      'Science,Red,Signed,Thousands,Missing,Broken\n12345.678,12345.678,12345.678,12345.678,45292,45292',
+    );
+    expect(columnTypes(profile)).toEqual([
+      'Science: number',
+      'Red: number',
+      'Signed: number',
+      'Thousands: number',
+      'Missing: integer',
+      'Broken: integer',
+    ]);
+  });
+
+  it('finds the styles part through the workbook relationships', async () => {
+    const { text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Shares',
+        sheetXml: styledSheet(['Share'], [[{ value: '0.25', style: '1' }]]),
+        stylesXml: stylesXml([0, 9]),
+        stylesTarget: 'theme/s.xml',
+      }),
+    );
+
+    expect(text).toContain('Share\n25%');
+  });
+
+  it('gives stored values without failing when the styles part is missing, oversized or broken', async () => {
+    const sheet = styledSheet(['Day'], [[{ value: '45292', style: '1' }]]);
+    const variants: Buffer[] = [
+      await singleSheetWorkbook({ sheetName: 'Days', sheetXml: sheet }),
+      declareMemberSize(
+        await singleSheetWorkbook({
+          sheetName: 'Days',
+          sheetXml: sheet,
+          stylesXml: stylesXml([0, 14]),
+        }),
+        'xl/styles.xml',
+        OVER_BUDGET_BYTES,
+      ),
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: '<styleSheet><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/>',
+      }),
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: `<styleSheet><numFmts><numFmt numFmtId="164" formatCode="${'y'.repeat(
+          MAX_FILE_TEXT_CHARS + 1,
+        )}"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>`,
+      }),
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: boundedStylesXml(MAX_CELL_FORMATS + 1, 0),
+      }),
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: sheet,
+        stylesXml: boundedStylesXml(2, MAX_CELL_FORMATS + 1),
+      }),
+    ];
+
+    for (const data of variants) {
+      inflated.length = 0;
+      const { profile, text } = await preparedSheet(data);
+      expect(text).toContain('First 1 rows:\nDay\n45292');
+      expect(columnTypes(profile)).toEqual(['Day: integer']);
+    }
+    expect(inflated).toContain('xl/styles.xml');
+    inflated.length = 0;
+    await preparedSheet(variants[1]!);
+    expect(inflated).not.toContain('xl/styles.xml');
+  });
+
+  it('formats numbers when the styles part holds exactly as many cell and custom formats as the bound allows', async () => {
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: styledSheet(['Day'], [[{ value: '45292', style: '1' }]]),
+        stylesXml: boundedStylesXml(MAX_CELL_FORMATS, MAX_CELL_FORMATS),
+      }),
+    );
+
+    expect(text).toContain('First 1 rows:\nDay\n2024-01-01');
+    expect(columnTypes(profile)).toEqual(['Day: date']);
+  });
+
+  it('reads the styles part after the first sheet, so a styles part that fills the budget cannot crowd the sheet out', async () => {
+    exhaustsBudget.add('xl/styles.xml');
+    const { profile, text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: styledSheet(['Day'], [[{ value: '45292', style: '1' }]]),
+        stylesXml: stylesXml([0, 14]),
+      }),
+    );
+
+    expect(inflated.indexOf('xl/worksheets/sheet1.xml')).toBeGreaterThanOrEqual(0);
+    expect(inflated.indexOf('xl/styles.xml')).toBeGreaterThan(
+      inflated.indexOf('xl/worksheets/sheet1.xml'),
+    );
+    expect(profile).toMatchObject({ name: 'Days', profiled: true, rowCount: 1 });
+    expect(text).toContain('First 1 rows:\nDay\n2024-01-01');
+  });
+
+  it('does not read the styles part when no sheet could be read', async () => {
+    const data = declareMemberSize(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: styledSheet(['Day'], [[{ value: '45292', style: '1' }]]),
+        stylesXml: stylesXml([0, 14]),
+      }),
+      'xl/worksheets/sheet1.xml',
+      OVER_BUDGET_BYTES,
+    );
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const id = await sealed(db, storage, data);
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+
+    expect(db.rowForAsset(id)).toMatchObject({ state: 'ready_partial' });
+    expect(db.rowForAsset(id)!.coverage['sheets']).toEqual([{ name: 'Days', profiled: false }]);
+    expect(inflated).not.toContain('xl/styles.xml');
+  });
+
+  it('keeps the stored value for a format code with a character reference outside Unicode and formats the rest', async () => {
+    const { text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Days',
+        sheetXml: styledSheet(
+          ['Coded', 'Day'],
+          [
+            [
+              { value: '45292', style: '1' },
+              { value: '45292', style: '2' },
+            ],
+          ],
+        ),
+        stylesXml:
+          '<styleSheet><numFmts><numFmt numFmtId="164" formatCode="&#x110000;0"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="14"/></cellXfs></styleSheet>',
+      }),
+    );
+
+    expect(text).toContain('Coded,Day\n45292,2024-01-01');
   });
 });

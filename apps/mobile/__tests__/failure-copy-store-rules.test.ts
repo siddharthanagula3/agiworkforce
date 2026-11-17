@@ -1,4 +1,6 @@
 import {
+  freeUsageLimitMessage,
+  LOCAL_MODE_KEEPS_WORKING,
   NOT_INCLUDED_IN_PLAN,
   purchaseNeutralRemainder,
   statedWait,
@@ -66,7 +68,7 @@ describe('what this app is allowed to say about paying us', () => {
     expect(rewritten).not.toMatch(/access code/i);
     expect(rewritten).not.toMatch(/waitlist/i);
     expect(rewritten).toBe(
-      'The Free plan includes the free models only. Select one in the model picker, or use your own provider key.',
+      'The Free plan includes the free models only. Select one in the model picker.',
     );
   });
 
@@ -112,11 +114,11 @@ describe('what this app is allowed to say about paying us', () => {
   const GATEWAY_MESSAGES: ReadonlyArray<readonly [string, string]> = [
     [
       `You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going. ${PAID_UPGRADE_ACCESS_NOTE}`,
-      'You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going.',
+      'You have reached the free usage limit on your account. Try again after it resets.',
     ],
     [
       `No free capacity right now. Try again shortly, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
-      'No free capacity right now. Try again shortly, or use your own provider key.',
+      'No free capacity right now. Try again shortly.',
     ],
     [
       `Auto could not find a model for this request on your plan. Choose a model from the picker. ${PAID_UPGRADE_ACCESS_NOTE}`,
@@ -124,7 +126,7 @@ describe('what this app is allowed to say about paying us', () => {
     ],
     [
       `The Free plan includes the free models only. Select one in the model picker, or use your own provider key. ${PAID_UPGRADE_ACCESS_NOTE}`,
-      'The Free plan includes the free models only. Select one in the model picker, or use your own provider key.',
+      'The Free plan includes the free models only. Select one in the model picker.',
     ],
     [
       `Model fixture-model is on the Premium plan, not yours. Choose a model your plan includes. ${PAID_UPGRADE_ACCESS_NOTE}`,
@@ -279,6 +281,7 @@ describe('what this app is allowed to say about paying us', () => {
   it.each(GATEWAY_MESSAGES)('keeps what happened and drops the purchase in %j', (sent, kept) => {
     const shown = withoutExternalPurchaseSteering(sent);
     expect(shown).not.toMatch(STEERING_VOCABULARY);
+    expect(shown).not.toMatch(/provider key/i);
     expect(shown).toBe(kept);
     expectWellFormed(shown);
   });
@@ -312,7 +315,7 @@ describe('a build that sells plans in the app', () => {
       `You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going. ${PAID_UPGRADE_ACCESS_NOTE}`,
     );
     expect(freeLimit).toBe(
-      'You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going. Paid plans carry more capacity.',
+      'You have reached the free usage limit on your account. Try again after it resets. Paid plans carry more capacity.',
     );
     expect(freeLimit).not.toMatch(/pricing|access code|waitlist/i);
     expect(
@@ -341,5 +344,67 @@ describe('the reference and the wait this app repeats', () => {
     expect(statedWait(3_600)).toBe('about 60 minutes');
     expect(statedWait(5_400)).toBe('about 2 hours');
     expect(statedWait(-5)).toBeUndefined();
+  });
+});
+
+describe('the message a Free account reads when its allowance is spent', () => {
+  const FREE_LIMIT_CODE = 'free_trial_token_budget_reached';
+  const NOW = Date.parse('2026-11-16T20:00:00.000Z');
+
+  it('says when Cloud replies come back from the wait the refusal carries', () => {
+    expect(freeUsageLimitMessage({ code: FREE_LIMIT_CODE, retryAfterSeconds: 7_800 }, NOW)).toBe(
+      `You have reached the free usage limit on your account. Try again in about 2 hours. ${LOCAL_MODE_KEEPS_WORKING}`,
+    );
+    expect(freeUsageLimitMessage({ code: FREE_LIMIT_CODE, retryAfterSeconds: 1_500 }, NOW)).toBe(
+      `You have reached the free usage limit on your account. Try again in about 25 minutes. ${LOCAL_MODE_KEEPS_WORKING}`,
+    );
+  });
+
+  it('reads the wait from the reset time when the refusal carries no seconds', () => {
+    const body = {
+      error: {
+        message: `You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going. ${PAID_UPGRADE_ACCESS_NOTE}`,
+        code: FREE_LIMIT_CODE,
+        resets_at: new Date(NOW + 45 * 60 * 1_000).toISOString(),
+      },
+    };
+    expect(freeUsageLimitMessage({ code: FREE_LIMIT_CODE, body }, NOW)).toBe(
+      `You have reached the free usage limit on your account. Try again in about 45 minutes. ${LOCAL_MODE_KEEPS_WORKING}`,
+    );
+  });
+
+  it('keeps after it resets when the refusal carries no wait it can state', () => {
+    const noWait = `You have reached the free usage limit on your account. Try again after it resets. ${LOCAL_MODE_KEEPS_WORKING}`;
+    expect(freeUsageLimitMessage({ code: FREE_LIMIT_CODE }, NOW)).toBe(noWait);
+    expect(
+      freeUsageLimitMessage(
+        { code: FREE_LIMIT_CODE, body: { error: { resets_at: 'next week' } } },
+        NOW,
+      ),
+    ).toBe(noWait);
+    expect(
+      freeUsageLimitMessage(
+        {
+          code: FREE_LIMIT_CODE,
+          body: { error: { resets_at: new Date(NOW + 6 * 86_400_000).toISOString() } },
+        },
+        NOW,
+      ),
+    ).toBe(noWait);
+  });
+
+  it('names no provider key and nothing to buy', () => {
+    for (const retryAfterSeconds of [undefined, 7_800]) {
+      const shown = freeUsageLimitMessage({ code: FREE_LIMIT_CODE, retryAfterSeconds }, NOW);
+      expect(shown).not.toMatch(/provider key|own key/i);
+      expect(shown).not.toMatch(STEERING_VOCABULARY);
+      expectWellFormed(shown ?? '');
+    }
+  });
+
+  it('leaves every other refusal to the sentence the server sent', () => {
+    expect(freeUsageLimitMessage({ code: 'rolling_five_hour_limit_reached' }, NOW)).toBeNull();
+    expect(freeUsageLimitMessage({ code: 'free_capacity_unavailable' }, NOW)).toBeNull();
+    expect(freeUsageLimitMessage({ code: null }, NOW)).toBeNull();
   });
 });

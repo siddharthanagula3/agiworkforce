@@ -1,4 +1,15 @@
-import { whenMmkvReady } from '@/lib/mmkv';
+import { storage, whenMmkvReady } from '@/lib/mmkv';
+import { SET_ASIDE_MARKER } from '@/storage/unreadableFiles';
+
+const CLOUD_ACCOUNT_STORE_NAMES = [
+  'chat-message-store-cloud',
+  'memory-store-cloud',
+  'projects-store-cloud',
+  'library-store-cloud',
+  'settings-store-cloud',
+  'schedule-store',
+  'tier-store',
+] as const;
 
 export interface ClearCloudAccountOptions {
   keepUnsentWork?: boolean;
@@ -9,6 +20,13 @@ function runTeardownStep(label: string, step: () => void): void {
     step();
   } catch (error) {
     console.warn(`[auth] Failed to clear Cloud ${label} state:`, error);
+  }
+}
+
+function deleteSetAsideCloudStoreCopies(): void {
+  const prefixes = CLOUD_ACCOUNT_STORE_NAMES.map((name) => `${name}${SET_ASIDE_MARKER}`);
+  for (const key of storage.getAllKeys?.() ?? []) {
+    if (prefixes.some((prefix) => key.startsWith(prefix))) storage.delete(key);
   }
 }
 
@@ -94,6 +112,13 @@ function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOpt
     clearCloudRecentSearches();
   });
 
+  runTeardownStep('unreadable store copies', deleteSetAsideCloudStoreCopies);
+
+  runTeardownStep('answers finished after the app closed', () => {
+    const { clearInFlightTurnRuns } = require('@/src/features/chat/inFlightTurnRun');
+    clearInFlightTurnRuns();
+  });
+
   if (!keepUnsentWork) clearUnsentCloudWorkNow();
 
   runTeardownStep('composer handoff', () => {
@@ -176,8 +201,11 @@ function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOpt
       isCloudManagedModelId,
     } = require('@/src/features/model-picker/service');
     const selected = useModelStore.getState().selectedModel;
-    if (getProviderOffering(selected)) useModelStore.getState().setModel(DEFAULT_LOCAL_MODEL_ID);
-    else if (isCloudManagedModelId(selected)) useModelStore.getState().restoreNewChatModel();
+    if (getProviderOffering(selected)) {
+      useModelStore
+        .getState()
+        .setModel(useModelStore.getState().newChatModels.local ?? DEFAULT_LOCAL_MODEL_ID);
+    } else if (isCloudManagedModelId(selected)) useModelStore.getState().restoreNewChatModel();
   });
 
   runTeardownStep('schedule cache', () => {

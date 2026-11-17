@@ -131,6 +131,7 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { toUserMessage } from '@/services/userMessage';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
+import { refuseFilteredSend } from '@/src/features/chat/utils/refuseFilteredSend';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
@@ -493,6 +494,7 @@ export default function ChatTabScreen() {
           return false;
         }
         const trimmed = text.trim();
+        if (refuseFilteredSend(trimmed)) return false;
         const skillNameForTurn = activeMode === 'cloud' ? selectedSkillName : undefined;
 
         const videoRequest = skillNameForTurn

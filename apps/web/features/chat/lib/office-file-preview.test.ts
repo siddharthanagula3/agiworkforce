@@ -410,10 +410,48 @@ describe('workbook serialized preview bound', () => {
     ).rejects.toBeInstanceOf(WorkbookPreviewLimitError);
   });
 
+  const ZZZ_WIDTH = 18_278;
+  const paddedRowsThatFit = Math.floor((MAX_FILE_TEXT_CHARS + 1) / (ZZZ_WIDTH + 1));
+
   it('counts rectangular padding across all rows', async () => {
+    const sheet = (rows: number) =>
+      '<row><c r="ZZZ1"><v>x</v></c></row>' + '<row><c><v>x</v></c></row>'.repeat(rows - 1);
+    expect((await xlsxFirstSheetToCsv(await workbook(sheet(paddedRowsThatFit)))).length).toBe(
+      paddedRowsThatFit * (ZZZ_WIDTH + 1) - 1,
+    );
+    const rejected = xlsxSheets(await workbook(sheet(paddedRowsThatFit + 1)));
+    await expect(rejected).rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+    await expect(rejected).rejects.toThrow(new WorkbookPreviewLimitError().message);
+  });
+
+  it('counts no padding for cells that keep a format but hold no value', async () => {
+    const rows = paddedRowsThatFit + 1;
+    const sheet =
+      Array.from(
+        { length: rows },
+        (_, index) =>
+          `<row r="${index + 1}"><c r="A${index + 1}"><v>x</v></c><c r="ZZZ${index + 1}" s="1"/></row>`,
+      ).join('') + '<row r="1048576"><c r="ZZZ1048576" s="1"/></row>';
+    expect(await xlsxFirstSheetToCsv(await workbook(sheet))).toBe(
+      Array.from({ length: rows }, () => 'x').join('\n'),
+    );
     await expect(
-      xlsxSheets(await workbook('<row><c r="ZZZ1"/></row>' + '<row/>'.repeat(11))),
-    ).rejects.toBeInstanceOf(WorkbookPreviewLimitError);
+      xlsxSheets(await workbook('<row><c r="ZZZ1" s="1"/></row>' + '<row/>'.repeat(11))),
+    ).resolves.toEqual([{ name: 'Sheet1', csv: '' }]);
+  });
+
+  it('starts at the first row that holds a value however far down the sheet it is', async () => {
+    const wide = '<c><v>1</v></c>'.repeat(50);
+    expect(
+      await xlsxFirstSheetToCsv(
+        await workbook(
+          `<row r="4999"><c r="AX4999" s="1"/></row><row r="5000">${wide}</row>` +
+            '<row r="5002"><c r="B5002"><v>2</v></c></row>',
+        ),
+      ),
+    ).toBe(
+      `${Array.from({ length: 50 }, () => '1').join(',')}\n${','.repeat(49)}\n,2${','.repeat(48)}`,
+    );
   });
 
   it('counts CSV quoting before allocating its escaped output', async () => {

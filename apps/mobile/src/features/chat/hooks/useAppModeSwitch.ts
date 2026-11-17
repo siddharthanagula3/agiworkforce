@@ -4,10 +4,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useModelStore } from '@/src/features/model-picker/store';
-import {
-  DEFAULT_CLOUD_MODEL_ID,
-  DEFAULT_LOCAL_MODEL_ID,
-} from '@/src/features/model-picker/service';
+import { DEFAULT_CLOUD_MODEL_ID } from '@/src/features/model-picker/service';
 import { readyLocalModelIdOr } from '@/src/features/model-picker/installStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -24,9 +21,12 @@ export function useAppModeSwitch() {
   const switchToLocal = useCallback((): boolean => {
     setWorkMode('chat');
     setAppMode('local');
-    setModel(readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID));
+    restoreNewChatModel();
+    const remembered = useModelStore.getState().selectedModel;
+    const ready = readyLocalModelIdOr(remembered);
+    if (ready !== remembered) setModel(ready);
     return true;
-  }, [setAppMode, setModel, setWorkMode]);
+  }, [restoreNewChatModel, setAppMode, setModel, setWorkMode]);
 
   const switchToCloud = useCallback((): boolean => {
     if (!FEATURES.cloudChat || !DEFAULT_CLOUD_MODEL_ID) {

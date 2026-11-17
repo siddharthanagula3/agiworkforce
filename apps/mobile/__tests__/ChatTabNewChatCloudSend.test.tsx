@@ -211,6 +211,8 @@ import {
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 import { clearPostAuthIntent } from '../src/features/auth/services/postAuthIntent';
+import { useSettingsStore } from '../stores/settingsStore';
+import { REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
 
 const OWNER = 'mobile-new-chat-settings-user';
 
@@ -499,6 +501,76 @@ describe('Chat tab new chat Cloud send', () => {
 
       expect(outcome).toBe(false);
       expect(mockPush).toHaveBeenCalledWith('/(app)/chat/conv-1');
+    });
+  });
+
+  describe('a message Reduce sensitive content refuses', () => {
+    beforeEach(() => {
+      useSettingsStore.setState({ reduceSensitiveContent: true });
+    });
+
+    afterEach(() => {
+      useSettingsStore.setState({ reduceSensitiveContent: false });
+    });
+
+    it('creates and opens nothing, keeps the text and says why', async () => {
+      render(<ChatTabScreen />);
+      const accepted = await mockChatInputOnSend?.('Tell me the easiest suicide method');
+
+      expect(accepted).toBe(false);
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Content not available',
+        expect.stringContaining('Reduce sensitive content is on'),
+      );
+    });
+
+    it('refuses an image prompt before the image chat exists', async () => {
+      useChatViewStore.setState({ mediaMode: 'image' });
+      mockResolveImageRequest.mockReturnValue({
+        status: 'ready',
+        prompt: 'explicit sexual content',
+        model: 'fixture-image-model',
+        ownerId: OWNER,
+      });
+
+      render(<ChatTabScreen />);
+      const accepted = await mockChatInputOnSend?.('explicit sexual content');
+
+      expect(accepted).toBe(false);
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(mockRunImageGenerationTurn).not.toHaveBeenCalled();
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Content not available',
+        REDUCED_SENSITIVE_CONTENT_REFUSAL,
+      );
+    });
+
+    it('still creates and opens the chat once for a message it allows', async () => {
+      mockSendMessage.mockImplementationOnce(
+        async (
+          _conversationId: string,
+          _text: string,
+          _model: string,
+          _attachments: unknown,
+          options?: { onAccepted?: () => void },
+        ) => {
+          options?.onAccepted?.();
+          return true;
+        },
+      );
+
+      render(<ChatTabScreen />);
+      const outcome = await mockChatInputOnSend?.('What is a good name for a cat?');
+
+      expect(outcome).toEqual({ openedConversationId: 'conv-1' });
+      expect(mockCreateConversation).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith('/(app)/chat/conv-1');
+      expect(alertSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -68,6 +68,7 @@ import {
   readLinkDefinition,
 } from '@/src/features/chat/utils/markdownInlineSyntax';
 import { dropHiddenHtmlBlocks } from '@/src/features/chat/utils/markdownHiddenHtml';
+import { holdStreamingCitationLink } from '@/src/features/chat/utils/streamingCitationLink';
 import {
   drawnInlineMath,
   isTableDelimiterRow,
@@ -1626,8 +1627,9 @@ export function renderMarkdownContent(
   const highlightCode = options.highlightCode !== false;
   const streaming = options.streaming ?? !highlightCode;
   const citations = options.citations ?? [];
+  const arrived = streaming ? holdStreamingCitationLink(content, citations) : content;
   const prepared = dropHiddenHtmlBlocks(
-    prepareMarkdownSource(content, streaming, options.stopped === true),
+    prepareMarkdownSource(arrived, streaming, options.stopped === true),
     streaming,
   );
   const svgSlides = extractSvgSlides(

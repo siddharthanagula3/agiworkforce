@@ -74,7 +74,9 @@
     "./research-report": "./src/lib/research-report.ts",
     "./artifact-selection-request": "./src/lib/artifact-selection-request.ts",
     "./research-plan": "./src/lib/research-plan.ts",
-    "./deck-model": "./src/lib/deck-model.ts"
+    "./deck-model": "./src/lib/deck-model.ts",
+    "./workbook-number-formats": "./src/lib/workbook-number-formats.ts",
+    "./workbook-cell-formats": "./src/lib/workbook-cell-formats.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

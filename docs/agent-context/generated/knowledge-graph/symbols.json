@@ -6382,6 +6382,9 @@
     "APPLE_COMMISSION_RATE": [
       "apps/web/features/admin/services/economics-summary.ts"
     ],
+    "APPLE_INTELLIGENCE_FAILURE_SCOPES": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
     "appleAppSiteAssociationResponse": [
       "apps/web/lib/server/mobile-app-association.ts"
     ],
@@ -17132,8 +17135,14 @@
     "CELL_STATES": [
       "scripts/check-surface-feature-matrix.mjs"
     ],
+    "CellFormatTable": [
+      "packages/ui/unified-chat/src/lib/workbook-cell-formats.ts"
+    ],
     "CellKind": [
       "apps/cli/src/notebook_edit.rs"
+    ],
+    "cellStyleFormats": [
+      "apps/web/lib/server/office-document-text.ts"
     ],
     "CELLULAR_CONSENT_SETTING_PATH": [
       "apps/mobile/services/modelDownload.ts"
@@ -18160,6 +18169,9 @@
     "ChatFileErasureScope": [
       "apps/web/lib/server/chat-file-intake/erasure.ts"
     ],
+    "ChatFileInspectionCursor": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
     "ChatFileIntakeCancelReason": [
       "packages/contracts/cloud-contracts/src/chat-file-intake.ts"
     ],
@@ -18991,6 +19003,9 @@
     ],
     "checkEdgeMiddleware": [
       "scripts/check-edge-middleware.mjs"
+    ],
+    "CheckedSystemModelState": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
     ],
     "checkEgressBoundary": [
       "scripts/lib/rust-egress-boundary.mjs"
@@ -21069,6 +21084,9 @@
     ],
     "clearIncident": [
       "apps/web/lib/server/incident/dispatch.ts"
+    ],
+    "clearInFlightTurnRuns": [
+      "apps/mobile/src/features/chat/inFlightTurnRun.ts"
     ],
     "clearIngestLease": [
       "apps/web/lib/connectors/directory/snapshot-cache.ts"
@@ -30882,6 +30900,9 @@
       "apps/mobile/lib/contentFilter.ts",
       "packages/contracts/types/src/content-safety.ts"
     ],
+    "ContentFilterSwitch": [
+      "apps/mobile/lib/contentFilter.ts"
+    ],
     "ContentItem": [
       "crates/agiworkforce-protocol/bindings/ContentItem.ts",
       "crates/agiworkforce-protocol/src/models.rs",
@@ -32758,6 +32779,9 @@
     "CountingStorage": [
       "apps/web/lib/server/chat-file-preparation/__tests__/preparation-harness.ts"
     ],
+    "countListedTests": [
+      "apps/mobile/scripts/run-jest-shards.mjs"
+    ],
     "countLocalChats": [
       "apps/mobile/src/features/settings/data-controls/deleteLocalChats.ts"
     ],
@@ -34625,6 +34649,9 @@
     "credential_rows_left_by": [
       "apps/desktop/src-tauri/src/core/mcp/config.rs"
     ],
+    "CREDENTIAL_SCAN_GUARD_BYTES": [
+      "apps/web/lib/security/upload-scan.ts"
+    ],
     "credential_scope": [
       "apps/desktop/src-tauri/src/core/mcp/config.rs"
     ],
@@ -34639,6 +34666,9 @@
     ],
     "credential_uses": [
       "apps/cli/src/auth.rs"
+    ],
+    "CREDENTIAL_WINDOW_OWNED_BYTES": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
     ],
     "CredentialClass": [
       "packages/ai/routing/src/breaker-profiles.ts",
@@ -34689,17 +34719,38 @@
     "CredentialFieldKind": [
       "apps/extension/src/features/auth/authInterop.ts"
     ],
+    "credentialFindingName": [
+      "apps/web/lib/security/upload-scan.ts"
+    ],
     "credentialFindings": [
       "scripts/check-connector-credential-containment.mjs"
     ],
     "CredentialPlacement": [
       "apps/web/lib/connectors/mcp-credential-spec.ts"
     ],
+    "CredentialRangeOutcome": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
+    "CredentialRangeRequest": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
     "credentialReadPaths": [
       "apps/desktop/electron/runtime/shellSandbox.ts"
     ],
     "CredentialRef": [
       "crates/agiworkforce-protocol/src/code_domain.rs"
+    ],
+    "credentialScanContinuesAfterHead": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
+    "credentialScanMimeType": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
+    "CredentialScanRange": [
+      "apps/web/lib/security/upload-scan.ts"
+    ],
+    "credentialScanReadsContent": [
+      "apps/web/lib/security/upload-scan.ts"
     ],
     "credentialSha256": [
       "apps/web/lib/free-quota-authorization.ts"
@@ -52658,6 +52709,9 @@
     "findPublicTarget": [
       "apps/web/app/api/admin/takedown/lib/public-target.ts"
     ],
+    "findPurchaseVocabulary": [
+      "apps/web/scripts/lib/support-purchase-passages.mjs"
+    ],
     "findRawErrorSinks": [
       "scripts/lib/raw-error-to-user.mjs"
     ],
@@ -52690,6 +52744,9 @@
     ],
     "findRewrittenTables": [
       "scripts/check-resource-metadata.mjs"
+    ],
+    "findRunForOperation": [
+      "apps/mobile/src/features/chat/finishedRunAnswer.ts"
     ],
     "findSelectableModel": [
       "apps/web/shared/stores/model-store.ts"
@@ -52914,6 +52971,12 @@
     "finishedCodeStepId": [
       "apps/mobile/src/features/chat/components/CodeExecutionPlots.tsx"
     ],
+    "finishedRunAnswer": [
+      "apps/mobile/src/features/chat/finishedRunAnswer.ts"
+    ],
+    "FinishedRunReading": [
+      "apps/mobile/src/features/chat/finishedRunAnswer.ts"
+    ],
     "finishFamilyAsCompromised": [
       "apps/web/lib/server/refresh-token-family.ts"
     ],
@@ -52977,6 +53040,9 @@
     ],
     "firstChangedGroupIndex": [
       "apps/web/features/chat/components/messages/ChatMessageList.tsx"
+    ],
+    "firstCursorAfterHead": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
     ],
     "FirstLoadGuard": [
       "apps/desktop/electron/firstLoadGuard.ts"
@@ -53683,6 +53749,9 @@
     ],
     "forgetCodeSessionStart": [
       "apps/mobile/src/features/companion/remote-code/store.ts"
+    ],
+    "forgetInFlightTurnRun": [
+      "apps/mobile/src/features/chat/inFlightTurnRun.ts"
     ],
     "forgetLastFrame": [
       "apps/desktop/electron/runtime/computerUseService.ts"
@@ -55573,6 +55642,9 @@
     "FreeTurnSandboxHold": [
       "apps/web/lib/e2b/compute-metering.ts"
     ],
+    "freeUsageLimitMessage": [
+      "apps/mobile/services/failureCopy.ts"
+    ],
     "freeVoiceAllowanceSeconds": [
       "apps/web/lib/voice/free-voice-allowance.ts"
     ],
@@ -56675,6 +56747,7 @@
       "apps/web/app/share/[token]/page.tsx",
       "apps/web/app/share/schedules/[token]/page.tsx",
       "apps/web/app/shared-artifact/[token]/page.tsx",
+      "apps/web/app/support/page.tsx",
       "apps/web/app/use-cases/[slug]/page.tsx"
     ],
     "generateMmkvEncryptionKey": [
@@ -62328,6 +62401,9 @@
     "hasPersistedSources": [
       "apps/mobile/src/features/chat/utils/messageSources.ts"
     ],
+    "hasPhoneMarker": [
+      "apps/web/app/help/phone-request.ts"
+    ],
     "hasPlaceholderPinForUrl": [
       "apps/mobile/lib/pinning.ts"
     ],
@@ -62677,6 +62753,15 @@
     "HELP_LINK_CSS": [
       "apps/extension/src/features/side-panel/helpLinks.ts"
     ],
+    "HELP_UNAVAILABLE_ON_PHONE_BODY": [
+      "apps/web/app/help/HelpUnavailableOnPhone.tsx"
+    ],
+    "HELP_UNAVAILABLE_ON_PHONE_LINK": [
+      "apps/web/app/help/HelpUnavailableOnPhone.tsx"
+    ],
+    "HELP_UNAVAILABLE_ON_PHONE_TITLE": [
+      "apps/web/app/help/HelpUnavailableOnPhone.tsx"
+    ],
     "HelpArticleId": [
       "apps/extension/src/features/side-panel/helpLinks.ts"
     ],
@@ -62693,6 +62778,9 @@
     "helpArticlePath": [
       "apps/web/lib/support/help-articles.ts",
       "apps/web/lib/support/help-paths.ts"
+    ],
+    "HelpArticleUnavailableOnPhone": [
+      "apps/web/app/help/HelpUnavailableOnPhone.tsx"
     ],
     "helpArticleUrl": [
       "apps/extension/src/features/side-panel/helpLinks.ts",
@@ -62751,6 +62839,9 @@
     ],
     "HelpSearch": [
       "apps/web/features/support/components/HelpSearch.tsx"
+    ],
+    "HelpSearchParams": [
+      "apps/web/app/help/phone-request.ts"
     ],
     "HelpSearchResponse": [
       "apps/web/app/api/help/search/route.ts"
@@ -63020,6 +63111,9 @@
     ],
     "holdsLivePaidSubscription": [
       "apps/web/lib/server/billing-waitlist-access.ts"
+    ],
+    "holdStreamingCitationLink": [
+      "apps/mobile/src/features/chat/utils/streamingCitationLink.ts"
     ],
     "holdTokensUntilClerkAnswers": [
       "apps/mobile/src/integrations/clerk.ts"
@@ -65286,11 +65380,17 @@
     "InFlightTurn": [
       "apps/desktop/src-tauri/src/sys/commands/chat/interrupted_turns.rs"
     ],
+    "inFlightTurnFor": [
+      "apps/mobile/src/features/chat/inFlightTurnRun.ts"
+    ],
     "InFlightTurnQuestion": [
       "apps/web/lib/hooks/inFlightTurnRecovery.ts"
     ],
     "InFlightTurnRecovery": [
       "apps/web/lib/hooks/inFlightTurnRecovery.ts"
+    ],
+    "InFlightTurnRun": [
+      "apps/mobile/src/features/chat/inFlightTurnRun.ts"
     ],
     "InFlightTurnVerdict": [
       "apps/mobile/src/features/chat/inFlightTurnRecovery.ts",
@@ -67883,6 +67983,9 @@
     ],
     "isAbortedCloudRunError": [
       "apps/mobile/src/features/tasks/service.ts"
+    ],
+    "isAbortedTurn": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
     ],
     "isAbsolutePath": [
       "packages/contracts/local-runtime/src/index.ts",
@@ -70515,6 +70618,9 @@
     "isSelfContainedResponseRequest": [
       "packages/ai/routing/src/index.ts"
     ],
+    "isSelfHarmMethodRequest": [
+      "packages/contracts/types/src/content-safety.ts"
+    ],
     "isSelfHealingReason": [
       "packages/ai/routing/src/index.ts",
       "packages/ai/routing/src/runtime-state.ts"
@@ -70838,6 +70944,9 @@
     "isSyncObjectType": [
       "packages/contracts/types/src/sync/object-semantics.ts"
     ],
+    "isSystemModelUnusableError": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
     "isSystemPermissionKind": [
       "packages/contracts/local-runtime/src/desktop-privacy.ts",
       "packages/contracts/local-runtime/src/index.ts"
@@ -70898,6 +71007,9 @@
     ],
     "isTemporaryConversationById": [
       "apps/web/features/chat/lib/imageGenerationPersistence.ts"
+    ],
+    "isTemporarySystemModelState": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
     ],
     "isTenantLockedDown": [
       "apps/web/lib/feature-flags/tenant-lockdown.ts"
@@ -71318,6 +71430,9 @@
     ],
     "JAVASCRIPT_REQUIRED_NOTICE": [
       "apps/web/lib/browser-support.ts"
+    ],
+    "jestRuns": [
+      "apps/mobile/scripts/run-jest-shards.mjs"
     ],
     "jira": [
       "packages/contracts/cloud-contracts/src/connector-scopes.ts"
@@ -76243,6 +76358,9 @@
     "LOCAL_METRIC_LABEL": [
       "apps/web/lib/observability/cardinality.ts"
     ],
+    "LOCAL_MODE_KEEPS_WORKING": [
+      "apps/mobile/services/failureCopy.ts"
+    ],
     "LOCAL_MODE_PUBLISH_MESSAGE": [
       "apps/mobile/src/features/chat/services/artifactPublishing.ts"
     ],
@@ -76393,9 +76511,6 @@
     ],
     "LOCAL_TURN_IN_CLOUD_CHAT": [
       "apps/web/features/chat/lib/local-turn.ts"
-    ],
-    "LOCAL_WELLBEING_FLOOR": [
-      "apps/mobile/stores/chat/localSystemPrompt.ts"
     ],
     "LOCAL_WORKTREE_SETTINGS_COPY": [
       "apps/web/features/code/local-code.ts"
@@ -81828,6 +81943,9 @@
     "MAX_CARDS": [
       "packages/ui/unified-chat/src/lib/study-set.ts"
     ],
+    "MAX_CELL_FORMATS": [
+      "packages/ui/unified-chat/src/lib/workbook-cell-formats.ts"
+    ],
     "MAX_CHAT_ATTACHMENT_BYTES": [
       "apps/web/lib/chat-attachment-policy.ts",
       "packages/contracts/cloud-contracts/src/chat-attachments.ts"
@@ -85624,6 +85742,9 @@
     "mergeImageGenerationMetadata": [
       "apps/web/features/chat/lib/imageGenerationPersistence.ts"
     ],
+    "mergeInspectionFindings": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
     "mergeIntoDraft": [
       "apps/web/features/work/index.ts",
       "apps/web/features/work/launch.ts"
@@ -86283,7 +86404,6 @@
       "apps/web/app/status/page.tsx",
       "apps/web/app/subprocessors/page.tsx",
       "apps/web/app/support/layout.tsx",
-      "apps/web/app/support/page.tsx",
       "apps/web/app/supported-countries/page.tsx",
       "apps/web/app/tasks/page.tsx",
       "apps/web/app/teams/page.tsx",
@@ -88914,6 +89034,9 @@
     "nativeDocumentAdmission": [
       "apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts"
     ],
+    "NativeDocumentWithoutData": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts"
+    ],
     "NativeEnvelope": [
       "apps/desktop/electron/browser/envelope.ts"
     ],
@@ -88971,7 +89094,13 @@
     "NativeResponse": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs"
     ],
+    "nativeRouteForCodeSession": [
+      "apps/mobile/src/features/notifications/productLinks.ts"
+    ],
     "nativeRouteForProductLink": [
+      "apps/mobile/src/features/notifications/productLinks.ts"
+    ],
+    "nativeRouteForSettingsSection": [
       "apps/mobile/src/features/notifications/productLinks.ts"
     ],
     "nativeSearchBudgetExhaustedMessage": [
@@ -93120,6 +93249,9 @@
     "OpenedFolderNotice": [
       "apps/web/features/desktop-host/components/OpenedFolderNotice.tsx"
     ],
+    "openedFromPhone": [
+      "apps/web/app/help/phone-request.ts"
+    ],
     "openedFromProject": [
       "apps/mobile/src/features/projects/components/ProjectChatBackButton.tsx"
     ],
@@ -93217,6 +93349,9 @@
     "openNowLabel": [
       "packages/ui/unified-chat/src/lib/place-facts.ts"
     ],
+    "OpenObjectRange": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
     "openOfficeArchive": [
       "apps/web/features/chat/lib/office-archive.ts",
       "apps/web/lib/server/office-document-text.ts"
@@ -93247,6 +93382,9 @@
     ],
     "openPricingPage": [
       "apps/desktop/src/utils/navigation.ts"
+    ],
+    "openPrivateObjectRange": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
     ],
     "openProfile": [
       "packages/tools/browser-tool/src/profile.ts"
@@ -100017,6 +100155,9 @@
     ],
     "platformSecret": [
       "apps/web/lib/crypto/platform-keys.ts"
+    ],
+    "platformSystemModelId": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
     ],
     "platformTenantKeyRing": [
       "apps/web/lib/crypto/cmek.ts"
@@ -107003,10 +107144,23 @@
       "apps/mobile/src/features/billing/storePricing.ts"
     ],
     "PURCHASE_HELP_CATEGORY": [
-      "apps/web/lib/support/help-articles.ts"
+      "apps/web/lib/support/help-articles.ts",
+      "apps/web/scripts/lib/support-purchase-passages.mjs"
+    ],
+    "PURCHASE_PASSAGE_CLOSE": [
+      "apps/web/scripts/lib/support-purchase-passages.mjs"
+    ],
+    "PURCHASE_PASSAGE_OPEN": [
+      "apps/web/scripts/lib/support-purchase-passages.mjs"
     ],
     "PURCHASE_REFUSAL": [
       "apps/extension/src/features/computer-use/approvalPolicy.ts"
+    ],
+    "PURCHASE_VOCABULARY": [
+      "apps/web/scripts/lib/support-purchase-passages.mjs"
+    ],
+    "PURCHASE_VOCABULARY_EXCEPTIONS": [
+      "apps/web/scripts/lib/support-purchase-passages.mjs"
     ],
     "purchaseCountryFromAppStoreStorefront": [
       "packages/contracts/types/src/billing-topups.ts"
@@ -109054,6 +109208,9 @@
     "readFinanceOverview": [
       "apps/web/lib/services/finance-overview-service.ts"
     ],
+    "readFinishedRunAnswer": [
+      "apps/mobile/src/features/chat/finishedRunAnswer.ts"
+    ],
     "readFixture": [
       "apps/web/lib/e2b/harnesses/__tests__/fixture.ts",
       "tools/evals/src/request.ts"
@@ -110371,6 +110528,9 @@
     "readSystemHighContrast": [
       "apps/mobile/src/ui/theme/useSystemHighContrast.ts"
     ],
+    "readSystemModelNativeStatus": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
     "readTable": [
       "apps/mobile/src/features/chat/utils/markdownTableRows.ts"
     ],
@@ -111573,6 +111733,12 @@
     "recordIdentityObservation": [
       "apps/web/lib/server/risk-signals.ts"
     ],
+    "recordInFlightTurnRun": [
+      "apps/mobile/src/features/chat/inFlightTurnRun.ts"
+    ],
+    "recordInFlightTurnSend": [
+      "apps/mobile/src/features/chat/inFlightTurnRun.ts"
+    ],
     "recordInfrastructureCostEvent": [
       "apps/web/lib/services/cogs-ledger-service.ts"
     ],
@@ -111648,6 +111814,9 @@
     ],
     "RecordLiveVoiceBackendCostInput": [
       "apps/web/lib/voice/live-voice-backend-cost.ts"
+    ],
+    "recordLocalModelTurnFailure": [
+      "apps/mobile/src/features/model-picker/localModelRuntime.ts"
     ],
     "recordManagedAutoMemoryTurn": [
       "apps/web/lib/services/managed-auto-memory-service.ts"
@@ -112702,6 +112871,9 @@
     ],
     "refuseEditedAssistantOverwrite": [
       "apps/web/lib/server/assistant-content-edits.ts"
+    ],
+    "refuseFilteredSend": [
+      "apps/mobile/src/features/chat/utils/refuseFilteredSend.ts"
     ],
     "refuseFreeQuotaKeptOutConversation": [
       "apps/web/lib/server/free-quota-turn.ts"
@@ -119749,6 +119921,9 @@
       "apps/mobile/src/features/chat/components/MarkdownInline.tsx",
       "apps/mobile/src/features/chat/utils/markdownInlineSyntax.ts"
     ],
+    "restoreFinishedRunAnswer": [
+      "apps/mobile/src/features/chat/finishedRunAnswer.ts"
+    ],
     "restoreFlagDefinition": [
       "apps/web/lib/feature-flags/flag-store.ts"
     ],
@@ -124535,6 +124710,9 @@
     "scanContrast": [
       "apps/web/e2e/lib/contrast-scan.ts"
     ],
+    "scanCredentialRange": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
     "scanDatasets": [
       "tools/evals/scripts/pii-scan.d.mts",
       "tools/evals/scripts/pii-scan.mjs"
@@ -124760,6 +124938,9 @@
       "apps/web/lib/security/upload-scan.ts"
     ],
     "scanUploadForCredentials": [
+      "apps/web/lib/security/upload-scan.ts"
+    ],
+    "scanUploadRangeForCredentials": [
       "apps/web/lib/security/upload-scan.ts"
     ],
     "scanValueForSecrets": [
@@ -130739,6 +130920,9 @@
     "settleStreamingFence": [
       "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
+    "settleSystemModelState": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
     "settleTranscriptionTokens": [
       "apps/web/app/api/llm/v1/audio/transcriptions/route.ts"
     ],
@@ -130937,6 +131121,9 @@
     ],
     "ShapeKind": [
       "apps/web/features/chat/components/artifacts/presentation/deck-shapes.ts"
+    ],
+    "shardCount": [
+      "apps/mobile/scripts/run-jest-shards.mjs"
     ],
     "shardFor": [
       "scripts/knowledge-graph.mjs"
@@ -138221,6 +138408,9 @@
     "styleForConversation": [
       "apps/mobile/stores/chat/chatViewStore.ts"
     ],
+    "styleIndex": [
+      "packages/ui/unified-chat/src/lib/workbook-cell-formats.ts"
+    ],
     "StyleOption": [
       "apps/mobile/src/features/settings/personalization/constants.ts",
       "packages/ui/unified-chat/src/components/AttachmentMenu.tsx"
@@ -139194,6 +139384,9 @@
       "apps/web/features/support/components/SupportComposer.tsx"
     ],
     "SupportCorpus": [
+      "apps/web/lib/support/agent/corpus/index.ts"
+    ],
+    "SupportCorpusView": [
       "apps/web/lib/support/agent/corpus/index.ts"
     ],
     "SupportDiagnostics": [
@@ -140269,6 +140462,18 @@
     ],
     "systemIntentTarget": [
       "apps/mobile/src/features/chat/utils/externalUrls.ts"
+    ],
+    "systemModelFailedThisSession": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
+    "systemModelState": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
+    "SystemModelState": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
+    "systemModelUnavailableNote": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
     ],
     "SystemPermissionKind": [
       "packages/contracts/local-runtime/src/desktop-privacy.ts",
@@ -141925,6 +142130,9 @@
     ],
     "test_confirmed_findings_keep_llm_enrichment": [
       "tools/skill-vetting/tests/test_meta_analyzer_injection.py"
+    ],
+    "TEST_FILES_PER_PROCESS": [
+      "apps/mobile/scripts/run-jest-shards.mjs"
     ],
     "test_hidden_instructions_are_still_detected": [
       "tools/skill-vetting/tests/test_pattern_backtracking.py"
@@ -147142,6 +147350,9 @@
     "unaccountedClientSurfaces": [
       "apps/web/lib/observability/signal-coverage.ts"
     ],
+    "UnansweredQuestion": [
+      "apps/mobile/src/features/chat/finishedRunAnswer.ts"
+    ],
     "unapproved_capabilities": [
       "apps/cli/src/features/plugins/plugins.rs"
     ],
@@ -148017,6 +148228,9 @@
     ],
     "untrustedToolContentInContext": [
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts"
+    ],
+    "UnusableSystemModelState": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
     ],
     "UNUSED_REFUND_WINDOW_DAYS": [
       "apps/web/lib/billing/refund-requests.ts"
@@ -151739,6 +151953,9 @@
     "useSystemHighContrast": [
       "apps/mobile/src/ui/theme/useSystemHighContrast.ts"
     ],
+    "useSystemModelSession": [
+      "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
     "useTabletLayout": [
       "apps/mobile/src/shared/hooks/useTabletLayout.ts"
     ],
@@ -155158,6 +155375,9 @@
     "WEB_SETTINGS_SECTION_ALIASES": [
       "apps/web/features/settings/lib/web-settings-sections.ts"
     ],
+    "WEB_SETTINGS_TASK_SECTIONS": [
+      "apps/web/features/settings/lib/web-settings-sections.ts"
+    ],
     "WEB_SHARED_SHORTCUT_PATH": [
       "scripts/check-shortcut-registry.mjs"
     ],
@@ -156627,6 +156847,9 @@
     ],
     "withoutMeasurements": [
       "scripts/check-llm-log-hygiene.mjs"
+    ],
+    "withoutNativeDocumentData": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts"
     ],
     "withoutPictureMetadata": [
       "apps/mobile/src/features/media/image-metadata.ts"
@@ -158847,6 +159070,15 @@
     ],
     "xml_tag": [
       "apps/cli/src/memory.rs"
+    ],
+    "XmlElement": [
+      "apps/web/lib/server/office-document-text.ts"
+    ],
+    "xmlElements": [
+      "apps/web/lib/server/office-document-text.ts"
+    ],
+    "xmlStartTags": [
+      "apps/web/lib/server/office-document-text.ts"
     ],
     "xmlTextRuns": [
       "apps/web/lib/server/office-document-text.ts"

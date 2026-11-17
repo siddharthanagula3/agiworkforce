@@ -337,7 +337,9 @@
       "./research-report": "universal",
       "./artifact-selection-request": "universal",
       "./research-plan": "universal",
-      "./deck-model": "universal"
+      "./deck-model": "universal",
+      "./workbook-number-formats": "universal",
+      "./workbook-cell-formats": "universal"
     }
   }
 }

@@ -22,7 +22,7 @@ import {
   CloudCredentialUnavailableError,
   UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
 } from '@/services/apiErrors';
-import { withFailureReference } from '@/services/failureCopy';
+import { freeUsageLimitMessage, withFailureReference } from '@/services/failureCopy';
 import {
   buildAttachedDocumentContext,
   buildProjectSourceContext,
@@ -94,16 +94,12 @@ import {
   type PhoneStepOutcome,
 } from '@/src/features/integrations/services/phoneDeviceSteps';
 import { isPhoneStepTool, phoneStepNeedsConfirmation } from '@agiworkforce/types';
-import {
-  checkContentFilter,
-  MINOR_SAFE_REFUSAL,
-  REDUCED_SENSITIVE_CONTENT_REFUSAL,
-} from '@/lib/contentFilter';
-import { isMinorMode } from '@/src/features/auth/services/ageGate';
+import { refuseFilteredSend } from '@/src/features/chat/utils/refuseFilteredSend';
 import { useAuthStore } from '@/src/features/auth/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   markLocalModelRefUsed,
+  recordLocalModelTurnFailure,
   resolveLocalModelRef,
 } from '@/src/features/model-picker/localModelRuntime';
 import {
@@ -276,6 +272,11 @@ import {
   IN_FLIGHT_TURN_WAITING_MESSAGE,
   type InFlightTurnVerdict,
 } from '@/src/features/chat/inFlightTurnRecovery';
+import {
+  forgetInFlightTurnRun,
+  recordInFlightTurnRun,
+  recordInFlightTurnSend,
+} from '@/src/features/chat/inFlightTurnRun';
 import {
   EMPTY_RESPONSE_FAILURE,
   parseStreamFailure,
@@ -1350,6 +1351,9 @@ function localSetupMessage(error: unknown): string {
   if (raw.includes('APPLE_INTELLIGENCE_RATE_LIMITED')) {
     return 'Apple Intelligence is busy on this device. Wait a moment and try again.';
   }
+  if (raw.includes('APPLE_INTELLIGENCE_UNSUPPORTED_LANGUAGE')) {
+    return 'Apple Intelligence does not support this language. Write in another language, or choose another on-device model.';
+  }
   if (raw.includes('APPLE_INTELLIGENCE_FAILED') || raw.includes('FoundationModels')) {
     return 'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.';
   }
@@ -1687,7 +1691,10 @@ function continuationFailure(error: unknown): ContinuationFailure {
     };
   }
   if (error instanceof ApiHttpError) {
-    const message = withFailureReference(error.message, error.requestId);
+    const message = withFailureReference(
+      freeUsageLimitMessage(error) ?? error.message,
+      error.requestId,
+    );
     return { error: message, failureCode: error.code ? { message, code: error.code } : null };
   }
   if (error instanceof RemoteChatDisabledError) return { error: error.message };
@@ -2134,19 +2141,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (options?.retryOfMessageId === undefined) modelShownAtBannerSwitch.delete(conversationId);
     let failureRetry: SendErrorRetry | null = null;
     const set = failureScopedSet(conversationId, () => failureRetry);
-    const minorMode = isMinorMode();
-    const reduceSensitiveContent = useSettingsStore.getState().reduceSensitiveContent;
-    if (minorMode || reduceSensitiveContent) {
-      const verdict = checkContentFilter(
-        content,
-        true,
-        minorMode ? MINOR_SAFE_REFUSAL : REDUCED_SENSITIVE_CONTENT_REFUSAL,
-      );
-      if (!verdict.allowed) {
-        Alert.alert('Content not available', verdict.refusal);
-        return false;
-      }
-    }
+    if (refuseFilteredSend(content)) return false;
 
     const queue = getMobileSendQueue();
     try {
@@ -2309,7 +2304,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           set({
             error:
               useFreeQuotaCatalogueStore.getState().error ??
-              'This provider-funded Free model is unavailable right now. Choose another available Free model.',
+              'This Free model is unavailable right now. Choose another available Free model.',
             paywallError: null,
             ...streamingFlags(),
           });
@@ -3019,6 +3014,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               updateLocalStream(parseCurrentTurnAssistantOutput(localStreamingRaw, content));
             },
           });
+        } catch (generationError) {
+          if (!controller.signal.aborted) {
+            void recordLocalModelTurnFailure(localRef.modelId, generationError);
+          }
+          throw generationError;
         } finally {
           localPeakMemoryMB = await memorySampler.stop();
         }
@@ -3251,6 +3251,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         thinkingEnabled,
       });
 
+      if (userMessage) {
+        recordInFlightTurnSend({
+          conversationId,
+          questionId: userMessage.id,
+          operationId: assistantMessageId,
+        });
+      }
       await streamChat(
         isFreeQuotaChat
           ? {
@@ -3454,6 +3461,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const firstReference = !activeCloudRuns.has(conversationId);
             activeCloudRuns.set(conversationId, { ...cloudAgentRun });
             if (firstReference) options?.onRunStarted?.(cloudAgentRun.runId);
+            if (firstReference && userMessage) {
+              recordInFlightTurnRun({
+                conversationId,
+                questionId: userMessage.id,
+                runId: cloudAgentRun.runId,
+              });
+            }
             const currentMsgStore = getConversationMessageStore(conversationId);
             currentMsgStore.setState((s) => ({
               messages: {
@@ -3947,10 +3961,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               console.warn(`[chat-stream] onError ${error?.name}: ${error?.message}`);
             }
             const connectionLost = error instanceof StreamConnectionLostError;
+            const httpFailureMessage =
+              error instanceof ApiHttpError ? (freeUsageLimitMessage(error) ?? error.message) : '';
             const failure =
               error instanceof ApiHttpError
                 ? {
-                    message: withFailureReference(error.message, error.requestId),
+                    message: withFailureReference(httpFailureMessage, error.requestId),
                     code: error.code,
                   }
                 : connectionLost
@@ -3959,7 +3975,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const turnFailure: StreamFailure =
               error instanceof ApiHttpError
                 ? {
-                    message: error.message,
+                    message: httpFailureMessage,
                     ...(error.code ? { code: error.code } : {}),
                     ...(error.retryAfterSeconds !== undefined
                       ? { retryAfterSeconds: error.retryAfterSeconds }
@@ -4139,6 +4155,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return true;
     } finally {
+      if (userMessage) forgetInFlightTurnRun(conversationId, userMessage.id);
       if (!shouldUseLocalRuntime || ownsLocalTurn()) {
         thinkingStartTimes.delete(conversationId);
         thinkingEndTimes.delete(conversationId);
@@ -4765,7 +4782,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 inactiveReason !== null
                   ? INACTIVE_INPUT_MESSAGE
                   : error instanceof ApiHttpError
-                    ? withFailureReference(error.message, error.requestId)
+                    ? withFailureReference(
+                        freeUsageLimitMessage(error) ?? error.message,
+                        error.requestId,
+                      )
                     : GENERIC_TURN_FAILURE,
             });
           },

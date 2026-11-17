@@ -31,7 +31,6 @@ import {
 import { ModelFilterChips } from './ModelFilterChips';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
-import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { claimModelSelection } from '@/src/features/model-picker/selectionIntent';
@@ -279,7 +278,6 @@ export function ModelPickerSheet({
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const freeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.catalogue);
-  const freeQuotaAccount = useFreeQuotaCatalogueStore((s) => s.account);
   const freeQuotaLoading = useFreeQuotaCatalogueStore((s) => s.loading);
   const freeQuotaError = useFreeQuotaCatalogueStore((s) => s.error);
   const refreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.refresh);
@@ -367,6 +365,10 @@ export function ModelPickerSheet({
   }, [cloudUnlocked, modelScope, openSignal, refreshFreeQuotaCatalogue, sheetRef]);
 
   const query = search.trim().toLowerCase();
+  const noModelToChoose =
+    cloudUnlocked &&
+    selectableAutoModes.length === 0 &&
+    !modelList.some((model) => model.availability !== 'locked');
   const filteredModels = useMemo(() => {
     if (!query) return modelList;
     return modelList.filter(
@@ -579,8 +581,9 @@ export function ModelPickerSheet({
     (fromIndex: number, toIndex: number) => {
       sheetPresence.onAnimate(fromIndex, toIndex);
       if (fromIndex === -1 || toIndex === -1) resetView();
+      if (fromIndex === -1 && toIndex >= 0) void hydrateInstalledModels();
     },
-    [resetView, sheetPresence],
+    [hydrateInstalledModels, resetView, sheetPresence],
   );
 
   const handleSheetClose = useCallback(() => {
@@ -723,7 +726,7 @@ export function ModelPickerSheet({
           </View>
           {showsFreeCatalogue && freeQuotaLoading ? (
             <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
-              Checking provider-funded Free models…
+              Checking Free models…
             </Text>
           ) : null}
           {showsFreeCatalogue && freeQuotaError ? (
@@ -735,7 +738,7 @@ export function ModelPickerSheet({
                 hitSlop={{ top: 2, bottom: 2 }}
                 onPress={() => void refreshFreeQuotaCatalogue()}
                 accessibilityRole="button"
-                accessibilityLabel="Retry loading provider-funded Free models"
+                accessibilityLabel="Retry loading Free models"
                 style={{ minHeight: 40, justifyContent: 'center' }}
               >
                 <Text style={{ color: colors.teal, fontSize: typeScale.caption }}>
@@ -743,17 +746,6 @@ export function ModelPickerSheet({
                 </Text>
               </PressableBox>
             </View>
-          ) : null}
-          {showsFreeCatalogue &&
-          isCloudAccountEpochCurrent(freeQuotaAccount) &&
-          !freeQuotaLoading &&
-          !freeQuotaError &&
-          !freeQuotaCatalogue?.models.some(
-            (model) => model.category === 'chat' && model.status === 'ready',
-          ) ? (
-            <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
-              No provider-funded Free chat models are available right now.
-            </Text>
           ) : null}
         </View>
 
@@ -976,7 +968,7 @@ export function ModelPickerSheet({
             </View>
           ) : null}
 
-          {!filtering && filteredModels.length === 0 ? (
+          {!filtering && (filteredModels.length === 0 || noModelToChoose) ? (
             <View
               style={{
                 alignItems: 'center',
@@ -992,7 +984,9 @@ export function ModelPickerSheet({
                   textAlign: 'center',
                 }}
               >
-                No models matching “{search}”
+                {query && filteredModels.length === 0
+                  ? `No models matching “${search}”`
+                  : 'No models are available right now.'}
               </Text>
             </View>
           ) : null}

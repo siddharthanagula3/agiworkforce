@@ -73,6 +73,7 @@ import { settingsSearchEntries } from '@/src/features/settings/settingsSearchEnt
 import { useOpenCloudRoute } from '@/src/features/settings/useOpenCloudRoute';
 import { useImageModelChoosable } from '@/src/features/settings/media/useImageModelChoosable';
 import { openWebContentPage } from '@/src/platform/webContentPage';
+import { openOrAlert } from '@/src/features/settings/cloud-privacy/privacyCenterLinks';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
@@ -880,7 +881,7 @@ export default function SettingsTabScreen() {
             label: 'Help Center',
             icon: CircleHelp,
             onPress: () => {
-              void openWebContentPage('https://agiworkforce.com/help');
+              void openOrAlert(() => openWebContentPage('/help'));
             },
           },
           {

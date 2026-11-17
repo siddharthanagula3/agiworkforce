@@ -1,11 +1,7 @@
 import { DecodeUTF8, Inflate, strFromU8 } from 'fflate';
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
-import {
-  builtInNumberFormat,
-  displayCellNumber,
-  parseNumberFormat,
-  type NumberFormat,
-} from './workbook-number-formats';
+import { CellFormatTable, styleIndex } from './workbook-cell-formats';
+import { displayCellNumber, type NumberFormat } from './workbook-number-formats';
 
 const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const DEFAULT_SHEET_PATH = 'xl/worksheets/sheet1.xml';
@@ -15,7 +11,6 @@ const SHARED_STRINGS_PATH = 'xl/sharedStrings.xml';
 const DEFAULT_STYLES_PATH = 'xl/styles.xml';
 const STYLES_RELATIONSHIP_SUFFIX = '/styles';
 export const MAX_WORKBOOK_SHEETS = 50;
-const MAX_CELL_FORMATS = 65_490;
 const MAX_ARCHIVE_MEMBERS = 2_000;
 const MAX_DECOMPRESSION_RATIO = 120;
 const MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024;
@@ -369,10 +364,6 @@ function isBlankCell(value: CellValue): boolean {
   return typeof value !== 'number' && !('stored' in value) && value.every((part) => part === '');
 }
 
-function styleIndex(raw: string | undefined): number {
-  return raw !== undefined && /^\d{1,9}$/.test(raw) ? Number(raw) : -1;
-}
-
 function rowIndex(raw: string | undefined, previous: number): number {
   const reference = raw?.trim() ?? '';
   const index = /^\d+$/.test(reference) ? Number(reference) - 1 : -1;
@@ -428,6 +419,7 @@ function parseSheet(
   let numbers = false;
   let inRow = false;
   let rowAt = -1;
+  let firstRowAt: number | null = null;
   let row: Map<number, CellValue> | null = null;
   let cell: {
     index: number;
@@ -458,7 +450,6 @@ function parseSheet(
         const reference = attributes['r'];
         const index = reference ? columnIndex(reference, budget) : previous + 1;
         previous = index;
-        width = Math.max(width, index + 1);
         cell = {
           index,
           type: attributes['t'],
@@ -467,7 +458,6 @@ function parseSheet(
           value: undefined,
           inline: [],
         };
-        check();
       } else if (cell) {
         if (name === 'v') {
           inValue = true;
@@ -510,14 +500,19 @@ function parseSheet(
         } else {
           value = [done.value ?? ''];
         }
+        const blank = isBlankCell(value);
         if (!row) {
-          if (isBlankCell(value)) return;
-          if (rowAt > budget) throw new WorkbookPreviewLimitError();
+          if (blank) return;
+          if (!Number.isSafeInteger(rowAt)) throw new WorkbookPreviewLimitError();
+          const at = rowAt - (firstRowAt ??= rowAt);
+          if (at > budget) throw new WorkbookPreviewLimitError();
           row = new Map();
-          rows.push({ index: rowAt, cells: row });
-          rowCount = rowAt + 1;
+          rows.push({ index: at, cells: row });
+          rowCount = at + 1;
         }
         const replaced = row.get(done.index);
+        if (blank && replaced === undefined) return;
+        if (!blank) width = Math.max(width, done.index + 1);
         if (replaced !== undefined && typeof replaced !== 'number') {
           known -= escapedCellLength(storedParts(replaced), Number.MAX_SAFE_INTEGER);
         }
@@ -535,9 +530,7 @@ function parseSheet(
 class CellFormatsRead extends Error {}
 
 function readCellFormats(archive: WorkbookArchive, path: string): (NumberFormat | null)[] {
-  const custom = new Map<number, string>();
-  let customChars = 0;
-  const formatIds: number[] = [];
+  const table = new CellFormatTable();
   let section: 'numFmts' | 'cellXfs' | null = null;
   try {
     readMember(archive, path, {
@@ -545,15 +538,11 @@ function readCellFormats(archive: WorkbookArchive, path: string): (NumberFormat 
         if (name === 'numFmts' || name === 'cellXfs') {
           section = name;
         } else if (name === 'numFmt' && section === 'numFmts') {
-          if (custom.size >= MAX_CELL_FORMATS) throw new WorkbookPreviewLimitError();
-          const id = styleIndex(attributes['numFmtId']);
-          const code = attributes['formatCode'] ?? '';
-          customChars += code.length;
-          if (customChars > MAX_FILE_TEXT_CHARS) throw new WorkbookPreviewLimitError();
-          if (id >= 0) custom.set(id, code);
+          if (!table.addCustomFormat(attributes['numFmtId'], attributes['formatCode'] ?? '')) {
+            throw new WorkbookPreviewLimitError();
+          }
         } else if (name === 'xf' && section === 'cellXfs') {
-          if (formatIds.length >= MAX_CELL_FORMATS) throw new WorkbookPreviewLimitError();
-          formatIds.push(styleIndex(attributes['numFmtId'] ?? '0'));
+          if (!table.addCellFormat(attributes['numFmtId'])) throw new WorkbookPreviewLimitError();
         }
       },
       close(name) {
@@ -562,20 +551,7 @@ function readCellFormats(archive: WorkbookArchive, path: string): (NumberFormat 
       },
     });
   } catch (error) {
-    if (error instanceof CellFormatsRead) {
-      const parsed = new Map<number, NumberFormat | null>();
-      return formatIds.map((id) => {
-        if (id < 0) return null;
-        const code = custom.get(id);
-        if (code === undefined) return builtInNumberFormat(id);
-        let format = parsed.get(id);
-        if (format === undefined) {
-          format = parseNumberFormat(code);
-          parsed.set(id, format);
-        }
-        return format;
-      });
-    }
+    if (error instanceof CellFormatsRead) return table.formats();
   }
   return [];
 }
@@ -681,6 +657,8 @@ function sheetCsv(
 /**
  * Reads the worksheets of an XLSX file on the device, in tab order, as CSV. It never
  * evaluates formulas: a formula cell shows its cached value or {@link XLSX_NOT_CALCULATED}.
+ * A sheet runs from its first row that holds a value to its last, and from column A to its
+ * last column that held one; empty rows and columns inside that range keep their places.
  * A number shows as its cell format displays it when that format can be shown faithfully,
  * and as the stored value otherwise or when the styles part cannot be read.
  * Throws {@link WorkbookPreviewLimitError} past the preview text limit and

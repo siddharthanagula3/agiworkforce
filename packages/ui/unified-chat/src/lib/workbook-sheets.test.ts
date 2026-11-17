@@ -242,26 +242,40 @@ describe('readWorkbookSheets', () => {
     expect(toCsv(grid!)).toBe('Heading\n\n\n42');
   });
 
-  it('keeps the empty rows before the first row', () => {
-    expect(sheetCsv('<row r="3"><c r="A3"><v>1</v></c><c r="B3"><v>2</v></c></row>')).toBe(
-      ',\n,\n1,2',
+  it('starts at the first row that holds a value and keeps the empty rows after it', () => {
+    const csv = sheetCsv(
+      '<row r="2"><c r="A2" s="1"/></row>' +
+        '<row r="3"><c r="A3" t="inlineStr"><is><t>Region</t></is></c>' +
+        '<c r="B3" t="inlineStr"><is><t>Revenue</t></is></c></row>' +
+        '<row r="5"><c r="B5"><v>3</v></c></row>',
+    );
+
+    expect(csv).toBe('Region,Revenue\n,\n,3');
+    expect(parseCsvTable(csv)?.columns).toEqual(['Region', 'Revenue']);
+    expect(sheetCsv('<row r="1048576"><c r="A1048576"><v>1</v></c></row>')).toBe('1');
+    expect(sheetCsv(`<row r="5000">${'<c><v>1</v></c>'.repeat(50)}</row>`)).toBe(
+      Array.from({ length: 50 }, () => '1').join(','),
     );
   });
 
   it('places a row without an index after the row before it', () => {
-    expect(sheetCsv('<row r="2"><c r="A2"><v>1</v></c></row><row><c><v>2</v></c></row>')).toBe(
-      '\n1\n2',
-    );
+    expect(
+      sheetCsv(
+        '<row r="1"><c><v>0</v></c></row><row r="3"><c r="A3"><v>1</v></c></row>' +
+          '<row><c><v>2</v></c></row>',
+      ),
+    ).toBe('0\n\n1\n2');
   });
 
   it('places a repeated, descending or unreadable row index after the row before it', () => {
     expect(
       sheetCsv(
-        '<row r="3"><c><v>1</v></c></row><row r="3"><c><v>2</v></c></row>' +
+        '<row r="1"><c><v>0</v></c></row>' +
+          '<row r="3"><c><v>1</v></c></row><row r="3"><c><v>2</v></c></row>' +
           '<row r="2"><c><v>3</v></c></row><row r="0"><c><v>4</v></c></row>' +
           '<row r="x"><c><v>5</v></c></row><row r="-9"><c><v>6</v></c></row>',
       ),
-    ).toBe('\n\n1\n2\n3\n4\n5\n6');
+    ).toBe('0\n\n1\n2\n3\n4\n5\n6');
   });
 
   it('places a row after a gap and each cell in its own column', () => {
@@ -299,21 +313,38 @@ describe('readWorkbookSheets', () => {
           '<row r="3"><c r="A3"><v>3</v></c></row>',
       ),
     ).toBe('1\n\n3');
-    expect(sheetCsv('<row r="2"><c r="A2" s="1"/><c r="B2"><v>2</v></c></row>')).toBe(',\n,2');
+    expect(sheetCsv('<row r="2"><c r="A2" s="1"/><c r="B2"><v>2</v></c></row>')).toBe(',2');
+  });
+
+  it('adds no columns for cells that keep a format but hold no value', () => {
+    expect(
+      sheetCsv(
+        '<row r="1"><c r="A1"><v>1</v></c><c r="ZZZ1" s="1"/></row>' +
+          '<row r="2"><c r="B2"><v>2</v></c><c r="C2" t="inlineStr"><is><t></t></is></c></row>',
+      ),
+    ).toBe('1,\n,2');
+    expect(
+      sheetCsv('<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c><c r="A1" s="1"/></row>'),
+    ).toBe(',2');
   });
 
   it('counts the empty rows it keeps against the preview limit', () => {
-    expect(() => sheetCsv('<row r="1048576"><c r="A1048576"><v>1</v></c></row>')).toThrow(
+    const first = '<row r="1"><c><v>0</v></c></row>';
+    expect(() => sheetCsv(`${first}<row r="1048576"><c r="A1048576"><v>1</v></c></row>`)).toThrow(
       WorkbookPreviewLimitError,
     );
     expect(() =>
       sheetCsv(`<row r="${'9'.repeat(400)}"><c><v>1</v></c></row><row><c><v>2</v></c></row>`),
     ).toThrow(WorkbookPreviewLimitError);
-    expect(() => sheetCsv(`<row r="${MAX_FILE_TEXT_CHARS + 1}"><c><v>1</v></c></row>`)).toThrow(
+    expect(() => sheetCsv(`${first}<row r="${'9'.repeat(400)}"><c><v>1</v></c></row>`)).toThrow(
       WorkbookPreviewLimitError,
     );
-    const atLimit = sheetCsv(`<row r="${MAX_FILE_TEXT_CHARS}"><c><v>1</v></c></row>`);
+    expect(() => sheetCsv(`${first}<row r="${MAX_FILE_TEXT_CHARS}"><c><v>1</v></c></row>`)).toThrow(
+      WorkbookPreviewLimitError,
+    );
+    const atLimit = sheetCsv(`${first}<row r="${MAX_FILE_TEXT_CHARS - 1}"><c><v>1</v></c></row>`);
     expect(atLimit).toHaveLength(MAX_FILE_TEXT_CHARS);
+    expect(atLimit.startsWith('0\n')).toBe(true);
     expect(atLimit.endsWith('\n1')).toBe(true);
   });
 

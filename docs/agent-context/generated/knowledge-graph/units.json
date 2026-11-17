@@ -2551,16 +2551,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 2413,
+      "files": 2435,
       "roles": {
         "asset": 4,
         "config": 14,
         "doc": 4,
         "generated": 1,
         "other": 49,
-        "source": 1208,
+        "source": 1214,
         "style": 1,
-        "test": 1132
+        "test": 1148
       }
     },
     {
@@ -2615,7 +2615,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8525,
+      "files": 8534,
       "roles": {
         "asset": 58,
         "config": 94,
@@ -2623,9 +2623,9 @@
         "generated": 2,
         "migration": 750,
         "other": 37,
-        "source": 3587,
+        "source": 3591,
         "style": 37,
-        "test": 3909
+        "test": 3914
       }
     },
     {
@@ -5011,7 +5011,9 @@
         "./text-direction",
         "./tool-failure",
         "./turn-citations",
-        "./web-search-notice"
+        "./web-search-notice",
+        "./workbook-cell-formats",
+        "./workbook-number-formats"
       ],
       "agentsDoc": "AGENTS.md",
       "checks": [
@@ -5042,12 +5044,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 527,
+      "files": 529,
       "roles": {
         "config": 3,
-        "source": 244,
+        "source": 245,
         "style": 3,
-        "test": 277
+        "test": 278
       }
     },
     {

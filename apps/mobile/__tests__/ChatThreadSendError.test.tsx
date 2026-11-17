@@ -126,13 +126,41 @@ jest.mock('@/lib/mmkv', () => {
   };
 });
 
+let mockImageRequest: unknown = null;
+jest.mock('@/src/features/chat/actions/resolveMobileImageGenerationRequest', () => {
+  const actual = jest.requireActual(
+    '@/src/features/chat/actions/resolveMobileImageGenerationRequest',
+  );
+  return {
+    ...actual,
+    resolveMobileImageGenerationRequest: (...args: unknown[]) =>
+      mockImageRequest ?? actual.resolveMobileImageGenerationRequest(...args),
+  };
+});
+
+const mockRunImageGenerationTurn = jest.fn();
+jest.mock('@/src/features/chat/actions/runImageGenerationTurn', () => ({
+  ...jest.requireActual('@/src/features/chat/actions/runImageGenerationTurn'),
+  runImageGenerationTurn: (...args: unknown[]) => mockRunImageGenerationTurn(...args),
+}));
+
+import { Alert } from 'react-native';
 import ChatScreen from '../app/(app)/chat/[id]';
+import { REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
+import { useSettingsStore } from '../stores/settingsStore';
 import { useChatExecutionStore, useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useTierStore } from '../src/features/billing/store';
 import { getShortDisplayName, UNKNOWN_MODEL_LABEL } from '../src/features/model-picker/service';
 import { quotedReplyAuthor, quotedReplyText } from '../src/features/chat/components/QuotedReplyBar';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { useModelStore } from '../src/features/model-picker/store';
+import { useModelInstallStore } from '../src/features/model-picker/installStore';
+import {
+  platformSystemModelId,
+  useSystemModelSession,
+} from '../src/features/model-picker/systemModelAvailability';
+import { DEFAULT_LOCAL_MODEL_ID, LOCAL_MODEL_LIST } from '../src/features/model-picker/service';
 
 const SEND_FAILED = 'Message could not be sent. Please try again.';
 const INITIAL_TIER = useTierStore.getState().tier;
@@ -361,5 +389,143 @@ describe('a quoted reply', () => {
     expect(quotedReplyAuthor({ role: 'assistant', model: 'retired-model-id' })).toBe('Assistant');
     expect(quotedReplyAuthor({ role: 'assistant' })).toBe('Assistant');
     expect(quotedReplyAuthor({ role: 'user', model: 'retired-model-id' })).toBe('You');
+  });
+});
+
+describe('a Local reply the built-in model could not give', () => {
+  const SYSTEM_MODEL_ID = platformSystemModelId('ios')!;
+  const DOWNLOADED_MODEL = LOCAL_MODEL_LIST.find(
+    (model) => (model.fileSizeBytes ?? 0) > 0 && model.id !== DEFAULT_LOCAL_MODEL_ID,
+  )!;
+  const SYSTEM_FAILED =
+    'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.';
+
+  function seedSystemModelThread(): void {
+    useChatStore.setState({
+      conversations: [
+        {
+          id: 'thread-1',
+          title: 'Quarterly plan',
+          createdAt: '2026-06-20T00:00:00.000Z',
+          updatedAt: '2026-06-20T00:00:00.000Z',
+          messageCount: 1,
+          pinned: false,
+          model: SYSTEM_MODEL_ID,
+          executionMode: 'local',
+        },
+      ],
+      messages: { 'thread-1': [QUESTION] },
+    } as never);
+    useModelStore.setState({ selectedModel: SYSTEM_MODEL_ID, selectedProvider: 'local' });
+    useChatExecutionStore.getState().setSendError(SYSTEM_FAILED, {
+      conversationId: 'thread-1',
+      retry: { kind: 'regenerate', messageId: QUESTION.id },
+    });
+  }
+
+  beforeEach(() => {
+    useSystemModelSession.setState({ failedModelIds: [], unreadySinceFailureIds: [] });
+    useModelInstallStore.setState({ installedModelIds: [], readySystemModelIds: [] });
+  });
+
+  it('offers the model list when nothing else is downloaded', () => {
+    useSystemModelSession.setState({ failedModelIds: [SYSTEM_MODEL_ID] });
+    seedSystemModelThread();
+    const screen = render(<ChatScreen />);
+
+    fireEvent.press(screen.getByLabelText('Open Models'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/models');
+  });
+
+  it('offers a downloaded model in one tap', () => {
+    useSystemModelSession.setState({ failedModelIds: [SYSTEM_MODEL_ID] });
+    useModelInstallStore.setState({ installedModelIds: [DOWNLOADED_MODEL.id] });
+    seedSystemModelThread();
+    const screen = render(<ChatScreen />);
+
+    const name = getShortDisplayName(DOWNLOADED_MODEL.id, useTierStore.getState().tier);
+    expect(screen.getByLabelText(`Use ${name}`)).toBeTruthy();
+  });
+
+  it('keeps the plain failure while the built-in model has not failed this session', () => {
+    seedSystemModelThread();
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByText(SYSTEM_FAILED)).toBeTruthy();
+    expect(screen.queryByLabelText('Open Models')).toBeNull();
+  });
+});
+
+describe('a message Reduce sensitive content refuses inside a chat', () => {
+  let alertSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    useSettingsStore.setState({ reduceSensitiveContent: true });
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    mockImageRequest = null;
+    useSettingsStore.setState({ reduceSensitiveContent: false });
+    alertSpy.mockRestore();
+  });
+
+  function readyImageRequest(prompt: string) {
+    mockImageRequest = {
+      status: 'ready',
+      prompt,
+      model: 'fixture-image-model',
+      ownerId: 'user-1',
+    };
+  }
+
+  it('makes no image and says why', async () => {
+    seedThread([QUESTION]);
+    readyImageRequest('explicit sexual content');
+    render(<ChatScreen />);
+
+    let accepted: unknown;
+    await act(async () => {
+      accepted = await mockComposerProps.onSend('explicit sexual content');
+    });
+
+    expect(accepted).toBe(false);
+    expect(mockRunImageGenerationTurn).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Content not available',
+      REDUCED_SENSITIVE_CONTENT_REFUSAL,
+    );
+  });
+
+  it('sends nothing for a refused text message and shows the alert once', async () => {
+    const sendMessage = jest.fn().mockResolvedValue(true);
+    seedThread([QUESTION]);
+    useChatExecutionStore.setState({ sendMessage });
+    render(<ChatScreen />);
+
+    await act(async () => {
+      await mockComposerProps.onSend('explicit sexual content');
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('still makes an image it allows', async () => {
+    seedThread([QUESTION]);
+    readyImageRequest('A lighthouse at dawn');
+    render(<ChatScreen />);
+
+    await act(async () => {
+      await mockComposerProps.onSend('A lighthouse at dawn');
+    });
+
+    expect(mockRunImageGenerationTurn).toHaveBeenCalledTimes(1);
+    expect(mockRunImageGenerationTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'thread-1', prompt: 'A lighthouse at dawn' }),
+    );
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 });

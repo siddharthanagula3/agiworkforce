@@ -326,6 +326,7 @@ describe('Projects list ergonomics', () => {
       'Product launch copy',
       'Drafts, edits, and a consistent voice.',
       'Use our brand voice.',
+      undefined,
     );
   });
 

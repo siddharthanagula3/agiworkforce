@@ -4,7 +4,6 @@ const mockGet = jest.fn();
 const mockPatch = jest.fn();
 const mockPush = jest.fn();
 const mockMarkDeviceRead = jest.fn();
-const mockOpenInAppBrowser = jest.fn();
 let mockDeviceItems: unknown[] = [];
 
 jest.mock('@/services/api', () => ({
@@ -15,10 +14,6 @@ jest.mock('@/services/api', () => ({
 }));
 
 jest.mock('@/lib/constants', () => ({ API_URL: 'https://agiworkforce.com' }));
-
-jest.mock('@/lib/safeOpenURL', () => ({
-  openUntrustedUrlInAppBrowser: (...args: unknown[]) => mockOpenInAppBrowser(...args),
-}));
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -100,21 +95,63 @@ beforeEach(() => {
   mockPatch.mockResolvedValue({ updated: 1 });
 });
 
+const SESSION_HREF_ID = '0190a000-0000-7000-8000-000000000033';
+
 describe('account notification destinations', () => {
-  it('opens product links and chats natively and everything else in the in-app browser', () => {
+  it('opens a code session in AGI Code', () => {
+    expect(accountNotificationDestination(`/code/${SESSION_HREF_ID}`)).toEqual({
+      kind: 'native',
+      route: `/(app)/cloud-code/${SESSION_HREF_ID}`,
+    });
+  });
+
+  it('opens research in Reports', () => {
+    expect(accountNotificationDestination('/open/research/report-1')).toEqual({
+      kind: 'native',
+      route: '/(app)/reports',
+    });
+  });
+
+  it('opens an approval on its AGI Work run', () => {
     expect(accountNotificationDestination(`/open/work/${RUN_ID}`)).toEqual({
       kind: 'native',
       route: `/(app)/tasks?runId=${RUN_ID}`,
     });
+  });
+
+  it('opens a chat on its conversation', () => {
     expect(accountNotificationDestination(`/chat/${CHAT_ID}`)).toEqual({
       kind: 'native',
       route: `/(app)/chat/${CHAT_ID}`,
     });
-    expect(accountNotificationDestination('/chat?settings=billing')).toEqual({
-      kind: 'web',
-      url: 'https://agiworkforce.com/chat?settings=billing',
+  });
+
+  it('opens a sign-in or security notice on the Security and login screen', () => {
+    expect(accountNotificationDestination('/chat?settings=security')).toEqual({
+      kind: 'native',
+      route: '/(app)/settings/account-security',
     });
+    expect(accountNotificationDestination('/chat?settings=account')).toEqual({
+      kind: 'native',
+      route: '/(app)/settings/account-security',
+    });
+  });
+
+  it('opens nothing for a target only the web or desktop can act on', () => {
+    expect(accountNotificationDestination('/chat?settings=billing')).toBeNull();
+    expect(accountNotificationDestination('/chat?settings=referrals')).toBeNull();
+    expect(accountNotificationDestination('/chat?settings=slack')).toBeNull();
+    expect(accountNotificationDestination('/chat?settings=')).toBeNull();
+    expect(accountNotificationDestination('/chat')).toBeNull();
+  });
+
+  it('opens nothing for an unknown or unsafe target', () => {
+    expect(accountNotificationDestination('/pricing')).toBeNull();
+    expect(accountNotificationDestination('/code/shared/token-1')).toBeNull();
+    expect(accountNotificationDestination('/code/%E0%A4%A')).toBeNull();
+    expect(accountNotificationDestination('/open/invoice/inv-1')).toBeNull();
     expect(accountNotificationDestination('//evil.example/x')).toBeNull();
+    expect(accountNotificationDestination('https://evil.example/x')).toBeNull();
     expect(accountNotificationDestination(null)).toBeNull();
   });
 });
@@ -285,6 +322,64 @@ describe('notifications inbox, account feed', () => {
       ids: ['0190a000-0000-7000-8000-000000000041'],
     });
     expect(mockPush).toHaveBeenCalledWith(`/(app)/tasks?runId=${RUN_ID}`);
+    expect(useAccountNotificationFeed.getState().unreadCount).toBe(0);
+  });
+
+  it('opens a code session row in AGI Code', async () => {
+    mockGet.mockResolvedValue({
+      notifications: [
+        feedItem({ title: 'Code session finished', href: `/code/${SESSION_HREF_ID}` }),
+      ],
+      unreadCount: 1,
+    });
+
+    render(<NotificationCenterScreen />);
+    await waitFor(() => expect(screen.getByText('Code session finished')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(/Unread, Code session finished/));
+    });
+
+    expect(mockPush).toHaveBeenCalledWith(`/(app)/cloud-code/${SESSION_HREF_ID}`);
+  });
+
+  it('opens a sign-in notice on the Security and login screen', async () => {
+    mockGet.mockResolvedValue({
+      notifications: [
+        feedItem({
+          category: 'security',
+          title: 'A new sign-in to your account',
+          href: '/chat?settings=security',
+        }),
+      ],
+      unreadCount: 1,
+    });
+
+    render(<NotificationCenterScreen />);
+    await waitFor(() => expect(screen.getByText('A new sign-in to your account')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(/Unread, A new sign-in to your account/));
+    });
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/account-security');
+  });
+
+  it('marks a row with no screen in the app read without opening the web', async () => {
+    mockGet.mockResolvedValue({
+      notifications: [feedItem({ title: 'Connect Slack', href: '/chat?settings=slack' })],
+      unreadCount: 1,
+    });
+
+    render(<NotificationCenterScreen />);
+    await waitFor(() => expect(screen.getByText('Connect Slack')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(/Unread, Connect Slack/));
+    });
+
+    expect(mockPatch).toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
     expect(useAccountNotificationFeed.getState().unreadCount).toBe(0);
   });
 

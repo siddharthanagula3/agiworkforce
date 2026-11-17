@@ -152,6 +152,30 @@ describe('Reduce sensitive content, the one setting that touches self-harm', () 
     });
   });
 
+  it('lets a message about feelings or a request for help through', () => {
+    for (const message of [
+      'I feel like everyone would be better off without me.',
+      'I want to kill myself.',
+      'What should I do if a friend says they feel hopeless?',
+      'What should I do if I want to kill myself?',
+      'suicide prevention hotline number',
+    ]) {
+      expect(checkContentFilter(message, true, REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL)).toEqual({
+        allowed: true,
+      });
+    }
+    expect(
+      checkContentFilter(
+        'I want to end my life. What is the most painless way?',
+        true,
+        REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL,
+      ),
+    ).toEqual({ allowed: false, refusal: REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL });
+    expect(prose('content/support/crisis-resources.md')).toContain(
+      'A message about how you feel, or a request for help for yourself or someone else, is not refused.',
+    );
+  });
+
   it('answers with a refusal that names the setting and no helpline', () => {
     expect(REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL).toContain('Reduce sensitive content is on');
     expect(REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL).not.toMatch(/988|14416|helpline|lifeline/iu);
@@ -362,21 +386,17 @@ describe('what the crisis article says each mode does', () => {
     );
   });
 
-  it('gives a Local mode chat on the phone the self-harm floor ahead of everything else', () => {
-    const floor = mobile('stores/chat/localSystemPrompt.ts');
-    expect(floor).toContain(
-      'Never give methods, means, doses or instructions for suicide or self-harm',
-    );
-    expect(floor).toContain('respond with care');
-    expect(floor).toContain('a local crisis line or emergency number can help right now');
-    expect(floor).toContain(
+  it('sends a Local mode chat on the phone no self-harm instruction', () => {
+    const prompt = mobile('stores/chat/localSystemPrompt.ts');
+    expect(prompt).toContain(
       "return [{ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT }, ...rest];",
     );
+    expect(prompt).not.toMatch(/suicid|self-harm|crisis|emergency number/iu);
     expect(mobile('stores/chat/chatExecutionStore.ts')).toContain(
       'const localMessages: LocalLlmMessage[] = ensureLocalSystemPrompt(',
     );
     expect(ARTICLE).toContain(
-      'In Local mode in the AGI Mobile app, the model runs on your phone with a short instruction from AGI: give no methods or instructions for suicide or self-harm, respond with care, and point to a local crisis line or emergency number when a message suggests you may be at risk.',
+      'In Local mode in the AGI Mobile app, a small model runs on your phone, and AGI does not add an instruction about self-harm to what it sends that model.',
     );
   });
 
@@ -386,13 +406,17 @@ describe('what the crisis article says each mode does', () => {
     expect(filter).toContain('988');
     expect(filter).toContain('your local emergency number');
     const store = mobile('stores/chat/chatExecutionStore.ts');
-    expect(filter).toContain('refusal: `${verdict.refusal}\\n\\n${SELF_HARM_HELPLINE}`');
+    expect(filter).toContain('refusal: `${copy.selfHarmNotSent}\\n\\n${SELF_HARM_HELPLINE}`');
     const send = store.slice(store.indexOf('  sendMessage: async ('));
-    const filtered = send.indexOf('if (minorMode || reduceSensitiveContent) {');
+    const filtered = send.indexOf('if (refuseFilteredSend(content)) return false;');
     expect(filtered).toBeGreaterThan(-1);
     expect(filtered).toBeLessThan(send.indexOf('const shouldUseLocalRuntime ='));
-    expect(send.slice(filtered)).toMatch(
-      /^if \(minorMode \|\| reduceSensitiveContent\) \{\s+const verdict = checkContentFilter\([^)]*\);\s+if \(!verdict\.allowed\) \{\s+Alert\.alert\('Content not available', verdict\.refusal\);/u,
+    const refusal = mobile('src/features/chat/utils/refuseFilteredSend.ts');
+    expect(refusal).toContain(
+      'if (!minorMode && !useSettingsStore.getState().reduceSensitiveContent) return false;',
+    );
+    expect(refusal).toMatch(
+      /const verdict = checkContentFilter\([^)]*\);\s+if \(verdict\.allowed\) return false;\s+Alert\.alert\('Content not available', verdict\.refusal\);\s+return true;/u,
     );
     expect(REDUCED_SENSITIVE_CONTENT_WEB_REFUSAL).not.toMatch(/988|helpline|crisis/iu);
     expect(ARTICLE).toContain(

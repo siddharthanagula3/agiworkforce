@@ -18,6 +18,7 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 import { renderHook, waitFor } from '@testing-library/react-native';
+import { ApiHttpError } from '@/services/apiErrors';
 import { localFileCopy, useLocalFileCopy } from '../useLocalFileCopy';
 
 describe('local file copies', () => {
@@ -119,6 +120,38 @@ describe('local file copies', () => {
       'file:///cache/exports/e-10/g.pdf',
     ]);
     expect(mockDownloadGeneratedFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks a file above the download limit as a failure that asking again cannot fix', async () => {
+    mockViewerFileCopy.mockRejectedValueOnce(
+      new ApiHttpError('This file is too large to open on this device.', 413, 'file_too_large'),
+    );
+    const { result } = renderHook(() =>
+      useLocalFileCopy('https://files.example.test/api/files/v-11', 'h.pdf'),
+    );
+
+    await waitFor(() =>
+      expect(result.current.copy).toEqual({
+        status: 'failed',
+        message: 'This file is too large to open on this device.',
+        retryable: false,
+      }),
+    );
+  });
+
+  it('keeps any other failed copy retryable', async () => {
+    mockViewerFileCopy.mockRejectedValueOnce(new Error('Download failed (HTTP 500)'));
+    const { result } = renderHook(() =>
+      useLocalFileCopy('https://files.example.test/api/files/v-12', 'i.pdf'),
+    );
+
+    await waitFor(() =>
+      expect(result.current.copy).toEqual({
+        status: 'failed',
+        message: 'Something went wrong on our side. Try again shortly.',
+        retryable: true,
+      }),
+    );
   });
 
   it('passes a file already on the device through untouched', async () => {

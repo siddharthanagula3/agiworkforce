@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render, within } from '@testing-library/react-native';
 
 const mockFetchResearchReports = jest.fn();
 const mockPreviewCitation = jest.fn();
@@ -113,8 +113,9 @@ describe('citation markers in a research report', () => {
   it('turns a marker in the summary into a control that opens that source', async () => {
     const screen = await openDetail();
 
-    expect(screen.queryByText(/\[1\]/)).toBeNull();
-    fireEvent.press(screen.getByLabelText('Citation 1: Recycling outlook'));
+    const marker = screen.getByLabelText('Citation 1: Recycling outlook');
+    expect(screen.getAllByText('[1]')).toEqual([within(marker).getByText('[1]')]);
+    fireEvent.press(marker);
 
     expect(mockPreviewCitation).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -127,8 +128,9 @@ describe('citation markers in a research report', () => {
   it('turns a marker in a key finding into a control for its own source', async () => {
     const screen = await openDetail();
 
-    expect(screen.queryByText(/\[2\]/)).toBeNull();
-    fireEvent.press(screen.getByLabelText('Citation 2: Plant capacity survey'));
+    const marker = screen.getByLabelText('Citation 2: Plant capacity survey');
+    expect(screen.getAllByText('[2]')).toEqual([within(marker).getByText('[2]')]);
+    fireEvent.press(marker);
 
     expect(mockPreviewCitation).toHaveBeenCalledWith(
       expect.objectContaining({ url: 'https://survey.example/plants' }),

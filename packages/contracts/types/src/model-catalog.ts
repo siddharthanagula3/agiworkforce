@@ -747,8 +747,17 @@ export interface ModelMetadata {
       endpoint: 'responses';
     };
   };
-  imageInput?: { detailValues?: string[]; maxImagesPerRequest?: number };
-  documentInput?: { maxPagesPerRequest?: number };
+  imageInput?: {
+    detailValues?: string[];
+    maxImagesPerRequest?: number;
+    /** The most input tokens the provider bills for one image at any accepted detail. */
+    maxInputTokensPerImage?: number;
+  };
+  documentInput?: {
+    maxPagesPerRequest?: number;
+    /** The most input tokens the provider bills for the image it makes of one PDF page. */
+    maxInputTokensPerPageImage?: number;
+  };
   endpoints?: string[];
   knowledgeCutoff?: string;
   inputTokenPricingTiers?: InputTokenPricingTier[];

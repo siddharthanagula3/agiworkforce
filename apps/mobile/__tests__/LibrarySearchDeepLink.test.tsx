@@ -154,6 +154,9 @@ import { LibraryScreen } from '../src/features/library';
 
 const mockApi = api as unknown as { get: jest.Mock };
 
+// The screen waits before it searches, then asks the server again.
+const AFTER_SEARCH_DELAY = { timeout: 4000 };
+
 const HOSTED_IMAGE = {
   id: '11111111-1111-4111-8111-111111111111',
   file_name: 'poster.png',
@@ -244,15 +247,15 @@ describe('Library reads the account library, not the local transcript', () => {
     fireEvent.changeText(screen.getByLabelText('Search library'), 'missing');
     await waitFor(() => {
       expect(screen.queryByText('launch-plan.pdf')).toBeNull();
-    });
+    }, AFTER_SEARCH_DELAY);
     await waitFor(() => {
       expect(screen.getByText(/Nothing in documents matches/)).toBeTruthy();
-    });
+    }, AFTER_SEARCH_DELAY);
 
     fireEvent.changeText(screen.getByLabelText('Search library'), 'launch');
     await waitFor(() => {
       expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
-    });
+    }, AFTER_SEARCH_DELAY);
 
     fireEvent.press(screen.getByLabelText('Open launch-plan.pdf'));
     expect(screen.getByTestId('file-viewer-screen')).toBeTruthy();

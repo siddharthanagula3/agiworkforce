@@ -23,10 +23,13 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { EMBEDDED_PAGE_PARAM, EMBEDDED_PAGE_PARAM_VALUE } from '@agiworkforce/types';
-import { PURCHASE_HELP_CATEGORY } from '@/lib/support/help-articles';
 import { supportCollectionIndex } from '@/app/help/collections';
+import {
+  findPurchaseVocabulary,
+  PURCHASE_HELP_CATEGORY,
+} from '../../../../scripts/lib/support-purchase-passages.mjs';
 
-import { GET } from './route';
+import { GET, type HelpSearchResult } from './route';
 
 function request(query: string): Request {
   return new Request(`https://agiworkforce.com/api/help/search?${query}`);
@@ -111,111 +114,90 @@ describe('GET /api/help/search', () => {
 
   describe('opened from the phone', () => {
     const marker = `${EMBEDDED_PAGE_PARAM}=${EMBEDDED_PAGE_PARAM_VALUE}`;
+    const PHONE_QUERIES = [
+      'upgrade',
+      'pricing',
+      'billing',
+      'plan',
+      'subscription',
+      'refund',
+      'credits',
+      'invoice',
+    ];
 
-    function article(docId: string, title: string, category = 'product') {
-      const hit = chunk(docId, title);
-      return { ...hit, chunk: { ...hit.chunk, origin: 'markdown', category } };
-    }
-
-    function purchaseAndProductHits() {
-      return {
-        chunks: [
-          article('plans-and-invoices', 'Plans and invoices', PURCHASE_HELP_CATEGORY),
-          article('byok', 'Bring your own key'),
-        ],
-        passedFloor: true,
-      };
-    }
-
-    it('leaves purchase articles out of the results', async () => {
-      mocks.retrieveSupportChunks.mockReturnValue(purchaseAndProductHits());
-
-      const response = await GET(request(`q=upgrade&${marker}`) as never);
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(body.results.map((result: { docId: string }) => result.docId)).toEqual(['byok']);
-      expect(
-        body.results.some(
-          (result: { category: string }) => result.category === PURCHASE_HELP_CATEGORY,
-        ),
-      ).toBe(false);
-    });
-
-    it('leaves out entries the help index on the phone does not list', async () => {
-      const summary = chunk('static-article:getting-started', 'Getting started');
-      mocks.retrieveSupportChunks.mockReturnValue({
-        chunks: [
-          { ...summary, chunk: { ...summary.chunk, origin: 'static-data', category: 'product' } },
-          article('byok', 'Bring your own key'),
-        ],
-        passedFloor: true,
-      });
-
-      const response = await GET(request(`q=upgrade&${marker}`) as never);
-      const body = await response.json();
-
-      expect(body.results.map((result: { docId: string }) => result.docId)).toEqual(['byok']);
-    });
-
-    it('lists only articles the help index on the phone lists, over the real corpus', async () => {
+    async function useRealCorpus() {
       const corpus = await vi.importActual<ScanModule0>('@/lib/support/agent/corpus');
       const retrieve = await vi.importActual<RetrieveModule>(
         '@/lib/support/agent/retrieval/retrieve',
       );
       mocks.getSupportCorpus.mockImplementation(corpus.getSupportCorpus);
       mocks.retrieveSupportChunks.mockImplementation(retrieve.retrieveSupportChunks);
-      const listedOnPhone = new Set(
-        supportCollectionIndex()
-          .collections.filter((collection) => collection.id !== PURCHASE_HELP_CATEGORY)
-          .flatMap((collection) => collection.articles.map((entry) => entry.docId)),
-      );
-      const docIds = async (query: string) => {
-        const response = await GET(request(`q=${query}&limit=12`) as never);
-        const body = await response.json();
-        return body.results.map((result: { docId: string }) => result.docId) as string[];
-      };
+    }
 
-      for (const query of ['upgrade', 'pricing', 'subscription', 'billing']) {
-        expect((await docIds(query)).some((docId) => !listedOnPhone.has(docId))).toBe(true);
-        const fromPhone = await docIds(`${query}&${marker}`);
-        expect(fromPhone.filter((docId) => !listedOnPhone.has(docId))).toEqual([]);
+    async function search(query: string): Promise<HelpSearchResult[]> {
+      const response = await GET(request(`q=${query}&limit=12`) as never);
+      expect(response.status).toBe(200);
+      return ((await response.json()) as { results: HelpSearchResult[] }).results;
+    }
+
+    it('searches the phone view of the corpus', async () => {
+      await GET(request(`q=upgrade&${marker}`) as never);
+
+      expect(mocks.getSupportCorpus).toHaveBeenCalledWith('phone');
+      expect(mocks.retrieveSupportChunks).toHaveBeenCalledWith(
+        'upgrade',
+        expect.objectContaining({ view: 'phone' }),
+      );
+    });
+
+    it('searches the whole corpus for every other reader, a marker that is not the phone included', async () => {
+      await GET(request('q=upgrade') as never);
+      await GET(request(`q=upgrade&${EMBEDDED_PAGE_PARAM}=web`) as never);
+
+      expect(mocks.getSupportCorpus.mock.calls).toEqual([['web'], ['web']]);
+      for (const [, options] of mocks.retrieveSupportChunks.mock.calls) {
+        expect(options).toMatchObject({ view: 'web' });
       }
     });
 
-    it('answers an honest empty list when only purchase articles matched', async () => {
-      mocks.retrieveSupportChunks.mockReturnValue({
-        chunks: [article('plans-and-invoices', 'Plans and invoices', PURCHASE_HELP_CATEGORY)],
-        passedFloor: true,
-      });
+    it('returns no purchase article and no purchase wording for a purchase query, over the real corpus', async () => {
+      await useRealCorpus();
+      const listedOnPhone = new Set(
+        supportCollectionIndex('phone').collections.flatMap((collection) =>
+          collection.articles.map((entry) => entry.docId),
+        ),
+      );
 
-      const response = await GET(request(`q=upgrade&${marker}`) as never);
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(body.corpus).toBe('available');
-      expect(body.results).toEqual([]);
+      for (const query of PHONE_QUERIES) {
+        const results = await search(`${query}&${marker}`);
+        expect(
+          results
+            .filter(
+              (result) =>
+                !listedOnPhone.has(result.docId) ||
+                result.category === PURCHASE_HELP_CATEGORY ||
+                findPurchaseVocabulary(`${result.title} ${result.snippet}`) !== null,
+            )
+            .map((result) => `${query}: ${result.docId}`),
+        ).toEqual([]);
+      }
     });
 
-    it('keeps purchase articles for every other reader', async () => {
-      mocks.retrieveSupportChunks.mockReturnValue(purchaseAndProductHits());
+    it('answers an honest empty list when only purchase articles match, over the real corpus', async () => {
+      await useRealCorpus();
 
-      const response = await GET(request('q=upgrade') as never);
-      const body = await response.json();
-
-      expect(body.results.map((result: { docId: string }) => result.docId)).toEqual([
-        'plans-and-invoices',
-        'byok',
-      ]);
+      for (const query of ['upgrade', 'pricing', 'refund', 'invoice', 'checkout']) {
+        expect((await search(query)).length, `${query} on the web`).toBeGreaterThan(0);
+        expect(await search(`${query}&${marker}`), `${query} from the phone`).toEqual([]);
+      }
     });
 
-    it('ignores a marker value that is not the phone', async () => {
-      mocks.retrieveSupportChunks.mockReturnValue(purchaseAndProductHits());
+    it('keeps purchase articles for every other reader, over the real corpus', async () => {
+      await useRealCorpus();
 
-      const response = await GET(request(`q=upgrade&${EMBEDDED_PAGE_PARAM}=web`) as never);
-      const body = await response.json();
+      const results = await search('upgrade');
 
-      expect(body.results).toHaveLength(2);
+      expect(results.some((result) => result.category === PURCHASE_HELP_CATEGORY)).toBe(true);
     });
   });
 

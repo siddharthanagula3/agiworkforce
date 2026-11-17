@@ -129,13 +129,17 @@ async function handleGet(request: NextRequest) {
   // Tasks is the AGI Work surface: it lists the runs that mode produced and
   // nothing else. An ordinary `chat` turn also writes a cloud_agent_runs row,
   // so without this filter every conversation showed up here as a "task".
+  // A request id names one run of this user, so that lookup is not a listing
+  // and finds a chat turn too: a phone ended before the response headers
+  // arrived knows its turn only by the request id it sent.
+  const requestId = parsedRequestIds.data[0];
   const listInput = {
     userId,
     states: parsedStates.data,
-    requestId: parsedRequestIds.data[0],
+    requestId,
     before: decodeCursor(url.searchParams.get('cursor')),
     limit: parsedLimit.data,
-    workModes: AGI_WORK_MODES,
+    ...(requestId ? {} : { workModes: AGI_WORK_MODES }),
     ...(projectId ? { projectId } : {}),
   };
   const page = parsedSearch

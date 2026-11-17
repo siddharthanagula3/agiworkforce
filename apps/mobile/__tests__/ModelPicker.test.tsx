@@ -329,7 +329,7 @@ describe('ModelPickerSheet', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
-  it('explains an empty provider-funded catalogue and a retryable check failure', () => {
+  it('lists the Free models with no note when the promotional catalogue is empty, and keeps the retry for a failed check', () => {
     activateCloudAccount('account-a');
     useWaitlistStore.setState({ cloudUnlocked: true });
     useFreeQuotaCatalogueStore.setState({
@@ -338,22 +338,45 @@ describe('ModelPickerSheet', () => {
       loading: false,
       error: null,
     });
+    const freeModel = getModelListForCloudAccess(true, 'free', null).find(
+      (model) => model.surface === 'cloud_managed' && model.availability === 'ready',
+    );
+    if (!freeModel) throw new Error('The Free plan has no selectable Cloud model');
     const screen = renderPicker({ modelScope: 'cloud' });
 
-    expect(
-      screen.getByText('No provider-funded Free chat models are available right now.'),
-    ).toBeTruthy();
+    expect(screen.getByTestId(`model-line-${freeModel.provider}`)).toBeTruthy();
+    expect(screen.queryByText(/provider-funded Free chat models/)).toBeNull();
+    expect(screen.queryByText('No models are available right now.')).toBeNull();
     act(() => {
       useFreeQuotaCatalogueStore.setState({
-        error: 'Sign in again to check provider-funded Free models.',
+        error: 'Sign in again to check Free models.',
       });
     });
 
-    expect(screen.getByText('Sign in again to check provider-funded Free models.')).toBeTruthy();
-    expect(screen.getByLabelText('Retry loading provider-funded Free models')).toBeTruthy();
-    expect(
-      screen.queryByText('No provider-funded Free chat models are available right now.'),
-    ).toBeNull();
+    expect(screen.getByText('Sign in again to check Free models.')).toBeTruthy();
+    expect(screen.getByLabelText('Retry loading Free models')).toBeTruthy();
+  });
+
+  it('says plainly that no model is available when the account can choose none', () => {
+    activateCloudAccount('account-a');
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'no-such-plan' } as never);
+    useFreeQuotaCatalogueStore.setState({
+      account: captureCloudAccountEpoch(),
+      catalogue: null,
+      loading: false,
+      error: null,
+    });
+
+    try {
+      const screen = renderPicker({ modelScope: 'cloud' });
+
+      expect(screen.getByText('No models are available right now.')).toBeTruthy();
+      expect(screen.queryByText(/provider-funded Free chat models/)).toBeNull();
+      expect(screen.queryByText(/No models matching/)).toBeNull();
+    } finally {
+      useTierStore.setState({ tier: 'free' } as never);
+    }
   });
 
   it('keeps the Free catalogue notices away from a paid plan', () => {
@@ -364,19 +387,19 @@ describe('ModelPickerSheet', () => {
       account: captureCloudAccountEpoch(),
       catalogue: null,
       loading: false,
-      error: 'Sign in again to check provider-funded Free models.',
+      error: 'Sign in again to check Free models.',
     });
 
     try {
       const screen = renderPicker({ modelScope: 'cloud' });
       expect(screen.queryByText(/provider-funded Free/)).toBeNull();
-      expect(screen.queryByLabelText('Retry loading provider-funded Free models')).toBeNull();
+      expect(screen.queryByLabelText('Retry loading Free models')).toBeNull();
     } finally {
       useTierStore.setState({ tier: 'free' } as never);
     }
   });
 
-  it('explains a checked catalogue whose chat offers are all unavailable', () => {
+  it('adds no note above the Free models when every promotional chat offer is unavailable', () => {
     const chatOffering = Object.entries(getProviderOfferings()).find(
       ([, offering]) => offering.category === 'chat' && offering.quotaProbeProtocol === 'chat',
     );
@@ -411,9 +434,7 @@ describe('ModelPickerSheet', () => {
 
     const screen = renderPicker({ modelScope: 'cloud' });
 
-    expect(
-      screen.getByText('No provider-funded Free chat models are available right now.'),
-    ).toBeTruthy();
+    expect(screen.queryByText(/provider-funded Free chat models/)).toBeNull();
     expect(screen.queryByText(chatOffering[1].displayName)).toBeNull();
   });
 
@@ -460,6 +481,22 @@ describe('ModelPickerSheet', () => {
       'Auto: Automatically routes each message to the best model for the task, your plan, and cost',
     );
     expect(autoCard.props.accessibilityState.selected).toBe(true);
+  });
+
+  it('checks again what is on the device each time the sheet opens', () => {
+    const BottomSheet = jest.requireMock('@gorhom/bottom-sheet').default as jest.Mock;
+    renderPicker();
+    const { hydrateInstalledModels } = useModelInstallStore.getState();
+    jest.mocked(hydrateInstalledModels).mockClear();
+    const sheetProps = BottomSheet.mock.calls.at(-1)?.[0] as {
+      onAnimate: (fromIndex: number, toIndex: number) => void;
+    };
+
+    act(() => sheetProps.onAnimate(-1, 0));
+    expect(hydrateInstalledModels).toHaveBeenCalledTimes(1);
+
+    act(() => sheetProps.onAnimate(0, -1));
+    expect(hydrateInstalledModels).toHaveBeenCalledTimes(1);
   });
 
   it('renders on-device model names from the local catalog', () => {

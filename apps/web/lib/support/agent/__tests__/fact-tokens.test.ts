@@ -239,7 +239,7 @@ describe('help articles follow the release registries', () => {
       'and adds the connector limits once connectors are open. {{AVAILABILITY.connectors}}',
     );
     expect(article('mcp-connections').replace(/\s+/g, ' ')).toContain(
-      'the pricing page lists the figures once connectors are open.',
+      'The pricing page lists the figures once connectors are open.',
     );
     expect(article('connectors-and-mcp').replace(/\s+/g, ' ')).toContain(
       'The pricing page lists that limit once connectors are open.',

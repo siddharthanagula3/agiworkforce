@@ -69,6 +69,7 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
+import { httpErrorFrom } from '../services/apiErrors';
 import { streamChat, streamToolApprovalResume, type StreamCallbacks } from '../services/streaming';
 import {
   useChatExecutionStore,
@@ -555,6 +556,38 @@ describe('a resumed stream that asks for a new request and then breaks', () => {
     expect(mockStreamResume.mock.calls[1]![0].tool_approvals).toEqual([
       { tool_call_id: 'call_1', decision: 'approved' },
     ]);
+  });
+});
+
+describe('an approval resumed after the Free allowance runs out', () => {
+  it('says when replies come back and that Local mode keeps working', async () => {
+    const assistantId = await pauseOnCodeApproval();
+    mockStreamResume.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onError(
+        httpErrorFrom(
+          429,
+          JSON.stringify({
+            error: {
+              message:
+                'You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going.',
+              type: 'insufficient_quota',
+              code: 'free_trial_token_budget_reached',
+              retry_after_seconds: 1_500,
+            },
+          }),
+        ),
+      );
+    });
+
+    await useChatExecutionStore
+      .getState()
+      .resolveToolApproval(CONV_ID, assistantId, 'call_0', 'approved');
+
+    const shown = useChatExecutionStore.getState().error;
+    expect(shown).toBe(
+      'You have reached the free usage limit on your account. Try again in about 25 minutes. Local mode keeps working.',
+    );
+    expect(shown).not.toMatch(/provider key|upgrade|pricing|paid plan/i);
   });
 });
 

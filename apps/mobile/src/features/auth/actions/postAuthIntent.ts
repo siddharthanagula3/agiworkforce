@@ -1,6 +1,5 @@
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
-  DEFAULT_LOCAL_MODEL_ID,
   getDefaultCloudModelIdForTier,
   isAutoMode,
   isCloudManagedModelId,
@@ -14,8 +13,8 @@ import {
 import { isCloudAccountAdditionOpenFor } from '../services/accountAddition';
 
 export function resetPostAuthDestinationToLocal(): void {
-  useModelStore.getState().setModel(DEFAULT_LOCAL_MODEL_ID);
   useChatAppModeStore.getState().setAppMode('local');
+  useModelStore.getState().restoreNewChatModel();
 }
 
 export function applyPostAuthIntentAfterSignIn(

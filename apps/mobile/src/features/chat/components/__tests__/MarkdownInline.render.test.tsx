@@ -249,15 +249,24 @@ describe('inline markdown rendering', () => {
       it('shows a chip for the bare marker and one for the link when the option is left out', () => {
         render(<>{renderInlineMarkdown(SOURCE, 'k', undefined, NEWS)}</>);
 
-        expect(allText()).not.toContain('[1]');
-        expect(screen.getAllByRole('link', { name: /^Citation \d/ })).toHaveLength(2);
+        expect(allText()).toBe('Rose [1] per [1].');
+        const markers = screen.getAllByRole('link', { name: /^Citation \d/ });
+        expect(markers).toHaveLength(2);
+        markers.forEach((marker) => expect(marker).toHaveTextContent('[1]'));
       });
     });
 
-    it('shows the publisher for a numbered marker and previews that source on tap', () => {
+    it('shows a small number for a marker and previews that source on tap', () => {
       renderCited('Rates rose [1].');
 
-      expect(allText()).toBe('Rates rose reuters.com.');
+      expect(allText()).toBe('Rates rose [1].');
+      expect(screen.getByText('[1]')).toHaveStyle({
+        color: colors.teal,
+        fontSize: typeScale.caption,
+      });
+      expect(StyleSheet.flatten(screen.getByText('[1]').props.style)).not.toHaveProperty(
+        'fontWeight',
+      );
       fireEvent.press(screen.getByRole('link', { name: /Citation 1: Rates explained/ }));
 
       expect(alertSpy.mock.calls[0]?.[0]).toBe('Rates explained');
@@ -270,7 +279,7 @@ describe('inline markdown rendering', () => {
     it('groups a run of markers into one control that lists every source', () => {
       renderCited('Both agree [1][2].');
 
-      expect(allText()).toBe('Both agree reuters.com +1.');
+      expect(allText()).toBe('Both agree [1, 2].');
       fireEvent.press(screen.getByRole('link', { name: /Citation 1, 2/ }));
 
       expect(alertSpy.mock.calls[0]?.[0]).toBe('2 sources');
@@ -299,7 +308,7 @@ describe('inline markdown rendering', () => {
     it('drops the parentheses that wrap a marker', () => {
       renderCited('Rates rose ([1]).');
 
-      expect(allText()).toBe('Rates rose reuters.com.');
+      expect(allText()).toBe('Rates rose [1].');
     });
 
     it('keeps a bracketed index in code and a streaming marker as written', () => {
@@ -312,8 +321,73 @@ describe('inline markdown rendering', () => {
     it('turns a link whose text is only the source domain into that source marker', () => {
       renderCited('Read [ft.com](https://www.ft.com/b) today');
 
-      expect(allText()).toBe('Read ft.com today');
+      expect(allText()).toBe('Read [2] today');
       expect(screen.getByRole('link', { name: /Citation 2: Outlook/ })).toBeTruthy();
+    });
+
+    it('draws a host-named link and the marker after it as one numbered marker', () => {
+      const PAPERS: CitationSource[] = [
+        { title: 'Ice in Beta Pictoris', url: 'https://pubmed.ncbi.nlm.nih.gov/43019434/' },
+        { title: 'Quasar pair', url: 'https://www.media.inaf.it/2026/11/11/quasar/' },
+      ];
+      renderCited(
+        'Below, I separate measurements from inference. ([pubmed.ncbi.nlm.nih.gov](https://pubmed.ncbi.nlm.nih.gov/43019434/))[1]',
+        PAPERS,
+      );
+
+      expect(allText()).toBe('Below, I separate measurements from inference. [1]');
+      expect(allText()).not.toContain('pubmed');
+      const markers = screen.getAllByRole('link', { name: /^Citation / });
+      expect(markers).toHaveLength(1);
+      fireEvent.press(markers[0]!);
+      expect(alertSpy.mock.calls[0]?.[0]).toBe('Ice in Beta Pictoris');
+    });
+
+    it('draws a host-named link that ends a sentence as its numbered marker', () => {
+      renderCited('Rates rose. ([reuters.com](https://www.reuters.com/a))');
+
+      expect(allText()).toBe('Rates rose. [1]');
+      expect(screen.getByRole('link', { name: 'Citation 1: Rates explained' })).toBeTruthy();
+    });
+
+    it('draws repeated markers of one source once, touching or apart by a space', () => {
+      renderCited('Rates rose [1][1] and fell [1] [1].');
+
+      expect(allText()).toBe('Rates rose [1] and fell [1].');
+      expect(screen.getAllByRole('link', { name: /^Citation / })).toHaveLength(2);
+    });
+
+    it('joins a link and the marker of another source into one marker naming both', () => {
+      renderCited('Both agree [ft.com](https://www.ft.com/b)[1].');
+
+      expect(allText()).toBe('Both agree [2, 1].');
+      expect(
+        screen.getByRole('link', { name: 'Citation 2, 1: Outlook; Rates explained' }),
+      ).toBeTruthy();
+    });
+
+    it('joins markers parted by a space only when the second repeats a source', () => {
+      renderCited('Rates rose [1] [2] and fell [2] [1][2].');
+
+      expect(allText()).toBe('Rates rose [1] [2] and fell [2, 1].');
+      fireEvent.press(screen.getByRole('link', { name: 'Citation 1: Rates explained' }));
+      expect(alertSpy.mock.calls[0]?.[0]).toBe('Rates explained');
+    });
+
+    it('keeps a line break between two markers', () => {
+      renderCited('Rates rose [1]\n[1] and fell [2]\n[1] again.');
+
+      expect(allText()).toBe('Rates rose [1]\n[1] and fell [2]\n[1] again.');
+      expect(screen.getAllByRole('link', { name: /^Citation / })).toHaveLength(4);
+    });
+
+    it('keeps a host-named link to a page that is not a source as an ordinary link', () => {
+      renderCited('See [example.org](https://example.org/guide) [1].');
+
+      expect(screen.getByRole('link', { name: 'example.org' })).toHaveStyle({
+        textDecorationLine: 'underline',
+      });
+      expect(allText()).toBe('See example.org [1].');
     });
 
     it('keeps a link with words of its own as a link', () => {
@@ -334,7 +408,7 @@ describe('inline markdown rendering', () => {
         right: number;
       };
       expect(slop.top + slop.bottom + typeScale.body).toBeGreaterThanOrEqual(44);
-      expect(slop.left + slop.right).toBeGreaterThanOrEqual(24);
+      expect(slop.left + slop.right + typeScale.caption).toBeGreaterThanOrEqual(44);
     });
   });
 

@@ -173,6 +173,7 @@ jest.mock('../src/features/library/useLibraryAssets', () => ({
 }));
 
 import { LibraryScreen } from '../src/features/library';
+import { FileDownloadError } from '../services/fileCreation';
 
 const ITEM_ACTIONS = ['Add to chat', 'Remix', 'Open chat', 'Share', 'Report', 'Delete'];
 
@@ -248,6 +249,31 @@ describe.each(['ios', 'android'] as const)('Library menus on %s', (os) => {
     await act(async () => {});
 
     expect(mockShareFile).toHaveBeenCalledWith('file:///fox.png', expect.anything());
+  });
+
+  it('says a file above the download limit is too large instead of asking to try again', async () => {
+    mockDownload.mockRejectedValue(new FileDownloadError(413));
+    openItemMenu();
+    chooseActionMenuItem('Share');
+    await act(async () => {});
+
+    expect(mockShareFile).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith(
+      'Could not open this file',
+      'This file is too large to open on this device.',
+    );
+  });
+
+  it('keeps the download copy for a failure with nothing more to say', async () => {
+    mockDownload.mockRejectedValue(new Error('disk full'));
+    openItemMenu();
+    chooseActionMenuItem('Share');
+    await act(async () => {});
+
+    expect(alert).toHaveBeenCalledWith(
+      'Could not open this file',
+      'The file could not be downloaded. Try again.',
+    );
   });
 
   it('opens the report sheet for the image', () => {

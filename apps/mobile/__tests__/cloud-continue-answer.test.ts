@@ -83,6 +83,7 @@ import {
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { CONTINUE_GENERATION_INSTRUCTION } from '@agiworkforce/unified-chat/continue-generation';
 import { apiFetch } from '../services/api';
+import { httpErrorFrom } from '../services/apiErrors';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
 import {
   IN_FLIGHT_TURN_STALL_DEADLINE_MS,
@@ -394,6 +395,34 @@ describe('continuing a cut-off cloud answer', () => {
       error: 'This answer could not be continued. Try again.',
       streamingConversationIds: [],
     });
+  });
+
+  it('says when a Free account can continue once its allowance runs out mid-continuation', async () => {
+    const answerId = await sendCutOffAnswer();
+    mockStreamChat.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onError(
+        httpErrorFrom(
+          429,
+          JSON.stringify({
+            error: {
+              message:
+                'You have reached the free usage limit on your account. Try again after it resets, or use your own provider key to keep going.',
+              type: 'insufficient_quota',
+              code: 'free_trial_token_budget_reached',
+              retry_after_seconds: 7_800,
+            },
+          }),
+        ),
+      );
+    });
+
+    await continueAnswer(answerId);
+
+    const shown = useChatExecutionStore.getState().error;
+    expect(shown).toBe(
+      'You have reached the free usage limit on your account. Try again in about 2 hours. Local mode keeps working.',
+    );
+    expect(shown).not.toMatch(/provider key|upgrade|pricing|paid plan/i);
   });
 
   it('leaves the answer as it was when the continuation brings nothing', async () => {

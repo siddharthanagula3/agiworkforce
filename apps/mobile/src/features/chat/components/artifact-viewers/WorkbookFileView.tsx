@@ -130,7 +130,9 @@ export function WorkbookFileView({ source }: { source: FileViewerSource }) {
         title="Could not open this file"
         body={copy.message}
       >
-        <Button title="Retry" variant="secondary" size="sm" onPress={retry} />
+        {copy.retryable ? (
+          <Button title="Retry" variant="secondary" size="sm" onPress={retry} />
+        ) : null}
       </WorkbookStatus>
     );
   }

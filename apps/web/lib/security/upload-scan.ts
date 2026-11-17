@@ -224,20 +224,84 @@ export function scanUploadForCredentials(
   for (const detection of scanForSecrets(textPrefix(bytes, CREDENTIAL_SCAN_BYTES), {
     includeHighEntropy: true,
   })) {
-    findings.push({
-      code: 'credential_material',
-      detail: `${detection.name} at byte ${detection.position}`,
-    });
+    findings.push(credentialFinding(detection.name, detection.position));
   }
 
+  return findings;
+}
+
+const CREDENTIAL_POSITION_SEPARATOR = ' at byte ';
+
+function credentialFinding(name: string, position: number): UploadScanFinding {
+  return {
+    code: 'credential_material',
+    detail: `${name}${CREDENTIAL_POSITION_SEPARATOR}${position}`,
+  };
+}
+
+/** The detector that produced a credential finding. */
+export function credentialFindingName(finding: UploadScanFinding): string {
+  return finding.detail.slice(0, finding.detail.lastIndexOf(CREDENTIAL_POSITION_SEPARATOR));
+}
+
+/** Whether the credential detectors read this type's content at all; a binary type is not read. */
+export function credentialScanReadsContent(declaredMime: string): boolean {
+  return isTextualMime(declaredMime);
+}
+
+/**
+ * The longest stretch of a file one credential detection is guaranteed to fit
+ * in. The longest bounded detector match is the JWT pattern, 4,356 bytes. A
+ * detector's other unbounded part is either a trailing run, which a shorter
+ * match at the same start already satisfies, or the whitespace between a
+ * keyword and its value, which this leaves about 16,000 bytes for.
+ */
+export const CREDENTIAL_SCAN_GUARD_BYTES = 16_384;
+
+export interface CredentialScanRange {
+  /** Where `bytes` starts in the file. */
+  bytesStart: number;
+  /** The part of the file this read answers for: a detection is reported when it starts here. */
+  ownedStart: number;
+  ownedEnd: number;
+}
+
+/**
+ * The credential detections `scanUploadForCredentials` makes, over one window
+ * of a file read in pieces. The window holds the owned range plus up to
+ * `CREDENTIAL_SCAN_GUARD_BYTES` either side; only a detection that starts in
+ * the owned range is reported, so owned ranges that tile the file report each
+ * match once, a match that straddles the edge of one owned range included.
+ */
+export function scanUploadRangeForCredentials(
+  bytes: Uint8Array,
+  declaredMime: string,
+  range: CredentialScanRange,
+): UploadScanFinding[] {
+  if (!isTextualMime(declaredMime)) return [];
+  const before = range.ownedStart - range.bytesStart;
+  const owned = range.ownedEnd - range.ownedStart;
+  if (before < 0 || owned < 0 || before + owned > bytes.byteLength) {
+    throw new RangeError('The owned range must lie inside the bytes read.');
+  }
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const lead = decoder.decode(bytes.subarray(0, before), { stream: true });
+  const middle = decoder.decode(bytes.subarray(before, before + owned), { stream: true });
+  const tail = decoder.decode(bytes.subarray(before + owned));
+  const from = lead.length;
+  const to = from + middle.length;
+  const findings: UploadScanFinding[] = [];
+  for (const detection of scanForSecrets(lead + middle + tail, { includeHighEntropy: true })) {
+    if (detection.position < from || detection.position >= to) continue;
+    findings.push(credentialFinding(detection.name, range.ownedStart + detection.position - from));
+  }
   return findings;
 }
 
 export function uploadFindingRejects(finding: UploadScanFinding): boolean {
   if (finding.code === 'sensitive_filename' || finding.code === 'unsafe_filename') return true;
   if (finding.code !== 'credential_material') return true;
-  const name = finding.detail.slice(0, finding.detail.lastIndexOf(' at byte '));
-  return isHighConfidenceSecretName(name);
+  return isHighConfidenceSecretName(credentialFindingName(finding));
 }
 
 export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): UploadScanResult {
@@ -472,16 +536,22 @@ function verdictOf(
   return { ok: findings.every((finding) => !uploadFindingRejects(finding)), findings };
 }
 
+/**
+ * `credentialMime` is the type the credential detectors read the bytes as.
+ * Where the product reads a file as text whatever type the client declared, it
+ * passes a text type here, so the declared type cannot switch the detectors off.
+ */
 export function inspectUploadHead(
   bytes: Uint8Array,
   declaredMime: string,
   filename: string,
+  credentialMime: string = declaredMime,
 ): UploadScanResult {
   const head = bytes.subarray(0, UPLOAD_INSPECTION_BYTES);
   return verdictOf(
     declaredMime,
     inspectUploadBytes(head, declaredMime).findings,
-    scanUploadForCredentials(head, declaredMime, filename),
+    scanUploadForCredentials(head, credentialMime, filename),
     NO_EXTERNAL_FINDINGS,
   );
 }

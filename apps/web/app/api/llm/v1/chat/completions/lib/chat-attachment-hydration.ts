@@ -719,6 +719,7 @@ export async function hydrateChatAttachments(
         mediaType: PDF_MIME_TYPE,
         data: rawBase64,
         pageCount: content.pageCount,
+        extractedTextComplete: !content.pagesOmitted && !wasExtractionTruncated(content.text),
       };
       if (content.text) {
         slot.resolved = markNativeDocument<AttachmentReferencePart>(

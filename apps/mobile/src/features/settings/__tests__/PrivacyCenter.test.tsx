@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { Alert, Dimensions } from 'react-native';
+import { Alert, Dimensions, StyleSheet } from 'react-native';
 import { fireEvent, render, screen, within } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -322,6 +322,39 @@ describe('the Privacy page', () => {
       expect(label.props.numberOfLines).toBeUndefined();
       expect(label.props.maxFontSizeMultiplier).toBe(ROW_LABEL_TEXT_SCALE_LIMIT);
       expect(within(row).getByTestId('settings-row-text-Personalization')).toBeTruthy();
+    } finally {
+      setTextScale(startingScale);
+    }
+  });
+});
+
+describe('the Privacy article cards at large text sizes', () => {
+  it.each([
+    ['the default text size', 1],
+    ['the largest text size', LARGEST_IOS_TEXT_SCALE],
+  ])('give each title room to wrap between words at %s', (_size, scale) => {
+    const startingScale = Dimensions.get('window').fontScale;
+    const { width } = Dimensions.get('window');
+    setTextScale(scale);
+    try {
+      render(
+        <TextScaleBoundary>
+          <CloudPrivacyScreen />
+        </TextScaleBoundary>,
+      );
+      for (const article of PRIVACY_ARTICLES) {
+        const card = screen.getByRole('button', { name: `${article.title}. ${article.category}` });
+        const cardWidth = StyleSheet.flatten(card.props.style).width as number;
+        const title = screen.getByTestId(`privacy-article-title-${article.docId}`);
+        if (scale === 1) {
+          expect(cardWidth).toBe(Math.round(width * 0.56));
+          expect(title.props.numberOfLines).toBe(2);
+        } else {
+          expect(cardWidth).toBeGreaterThanOrEqual(Math.round(width * 0.8));
+          expect(cardWidth).toBeLessThan(width);
+          expect(title.props.numberOfLines).toBeUndefined();
+        }
+      }
     } finally {
       setTextScale(startingScale);
     }

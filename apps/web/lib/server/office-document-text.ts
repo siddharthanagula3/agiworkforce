@@ -4,6 +4,11 @@ import JSZip from 'jszip';
 import mammoth from 'mammoth';
 
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { CellFormatTable, styleIndex } from '@agiworkforce/unified-chat/workbook-cell-formats';
+import {
+  displayCellNumber,
+  type NumberFormat,
+} from '@agiworkforce/unified-chat/workbook-number-formats';
 import { truncateExtractedText } from '@/lib/server/extraction-truncation';
 
 import {
@@ -325,8 +330,137 @@ async function extractDocx(
   }
 }
 
-function columnLabel(reference: string): string {
-  return reference.replace(/\d+/g, '');
+export interface XmlElement {
+  attributes: string;
+  body: string;
+}
+
+function endsTagName(code: number): boolean {
+  return (
+    code === 0x3e ||
+    code === 0x2f ||
+    code === 0x20 ||
+    code === 0x09 ||
+    code === 0x0a ||
+    code === 0x0d
+  );
+}
+
+/**
+ * Start tags named `tag`, by index scans rather than a backtracking pattern:
+ * an opener with no `>` after it ends the scan, since none after it has one.
+ */
+export function* xmlStartTags(
+  xml: string,
+  tag: string,
+): Generator<{ attributes: string; end: number }> {
+  const open = `<${tag}`;
+  let position = 0;
+  for (;;) {
+    const start = xml.indexOf(open, position);
+    if (start === -1) return;
+    const nameEnd = start + open.length;
+    if (!endsTagName(xml.charCodeAt(nameEnd))) {
+      position = nameEnd;
+      continue;
+    }
+    const tagEnd = xml.indexOf('>', nameEnd);
+    if (tagEnd === -1) return;
+    yield { attributes: xml.slice(nameEnd, tagEnd), end: tagEnd + 1 };
+    position = tagEnd + 1;
+  }
+}
+
+/**
+ * Elements named `tag` with their bodies; a self-closing one has an empty
+ * body. An element with no closing tag ends the scan, since no later one can
+ * close either, so the work stays linear in the XML whatever it holds.
+ */
+export function* xmlElements(xml: string, tag: string): Generator<XmlElement> {
+  const close = `</${tag}>`;
+  const starts = xmlStartTags(xml, tag);
+  let resumeAt = 0;
+  for (;;) {
+    const next = starts.next();
+    if (next.done) return;
+    const { attributes, end } = next.value;
+    if (end <= resumeAt) continue;
+    if (attributes.endsWith('/')) {
+      yield { attributes: attributes.slice(0, -1), body: '' };
+      continue;
+    }
+    const closeAt = xml.indexOf(close, end);
+    if (closeAt === -1) return;
+    yield { attributes, body: xml.slice(end, closeAt) };
+    resumeAt = closeAt + close.length;
+  }
+}
+
+interface CellStyles {
+  formats: readonly (NumberFormat | null)[];
+  date1904: boolean;
+}
+
+function formatCode(attributes: string): string {
+  const raw = /formatCode="([^"]*)"/.exec(attributes)?.[1] ?? '';
+  try {
+    return decodeXmlEntities(raw);
+  } catch (error) {
+    if (error instanceof RangeError) return '';
+    throw error;
+  }
+}
+
+/**
+ * The number format of each cell style, under the same bounds as the workbook
+ * viewer: past them, or without a closed `cellXfs`, every number keeps its
+ * stored value.
+ */
+export function cellStyleFormats(xml: string): (NumberFormat | null)[] {
+  const table = new CellFormatTable();
+  const declared = xmlElements(xml, 'numFmts').next();
+  if (!declared.done) {
+    for (const { attributes } of xmlStartTags(declared.value.body, 'numFmt')) {
+      const id = /numFmtId="([^"]*)"/.exec(attributes)?.[1];
+      if (!table.addCustomFormat(id, formatCode(attributes))) return [];
+    }
+  }
+  const cellXfs = xmlElements(xml, 'cellXfs').next();
+  if (cellXfs.done) return [];
+  for (const { attributes } of xmlStartTags(cellXfs.value.body, 'xf')) {
+    if (!table.addCellFormat(/numFmtId="([^"]*)"/.exec(attributes)?.[1])) return [];
+  }
+  return table.formats();
+}
+
+/**
+ * The styles part is read only when it fits what is left of the archive
+ * budget, and any failure to read it leaves every number at its stored value.
+ */
+async function cellStyles(
+  bounded: BoundedZip,
+  path: string,
+  date1904: boolean,
+): Promise<CellStyles> {
+  try {
+    const entry = bounded.zip.file(path);
+    if (!entry || declaredMemberSize(entry) > bounded.budget.ceiling - bounded.budget.spent) {
+      return { formats: [], date1904 };
+    }
+    const xml = await officeArchiveEntryText(bounded, path);
+    return { formats: xml === null ? [] : cellStyleFormats(xml), date1904 };
+  } catch {
+    return { formats: [], date1904 };
+  }
+}
+
+function columnName(index: number): string {
+  if (!Number.isSafeInteger(index) || index < 1) return '';
+  let name = '';
+  for (let rest = index; rest > 0; rest = Math.floor((rest - 1) / 26)) {
+    name = String.fromCharCode(65 + ((rest - 1) % 26)) + name;
+  }
+  return name;
 }
 
 function rowNumber(reference: string): number {
@@ -363,48 +497,67 @@ async function readXlsxSheets(
 
   const relationships = (await officeArchiveEntryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
   const targetByRelationshipId = new Map<string, string>();
-  for (const match of relationships.matchAll(/<Relationship\b[^>]*>/g)) {
-    const id = /Id="([^"]+)"/.exec(match[0])?.[1];
-    const target = /Target="([^"]+)"/.exec(match[0])?.[1];
-    if (id && target) targetByRelationshipId.set(id, target.replace(/^\/?xl\//, ''));
+  let stylesTarget: string | undefined;
+  for (const { attributes } of xmlStartTags(relationships, 'Relationship')) {
+    const id = /Id="([^"]+)"/.exec(attributes)?.[1];
+    const target = /Target="([^"]+)"/.exec(attributes)?.[1]?.replace(/^\/?xl\//, '');
+    if (id && target) targetByRelationshipId.set(id, target);
+    if (target && /Type="([^"]*)"/.exec(attributes)?.[1]?.endsWith('/styles')) {
+      stylesTarget ??= target;
+    }
   }
+  const workbookProperties = xmlStartTags(workbook, 'workbookPr').next();
+  const date1904Attribute = workbookProperties.done
+    ? undefined
+    : /date1904="([^"]*)"/.exec(workbookProperties.value.attributes)?.[1]?.trim();
+  const date1904 = date1904Attribute === '1' || date1904Attribute === 'true';
 
   const sharedStringsXml = (await officeArchiveEntryText(bounded, 'xl/sharedStrings.xml')) ?? '';
-  const sharedStrings = [...sharedStringsXml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map((match) =>
-    xmlTextRuns(match[1] ?? '', 't'),
+  const sharedStrings = [...xmlElements(sharedStringsXml, 'si')].map((element) =>
+    xmlTextRuns(element.body, 't'),
   );
 
   const sheets: Sheet[] = [];
+  let styles: CellStyles | undefined;
   let sheetIndex = 0;
-  for (const sheetMatch of workbook.matchAll(/<sheet\b[^>]*>/g)) {
+  for (const { attributes: sheetAttributes } of xmlStartTags(workbook, 'sheet')) {
     sheetIndex += 1;
     const name = decodeXmlEntities(
-      /name="([^"]*)"/.exec(sheetMatch[0])?.[1] ?? `Sheet${sheetIndex}`,
+      /name="([^"]*)"/.exec(sheetAttributes)?.[1] ?? `Sheet${sheetIndex}`,
     );
-    const relationshipId = /r:id="([^"]+)"/.exec(sheetMatch[0])?.[1];
+    const relationshipId = /r:id="([^"]+)"/.exec(sheetAttributes)?.[1];
     const target = relationshipId ? targetByRelationshipId.get(relationshipId) : undefined;
     const sheetXml =
       (target ? await officeArchiveEntryText(bounded, `xl/${target}`) : null) ??
       (await officeArchiveEntryText(bounded, `xl/worksheets/sheet${sheetIndex}.xml`));
     if (!sheetXml) continue;
+    const sheetStyles = (styles ??= await cellStyles(
+      bounded,
+      `xl/${stylesTarget ?? 'styles.xml'}`,
+      date1904,
+    ));
 
     const rows: SheetRow[] = [];
     let omitted = false;
-    for (const rowMatch of sheetXml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
+    let lastRow = 0;
+    for (const row of xmlElements(sheetXml, 'row')) {
       if (rows.length >= maxSheetRows) {
         omitted = true;
         break;
       }
+      const declaredRow = /\sr="(\d+)"/.exec(row.attributes)?.[1];
+      lastRow = declaredRow === undefined ? lastRow + 1 : Number(declaredRow);
       const cells: SheetCell[] = [];
-      for (const cellMatch of (rowMatch[1] ?? '').matchAll(
-        /<c\b([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g,
-      )) {
-        const attributes = cellMatch[1] ?? '';
-        const body = cellMatch[2] ?? '';
-        const reference = /r="([A-Z]+\d+)"/.exec(attributes)?.[1] ?? '';
+      let lastColumn = 0;
+      for (const { attributes, body } of xmlElements(row.body, 'c')) {
+        const declaredColumn = /\sr="([A-Z]+)\d+"/.exec(attributes)?.[1];
+        lastColumn = declaredColumn === undefined ? lastColumn + 1 : columnIndex(declaredColumn);
         const type = /t="([^"]+)"/.exec(attributes)?.[1] ?? 'n';
-        const formula = /<f\b[^>]*>([\s\S]*?)<\/f>/.exec(body)?.[1];
-        const rawValue = /<v>([\s\S]*?)<\/v>/.exec(body)?.[1] ?? '';
+        const formulaElement = xmlElements(body, 'f').next();
+        const formula = formulaElement.done ? undefined : formulaElement.value.body;
+        const valueStart = body.indexOf('<v>');
+        const valueEnd = valueStart === -1 ? -1 : body.indexOf('</v>', valueStart + 3);
+        const rawValue = valueEnd === -1 ? '' : body.slice(valueStart + 3, valueEnd);
         let value: string;
         if (type === 's') {
           value = sharedStrings[Number(rawValue)] ?? '';
@@ -412,19 +565,24 @@ async function readXlsxSheets(
           value = xmlTextRuns(body, 't');
         } else {
           value = decodeXmlEntities(rawValue);
+          if (type === 'n' && value) {
+            const style = styleIndex(/\ss="([^"]*)"/.exec(attributes)?.[1] ?? '0');
+            value = displayCellNumber(
+              value,
+              sheetStyles.formats[style] ?? null,
+              sheetStyles.date1904,
+            );
+          }
         }
         if (formula || value) {
           cells.push({
-            column: columnLabel(reference),
+            column: declaredColumn ?? columnName(lastColumn),
             value,
             formula: formula ? decodeXmlEntities(formula) : null,
           });
         }
       }
-      if (cells.length > 0) {
-        const number = /<row\b[^>]*r="(\d+)"/.exec(rowMatch[0])?.[1] ?? String(rows.length + 1);
-        rows.push({ number, cells });
-      }
+      if (cells.length > 0) rows.push({ number: declaredRow ?? String(lastRow), cells });
     }
     sheets.push({ name, rows, omitted });
   }

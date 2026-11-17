@@ -26,6 +26,16 @@ import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { requestMediaAssetReindex } from '@/lib/services/retrieval-index-service';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
+import {
+  credentialScanContinuesAfterHead,
+  credentialScanMimeType,
+  firstCursorAfterHead,
+  mergeInspectionFindings,
+  openPrivateObjectRange,
+  scanCredentialRange,
+  type ChatFileInspectionCursor,
+  type OpenObjectRange,
+} from './full-inspection';
 import { defaultSealDeps, sealChatFile, type SealDeps } from './seal';
 import { sqlChatFileIntakeStore, type ChatFileIntakeRow } from './store';
 import {
@@ -90,6 +100,7 @@ export interface ChatFileIntakeDeps extends IntakeTransitionDeps {
     head: Uint8Array,
     findings: readonly UploadScanFinding[],
   ): Promise<ContentPolicyVerdict>;
+  openRange: OpenObjectRange;
   seal: SealDeps;
   prepare(assetId: string): Promise<{ done: boolean }>;
   reindex(row: ChatFileIntakeRow, assetId: string): Promise<void>;
@@ -187,15 +198,117 @@ async function readInspectedHead(
   return null;
 }
 
-async function inspectStep(ctx: StepContext): Promise<ChatFileIntakeDirective> {
-  const { deps } = ctx;
-  const row = await deps.store.claim({
+function holdForInspection(ctx: StepContext): Promise<ChatFileIntakeRow | null> {
+  return ctx.deps.store.claim({
     intakeId: ctx.intakeId,
     runId: ctx.runId,
     to: 'inspecting',
     from: ['uploaded'],
-    nowMs: deps.now(),
+    nowMs: ctx.deps.now(),
   });
+}
+
+function refuseInspected(
+  ctx: StepContext,
+  row: ChatFileIntakeRow,
+  findings: readonly UploadScanFinding[],
+): Promise<ChatFileIntakeDirective> {
+  logger.warn(
+    { intakeId: row.id, findings: findings.map((finding) => finding.code) },
+    '[chat-files] refused a large file that failed content inspection',
+  );
+  return refuse(ctx, row, refusalForFindings(findings));
+}
+
+/**
+ * The workspace data policy over every finding, then the entity tag the
+ * scanner and the seal hold the bytes to.
+ */
+async function concludeInspection(
+  ctx: StepContext,
+  row: ChatFileIntakeRow,
+  etag: string,
+  head: Uint8Array,
+  findings: readonly UploadScanFinding[],
+): Promise<ChatFileIntakeDirective> {
+  const { deps } = ctx;
+  if ((await deps.inspectContent(row, head, findings)) === 'blocked') {
+    logger.warn(
+      { intakeId: row.id },
+      '[chat-files] the workspace data policy blocked a large file',
+    );
+    return refuse(ctx, row, 'dlp_blocked');
+  }
+  const recorded = await deps.store.recordEtag({ intakeId: row.id, runId: ctx.runId, etag });
+  return recorded ? { next: 'submit' } : endDirective('superseded');
+}
+
+function objectUnchanged(
+  current: { etag?: string | undefined; contentLength?: number | undefined } | null,
+  etag: string,
+  row: ChatFileIntakeRow,
+): boolean {
+  return current !== null && current.etag === etag && current.contentLength === row.byteCount;
+}
+
+/**
+ * One step of the credential scan after the head: at most a text step's bytes,
+ * read once and held to the entity tag the head was read under. The cursor
+ * moves only through the directive this returns, so a retried step scans the
+ * same range again and a range is never skipped or counted twice. The last
+ * step reads the head again, because the data policy decides over the head's
+ * findings and the rest's together.
+ */
+async function continueInspection(
+  ctx: StepContext,
+  cursor: ChatFileInspectionCursor,
+): Promise<ChatFileIntakeDirective> {
+  const { deps } = ctx;
+  const row = await holdForInspection(ctx);
+  if (!row) return endDirective('superseded');
+  if (!objectUnchanged(await deps.objects.head(row.stagingKey), cursor.etag, row)) {
+    return refuse(ctx, row, 'changed_during_check');
+  }
+
+  const ownedTo = Math.min(row.byteCount, cursor.ownedFrom + deps.policy.kinds.text.bytesPerStep);
+  const scanned = await scanCredentialRange({
+    openRange: deps.openRange,
+    key: row.stagingKey,
+    mimeType: credentialScanMimeType(row),
+    byteCount: row.byteCount,
+    ownedFrom: cursor.ownedFrom,
+    ownedTo,
+  });
+  const finished = scanned.kind === 'read' && !scanned.rejected && ownedTo === row.byteCount;
+  const head = finished
+    ? await readInspectedHead(ctx, row, Math.min(row.byteCount, UPLOAD_INSPECTION_BYTES))
+    : null;
+  if (!objectUnchanged(await deps.objects.head(row.stagingKey), cursor.etag, row)) {
+    return refuse(ctx, row, 'changed_during_check');
+  }
+  if (scanned.kind === 'short') throw new ShortInspectionReadError(row.id);
+  if (scanned.rejected) return refuseInspected(ctx, row, scanned.findings);
+
+  const findings = mergeInspectionFindings(cursor.findings, scanned.findings);
+  if (!finished) return { next: 'inspect', cursor: { ...cursor, ownedFrom: ownedTo, findings } };
+  if (head === null) throw new ShortInspectionReadError(row.id);
+  const inspection = inspectUploadHead(
+    head,
+    row.mimeType,
+    row.fileName,
+    credentialScanMimeType(row),
+  );
+  if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
+  return concludeInspection(ctx, row, cursor.etag, head, [...inspection.findings, ...findings]);
+}
+
+async function inspectStep(
+  ctx: StepContext,
+  directive: Extract<ChatFileIntakeDirective, { next: 'inspect' }>,
+): Promise<ChatFileIntakeDirective> {
+  if (directive.cursor) return continueInspection(ctx, directive.cursor);
+  const { deps } = ctx;
+  const row = await holdForInspection(ctx);
   if (!row) return endDirective('superseded');
 
   const before = await deps.objects.head(row.stagingKey);
@@ -214,28 +327,17 @@ async function inspectStep(ctx: StepContext): Promise<ChatFileIntakeDirective> {
   }
   if (head === null) throw new ShortInspectionReadError(row.id);
 
-  const inspection = inspectUploadHead(head, row.mimeType, row.fileName);
-  if (!inspection.ok) {
-    logger.warn(
-      { intakeId: row.id, findings: inspection.findings.map((finding) => finding.code) },
-      '[chat-files] refused a large file that failed content inspection',
-    );
-    return refuse(ctx, row, refusalForFindings(inspection.findings));
+  const inspection = inspectUploadHead(
+    head,
+    row.mimeType,
+    row.fileName,
+    credentialScanMimeType(row),
+  );
+  if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
+  if (credentialScanContinuesAfterHead(row)) {
+    return { next: 'inspect', cursor: firstCursorAfterHead(before.etag) };
   }
-  if ((await deps.inspectContent(row, head, inspection.findings)) === 'blocked') {
-    logger.warn(
-      { intakeId: row.id },
-      '[chat-files] the workspace data policy blocked a large file',
-    );
-    return refuse(ctx, row, 'dlp_blocked');
-  }
-
-  const recorded = await deps.store.recordEtag({
-    intakeId: row.id,
-    runId: ctx.runId,
-    etag: before.etag,
-  });
-  return recorded ? { next: 'submit' } : endDirective('superseded');
+  return concludeInspection(ctx, row, before.etag, head, inspection.findings);
 }
 
 async function holdForSubmit(
@@ -478,7 +580,7 @@ export async function runChatFileIntakeStep(
     case 'start':
       return startStep(ctx);
     case 'inspect':
-      return inspectStep(ctx);
+      return inspectStep(ctx, directive);
     case 'submit':
       return submitStep(ctx, directive);
     case 'poll':
@@ -525,6 +627,7 @@ export function createChatFileIntakeDeps(input: ChatFileIntakeWorkflowInput): Ch
     scanner: {},
     policy: CHAT_LARGE_FILE_POLICY,
     inspectContent: uploadContentInspector(db),
+    openRange: openPrivateObjectRange,
     seal: defaultSealDeps(db),
     prepare: (assetId) => prepareChatFileStep(assetId, { db }),
     async reindex(row, assetId) {

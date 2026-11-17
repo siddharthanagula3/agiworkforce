@@ -1,6 +1,5 @@
 import { PageLink } from '@shared/components/layout/EmbeddedPage';
 import { redirect } from 'next/navigation';
-import { EMBEDDED_PAGE_PARAM, hasEmbeddedPageMarker } from '@agiworkforce/types';
 
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
@@ -17,9 +16,10 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared'
 import { HelpSearch } from '@/features/support/components/HelpSearch';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
+import { embeddedPageHref } from '@/lib/embedded-page';
 import { readTopicParam, resolveDocTopic } from '@/lib/support/doc-topics';
-import { PURCHASE_HELP_CATEGORY } from '@/lib/support/help-articles';
 import { supportCollectionIndex } from './collections';
+import { hasPhoneMarker, type HelpSearchParams } from './phone-request';
 
 export const metadata = buildMetadata({
   title: 'Help: every collection in the help centre',
@@ -30,22 +30,19 @@ export const metadata = buildMetadata({
 export default async function HelpPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<HelpSearchParams>;
 }) {
-  const { q, topic: topicParam, [EMBEDDED_PAGE_PARAM]: marker } = await searchParams;
-  const fromPhone = hasEmbeddedPageMarker(
-    new URLSearchParams([marker ?? []].flat().map((value) => [EMBEDDED_PAGE_PARAM, value])),
-  );
+  const params = await searchParams;
+  const { q, topic: topicParam } = params;
+  const fromPhone = hasPhoneMarker(params);
+  const view = fromPhone ? 'phone' : 'web';
   const topic = readTopicParam(topicParam);
-  const topicPath = topic ? resolveDocTopic(topic) : null;
-  if (topicPath) redirect(topicPath);
+  const topicPath = topic ? resolveDocTopic(topic, view) : null;
+  const topicTarget = topicPath && fromPhone ? embeddedPageHref(topicPath) : topicPath;
+  if (topicTarget) redirect(topicTarget);
   const initialQuery =
     (Array.isArray(q) ? q[0] : q)?.slice(0, 200) ?? topic?.replace(/-/g, ' ') ?? '';
-  const index = supportCollectionIndex();
-  const collections = fromPhone
-    ? index.collections.filter((collection) => collection.id !== PURCHASE_HELP_CATEGORY)
-    : index.collections;
-  const articleCount = collections.reduce((total, entry) => total + entry.articles.length, 0);
+  const { collections, articleCount } = supportCollectionIndex(view);
 
   return (
     <div data-design="agi" className="agi-ds-page">

@@ -13,6 +13,7 @@ import { vi } from 'vitest';
 
 import { CHAT_LARGE_FILE_POLICY } from '@/lib/chat-attachment-policy';
 import { getObjectStore } from '@/lib/server/object-storage-runtime';
+import { openPrivateObjectRange } from '../full-inspection';
 import type { SealCommitOutcome, SealDeps } from '../seal';
 import { runChatFileIntakeStep, type ChatFileIntakeDeps } from '../steps';
 import type { ChatFileIntakeRow } from '../store';
@@ -183,6 +184,7 @@ export function createIntakeHarness(input: {
     scanner: input.scanner.options,
     policy: CHAT_LARGE_FILE_POLICY,
     inspectContent: async () => 'allowed',
+    openRange: openPrivateObjectRange,
     seal,
     prepare: async () => ({ done: true }),
     async reindex(_row, assetId) {

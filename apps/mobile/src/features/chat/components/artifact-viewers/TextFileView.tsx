@@ -15,7 +15,9 @@ import type { FileViewerSource } from './viewerKind';
 const MONOSPACE = codeFontFamily;
 
 type FileText =
-  { status: 'loading' } | { status: 'ready'; text: string } | { status: 'failed'; message: string };
+  | { status: 'loading' }
+  | { status: 'ready'; text: string }
+  | { status: 'failed'; message: string; retryable: boolean };
 
 function useFileText(source: FileViewerSource): { text: FileText; retry: () => void } {
   const { copy, retry } = useLocalFileCopy(source.url, source.fileName);
@@ -32,7 +34,11 @@ function useFileText(source: FileViewerSource): { text: FileText; retry: () => v
       },
       (error: unknown) => {
         if (live) {
-          setRead({ status: 'failed', message: toUserMessage(error, FILE_UNAVAILABLE_MESSAGE) });
+          setRead({
+            status: 'failed',
+            message: toUserMessage(error, FILE_UNAVAILABLE_MESSAGE),
+            retryable: true,
+          });
         }
       },
     );
@@ -70,7 +76,9 @@ function FileTextState({ text, retry }: { text: FileText; retry: () => void }) {
         <Text style={{ fontSize: typeScale.footnote, color: colors.textMuted }}>
           {text.message}
         </Text>
-        <Button title="Retry" variant="secondary" size="sm" onPress={retry} />
+        {text.retryable ? (
+          <Button title="Retry" variant="secondary" size="sm" onPress={retry} />
+        ) : null}
       </View>
     );
   }

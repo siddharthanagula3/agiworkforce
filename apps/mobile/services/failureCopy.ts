@@ -1,3 +1,4 @@
+import { classifyManagedQuotaErrorCode } from '@agiworkforce/types';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 
 /**
@@ -27,6 +28,40 @@ export function statedWait(retryAfterSeconds: unknown): string | undefined {
   const minutes = Math.round(seconds / 60);
   if (minutes < 90) return `about ${counted(minutes, 'minute')}`;
   return `about ${counted(Math.round(seconds / 3600), 'hour')}`;
+}
+
+export const LOCAL_MODE_KEEPS_WORKING = 'Local mode keeps working.';
+const FREE_USAGE_LIMIT_REACHED = 'You have reached the free usage limit on your account.';
+
+interface UsageLimitRefusal {
+  code?: string | null;
+  retryAfterSeconds?: number | undefined;
+  body?: Record<string, unknown> | undefined;
+}
+
+function secondsUntilReset(body: Record<string, unknown> | undefined, nowMs: number) {
+  const error = body?.['error'];
+  const resetsAt =
+    error && typeof error === 'object' ? (error as { resets_at?: unknown }).resets_at : undefined;
+  if (typeof resetsAt !== 'string') return undefined;
+  const resetMs = Date.parse(resetsAt);
+  return Number.isFinite(resetMs) ? Math.ceil((resetMs - nowMs) / 1_000) : undefined;
+}
+
+/**
+ * What a Free account reads when its allowance is spent, or null for any other
+ * refusal. It says when Cloud replies come back, from the wait or the reset
+ * time the refusal carries, and that Local mode is unaffected.
+ */
+export function freeUsageLimitMessage(
+  refusal: UsageLimitRefusal,
+  nowMs: number = Date.now(),
+): string | null {
+  const block = classifyManagedQuotaErrorCode(refusal.code);
+  if (block?.kind !== 'free_trial' || block.feature !== 'token_cap') return null;
+  const wait = statedWait(refusal.retryAfterSeconds ?? secondsUntilReset(refusal.body, nowMs));
+  const when = wait ? `Try again in ${wait}.` : 'Try again after it resets.';
+  return `${FREE_USAGE_LIMIT_REACHED} ${when} ${LOCAL_MODE_KEEPS_WORKING}`;
 }
 
 /**
@@ -69,9 +104,17 @@ const NOT_A_STANDALONE_CLAUSE = /^(?:if|when|unless|because|and|but|so|then)\b/i
 export const NOT_INCLUDED_IN_PLAN = 'It isn’t included in your plan.';
 const USAGE_LIMIT_NEXT_STEP = 'See Usage in Settings for when it resets.';
 
+// The phone runs Local and AGI Cloud only and never takes a provider key, so
+// a suggestion to use one leads nowhere here.
+const OWN_PROVIDER_KEY = /\bown (?:provider |API )?keys?\b/i;
+
 function steersToPurchase(text: string): boolean {
   if (OFF_DEVICE_PURCHASE.test(text)) return true;
   return !NATIVE_PURCHASES_AVAILABLE && IN_APP_PURCHASE.test(text.replace(SOFTWARE_UPGRADE, ''));
+}
+
+function leadsNowhereHere(text: string): boolean {
+  return steersToPurchase(text) || OWN_PROVIDER_KEY.test(text);
 }
 
 function sentencesOf(message: string): string[] {
@@ -120,10 +163,10 @@ function judgedSentence(sentence: string): SentenceVerdict {
         return { kept: `${subject} isn’t included in your plan.`, droppedCredits: false };
     }
   }
-  if (!steersToPurchase(body)) return { kept: sentence, droppedCredits: false };
+  if (!leadsNowhereHere(body)) return { kept: sentence, droppedCredits: false };
 
   const alternatives = alternativesOf(body).map((part) => part.trim());
-  const kept = alternatives.filter((part) => part && !steersToPurchase(part));
+  const kept = alternatives.filter((part) => part && !leadsNowhereHere(part));
   const droppedCredits = alternatives.some((part) => CREDIT_PURCHASE.test(part));
   const salvageable =
     kept.length > 0 &&
@@ -136,9 +179,9 @@ function judgedSentence(sentence: string): SentenceVerdict {
 }
 
 /**
- * The message with every purchase step removed, or an empty string when
- * nothing else was in it. A message that names no purchase comes back exactly
- * as sent.
+ * The message with every purchase step and every own-provider-key alternative
+ * removed, or an empty string when nothing else was in it. A message that
+ * names neither comes back exactly as sent.
  */
 export function purchaseNeutralRemainder(message: string): string {
   const sentences = sentencesOf(message);

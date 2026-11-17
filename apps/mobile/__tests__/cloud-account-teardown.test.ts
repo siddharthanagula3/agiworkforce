@@ -250,6 +250,8 @@ const { useChatMessageStore } = require('../stores/chat/chatMessageStore') as {
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 import { mmkvStorage, storage } from '../lib/mmkv';
+import { getProviderOfferings } from '@agiworkforce/types';
+import { SET_ASIDE_MARKER } from '../storage/unreadableFiles';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { applyCloudSettings, toCloudSettings } from '../services/cloudSettingsMapping';
 import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
@@ -393,6 +395,86 @@ describe('clearLocalCloudAccountState', () => {
 
     expect(restoreNewChatModel).toHaveBeenCalledTimes(1);
     expect(setModel).not.toHaveBeenCalled();
+  });
+
+  const promotionalModelId = Object.keys(getProviderOfferings())[0]!;
+
+  it('keeps the Local model the person chose when a promotional Cloud model was selected', () => {
+    const setModel = jest.fn();
+    useModelStore.getState.mockReturnValue({
+      selectedModel: promotionalModelId,
+      newChatModels: { local: 'fixture-chosen-local-model', cloud: promotionalModelId },
+      setModel,
+      restoreNewChatModel: jest.fn(),
+    });
+
+    clearLocalCloudAccountState();
+
+    expect(setModel).toHaveBeenCalledTimes(1);
+    expect(setModel).toHaveBeenCalledWith('fixture-chosen-local-model');
+  });
+
+  it('falls back to the default Local model when none was chosen before the promotional one', () => {
+    const setModel = jest.fn();
+    useModelStore.getState.mockReturnValue({
+      selectedModel: promotionalModelId,
+      newChatModels: { local: null, cloud: promotionalModelId },
+      setModel,
+      restoreNewChatModel: jest.fn(),
+    });
+
+    clearLocalCloudAccountState();
+
+    expect(setModel).toHaveBeenCalledWith('fixture-local-model');
+  });
+
+  it('deletes the copies set aside from unreadable Cloud stores and keeps Local ones', () => {
+    const keys = [
+      `chat-message-store-cloud${SET_ASIDE_MARKER}1700000000000`,
+      `memory-store-cloud${SET_ASIDE_MARKER}1700000000001`,
+      `projects-store-cloud${SET_ASIDE_MARKER}1700000000002-1`,
+      `library-store-cloud${SET_ASIDE_MARKER}1700000000003`,
+      `settings-store-cloud${SET_ASIDE_MARKER}1700000000004`,
+      `schedule-store${SET_ASIDE_MARKER}1700000000005`,
+      `tier-store${SET_ASIDE_MARKER}1700000000007`,
+      `chat-message-store-local${SET_ASIDE_MARKER}1700000000006`,
+      'chat-message-store-cloud',
+      'unrelated-key',
+    ];
+    (storage.getAllKeys as jest.Mock).mockReturnValueOnce([]).mockReturnValueOnce(keys);
+
+    clearLocalCloudAccountState();
+
+    const deleted = (storage.delete as jest.Mock).mock.calls.map(([key]) => key);
+    expect(deleted).toEqual(expect.arrayContaining(keys.slice(0, 7)));
+    expect(deleted).not.toContain(keys[7]);
+    expect(deleted).not.toContain('chat-message-store-cloud');
+    expect(deleted).not.toContain('unrelated-key');
+  });
+
+  it('forgets the answers it was waiting for after the app closed and signs out even if that fails', () => {
+    const warning = jest.spyOn(console, 'warn');
+    (storage.delete as jest.Mock).mockImplementation((key: string) => {
+      if (key === 'agi-in-flight-turn-runs-v1') throw new Error('storage unavailable');
+    });
+    (storage.getString as jest.Mock).mockImplementation((key: string) =>
+      key === 'agi-in-flight-turn-runs-v1'
+        ? JSON.stringify([{ conversationId: 'c1', questionId: 'q1', operationId: 'o1' }])
+        : undefined,
+    );
+
+    try {
+      clearLocalCloudAccountState();
+
+      expect(storage.delete).toHaveBeenCalledWith('agi-in-flight-turn-runs-v1');
+      expect(clearCloudSearch).toHaveBeenCalledTimes(1);
+      expect(clearManagedCloudAccess).toHaveBeenCalledTimes(1);
+      expect(warning).not.toHaveBeenCalled();
+    } finally {
+      warning.mockRestore();
+      (storage.delete as jest.Mock).mockReset();
+      (storage.getString as jest.Mock).mockReset().mockReturnValue(undefined);
+    }
   });
 
   it('drops shared text and files staged for account A before account B opens a composer', () => {

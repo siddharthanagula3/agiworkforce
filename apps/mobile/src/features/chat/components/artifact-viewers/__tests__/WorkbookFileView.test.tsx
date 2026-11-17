@@ -48,6 +48,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { strToU8, zipSync } from 'fflate';
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { ApiHttpError } from '@/services/apiErrors';
 import { WORKBOOK_TOO_LARGE_TITLE, WorkbookFileView } from '../WorkbookFileView';
 import type { FileViewerSource } from '../viewerKind';
 
@@ -234,5 +235,16 @@ describe('WorkbookFileView', () => {
     });
 
     expect(await screen.findByTestId('tabular-grid')).toBeTruthy();
+  });
+
+  it('says a workbook above the download limit is too large and offers no Retry', async () => {
+    mockViewerFileCopy.mockRejectedValueOnce(
+      new ApiHttpError('This file is too large to open on this device.', 413, 'file_too_large'),
+    );
+    render(<WorkbookFileView source={workbookSource()} />);
+
+    expect(await screen.findByTestId('workbook-file-failed')).toBeTruthy();
+    expect(screen.getByText('This file is too large to open on this device.')).toBeTruthy();
+    expect(screen.queryByText('Retry')).toBeNull();
   });
 });

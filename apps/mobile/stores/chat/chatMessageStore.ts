@@ -1757,6 +1757,7 @@ export const useChatMessageStore = create<MessageState>()(
 );
 
 subscribeCloudHistoryLoading((isLoadingMessages) => {
+  if (useChatMessageStore.getState().isLoadingMessages === isLoadingMessages) return;
   useChatMessageStore.setState({ isLoadingMessages });
 });
 

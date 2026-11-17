@@ -40,14 +40,19 @@ jest.mock('@/services/authSession', () => ({
 }));
 
 import * as Sharing from 'expo-sharing';
+import { CLIENT_CAPABILITIES_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import {
+  FileDownloadError,
+  downloadFailureMessage,
   downloadGeneratedFile,
   prepareLocalVideoPlayer,
   shareFile,
   shareGeneratedImage,
   saveGeneratedImageToPhotos,
   copyGeneratedImage,
+  viewerFileCopy,
 } from '@/services/fileCreation';
+import { toUserMessage } from '@/services/userMessage';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -123,6 +128,53 @@ describe('downloadGeneratedFile', () => {
       downloadGeneratedFile('https://agiworkforce.com/api/files/gf-1', 'report.pdf'),
     ).rejects.toThrow(/signed in/);
     expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('a 413 gives the too-large copy and builds no blob', async () => {
+    const blob = jest.fn(async () => ({}));
+    mockGuardedFetch.mockResolvedValue({ ok: false, status: 413, blob });
+    const fileUrl = 'https://agiworkforce.com/api/files/33333333-3333-4333-8333-333333333333';
+
+    const exported = await downloadGeneratedFile(fileUrl, 'dataset.zip').catch((e: unknown) => e);
+    const viewed = await viewerFileCopy(fileUrl, 'dataset.zip').catch((e: unknown) => e);
+
+    for (const error of [exported, viewed]) {
+      expect(error).toBeInstanceOf(FileDownloadError);
+      expect(downloadFailureMessage(error, 'Download failed')).toBe(
+        'This file is too large to open on this device.',
+      );
+      expect(toUserMessage(error, 'This file could not be opened. Check your connection.')).toBe(
+        'This file is too large to open on this device.',
+      );
+    }
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    expect(blob).not.toHaveBeenCalled();
+    expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the plain copy of other refusals on the viewer path', () => {
+    const fallback = 'This file could not be opened. Check your connection.';
+    expect(toUserMessage(new FileDownloadError(404), fallback)).toBe(
+      'That is no longer available.',
+    );
+    expect(toUserMessage(new FileDownloadError(429), fallback)).toBe(
+      'You are going a little fast. Wait a moment and try again.',
+    );
+    expect(toUserMessage(new FileDownloadError(500), fallback)).toBe(
+      'Something went wrong on our side. Try again shortly.',
+    );
+    expect(toUserMessage(new FileDownloadError(400), fallback)).toBe(fallback);
+  });
+
+  it('no file request carries x-agi-client-capabilities', async () => {
+    await downloadGeneratedFile('https://agiworkforce.com/api/files/gf-1', 'report.pdf');
+    await viewerFileCopy('https://agiworkforce.com/api/files/gf-2', 'report.pdf');
+
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    for (const [, init] of mockGuardedFetch.mock.calls as [string, RequestInit][]) {
+      const names = Object.keys(init.headers ?? {}).map((name) => name.toLowerCase());
+      expect(names).not.toContain(CLIENT_CAPABILITIES_REQUEST_HEADER.toLowerCase());
+    }
   });
 
   it('surfaces other HTTP failures with the status code', async () => {

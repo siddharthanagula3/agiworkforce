@@ -33,7 +33,6 @@ import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { translatePlural } from '@/src/i18n/plural';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import {
   accountNotificationDestination,
   useAccountNotifications,
@@ -273,11 +272,7 @@ export default function NotificationCenterScreen() {
       markAccountRead(item.id);
       const destination = accountNotificationDestination(item.href);
       if (!destination) return;
-      if (destination.kind === 'native') {
-        router.push(destination.route as Parameters<typeof router.push>[0]);
-      } else {
-        void openUntrustedUrlInAppBrowser(destination.url);
-      }
+      router.push(destination.route as Parameters<typeof router.push>[0]);
     },
     [markAccountRead, router],
   );

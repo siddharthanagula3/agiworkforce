@@ -16,10 +16,13 @@
 
 import {
   checkContentFilter as checkSharedContentFilter,
+  isSelfHarmMethodRequest,
   type ContentFilterResult,
 } from '@agiworkforce/types';
 
 export type { ContentFilterResult } from '@agiworkforce/types';
+
+export type ContentFilterSwitch = 'minor-safe' | 'reduce-sensitive-content';
 
 export const MINOR_SAFE_REFUSAL =
   "Minor-safe mode is on for this device, so AGI can't help with this request. " +
@@ -30,10 +33,20 @@ export const REDUCED_SENSITIVE_CONTENT_REFUSAL =
   'This content is unavailable while Reduce sensitive content is on. ' +
   'You can change this in Settings > Safety & Security.';
 
+// The self-harm refusal stays two short lines so the alert fits at the largest text size.
 export const SELF_HARM_HELPLINE =
-  "If you're thinking about hurting yourself, a crisis line can help right now: call or text " +
-  '988 in the US, or find one for your country at findahelpline.com. In an emergency, call ' +
-  'your local emergency number.';
+  'Call or text 988 in the US, find a crisis line at findahelpline.com, or call your local emergency number.';
+
+const FILTER_COPY: Record<ContentFilterSwitch, { refusal: string; selfHarmNotSent: string }> = {
+  'minor-safe': {
+    refusal: MINOR_SAFE_REFUSAL,
+    selfHarmNotSent: 'This was not sent because minor-safe mode is on.',
+  },
+  'reduce-sensitive-content': {
+    refusal: REDUCED_SENSITIVE_CONTENT_REFUSAL,
+    selfHarmNotSent: 'This was not sent because Reduce sensitive content is on.',
+  },
+};
 
 const SELF_HARM_TOPIC =
   /\b(suicid\w*|self[\s-]?harm\w*|(kill(ing)?|hurt(ing)?|harm(ing)?|cut(ting)?)\s+(myself|yourself|themselves|oneself)|end(ing)?\s+(my|your|their)\s+(own\s+)?life)\b/i;
@@ -41,9 +54,11 @@ const SELF_HARM_TOPIC =
 export function checkContentFilter(
   prompt: string,
   enabled: boolean,
-  refusal = MINOR_SAFE_REFUSAL,
+  filter: ContentFilterSwitch = 'minor-safe',
 ): ContentFilterResult {
-  const verdict = checkSharedContentFilter(prompt, enabled, refusal);
-  if (verdict.allowed || !SELF_HARM_TOPIC.test(prompt)) return verdict;
-  return { allowed: false, refusal: `${verdict.refusal}\n\n${SELF_HARM_HELPLINE}` };
+  const copy = FILTER_COPY[filter];
+  const verdict = checkSharedContentFilter(prompt, enabled, copy.refusal);
+  if (verdict.allowed) return verdict;
+  if (!isSelfHarmMethodRequest(prompt) && !SELF_HARM_TOPIC.test(prompt)) return verdict;
+  return { allowed: false, refusal: `${copy.selfHarmNotSent}\n\n${SELF_HARM_HELPLINE}` };
 }

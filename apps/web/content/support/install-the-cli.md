@@ -5,7 +5,7 @@ path: /cli
 category: surfaces
 tags: cli, install cli, install.sh, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, update, checksum, signature
 platforms: cli, macos, windows, linux
-updated: 2026-11-11
+updated: 2026-11-16
 description: How to get the CLI binary, run it for the first time and work with sessions and trust boundaries.
 scope: public
 ---
@@ -89,10 +89,15 @@ without an explicit route.
 
 ## Managed cloud from the CLI
 
+{{#purchase}}
+
 Managed cloud access from the CLI requires one of these plans:
-{{PLANS.developer_surfaces}}. Local mode and BYOK work on any account, including
-one with no subscription at all. The pricing page lists it once the CLI or the
-VS Code extension is released.
+{{PLANS.developer_surfaces}}. Local mode and BYOK work on any account, whatever
+its plan.
+
+The pricing page lists it once the CLI or the VS Code extension is released.
+
+{{/purchase}}
 
 ## When something is wrong
 

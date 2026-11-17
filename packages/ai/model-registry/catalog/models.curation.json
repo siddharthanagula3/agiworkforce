@@ -3,6 +3,12 @@
   "lastUpdated": "2026-11-16",
   "verificationLog": [
     {
+      "date": "2026-11-16",
+      "verifiedBy": "official-anthropic-vision-and-pdf-guides-and-openai-images-vision-and-pdf-files-guides",
+      "status": "ADDITION",
+      "notes": "Added imageInput.maxInputTokensPerImage and documentInput.maxInputTokensPerPageImage, the most input tokens one image or one PDF page image can bill, so the Free allowance reserves what a picture or a PDF can cost instead of counting its encoded bytes as tokens. claude-haiku-5-5 takes 4784: platform.claude.com/docs/en/build-with-claude/vision caps an image at 4,784 visual tokens on Claude 4.7 and later, and the PDF support guide bills each page as its extracted text plus an image under the same calculation, so the page image bound falls back to the image bound. gpt-6-luna takes 73800 per image and 15115 per page image: developers.openai.com/api/docs/guides/images-vision rejects an image over 30,000 patches and lists multipliers up to 2.46 (gpt-4.1-nano), and gpt-6-luna is not in its table, so 30,000 x 2.46 bounds any detail; the PDF files guide says page images use detail auto, which is high on GPT-5.6 and later, and the largest high budget the vision guide lists is 6,144 patches, so 6,144 x 2.46 rounded up bounds a page image. Both figures for gpt-6-luna are inferred from the guides' largest listed values because the model is not listed; the family multiplier of 1.2 would give 36000 and 7373. No live provider call or token count was made."
+    },
+    {
       "date": "2026-10-25",
       "verifiedBy": "bundled-claude-api-reference-and-platform-extended-thinking-page",
       "status": "CORRECTION",
@@ -1267,7 +1273,11 @@
         }
       },
       "imageInput": {
-        "detailValues": ["low", "high", "original", "auto"]
+        "detailValues": ["low", "high", "original", "auto"],
+        "maxInputTokensPerImage": 73800
+      },
+      "documentInput": {
+        "maxInputTokensPerPageImage": 15115
       },
       "endpoints": ["v1/chat/completions", "v1/responses", "v1/batch"],
       "inputModalities": ["text", "image", "pdf"],
@@ -1564,6 +1574,9 @@
       "bestFor": ["Low Latency", "High Volume", "Tool Use"],
       "description": "Fastest replies for light, high-volume tasks.",
       "inputModalities": ["text", "image", "pdf"],
+      "imageInput": {
+        "maxInputTokensPerImage": 4784
+      },
       "documentInput": {
         "maxPagesPerRequest": 600
       },

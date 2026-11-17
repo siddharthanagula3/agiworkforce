@@ -5,6 +5,7 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { openHelpArticle, type MobileHelpArticleId } from '@/src/features/support/HelpArticleLink';
 import { useThemeColors } from '@/src/ui/theme';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { radii, typeScale } from '@/src/ui/theme/tokens';
 import { CAROUSEL_GAP, CAROUSEL_GUTTER, PrivacyCenterSection } from './PrivacyCenterSection';
 import { openOrAlert } from './privacyCenterLinks';
@@ -40,11 +41,15 @@ export const PRIVACY_ARTICLES: readonly PrivacyArticle[] = [
 ];
 
 const CARD_WIDTH_SHARE = 0.56;
+const LARGE_TEXT_CARD_WIDTH_SHARE = 0.85;
 
 export function PrivacyArticleCards() {
   const colors = useThemeColors();
   const { width } = useWindowDimensions();
-  const cardWidth = Math.round(width * CARD_WIDTH_SHARE);
+  const largeText = useLargeTextRows();
+  const cardWidth = Math.round(
+    width * (largeText ? LARGE_TEXT_CARD_WIDTH_SHARE : CARD_WIDTH_SHARE),
+  );
 
   return (
     <PrivacyCenterSection title="Learn and act">
@@ -91,7 +96,8 @@ export function PrivacyArticleCards() {
                 <Icon size={20} color={colors.textSecondary} />
               </View>
               <Text
-                numberOfLines={2}
+                testID={`privacy-article-title-${article.docId}`}
+                numberOfLines={largeText ? undefined : 2}
                 style={{
                   color: colors.textPrimary,
                   fontSize: typeScale.subhead,

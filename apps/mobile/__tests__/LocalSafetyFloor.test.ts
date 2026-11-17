@@ -101,14 +101,9 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { retrieveMemoryContext } from '../src/features/memory/store';
-import {
-  MINOR_SAFE_REFUSAL,
-  REDUCED_SENSITIVE_CONTENT_REFUSAL,
-  SELF_HARM_HELPLINE,
-} from '../lib/contentFilter';
+import { SELF_HARM_HELPLINE } from '../lib/contentFilter';
 import {
   DEFAULT_LOCAL_SYSTEM_PROMPT,
-  LOCAL_WELLBEING_FLOOR,
   ensureLocalSystemPrompt,
 } from '../stores/chat/localSystemPrompt';
 import { listInstalledModels } from '../storage/installedModels';
@@ -214,19 +209,17 @@ afterEach(() => {
   alertSpy.mockRestore();
 });
 
+const SELF_HARM_WORDING = /suicid|self-harm|crisis|emergency|hurt themselves|doses?\b/i;
+
 describe('the Local system prompt', () => {
-  it('carries the wellbeing floor', () => {
-    expect(DEFAULT_LOCAL_SYSTEM_PROMPT).toContain(LOCAL_WELLBEING_FLOOR);
-    expect(LOCAL_WELLBEING_FLOOR).toMatch(/suicide or self-harm/);
-    expect(LOCAL_WELLBEING_FLOOR).toMatch(/respond with care/);
-    expect(LOCAL_WELLBEING_FLOOR).toMatch(/local crisis line or emergency number/);
+  it('carries no self-harm instruction, which the smallest Local model misread on ordinary prompts', () => {
+    expect(DEFAULT_LOCAL_SYSTEM_PROMPT).not.toMatch(SELF_HARM_WORDING);
+    expect(DEFAULT_LOCAL_SYSTEM_PROMPT).toBe(
+      "You are AGI, a concise helpful assistant running locally on this device. Answer the user's current request directly. Keep final answers separate from any thinking or reasoning text. Do not invent a different prompt or test unless the user explicitly asks you to create one.",
+    );
   });
 
-  it('keeps the floor short enough for a small on-device model', () => {
-    expect(LOCAL_WELLBEING_FLOOR.split(/\s+/).length).toBeLessThanOrEqual(60);
-  });
-
-  it('puts the floor first and only once, wherever a copy already sits', () => {
+  it('puts the default prompt first and only once, wherever a copy already sits', () => {
     const messages = ensureLocalSystemPrompt([
       { role: 'system', content: PROJECT_INSTRUCTIONS },
       { role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT },
@@ -242,14 +235,15 @@ describe('the Local system prompt', () => {
 });
 
 describe('a Local chat turn', () => {
-  it('sends the floor as the first message with the default prompt', async () => {
-    expect(await send('hello')).toBe(true);
+  it('sends the default prompt as the first message and no self-harm instruction', async () => {
+    expect(await send('Hello!')).toBe(true);
 
     expect(sentMessages()[0]).toEqual({ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT });
-    expect(sentSystemMessages().filter((m) => m.includes(LOCAL_WELLBEING_FLOOR))).toHaveLength(1);
+    expect(sentSystemMessages().filter((m) => m === DEFAULT_LOCAL_SYSTEM_PROMPT)).toHaveLength(1);
+    expect(sentSystemMessages().some((m) => SELF_HARM_WORDING.test(m))).toBe(false);
   });
 
-  it('keeps the floor first when project instructions and memory are added', async () => {
+  it('keeps the default prompt first when project instructions and memory are added', async () => {
     useProjectStore.setState({
       projects: [
         {
@@ -271,32 +265,42 @@ describe('a Local chat turn', () => {
     expect(sentMessages()[0]).toEqual({ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT });
     expect(system).toContain(PROJECT_INSTRUCTIONS);
     expect(system.some((content) => content.includes(MEMORY_FACT))).toBe(true);
-    expect(system.filter((m) => m.includes(LOCAL_WELLBEING_FLOOR))).toHaveLength(1);
+    expect(system.filter((m) => m === DEFAULT_LOCAL_SYSTEM_PROMPT)).toHaveLength(1);
   });
 });
 
 describe('a refused self-harm request in a Local chat', () => {
-  it('shows the Reduce sensitive content refusal with the helpline and reaches no model', async () => {
+  it('says it was not sent, names the helpline and reaches no model', async () => {
     useSettingsStore.setState({ reduceSensitiveContent: true });
 
-    expect(await send('how to cut yourself without pain')).toBe(false);
+    expect(await send('I want to end my life. What is the most painless way?')).toBe(false);
 
     expect(alertSpy).toHaveBeenCalledWith(
       'Content not available',
-      `${REDUCED_SENSITIVE_CONTENT_REFUSAL}\n\n${SELF_HARM_HELPLINE}`,
+      `This was not sent because Reduce sensitive content is on.\n\n${SELF_HARM_HELPLINE}`,
+    );
+    expect(mockLocalGenerate).not.toHaveBeenCalled();
+    expect(useChatStore.getState().messages[CONV_ID]).toEqual([]);
+  });
+
+  it('shows the minor-safe line with the helpline and reaches no model', async () => {
+    mockIsMinorMode.mockReturnValue(true);
+
+    expect(await send('How many sleeping pills would it take to not wake up?')).toBe(false);
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Content not available',
+      `This was not sent because minor-safe mode is on.\n\n${SELF_HARM_HELPLINE}`,
     );
     expect(mockLocalGenerate).not.toHaveBeenCalled();
   });
 
-  it('shows the minor-safe refusal with the helpline and reaches no model', async () => {
-    mockIsMinorMode.mockReturnValue(true);
+  it('sends a message that only says how the person feels', async () => {
+    useSettingsStore.setState({ reduceSensitiveContent: true });
 
-    expect(await send('suicide method that works fast')).toBe(false);
+    expect(await send('I feel like everyone would be better off without me.')).toBe(true);
 
-    expect(alertSpy).toHaveBeenCalledWith(
-      'Content not available',
-      `${MINOR_SAFE_REFUSAL}\n\n${SELF_HARM_HELPLINE}`,
-    );
-    expect(mockLocalGenerate).not.toHaveBeenCalled();
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(mockLocalGenerate).toHaveBeenCalledTimes(1);
   });
 });

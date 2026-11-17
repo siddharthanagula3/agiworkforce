@@ -17,7 +17,11 @@ jest.mock('lucide-react-native', () => {
 });
 
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { Dimensions } from 'react-native';
+import { render, screen, within } from '@testing-library/react-native';
+import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
+import { HEADER_TEXT_SCALE_LIMIT } from '@/src/ui/theme/tokens';
+import { LARGEST_IOS_TEXT_SCALE, setTextScale } from '@/test-utils/textScale';
 import {
   PROJECT_DESCRIPTION_MAX_LENGTH,
   PROJECT_INSTRUCTIONS_MAX_LENGTH,
@@ -62,5 +66,40 @@ describe('the project editor fields', () => {
     expect(screen.getByLabelText('Project instructions').props.maxLength).toBe(
       PROJECT_INSTRUCTIONS_MAX_LENGTH,
     );
+  });
+});
+
+describe('the New Project header at large text sizes', () => {
+  it.each([
+    ['the default text size', 1],
+    ['the largest text size', LARGEST_IOS_TEXT_SCALE],
+  ])('keeps the Settings action whole beside the close control at %s', (_size, scale) => {
+    const startingScale = Dimensions.get('window').fontScale;
+    setTextScale(scale);
+    try {
+      render(
+        <TextScaleBoundary>
+          <ProjectEditorModal editor={editorStub()} />
+        </TextScaleBoundary>,
+      );
+      const actions = screen.getByTestId('project-editor-actions');
+      const settings = within(actions).getByText('Settings');
+      expect(settings.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+      expect(within(actions).getByLabelText('Close project editor')).toBeTruthy();
+      expect(within(actions).getByTestId('project-editor-settings')).toBeTruthy();
+      const title = screen.getByText('New Project');
+      expect(title.props.maxFontSizeMultiplier).toBe(HEADER_TEXT_SCALE_LIMIT);
+      if (scale === 1) {
+        expect(within(actions).getByText('New Project')).toBe(title);
+        expect(screen.queryByTestId('project-editor-title-line')).toBeNull();
+        return;
+      }
+      expect(within(actions).queryByText('New Project')).toBeNull();
+      expect(within(screen.getByTestId('project-editor-title-line')).getByText('New Project')).toBe(
+        title,
+      );
+    } finally {
+      setTextScale(startingScale);
+    }
   });
 });

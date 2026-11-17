@@ -12,7 +12,8 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { HEADER_TEXT_SCALE_LIMIT } from '@/src/features/chat/components/WorkModeSwitch';
 import { useThemeColors } from '@/src/ui/theme';
-import { typeScale } from '@/src/ui/theme/tokens';
+import { spacing, typeScale } from '@/src/ui/theme/tokens';
+import { useLargeTextRows } from '@/src/shared/hooks/useLargeTextRows';
 import { PageSheetSafeArea } from '@/src/features/chat/components/ModalSafeArea';
 import { NewProjectSettingsSheet } from '@/src/features/projects/components/NewProjectSettingsSheet';
 import type { ProjectEditor } from '@/src/features/projects/useProjectEditor';
@@ -43,6 +44,7 @@ function EditorFooter({ children }: { children: ReactNode }) {
 
 export function ProjectEditorModal({ editor }: { editor: ProjectEditor }) {
   const colors = useThemeColors();
+  const titleOnOwnLine = useLargeTextRows();
   const {
     visible,
     editingProject,
@@ -63,6 +65,17 @@ export function ProjectEditorModal({ editor }: { editor: ProjectEditor }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const showSettings = isCloud && !editingProject;
 
+  const title = (
+    <Text
+      variant="subheading"
+      maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+      accessibilityRole="header"
+      style={{ color: colors.textPrimary, textAlign: 'center' }}
+    >
+      {editingProject ? 'Edit Project' : 'New Project'}
+    </Text>
+  );
+
   useEffect(() => {
     if (!visible) setSettingsOpen(false);
   }, [visible]);
@@ -81,55 +94,53 @@ export function ProjectEditorModal({ editor }: { editor: ProjectEditor }) {
           className="flex-1"
           style={{ backgroundColor: colors.background }}
         >
-          <View
-            className="flex-row items-center px-4 min-h-14 border-b"
-            style={{ borderBottomColor: colors.border }}
-          >
-            <View style={{ flex: 1, alignItems: 'flex-start' }}>
-              <Pressable
-                hitSlop={6}
-                onPress={requestClose}
-                className="w-8 h-8 items-center justify-center rounded-lg"
-                style={({ pressed }) => ({
-                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-                })}
-                accessibilityRole="button"
-                accessibilityLabel="Close project editor"
-              >
-                <X size={20} color={colors.textMuted} />
-              </Pressable>
-            </View>
-            <Text
-              variant="subheading"
-              maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
-              style={{ color: colors.textPrimary }}
-            >
-              {editingProject ? 'Edit Project' : 'New Project'}
-            </Text>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              {showSettings ? (
+          <View className="px-4 border-b" style={{ borderBottomColor: colors.border }}>
+            <View testID="project-editor-actions" className="flex-row items-center min-h-14">
+              <View style={{ flex: 1, alignItems: 'flex-start' }}>
                 <Pressable
-                  testID="project-editor-settings"
                   hitSlop={6}
-                  onPress={() => setSettingsOpen(true)}
-                  style={{
-                    minWidth: 44,
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    alignItems: 'flex-end',
-                  }}
+                  onPress={requestClose}
+                  className="w-8 h-8 items-center justify-center rounded-lg"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                  })}
                   accessibilityRole="button"
-                  accessibilityLabel="Project settings"
+                  accessibilityLabel="Close project editor"
                 >
-                  <Text
-                    maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
-                    style={{ color: colors.textPrimary, fontSize: typeScale.callout }}
-                  >
-                    Settings
-                  </Text>
+                  <X size={20} color={colors.textMuted} />
                 </Pressable>
-              ) : null}
+              </View>
+              {titleOnOwnLine ? null : title}
+              <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                {showSettings ? (
+                  <Pressable
+                    testID="project-editor-settings"
+                    hitSlop={6}
+                    onPress={() => setSettingsOpen(true)}
+                    style={{
+                      minWidth: 44,
+                      minHeight: 44,
+                      justifyContent: 'center',
+                      alignItems: 'flex-end',
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Project settings"
+                  >
+                    <Text
+                      maxFontSizeMultiplier={HEADER_TEXT_SCALE_LIMIT}
+                      style={{ color: colors.textPrimary, fontSize: typeScale.callout }}
+                    >
+                      Settings
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
+            {titleOnOwnLine ? (
+              <View testID="project-editor-title-line" style={{ paddingBottom: spacing.md }}>
+                {title}
+              </View>
+            ) : null}
           </View>
 
           <ScrollView

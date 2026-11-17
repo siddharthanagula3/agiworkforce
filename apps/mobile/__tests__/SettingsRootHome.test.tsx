@@ -1,10 +1,23 @@
 import React from 'react';
-import { fireEvent, render, within } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { AgeGateRecord } from '../src/features/auth/services/ageGate';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockOpenBrowserAsync = jest.fn();
+let mockApiUrl = 'https://agiworkforce.com';
 let mockAgeRecord: AgeGateRecord | null = null;
+
+jest.mock('expo-web-browser', () => ({
+  openBrowserAsync: (...args: unknown[]) => mockOpenBrowserAsync(...args),
+}));
+
+jest.mock('@/lib/constants', () =>
+  Object.defineProperty({ ...jest.requireActual('@/lib/constants') }, 'API_URL', {
+    enumerable: true,
+    get: () => mockApiUrl,
+  }),
+);
 
 jest.mock('@clerk/expo', () => ({
   useUser: () => ({ user: null }),
@@ -80,7 +93,8 @@ jest.mock('../src/features/auth/services/ageGate', () => ({
   readAgeGateRecord: () => mockAgeRecord,
 }));
 
-import { AccessibilityInfo, Dimensions, Platform } from 'react-native';
+import { AccessibilityInfo, Alert, Dimensions, Platform } from 'react-native';
+import { EMBEDDED_PAGE_PARAM, EMBEDDED_PAGE_PARAM_VALUE } from '@agiworkforce/types';
 import SettingsTabScreen from '../src/features/settings';
 import { TextScaleBoundary } from '../src/shared/components/TextScaleBoundary';
 import { ROW_LABEL_TEXT_SCALE_LIMIT } from '../src/ui/theme/tokens';
@@ -532,5 +546,46 @@ describe('Settings home search', () => {
 
     expect(screen.getByLabelText('Subscription. Account')).toBeTruthy();
     expect(screen.queryByText(/\$|price|upgrade|buy|purchase/i)).toBeNull();
+  });
+});
+
+describe('Settings home Help Center', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockAgeRecord = null;
+    mockOpenBrowserAsync.mockResolvedValue({ type: 'dismiss' });
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
+  });
+
+  afterEach(() => {
+    mockApiUrl = 'https://agiworkforce.com';
+  });
+
+  it('opens help on the web origin the app is configured for, marked as the phone app', async () => {
+    mockApiUrl = 'https://staging.agiworkforce.com';
+    const screen = render(<SettingsTabScreen />);
+
+    fireEvent.press(screen.getByText('Help Center'));
+
+    await waitFor(() => expect(mockOpenBrowserAsync).toHaveBeenCalledTimes(1));
+    const opened = new URL(String(mockOpenBrowserAsync.mock.calls[0]?.[0]));
+    expect(opened.origin).toBe('https://staging.agiworkforce.com');
+    expect(opened.pathname).toBe('/help');
+    expect(opened.searchParams.getAll(EMBEDDED_PAGE_PARAM)).toEqual([EMBEDDED_PAGE_PARAM_VALUE]);
+  });
+
+  it('says the link could not open when the origin is not one the app may open', async () => {
+    mockApiUrl = 'http://localhost:3000';
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const screen = render(<SettingsTabScreen />);
+
+    fireEvent.press(screen.getByText('Help Center'));
+
+    await waitFor(() =>
+      expect(alert).toHaveBeenCalledWith('Error', 'Could not open the link. Please try again.'),
+    );
+    expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
+    alert.mockRestore();
   });
 });

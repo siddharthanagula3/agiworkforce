@@ -80,7 +80,9 @@ export function interpolateFacts(text: string, source: string): string {
   });
 }
 
-function buildMarkdownChunks(): CorpusChunk[] {
+export type SupportCorpusView = 'web' | 'phone';
+
+function buildMarkdownChunks(view: SupportCorpusView): CorpusChunk[] {
   const parsed = corpusArtifactSchema.safeParse(rawCorpus);
   if (!parsed.success) {
     throw new CorpusUnavailableError(
@@ -98,7 +100,10 @@ function buildMarkdownChunks(): CorpusChunk[] {
         `document "${document.id}" declares a non-public path "${document.path}"`,
       );
     }
+    if (view === 'phone' && !document.onPhone) continue;
     for (const chunk of document.chunks) {
+      const text = view === 'phone' && chunk.phoneText !== undefined ? chunk.phoneText : chunk.text;
+      if (text === null) continue;
       chunks.push({
         id: chunk.id,
         docId: document.id,
@@ -108,7 +113,7 @@ function buildMarkdownChunks(): CorpusChunk[] {
         tags: Object.freeze([...document.tags]),
         heading: chunk.heading,
         headingPath: interpolateFacts(chunk.headingPath, document.id),
-        text: interpolateFacts(chunk.text, document.id),
+        text: interpolateFacts(text, document.id),
         updated: document.updated,
         ...(document.description ? { description: document.description } : {}),
         origin: 'markdown',
@@ -131,11 +136,14 @@ export interface UnavailableCorpus {
 
 export type CorpusLoadResult = SupportCorpus | UnavailableCorpus;
 
-let cached: CorpusLoadResult | null = null;
+const cached = new Map<SupportCorpusView, CorpusLoadResult>();
 
-function load(): CorpusLoadResult {
+function load(view: SupportCorpusView): CorpusLoadResult {
   try {
-    const merged = [...buildMarkdownChunks(), ...buildStaticDataChunks()];
+    const merged =
+      view === 'phone'
+        ? buildMarkdownChunks(view)
+        : [...buildMarkdownChunks(view), ...buildStaticDataChunks()];
 
     const byId = new Map<string, CorpusChunk>();
     for (const chunk of merged) {
@@ -158,7 +166,10 @@ function load(): CorpusLoadResult {
   }
 }
 
-export function getSupportCorpus(): CorpusLoadResult {
-  cached ??= load();
-  return cached;
+export function getSupportCorpus(view: SupportCorpusView = 'web'): CorpusLoadResult {
+  const existing = cached.get(view);
+  if (existing) return existing;
+  const loaded = load(view);
+  cached.set(view, loaded);
+  return loaded;
 }

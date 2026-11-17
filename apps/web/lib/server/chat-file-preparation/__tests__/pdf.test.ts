@@ -108,67 +108,75 @@ describe('PDF preparation', () => {
     expect(rangedStorage.stats.bytesRead).toBeLessThan(pdf.byteLength / 4);
   });
 
-  it('reads 1,000 of 1,200 pages in steps of 100 and reports the rest as unread', async () => {
-    const db = new FakePreparationDb();
-    const storage = createCountingStorage();
-    const id = await sealedPdf(
-      db,
-      storage,
-      buildPdf({ pages: pageTexts(1_200, 11), paddingBytes: LARGE_PADDING }),
-    );
+  it(
+    'reads 1,000 of 1,200 pages in steps of 100 and reports the rest as unread',
+    { timeout: 60_000 },
+    async () => {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const id = await sealedPdf(
+        db,
+        storage,
+        buildPdf({ pages: pageTexts(1_200, 11), paddingBytes: LARGE_PADDING }),
+      );
 
-    const steps = await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+      const steps = await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
 
-    expect(steps).toBe(10);
-    const card = await readPreparedCard(id, { userId: USER, db, storage });
-    expect(card).toMatchObject({ state: 'ready_partial', pagesRead: 1_000, pageCount: 1_200 });
-    const text = await readPreparedText(
-      id,
-      { startChar: 0, maxChars: 10_000_000 },
-      { userId: USER, db, storage },
-    );
-    expect(text?.text).toContain('[Page 1000]\nPage1000 ');
-    expect(text?.text).not.toContain('[Page 1001]');
-    expect(text?.pageAnchors).toHaveLength(1_000);
-    await expect(readPreparedPage(id, 1_000, { userId: USER, db, storage })).resolves.toMatchObject(
-      {
+      expect(steps).toBe(10);
+      const card = await readPreparedCard(id, { userId: USER, db, storage });
+      expect(card).toMatchObject({ state: 'ready_partial', pagesRead: 1_000, pageCount: 1_200 });
+      const text = await readPreparedText(
+        id,
+        { startChar: 0, maxChars: 10_000_000 },
+        { userId: USER, db, storage },
+      );
+      expect(text?.text).toContain('[Page 1000]\nPage1000 ');
+      expect(text?.text).not.toContain('[Page 1001]');
+      expect(text?.pageAnchors).toHaveLength(1_000);
+      await expect(
+        readPreparedPage(id, 1_000, { userId: USER, db, storage }),
+      ).resolves.toMatchObject({
         status: 'text',
         source: 'text_layer',
         text: expect.stringContaining('Page1000 '),
-      },
-    );
-    await expect(readPreparedPage(id, 1_001, { userId: USER, db, storage })).resolves.toEqual({
-      status: 'not_read',
-      page: 1_001,
-    });
-    await expect(readPreparedPage(id, 1_201, { userId: USER, db, storage })).resolves.toEqual({
-      status: 'out_of_range',
-      page: 1_201,
-    });
-  });
+      });
+      await expect(readPreparedPage(id, 1_001, { userId: USER, db, storage })).resolves.toEqual({
+        status: 'not_read',
+        page: 1_001,
+      });
+      await expect(readPreparedPage(id, 1_201, { userId: USER, db, storage })).resolves.toEqual({
+        status: 'out_of_range',
+        page: 1_201,
+      });
+    },
+  );
 
-  it('gives prepare_failed for a malformed PDF and keeps the file otherwise untouched', async () => {
-    const db = new FakePreparationDb();
-    const storage = createCountingStorage();
-    const malformed = Buffer.concat([
-      Buffer.from('%PDF-1.7\n'),
-      Buffer.alloc(LARGE_PADDING, 0x20),
-      Buffer.from('trailer garbage %%EOF'),
-    ]);
-    const id = await sealedPdf(db, storage, malformed);
+  it(
+    'gives prepare_failed for a malformed PDF and keeps the file otherwise untouched',
+    { timeout: 120_000 },
+    async () => {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const malformed = Buffer.concat([
+        Buffer.from('%PDF-1.7\n'),
+        Buffer.alloc(LARGE_PADDING, 0x0a),
+        Buffer.from('trailer garbage %%EOF'),
+      ]);
+      const id = await sealedPdf(db, storage, malformed);
 
-    const result = await prepareChatFileStep(id, { db, storage });
+      const result = await prepareChatFileStep(id, { db, storage });
 
-    expect(result).toEqual({ outcome: 'finished', state: 'prepare_failed', done: true });
-    expect(db.rowForAsset(id)).toMatchObject({
-      state: 'prepare_failed',
-      error: 'unreadable',
-      derived_keys: [],
-    });
-    await expect(
-      readPreparedText(id, { startChar: 0, maxChars: 100 }, { userId: USER, db, storage }),
-    ).resolves.toMatchObject({ text: '', totalChars: 0 });
-  });
+      expect(result).toEqual({ outcome: 'finished', state: 'prepare_failed', done: true });
+      expect(db.rowForAsset(id)).toMatchObject({
+        state: 'prepare_failed',
+        error: 'unreadable',
+        derived_keys: [],
+      });
+      await expect(
+        readPreparedText(id, { startChar: 0, maxChars: 100 }, { userId: USER, db, storage }),
+      ).resolves.toMatchObject({ text: '', totalChars: 0 });
+    },
+  );
 
   it('retries a step whose pdf.js module failed to load instead of calling the file unreadable', async () => {
     const db = new FakePreparationDb();

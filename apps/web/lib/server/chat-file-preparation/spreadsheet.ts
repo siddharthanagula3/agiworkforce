@@ -1,5 +1,10 @@
 import 'server-only';
 
+import { styleIndex } from '@agiworkforce/unified-chat/workbook-cell-formats';
+import {
+  displayCellNumber,
+  type NumberFormat,
+} from '@agiworkforce/unified-chat/workbook-number-formats';
 import type { ChatLargeFilePolicy } from '@/lib/chat-attachment-policy';
 import {
   declaredMemberSize,
@@ -7,10 +12,13 @@ import {
   readArchiveMember,
 } from '@/lib/security/archive-bounds';
 import {
+  cellStyleFormats,
   decodeXmlEntities,
   officeArchiveEntryText,
   openOfficeArchive,
   OfficeDocumentUnreadableError,
+  xmlElements,
+  xmlStartTags,
   type BoundedZip,
 } from '@/lib/server/office-document-text';
 import {
@@ -51,67 +59,21 @@ interface SheetRef {
   path: string;
 }
 
-interface XmlElement {
-  attributes: string;
-  body: string;
+interface WorkbookLayout {
+  refs: SheetRef[];
+  stylesPath: string;
+  date1904: boolean;
 }
 
-function endsTagName(code: number): boolean {
-  return (
-    code === 0x3e ||
-    code === 0x2f ||
-    code === 0x20 ||
-    code === 0x09 ||
-    code === 0x0a ||
-    code === 0x0d
-  );
+interface CellStyles {
+  formats: readonly (NumberFormat | null)[];
+  date1904: boolean;
 }
 
-/**
- * Start tags named `tag`, by index scans rather than a backtracking pattern:
- * an opener with no `>` after it ends the scan, since none after it has one.
- */
-function* xmlStartTags(xml: string, tag: string): Generator<{ attributes: string; end: number }> {
-  const open = `<${tag}`;
-  let position = 0;
-  for (;;) {
-    const start = xml.indexOf(open, position);
-    if (start === -1) return;
-    const nameEnd = start + open.length;
-    if (!endsTagName(xml.charCodeAt(nameEnd))) {
-      position = nameEnd;
-      continue;
-    }
-    const tagEnd = xml.indexOf('>', nameEnd);
-    if (tagEnd === -1) return;
-    yield { attributes: xml.slice(nameEnd, tagEnd), end: tagEnd + 1 };
-    position = tagEnd + 1;
-  }
-}
-
-/**
- * Elements named `tag` with their bodies; a self-closing one has an empty
- * body. An element with no closing tag ends the scan, since no later one can
- * close either, so the work stays linear in the XML whatever it holds.
- */
-function* xmlElements(xml: string, tag: string): Generator<XmlElement> {
-  const close = `</${tag}>`;
-  const starts = xmlStartTags(xml, tag);
-  let resumeAt = 0;
-  for (;;) {
-    const next = starts.next();
-    if (next.done) return;
-    const { attributes, end } = next.value;
-    if (end <= resumeAt) continue;
-    if (attributes.endsWith('/')) {
-      yield { attributes: attributes.slice(0, -1), body: '' };
-      continue;
-    }
-    const closeAt = xml.indexOf(close, end);
-    if (closeAt === -1) return;
-    yield { attributes, body: xml.slice(end, closeAt) };
-    resumeAt = closeAt + close.length;
-  }
+/** `typed` is what the column type is inferred from: the stored number unless a date format showed it. */
+interface SheetCell {
+  text: string;
+  typed: string;
 }
 
 function textRuns(xml: string): string {
@@ -135,16 +97,24 @@ function profileName(value: string): string {
   return boundedStorableText(value, MAX_COLUMN_NAME_BYTES);
 }
 
-async function sheetRefs(bounded: BoundedZip, fileName: string): Promise<SheetRef[]> {
+async function workbookLayout(bounded: BoundedZip, fileName: string): Promise<WorkbookLayout> {
   const workbook = await officeArchiveEntryText(bounded, 'xl/workbook.xml');
   if (!workbook) throw new OfficeDocumentUnreadableError(fileName);
   const relationships = (await officeArchiveEntryText(bounded, 'xl/_rels/workbook.xml.rels')) ?? '';
   const targets = new Map<string, string>();
+  let stylesTarget: string | undefined;
   for (const { attributes } of xmlStartTags(relationships, 'Relationship')) {
     const id = /Id="([^"]+)"/.exec(attributes)?.[1];
-    const target = /Target="([^"]+)"/.exec(attributes)?.[1];
-    if (id && target) targets.set(id, target.replace(/^\/?xl\//, ''));
+    const target = /Target="([^"]+)"/.exec(attributes)?.[1]?.replace(/^\/?xl\//, '');
+    if (id && target) targets.set(id, target);
+    if (target && /Type="([^"]*)"/.exec(attributes)?.[1]?.endsWith('/styles')) {
+      stylesTarget ??= target;
+    }
   }
+  const properties = xmlStartTags(workbook, 'workbookPr').next();
+  const date1904 = properties.done
+    ? undefined
+    : /date1904="([^"]*)"/.exec(properties.value.attributes)?.[1]?.trim();
   const refs: SheetRef[] = [];
   let index = 0;
   for (const { attributes } of xmlStartTags(workbook, 'sheet')) {
@@ -156,10 +126,14 @@ async function sheetRefs(bounded: BoundedZip, fileName: string): Promise<SheetRe
     const target = relationshipId ? targets.get(relationshipId) : undefined;
     refs.push({ name, path: `xl/${target ?? `worksheets/sheet${index}.xml`}` });
   }
-  return refs;
+  return {
+    refs,
+    stylesPath: `xl/${stylesTarget ?? 'styles.xml'}`,
+    date1904: date1904 === '1' || date1904 === 'true',
+  };
 }
 
-async function sheetXmlWithinBudget(
+async function partXmlWithinBudget(
   bounded: BoundedZip,
   path: string,
 ): Promise<string | null | 'over'> {
@@ -176,15 +150,38 @@ async function sheetXmlWithinBudget(
   }
 }
 
-function cellValue(attributes: string, body: string, sharedStrings: readonly string[]): string {
+async function cellStyles(bounded: BoundedZip, layout: WorkbookLayout): Promise<CellStyles> {
+  try {
+    const xml = await partXmlWithinBudget(bounded, layout.stylesPath);
+    return {
+      formats: typeof xml === 'string' ? cellStyleFormats(xml) : [],
+      date1904: layout.date1904,
+    };
+  } catch {
+    return { formats: [], date1904: layout.date1904 };
+  }
+}
+
+function cellValue(
+  attributes: string,
+  body: string,
+  sharedStrings: readonly string[],
+  styles: CellStyles,
+): SheetCell {
   const type = /t="([^"]+)"/.exec(attributes)?.[1] ?? 'n';
   const valueStart = body.indexOf('<v>');
   const valueEnd = valueStart === -1 ? -1 : body.indexOf('</v>', valueStart + 3);
   const raw = valueEnd === -1 ? '' : body.slice(valueStart + 3, valueEnd);
-  if (type === 's') return sharedStrings[Number(raw)] ?? '';
-  if (type === 'inlineStr') return textRuns(body);
-  if (type === 'b') return raw === '1' ? 'true' : raw === '0' ? 'false' : raw;
-  return decodeXmlEntities(raw);
+  let text: string;
+  if (type === 's') text = sharedStrings[Number(raw)] ?? '';
+  else if (type === 'inlineStr') text = textRuns(body);
+  else if (type === 'b') text = raw === '1' ? 'true' : raw === '0' ? 'false' : raw;
+  else text = decodeXmlEntities(raw);
+  if (type !== 'n' || !text) return { text, typed: text };
+  const style = styleIndex(/\ss="([^"]*)"/.exec(attributes)?.[1] ?? '0');
+  const format = styles.formats[style] ?? null;
+  const shown = displayCellNumber(text, format, styles.date1904);
+  return { text: shown, typed: format?.kind === 'date' && shown !== text ? shown : text };
 }
 
 function sheetDimension(xml: string): string | undefined {
@@ -198,17 +195,18 @@ function profileSheet(
   ref: SheetRef,
   xml: string,
   sharedStrings: readonly string[],
+  styles: CellStyles,
   sampleRows: number,
 ): { profile: SheetProfile; text: string } {
-  const rows: Map<string, string>[] = [];
+  const rows: Map<string, SheetCell>[] = [];
   let rowCount = 0;
   for (const row of xmlElements(xml, 'row')) {
-    const cells = new Map<string, string>();
+    const cells = new Map<string, SheetCell>();
     for (const cell of xmlElements(row.body, 'c')) {
       const reference = /r="([A-Z]+)\d+"/.exec(cell.attributes)?.[1];
       if (!reference) continue;
-      const value = cellValue(cell.attributes, cell.body, sharedStrings);
-      if (value) cells.set(reference, value);
+      const value = cellValue(cell.attributes, cell.body, sharedStrings, styles);
+      if (value.text) cells.set(reference, value);
     }
     if (cells.size === 0) continue;
     rowCount += 1;
@@ -221,16 +219,18 @@ function profileSheet(
     .slice(0, MAX_PROFILED_COLUMNS);
   const counts = new Map<string, ColumnCounts>(columns.map((column) => [column, emptyCounts()]));
   for (const row of dataRows.slice(0, TYPE_INFERENCE_ROWS)) {
-    for (const column of columns) counts.get(column)![valueType(row.get(column) ?? '')] += 1;
+    for (const column of columns) {
+      counts.get(column)![valueType(row.get(column)?.typed ?? '')] += 1;
+    }
   }
   const profileColumns = columns.map((column) => ({
-    name: profileName(header?.get(column) ?? column),
+    name: profileName(header?.get(column)?.text ?? column),
     type: columnType(counts.get(column) ?? emptyCounts()),
   }));
   const dimension = sheetDimension(xml);
   const dataRowCount = Math.max(rowCount - 1, 0);
-  const csv = (row: Map<string, string>) =>
-    columns.map((column) => csvField(row.get(column) ?? '')).join(',');
+  const csv = (row: Map<string, SheetCell>) =>
+    columns.map((column) => csvField(row.get(column)?.text ?? '')).join(',');
   const shown = dataRows.slice(0, sampleRows);
   const lines = [
     `## Sheet: ${ref.name}${dimension ? ` (${dimension})` : ''}`,
@@ -283,7 +283,8 @@ function boundedProfiles(sheets: readonly SheetProfile[]): SheetProfile[] {
 /**
  * Sheets in workbook order while their inflated XML fits the archive budget;
  * the rest are listed by name. Formulas are not evaluated (cached values are
- * read), and external links are never opened.
+ * read), and external links are never opened. The styles part shares that
+ * budget, so it is read only once the first sheet is in hand and cannot crowd it out.
  */
 export async function prepareWorkbook(input: {
   data: Uint8Array;
@@ -293,7 +294,8 @@ export async function prepareWorkbook(input: {
   const data = Buffer.from(input.data.buffer, input.data.byteOffset, input.data.byteLength);
   try {
     const bounded = await openOfficeArchive(data, input.fileName, 'per-member');
-    const allRefs = await sheetRefs(bounded, input.fileName);
+    const layout = await workbookLayout(bounded, input.fileName);
+    const allRefs = layout.refs;
     if (allRefs.length === 0) throw new PreparationRefusedError('unreadable');
     const refs = allRefs.slice(0, MAX_LISTED_SHEETS);
     const unlisted = allRefs.length - refs.length;
@@ -301,6 +303,7 @@ export async function prepareWorkbook(input: {
     const sharedStrings = [...xmlElements(sharedStringsXml, 'si')].map((element) =>
       textRuns(element.body),
     );
+    let styles: CellStyles | undefined;
 
     const sheets: SheetProfile[] = [];
     const sections: string[] = [];
@@ -309,17 +312,19 @@ export async function prepareWorkbook(input: {
     let textChars = 0;
     for (const ref of refs) {
       if (textChars >= maxTextChars) overBudget = true;
-      const xml = overBudget ? 'over' : await sheetXmlWithinBudget(bounded, ref.path);
+      const xml = overBudget ? 'over' : await partXmlWithinBudget(bounded, ref.path);
       if (xml === 'over') {
         overBudget = true;
         sheets.push({ name: ref.name, profiled: false });
         continue;
       }
       if (xml === null) continue;
+      styles ??= await cellStyles(bounded, layout);
       const profiled = profileSheet(
         ref,
         xml,
         sharedStrings,
+        styles,
         input.policy.kinds.spreadsheet.sampleRows,
       );
       sheets.push(profiled.profile);

@@ -13,13 +13,20 @@ import mammoth from 'mammoth';
 import PptxGenJS from 'pptxgenjs';
 import { describe, expect, it, vi } from 'vitest';
 
+import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { MAX_CELL_FORMATS } from '@agiworkforce/unified-chat/workbook-cell-formats';
+import { displayCellNumber } from '@agiworkforce/unified-chat/workbook-number-formats';
 import { MAX_DECOMPRESSION_RATIO, declaredMemberSize } from '@/lib/security/archive-bounds';
 
 import {
+  cellStyleFormats,
   extractOfficeDocumentText,
+  extractSpreadsheetTable,
   officeDocumentKind,
   OfficeDocumentUnreadableError,
   OFFICE_DOCUMENT_FAILURE_REASONS,
+  xmlElements,
+  xmlStartTags,
   xmlTextRuns,
 } from './office-document-text';
 
@@ -300,6 +307,336 @@ describe('extractOfficeDocumentText', () => {
         'xlsx',
       ),
     ).rejects.toBeInstanceOf(OfficeDocumentUnreadableError);
+  });
+});
+
+const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+async function styledXlsx(options: {
+  sheetXml: string;
+  stylesXml?: string;
+  stylesTarget?: string;
+  date1904?: boolean;
+  sharedStringsXml?: string;
+  storedBallastBytes?: number;
+}): Promise<Buffer> {
+  const zip = new JSZip();
+  const workbookPr =
+    options.date1904 === undefined
+      ? ''
+      : `<workbookPr date1904="${options.date1904 ? '1' : '0'}"/>`;
+  zip.file(
+    'xl/workbook.xml',
+    `<?xml version="1.0"?><workbook xmlns:r="${RELATIONSHIP_NS}">${workbookPr}<sheets><sheet name="Ledger" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+  );
+  const stylesRelationship = options.stylesTarget
+    ? `<Relationship Id="rId9" Type="${RELATIONSHIP_NS}/styles" Target="${options.stylesTarget}"/>`
+    : '';
+  zip.file(
+    'xl/_rels/workbook.xml.rels',
+    `<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/>${stylesRelationship}</Relationships>`,
+  );
+  if (options.sharedStringsXml) zip.file('xl/sharedStrings.xml', options.sharedStringsXml);
+  if (options.stylesXml !== undefined) {
+    zip.file(`xl/${options.stylesTarget ?? 'styles.xml'}`, options.stylesXml);
+  }
+  zip.file(
+    'xl/worksheets/sheet1.xml',
+    `<?xml version="1.0"?><worksheet><sheetData>${options.sheetXml}</sheetData></worksheet>`,
+  );
+  if (options.storedBallastBytes) {
+    zip.file('xl/media/ballast.bin', Buffer.alloc(options.storedBallastBytes), {
+      compression: 'STORE',
+    });
+  }
+  return zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+function xmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function stylesXml(cellFormats: number[], custom: Record<number, string> = {}): string {
+  const numFmts = Object.entries(custom)
+    .map(([id, code]) => `<numFmt numFmtId="${id}" formatCode="${xmlAttribute(code)}"/>`)
+    .join('');
+  const cellXfs = cellFormats
+    .map((id) => `<xf numFmtId="${id}" applyNumberFormat="1"><alignment/></xf>`)
+    .join('');
+  return `<?xml version="1.0"?><styleSheet>${
+    numFmts ? `<numFmts count="${Object.keys(custom).length}">${numFmts}</numFmts>` : ''
+  }<cellStyleXfs count="2"><xf numFmtId="14"/><xf numFmtId="9"/></cellStyleXfs><cellXfs count="${
+    cellFormats.length
+  }">${cellXfs}</cellXfs><dxfs count="1"><dxf><numFmt numFmtId="14" formatCode="0.00%"/></dxf></dxfs></styleSheet>`;
+}
+
+function numberRow(row: number, cells: { value: string; style?: string }[]): string {
+  return `<row r="${row}">${cells
+    .map(
+      (cell, index) =>
+        `<c r="${String.fromCharCode(65 + index)}${row}"${
+          cell.style === undefined ? '' : ` s="${cell.style}"`
+        }><v>${cell.value}</v></c>`,
+    )
+    .join('')}</row>`;
+}
+
+async function sheetText(data: Buffer, sizing?: 'per-member'): Promise<string> {
+  return extractOfficeDocumentText(data, 'ledger.xlsx', 'xlsx', sizing ? { sizing } : {});
+}
+
+describe('inline workbook number formats', () => {
+  const afternoon = String(45292 + (13 * 3600 + 47 * 60 + 30) / 86400);
+
+  it('gives the model dates, times, percentages and separated numbers as the workbook shows them', async () => {
+    const text = await sheetText(
+      await styledXlsx({
+        sheetXml:
+          numberRow(1, [
+            { value: '45292', style: '1' },
+            { value: afternoon, style: '2' },
+            { value: afternoon, style: '3' },
+            { value: afternoon, style: '4' },
+            { value: '0.285', style: '5' },
+            { value: '0.12345', style: '6' },
+            { value: '1234567.4', style: '7' },
+            { value: '-1234.5', style: '8' },
+            { value: '1.005', style: '9' },
+            { value: '1234.5', style: '10' },
+            { value: '42' },
+            { value: afternoon, style: '11' },
+          ]) + '<row r="2"><c r="A2" s="1"><f>TODAY()</f><v>45293</v></c></row>',
+        stylesXml: stylesXml([0, 14, 22, 20, 21, 9, 10, 3, 4, 2, 164, 165], {
+          164: '"$"#,##0.00',
+          165: 'yyyy-mm-dd hh:mm:ss',
+        }),
+      }),
+    );
+
+    expect(text).toBe(
+      [
+        '## Sheet: Ledger',
+        'Row 1: A: 2024-01-01 | B: 2024-01-01 13:47 | C: 13:47 | D: 13:47:30 | E: 29% | F: 12.35% | G: 1,234,567 | H: -1,234.50 | I: 1.01 | J: $1,234.50 | K: 42 | L: 2024-01-01 13:47:30',
+        'Row 2: A: =TODAY() (2024-01-02)',
+      ].join('\n'),
+    );
+  });
+
+  it('reads serials in the 1904 date system when the workbook says so', async () => {
+    const sheetXml = numberRow(1, [
+      { value: '43830', style: '1' },
+      { value: '0', style: '1' },
+    ]);
+    const styles = stylesXml([0, 14]);
+
+    const in1904 = await sheetText(
+      await styledXlsx({ sheetXml, stylesXml: styles, date1904: true }),
+    );
+    const in1900 = await sheetText(await styledXlsx({ sheetXml, stylesXml: styles }));
+
+    expect(in1904).toContain('Row 1: A: 2024-01-01 | B: 1904-01-01');
+    expect(in1900).toContain('Row 1: A: 2019-12-31 | B: 0');
+  });
+
+  it('keeps the stored value for a format it cannot show faithfully or a style the file does not declare', async () => {
+    const text = await sheetText(
+      await styledXlsx({
+        sheetXml: numberRow(1, [
+          { value: '12345.678', style: '1' },
+          { value: '12345.678', style: '2' },
+          { value: '12345.678', style: '3' },
+          { value: '12345.678', style: '4' },
+          { value: '45292', style: '9' },
+          { value: '45292', style: 'x' },
+        ]),
+        stylesXml: stylesXml([0, 11, 164, 165, 166], {
+          164: '[Red]0.00',
+          165: '0.00;(0.00)',
+          166: '#,##0,',
+        }),
+      }),
+    );
+
+    expect(text).toContain(
+      'Row 1: A: 12345.678 | B: 12345.678 | C: 12345.678 | D: 12345.678 | E: 45292 | F: 45292',
+    );
+  });
+
+  it('finds the styles part through the workbook relationships', async () => {
+    const text = await sheetText(
+      await styledXlsx({
+        sheetXml: numberRow(1, [{ value: '0.25', style: '1' }]),
+        stylesXml: stylesXml([0, 9]),
+        stylesTarget: 'theme/s.xml',
+      }),
+    );
+
+    expect(text).toContain('Row 1: A: 25%');
+  });
+
+  it('gives stored values without failing when the styles part is missing, oversized or broken', async () => {
+    const sheetXml = numberRow(1, [{ value: '45292', style: '1' }]);
+    const padded = `${stylesXml([0, 14])}${' '.repeat(4 * 1024 * 1024)}`;
+    const honestOversized = await styledXlsx({ sheetXml, stylesXml: padded });
+    expect(
+      declaredMemberSize((await JSZip.loadAsync(honestOversized)).file('xl/styles.xml')!),
+    ).toBeGreaterThan(honestOversized.byteLength * MAX_DECOMPRESSION_RATIO);
+    const variants: { data: Buffer; sizing?: 'per-member' }[] = [
+      { data: await styledXlsx({ sheetXml }) },
+      {
+        data: await styledXlsx({
+          sheetXml,
+          stylesXml: '<styleSheet><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/>',
+        }),
+      },
+      {
+        data: await styledXlsx({
+          sheetXml,
+          stylesXml: `<styleSheet><numFmts><numFmt numFmtId="164" formatCode="${'y'.repeat(
+            MAX_FILE_TEXT_CHARS + 1,
+          )}"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>`,
+          storedBallastBytes: 64 * 1024,
+        }),
+      },
+      {
+        data: await styledXlsx({
+          sheetXml,
+          stylesXml: `<styleSheet><cellXfs><xf numFmtId="0"/>${'<xf numFmtId="14"/>'.repeat(
+            MAX_CELL_FORMATS,
+          )}</cellXfs></styleSheet>`,
+          storedBallastBytes: 64 * 1024,
+        }),
+      },
+      {
+        data: await styledXlsx({
+          sheetXml,
+          stylesXml:
+            '<styleSheet><numFmts><numFmt numFmtId="164" formatCode="&#99999999;"/></numFmts><cellXfs><xf numFmtId="0"/><xf numFmtId="164"/></cellXfs></styleSheet>',
+        }),
+      },
+      { data: understateMemberSize(honestOversized, 'xl/styles.xml') },
+      { data: honestOversized, sizing: 'per-member' },
+    ];
+
+    for (const { data, sizing } of variants) {
+      expect(await sheetText(data, sizing)).toBe('## Sheet: Ledger\nRow 1: A: 45292');
+    }
+    const atTheBound = await styledXlsx({
+      sheetXml,
+      stylesXml: `<styleSheet><cellXfs><xf numFmtId="0"/>${'<xf numFmtId="14"/>'.repeat(
+        MAX_CELL_FORMATS - 1,
+      )}</cellXfs></styleSheet>`,
+      storedBallastBytes: 64 * 1024,
+    });
+    expect(await sheetText(atTheBound)).toBe('## Sheet: Ledger\nRow 1: A: 2024-01-01');
+  });
+
+  it('keeps text, booleans, errors, formula strings and shared and inline strings as stored under a date style', async () => {
+    const text = await sheetText(
+      await styledXlsx({
+        sheetXml:
+          '<row r="1"><c r="A1" t="s" s="1"><v>0</v></c><c r="B1" t="inlineStr" s="1"><is><t>45292</t></is></c><c r="C1" t="b" s="1"><v>1</v></c><c r="D1" t="e" s="1"><v>#DIV/0!</v></c><c r="E1" t="str" s="1"><f>"4529"&amp;"2"</f><v>45292</v></c><c r="F1" t="d" s="1"><v>2024-01-01T00:00:00</v></c></row>',
+        sharedStringsXml: '<?xml version="1.0"?><sst><si><t>45292</t></si></sst>',
+        stylesXml: stylesXml([0, 14]),
+      }),
+    );
+
+    expect(text).toBe(
+      '## Sheet: Ledger\nRow 1: A: 45292 | B: 45292 | C: 1 | D: #DIV/0! | E: ="4529"&"2" (45292) | F: 2024-01-01T00:00:00',
+    );
+  });
+
+  it('lays out a workbook with no number formats exactly as before', async () => {
+    expect(await extractOfficeDocumentText(await buildXlsx(), 'operations.xlsx', 'xlsx')).toBe(
+      [
+        '## Sheet: Revenue',
+        'Row 1: A: Month',
+        'Row 2: A: Jan | B: 107 | D: =B2*2 (214)',
+        'Row 3: D: =SUM(D2:D2)',
+        '',
+        '## Sheet: Headcount',
+        'Row 1: A: Secret code | B: MANGO-3308-DELTA',
+      ].join('\n'),
+    );
+  });
+
+  it('shows formatted values in the spreadsheet preview table', async () => {
+    const table = await extractSpreadsheetTable(
+      await styledXlsx({
+        sheetXml: numberRow(1, [
+          { value: '45292', style: '1' },
+          { value: '0.5', style: '2' },
+        ]),
+        stylesXml: stylesXml([0, 14, 9]),
+      }),
+      'ledger.xlsx',
+      MAX_FILE_TEXT_CHARS,
+    );
+
+    expect(table).toEqual({ csv: '"2024-01-01","50%"', complete: true });
+  });
+});
+
+describe('inline workbook cell positions', () => {
+  const sheetXml =
+    '<row r="1"><c r="A1" s="1"/><c r="B1"><v>5</v></c></row>' +
+    '<row r="2" ht="30" customHeight="1"/>' +
+    '<row r="4"><c r="A4" t="inlineStr"><is><t>Total</t></is></c><c r="C4"><v>9</v></c></row>' +
+    '<row><c t="inlineStr"><is><t>Spare</t></is></c><c><v>1</v></c><c><v>2</v></c></row>';
+
+  it('keeps each cell in its row and column across self-closing elements and omitted references', async () => {
+    expect(await sheetText(await styledXlsx({ sheetXml }))).toBe(
+      [
+        '## Sheet: Ledger',
+        'Row 1: B: 5',
+        'Row 4: A: Total | C: 9',
+        'Row 5: A: Spare | B: 1 | C: 2',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps every column of the preview table when cells omit their references', async () => {
+    const table = await extractSpreadsheetTable(
+      await styledXlsx({ sheetXml }),
+      'ledger.xlsx',
+      MAX_FILE_TEXT_CHARS,
+    );
+
+    expect(table.csv).toBe(['"","5",""', '"Total","","9"', '"Spare","1","2"'].join('\n'));
+  });
+});
+
+describe('workbook XML helpers shared with the large-file path', () => {
+  it('reads elements by exact name, self-closing or not, and stops at one never closed', () => {
+    const xml =
+      '<rowBreaks count="1"/><row r="1" ht="30"/><row r="2"><c r="A2"/></row><row r="3"><c/>';
+
+    expect([...xmlElements(xml, 'row')]).toEqual([
+      { attributes: ' r="1" ht="30"', body: '' },
+      { attributes: ' r="2"', body: '<c r="A2"/>' },
+    ]);
+    expect([...xmlStartTags(xml, 'row')].map(({ attributes }) => attributes)).toEqual([
+      ' r="1" ht="30"/',
+      ' r="2"',
+      ' r="3"',
+    ]);
+  });
+
+  it('gives each cell style the number format the workbook declares for it', () => {
+    const formats = cellStyleFormats(stylesXml([0, 14, 9, 164], { 164: '#,##0.00' }));
+
+    expect(formats).toHaveLength(4);
+    expect(formats.map((format) => displayCellNumber('45292', format, false))).toEqual([
+      '45292',
+      '2024-01-01',
+      '4529200%',
+      '45,292.00',
+    ]);
+    expect(cellStyleFormats('<styleSheet><cellXfs><xf numFmtId="14"/>')).toEqual([]);
   });
 });
 

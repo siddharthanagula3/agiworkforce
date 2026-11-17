@@ -12,7 +12,7 @@ import {
   MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
 } from '@agiworkforce/cloud-contracts';
 import { StoredObjectTooLargeError } from '@/lib/server/object-storage';
-import { getPlanMaxAttachmentsPerMessage } from '@agiworkforce/types';
+import { getPlanMaxAttachmentsPerMessage, MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
 
 const PAID_ATTACHMENTS_PER_MESSAGE = getPlanMaxAttachmentsPerMessage('pro');
 
@@ -39,7 +39,10 @@ function partsOf(message: { content: string | TestPart[] } | undefined): TestPar
 }
 
 function textPdf(body: string): Buffer {
-  const stream = `BT /F1 14 Tf 72 700 Td (${body}) Tj ET`;
+  return pdfWithContent(`BT /F1 14 Tf 72 700 Td (${body}) Tj ET`);
+}
+
+function pdfWithContent(stream: string): Buffer {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -95,7 +98,12 @@ describe('hydrateChatAttachments', () => {
     expect(messages[0]?.content[1]).toMatchObject({
       type: 'text',
       text: '[attached file: brief.pdf (application/pdf)]',
-      x_native_document: { filename: 'brief.pdf', mediaType: 'application/pdf' },
+      x_native_document: {
+        filename: 'brief.pdf',
+        mediaType: 'application/pdf',
+        pageCount: 1,
+        extractedTextComplete: true,
+      },
     });
     const filePart = partsOf(messages[0])[2];
     expect(filePart?.file?.filename).toBe('brief.pdf');
@@ -105,6 +113,36 @@ describe('hydrateChatAttachments', () => {
       'base64',
     ).toString('utf8');
     expect(decoded).toContain('PLUM-VECTOR-9182');
+  });
+
+  it('marks a PDF whose extracted text was cut short as incomplete', async () => {
+    const assetId = '32b71cf4-c0d1-4cc7-b6c4-776ece82f138';
+    const lineLength = 500;
+    const lines = Array.from(
+      { length: Math.ceil(MAX_FILE_TEXT_CHARS / lineLength) + 1 },
+      () => `(${'W'.repeat(lineLength)}) Tj T*`,
+    );
+    const pdf = pdfWithContent(`BT /F1 1 Tf 1 TL 4 790 Td ${lines.join(' ')} ET`);
+    mocks.getMediaAssetById.mockResolvedValue({
+      id: assetId,
+      userId: 'user-1',
+      organizationId: null,
+      kind: 'file',
+      mimeType: 'application/pdf',
+      byteSize: pdf.byteLength,
+      storageUrl: 'https://files.example.test/key',
+      storagePathname: 'chat-attachments/user-1/key.pdf',
+      metadata: { filename: 'long.pdf' },
+      deletedAt: null,
+    });
+    mocks.readStoredMedia.mockResolvedValue({ data: pdf, contentType: 'application/pdf' });
+    const messages = [{ role: 'user', content: [{ type: 'file', file: { asset_id: assetId } }] }];
+
+    await hydrateChatAttachments(messages, 'user-1', undefined, PAID_ATTACHMENTS_PER_MESSAGE, null);
+
+    expect(messages[0]?.content[0]).toMatchObject({
+      x_native_document: { filename: 'long.pdf', extractedTextComplete: false },
+    });
   });
 
   it('refuses a turn carrying more files than the plan allows on one message', async () => {

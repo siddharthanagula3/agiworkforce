@@ -24,7 +24,7 @@ installing the CLI or another client.
   [Local mode](https://agiworkforce.com/help/local-mode) for setup.
 - **BYOK** means bringing your own provider API key. See
   [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login
-  commands, key storage and custom endpoints. Review your provider's billing and
+  commands, key storage and custom endpoints. Review your provider's charges and
   data-use terms before using a key.
 - **Managed cloud** uses your AGI account.
 

@@ -40,6 +40,7 @@ jest.mock('lucide-react-native', () => {
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
+import { ApiHttpError } from '@/services/apiErrors';
 import { DocumentFileView, documentFrameUri, isOwnDocumentNavigation } from '../DocumentFileView';
 import type { FileViewerSource } from '../viewerKind';
 
@@ -98,6 +99,18 @@ describe('DocumentFileView', () => {
 
     expect(await screen.findByTestId('document-file-frame')).toBeTruthy();
     expect(mockDownloadGeneratedFile).toHaveBeenCalledTimes(2);
+  });
+
+  it('says a file above the download limit is too large and offers no Retry that would ask again', async () => {
+    mockDownloadGeneratedFile.mockRejectedValueOnce(
+      new ApiHttpError('This file is too large to open on this device.', 413, 'file_too_large'),
+    );
+    render(<DocumentFileView source={pdf()} />);
+
+    expect(await screen.findByTestId('document-file-failed')).toBeTruthy();
+    expect(screen.getByText('This file is too large to open on this device.')).toBeTruthy();
+    expect(screen.queryByText('Retry')).toBeNull();
+    expect(mockDownloadGeneratedFile).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to Retry and Share when the file cannot be drawn', async () => {

@@ -354,8 +354,11 @@ export function MessageList({
   const renderItem = useCallback(
     ({ item, index }: { item: ChatMessage; index: number }) => (
       // The column is on the row, not on the list, so a swipe anywhere in the
-      // pane still scrolls the thread on a tablet.
+      // pane still scrolls the thread on a tablet. FlashList hands a cell to
+      // whichever message takes its slot, such as the other version of an
+      // answer; the key gives each message a row that never laid out another.
       <MessageListRow
+        key={item.id}
         messageId={item.id}
         streaming={item.isStreaming === true}
         style={

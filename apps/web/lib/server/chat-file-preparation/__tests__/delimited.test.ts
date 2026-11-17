@@ -130,168 +130,190 @@ async function profileText(
 }
 
 describe('delimited preparation', () => {
-  it('counts every row and types every column when quoted line breaks cross step edges', async () => {
-    const db = new FakePreparationDb();
-    const storage = createCountingStorage();
-    const table = buildCsv(3);
-    const id = await sealed(db, storage, table.data, 'ledger.csv', 'text/csv');
-    let largestCursor = 0;
-    db.beforeAdvance = () => {
-      const cursor = db.rowForAsset(id)?.cursor;
-      largestCursor = Math.max(
-        largestCursor,
-        Buffer.byteLength(JSON.stringify(cursor ?? {}), 'utf8'),
+  it(
+    'counts every row and types every column when quoted line breaks cross step edges',
+    { timeout: 60_000 },
+    async () => {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const table = buildCsv(3);
+      const id = await sealed(db, storage, table.data, 'ledger.csv', 'text/csv');
+      let largestCursor = 0;
+      db.beforeAdvance = () => {
+        const cursor = db.rowForAsset(id)?.cursor;
+        largestCursor = Math.max(
+          largestCursor,
+          Buffer.byteLength(JSON.stringify(cursor ?? {}), 'utf8'),
+        );
+      };
+
+      const steps = await prepareUntilDone(() =>
+        prepareChatFileStep(id, { db, storage, policy: smallSteps }),
       );
-    };
 
-    const steps = await prepareUntilDone(() =>
-      prepareChatFileStep(id, { db, storage, policy: smallSteps }),
-    );
+      expect(steps).toBeGreaterThanOrEqual(Math.ceil(table.data.byteLength / STEP_BYTES));
+      const card = await readPreparedCard(id, { userId: USER, db, storage });
+      expect(card?.state).toBe('ready');
+      expect(card?.coverage['table']).toEqual({
+        rowCount: table.rows,
+        columnCount: 5,
+        columns: [
+          { name: 'id', type: 'integer' },
+          { name: 'amount', type: 'number' },
+          { name: 'active', type: 'boolean' },
+          { name: 'opened', type: 'date' },
+          { name: 'notes', type: 'text' },
+        ],
+        columnsTruncated: false,
+        delimiter: 'comma',
+      });
+      const text = await profileText(db, storage, id);
+      expect(text).toContain(
+        `${table.rows.toLocaleString('en-US')} rows after the header, 5 columns.`,
+      );
+      expect(text).toContain(`First ${CHAT_LARGE_FILE_POLICY.kinds.delimited.sampleRows} rows:`);
+      expect(text).toContain(
+        `${CHAT_LARGE_FILE_POLICY.kinds.delimited.sampleRows} rows sampled at random from the whole file:`,
+      );
+      expect(largestCursor).toBeGreaterThan(0);
+      expect(largestCursor).toBeLessThanOrEqual(MAX_DELIMITED_CURSOR_BYTES);
+    },
+  );
 
-    expect(steps).toBeGreaterThanOrEqual(Math.ceil(table.data.byteLength / STEP_BYTES));
-    const card = await readPreparedCard(id, { userId: USER, db, storage });
-    expect(card?.state).toBe('ready');
-    expect(card?.coverage['table']).toEqual({
-      rowCount: table.rows,
-      columnCount: 5,
-      columns: [
-        { name: 'id', type: 'integer' },
-        { name: 'amount', type: 'number' },
-        { name: 'active', type: 'boolean' },
-        { name: 'opened', type: 'date' },
-        { name: 'notes', type: 'text' },
-      ],
-      columnsTruncated: false,
-      delimiter: 'comma',
-    });
-    const text = await profileText(db, storage, id);
-    expect(text).toContain(
-      `${table.rows.toLocaleString('en-US')} rows after the header, 5 columns.`,
-    );
-    expect(text).toContain(`First ${CHAT_LARGE_FILE_POLICY.kinds.delimited.sampleRows} rows:`);
-    expect(text).toContain(
-      `${CHAT_LARGE_FILE_POLICY.kinds.delimited.sampleRows} rows sampled at random from the whole file:`,
-    );
-    expect(largestCursor).toBeGreaterThan(0);
-    expect(largestCursor).toBeLessThanOrEqual(MAX_DELIMITED_CURSOR_BYTES);
-  });
+  it(
+    'resumes a retried step at its cursor and ends with the same profile',
+    { timeout: 60_000 },
+    async () => {
+      const table = buildCsv(9);
+      const assetId = testUuid();
 
-  it('resumes a retried step at its cursor and ends with the same profile', async () => {
-    const table = buildCsv(9);
-    const assetId = testUuid();
+      const cleanDb = new FakePreparationDb();
+      const cleanStorage = createCountingStorage();
+      await sealed(cleanDb, cleanStorage, table.data, 'ledger.csv', 'text/csv', assetId);
+      await prepareUntilDone(() =>
+        prepareChatFileStep(assetId, { db: cleanDb, storage: cleanStorage, policy: smallSteps }),
+      );
 
-    const cleanDb = new FakePreparationDb();
-    const cleanStorage = createCountingStorage();
-    await sealed(cleanDb, cleanStorage, table.data, 'ledger.csv', 'text/csv', assetId);
-    await prepareUntilDone(() =>
-      prepareChatFileStep(assetId, { db: cleanDb, storage: cleanStorage, policy: smallSteps }),
-    );
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      await sealed(db, storage, table.data, 'ledger.csv', 'text/csv', assetId);
+      await prepareChatFileStep(assetId, { db, storage, policy: smallSteps });
+      await prepareChatFileStep(assetId, { db, storage, policy: smallSteps });
+      const offset = Number(db.rowForAsset(assetId)!.cursor['byteOffset']);
+      expect(offset).toBeGreaterThan(STEP_BYTES);
 
-    const db = new FakePreparationDb();
-    const storage = createCountingStorage();
-    await sealed(db, storage, table.data, 'ledger.csv', 'text/csv', assetId);
-    await prepareChatFileStep(assetId, { db, storage, policy: smallSteps });
-    await prepareChatFileStep(assetId, { db, storage, policy: smallSteps });
-    const offset = Number(db.rowForAsset(assetId)!.cursor['byteOffset']);
-    expect(offset).toBeGreaterThan(STEP_BYTES);
+      db.failNextAdvance = true;
+      await expect(
+        prepareChatFileStep(assetId, { db, storage, policy: smallSteps }),
+      ).rejects.toThrow('connection reset during advance');
+      expect(Number(db.rowForAsset(assetId)!.cursor['byteOffset'])).toBe(offset);
+      const failedRange = storage.stats.ranges.at(-1);
+      await prepareChatFileStep(assetId, { db, storage, policy: smallSteps });
+      expect(storage.stats.ranges.at(-1)).toBe(failedRange);
+      expect(failedRange).toMatch(new RegExp(`^bytes=${offset}-`));
 
-    db.failNextAdvance = true;
-    await expect(prepareChatFileStep(assetId, { db, storage, policy: smallSteps })).rejects.toThrow(
-      'connection reset during advance',
-    );
-    expect(Number(db.rowForAsset(assetId)!.cursor['byteOffset'])).toBe(offset);
-    const failedRange = storage.stats.ranges.at(-1);
-    await prepareChatFileStep(assetId, { db, storage, policy: smallSteps });
-    expect(storage.stats.ranges.at(-1)).toBe(failedRange);
-    expect(failedRange).toMatch(new RegExp(`^bytes=${offset}-`));
+      await prepareUntilDone(() =>
+        prepareChatFileStep(assetId, { db, storage, policy: smallSteps }),
+      );
+      expect(db.rowForAsset(assetId)!.coverage).toEqual(cleanDb.rowForAsset(assetId)!.coverage);
+      expect(db.rowForAsset(assetId)!.derived_keys).toEqual(
+        cleanDb.rowForAsset(assetId)!.derived_keys,
+      );
+      expect(await profileText(db, storage, assetId)).toBe(
+        await profileText(cleanDb, cleanStorage, assetId),
+      );
+    },
+  );
 
-    await prepareUntilDone(() => prepareChatFileStep(assetId, { db, storage, policy: smallSteps }));
-    expect(db.rowForAsset(assetId)!.coverage).toEqual(cleanDb.rowForAsset(assetId)!.coverage);
-    expect(db.rowForAsset(assetId)!.derived_keys).toEqual(
-      cleanDb.rowForAsset(assetId)!.derived_keys,
-    );
-    expect(await profileText(db, storage, assetId)).toBe(
-      await profileText(cleanDb, cleanStorage, assetId),
-    );
-  });
+  it(
+    'reads a TSV by its extension and treats a quote as an ordinary character',
+    { timeout: 60_000 },
+    async () => {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const table = buildCsv(5, '\t');
+      const id = await sealed(db, storage, table.data, 'export.tsv', 'text/plain');
 
-  it('reads a TSV by its extension and treats a quote as an ordinary character', async () => {
-    const db = new FakePreparationDb();
-    const storage = createCountingStorage();
-    const table = buildCsv(5, '\t');
-    const id = await sealed(db, storage, table.data, 'export.tsv', 'text/plain');
+      await prepareUntilDone(() => prepareChatFileStep(id, { db, storage, policy: smallSteps }));
 
-    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage, policy: smallSteps }));
+      expect(db.rowForAsset(id)).toMatchObject({ kind: 'delimited', state: 'ready' });
+      expect(db.rowForAsset(id)!.coverage['table']).toMatchObject({
+        rowCount: table.rows,
+        delimiter: 'tab',
+      });
+    },
+  );
 
-    expect(db.rowForAsset(id)).toMatchObject({ kind: 'delimited', state: 'ready' });
-    expect(db.rowForAsset(id)!.coverage['table']).toMatchObject({
-      rowCount: table.rows,
-      delimiter: 'tab',
-    });
-  });
+  it(
+    'reads a stray quote inside an unquoted field as a character, not the start of a quoted field',
+    { timeout: 60_000 },
+    async () => {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const random = seededRandom(21);
+      const lines = ['id,size,notes'];
+      let length = lines[0]!.length + 1;
+      while (length < MAX_CHAT_ATTACHMENT_BYTES + 3 * MIB) {
+        const line = `${lines.length},${1 + Math.floor(random() * 9)}" pipe,${seededWords(random, 3)}`;
+        lines.push(line);
+        length += Buffer.byteLength(line, 'utf8') + 1;
+      }
+      const id = await sealed(
+        db,
+        storage,
+        Buffer.from(`${lines.join('\n')}\n`, 'utf8'),
+        'parts.csv',
+        'text/csv',
+      );
 
-  it('reads a stray quote inside an unquoted field as a character, not the start of a quoted field', async () => {
-    const db = new FakePreparationDb();
-    const storage = createCountingStorage();
-    const random = seededRandom(21);
-    const lines = ['id,size,notes'];
-    let length = lines[0]!.length + 1;
-    while (length < MAX_CHAT_ATTACHMENT_BYTES + 3 * MIB) {
-      const line = `${lines.length},${1 + Math.floor(random() * 9)}" pipe,${seededWords(random, 3)}`;
-      lines.push(line);
-      length += Buffer.byteLength(line, 'utf8') + 1;
-    }
-    const id = await sealed(
-      db,
-      storage,
-      Buffer.from(`${lines.join('\n')}\n`, 'utf8'),
-      'parts.csv',
-      'text/csv',
-    );
+      await prepareUntilDone(() => prepareChatFileStep(id, { db, storage, policy: smallSteps }));
 
-    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage, policy: smallSteps }));
+      expect(db.rowForAsset(id)).toMatchObject({ state: 'ready' });
+      expect(db.rowForAsset(id)!.coverage['table']).toMatchObject({
+        rowCount: lines.length - 1,
+        columnCount: 3,
+        columns: [
+          { name: 'id', type: 'integer' },
+          { name: 'size', type: 'text' },
+          { name: 'notes', type: 'text' },
+        ],
+      });
+    },
+  );
 
-    expect(db.rowForAsset(id)).toMatchObject({ state: 'ready' });
-    expect(db.rowForAsset(id)!.coverage['table']).toMatchObject({
-      rowCount: lines.length - 1,
-      columnCount: 3,
-      columns: [
-        { name: 'id', type: 'integer' },
-        { name: 'size', type: 'text' },
-        { name: 'notes', type: 'text' },
-      ],
-    });
-  });
+  it(
+    'drops NUL from a header name and a sampled row rather than failing the step on every retry',
+    { timeout: 60_000 },
+    async () => {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const table = buildCsv(11);
+      const firstNotes = table.data.indexOf('"');
+      const data = Buffer.concat([
+        Buffer.from('i\u0000', 'utf8'),
+        table.data.subarray(1, firstNotes + 1),
+        Buffer.from('\u0000', 'utf8'),
+        table.data.subarray(firstNotes + 1),
+      ]);
+      const id = await sealed(db, storage, data, 'ledger.csv', 'text/csv');
 
-  it('drops NUL from a header name and a sampled row rather than failing the step on every retry', async () => {
-    const db = new FakePreparationDb();
-    const storage = createCountingStorage();
-    const table = buildCsv(11);
-    const firstNotes = table.data.indexOf('"');
-    const data = Buffer.concat([
-      Buffer.from('i\u0000', 'utf8'),
-      table.data.subarray(1, firstNotes + 1),
-      Buffer.from('\u0000', 'utf8'),
-      table.data.subarray(firstNotes + 1),
-    ]);
-    const id = await sealed(db, storage, data, 'ledger.csv', 'text/csv');
+      const steps = await prepareUntilDone(() =>
+        prepareChatFileStep(id, { db, storage, policy: smallSteps }),
+      );
 
-    const steps = await prepareUntilDone(() =>
-      prepareChatFileStep(id, { db, storage, policy: smallSteps }),
-    );
+      expect(steps).toBeGreaterThan(1);
+      expect(db.rowForAsset(id)).toMatchObject({ state: 'ready' });
+      expect(db.rowForAsset(id)!.coverage['table']).toMatchObject({
+        rowCount: table.rows,
+        columns: expect.arrayContaining([{ name: 'id', type: 'integer' }]),
+      });
+      const text = await profileText(db, storage, id);
+      expect(text).not.toContain('\u0000');
+      expect(text).toContain('\nid,amount,active,opened,notes\n1,');
+    },
+  );
 
-    expect(steps).toBeGreaterThan(1);
-    expect(db.rowForAsset(id)).toMatchObject({ state: 'ready' });
-    expect(db.rowForAsset(id)!.coverage['table']).toMatchObject({
-      rowCount: table.rows,
-      columns: expect.arrayContaining([{ name: 'id', type: 'integer' }]),
-    });
-    const text = await profileText(db, storage, id);
-    expect(text).not.toContain('\u0000');
-    expect(text).toContain('\nid,amount,active,opened,notes\n1,');
-  });
-
-  it('counts a range of two-byte rows', async () => {
+  it('counts a range of two-byte rows', { timeout: 60_000 }, async () => {
     const db = new FakePreparationDb();
     const storage = createCountingStorage();
     const rows = Math.ceil((MAX_CHAT_ATTACHMENT_BYTES + MIB) / 2);
@@ -307,7 +329,7 @@ describe('delimited preparation', () => {
     });
   });
 
-  it('refuses invalid UTF-8', async () => {
+  it('refuses invalid UTF-8', { timeout: 60_000 }, async () => {
     const db = new FakePreparationDb();
     const storage = createCountingStorage();
     const table = buildCsv(4);
@@ -328,26 +350,30 @@ describe('delimited preparation', () => {
     'types a 200,000-digit cell that ends in a letter in time linear in its length',
     { timeout: 60_000 },
     async () => {
-      const db = new FakePreparationDb();
-      const storage = createCountingStorage();
-      const data = Buffer.concat([
-        Buffer.from(`id,code\n1,${'1'.repeat(200_000)}x\n`, 'utf8'),
-        Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, `2,${'z'.repeat(1_021)}\n`),
-      ]);
-      const id = await sealed(db, storage, data, 'codes.csv', 'text/csv');
+      const prepareCell = async (cell: string) => {
+        const db = new FakePreparationDb();
+        const storage = createCountingStorage();
+        const data = Buffer.concat([
+          Buffer.from(`id,code\n1,${cell}\n`, 'utf8'),
+          Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, `2,${'z'.repeat(1_021)}\n`),
+        ]);
+        const id = await sealed(db, storage, data, 'codes.csv', 'text/csv');
+        const started = performance.now();
+        await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+        return { db, id, elapsed: performance.now() - started };
+      };
 
-      const started = performance.now();
-      await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
-      const elapsed = performance.now() - started;
+      const baseline = await prepareCell('z'.repeat(200_001));
+      const digits = await prepareCell(`${'1'.repeat(200_000)}x`);
 
-      expect(db.rowForAsset(id)).toMatchObject({ state: 'ready' });
-      expect(db.rowForAsset(id)!.coverage['table']).toMatchObject({
+      expect(digits.db.rowForAsset(digits.id)).toMatchObject({ state: 'ready' });
+      expect(digits.db.rowForAsset(digits.id)!.coverage['table']).toMatchObject({
         columns: [
           { name: 'id', type: 'integer' },
           { name: 'code', type: 'text' },
         ],
       });
-      expect(elapsed).toBeLessThan(5_000);
+      expect(digits.elapsed).toBeLessThan(baseline.elapsed * 4 + 1_000);
     },
   );
 

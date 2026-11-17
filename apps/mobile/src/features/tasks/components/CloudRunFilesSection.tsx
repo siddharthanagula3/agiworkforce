@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/Text';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { API_URL } from '@/lib/constants';
 import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
+import { toUserMessage } from '@/services/userMessage';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { CloudRunProducedFile } from '../runPresentation';
@@ -25,8 +26,11 @@ export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] 
         file.name,
       );
       await shareFile(localUri);
-    } catch {
-      Alert.alert('Could not open this file', 'The file could not be downloaded.');
+    } catch (error) {
+      Alert.alert(
+        'Could not open this file',
+        toUserMessage(error, 'The file could not be downloaded.'),
+      );
     } finally {
       setOpeningId(null);
     }

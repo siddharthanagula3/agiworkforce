@@ -79,7 +79,13 @@ const PHONE_OPENED_PAGES: readonly PageCase[] = [
   ['/security', () => <SecurityPage />],
   ['/status', () => StatusPage()],
   ['/subprocessors', () => <SubprocessorsPage />],
-  ['/support', () => <SupportPage />],
+  [
+    '/support',
+    () =>
+      SupportPage({
+        searchParams: Promise.resolve(Object.fromEntries(new URLSearchParams(route.search))),
+      }),
+  ],
   ['/trust', () => <TrustPage />],
 ];
 

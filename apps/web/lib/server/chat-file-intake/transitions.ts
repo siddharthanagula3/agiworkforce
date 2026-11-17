@@ -17,6 +17,7 @@ import {
   headPrivateObject,
 } from '@/lib/server/object-storage';
 import { getObjectStore, objectStorageConfig } from '@/lib/server/object-storage-runtime';
+import type { ChatFileInspectionCursor } from './full-inspection';
 import { admitScanUnavailableRefund } from './quotas';
 import {
   sqlChatFileIntakeStore,
@@ -303,7 +304,7 @@ export function defaultIntakeTransitionDeps(
  */
 export type ChatFileIntakeDirective =
   | { next: 'start' }
-  | { next: 'inspect' }
+  | { next: 'inspect'; cursor?: ChatFileInspectionCursor }
   | {
       next: 'submit';
       sleepMs?: number;

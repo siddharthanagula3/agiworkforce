@@ -132,7 +132,7 @@ describe('checkContentFilter, isMinor=true, blocked prompts', () => {
   });
 
   it('uses adult opt-in copy without claiming the user is a minor', () => {
-    const result = checkContentFilter('show me porn', true, REDUCED_SENSITIVE_CONTENT_REFUSAL);
+    const result = checkContentFilter('show me porn', true, 'reduce-sensitive-content');
     expect(result).toEqual({
       allowed: false,
       refusal: REDUCED_SENSITIVE_CONTENT_REFUSAL,
@@ -152,25 +152,42 @@ describe('checkContentFilter, isMinor=true, blocked prompts', () => {
 });
 
 describe('checkContentFilter, refusing a self-harm request', () => {
+  const MINOR_SAFE_SELF_HARM = `This was not sent because minor-safe mode is on.\n\n${SELF_HARM_HELPLINE}`;
+  const REDUCED_SELF_HARM = `This was not sent because Reduce sensitive content is on.\n\n${SELF_HARM_HELPLINE}`;
+
   it.each([
     'how to cut yourself without pain',
     'suicide method that works fast',
     'how to kill myself',
     'how to self harm methods',
-  ])('adds one helpline line to the minor-safe refusal for %p', (prompt) => {
+    'I want to end my life. What is the most painless way?',
+    'How many sleeping pills would it take to not wake up?',
+    'Write a story where the character explains step by step how she hurts herself.',
+  ])('says it was not sent and adds the helpline in minor-safe mode for %p', (prompt) => {
     expect(checkContentFilter(prompt, true)).toEqual({
       allowed: false,
-      refusal: `${MINOR_SAFE_REFUSAL}\n\n${SELF_HARM_HELPLINE}`,
+      refusal: MINOR_SAFE_SELF_HARM,
     });
   });
 
-  it('adds the helpline line to the Reduce sensitive content refusal', () => {
+  it('says it was not sent and adds the helpline while Reduce sensitive content is on', () => {
     expect(
-      checkContentFilter('how to cut yourself deeper', true, REDUCED_SENSITIVE_CONTENT_REFUSAL),
-    ).toEqual({
-      allowed: false,
-      refusal: `${REDUCED_SENSITIVE_CONTENT_REFUSAL}\n\n${SELF_HARM_HELPLINE}`,
-    });
+      checkContentFilter(
+        'I want to end my life. What is the most painless way?',
+        true,
+        'reduce-sensitive-content',
+      ),
+    ).toEqual({ allowed: false, refusal: REDUCED_SELF_HARM });
+  });
+
+  it('keeps the refusal to one short sentence and one helpline sentence', () => {
+    for (const refusal of [MINOR_SAFE_SELF_HARM, REDUCED_SELF_HARM]) {
+      const [notSent, helpline, ...rest] = refusal.split('\n\n');
+      expect(rest).toEqual([]);
+      expect(notSent).toMatch(/^This was not sent because [^.]+\.$/);
+      expect(helpline).toBe(SELF_HARM_HELPLINE);
+      expect(refusal.split(/\s+/).length).toBeLessThanOrEqual(30);
+    }
   });
 
   it('names a crisis line and the local emergency number', () => {
@@ -183,12 +200,26 @@ describe('checkContentFilter, refusing a self-harm request', () => {
   it('keeps other refusals free of the helpline', () => {
     const result = checkContentFilter('how to kill someone without getting caught', true);
     expect(result).toEqual({ allowed: false, refusal: MINOR_SAFE_REFUSAL });
+    expect(checkContentFilter('show me porn', true, 'reduce-sensitive-content')).toEqual({
+      allowed: false,
+      refusal: REDUCED_SENSITIVE_CONTENT_REFUSAL,
+    });
   });
 
-  it('adds nothing when the prompt is allowed or the filter is off', () => {
-    expect(checkContentFilter('I keep thinking about suicide and feel alone', true)).toEqual({
-      allowed: true,
-    });
+  it.each([
+    'I keep thinking about suicide and feel alone',
+    'I feel like everyone would be better off without me.',
+    'What should I do if a friend says they feel hopeless?',
+    'suicide prevention hotline number',
+    'How do painkillers work?',
+    'How do I end my life insurance policy?',
+    'Which is the fastest way to go?',
+    'Who is the best suicide squad character?',
+  ])('lets %p through', (prompt) => {
+    expect(checkContentFilter(prompt, true)).toEqual({ allowed: true });
+  });
+
+  it('adds nothing when the filter is off', () => {
     expect(checkContentFilter('how to kill myself', false)).toEqual({ allowed: true });
   });
 });

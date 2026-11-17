@@ -157,6 +157,7 @@ import {
   readyLocalModelIdOr,
   useModelInstallStore,
 } from '@/src/features/model-picker/installStore';
+import { useSystemModelSession } from '@/src/features/model-picker/systemModelAvailability';
 import { visibleThreadFor } from '@/src/features/chat/utils/conversationThread';
 import { hasUnfinishedRun } from '@/src/features/chat/utils/agentActivity';
 import { continuableCloudModel } from '@/src/features/chat/utils/continuableAnswer';
@@ -189,6 +190,7 @@ import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
 import { getMessageStreamErrorMessage } from '@/src/features/chat/utils/messageStreamError';
+import { refuseFilteredSend } from '@/src/features/chat/utils/refuseFilteredSend';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import {
   runImageGenerationTurn,
@@ -623,6 +625,7 @@ export default function ChatScreen() {
       }
 
       const trimmedInput = text.trim();
+      if (refuseFilteredSend(trimmedInput)) return false;
 
       const videoRequest = resolveMobileVideoGenerationRequest({
         executionMode: conversationExecutionMode,
@@ -1076,12 +1079,15 @@ export default function ChatScreen() {
 
   const installedModelIds = useModelInstallStore((state) => state.installedModelIds);
   const readySystemModelIds = useModelInstallStore((state) => state.readySystemModelIds);
+  const failedSystemModelIds = useSystemModelSession((state) => state.failedModelIds);
 
   const localRecovery = useMemo(
     () =>
       localModelRecovery({
         executionMode: conversationExecutionMode,
-        isNoLocalModelError: sendError === LOCAL_NO_MODEL_MESSAGE,
+        isNoLocalModelError:
+          sendError === LOCAL_NO_MODEL_MESSAGE ||
+          (Boolean(sendError) && failedSystemModelIds.includes(selectedModel)),
         selectedModelId: selectedModel,
         installedModelIds,
         readySystemModelIds,
@@ -1089,6 +1095,7 @@ export default function ChatScreen() {
       }),
     [
       conversationExecutionMode,
+      failedSystemModelIds,
       installedModelIds,
       readySystemModelIds,
       selectedModel,

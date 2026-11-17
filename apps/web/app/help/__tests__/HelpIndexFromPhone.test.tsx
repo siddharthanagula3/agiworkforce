@@ -29,7 +29,10 @@ vi.mock('@/features/support/components/HelpSearch', async (importOriginal) => ({
 
 import { EmbeddedPageProvider } from '@shared/components/layout/EmbeddedPage';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
-import { PURCHASE_HELP_CATEGORY } from '@/lib/support/help-articles';
+import {
+  findPurchaseVocabulary,
+  PURCHASE_HELP_CATEGORY,
+} from '../../../scripts/lib/support-purchase-passages.mjs';
 
 import { supportCollectionIndex } from '../collections';
 import HelpLayout from '../layout';
@@ -79,8 +82,8 @@ describe('the help index', () => {
     const { index, purchase } = purchaseCollection();
     const { container } = await renderHelp(true);
     const text = container.textContent ?? '';
-    const shown = index.collections.filter((entry) => entry.id !== PURCHASE_HELP_CATEGORY);
-    const shownArticles = shown.reduce((total, entry) => total + entry.articles.length, 0);
+    const { collections: shown, articleCount: shownArticles } = supportCollectionIndex('phone');
+    expect(index.articleCount).toBeGreaterThan(shownArticles);
 
     expect(text).not.toContain(purchase.label);
     for (const article of purchase.articles) expect(text).not.toContain(article.title);
@@ -89,5 +92,6 @@ describe('the help index', () => {
     expect(text).toContain(CONTACT_EMAIL);
     expect(text).toContain(`${shownArticles} articles across ${shown.length} collections`);
     for (const entry of shown) expect(text).toContain(entry.label);
+    expect(findPurchaseVocabulary(text)).toBeNull();
   });
 });

@@ -46,22 +46,23 @@ Very little, and you should know that before you rely on it.
 - In Managed Cloud and with your own provider key, the model you picked answers
   under its provider's own safety rules. What it says, and whether it mentions
   a helpline, differs from one model to another.
-- In Local mode in the AGI Mobile app, the model runs on your phone with a short
-  instruction from AGI: give no methods or instructions for suicide or
-  self-harm, respond with care, and point to a local crisis line or emergency
-  number when a message suggests you may be at risk. A small model on a phone
-  can still get this wrong.
+- In Local mode in the AGI Mobile app, a small model runs on your phone, and AGI
+  does not add an instruction about self-harm to what it sends that model. What
+  it says depends on how the model was trained, and a small model can get this
+  wrong.
 
 One setting touches this subject. **Reduce sensitive content**, in Settings under
 Safety, is off unless you turn it on. When it is on, AGI refuses a short list of
 explicit or harmful how-to prompts before they reach a Managed Cloud model, and
-requests for suicide or self-harm methods are on that list. On the web, the
-refusal says the content is unavailable while the setting is on. It shows no
-helpline. In the AGI Mobile app the same check runs on the phone before a chat
-message you type or dictate reaches any model, in Local mode as well, and when
-it refuses a request about suicide or self-harm, the pop-up that says so adds a
-note that points to a crisis line and your local emergency number. A phone in
-minor-safe mode runs the check whether or not the setting is on.
+requests for a method, means or dose of suicide or self-harm are on that list.
+A message about how you feel, or a request for help for yourself or someone
+else, is not refused. On the web, the refusal says the content is unavailable
+while the setting is on. It shows no helpline. In the AGI Mobile app the same
+check runs on the phone before a chat message you type or dictate reaches any
+model, in Local mode as well, and when it refuses a request about suicide or
+self-harm, the pop-up that says so adds a note that points to a crisis line and
+your local emergency number. A phone in minor-safe mode runs the check whether
+or not the setting is on.
 
 ## What the rules say
 

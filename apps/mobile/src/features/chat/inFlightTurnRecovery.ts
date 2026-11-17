@@ -4,6 +4,14 @@ import { MANAGED_CLOUD_AGENT_RUNS_BASE_PATH } from '@agiworkforce/cloud-contract
 import type { LifecycleStatus } from '@agiworkforce/types';
 import { apiFetch } from '@/services/api';
 import type { ChatMessage } from '@/types/chat';
+import {
+  findRunForOperation,
+  readFinishedRunAnswer,
+  restoreFinishedRunAnswer,
+  type FinishedRunReading,
+  type UnansweredQuestion,
+} from './finishedRunAnswer';
+import { forgetInFlightTurnRun, inFlightTurnFor, recordInFlightTurnRun } from './inFlightTurnRun';
 import { hasUnfinishedRun, isStoppedFinishReason, type LiveRunState } from './utils/agentActivity';
 
 export const IN_FLIGHT_TURN_RECHECK_MS = 5_000;
@@ -27,6 +35,7 @@ type TurnRow = Pick<ChatMessage, 'role'> &
       ChatMessage,
       | 'id'
       | 'createdAt'
+      | 'parentId'
       | 'isStreaming'
       | 'isQueued'
       | 'queueFailed'
@@ -92,25 +101,41 @@ export function readInFlightTurnVerdict(
   return runs.some((run) => isAlive(run, stallDeadlineMs)) ? 'running' : 'stalled';
 }
 
-export async function askWhetherTurnIsRunning(
+interface ConversationRuns {
+  verdict: InFlightTurnVerdict;
+  runId?: string;
+}
+
+async function readConversationRuns(
   conversationId: string,
   signal: AbortSignal,
-): Promise<InFlightTurnVerdict> {
+): Promise<ConversationRuns> {
   const response = await apiFetch(
     `${MANAGED_CLOUD_AGENT_RUNS_BASE_PATH}?conversationId=${encodeURIComponent(conversationId)}`,
     { method: 'GET', signal },
   );
-  if (!response.ok) return 'unknown';
+  if (!response.ok) return { verdict: 'unknown' };
   const payload = (await response.json()) as { runs?: unknown[] };
-  if (!Array.isArray(payload.runs)) return 'unknown';
+  if (!Array.isArray(payload.runs)) return { verdict: 'unknown' };
   const runs = payload.runs.filter(
-    (run): run is InFlightRunLiveness =>
+    (run): run is InFlightRunLiveness & { id?: unknown } =>
       typeof run === 'object' &&
       run !== null &&
       typeof (run as InFlightRunLiveness).state === 'string',
   );
-  if (runs.length === 0) return payload.runs.length > 0 ? 'running' : 'idle';
-  return readInFlightTurnVerdict(runs);
+  if (runs.length === 0) return { verdict: payload.runs.length > 0 ? 'running' : 'idle' };
+  const runId = runs.find((run) => typeof run.id === 'string')?.id;
+  return {
+    verdict: readInFlightTurnVerdict(runs),
+    ...(typeof runId === 'string' ? { runId } : {}),
+  };
+}
+
+export async function askWhetherTurnIsRunning(
+  conversationId: string,
+  signal: AbortSignal,
+): Promise<InFlightTurnVerdict> {
+  return (await readConversationRuns(conversationId, signal)).verdict;
 }
 
 /**
@@ -146,12 +171,23 @@ export function useInFlightTurnRecovery(
   const onFinishedRef = useRef(input.onFinished);
   onFinishedRef.current = input.onFinished;
   const runningSeen = useRef<string | null>(null);
+  const runSeen = useRef<{ turn: string; runId: string } | null>(null);
   const firstAsked = useRef<{ turn: string; atMs: number } | null>(null);
   const asking = turnToAsk(input);
   const conversationId = input.conversationId;
   const last = input.messages[input.messages.length - 1];
   const turn = asking && conversationId ? `${conversationId}:${asking}:${last?.id ?? ''}` : null;
   const questionSentAt = asking === 'question' ? last?.createdAt : undefined;
+  const questionRef = useRef<UnansweredQuestion | null>(null);
+  questionRef.current =
+    asking === 'question' && last?.id
+      ? {
+          id: last.id,
+          ...(last.createdAt ? { createdAt: last.createdAt } : {}),
+          ...(last.parentId !== undefined ? { parentId: last.parentId } : {}),
+          ...(last.metadata ? { metadata: last.metadata } : {}),
+        }
+      : null;
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -179,10 +215,77 @@ export function useInFlightTurnRecovery(
       timer = setTimeout(() => void ask(), IN_FLIGHT_TURN_RECHECK_MS);
     };
 
-    const ask = async (): Promise<void> => {
-      let next: InFlightTurnVerdict;
+    const question = questionRef.current;
+    const followFinishedRun = async (): Promise<boolean> => {
+      if (!question) return false;
+      const recorded = inFlightTurnFor(conversationId, question.id);
+      let runId =
+        recorded?.runId ?? (runSeen.current?.turn === turn ? runSeen.current.runId : null);
+      if (!runId && recorded?.operationId) {
+        try {
+          runId = await findRunForOperation(recorded.operationId, controller.signal);
+        } catch {
+          runId = null;
+        }
+        if (controller.signal.aborted) return true;
+        if (runId) recordInFlightTurnRun({ conversationId, questionId: question.id, runId });
+      }
+      if (!runId) return false;
+      let reading: FinishedRunReading;
       try {
-        next = await askWhetherTurnIsRunning(conversationId, controller.signal);
+        reading = await readFinishedRunAnswer(
+          { conversationId, runId, question },
+          controller.signal,
+        );
+      } catch {
+        reading = { kind: 'unknown' };
+      }
+      if (controller.signal.aborted) return true;
+      switch (reading.kind) {
+        case 'running': {
+          const verdict = readInFlightTurnVerdict([reading.run]);
+          settle(verdict);
+          if (verdict === 'running') {
+            runningSeen.current = conversationId;
+            askAgainLater();
+          }
+          return true;
+        }
+        case 'answered':
+          forgetInFlightTurnRun(conversationId);
+          runSeen.current = null;
+          if (restoreFinishedRunAnswer(conversationId, question.id, reading.answer)) {
+            settle('idle');
+            return true;
+          }
+          onFinishedRef.current();
+          settle('checking');
+          askAgainLater();
+          return true;
+        case 'ended':
+          forgetInFlightTurnRun(conversationId);
+          settle('stalled');
+          return true;
+        case 'elsewhere':
+          forgetInFlightTurnRun(conversationId);
+          runSeen.current = null;
+          runningSeen.current = null;
+          onFinishedRef.current();
+          settle('checking');
+          askAgainLater();
+          return true;
+        case 'unknown':
+          return false;
+      }
+    };
+
+    const ask = async (): Promise<void> => {
+      if (await followFinishedRun()) return;
+      if (controller.signal.aborted) return;
+      let next: InFlightTurnVerdict;
+      let runId: string | undefined;
+      try {
+        ({ verdict: next, runId } = await readConversationRuns(conversationId, controller.signal));
       } catch {
         next = 'unknown';
       }
@@ -190,6 +293,7 @@ export function useInFlightTurnRecovery(
       if (next === 'running') {
         settle(next);
         runningSeen.current = conversationId;
+        if (runId && question) runSeen.current = { turn, runId };
         askAgainLater();
         return;
       }

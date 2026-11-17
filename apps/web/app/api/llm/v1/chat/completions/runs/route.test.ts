@@ -69,9 +69,30 @@ describe('GET /api/llm/v1/chat/completions/runs', () => {
       requestId: 'request-1',
       before: undefined,
       limit: 1,
-      workModes: ['agiwork'],
     });
     await expect(response.json()).resolves.toEqual({ runs: [], nextCursor: null });
+  });
+
+  // A phone ended right after Send never read the run id from the response
+  // headers; the request id it sent is the only way back to a chat turn the
+  // server went on to finish.
+  it('finds a chat turn by its request id in any state', async () => {
+    const chatRun = {
+      id: 'run-chat',
+      requestId: 'agi.chat.mobile.send.op-1',
+      workMode: 'chat',
+      state: 'ready_for_review',
+    };
+    mocks.listCloudAgentRuns.mockResolvedValue({ runs: [chatRun], next: null });
+
+    const response = await GET(
+      request('?requestId=agi.chat.mobile.send.op-1&state=ready_for_review&state=failed&limit=1'),
+    );
+
+    const input = mocks.listCloudAgentRuns.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(input).not.toHaveProperty('workModes');
+    expect(input).toMatchObject({ userId: 'user-owner', requestId: 'agi.chat.mobile.send.op-1' });
+    await expect(response.json()).resolves.toEqual({ runs: [chatRun], nextCursor: null });
   });
 
   // Tasks is the AGI Work surface. An ordinary `chat` turn also writes a

@@ -21,6 +21,7 @@ import { codeFileFor } from '@agiworkforce/unified-chat/code-file-name';
 import { sanitizeFilename } from '@agiworkforce/unified-chat/filename';
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
+import { ApiHttpError } from '@/services/apiErrors';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 import { EXPORT_CONTENT_STYLES, markdownToExportHtml } from '@/services/exportMarkdownHtml';
 import { markdownToDocxBase64 } from './docxExport';
@@ -402,27 +403,33 @@ export function blobToBase64(blob: Blob): Promise<string> {
  */
 const SIGNED_OUT_STATUSES: ReadonlySet<number> = new Set([401, 403]);
 const GONE_STATUSES: ReadonlySet<number> = new Set([404, 410]);
+const TOO_LARGE_STATUS = 413;
+const FILE_TOO_LARGE_CODE = 'file_too_large';
+const FILE_TOO_LARGE_MESSAGE = 'This file is too large to open on this device.';
 
-export class FileDownloadError extends Error {
-  readonly status: number;
-
+export class FileDownloadError extends ApiHttpError {
   constructor(status: number) {
     super(
       SIGNED_OUT_STATUSES.has(status)
         ? 'You must be signed in to download this file.'
         : GONE_STATUSES.has(status)
           ? 'This file no longer exists.'
-          : `Download failed (HTTP ${status})`,
+          : status === TOO_LARGE_STATUS
+            ? FILE_TOO_LARGE_MESSAGE
+            : `Download failed (HTTP ${status})`,
+      status,
+      status === TOO_LARGE_STATUS ? FILE_TOO_LARGE_CODE : null,
     );
     this.name = 'FileDownloadError';
-    this.status = status;
   }
 }
 
 export function downloadFailureMessage(error: unknown, fallback: string): string {
   if (
     error instanceof FileDownloadError &&
-    (SIGNED_OUT_STATUSES.has(error.status) || GONE_STATUSES.has(error.status))
+    (SIGNED_OUT_STATUSES.has(error.status) ||
+      GONE_STATUSES.has(error.status) ||
+      error.status === TOO_LARGE_STATUS)
   ) {
     return error.message;
   }

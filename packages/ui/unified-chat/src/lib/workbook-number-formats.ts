@@ -270,9 +270,9 @@ function roundToPlaces(
       ? significant + '0'.repeat(keep - significant.length)
       : significant.slice(0, keep);
   if (keep < significant.length && significant[keep]! >= '5') {
-    const rounded = increment(kept);
-    if (rounded.length > kept.length) integerLength += 1;
-    kept = rounded;
+    const carried = increment(kept);
+    if (carried.length > kept.length) integerLength += 1;
+    kept = carried;
   }
   if (integerLength <= 0) return { whole: '', fraction: '0'.repeat(-integerLength) + kept };
   let start = 0;
