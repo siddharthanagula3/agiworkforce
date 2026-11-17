@@ -3,6 +3,7 @@ import React from 'react';
 import {
   AppState,
   BackHandler,
+  NativeModules,
   Platform,
   StyleSheet,
   type StyleProp,
@@ -97,9 +98,11 @@ const mockRouterReplace = jest.fn();
 const mockRouterBack = jest.fn();
 const mockCanGoBack = jest.fn(() => true);
 const mockFocusEffects = new Set<{ focus: () => void }>();
+let mockVoiceRouteFocused = true;
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   __esModule: true,
+  useIsFocused: () => mockVoiceRouteFocused,
   useRouter: () => ({
     push: jest.fn(),
     replace: mockRouterReplace,
@@ -203,6 +206,8 @@ import { useTierStore } from '@/src/features/billing/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useRemoteCapabilityStore } from '@/src/lib/Capabilities';
 import { colors, lightColors, type ColorScheme } from '@/src/ui/theme/tokens';
+import { useTheme } from '@/src/ui/theme';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import {
   __resetCloudAccountSessionForTests,
@@ -978,6 +983,7 @@ describe.each<['light' | 'dark', ColorScheme]>([
   });
 
   afterEach(() => {
+    mockVoiceRouteFocused = true;
     useRemoteCapabilityStore.setState({ switchedOff: {}, loadedAt: null });
     useLocalSettingsStore.setState({ themeMode: initialThemeMode });
   });
@@ -999,5 +1005,44 @@ describe.each<['light' | 'dark', ColorScheme]>([
 
     expect(screen.getByLabelText('Close voice companion')).toBeTruthy();
     expect(safeAreaBackground(screen)).toBe(colors.voiceCompanionBgEnd);
+  });
+
+  it('draws light status bar text only while the companion is in front, then hands the bar back to the theme', async () => {
+    const themeBarStyle = themeMode === 'dark' ? 'light-content' : 'dark-content';
+    const otherThemeMode = themeMode === 'dark' ? 'light' : 'dark';
+    const otherThemeBarStyle = themeMode === 'dark' ? 'dark-content' : 'light-content';
+    const settleStatusBar = () => act(() => new Promise<void>((resolve) => setImmediate(resolve)));
+    const nativeBarStyle = () =>
+      jest.mocked(NativeModules.StatusBarManager.setStyle).mock.calls.at(-1)?.[0];
+    function RootStatusBar() {
+      return <ExpoStatusBar style={useTheme().statusBarStyle} />;
+    }
+    const tree = () => (
+      <>
+        <RootStatusBar />
+        <VoiceScreen />
+      </>
+    );
+
+    await settleStatusBar();
+    mockVoiceRouteFocused = true;
+    const screen = render(tree());
+    await settleStatusBar();
+    expect(nativeBarStyle()).toBe('light-content');
+
+    mockVoiceRouteFocused = false;
+    screen.rerender(tree());
+    await settleStatusBar();
+    expect(screen.getByLabelText('Close voice companion')).toBeTruthy();
+    expect(nativeBarStyle()).toBe(themeBarStyle);
+
+    act(() => useLocalSettingsStore.setState({ themeMode: otherThemeMode }));
+    await settleStatusBar();
+    expect(nativeBarStyle()).toBe(otherThemeBarStyle);
+
+    mockVoiceRouteFocused = true;
+    screen.rerender(tree());
+    await settleStatusBar();
+    expect(nativeBarStyle()).toBe('light-content');
   });
 });

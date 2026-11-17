@@ -100,6 +100,8 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
   const stateRef = useRef<VoiceState>('idle');
   const pressStartRef = useRef(0);
   const isLongPressRef = useRef(false);
+  const holdAttemptRef = useRef<RecordingAttempt | null>(null);
+  const holdFailedRef = useRef(false);
   const isPTTRef = useRef(false);
   const pttTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ringScale = useSharedValue(1);
@@ -144,7 +146,7 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
   }, [changeState, clearPTTTimer]);
   const reportError = useCallback((error: unknown) => {
     const kind = classifyVoiceFailure(error);
-    if (kind === 'aborted') return;
+    if (kind === 'aborted') return false;
     if (kind === 'permission') {
       current.current.props.onError?.(
         'Voice input needs microphone and speech access. You can keep typing instead.',
@@ -153,6 +155,7 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
     } else if (kind === 'unavailable' || kind === 'busy' || kind === 'disabled') {
       current.current.props.onError?.(voiceFailureMessage(error));
     } else current.current.props.onFailure?.();
+    return true;
   }, []);
   const fail = useCallback(
     (attempt: RecordingAttempt, error: unknown) => {
@@ -162,7 +165,7 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
       changeState('idle');
       current.current.props.onRecordingStop?.();
       current.current.props.onProcessingChange?.(false);
-      reportError(error);
+      if (reportError(error) && attempt === holdAttemptRef.current) holdFailedRef.current = true;
     },
     [changeState, owns, reportError],
   );
@@ -205,7 +208,7 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
         !current.current.voiceInputEnabled ||
         !useSettingsStore.getState().voiceEnabled
       )
-        return;
+        return null;
       const controller = new AbortController();
       const attempt: RecordingAttempt = {
         controller,
@@ -239,6 +242,7 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
           current.current.props.onRecordingStart?.();
         })
         .catch((error) => fail(attempt, error));
+      return attempt;
     },
     [changeState, fail, owns],
   );
@@ -290,6 +294,8 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
   }, [startSignal, startRecording]);
 
   const handlePressIn = useCallback(() => {
+    holdAttemptRef.current = null;
+    holdFailedRef.current = false;
     if (current.current.disabled || stateRef.current === 'processing') return;
     clearPTTTimer();
     pressStartRef.current = Date.now();
@@ -297,7 +303,8 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
     if (stateRef.current !== 'idle' || !dictationOnboardingSeen) return;
     pttTimerRef.current = setTimeout(() => {
       pttTimerRef.current = null;
-      if (!isLongPressRef.current && pressStartRef.current > 0) startRecording(true);
+      if (!isLongPressRef.current && pressStartRef.current > 0)
+        holdAttemptRef.current = startRecording(true);
     }, HOLD_TO_TALK_THRESHOLD_MS);
   }, [clearPTTTimer, dictationOnboardingSeen, startRecording]);
   const handlePressOut = useCallback(() => {
@@ -316,6 +323,7 @@ export function VoiceInputButton(props: VoiceInputButtonProps) {
     if (!current.current.props.onLongPress) return;
     isLongPressRef.current = true;
     cancelActiveRecording();
+    if (holdFailedRef.current) return;
     if (current.current.hapticsEnabled) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     current.current.props.onLongPress();
   }, [cancelActiveRecording]);

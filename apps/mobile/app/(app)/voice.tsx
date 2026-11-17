@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   BackHandler,
   View,
-  StatusBar,
   useWindowDimensions,
   StyleSheet,
   KeyboardAvoidingView,
@@ -12,7 +11,8 @@ import {
 } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { ArrowUp, X, MicOff, Mic, Hand, Flag } from 'lucide-react-native';
@@ -175,6 +175,7 @@ function LeaveVoiceWithoutOnDeviceRecognizer() {
 
 function VoiceCompanion() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const params = useLocalSearchParams<{ returnTo?: string; audioUri?: string }>();
   const insets = useSafeAreaInsets();
   const themeColors = useThemeColors();
@@ -428,7 +429,7 @@ function VoiceCompanion() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" />
+      {isFocused ? <StatusBar style="light" /> : null}
       <DarkGradientBg />
       <VoiceStateGlow phase={muted ? 'idle' : phase} height={VOICE_GLOW_HEIGHT} />
 
