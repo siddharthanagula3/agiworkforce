@@ -33,9 +33,16 @@ import {
   mergeInspectionFindings,
   openPrivateObjectRange,
   scanCredentialRange,
-  type ChatFileInspectionCursor,
   type OpenObjectRange,
+  type TextInspectionCursor,
 } from './full-inspection';
+import {
+  firstPackageCursor,
+  isPackageCursor,
+  packageScanApplies,
+  scanPackageStep,
+  type PackageInspectionCursor,
+} from './package-inspection';
 import { defaultSealDeps, sealChatFile, type SealDeps } from './seal';
 import { sqlChatFileIntakeStore, type ChatFileIntakeRow } from './store';
 import {
@@ -261,7 +268,7 @@ function objectUnchanged(
  */
 async function continueInspection(
   ctx: StepContext,
-  cursor: ChatFileInspectionCursor,
+  cursor: TextInspectionCursor,
 ): Promise<ChatFileIntakeDirective> {
   const { deps } = ctx;
   const row = await holdForInspection(ctx);
@@ -302,11 +309,73 @@ async function continueInspection(
   return concludeInspection(ctx, row, cursor.etag, head, [...inspection.findings, ...findings]);
 }
 
+/**
+ * One step of the credential scan of an Office package: the whole file, read
+ * once and held to the entity tag the head was read under, then at most a text
+ * step's bytes of the package and its inflated members. The step that reaches
+ * the end decides over the head's findings and the package's together, from
+ * the same read.
+ */
+async function continuePackageInspection(
+  ctx: StepContext,
+  cursor: PackageInspectionCursor,
+): Promise<ChatFileIntakeDirective> {
+  const { deps } = ctx;
+  const row = await holdForInspection(ctx);
+  if (!row) return endDirective('superseded');
+  if (!objectUnchanged(await deps.objects.head(row.stagingKey), cursor.etag, row)) {
+    return refuse(ctx, row, 'changed_during_check');
+  }
+  const data = await readInspectedHead(ctx, row, row.byteCount);
+  if (!objectUnchanged(await deps.objects.head(row.stagingKey), cursor.etag, row)) {
+    return refuse(ctx, row, 'changed_during_check');
+  }
+  if (data === null) throw new ShortInspectionReadError(row.id);
+
+  const scanned = await scanPackageStep({
+    data,
+    row,
+    cursor,
+    policy: deps.policy,
+    declaredAsText: credentialScanContinuesAfterHead(row),
+  });
+  switch (scanned.kind) {
+    case 'continue':
+      return { next: 'inspect', cursor: scanned.cursor };
+    case 'unreadable':
+      logger.warn(
+        { intakeId: row.id, reason: scanned.reason },
+        '[chat-files] refused a large file whose package could not be read to its end',
+      );
+      return refuse(ctx, row, scanned.refusal);
+    case 'rejected':
+      return refuseInspected(ctx, row, scanned.findings);
+    case 'finished': {
+      const head = data.subarray(0, Math.min(row.byteCount, UPLOAD_INSPECTION_BYTES));
+      const inspection = inspectUploadHead(
+        head,
+        row.mimeType,
+        row.fileName,
+        credentialScanMimeType(row),
+      );
+      if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
+      return concludeInspection(ctx, row, cursor.etag, head, [
+        ...inspection.findings,
+        ...scanned.findings,
+      ]);
+    }
+  }
+}
+
 async function inspectStep(
   ctx: StepContext,
   directive: Extract<ChatFileIntakeDirective, { next: 'inspect' }>,
 ): Promise<ChatFileIntakeDirective> {
-  if (directive.cursor) return continueInspection(ctx, directive.cursor);
+  if (directive.cursor) {
+    return isPackageCursor(directive.cursor)
+      ? continuePackageInspection(ctx, directive.cursor)
+      : continueInspection(ctx, directive.cursor);
+  }
   const { deps } = ctx;
   const row = await holdForInspection(ctx);
   if (!row) return endDirective('superseded');
@@ -334,6 +403,7 @@ async function inspectStep(
     credentialScanMimeType(row),
   );
   if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
+  if (packageScanApplies(row)) return { next: 'inspect', cursor: firstPackageCursor(before.etag) };
   if (credentialScanContinuesAfterHead(row)) {
     return { next: 'inspect', cursor: firstCursorAfterHead(before.etag) };
   }

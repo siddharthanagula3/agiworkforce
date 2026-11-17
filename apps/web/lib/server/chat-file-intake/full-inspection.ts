@@ -11,6 +11,7 @@ import {
   type UploadScanFinding,
 } from '@/lib/security/upload-scan';
 import { getPrivateObjectStream } from '@/lib/server/object-storage';
+import type { PackageInspectionCursor } from './package-inspection';
 
 /**
  * How far the credential scan of a large text file has got. It crosses the
@@ -18,13 +19,16 @@ import { getPrivateObjectStream } from '@/lib/server/object-storage';
  * any of the file's text. A run that starts again from the row's state starts
  * the scan again from the first byte.
  */
-export interface ChatFileInspectionCursor {
+export interface TextInspectionCursor {
+  scan?: undefined;
   etag: string;
   /** The first byte whose detections the next step answers for. */
   ownedFrom: number;
   /** One finding per detector the scan after the head has found so far. */
   findings: UploadScanFinding[];
 }
+
+export type ChatFileInspectionCursor = TextInspectionCursor | PackageInspectionCursor;
 
 /** Bytes one window answers for: with a guard either side it reads as much as the head does. */
 export const CREDENTIAL_WINDOW_OWNED_BYTES =
@@ -72,7 +76,7 @@ export function credentialScanContinuesAfterHead(row: {
   );
 }
 
-export function firstCursorAfterHead(etag: string): ChatFileInspectionCursor {
+export function firstCursorAfterHead(etag: string): TextInspectionCursor {
   return { etag, ownedFrom: UPLOAD_INSPECTION_BYTES - CREDENTIAL_SCAN_GUARD_BYTES, findings: [] };
 }
 

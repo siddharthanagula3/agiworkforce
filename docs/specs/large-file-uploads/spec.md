@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Chat attachments maintainers
-Last updated: 2026-11-16
+Last updated: 2026-11-17
 
 Paid plans on Managed Cloud can attach chat files up to 500 MiB each and 20 per
 message. A large file is never held whole in a function's memory and never sent
@@ -650,8 +650,28 @@ an 8 GB VM with 4 shared CPUs, which is an owner cost decision.
   (`dlp_blocked`); the rest go with the head's findings to the workspace data
   policy, which decides as it does for a small file. A whitespace run of more
   than about 16,000 bytes between a keyword and its value, across a window
-  edge, is not matched. PDF, Office and XLSX files, by declared type and by
-  name, are not read by the credential detectors at any size, large or inline.
+  edge, is not matched. PDF files, by declared type and by name, are not read
+  by the credential detectors at any size, large or inline, and Office and XLSX
+  files are not read on the inline path.
+- A large Office or XLSX file is read as a package before anything is submitted
+  (`apps/web/lib/server/chat-file-intake/package-inspection.ts`): the package's
+  own bytes; every member inflated, a part written in UTF-16 decoded first; a
+  copy of every `.xml`, `.rels` and `.vml` part with its markup removed, so a
+  credential split across runs is read whole; and the members of a package held
+  inside a member, one level deep. A step reads at most
+  `kinds.text.bytesPerStep` and visits at most 2,000 members. The members may
+  inflate to at most `largeFiles.maxPackageInflatedBytes` (1 GiB, the malware
+  scanner's `MaxScanSize`) and to 120 times the file's size. The detectors that
+  name no credential format (entropy, card number and SSN shapes) do not answer
+  over a package, because Office's own serialisation trips them, and a password
+  in a URL answers only over relationship parts and the markup-free copy. A
+  package that cannot be read to its end is refused before submission under
+  every policy: an encrypted one as `encrypted`; more than 2,000 members in the
+  archive or in a held package, inflation past either limit, a package nested
+  two deep or a held package larger than the file as `limits_exceeded`; a
+  damaged one, or one whose member names alias each other, as `type_mismatch`.
+  No reader runs during intake; the cursor between steps holds offsets, member
+  indexes, lengths and detector names, never text.
 - `matchDenylistedSha256` in `hash-denylist.ts` matches a hash against the
   existing denylist.
 
@@ -1341,7 +1361,7 @@ egress is free, so that is accepted.
   client uses, so nothing changes for a client without the token.
 - `largeFiles` {`maxBytes` 524288000, `maxCount` 20, `maxMessageBytes`
   2147483648, `cellularConfirmBytes` 52428800, `sandboxStagedBytesMax`
-  1073741824}
+  1073741824, `maxPackageInflatedBytes` 1073741824}
 - `kinds` {`pdf` {maxBytes 524288000, maxTextPages 1000, pagesPerStep 100,
   maxOcrPagesPerFile 100, ocrPagesPerTurn 8, ocrBatchPages 4, bufferedMaxBytes
   209715200, rangeLoading true}, `office` {maxBytes 104857600, maxSlides 200}, `spreadsheet`

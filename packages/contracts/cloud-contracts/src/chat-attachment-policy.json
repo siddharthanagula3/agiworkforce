@@ -68,7 +68,8 @@
     "maxCount": 20,
     "maxMessageBytes": 2147483648,
     "cellularConfirmBytes": 52428800,
-    "sandboxStagedBytesMax": 1073741824
+    "sandboxStagedBytesMax": 1073741824,
+    "maxPackageInflatedBytes": 1073741824
   },
   "kinds": {
     "pdf": {

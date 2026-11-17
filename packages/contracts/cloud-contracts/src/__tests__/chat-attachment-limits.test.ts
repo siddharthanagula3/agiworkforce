@@ -230,6 +230,7 @@ describe('large chat file policy', () => {
       maxMessageBytes: 2048 * MIB,
       cellularConfirmBytes: 50 * MIB,
       sandboxStagedBytesMax: 1024 * MIB,
+      maxPackageInflatedBytes: 1024 * MIB,
     });
     expect(CHAT_LARGE_FILE_POLICY.kinds).toEqual({
       pdf: {
