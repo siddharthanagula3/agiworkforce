@@ -38,6 +38,13 @@ import {
   PERSONALIZATION_OCCUPATION_MAX_LENGTH,
 } from './personalizationFieldLimits';
 import { TraitLevelSheet } from './TraitLevelSheet';
+import {
+  FIELD_BORDER_WIDTH,
+  MULTILINE_FIELD_MAX_HEIGHT,
+  useFocusedFieldReveal,
+  type FieldReveal,
+  type MeasurableScrollView,
+} from './personalizationFieldReveal';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
@@ -119,6 +126,7 @@ function LabeledInput({
   maxLength,
   helper,
   error,
+  reveal,
 }: {
   label: string;
   value: string;
@@ -128,22 +136,29 @@ function LabeledInput({
   maxLength?: number;
   helper?: ReactNode;
   error?: string | null;
+  reveal: FieldReveal;
 }) {
   const c = useThemeColors();
+  const blockRef = useRef<View>(null);
+  const inputRef = useRef<TextInput>(null);
   return (
-    <View className="gap-1.5">
+    <View ref={blockRef} collapsable={false} className="gap-1.5">
       <Text className="text-sm" style={{ color: c.textMuted }}>
         {label}
       </Text>
       <TextInput
+        ref={inputRef}
         className={`px-4 rounded-xl text-[15px] ${multiline ? 'pt-3 pb-3 min-h-[100px]' : 'h-12'}`}
         style={{
           backgroundColor: c.surfaceElevated,
-          borderWidth: 1,
+          borderWidth: FIELD_BORDER_WIDTH,
           borderColor: error ? c.agentError : c.border,
           color: c.textPrimary,
           letterSpacing: 0,
+          maxHeight: multiline ? MULTILINE_FIELD_MAX_HEIGHT : undefined,
         }}
+        onFocus={() => reveal.focusField(blockRef, inputRef)}
+        onBlur={() => reveal.blurField(blockRef)}
         accessibilityLabel={label}
         accessibilityHint={error ?? undefined}
         value={value}
@@ -220,6 +235,9 @@ export default function PersonalizationScreen() {
   const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
   const cloudSetPersonalization = useCloudSettingsStore((s) => s.setPersonalization);
   const clerkUserId = useAuthStore((s) => s.clerkUserId);
+
+  const scrollRef = useRef<MeasurableScrollView>(null);
+  const { reveal, scrollProps } = useFocusedFieldReveal(scrollRef);
 
   const personalization = isCloud ? cloudPersonalization : localPersonalization;
   const setPersonalization = isCloud ? cloudSetPersonalization : localSetPersonalization;
@@ -460,14 +478,17 @@ export default function PersonalizationScreen() {
         enabled={Platform.OS !== 'ios'}
       >
         <ScrollView
+          ref={scrollRef}
           className="flex-1 px-4"
           contentContainerStyle={{ ...contentColumn('reading'), paddingBottom: 40, gap: 16 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets
+          {...scrollProps}
         >
           <Card className="gap-4 mt-2">
             <LabeledInput
+              reveal={reveal}
               label="Full Name"
               value={fullName}
               onChangeText={(value) => {
@@ -478,6 +499,7 @@ export default function PersonalizationScreen() {
               error={fullNameError}
             />
             <LabeledInput
+              reveal={reveal}
               label="Nickname"
               value={nickname}
               onChangeText={(value) => {
@@ -489,6 +511,7 @@ export default function PersonalizationScreen() {
               helper={`${PRODUCT_BRAND} uses your nickname in chat.`}
             />
             <LabeledInput
+              reveal={reveal}
               label="Occupation"
               value={occupation}
               onChangeText={(value) => {
@@ -499,6 +522,7 @@ export default function PersonalizationScreen() {
               maxLength={PERSONALIZATION_OCCUPATION_MAX_LENGTH}
             />
             <LabeledInput
+              reveal={reveal}
               label="More about you"
               value={aboutYou}
               onChangeText={(value) => {
@@ -509,6 +533,7 @@ export default function PersonalizationScreen() {
               multiline
             />
             <LabeledInput
+              reveal={reveal}
               label="Custom Instructions"
               value={instructions}
               onChangeText={(value) => {

@@ -51474,6 +51474,9 @@
     "fetchWorkspacePosture": [
       "apps/mobile/src/features/team/administration.ts"
     ],
+    "FIELD_BORDER_WIDTH": [
+      "apps/mobile/src/features/settings/personalization/personalizationFieldReveal.ts"
+    ],
     "FIELD_CONDITION_OPERATORS": [
       "apps/web/lib/automation/field-conditions.ts"
     ],
@@ -51494,6 +51497,15 @@
     ],
     "FieldNeverLogged": [
       "apps/web/lib/identity/log-hygiene.ts"
+    ],
+    "FieldReveal": [
+      "apps/mobile/src/features/settings/personalization/personalizationFieldReveal.ts"
+    ],
+    "FieldRevealFrame": [
+      "apps/mobile/src/features/settings/personalization/personalizationFieldReveal.ts"
+    ],
+    "fieldRevealOffset": [
+      "apps/mobile/src/features/settings/personalization/personalizationFieldReveal.ts"
     ],
     "FIELDS_NEVER_LOGGED": [
       "apps/web/lib/identity/log-hygiene.ts"
@@ -84458,6 +84470,9 @@
     "Measurable": [
       "apps/mobile/src/features/chat/components/cards/ChatScrollIntoView.tsx"
     ],
+    "MeasurableScrollView": [
+      "apps/mobile/src/features/settings/personalization/personalizationFieldReveal.ts"
+    ],
     "measureAnomalySeries": [
       "apps/web/lib/server/slo/anomaly.ts"
     ],
@@ -88730,6 +88745,9 @@
     ],
     "MS_PER_SECOND": [
       "apps/web/features/plugins/server/directory/constants.ts"
+    ],
+    "MULTILINE_FIELD_MAX_HEIGHT": [
+      "apps/mobile/src/features/settings/personalization/personalizationFieldReveal.ts"
     ],
     "MULTIMODAL_MIN_RAM_MB": [
       "packages/platform/local-llm/src/index.ts",
@@ -120688,6 +120706,9 @@
     "revealInFileManager": [
       "apps/desktop/electron/runtime/appsService.ts"
     ],
+    "RevealScroller": [
+      "apps/mobile/src/features/settings/personalization/personalizationFieldReveal.ts"
+    ],
     "revealSimulatorCapture": [
       "apps/desktop/electron/runtime/simulatorService.ts",
       "apps/web/features/desktop-host/index.ts",
@@ -150694,6 +150715,9 @@
     ],
     "useFocusBoundVisibility": [
       "apps/mobile/src/features/voice/hooks/useInlineVoiceBar.ts"
+    ],
+    "useFocusedFieldReveal": [
+      "apps/mobile/src/features/settings/personalization/personalizationFieldReveal.ts"
     ],
     "useFocusFollowUp": [
       "apps/web/features/chat/hooks/use-focus-follow-up.ts"
