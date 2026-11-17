@@ -560,7 +560,7 @@ async function readXlsxSheets(
         const rawValue = valueEnd === -1 ? '' : body.slice(valueStart + 3, valueEnd);
         let value: string;
         if (type === 's') {
-          value = sharedStrings[Number(rawValue)] ?? '';
+          value = rawValue === '' ? '' : (sharedStrings[Number(rawValue)] ?? '');
         } else if (type === 'inlineStr') {
           value = xmlTextRuns(body, 't');
         } else {

@@ -1,4 +1,5 @@
 export const MAX_FILENAME_CHARS = 200;
+export const MAX_FILENAME_EXTENSION_CHARS = 16;
 export const FALLBACK_FILENAME = 'file';
 
 const PATH_SEPARATOR = /[/\\]/u;
@@ -8,6 +9,14 @@ const COLLAPSE_UNDERSCORES = /_{2,}/gu;
 const TRAVERSAL_SEGMENT = /^\.+$/u;
 const LAST_CONTROL_CODE = 0x1f;
 const DELETE_CODE = 0x7f;
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
 
 function isControlCharacter(character: string): boolean {
   const code = character.codePointAt(0) ?? 0;
@@ -20,6 +29,15 @@ function stripControlCharacters(value: string): string {
     if (!isControlCharacter(character)) out += character;
   }
   return out;
+}
+
+function wholeCharacters(value: string, end: number): string {
+  const splitsPair =
+    end > 0 &&
+    end < value.length &&
+    isHighSurrogate(value.charCodeAt(end - 1)) &&
+    isLowSurrogate(value.charCodeAt(end));
+  return value.slice(0, splitsPair ? end - 1 : end);
 }
 
 function lastSegment(value: string): string {
@@ -53,6 +71,7 @@ export function sanitizeFilename(value: string): string {
   if (base.length <= MAX_FILENAME_CHARS) return base;
 
   const dot = base.lastIndexOf('.');
-  const extension = dot > 0 && base.length - dot <= 16 ? base.slice(dot) : '';
-  return `${base.slice(0, MAX_FILENAME_CHARS - extension.length)}${extension}`;
+  const extension =
+    dot > 0 && base.length - dot <= MAX_FILENAME_EXTENSION_CHARS ? base.slice(dot) : '';
+  return `${wholeCharacters(base, MAX_FILENAME_CHARS - extension.length)}${extension}`;
 }

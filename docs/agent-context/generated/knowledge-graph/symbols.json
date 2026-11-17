@@ -82255,6 +82255,9 @@
       "apps/web/lib/redaction/index.ts",
       "packages/ui/unified-chat/src/lib/filename.ts"
     ],
+    "MAX_FILENAME_EXTENSION_CHARS": [
+      "packages/ui/unified-chat/src/lib/filename.ts"
+    ],
     "MAX_FILL_FIELDS": [
       "apps/extension/src/features/content/pageElements.ts"
     ],
@@ -82458,6 +82461,9 @@
     "MAX_MULTIPART_PART_NUMBER": [
       "packages/platform/object-storage/src/index.ts",
       "packages/platform/object-storage/src/presign.ts"
+    ],
+    "MAX_NATIVE_FILENAME_BYTES": [
+      "apps/mobile/services/nativeFileName.ts"
     ],
     "MAX_OFFICE_TEXT_CHARS": [
       "apps/web/lib/server/office-document-text.ts"
@@ -89049,6 +89055,9 @@
     ],
     "nativeFieldValue": [
       "apps/extension/src/features/content/pageElements.ts"
+    ],
+    "nativeFileName": [
+      "apps/mobile/services/nativeFileName.ts"
     ],
     "NativeHostManifest": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/manifest.rs"

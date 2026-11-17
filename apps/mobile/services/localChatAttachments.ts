@@ -5,7 +5,7 @@ import {
   makeDirectoryAsync,
 } from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
-import { sanitizeFilename } from '@agiworkforce/unified-chat/filename';
+import { nativeFileName } from '@/services/nativeFileName';
 import { excludeFromBackup } from '@/src/platform/backupExclusion';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 
@@ -59,7 +59,7 @@ async function keepAttachment(
   const folder = `${directory}${Crypto.randomUUID()}/`;
   try {
     await makeDirectoryAsync(folder, { intermediates: true });
-    const url = `${folder}${encodeURIComponent(sanitizeFilename(attachment.fileName))}`;
+    const url = `${folder}${encodeURIComponent(nativeFileName(attachment.fileName))}`;
     await copyAsync({ from: attachment.url, to: url });
     return { ...attachment, url };
   } catch {

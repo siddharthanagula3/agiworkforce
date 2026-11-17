@@ -18,12 +18,12 @@ import {
 } from 'expo-media-library/legacy';
 import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agiworkforce/types';
 import { codeFileFor } from '@agiworkforce/unified-chat/code-file-name';
-import { sanitizeFilename } from '@agiworkforce/unified-chat/filename';
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
 import { ApiHttpError } from '@/services/apiErrors';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 import { EXPORT_CONTENT_STYLES, markdownToExportHtml } from '@/services/exportMarkdownHtml';
+import { nativeFileName } from '@/services/nativeFileName';
 import { markdownToDocxBase64 } from './docxExport';
 import {
   StaleCloudAccountOperationError,
@@ -89,8 +89,8 @@ function exportedFile(uri: string, fileName: string, lineage: Partial<FileLineag
 }
 
 function exportFileName(title: string, extension: string): string {
-  const name = sanitizeFilename(title);
-  return extension ? sanitizeFilename(`${name}.${extension}`) : name;
+  const name = nativeFileName(title);
+  return extension ? nativeFileName(`${name}.${extension}`) : name;
 }
 
 function markdownToHtml(content: string, title: string): string {
@@ -466,7 +466,7 @@ function nameForContentType(fileName: string, contentType: string | null): strin
 }
 
 async function writeGeneratedFileBytes(fileName: string, base64: string): Promise<string> {
-  const destUri = await allocateExportPath(sanitizeFilename(fileName));
+  const destUri = await allocateExportPath(nativeFileName(fileName));
   await writeAsStringAsync(destUri, base64, { encoding: EncodingType.Base64 });
   return destUri;
 }
@@ -482,7 +482,7 @@ export async function downloadGeneratedFileAsManagedFile(
   fileName: string,
 ): Promise<ManagedFile> {
   const { base64, contentType } = await fetchGeneratedFileBytes(url);
-  const typedName = sanitizeFilename(nameForContentType(fileName, contentType));
+  const typedName = nativeFileName(nameForContentType(fileName, contentType));
   const destUri = await writeGeneratedFileBytes(typedName, base64);
   const sourceFileId = CLOUD_FILE_PATH.exec(url)?.[1] ?? null;
   return exportedFile(
@@ -528,7 +528,7 @@ export async function viewerFileCopy(url: string, fileName: string): Promise<str
   if (existing) return existing;
   const { base64, contentType } = await fetchGeneratedFileBytes(url);
   const fileUri = `${directoryUri}${encodeURIComponent(
-    sanitizeFilename(nameForContentType(fileName, contentType)),
+    nativeFileName(nameForContentType(fileName, contentType)),
   )}`;
   await makeDirectoryAsync(directoryUri, { intermediates: true });
   const partialUri = `${directoryUri}${Crypto.randomUUID()}.part`;

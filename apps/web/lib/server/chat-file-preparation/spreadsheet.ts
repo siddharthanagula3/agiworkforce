@@ -88,6 +88,14 @@ function columnIndex(column: string): number {
   return index;
 }
 
+function columnLetters(index: number): string {
+  let letters = '';
+  for (let rest = index; rest > 0; rest = Math.floor((rest - 1) / 26)) {
+    letters = String.fromCharCode(65 + ((rest - 1) % 26)) + letters;
+  }
+  return letters;
+}
+
 function csvField(value: string): string {
   const bounded = value.length > MAX_CELL_CHARS ? value.slice(0, MAX_CELL_CHARS) : value;
   return /[",\n\r]/.test(bounded) ? `"${bounded.replace(/"/g, '""')}"` : bounded;
@@ -173,7 +181,7 @@ function cellValue(
   const valueEnd = valueStart === -1 ? -1 : body.indexOf('</v>', valueStart + 3);
   const raw = valueEnd === -1 ? '' : body.slice(valueStart + 3, valueEnd);
   let text: string;
-  if (type === 's') text = sharedStrings[Number(raw)] ?? '';
+  if (type === 's') text = raw === '' ? '' : (sharedStrings[Number(raw)] ?? '');
   else if (type === 'inlineStr') text = textRuns(body);
   else if (type === 'b') text = raw === '1' ? 'true' : raw === '0' ? 'false' : raw;
   else text = decodeXmlEntities(raw);
@@ -202,11 +210,12 @@ function profileSheet(
   let rowCount = 0;
   for (const row of xmlElements(xml, 'row')) {
     const cells = new Map<string, SheetCell>();
+    let position = 0;
     for (const cell of xmlElements(row.body, 'c')) {
-      const reference = /r="([A-Z]+)\d+"/.exec(cell.attributes)?.[1];
-      if (!reference) continue;
+      const declared = /\sr="([A-Z]{1,3})\d+"/.exec(cell.attributes)?.[1];
+      position = declared === undefined ? position + 1 : columnIndex(declared);
       const value = cellValue(cell.attributes, cell.body, sharedStrings, styles);
-      if (value.text) cells.set(reference, value);
+      if (value.text) cells.set(columnLetters(position), value);
     }
     if (cells.size === 0) continue;
     rowCount += 1;

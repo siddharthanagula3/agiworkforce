@@ -922,3 +922,95 @@ describe('workbook preparation number formats', () => {
     expect(text).toContain('Coded,Day\n45292,2024-01-01');
   });
 });
+
+describe('workbook preparation cell positions', () => {
+  const SHARED_STRINGS =
+    '<?xml version="1.0"?><sst><si><t>Code</t></si><si><t>Amount</t></si><si><t>Region</t></si><si><t>Note</t></si><si><t>X9</t></si></sst>';
+
+  async function profiled(rows: string[]): Promise<{ profile: SheetProfile; text: string }> {
+    return preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Positions',
+        sharedStringsXml: SHARED_STRINGS,
+        sheetXml: sheetXml(rows.join('')),
+      }),
+    );
+  }
+
+  it('reads a sheet whose cells and rows carry no references by position', async () => {
+    const { profile, text } = await profiled([
+      '<row><c t="s"><v>0</v></c><c t="s"><v>1</v></c></row>',
+      '<row><c><v>1</v></c><c><v>20</v></c></row>',
+      '<row><c><v>2</v></c><c><v>30</v></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 2 });
+    expect(columnTypes(profile)).toEqual(['Code: integer', 'Amount: integer']);
+    expect(text).toContain('2 rows after the header, 2 columns.');
+    expect(text).toContain('First 2 rows:\nCode,Amount\n1,20\n2,30');
+  });
+
+  it('continues from a declared reference with the cells after it that have none', async () => {
+    const { profile, text } = await profiled([
+      '<row><c r="A1" t="s"><v>0</v></c><c t="s"><v>1</v></c><c r="E1" t="s"><v>2</v></c><c t="s"><v>3</v></c></row>',
+      '<row><c r="A2"><v>1</v></c><c><v>2</v></c><c r="E2" t="inlineStr"><is><t>North</t></is></c><c><v>9</v></c></row>',
+    ]);
+
+    expect(columnTypes(profile)).toEqual([
+      'Code: integer',
+      'Amount: integer',
+      'Region: text',
+      'Note: integer',
+    ]);
+    expect(text).toContain('First 1 rows:\nCode,Amount,Region,Note\n1,2,North,9');
+  });
+
+  it('counts a cell without a value as a position so the cells after it keep their columns', async () => {
+    const { profile, text } = await profiled([
+      '<row><c t="s"><v>0</v></c><c t="s"><v>1</v></c><c t="s"><v>2</v></c></row>',
+      '<row><c/><c><v>42</v></c><c s="1" /></row>',
+      '<row><c t="s"><v>4</v></c><c></c><c><v>7</v></c></row>',
+      '<row ht="20"/>',
+      '<row><c/><c/><c><v>5</v></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 3 });
+    expect(profile.columns?.map((column) => column.name)).toEqual(['Code', 'Amount', 'Region']);
+    expect(text).toContain('First 3 rows:\nCode,Amount,Region\n,42,\nX9,,7\n,,5');
+  });
+
+  it('reads a shared string cell without a value as empty rather than the first shared string', async () => {
+    const { profile, text } = await profiled([
+      '<row><c t="s"><v>0</v></c><c t="s"><v>1</v></c><c t="s"><v>2</v></c></row>',
+      '<row><c t="s"/><c><v>42</v></c><c t="s"></c></row>',
+      '<row><c r="A3" t="s"/><c r="B3"><v>7</v></c><c r="C3" t="s"></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 2 });
+    expect(text).toContain('First 2 rows:\nCode,Amount,Region\n,42,\n,7,');
+  });
+
+  it('treats a malformed reference as missing and ignores an attribute whose name ends in r', async () => {
+    const { profile, text } = await profiled([
+      '<row><c bar="Z9" t="s"><v>0</v></c><c r="B" t="s"><v>1</v></c></row>',
+      '<row><c r="1A"><v>3</v></c><c r="zz9"><v>4</v></c></row>',
+      '<row><c r="AAAAAAAAAA1"><v>5</v></c><c ver="Q7"><v>6</v></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 2 });
+    expect(columnTypes(profile)).toEqual(['Code: integer', 'Amount: integer']);
+    expect(text).toContain('First 2 rows:\nCode,Amount\n3,4\n5,6');
+  });
+
+  it('places the 27th and later cells of a row in the columns after Z', async () => {
+    const header = Array.from(
+      { length: 28 },
+      (_, index) => `<c t="inlineStr"><is><t>H${index + 1}</t></is></c>`,
+    ).join('');
+    const values = Array.from({ length: 28 }, (_, index) => `<c><v>${index + 1}</v></c>`).join('');
+    const { profile } = await profiled([`<row>${header}</row>`, `<row>${values}</row>`]);
+
+    expect(profile.columns).toHaveLength(28);
+    expect(profile.columns?.slice(25).map((column) => column.name)).toEqual(['H26', 'H27', 'H28']);
+  });
+});

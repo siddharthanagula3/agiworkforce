@@ -608,6 +608,18 @@ describe('inline workbook cell positions', () => {
 
     expect(table.csv).toBe(['"","5",""', '"Total","","9"', '"Spare","1","2"'].join('\n'));
   });
+
+  it('reads a shared string cell with no value as empty, not as the first shared string', async () => {
+    const text = await sheetText(
+      await styledXlsx({
+        sheetXml:
+          '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"/><c r="C1" t="s"></c><c t="s"/><c r="E1"><v>7</v></c></row>',
+        sharedStringsXml: '<?xml version="1.0"?><sst><si><t>Name</t></si></sst>',
+      }),
+    );
+
+    expect(text).toBe(['## Sheet: Ledger', 'Row 1: A: Name | E: 7'].join('\n'));
+  });
 });
 
 describe('workbook XML helpers shared with the large-file path', () => {

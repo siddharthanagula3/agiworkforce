@@ -70,6 +70,27 @@ describe('keeping the files of a Local chat message', () => {
     expect(mockCopy).toHaveBeenCalledWith({ from: PHOTO.url, to: kept[1]!.url });
   });
 
+  it('keeps the copy of a file with a long multibyte name within the file system limit and keeps its extension', async () => {
+    const long: MessageAttachment = {
+      ...PDF,
+      fileName: `${'\u9577'.repeat(100)}.pdf`,
+    };
+
+    const [kept] = await keepLocalChatAttachments('conv_1', [long]);
+
+    const diskName = decodeURIComponent(kept!.url.slice(kept!.url.lastIndexOf('/') + 1));
+    expect(diskName.endsWith('.pdf')).toBe(true);
+    expect(Buffer.byteLength(diskName, 'utf8')).toBeLessThanOrEqual(255);
+    expect(mockCopy).toHaveBeenCalledWith({ from: long.url, to: kept!.url });
+    expect(kept!.fileName).toBe(long.fileName);
+  });
+
+  it('keeps a copy of a file whose name holds half an emoji', async () => {
+    const [kept] = await keepLocalChatAttachments('conv_1', [{ ...PDF, fileName: 'a\uD83D.pdf' }]);
+
+    expect(kept!.url).toBe('file:///documents/chat-attachments/conv_1/copy-1/a_.pdf');
+  });
+
   it('keeps the copies out of iCloud and computer backups', async () => {
     await keepLocalChatAttachments('conv_1', [PDF]);
 
