@@ -52561,6 +52561,9 @@
     "FindInGitHubRestPagesOptions": [
       "apps/web/lib/github-rest-pagination.ts"
     ],
+    "findingNamesFormat": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
     "findings": [
       "scripts/check-skill-authority.mjs",
       "scripts/lib/research-run-bounds.mjs"
@@ -53077,6 +53080,9 @@
     ],
     "FirstPartyTarget": [
       "apps/web/lib/connectors/directory/first-party.ts"
+    ],
+    "firstPdfCursor": [
+      "apps/web/lib/server/chat-file-intake/pdf-inspection.ts"
     ],
     "firstPublishedStanding": [
       "apps/web/lib/legal/policy-archive.ts"
@@ -70031,6 +70037,9 @@
     "isPaymentProviderId": [
       "apps/web/lib/server/payments/domain.ts",
       "apps/web/lib/server/payments/index.ts"
+    ],
+    "isPdfCursor": [
+      "apps/web/lib/server/chat-file-intake/pdf-inspection.ts"
     ],
     "isPdfPasswordError": [
       "apps/web/lib/server/pdf-attachment-content.ts"
@@ -93175,6 +93184,9 @@
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/runtime-client.ts"
     ],
+    "openBytesRange": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
+    ],
     "openCapabilitySurface": [
       "apps/extension-vscode/src/features/surfaces/index.ts"
     ],
@@ -93297,6 +93309,9 @@
     ],
     "openedFromProject": [
       "apps/mobile/src/features/projects/components/ProjectChatBackButton.tsx"
+    ],
+    "OpenedPdf": [
+      "apps/web/lib/server/chat-file-preparation/pdf.ts"
     ],
     "OpenedSecurityScanReport": [
       "apps/web/features/security-scan/server/report-signing.ts"
@@ -93568,6 +93583,9 @@
     ],
     "openSourceNoticesPath": [
       "apps/desktop/electron/openSourceNoticesFile.ts"
+    ],
+    "openStoredPdf": [
+      "apps/web/lib/server/chat-file-preparation/pdf.ts"
     ],
     "openSupportEmail": [
       "apps/mobile/services/contentReport.ts"
@@ -97983,6 +98001,9 @@
     "PdfHeader": [
       "apps/web/features/chat/services/export-pdf.ts"
     ],
+    "PdfInspectionCursor": [
+      "apps/web/lib/server/chat-file-intake/pdf-inspection.ts"
+    ],
     "PdfjsModule": [
       "apps/web/lib/server/pdf-attachment-content.ts"
     ],
@@ -97998,11 +98019,20 @@
     "PdfRgb": [
       "apps/web/features/chat/services/export-pdf.ts"
     ],
+    "pdfScanApplies": [
+      "apps/web/lib/server/chat-file-intake/pdf-inspection.ts"
+    ],
+    "PdfScanOutcome": [
+      "apps/web/lib/server/chat-file-intake/pdf-inspection.ts"
+    ],
     "PdfSlide": [
       "apps/web/features/chat/services/export-pdf.ts"
     ],
     "PdfSlidePalette": [
       "apps/web/features/chat/services/export-pdf.ts"
+    ],
+    "PdfSourceReadError": [
+      "apps/web/lib/server/chat-file-preparation/pdf.ts"
     ],
     "pdfViewerChunkScript": [
       "apps/mobile/src/features/chat/components/artifact-viewers/pdfViewerBridge.ts"
@@ -109798,6 +109828,9 @@
     ],
     "readOrganizationUsage": [
       "apps/web/lib/services/organization-usage-service.ts"
+    ],
+    "readOutline": [
+      "apps/web/lib/server/chat-file-preparation/pdf.ts"
     ],
     "readOverRevokedTopUpRefunds": [
       "apps/web/scripts/mobile-top-up-refund-report/report.ts"
@@ -124926,6 +124959,9 @@
     ],
     "scanPackageStep": [
       "apps/web/lib/server/chat-file-intake/package-inspection.ts"
+    ],
+    "scanPdfStep": [
+      "apps/web/lib/server/chat-file-intake/pdf-inspection.ts"
     ],
     "scanPluginPackage": [
       "packages/client/client-runtime/src/plugins/index.ts",
