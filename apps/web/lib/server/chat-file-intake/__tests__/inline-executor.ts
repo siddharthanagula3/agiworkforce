@@ -12,6 +12,8 @@ import {
 import { vi } from 'vitest';
 
 import { CHAT_LARGE_FILE_POLICY } from '@/lib/chat-attachment-policy';
+import { buildPdf } from '@/lib/server/chat-file-preparation/__tests__/preparation-harness';
+import { defaultPreparationStorage } from '@/lib/server/chat-file-preparation/derived-keys';
 import { getObjectStore } from '@/lib/server/object-storage-runtime';
 import { openPrivateObjectRange } from '../full-inspection';
 import type { SealCommitOutcome, SealDeps } from '../seal';
@@ -55,11 +57,21 @@ export function memoryObjectStore(): MemoryObjectStore {
   return store;
 }
 
-/** A PDF of `byteCount` bytes that passes the structural and credential checks. */
+const PDF_PAGES = ['Quarterly report'];
+
+/**
+ * A PDF of `byteCount` bytes, padded with an object no page refers to, that
+ * pdf.js opens and that passes the structural and credential checks.
+ */
 export function pdfBytes(byteCount: number): Uint8Array {
-  const bytes = new Uint8Array(byteCount).fill(0x61);
-  bytes.set(new TextEncoder().encode('%PDF-1.7\n'), 0);
-  return bytes;
+  const bare = buildPdf({ pages: PDF_PAGES, paddingBytes: 1 }).byteLength - 1;
+  let paddingBytes = byteCount - bare;
+  for (;;) {
+    if (paddingBytes < 1) throw new RangeError(`A PDF fixture needs more than ${bare} bytes.`);
+    const pdf = buildPdf({ pages: PDF_PAGES, paddingBytes });
+    if (pdf.byteLength === byteCount) return new Uint8Array(pdf);
+    paddingBytes += byteCount - pdf.byteLength;
+  }
 }
 
 export async function putStagedFile(
@@ -185,6 +197,7 @@ export function createIntakeHarness(input: {
     policy: CHAT_LARGE_FILE_POLICY,
     inspectContent: async () => 'allowed',
     openRange: openPrivateObjectRange,
+    preparationStorage: defaultPreparationStorage,
     seal,
     prepare: async () => ({ done: true }),
     async reindex(_row, assetId) {

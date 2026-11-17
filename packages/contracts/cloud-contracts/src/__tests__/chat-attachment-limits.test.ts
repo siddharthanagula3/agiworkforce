@@ -236,6 +236,8 @@ describe('large chat file policy', () => {
       pdf: {
         maxBytes: 500 * MIB,
         maxTextPages: 1000,
+        maxScanPages: 100_000,
+        maxScanMs: 1_800_000,
         pagesPerStep: 100,
         maxOcrPagesPerFile: 100,
         ocrPagesPerTurn: 8,

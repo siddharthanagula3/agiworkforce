@@ -75,6 +75,8 @@
     "pdf": {
       "maxBytes": 524288000,
       "maxTextPages": 1000,
+      "maxScanPages": 100000,
+      "maxScanMs": 1800000,
       "pagesPerStep": 100,
       "maxOcrPagesPerFile": 100,
       "ocrPagesPerTurn": 8,

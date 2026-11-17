@@ -1,6 +1,9 @@
 import 'server-only';
 
+import { SECRET_PATTERN_RULES } from '@agiworkforce/utils/secret-redaction';
+
 import { chatLargeFileKind, type ChatLargeFileKind } from '@/lib/chat-attachment-policy';
+import { HIGH_ENTROPY_DETECTION_NAME } from '@/lib/security/entropy';
 import {
   CREDENTIAL_SCAN_GUARD_BYTES,
   UPLOAD_INSPECTION_BYTES,
@@ -12,6 +15,7 @@ import {
 } from '@/lib/security/upload-scan';
 import { getPrivateObjectStream } from '@/lib/server/object-storage';
 import type { PackageInspectionCursor } from './package-inspection';
+import type { PdfInspectionCursor } from './pdf-inspection';
 
 /**
  * How far the credential scan of a large text file has got. It crosses the
@@ -28,7 +32,8 @@ export interface TextInspectionCursor {
   findings: UploadScanFinding[];
 }
 
-export type ChatFileInspectionCursor = TextInspectionCursor | PackageInspectionCursor;
+export type ChatFileInspectionCursor =
+  TextInspectionCursor | PackageInspectionCursor | PdfInspectionCursor;
 
 /** Bytes one window answers for: with a guard either side it reads as much as the head does. */
 export const CREDENTIAL_WINDOW_OWNED_BYTES =
@@ -96,11 +101,42 @@ export function mergeInspectionFindings(
   return merged;
 }
 
+/**
+ * Detectors that name no credential format. Documents are full of long
+ * numbers, identifiers and digests, and these read them as card numbers, SSNs
+ * and random strings, so they never answer over a document's content, only
+ * over a file declared as text.
+ */
+const FORMATLESS_DETECTORS: ReadonlySet<string> = new Set([
+  HIGH_ENTROPY_DETECTION_NAME,
+  SECRET_PATTERN_RULES['credit-card-number'].label,
+  SECRET_PATTERN_RULES['us-ssn'].label,
+]);
+
+/** Whether a finding names a credential format, or is not a credential finding at all. */
+export function findingNamesFormat(finding: UploadScanFinding): boolean {
+  return (
+    finding.code !== 'credential_material' ||
+    !FORMATLESS_DETECTORS.has(credentialFindingName(finding))
+  );
+}
+
 export type OpenObjectRange = (
   key: string,
   start: number,
   endExclusive: number,
 ) => Promise<ReadableStream<Uint8Array> | null>;
+
+/** Bytes already in memory, read through the same ranged windows as a stored object. */
+export function openBytesRange(bytes: Uint8Array): OpenObjectRange {
+  return async (_key, start, end) =>
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.subarray(start, end));
+        controller.close();
+      },
+    });
+}
 
 export const openPrivateObjectRange: OpenObjectRange = async (key, start, endExclusive) => {
   const stream = await getPrivateObjectStream(key, `bytes=${start}-${endExclusive - 1}`);
@@ -114,6 +150,41 @@ export interface CredentialRangeRequest {
   byteCount: number;
   ownedFrom: number;
   ownedTo: number;
+  /** A document's content, which only the detectors that name a format answer over, each from a word's start. */
+  readsDocument?: boolean;
+}
+
+const KEY_PREFIX = [0x73, 0x6b, 0x2d] as const;
+const KEY_PREFIX_STAND_IN = 0x78;
+
+function isWordByte(byte: number): boolean {
+  return (
+    (byte >= 0x30 && byte <= 0x39) ||
+    (byte >= 0x41 && byte <= 0x5a) ||
+    (byte >= 0x61 && byte <= 0x7a) ||
+    byte === 0x5f ||
+    byte === 0x2d
+  );
+}
+
+/**
+ * The `sk-` key detector has no left edge, so over a document it reads the
+ * slug of a printed or linked URL, `risk-management-and-internal-control`, as
+ * a key. In a document a key starts a word: an `sk-` inside one has its `s`
+ * set to `x`, a lowercase letter every other detector's character classes
+ * read exactly as they read `s`, so no other detection is lost or made.
+ */
+function unglueKeyPrefixes(bytes: Uint8Array): void {
+  for (let at = 1; at + KEY_PREFIX.length <= bytes.byteLength; at += 1) {
+    if (
+      bytes[at] === KEY_PREFIX[0] &&
+      bytes[at + 1] === KEY_PREFIX[1] &&
+      bytes[at + 2] === KEY_PREFIX[2] &&
+      isWordByte(bytes[at - 1]!)
+    ) {
+      bytes[at] = KEY_PREFIX_STAND_IN;
+    }
+  }
 }
 
 export type CredentialRangeOutcome =
@@ -214,11 +285,14 @@ export async function scanCredentialRange(
       const bytesStart = Math.max(readStart, windowStart - CREDENTIAL_SCAN_GUARD_BYTES);
       const bytesEnd = Math.min(readEnd, windowEnd + CREDENTIAL_SCAN_GUARD_BYTES);
       if (!(await buffer.fillTo(bytesEnd))) return { kind: 'short' };
-      const found = scanUploadRangeForCredentials(
-        buffer.slice(bytesStart, bytesEnd),
-        request.mimeType,
-        { bytesStart, ownedStart: windowStart, ownedEnd: windowEnd },
-      );
+      const windowBytes = buffer.slice(bytesStart, bytesEnd);
+      if (request.readsDocument) unglueKeyPrefixes(windowBytes);
+      const detected = scanUploadRangeForCredentials(windowBytes, request.mimeType, {
+        bytesStart,
+        ownedStart: windowStart,
+        ownedEnd: windowEnd,
+      });
+      const found = request.readsDocument ? detected.filter(findingNamesFormat) : detected;
       findings = mergeInspectionFindings(findings, found);
       if (found.some(uploadFindingRejects)) return { kind: 'read', findings, rejected: true };
       windowStart = windowEnd;

@@ -134,7 +134,11 @@ function mediaBytes(byteCount: number): Uint8Array {
 }
 
 function escapeXml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 /** The package with a picture first, so every part after it starts past the head. */

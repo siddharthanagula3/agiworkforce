@@ -20,8 +20,13 @@ import {
   inspectUploadHead,
   uploadFindingRejects,
   type UploadScanFinding,
+  type UploadScanResult,
 } from '@/lib/security/upload-scan';
 import { prepareChatFileStep } from '@/lib/server/chat-file-preparation';
+import {
+  defaultPreparationStorage,
+  type PreparationStorage,
+} from '@/lib/server/chat-file-preparation/derived-keys';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { requestMediaAssetReindex } from '@/lib/services/retrieval-index-service';
@@ -43,6 +48,14 @@ import {
   scanPackageStep,
   type PackageInspectionCursor,
 } from './package-inspection';
+import {
+  firstPdfCursor,
+  isPdfCursor,
+  pdfScanApplies,
+  scanPdfStep,
+  type PdfInspectionCursor,
+  type PdfScanOutcome,
+} from './pdf-inspection';
 import { defaultSealDeps, sealChatFile, type SealDeps } from './seal';
 import { sqlChatFileIntakeStore, type ChatFileIntakeRow } from './store';
 import {
@@ -108,6 +121,8 @@ export interface ChatFileIntakeDeps extends IntakeTransitionDeps {
     findings: readonly UploadScanFinding[],
   ): Promise<ContentPolicyVerdict>;
   openRange: OpenObjectRange;
+  /** Where pdf.js reads a PDF from, as preparation reads it. */
+  preparationStorage(): PreparationStorage;
   seal: SealDeps;
   prepare(assetId: string): Promise<{ done: boolean }>;
   reindex(row: ChatFileIntakeRow, assetId: string): Promise<void>;
@@ -351,6 +366,12 @@ async function continuePackageInspection(
     case 'rejected':
       return refuseInspected(ctx, row, scanned.findings);
     case 'finished': {
+      if (pdfScanApplies(row)) {
+        return {
+          next: 'inspect',
+          cursor: { ...firstPdfCursor(cursor.etag), findings: scanned.findings },
+        };
+      }
       const head = data.subarray(0, Math.min(row.byteCount, UPLOAD_INSPECTION_BYTES));
       const inspection = inspectUploadHead(
         head,
@@ -367,13 +388,104 @@ async function continuePackageInspection(
   }
 }
 
+function pdfScanStep(
+  ctx: StepContext,
+  row: ChatFileIntakeRow,
+  cursor: PdfInspectionCursor,
+): Promise<PdfScanOutcome> {
+  const { deps } = ctx;
+  return scanPdfStep({
+    row,
+    cursor,
+    policy: deps.policy,
+    openRange: deps.openRange,
+    storage: deps.preparationStorage(),
+    declaredAsText: credentialScanContinuesAfterHead(row),
+    now: deps.now,
+  });
+}
+
+/**
+ * What a step of the PDF scan leads to, once the object was found unchanged
+ * after it. The step that reaches the last page decides over the head's
+ * findings and the file's together, so it holds the head read in that step.
+ */
+function settlePdfStep(
+  ctx: StepContext,
+  row: ChatFileIntakeRow,
+  etag: string,
+  scanned: PdfScanOutcome,
+  head: Uint8Array | null,
+  inspection: UploadScanResult | null,
+): Promise<ChatFileIntakeDirective> | ChatFileIntakeDirective {
+  switch (scanned.kind) {
+    case 'short':
+      throw new ShortInspectionReadError(row.id);
+    case 'continue':
+      return { next: 'inspect', cursor: scanned.cursor };
+    case 'unreadable':
+      logger.warn(
+        { intakeId: row.id, reason: scanned.reason },
+        '[chat-files] refused a large PDF whose text could not be read to its end',
+      );
+      return refuse(ctx, row, scanned.refusal);
+    case 'rejected':
+      return refuseInspected(ctx, row, scanned.findings);
+    case 'finished': {
+      if (head === null) throw new ShortInspectionReadError(row.id);
+      const headInspection =
+        inspection ??
+        inspectUploadHead(head, row.mimeType, row.fileName, credentialScanMimeType(row));
+      if (!headInspection.ok) return refuseInspected(ctx, row, headInspection.findings);
+      return concludeInspection(
+        ctx,
+        row,
+        etag,
+        head,
+        mergeInspectionFindings(headInspection.findings, scanned.findings),
+      );
+    }
+  }
+}
+
+/**
+ * A later step of the credential scan of a PDF: at most a text step of its own
+ * bytes, then at most a step's pages of its text, held to the entity tag the
+ * head was read under. The step that reaches the last page reads the head
+ * again.
+ */
+async function continuePdfInspection(
+  ctx: StepContext,
+  cursor: PdfInspectionCursor,
+): Promise<ChatFileIntakeDirective> {
+  const { deps } = ctx;
+  const row = await holdForInspection(ctx);
+  if (!row) return endDirective('superseded');
+  if (!objectUnchanged(await deps.objects.head(row.stagingKey), cursor.etag, row)) {
+    return refuse(ctx, row, 'changed_during_check');
+  }
+
+  const scanned = await pdfScanStep(ctx, row, cursor);
+  const head =
+    scanned.kind === 'finished'
+      ? await readInspectedHead(ctx, row, Math.min(row.byteCount, UPLOAD_INSPECTION_BYTES))
+      : null;
+  if (!objectUnchanged(await deps.objects.head(row.stagingKey), cursor.etag, row)) {
+    return refuse(ctx, row, 'changed_during_check');
+  }
+  return settlePdfStep(ctx, row, cursor.etag, scanned, head, null);
+}
+
 async function inspectStep(
   ctx: StepContext,
   directive: Extract<ChatFileIntakeDirective, { next: 'inspect' }>,
 ): Promise<ChatFileIntakeDirective> {
   if (directive.cursor) {
-    return isPackageCursor(directive.cursor)
-      ? continuePackageInspection(ctx, directive.cursor)
+    if (isPackageCursor(directive.cursor)) {
+      return continuePackageInspection(ctx, directive.cursor);
+    }
+    return isPdfCursor(directive.cursor)
+      ? continuePdfInspection(ctx, directive.cursor)
       : continueInspection(ctx, directive.cursor);
   }
   const { deps } = ctx;
@@ -390,6 +502,10 @@ async function inspectStep(
 
   const wanted = Math.min(row.byteCount, UPLOAD_INSPECTION_BYTES);
   const head = await readInspectedHead(ctx, row, wanted);
+  const pdfScan =
+    head !== null && !packageScanApplies(row) && pdfScanApplies(row)
+      ? await pdfScanStep(ctx, row, firstPdfCursor(before.etag))
+      : null;
   const after = await deps.objects.head(row.stagingKey);
   if (!after || after.etag !== before.etag || after.contentLength !== row.byteCount) {
     return refuse(ctx, row, 'changed_during_check');
@@ -404,6 +520,7 @@ async function inspectStep(
   );
   if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
   if (packageScanApplies(row)) return { next: 'inspect', cursor: firstPackageCursor(before.etag) };
+  if (pdfScan) return settlePdfStep(ctx, row, before.etag, pdfScan, head, inspection);
   if (credentialScanContinuesAfterHead(row)) {
     return { next: 'inspect', cursor: firstCursorAfterHead(before.etag) };
   }
@@ -698,6 +815,7 @@ export function createChatFileIntakeDeps(input: ChatFileIntakeWorkflowInput): Ch
     policy: CHAT_LARGE_FILE_POLICY,
     inspectContent: uploadContentInspector(db),
     openRange: openPrivateObjectRange,
+    preparationStorage: defaultPreparationStorage,
     seal: defaultSealDeps(db),
     prepare: (assetId) => prepareChatFileStep(assetId, { db }),
     async reindex(row, assetId) {

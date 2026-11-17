@@ -11,7 +11,6 @@ import {
   decompressionBudget,
   type DecompressionBudget,
 } from '@/lib/security/archive-bounds';
-import { HIGH_ENTROPY_DETECTION_NAME } from '@/lib/security/entropy';
 import {
   CREDENTIAL_SCAN_GUARD_BYTES,
   credentialFindingName,
@@ -25,7 +24,9 @@ import {
   type OfficeDocumentFailureReason,
 } from '@/lib/server/office-document-text';
 import {
+  findingNamesFormat,
   mergeInspectionFindings,
+  openBytesRange,
   scanCredentialRange,
   type OpenObjectRange,
 } from './full-inspection';
@@ -87,18 +88,6 @@ const RELATIONSHIP_PART = /\.rels$/i;
 const VML_PART = /\.vml$/i;
 
 /**
- * Detectors that name no credential format. Office writes full-precision
- * numbers, identifiers and digests of its own into every package, and these
- * read them as card numbers, SSNs and random strings, so they never answer
- * over a package, its members or the text in them.
- */
-const FORMATLESS_DETECTORS: ReadonlySet<string> = new Set([
-  HIGH_ENTROPY_DETECTION_NAME,
-  SECRET_PATTERN_RULES['credit-card-number'].label,
-  SECRET_PATTERN_RULES['us-ssn'].label,
-]);
-
-/**
  * The URL password detector reads `password=` and any eight characters after
  * it, which a protection attribute Office writes, `<sheetProtection
  * password="CF7A"/>`, also is. Over markup it answers only in a relationship
@@ -115,9 +104,8 @@ type Reading = 'declared_text' | 'markup' | 'relationships' | 'text';
 
 function findingAnswers(finding: UploadScanFinding, reading: Reading): boolean {
   if (reading === 'declared_text' || finding.code !== 'credential_material') return true;
-  const name = credentialFindingName(finding);
-  if (FORMATLESS_DETECTORS.has(name)) return false;
-  return reading !== 'markup' || name !== URL_PASSWORD_DETECTOR;
+  if (!findingNamesFormat(finding)) return false;
+  return reading !== 'markup' || credentialFindingName(finding) !== URL_PASSWORD_DETECTOR;
 }
 
 function readingOf(
@@ -486,16 +474,6 @@ function memberRange(
   });
 }
 
-function bytesRange(bytes: Uint8Array): OpenObjectRange {
-  return async (_key, start, end) =>
-    new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(bytes.subarray(start, end));
-        controller.close();
-      },
-    });
-}
-
 /** Where the central directory ends: at the ZIP64 end record when there is one, else at the end record. */
 function centralDirectoryBounds(bytes: Buffer): { start: number; end: number } | null {
   const end = bytes.lastIndexOf(ZIP_END_OF_CENTRAL_DIRECTORY);
@@ -717,7 +695,7 @@ export async function scanPackageStep(input: {
           ownedTo,
           reading
             ? async (_key, start, end) => memberRange(reading, readingView, start, end)
-            : bytesRange(data),
+            : openBytesRange(data),
         );
         const answering = readingOf(reading, readingView, declaredAsText);
         findings = mergeInspectionFindings(

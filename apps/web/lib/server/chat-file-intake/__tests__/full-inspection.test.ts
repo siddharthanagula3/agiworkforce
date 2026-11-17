@@ -288,7 +288,7 @@ describe('the credential scan of a large text file', () => {
     }
   });
 
-  it('opens no range for a type the credential detectors do not read', async () => {
+  it("reads a PDF's own bytes through ranges from its first byte, since the head reads none of them", async () => {
     const openRange = vi.fn(openPrivateObjectRange);
     const base = intakeRow({ createdAt: START_MS, stateChangedAt: START_MS });
     const staged = await putStagedFile(base);
@@ -308,7 +308,9 @@ describe('the credential scan of a large text file', () => {
     const run = await runInline(harness, { intakeId: row.id, runId: 'run-1' });
 
     expect(run.last).toEqual({ next: 'end', reason: 'finished' });
-    expect(openRange).not.toHaveBeenCalled();
+    const ranges = openRange.mock.calls.map(([, start, end]) => [start, end]);
+    expect(ranges[0]![0]).toBe(0);
+    expect(ranges.at(-1)![1]).toBe(row.byteCount);
   });
 });
 

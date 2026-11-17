@@ -41,7 +41,7 @@ export interface PdfBatchRequest {
   withOutline: boolean;
 }
 
-interface OpenedPdf {
+export interface OpenedPdf {
   document: PdfDocumentProxy;
   guard: <T>(work: Promise<T>) => Promise<T>;
   bytesFetched: () => number;
@@ -49,7 +49,7 @@ interface OpenedPdf {
 }
 
 /** A storage failure, kept apart from pdf.js errors so it retries instead of failing the file. */
-class PdfSourceReadError extends Error {
+export class PdfSourceReadError extends Error {
   constructor(override readonly cause: unknown) {
     super('The stored PDF could not be read.');
     this.name = 'PdfSourceReadError';
@@ -62,8 +62,10 @@ function asSourceReadError(error: unknown): never {
 
 type OutlineNode = Awaited<ReturnType<PdfDocumentProxy['getOutline']>>[number];
 
-async function openStoredPdf(
-  request: PdfBatchRequest,
+type StoredPdf = Pick<PdfBatchRequest, 'storage' | 'key' | 'byteCount' | 'policy'>;
+
+export async function openStoredPdf(
+  request: StoredPdf,
   { getDocument }: PdfjsModule,
 ): Promise<OpenedPdf> {
   const pdfPolicy = request.policy.kinds.pdf;
@@ -127,7 +129,7 @@ async function outlinePage(
   return null;
 }
 
-async function readOutline(opened: OpenedPdf): Promise<PdfOutlineEntry[]> {
+export async function readOutline(opened: OpenedPdf): Promise<PdfOutlineEntry[]> {
   const nodes = await opened.guard(opened.document.getOutline());
   const anchors: PdfOutlineEntry[] = [];
   const pending: { node: OutlineNode; level: number }[] = (nodes ?? [])

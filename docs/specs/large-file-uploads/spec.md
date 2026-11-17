@@ -375,9 +375,9 @@ whatever its preparation does.
   passed, and a step that re-enters redoes its work from its start.
   - Inspect accepts `uploaded`, or `inspecting` under the rule. It inspects
     again from the start (the HEAD, the 256,000-byte read,
-    `inspectUploadHead` and, for a text type, the credential scan of the
-    rest of the file), never trusting a check an earlier run may have half
-    done. The credential scan's cursor lives only in the run's directives,
+    `inspectUploadHead` and, for a text type, an Office package or a PDF,
+    the credential scan of the rest of the file), never trusting a check an
+    earlier run may have half done. The credential scan's cursor lives only in the run's directives,
     so a retried step scans the same range again and a re-dispatched run
     starts it from the first byte.
   - Scan accepts `inspecting` (after the fairness wait), or `scanning` under
@@ -650,9 +650,8 @@ an 8 GB VM with 4 shared CPUs, which is an owner cost decision.
   (`dlp_blocked`); the rest go with the head's findings to the workspace data
   policy, which decides as it does for a small file. A whitespace run of more
   than about 16,000 bytes between a keyword and its value, across a window
-  edge, is not matched. PDF files, by declared type and by name, are not read
-  by the credential detectors at any size, large or inline, and Office and XLSX
-  files are not read on the inline path.
+  edge, is not matched. On the inline path the credential detectors read no
+  content of a PDF, an Office file or an XLSX file.
 - A large Office or XLSX file is read as a package before anything is submitted
   (`apps/web/lib/server/chat-file-intake/package-inspection.ts`): the package's
   own bytes; every member inflated, a part written in UTF-16 decoded first; a
@@ -672,6 +671,90 @@ an 8 GB VM with 4 shared CPUs, which is an owner cost decision.
   damaged one, or one whose member names alias each other, as `type_mismatch`.
   No reader runs during intake; the cursor between steps holds offsets, member
   indexes, lengths and detector names, never text.
+- A large PDF, by the kind its name and declared type give or by a declared
+  `application/pdf`, is read before anything is submitted
+  (`apps/web/lib/server/chat-file-intake/pdf-inspection.ts`), at any size,
+  since the head's detectors read nothing of a PDF. A `.pdf` name whose
+  declared type gives a stricter kind, such as a DOCX, is read as that kind,
+  as preparation and the turn's reader read it. First the file's own bytes, in
+  the text scan's ranged windows, at most `kinds.text.bytesPerStep` a step,
+  which covers uncompressed streams, link annotations and the strings of the
+  information dictionary and XMP metadata written as plain ASCII. Then the
+  file is opened the way preparation opens it (pdf.js over ranged reads of the
+  private object) and the text of every page is read, at most
+  `kinds.pdf.pagesPerStep` (100) pages a step, past `kinds.pdf.maxTextPages`
+  to the last page, with the outline titles preparation keeps on the first
+  pages step. A step starts no further page once a third of
+  `intake.leaseMs.inspecting` has passed, after reading at least one; pdf.js
+  extracts a page without yielding to a timer, so a page cannot be cut short.
+  Each page's text is extracted once and scanned in up to three joins: as
+  preparation joins its runs, with a space between them; as pdf.js's own
+  viewer searches it, the runs end to end with a line break where pdf.js ends
+  a line; and that text again without the line break after a line that ends in
+  `-` or `_`, where a typesetter wraps a long key at its own separator.
+  pdf.js already writes a space into a run wherever the glyphs leave a gap, so
+  two runs meet with nothing between them only where they print as one word,
+  such as a key half set in bold; the second join can make a match a reader
+  would not see only where runs overprint each other or a superscript follows
+  its base text, and the third only where a line ends in a key's prefix, such
+  as `sk-` or `ghp_` starting a word, and the next line starts with enough key
+  characters to complete it, which hyphenated prose does not do. The first
+  step runs inside the head's step. Over a PDF's bytes and
+  text only the detectors that name a credential format answer, and an `sk-`
+  key only where it starts a word, so the slug of a printed or linked URL such
+  as `risk-management-and-…` is not read as a key; a file declared as text has
+  its bytes read by every detector, as the text scan reads them. Findings merge
+  across steps and with the head's, and go to the workspace data policy, as
+  for a text file. A documentation PDF that prints a vendor's published
+  example key, such as AWS's `AKIA…EXAMPLE` access key, or the header line of a
+  PEM private key, is therefore refused as `dlp_blocked` under every policy,
+  as a text file with the same content is; it sealed before this scan. An
+  allowlist of published example keys belongs to the detectors' owner
+  (`packages/platform/utils/src/secretRedaction.ts`). A PDF that cannot be
+  read is refused before submission under every policy: one with a user
+  password as `encrypted` (pdf.js opens an owner-only password without one, so
+  that file is read); one pdf.js cannot open, or one with any page whose
+  dictionary or text it cannot read, as `type_mismatch`, so a truncated file
+  whose page tree points at missing objects, which sealed before this scan and
+  failed only in preparation, is now refused with the general safety-check
+  message; one with more than `kinds.pdf.maxScanPages` (100,000) pages, one
+  whose steps together spend `kinds.pdf.maxScanMs` (30 minutes) without
+  reaching its last page, or one past `kinds.pdf.bufferedMaxBytes` while
+  `kinds.pdf.rangeLoading` is off, as `limits_exceeded`. A PDF with no text
+  layer, or one pdf.js opens by rebuilding its cross-reference table, is read
+  and sealed. A file whose kind is Office but whose declared type is
+  `application/pdf` is read as a package and then as a PDF. Every pages step
+  opens the document again, and pdf.js walks the page tree to the last page on
+  open, so a step costs the whole tree whatever pages it reads: measured in
+  review with a flat tree, about 1.4 s and 500 MB for 100,000 pages, fetching
+  up to the whole file per open. By a reading of pdf.js in review, not
+  measured, a file pdf.js opens only by rebuilding its cross-reference table
+  is fetched whole as one range on every open and held twice, about twice its
+  size resident, on every pages step, as preparation holds it on every batch. `maxScanMs` bounds the scan's total time whatever a
+  page costs: a document whose pages each fit the lease but together are slow,
+  such as many pages sharing one large content stream that pdf.js decodes
+  again for each, is refused at the first page boundary past it, so one
+  upload's scan costs at most `maxScanMs` plus one step. The time a step spent
+  is counted when it hands on, so a step that crashes before handing on is
+  not counted and its retry is. At 100,000 fast pages the scan takes about
+  1,000 steps of the workflow's 5,000, and the reopening alone costs about 23
+  minutes, so a PDF near `maxScanPages` can reach `maxScanMs` and be refused.
+  Two inputs are not refused but end `stalled` after `intake.abandonAfterMs`,
+  as they do in preparation: a page tree too large for pdf.js to open in the
+  function's memory, which is checked against `maxScanPages` only once open,
+  and a single page whose text takes longer than the lease to extract or
+  whose content stream exhausts the function's memory, which fails every retry
+  of its step. The cursor between steps holds a byte offset, a page number,
+  the milliseconds spent and detector names, never text. The scan does not read text in
+  images (OCR reads it later), files attached inside the PDF, form field
+  values or annotation text other than plain ASCII strings in the file's
+  bytes, anything a compressed stream or object stream holds other than page
+  text and outline titles (such as an XMP packet or information dictionary
+  stored in one), strings written as UTF-16 or with escapes, text pdf.js leaves out
+  because it lies outside the page's box, a credential split across two pages
+  or across runs pdf.js does not set next to each other, or a key wrapped at a
+  character other than `-` or `_`, or with a space left before the line
+  break.
 - `matchDenylistedSha256` in `hash-denylist.ts` matches a hash against the
   existing denylist.
 
@@ -1362,7 +1445,8 @@ egress is free, so that is accepted.
 - `largeFiles` {`maxBytes` 524288000, `maxCount` 20, `maxMessageBytes`
   2147483648, `cellularConfirmBytes` 52428800, `sandboxStagedBytesMax`
   1073741824, `maxPackageInflatedBytes` 1073741824}
-- `kinds` {`pdf` {maxBytes 524288000, maxTextPages 1000, pagesPerStep 100,
+- `kinds` {`pdf` {maxBytes 524288000, maxTextPages 1000, maxScanPages 100000,
+  maxScanMs 1800000, pagesPerStep 100,
   maxOcrPagesPerFile 100, ocrPagesPerTurn 8, ocrBatchPages 4, bufferedMaxBytes
   209715200, rangeLoading true}, `office` {maxBytes 104857600, maxSlides 200}, `spreadsheet`
   {maxBytes 52428800, sampleRows 200}, `delimited` {maxBytes 524288000,
