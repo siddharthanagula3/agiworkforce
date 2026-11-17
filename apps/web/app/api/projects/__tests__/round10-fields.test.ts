@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { ManagedCloudProjectResponseSchema } from '@agiworkforce/cloud-contracts';
 import { getProjectLimit } from '@/lib/services/free-plan-entitlements';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 const {
   mockFrom,
@@ -275,9 +276,14 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
 
     expect(res.status).toBe(200);
     const sqlCalls = mockNeonQuery.mock.calls.map((c) => String(c[0]));
-    expect(
-      sqlCalls.some((sql) => /metadata = coalesce\(metadata/.test(sql) && /starred/.test(sql)),
-    ).toBe(true);
+    const starredMerge = `metadata = ${mergeJsonbObjectSql(
+      'metadata',
+      "jsonb_build_object('starred', $1::boolean)",
+    )}`;
+    expect(sqlCalls.some((sql) => sql.includes(starredMerge))).toBe(true);
+    expect(sqlCalls.some((sql) => /coalesce\(metadata, '\{\}'::jsonb\) \|\|/.test(sql))).toBe(
+      false,
+    );
     const json = (await res.json()) as { project: { metadata?: Record<string, unknown> } };
     expect(json.project.metadata?.['starred']).toBe(true);
   });

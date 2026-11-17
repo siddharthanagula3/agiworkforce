@@ -140,6 +140,16 @@ function editRequest(source = 'Original draft.', content = 'Saved draft.'): Next
   );
 }
 
+function syncPushMessages(messages: Array<Record<string, unknown>>) {
+  return syncPush(
+    new NextRequest('http://localhost/api/chat/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ protocolVersion: SYNC_PROTOCOL_VERSION, messages }),
+    }),
+  );
+}
+
 function persistOnServer(content: string, truncated = false, admitted?: EditedAssistantContent) {
   return persistAssistantTurn({
     userId: USER_ID,
@@ -679,7 +689,7 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
   });
 
   it.each([false, true])(
-    'preserves nullable metadata on an ordinary sync update (explicit=%s)',
+    'stores nullable metadata as an object on an ordinary sync update (explicit=%s)',
     async (explicit) => {
       await db.execute("update web_messages set metadata = 'null'::jsonb where id = $1", [
         MESSAGE_ID,
@@ -707,12 +717,14 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({ applied: { messages: [{ id: MESSAGE_ID }] } });
-      expect((await stored()).metadata).toBeNull();
+      const after = await stored();
+      expect(after.content).toBe(`${SOURCE}\nSynced.`);
+      expect(after.metadata).toEqual({});
       expect(mocks.logError).not.toHaveBeenCalled();
     },
   );
 
-  it('accepts nullable metadata on new sync messages without minting provenance', async () => {
+  it('stores nullable metadata on new sync messages as an object without minting provenance', async () => {
     const response = await syncPush(
       new NextRequest('http://localhost/api/chat/sync', {
         method: 'POST',
@@ -741,7 +753,70 @@ describe.skipIf(!connectionString)('saved assistant edits against disposable Pos
       'select metadata from web_messages where id = $1',
       [NEW_MESSAGE_ID],
     );
-    expect(row?.metadata).toBeNull();
+    expect(row?.metadata).toEqual({});
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it('takes no new version when a device keeps pushing null metadata for an unchanged message', async () => {
+    const pushUnchanged = async (id: string, content: string, baseVersion: string) => {
+      const response = await syncPushMessages([
+        {
+          id,
+          conversationId: CONVERSATION_ID,
+          role: 'assistant',
+          content,
+          metadata: null,
+          baseVersion,
+        },
+      ]);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        applied: { messages: Array<{ id: string; server_version: string }> };
+      };
+      expect(body.applied.messages).toEqual([{ id, server_version: expect.any(String) }]);
+      return body.applied.messages[0]!.server_version;
+    };
+
+    const serverWritten = await stored();
+    expect(serverWritten.metadata).toEqual({});
+    expect(await pushUnchanged(MESSAGE_ID, SOURCE, serverWritten.server_version)).toBe(
+      serverWritten.server_version,
+    );
+    expect(await pushUnchanged(MESSAGE_ID, SOURCE, serverWritten.server_version)).toBe(
+      serverWritten.server_version,
+    );
+    expect(await stored()).toEqual(serverWritten);
+
+    const created = await pushUnchanged(NEW_MESSAGE_ID, 'New synced turn.', '0');
+    expect(await pushUnchanged(NEW_MESSAGE_ID, 'New synced turn.', created)).toBe(created);
+    const [row] = await db.query<{ metadata: unknown; server_version: string }>(
+      'select metadata, server_version::text from web_messages where id = $1',
+      [NEW_MESSAGE_ID],
+    );
+    expect(row).toEqual({ metadata: {}, server_version: created });
+    expect(mocks.logError).not.toHaveBeenCalled();
+  });
+
+  it('keeps saved edit provenance and the version when a device pushes null metadata over an edited answer', async () => {
+    expect((await PATCH(editRequest(), context)).status).toBe(200);
+    const edited = await stored();
+    const response = await syncPushMessages([
+      {
+        id: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        role: 'assistant',
+        content: EDITED,
+        metadata: null,
+        baseVersion: edited.server_version,
+      },
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      applied: { messages: [{ id: MESSAGE_ID, server_version: edited.server_version }] },
+    });
+    expect(await stored()).toEqual(edited);
+    expect(edited.metadata).toEqual({ [ASSISTANT_CONTENT_EDIT_METADATA_KEY]: expect.any(String) });
     expect(mocks.logError).not.toHaveBeenCalled();
   });
 

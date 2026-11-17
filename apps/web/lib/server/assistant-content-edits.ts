@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { stripCitationMarkup } from '@agiworkforce/provider-protocol';
 import { createError } from '@/lib/errors';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 import {
   ASSISTANT_CONTENT_CHANGED_MESSAGE,
   ASSISTANT_CONTENT_CHANGED_REASON,
@@ -61,10 +62,14 @@ export const SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL = preservedEditMetada
   'incoming',
 );
 
+const EDIT_REVISION_METADATA_SQL = mergeJsonbObjectSql(
+  'metadata',
+  `jsonb_build_object('${ASSISTANT_CONTENT_EDIT_METADATA_KEY}', $5::text)`,
+);
+
 export const SAVE_ASSISTANT_CONTENT_EDIT_SQL = `update web_messages
    set content = $1,
-       metadata = coalesce(metadata, '{}'::jsonb)
-         || jsonb_build_object('${ASSISTANT_CONTENT_EDIT_METADATA_KEY}', $5::text)
+       metadata = ${EDIT_REVISION_METADATA_SQL}
  where id = $2 and conversation_id = $3 and role = 'assistant'
    and deleted_at is null and content = $4
  returning content, metadata ->> '${ASSISTANT_CONTENT_EDIT_METADATA_KEY}' as edit_revision`;

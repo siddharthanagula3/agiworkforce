@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 export const STOPPED_ASSISTANT_TURN_FINISH_REASON = 'stopped';
 
@@ -17,7 +18,7 @@ export const STOPPED_ASSISTANT_TURN_FINISH_REASON = 'stopped';
 // cancelled server write inherited from an earlier attempt on the same message
 // is.
 const RECORD_STOPPED_RUN_TURN_SQL = `update web_messages m
-          set metadata = m.metadata || jsonb_build_object('finishReason', $4::text)
+          set metadata = ${mergeJsonbObjectSql('m.metadata', "jsonb_build_object('finishReason', $4::text)")}
          from public.cloud_agent_runs r
          join public.web_conversations c on c.id = r.conversation_id
         where r.id = $1::uuid

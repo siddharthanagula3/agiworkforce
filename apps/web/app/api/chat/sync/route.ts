@@ -28,6 +28,8 @@ import {
   withoutStoredCitationMarkupRow,
 } from '@/lib/server/stored-assistant-text';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { jsonbObjectSql } from '@/lib/server/jsonb-object-merge';
+import { withObjectMessageMetadata } from '@/lib/server/message-metadata-repair';
 import { buildChatSyncGateResponse } from '@/lib/managed-compute-gate';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { unpublishArtifactsForConversations } from '@/lib/services/published-artifact-service';
@@ -57,6 +59,10 @@ type MessageDelta = MessageWireDelta;
 type ArtifactDelta = ArtifactWireDelta;
 
 const PROSE_ARTIFACT_TYPES: ReadonlySet<string> = new Set<ArtifactType>(['document', 'markdown']);
+
+function withObjectMetadata(message: MessageDelta, userId: string): MessageDelta {
+  return withObjectMessageMetadata(message, { userId, conversationId: message.conversation_id });
+}
 
 function withoutStoredCitationMarkupArtifact(artifact: ArtifactDelta): ArtifactDelta {
   if (!PROSE_ARTIFACT_TYPES.has(artifact.artifact_type)) return artifact;
@@ -185,7 +191,11 @@ async function handlePull(request: NextRequest) {
     return NextResponse.json(
       ChatSyncPullResponseSchema.parse({
         conversations: withIsoTimestamps(conversations),
-        messages: withIsoTimestamps(withoutStoredCitationMarkup(messages)),
+        messages: withIsoTimestamps(
+          withoutStoredCitationMarkup(
+            messages.map((message) => withObjectMetadata(message, userId)),
+          ),
+        ),
         artifacts: withIsoTimestamps(artifacts.map(withoutStoredCitationMarkupArtifact)),
         cursor,
         hasMore,
@@ -204,9 +214,8 @@ type BatchRow<T> = {
   current: T | null;
 };
 
-const SYNC_PUSHED_MESSAGE_METADATA_SQL = recordedTurnEndingKeptSql(
-  'existing',
-  SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL,
+const SYNC_PUSHED_MESSAGE_METADATA_SQL = jsonbObjectSql(
+  recordedTurnEndingKeptSql('existing', SYNC_ASSISTANT_CONTENT_PRESERVED_METADATA_SQL),
 );
 
 const PUSH_MESSAGES_SQL = `
@@ -220,7 +229,7 @@ const PUSH_MESSAGES_SQL = `
                    item ? 'inputTokens' as has_input_tokens,
                    coalesce((item ->> 'outputTokens')::integer, 0) as output_tokens,
                    item ? 'outputTokens' as has_output_tokens,
-                   coalesce(item -> 'metadata', '{}'::jsonb) as metadata,
+                   ${jsonbObjectSql("item -> 'metadata'")} as metadata,
                    item ? 'metadata' as has_metadata,
                    (item ->> 'baseVersion')::bigint as base_version,
                    coalesce((item ->> 'isDeleted')::boolean, false) as should_delete,
@@ -699,7 +708,10 @@ async function handlePush(request: NextRequest) {
       collectBatchRows(rows, applied.messages, conflicts.messages);
       conflicts.messages = conflicts.messages.map((conflict) =>
         conflict.current
-          ? { ...conflict, current: withoutStoredCitationMarkupRow(conflict.current) }
+          ? {
+              ...conflict,
+              current: withoutStoredCitationMarkupRow(withObjectMetadata(conflict.current, userId)),
+            }
           : conflict,
       );
 

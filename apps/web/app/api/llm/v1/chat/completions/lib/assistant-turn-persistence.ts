@@ -46,6 +46,7 @@ import {
   ASSISTANT_CONTENT_PRESERVED_METADATA_SQL,
   SERVER_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL,
 } from '@/lib/server/assistant-content-edits';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
 
@@ -68,7 +69,7 @@ const INSERT_ASSISTANT_TURN_SQL = `insert into web_messages
               provider = excluded.provider,
               input_tokens = excluded.input_tokens,
               output_tokens = excluded.output_tokens,
-              metadata = web_messages.metadata || ${ASSISTANT_CONTENT_PRESERVED_METADATA_SQL}
+              metadata = ${mergeJsonbObjectSql('web_messages.metadata', ASSISTANT_CONTENT_PRESERVED_METADATA_SQL)}
         where web_messages.conversation_id = excluded.conversation_id
           and ${SERVER_ASSISTANT_CONTENT_WRITE_ALLOWED_SQL}`;
 
@@ -90,7 +91,7 @@ const SELECT_ASSISTANT_TURN_METADATA_SQL = `select m.metadata
 // only while the citation keys still hold exactly what that read saw; a save
 // that landed in between is re-read and patched instead of overwritten.
 const PATCH_ASSISTANT_TURN_SOURCE_URLS_SQL = `update web_messages m
-          set metadata = m.metadata || $4::jsonb
+          set metadata = ${mergeJsonbObjectSql('m.metadata', '$4::jsonb')}
          from public.web_conversations c
         where m.id = $1::uuid
           and m.conversation_id = c.id

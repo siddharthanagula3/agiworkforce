@@ -31,6 +31,7 @@ import {
   spliceMessageChildren,
   wantsSubtreeDelete,
 } from '../lib/message-thread';
+import { mergeJsonbObjectSql } from '@/lib/server/jsonb-object-merge';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -207,7 +208,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
 
   const count = await db.execute(
     `update web_messages
-        set metadata = coalesce(metadata, '{}'::jsonb) || $1::jsonb
+        set metadata = ${mergeJsonbObjectSql('metadata', '$1::jsonb')}
       where id = $2 and conversation_id = $3 and deleted_at is null`,
     [JSON.stringify(patch), messageId, conversationId],
   );
