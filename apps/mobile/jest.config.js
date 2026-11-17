@@ -1,5 +1,8 @@
 module.exports = {
   preset: 'jest-expo',
+  // CI runs this suite beside the web and desktop suites on one runner, where
+  // a screen test that waits out a debounce can pass 5 s without being stuck.
+  testTimeout: 20000,
   testPathIgnorePatterns: ['/node_modules/', 'scripts/screenshots/specs/'],
   setupFiles: ['./jest.setup.js'],
   setupFilesAfterEnv: ['./jest.after-setup.js'],
