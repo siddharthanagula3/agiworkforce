@@ -84,7 +84,10 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
      app against production, and that one ordinary tap toggles Reduce sensitive content (runbook
      sections 11.1 and 11.2).
   5. Decide iPad (runbook D2). The build supports iPad, so App Store Connect requires a 13-inch iPad
-     screenshot and App Review can test on iPad; every check so far ran on one iPhone simulator.
+     screenshot and App Review can test on iPad. A layout pass for iPad was made on 2026-11-17, but
+     only the first-run screen has been seen on an iPad: the simulator control needs your access
+     grant for the iPad simulator before the prepared iPad round and the iPad screenshots can run.
+     Developers report that an update cannot drop iPad once a universal version is approved.
 - Phone sign-in to Cloud works in production from `main` (`568584454a`, part of the release
   `e822c4fda6` live since 2026-11-13). The local branch `hotfix/mobile-native-session`
   (`a8e278c62e`) is no longer served.

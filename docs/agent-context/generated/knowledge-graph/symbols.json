@@ -30884,6 +30884,9 @@
     "contentColumn": [
       "apps/mobile/src/shared/layout/contentColumn.ts"
     ],
+    "contentColumnInset": [
+      "apps/mobile/src/shared/layout/contentColumn.ts"
+    ],
     "ContentColumnKind": [
       "apps/mobile/src/shared/layout/contentColumn.ts"
     ],
@@ -53054,6 +53057,9 @@
     "firstManagedMemoryContentOffset": [
       "apps/web/lib/services/managed-memory-context-service.ts"
     ],
+    "firstPackageCursor": [
+      "apps/web/lib/server/chat-file-intake/package-inspection.ts"
+    ],
     "firstParkedSend": [
       "apps/web/shared/stores/web-chat-store.ts"
     ],
@@ -53830,6 +53836,9 @@
     ],
     "Form": [
       "apps/web/shared/ui/Form.tsx"
+    ],
+    "FORM_COLUMN_MAX_WIDTH": [
+      "apps/mobile/src/shared/layout/contentColumn.ts"
     ],
     "FORM_FIELDS_PARAMETERS": [
       "apps/extension/src/features/content/formFillPlan.ts"
@@ -66107,6 +66116,9 @@
     "insertTicket": [
       "apps/web/lib/support/tickets/store.ts"
     ],
+    "insetAbove": [
+      "apps/mobile/test-utils/sheetColumn.ts"
+    ],
     "inside_any": [
       "crates/agiworkforce-sandbox-policy/src/host_path.rs",
       "crates/agiworkforce-worktree/src/git.rs"
@@ -69951,6 +69963,9 @@
     ],
     "isOwnerlessOrganizationError": [
       "apps/web/lib/services/organization-seat-service.ts"
+    ],
+    "isPackageCursor": [
+      "apps/web/lib/server/chat-file-intake/package-inspection.ts"
     ],
     "isPageDocumentId": [
       "apps/extension/src/features/browser-tools/documentBridge.ts"
@@ -95090,6 +95105,9 @@
     "PackageFile": [
       "apps/desktop/src-tauri/src/core/mcp/extensions/package.rs"
     ],
+    "PackageInspectionCursor": [
+      "apps/web/lib/server/chat-file-intake/package-inspection.ts"
+    ],
     "PackageManager": [
       "apps/cli/src/repo/mod.rs",
       "apps/cli/src/repo/setup.rs"
@@ -95099,6 +95117,12 @@
     ],
     "packageRootOfModule": [
       "scripts/lib/third-party-notices.mjs"
+    ],
+    "packageScanApplies": [
+      "apps/web/lib/server/chat-file-intake/package-inspection.ts"
+    ],
+    "PackageScanOutcome": [
+      "apps/web/lib/server/chat-file-intake/package-inspection.ts"
     ],
     "packScanBatches": [
       "apps/web/features/security-scan/server/selection.ts"
@@ -124879,6 +124903,9 @@
     "scannerUnparseable": [
       "scripts/check-test-hygiene.mjs"
     ],
+    "scanPackageStep": [
+      "apps/web/lib/server/chat-file-intake/package-inspection.ts"
+    ],
     "scanPluginPackage": [
       "packages/client/client-runtime/src/plugins/index.ts",
       "packages/client/client-runtime/src/plugins/packageScan.ts"
@@ -133214,6 +133241,9 @@
     ],
     "siteVisitPath": [
       "apps/web/features/sites/services/sites-service.ts"
+    ],
+    "sitsInColumn": [
+      "apps/mobile/test-utils/sheetColumn.ts"
     ],
     "size_bytes": [
       "apps/desktop/src-tauri/src/data/cache/tool_results.rs"
@@ -142375,6 +142405,9 @@
     ],
     "textId": [
       "scripts/lib/third-party-notices.mjs"
+    ],
+    "TextInspectionCursor": [
+      "apps/web/lib/server/chat-file-intake/full-inspection.ts"
     ],
     "textMarkerOf": [
       "apps/web/app/api/llm/v1/chat/completions/lib/attachment-turn-budget.ts"
