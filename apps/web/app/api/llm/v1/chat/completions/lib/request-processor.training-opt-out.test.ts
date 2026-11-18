@@ -78,7 +78,7 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
 
 import { CreditService } from '@/lib/services/credit-service';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
-import { buildCompactionRoutingRequest, processRequest } from './request-processor';
+import { processRequest } from './request-processor';
 
 const proSubscription = {
   id: 'sub-pro',
@@ -233,14 +233,5 @@ describe('the main chat route treats the training opt-out as admission, not rank
     expect(result.fallbackReason).toBe('insufficient_credits');
     expect(modelKeepsInputsOutOfTraining(result.chatRequest.model)).toBe(true);
     expect(providerKeepsInputsOutOfTraining(result.provider)).toBe(true);
-  });
-});
-
-describe('context compaction carries the training opt-out', () => {
-  it('asks the router to refuse routes that may train when the account opted out', () => {
-    expect(buildCompactionRoutingRequest({ noTrainingOnly: true })).toMatchObject({
-      noTrainingOnly: true,
-    });
-    expect(buildCompactionRoutingRequest({})).not.toHaveProperty('noTrainingOnly');
   });
 });

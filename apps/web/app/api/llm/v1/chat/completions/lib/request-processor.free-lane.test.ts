@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getRoutingSlotModel, type RoutingSlot } from '@agiworkforce/types';
 import type { RoutingTaskType } from '@agiworkforce/routing';
 
-import { resolveWebCloudModelRoute } from './request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 import {
   FREE_LANE_SELECTION,
   activateFreeLane,

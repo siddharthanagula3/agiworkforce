@@ -5697,7 +5697,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -5718,7 +5718,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -5775,7 +5775,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -5796,7 +5796,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
@@ -5892,7 +5892,7 @@
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/web/lib/server/managed-cloud-routing/routing-request.ts#MANAGED_CLOUD_TRUST_MODE",
         "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
         "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],

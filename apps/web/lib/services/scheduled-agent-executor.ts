@@ -5,14 +5,13 @@ import { createPostgresContextManifestStore, resolveContext } from '@agiworkforc
 import {
   classifyTaskLocally,
   detectIndicScript,
-  modelsPastDeprecationDate,
-  resolveAutoRoute,
-  type AutoRoutingRequest,
+  MODEL_POLICY_UNAVAILABLE,
 } from '@agiworkforce/routing';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import {
-  sideCallRoutingRequest,
-  sideCallTrainingOptOut,
-} from '@/lib/server/side-call-training-policy';
+  admitManagedCloudRoute,
+  type ManagedCloudAccount,
+} from '@/lib/server/managed-cloud-routing/admission';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import {
   connectedGoogleUserDataConnectorIds,
@@ -726,6 +725,16 @@ export class NoTrainingRouteError extends Error {
   }
 }
 
+export class UnattendedPolicyUnreadableError extends Error {
+  readonly code = MODEL_POLICY_UNAVAILABLE.code;
+  constructor() {
+    super(MODEL_POLICY_UNAVAILABLE.reason);
+    this.name = 'UnattendedPolicyUnreadableError';
+  }
+}
+
+type UnattendedScope = ManagedCloudAccount & { db: NonNullable<ManagedCloudAccount['db']> };
+
 async function scheduledRunReachesGoogleUserData(
   db: Parameters<typeof connectedGoogleUserDataConnectorIds>[0],
   userId: string,
@@ -753,7 +762,7 @@ function scheduledModelSelection(task: ScheduleTask): string {
 }
 
 async function selectScheduledRoute(
-  scope: { db: NonNullable<Parameters<typeof sideCallRoutingRequest>[0]>; userId: string },
+  scope: UnattendedScope,
   task: ScheduleTask,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
@@ -769,38 +778,28 @@ async function selectScheduledRoute(
 }
 
 export async function selectUnattendedRoute(
-  scope: { db: NonNullable<Parameters<typeof sideCallRoutingRequest>[0]>; userId: string },
+  scope: UnattendedScope,
   selection: string,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
   googleUserData: boolean,
 ): Promise<ScheduledRunRoute> {
-  const baseRouting: AutoRoutingRequest = {
-    selection,
-    taskType,
-    subscriptionTier,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-    retiredModelKeys: modelsPastDeprecationDate(),
-  };
-  const noTraining = googleUserData || (await sideCallTrainingOptOut(scope.db, scope.userId));
-  const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting, {
-    forceNoTraining: noTraining,
+  const admission = await admitManagedCloudRoute({
+    kind: 'unattended',
+    account: { db: scope.db, userId: scope.userId, organizationId: scope.organizationId },
+    planTier: subscriptionTier,
+    need: { selection, taskType, keepOutOfTraining: googleUserData },
   });
-  const noTrainingMessage = googleUserData
-    ? GOOGLE_USER_DATA_ROUTE_MESSAGE
-    : NO_TRAINING_MODEL_MESSAGE;
-  if (!routing) throw new NoTrainingRouteError(noTrainingMessage);
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    if (routing === baseRouting) {
-      throw new Error('The selected model is not available for scheduled managed execution');
+  if (admission.status === 'refused') {
+    if (admission.reason === 'policy_unreadable') throw new UnattendedPolicyUnreadableError();
+    if (admission.reason === 'no_training_route') {
+      throw new NoTrainingRouteError(
+        googleUserData ? GOOGLE_USER_DATA_ROUTE_MESSAGE : NO_TRAINING_MODEL_MESSAGE,
+      );
     }
-    throw new NoTrainingRouteError(noTrainingMessage);
+    throw new Error('The selected model is not available for scheduled managed execution');
   }
-  if (noTraining && !modelKeepsInputsOutOfTraining(route.modelKey)) {
-    throw new NoTrainingRouteError(noTrainingMessage);
-  }
+  const { route } = admission;
   if (route.harnessId.endsWith('/media')) {
     throw new Error('Scheduled media generation is unavailable');
   }

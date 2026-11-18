@@ -2,7 +2,6 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { resolveAutoRoute, type AutoRoutingRequest } from '@agiworkforce/routing';
 import {
   resolveModelFamilySlot,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
@@ -15,7 +14,6 @@ import {
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
-import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   lookupSemanticResponseCache,
   recordSemanticCacheHit,
@@ -28,7 +26,7 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import { getOptionalEnv } from '@/shared/utils/env';
-import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import { admitManagedCloudRoute } from '@/lib/server/managed-cloud-routing/admission';
 import type { SupportModelCallGate } from '../types';
 
 const MAX_OUTPUT_TOKENS = 400;
@@ -80,6 +78,7 @@ export function isSupportAgentEnabled(): boolean {
 export interface SupportModelCallInput {
   userMessage: string;
   userId: string | null;
+  organizationId?: string | null;
   surface: 'app' | 'marketing';
   admitModelCall: SupportModelCallGate;
   signal?: AbortSignal;
@@ -103,31 +102,29 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
   }
 
   const modelKey = resolveModelFamilySlot(SUPPORT_MODEL_FAMILY);
-  const baseRouting: AutoRoutingRequest = {
-    selection: modelKey,
-    fallbackToAutoForCapabilityMismatch: false,
-    requiredCapabilities: ['structuredOutput'],
-    taskType: 'simple_chat',
-    subscriptionTier: SUPPORT_ROUTING_TIER,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-  };
-  const routing = input.userId
-    ? await sideCallRoutingRequest(null, input.userId, baseRouting)
-    : baseRouting;
-  if (!routing) return { status: 'unavailable', reason: 'no_route', route: null };
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable') {
-    logger.warn({ code: route.code }, '[support-agent] no managed route available');
+  const admission = await admitManagedCloudRoute({
+    kind: 'platform',
+    account: input.userId
+      ? { db: null, userId: input.userId, organizationId: input.organizationId ?? null }
+      : null,
+    planTier: SUPPORT_ROUTING_TIER,
+    need: {
+      selection: modelKey,
+      exactSelection: true,
+      requiredCapabilities: ['structuredOutput'],
+      taskType: 'simple_chat',
+    },
+  });
+  if (admission.status === 'refused') {
     return { status: 'unavailable', reason: 'no_route', route: null };
   }
+  const { route, dispatchProvider } = admission;
   if (route.modelKey !== modelKey) {
     logger.error('[support-agent] selected model does not match the support family');
     return { status: 'unavailable', reason: 'no_route', route: null };
   }
 
   const routeInfo = { provider: route.provider, modelKey: route.modelKey };
-  const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const prompt = resolvePrompt(SUPPORT_SYSTEM_PROMPT_ID);
   const system = prompt.text;
   const cacheFields: SemanticCacheKeyFields = {

@@ -9,7 +9,7 @@ import {
 } from '@agiworkforce/types';
 import { SKILL_TOOL_NAME } from '@agiworkforce/skills';
 import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
-import { resolveWebCloudModelRoute } from '../lib/request-processor';
+import { resolveWebCloudModelRoute } from '@/lib/server/managed-cloud-routing/routing-request';
 import { createError } from '@/lib/errors';
 import { CloudAgentCapabilityRefusedError } from '@/lib/workflows/cloud-agent-capability-refusal';
 type ScanModule0 = typeof import('@/lib/server/terms');

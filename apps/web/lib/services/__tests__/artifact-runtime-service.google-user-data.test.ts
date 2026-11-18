@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type AdmissionModule = typeof import('@/lib/server/managed-cloud-routing/admission');
+
 const mocks = vi.hoisted(() => ({
-  sideCallRouting: vi.fn(),
-  resolveAutoRoute: vi.fn(),
+  admit: vi.fn(),
   keepsOutOfTraining: vi.fn(),
   reserve: vi.fn(),
 }));
@@ -12,17 +13,13 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  sideCallRoutingRequest: mocks.sideCallRouting,
+vi.mock('@/lib/server/managed-cloud-routing/admission', async (importOriginal) => ({
+  ...(await importOriginal<AdmissionModule>()),
+  admitManagedCloudRoute: mocks.admit,
 }));
 vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   modelKeepsInputsOutOfTraining: mocks.keepsOutOfTraining,
-}));
-vi.mock('@agiworkforce/routing', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resolveAutoRoute: mocks.resolveAutoRoute,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -38,6 +35,7 @@ const {
 const { GMAIL_CONNECTOR_ID } = await import('@/lib/connectors/gmail-actions');
 
 const db = {} as never;
+const ACCOUNT = { db, userId: 'user-1', organizationId: 'org-1' };
 const ROUTE = {
   provider: 'deepseek',
   providerModelId: 'provider-model',
@@ -48,50 +46,82 @@ const ROUTE = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('AGI_ARTIFACT_AI_ENABLED', '1');
-  mocks.sideCallRouting.mockImplementation(async (_db, _user, request) => request);
-  mocks.resolveAutoRoute.mockReturnValue({ status: 'ok', harnessId: 'deepseek/chat', ...ROUTE });
+  mocks.admit.mockResolvedValue({
+    status: 'admitted',
+    route: { status: 'selected', harnessId: 'deepseek/chat', ...ROUTE },
+    dispatchProvider: ROUTE.provider,
+  });
   mocks.keepsOutOfTraining.mockReturnValue(true);
 });
 
-describe('selectArtifactRuntimeRoute and Google user data', () => {
-  it('forces no-training routing for a run that can reach a Google connector', async () => {
-    await selectArtifactRuntimeRoute(db, 'user-1', 'summarise my inbox', 'pro', {
+function refused(reason: string) {
+  return { status: 'refused', reason, code: null };
+}
+
+describe('selectArtifactRuntimeRoute', () => {
+  it('asks for a background route for the account and workspace, keeping a Google run out of training', async () => {
+    await selectArtifactRuntimeRoute(ACCOUNT, 'summarise my inbox', 'pro', {
       needsTools: true,
       googleUserData: true,
     });
 
-    expect(mocks.sideCallRouting).toHaveBeenCalledWith(db, 'user-1', expect.any(Object), {
-      forceNoTraining: true,
+    expect(mocks.admit).toHaveBeenCalledWith({
+      kind: 'background',
+      account: ACCOUNT,
+      planTier: 'pro',
+      need: {
+        taskType: expect.any(String),
+        keepOutOfTraining: true,
+        requiredCapabilities: ['functionCalling'],
+      },
     });
   });
 
-  it('leaves routing to the account preference when no Google connector is in reach', async () => {
-    await selectArtifactRuntimeRoute(db, 'user-1', 'hello', 'pro', { needsTools: true });
+  it('leaves training to the account preference when no Google connector is in reach', async () => {
+    await selectArtifactRuntimeRoute(ACCOUNT, 'hello', 'pro');
 
-    expect(mocks.sideCallRouting).toHaveBeenCalledWith(db, 'user-1', expect.any(Object), {
-      forceNoTraining: false,
-    });
+    expect(mocks.admit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        need: { taskType: expect.any(String), keepOutOfTraining: false },
+      }),
+    );
   });
 
   it('refuses with the Google copy when no model keeps inputs out of training', async () => {
-    mocks.sideCallRouting.mockResolvedValue(null);
+    mocks.admit.mockResolvedValue(refused('no_training_route'));
 
-    await expect(
-      selectArtifactRuntimeRoute(db, 'user-1', 'summarise my inbox', 'pro', {
-        googleUserData: true,
-      }),
-    ).rejects.toBeInstanceOf(ArtifactRuntimeGoogleUserDataRouteError);
-  });
-
-  it('refuses a resolved route whose model may train, even if routing let it through', async () => {
-    mocks.keepsOutOfTraining.mockReturnValue(false);
-
-    const refusal = selectArtifactRuntimeRoute(db, 'user-1', 'summarise my inbox', 'pro', {
+    const refusal = selectArtifactRuntimeRoute(ACCOUNT, 'summarise my inbox', 'pro', {
       googleUserData: true,
     });
 
     await expect(refusal).rejects.toBeInstanceOf(ArtifactRuntimeGoogleUserDataRouteError);
     await expect(refusal).rejects.toBeInstanceOf(ArtifactRuntimeRouteUnavailableError);
+  });
+
+  it.each([['no_route'], ['policy_unreadable']])(
+    'refuses with the general copy when admission refuses with %s',
+    async (reason) => {
+      mocks.admit.mockResolvedValue(refused(reason));
+
+      const refusal = selectArtifactRuntimeRoute(ACCOUNT, 'hello', 'pro', {
+        googleUserData: true,
+      });
+
+      await expect(refusal).rejects.toBeInstanceOf(ArtifactRuntimeRouteUnavailableError);
+      await expect(refusal).rejects.not.toBeInstanceOf(ArtifactRuntimeGoogleUserDataRouteError);
+    },
+  );
+
+  it('refuses a media-only route', async () => {
+    mocks.admit.mockResolvedValue({
+      status: 'admitted',
+      route: { status: 'selected', harnessId: 'provider/media', ...ROUTE },
+      dispatchProvider: ROUTE.provider,
+    });
+
+    await expect(selectArtifactRuntimeRoute(ACCOUNT, 'hello', 'pro')).rejects.toBeInstanceOf(
+      ArtifactRuntimeRouteUnavailableError,
+    );
   });
 });
 

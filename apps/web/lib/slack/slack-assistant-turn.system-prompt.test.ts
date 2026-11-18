@@ -54,7 +54,6 @@ vi.mock('@/lib/services/aggregator-routing', async (importOriginal) => ({
 }));
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  sideCallRoutingRequest: vi.fn(async (_db: unknown, _user: unknown, request: unknown) => request),
   sideCallTrainingOptOut: vi.fn(async () => false),
 }));
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => ({

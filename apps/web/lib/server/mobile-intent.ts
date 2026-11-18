@@ -30,6 +30,7 @@ import {
   MAX_OUTPUT_TOKENS,
   runScheduledCompletion,
   NoTrainingRouteError,
+  UnattendedPolicyUnreadableError,
   selectUnattendedRoute,
 } from '@/lib/services/scheduled-agent-executor';
 
@@ -165,7 +166,7 @@ export async function answerMobileIntentAsk(input: {
   if (!decision.allowed) throw new MobileIntentRefusal(403, decision.code, decision.reason);
 
   const taskType = classifyTaskLocally(prompt, []).type;
-  const routeScope = { db, userId: owner.userId };
+  const routeScope = { db, userId: owner.userId, organizationId: owner.organizationId };
   const routeTo = (selection: string) =>
     selectUnattendedRoute(routeScope, selection, taskType, entitlement.plan, false);
   let route: Awaited<ReturnType<typeof routeTo>>;
@@ -176,6 +177,9 @@ export async function answerMobileIntentAsk(input: {
   } catch (error) {
     if (error instanceof NoTrainingRouteError) {
       throw new MobileIntentRefusal(503, 'no_training_model_available', NO_TRAINING_ANSWER);
+    }
+    if (error instanceof UnattendedPolicyUnreadableError) {
+      throw new MobileIntentRefusal(503, error.code, error.message);
     }
     throw error;
   }

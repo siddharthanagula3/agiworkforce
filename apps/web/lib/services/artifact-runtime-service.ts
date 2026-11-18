@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto';
 import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { classifyTaskLocally, detectIndicScript, resolveAutoRoute } from '@agiworkforce/routing';
+import { classifyTaskLocally, detectIndicScript } from '@agiworkforce/routing';
 import {
   getModelMetadataById,
   getSlotForModel,
@@ -45,7 +45,10 @@ import {
   toolsReachGoogleUserData,
 } from '@/lib/connectors/google-user-data-runs';
 import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
-import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
+import {
+  admitManagedCloudRoute,
+  type ManagedCloudAccount,
+} from '@/lib/server/managed-cloud-routing/admission';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
@@ -293,37 +296,32 @@ export async function listArtifactStorageKeys(
 }
 
 export async function selectArtifactRuntimeRoute(
-  db: DatabaseAdapter,
-  userId: string,
+  account: ManagedCloudAccount,
   prompt: string,
   planTier: string,
   options: { needsTools?: boolean; googleUserData?: boolean } = {},
 ): Promise<ArtifactRuntimeRoute> {
   const googleUserData = options.googleUserData === true;
-  const unavailable = () =>
-    googleUserData
-      ? new ArtifactRuntimeGoogleUserDataRouteError()
-      : new ArtifactRuntimeRouteUnavailableError();
-  const routing = await sideCallRoutingRequest(
-    db,
-    userId,
-    {
-      selection: 'auto',
+  const admission = await admitManagedCloudRoute({
+    kind: 'background',
+    account,
+    planTier,
+    need: {
       taskType: classifyTaskLocally(prompt, []).type,
-      subscriptionTier: planTier,
-      trustMode: 'managed_cloud',
-      runtimeProfileId: 'web/cloud-chat',
+      keepOutOfTraining: googleUserData,
       ...(options.needsTools ? { requiredCapabilities: ['functionCalling'] as const } : {}),
     },
-    { forceNoTraining: googleUserData },
-  );
-  if (!routing) throw unavailable();
-  const route = resolveAutoRoute(routing);
-  if (route.status === 'unavailable' || route.harnessId.endsWith('/media')) {
-    throw unavailable();
+  });
+  if (admission.status === 'refused') {
+    throw googleUserData && admission.reason === 'no_training_route'
+      ? new ArtifactRuntimeGoogleUserDataRouteError()
+      : new ArtifactRuntimeRouteUnavailableError();
   }
-  if (googleUserData && !modelKeepsInputsOutOfTraining(route.modelKey)) {
-    throw new ArtifactRuntimeGoogleUserDataRouteError();
+  const { route } = admission;
+  if (route.harnessId.endsWith('/media')) {
+    throw googleUserData
+      ? new ArtifactRuntimeGoogleUserDataRouteError()
+      : new ArtifactRuntimeRouteUnavailableError();
   }
   return {
     provider: route.provider,

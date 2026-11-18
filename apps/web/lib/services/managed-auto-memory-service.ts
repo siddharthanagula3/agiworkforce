@@ -175,6 +175,7 @@ export async function recordManagedAutoMemoryTurn(
           forceNoTraining:
             Boolean(params.processed.healthSpaceProjectId) ||
             params.processed.googleUserData === true,
+          ...(params.processed.routingPolicy ? { turnPolicy: params.processed.routingPolicy } : {}),
           includeSensitiveTopics: params.processed.autoMemoryIncludeSensitiveTopics === true,
           promptVariants: params.processed.promptVariants,
           requestId: params.processed.requestId,

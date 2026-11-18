@@ -5,12 +5,7 @@ import {
   listCanonicalModels,
   listManagedRoutesForModel,
 } from '@agiworkforce/types';
-type ScanModule0 = typeof import('@agiworkforce/routing');
 type ScanModule1 = typeof import('@agiworkforce/agent-core');
-
-vi.mock('@/lib/server/side-call-training-policy', () => ({
-  sideCallRoutingRequest: async (_db: unknown, _userId: string, request: unknown) => request,
-}));
 
 vi.mock('server-only', () => ({}));
 
@@ -35,10 +30,14 @@ const SELECTED_ROUTE = {
 
 const resolveAutoRouteMock = vi.fn(() => SELECTED_ROUTE);
 
-vi.mock('@agiworkforce/routing', async (importOriginal) => {
-  const actual = await importOriginal<ScanModule0>();
-  return { ...actual, resolveAutoRoute: () => resolveAutoRouteMock() };
-});
+vi.mock('@/lib/server/managed-cloud-routing/admission', () => ({
+  admitManagedCloudRoute: async () => {
+    const route = resolveAutoRouteMock() as { status: string; provider: string; code?: string };
+    return route.status === 'selected'
+      ? { status: 'admitted', route, dispatchProvider: route.provider }
+      : { status: 'refused', reason: 'no_route', code: route.code ?? null };
+  },
+}));
 
 const runnerResult = vi.fn();
 vi.mock('@agiworkforce/agent-core', async (importOriginal) => {
