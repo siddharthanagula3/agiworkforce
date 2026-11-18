@@ -44872,6 +44872,9 @@
     "endDeviceSession": [
       "apps/mobile/src/features/accounts/deviceAccounts.ts"
     ],
+    "endEarlierWorkers": [
+      "apps/extension/__tests__/worker-timers.ts"
+    ],
     "endEnterpriseContractIfPresent": [
       "apps/web/lib/services/enterprise-billing-service.ts"
     ],

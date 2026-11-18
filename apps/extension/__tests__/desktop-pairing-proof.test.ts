@@ -1,6 +1,8 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NATIVE_BROWSER_POLL_MESSAGE, NATIVE_BROWSER_UNPAIR_MESSAGE } from '@agiworkforce/types';
+import { NATIVE_RECONNECT_BASE_DELAY_MS } from '../src/features/native-bridge/reconnect';
+import { endEarlierWorkers } from './worker-timers';
 
 type DesktopAnswer = Record<string, unknown> | null;
 
@@ -269,6 +271,7 @@ function clearStore(store: Record<string, unknown>): void {
 }
 
 async function startWorker(): Promise<void> {
+  endEarlierWorkers();
   harness.messageListeners.length = 0;
   harness.tabRemovedListeners.length = 0;
   vi.resetModules();
@@ -308,6 +311,7 @@ afterEach(async () => {
   vi.useRealTimers();
   for (const port of harness.ports) port.exit();
   await new Promise((resolve) => setTimeout(resolve, 20));
+  endEarlierWorkers();
 });
 
 describe('a profile proves its pairing before it runs Desktop work', () => {
@@ -480,6 +484,34 @@ describe('a refusal of an older pairing never removes a newer one', () => {
 
     expect(harness.localStore['agi_paired_desktop']).toEqual(NEWER);
     expect(harness.localStore['connectedToDesktop']).not.toBe(false);
+  });
+});
+
+describe('a worker that a later start replaced', () => {
+  it('makes no native connection of its own once the later worker runs', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'Date'] });
+    harness.localStore['connectedToDesktop'] = true;
+    harness.localStore['agi_paired_desktop'] = {
+      fingerprint: 'eeee',
+      accountId: null,
+      token: PAIR_TOKEN,
+    };
+    harness.desktop.answer = (message) =>
+      message['type'] === 'connect'
+        ? { success: false, error: 'Desktop is not running.' }
+        : { success: true };
+    await startWorker();
+    await settled(() => harness.ports[0]?.disconnect.mock.calls.length === 1);
+    await settled(() => vi.getTimerCount() > 0);
+
+    clearStore(harness.localStore);
+    harness.localStore['agi_pending_desktop_revocation'] = { id: 'owed-0', token: OWED_TOKEN };
+    harness.connectNative.mockClear();
+    await startWorker();
+    await settled(() => harness.connectNative.mock.calls.length > 0);
+    await vi.advanceTimersByTimeAsync(NATIVE_RECONNECT_BASE_DELAY_MS * 2);
+
+    expect(harness.connectNative).toHaveBeenCalledTimes(1);
   });
 });
 
