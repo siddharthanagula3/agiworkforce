@@ -1,4 +1,6 @@
 import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
   MANAGED_CLOUD_SCHEDULE_TEMPLATES,
   ManagedCloudScheduleResponseSchema,
@@ -18,6 +20,7 @@ import {
   updateSchedule,
 } from '@/src/features/schedules/service';
 import type { CreateScheduleInput } from '@/src/features/schedules/store';
+import { fetchWorkspaceOverview } from '@/src/features/team/service';
 
 export const DAILY_BRIEF_SCHEDULE_PREFERENCE_KEY = 'dailyBriefScheduleId';
 export const DAILY_BRIEF_DEFAULT_TIME = '08:00';
@@ -34,6 +37,12 @@ export interface DailyBriefState {
   scheduleId: string | null;
   enabled: boolean;
   timeOfDay: string;
+  elsewhere?: string;
+}
+
+export interface DailyBriefScope {
+  personalLabel: string;
+  signal?: AbortSignal;
 }
 
 export const DAILY_BRIEF_OFF: DailyBriefState = {
@@ -85,24 +94,61 @@ export function readDailyBriefScheduleId(settings: unknown): string | null {
   return typeof id === 'string' && id.trim() !== '' ? id : null;
 }
 
-export async function readDailyBrief(
-  scheduleId: string | null,
-  signal?: AbortSignal,
-): Promise<DailyBriefState> {
-  if (!scheduleId) return DAILY_BRIEF_OFF;
-  let value: unknown;
-  try {
-    value = await api.get<unknown>(
-      managedCloudSchedulePath(scheduleId),
-      signal ? { signal } : undefined,
-    );
-  } catch (error) {
-    if (isMissing(error)) return DAILY_BRIEF_OFF;
-    throw error;
-  }
+async function readSchedule(scheduleId: string, signal?: AbortSignal, workspaceSelector?: string) {
+  const value = await api.get<unknown>(managedCloudSchedulePath(scheduleId), {
+    ...(signal ? { signal } : {}),
+    ...(workspaceSelector
+      ? { headers: { [MANAGED_CLOUD_ORGANIZATION_HEADER]: workspaceSelector } }
+      : {}),
+  });
   const parsed = ManagedCloudScheduleResponseSchema.safeParse(value);
   if (!parsed.success) throw new Error('The daily brief returned an invalid response.');
-  const { schedule } = parsed.data;
+  return parsed.data.schedule;
+}
+
+export async function locateDailyBriefElsewhere(
+  scheduleId: string,
+  scope: DailyBriefScope,
+): Promise<string | null> {
+  const overview = await fetchWorkspaceOverview(scope.signal);
+  if (overview.workspaces.length === 0) return null;
+  const candidates = [
+    { selector: MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE, name: scope.personalLabel },
+    ...overview.workspaces.map((membership) => ({
+      selector: membership.id,
+      name: membership.name,
+    })),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await readSchedule(scheduleId, scope.signal, candidate.selector);
+      return candidate.name;
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+    }
+  }
+  return null;
+}
+
+function offElsewhere(timeOfDay: string, elsewhere: string | null): DailyBriefState {
+  return { ...DAILY_BRIEF_OFF, timeOfDay, ...(elsewhere ? { elsewhere } : {}) };
+}
+
+export async function readDailyBrief(
+  scheduleId: string | null,
+  scope: DailyBriefScope,
+): Promise<DailyBriefState> {
+  if (!scheduleId) return DAILY_BRIEF_OFF;
+  let schedule: Awaited<ReturnType<typeof readSchedule>>;
+  try {
+    schedule = await readSchedule(scheduleId, scope.signal);
+  } catch (error) {
+    if (!isMissing(error)) throw error;
+    return offElsewhere(
+      DAILY_BRIEF_DEFAULT_TIME,
+      await locateDailyBriefElsewhere(scheduleId, scope),
+    );
+  }
   const timeOfDay = schedule.metadata?.['timeOfDay'];
   return {
     scheduleId: schedule.id,
@@ -135,7 +181,9 @@ export async function turnOnDailyBrief(
   timeOfDay: string,
   timezone: string,
   writes: DailyBriefWrites,
+  scope: DailyBriefScope,
 ): Promise<DailyBriefState> {
+  if (current.elsewhere) return current;
   if (current.scheduleId) {
     try {
       const resumed = await updateSchedule(current.scheduleId, {
@@ -147,17 +195,25 @@ export async function turnOnDailyBrief(
     } catch (error) {
       if (!isMissing(error)) throw error;
     }
+    const elsewhere = await locateDailyBriefElsewhere(current.scheduleId, scope);
+    if (elsewhere) return offElsewhere(current.timeOfDay, elsewhere);
   }
   return createDailyBrief(timeOfDay, timezone, writes);
 }
 
-export async function turnOffDailyBrief(current: DailyBriefState): Promise<DailyBriefState> {
+export async function turnOffDailyBrief(
+  current: DailyBriefState,
+  scope: DailyBriefScope,
+): Promise<DailyBriefState> {
   if (!current.scheduleId) return { ...current, enabled: false };
   try {
     const paused = await toggleSchedule(current.scheduleId, false);
     return { scheduleId: paused.id, enabled: paused.isActive, timeOfDay: paused.timeOfDay };
   } catch (error) {
-    if (isMissing(error)) return { ...DAILY_BRIEF_OFF, timeOfDay: current.timeOfDay };
-    throw error;
+    if (!isMissing(error)) throw error;
   }
+  return offElsewhere(
+    current.timeOfDay,
+    await locateDailyBriefElsewhere(current.scheduleId, scope),
+  );
 }

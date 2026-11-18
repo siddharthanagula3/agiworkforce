@@ -25,6 +25,7 @@ import {
   readDailyBriefScheduleId,
   turnOffDailyBrief,
   turnOnDailyBrief,
+  type DailyBriefScope,
   type DailyBriefState,
 } from './dailyBrief';
 import { ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE } from './useAgentActivityPushSync';
@@ -87,7 +88,7 @@ function mirrorUsageResetOnDevice(enabled: boolean): void {
   useNotificationPrefsStore.getState().setCategoryEnabled(ACCOUNT_PUSH_PREFERENCE_GROUP, enabled);
 }
 
-export function useCloudReminders(): CloudReminders {
+export function useCloudReminders(personalLabel: string): CloudReminders {
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
@@ -156,10 +157,10 @@ export function useCloudReminders(): CloudReminders {
       mirrorUsageResetOnDevice(usage);
       setStatus('ready');
       try {
-        const briefState = await readDailyBrief(
-          readDailyBriefScheduleId(settings),
-          session.controller.signal,
-        );
+        const briefState = await readDailyBrief(readDailyBriefScheduleId(settings), {
+          personalLabel,
+          signal: session.controller.signal,
+        });
         if (!live(session)) return;
         setBrief(briefState);
         setBriefLoaded(true);
@@ -172,7 +173,16 @@ export function useCloudReminders(): CloudReminders {
       session.controller.abort();
       if (sessionRef.current === session) sessionRef.current = null;
     };
-  }, [appMode, isClerkLoaded, isClerkSignedIn, clerkUserId, accountVersion, loadKey, live]);
+  }, [
+    appMode,
+    isClerkLoaded,
+    isClerkSignedIn,
+    clerkUserId,
+    accountVersion,
+    loadKey,
+    live,
+    personalLabel,
+  ]);
 
   const retry = useCallback(() => setLoadKey((key) => key + 1), []);
 
@@ -245,42 +255,60 @@ export function useCloudReminders(): CloudReminders {
     [],
   );
 
+  const briefScope = useCallback(
+    (session: ReminderSession): DailyBriefScope => ({
+      personalLabel,
+      signal: session.controller.signal,
+    }),
+    [personalLabel],
+  );
+
   const turnOn = useCallback(
-    (timeOfDay: string) =>
+    (timeOfDay: string) => {
+      if (brief.elsewhere) return;
       writeBrief(
         { ...brief, enabled: true, timeOfDay },
         (session) =>
-          turnOnDailyBrief(brief, timeOfDay, deviceTimezone(), {
-            rememberScheduleId: rememberScheduleId(session),
-          }),
+          turnOnDailyBrief(
+            brief,
+            timeOfDay,
+            deviceTimezone(),
+            { rememberScheduleId: rememberScheduleId(session) },
+            briefScope(session),
+          ),
         DAILY_BRIEF_SETUP_FAILED,
-      ),
-    [brief, rememberScheduleId, writeBrief],
+      );
+    },
+    [brief, briefScope, rememberScheduleId, writeBrief],
   );
 
   const turnOff = useCallback(
     () =>
       writeBrief(
         { ...brief, enabled: false },
-        () => turnOffDailyBrief(brief),
+        (session) => turnOffDailyBrief(brief, briefScope(session)),
         DAILY_BRIEF_PAUSE_FAILED,
       ),
-    [brief, writeBrief],
+    [brief, briefScope, writeBrief],
   );
 
   const changeTime = useCallback(
     (timeOfDay: string) => {
-      if (!brief.enabled) return;
+      if (!brief.enabled || brief.elsewhere) return;
       writeBrief(
         { ...brief, timeOfDay },
         (session) =>
-          turnOnDailyBrief(brief, timeOfDay, deviceTimezone(), {
-            rememberScheduleId: rememberScheduleId(session),
-          }),
+          turnOnDailyBrief(
+            brief,
+            timeOfDay,
+            deviceTimezone(),
+            { rememberScheduleId: rememberScheduleId(session) },
+            briefScope(session),
+          ),
         DAILY_BRIEF_TIME_FAILED,
       );
     },
-    [brief, rememberScheduleId, writeBrief],
+    [brief, briefScope, rememberScheduleId, writeBrief],
   );
 
   const signedInCloud = status === 'loading' || status === 'ready' || status === 'error';

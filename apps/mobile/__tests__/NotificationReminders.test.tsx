@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 import { requireAutoMode } from '../test-utils/modelFixtures';
 
 const mockPush = jest.fn();
@@ -72,6 +76,8 @@ jest.mock('lucide-react-native', () => {
   return new Proxy({}, { get: (_target, name) => (name === '__esModule' ? true : icon) });
 });
 
+import '@/src/i18n';
+import { ApiHttpError } from '../services/apiErrors';
 import NotificationPreferencesScreen from '../src/features/settings/notifications';
 import { ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE } from '../src/features/settings/notifications/useAgentActivityPushSync';
 import {
@@ -93,6 +99,44 @@ import {
 } from '../src/features/auth/services/cloudAccountSession';
 
 const OWNER = 'reminders-owner';
+const ORGANIZATION = { id: '11111111-1111-4111-8111-111111111111', name: 'Acme', slug: 'acme' };
+const SCHEDULE_PATH = '/api/schedules/brief-1';
+const WORKSPACE_OVERVIEW_PATH = '/api/settings/organization';
+const NO_SELECTOR = 'active';
+
+type ScheduleRead = 'found' | 'missing' | 'failing';
+
+function missingSchedule() {
+  return new ApiHttpError('Schedule not found', 404);
+}
+
+function routeApi(reads: Record<string, ScheduleRead>, memberships = [ORGANIZATION]) {
+  mockApiGet.mockImplementation((path: string, options?: { headers?: Record<string, string> }) => {
+    if (path === WORKSPACE_OVERVIEW_PATH) {
+      return Promise.resolve({
+        access: { plan: 'pro', canManageTeam: false, maxMembers: null },
+        activeOrganizationId: null,
+        workspaces: memberships.map((membership) => ({ ...membership, role: 'member' })),
+        organization: null,
+      });
+    }
+    if (path !== SCHEDULE_PATH) return Promise.reject(new Error(`unexpected path ${path}`));
+    const read = reads[options?.headers?.[MANAGED_CLOUD_ORGANIZATION_HEADER] ?? NO_SELECTOR];
+    if (read === 'found') return Promise.resolve({ schedule: serverSchedule() });
+    if (read === 'failing') return Promise.reject(new ApiHttpError('Unavailable', 503));
+    return Promise.reject(missingSchedule());
+  });
+}
+
+function scheduleReadSelectors(): string[] {
+  return mockApiGet.mock.calls
+    .filter(([path]) => path === SCHEDULE_PATH)
+    .map(([, options]) => options?.headers?.[MANAGED_CLOUD_ORGANIZATION_HEADER] ?? NO_SELECTOR);
+}
+
+function elsewhereNote(name: string) {
+  return `Your daily brief runs in ${name}. Switch to that workspace to change it.`;
+}
 const AUTO_MODEL_ID = requireAutoMode().id;
 
 function storedNotifications(value: Record<string, unknown>) {
@@ -401,5 +445,141 @@ describe('notification reminders', () => {
       expect(screen.getByLabelText('Usage limit resets').props.disabled).toBe(false);
     });
     expect(screen.queryByLabelText('Daily brief')).toBeNull();
+  });
+
+  describe('a brief saved from another workspace', () => {
+    beforeEach(() => {
+      storedNotifications({ [DAILY_BRIEF_SCHEDULE_PREFERENCE_KEY]: 'brief-1' });
+    });
+
+    afterEach(() => {
+      mockApiGet.mockReset();
+      mockUpdateSchedule.mockReset();
+    });
+
+    it('locks the switch and names Personal when the brief runs there', async () => {
+      routeApi({ [MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE]: 'found' });
+      signInToCloud();
+      const screen = render(<NotificationPreferencesScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText(elsewhereNote('Personal'))).toBeTruthy();
+      });
+      expect(screen.getByLabelText('Daily brief').props.value).toBe(false);
+      expect(screen.getByLabelText('Daily brief').props.disabled).toBe(true);
+      expect(scheduleReadSelectors()).toEqual([
+        NO_SELECTOR,
+        MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+      ]);
+      expect(mockCreateSchedule).not.toHaveBeenCalled();
+      expect(mockPatchPreferenceNamespace).not.toHaveBeenCalled();
+    });
+
+    it('names the organization when the brief runs there', async () => {
+      routeApi({ [ORGANIZATION.id]: 'found' });
+      signInToCloud();
+      const screen = render(<NotificationPreferencesScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText(elsewhereNote(ORGANIZATION.name))).toBeTruthy();
+      });
+      expect(screen.getByLabelText('Daily brief').props.disabled).toBe(true);
+      expect(scheduleReadSelectors()).toEqual([
+        NO_SELECTOR,
+        MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+        ORGANIZATION.id,
+      ]);
+      expect(mockCreateSchedule).not.toHaveBeenCalled();
+    });
+
+    it('creates a new brief when no workspace has the saved one', async () => {
+      routeApi({});
+      mockCreateSchedule.mockResolvedValueOnce({
+        id: 'brief-2',
+        isActive: true,
+        timeOfDay: '08:00',
+      });
+      signInToCloud();
+      const screen = render(<NotificationPreferencesScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Daily brief').props.disabled).toBe(false);
+      });
+      expect(screen.getByLabelText('Daily brief').props.value).toBe(false);
+      expect(scheduleReadSelectors()).toEqual([
+        NO_SELECTOR,
+        MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+        ORGANIZATION.id,
+      ]);
+      expect(screen.queryByText(/Your daily brief runs in/)).toBeNull();
+
+      fireEvent(screen.getByLabelText('Daily brief'), 'valueChange', true);
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText('Set Time'));
+      });
+
+      expect(mockCreateSchedule).toHaveBeenCalledTimes(1);
+      expect(mockPatchPreferenceNamespace).toHaveBeenCalledWith(
+        ACCOUNT_NOTIFICATION_PREFERENCES_NAMESPACE,
+        { [DAILY_BRIEF_SCHEDULE_PREFERENCE_KEY]: 'brief-2' },
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+      expect(screen.getByLabelText('Daily brief').props.value).toBe(true);
+    });
+
+    it('does not probe when the account has no organizations', async () => {
+      routeApi({ [MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE]: 'found' }, []);
+      signInToCloud();
+      const screen = render(<NotificationPreferencesScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Daily brief').props.disabled).toBe(false);
+      });
+      expect(screen.getByLabelText('Daily brief').props.value).toBe(false);
+      expect(scheduleReadSelectors()).toEqual([NO_SELECTOR]);
+      expect(mockApiGet).toHaveBeenCalledWith(WORKSPACE_OVERVIEW_PATH, expect.anything());
+      expect(screen.queryByText(/Your daily brief runs in/)).toBeNull();
+    });
+
+    it('does not create a second brief when the loaded one moved out of reach', async () => {
+      routeApi({ [NO_SELECTOR]: 'found' });
+      signInToCloud();
+      const screen = render(<NotificationPreferencesScreen />);
+      await waitFor(() => {
+        expect(screen.getByLabelText('Daily brief').props.value).toBe(true);
+      });
+
+      routeApi({ [ORGANIZATION.id]: 'found' });
+      mockUpdateSchedule.mockRejectedValueOnce(missingSchedule());
+      fireEvent.press(screen.getByLabelText('Daily brief time, 07:30'));
+      fireEvent.press(screen.getByLabelText('Set time to 09:00'));
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText('Set Time'));
+      });
+
+      expect(mockUpdateSchedule).toHaveBeenCalledTimes(1);
+      expect(mockCreateSchedule).not.toHaveBeenCalled();
+      expect(mockPatchPreferenceNamespace).not.toHaveBeenCalled();
+      expect(screen.getByText(elsewhereNote(ORGANIZATION.name))).toBeTruthy();
+      expect(screen.getByLabelText('Daily brief').props.value).toBe(false);
+      expect(screen.getByLabelText('Daily brief').props.disabled).toBe(true);
+    });
+
+    it('fails closed when a workspace cannot be checked', async () => {
+      routeApi({ [MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE]: 'failing' });
+      signInToCloud();
+      const screen = render(<NotificationPreferencesScreen />);
+
+      await waitFor(() => {
+        expect(screen.getByText(DAILY_BRIEF_LOAD_FAILED)).toBeTruthy();
+      });
+      expect(screen.getByLabelText('Daily brief').props.disabled).toBe(true);
+      expect(scheduleReadSelectors()).toEqual([
+        NO_SELECTOR,
+        MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+      ]);
+      expect(mockCreateSchedule).not.toHaveBeenCalled();
+      expect(mockPatchPreferenceNamespace).not.toHaveBeenCalled();
+    });
   });
 });

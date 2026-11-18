@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { AppState, View, Linking, Platform } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 import {
   Bell,
   BellOff,
@@ -154,6 +155,9 @@ function remindersFootnote(reminders: CloudReminders): string | null {
       return (
         (reminders.dailyBrief.shown ? reminders.dailyBrief.error : null) ??
         reminders.usageReset.error ??
+        (reminders.dailyBrief.shown && reminders.dailyBrief.state.elsewhere
+          ? `Your daily brief runs in ${reminders.dailyBrief.state.elsewhere}. Switch to that workspace to change it.`
+          : null) ??
         (reminders.dailyBrief.state.enabled ? 'Each brief counts toward your usage limits.' : null)
       );
   }
@@ -253,7 +257,8 @@ export default function NotificationPreferencesScreen() {
   const CATEGORIES = getCategories(colors, announcedPushGroups);
   const { unreadCount } = useNotificationCenter();
   const agentActivityPush = useAgentActivityPushSync();
-  const reminders = useCloudReminders();
+  const { t } = useTranslation();
+  const reminders = useCloudReminders(t('navPersonalWorkspace'));
 
   const [briefPickerOpen, setBriefPickerOpen] = useState(false);
   const [pushPermission, setPushPermission] = useState<PushDeliveryStatus>('undetermined');
@@ -570,7 +575,10 @@ export default function NotificationPreferencesScreen() {
                 value={remindersInCloud && dailyBriefEnabled}
                 disabled={
                   remindersInCloud &&
-                  (!remindersReady || !reminders.dailyBrief.loaded || reminders.dailyBrief.saving)
+                  (!remindersReady ||
+                    !reminders.dailyBrief.loaded ||
+                    reminders.dailyBrief.saving ||
+                    Boolean(reminders.dailyBrief.state.elsewhere))
                 }
                 onValueChange={handleDailyBriefChange}
               />
