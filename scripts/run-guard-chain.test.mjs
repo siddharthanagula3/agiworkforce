@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -206,4 +206,85 @@ test('the command line runs every step, prints failures and exits non-zero', (t)
   const refused = invoke('pnpm check:pass && echo unsafe', '1');
   assert.equal(refused.status, 2);
   assert.ok(!refused.stdout.includes('first ran'));
+});
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error.code === 'ESRCH') return false;
+    throw error;
+  }
+}
+
+async function until(condition, limitMs) {
+  const deadline = Date.now() + limitMs;
+  while (!condition()) {
+    assert.ok(Date.now() < deadline, 'timed out waiting');
+    await delay(25);
+  }
+}
+
+test('a cancelled run stops the whole process tree of a guard and starts no other', async (t) => {
+  const lateMs = 3000;
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-chain-stop-'));
+  const started = path.join(directory, 'started');
+  const late = path.join(directory, 'late');
+  fs.writeFileSync(
+    path.join(directory, 'slow.mjs'),
+    [
+      "import { spawn } from 'node:child_process';",
+      "spawn(process.execPath, ['worker.mjs'], { stdio: 'inherit' });",
+      'setInterval(() => {}, 1000);',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(directory, 'worker.mjs'),
+    [
+      "import fs from 'node:fs';",
+      `fs.writeFileSync(${JSON.stringify(started)}, String(process.pid));`,
+      `setTimeout(() => fs.writeFileSync(${JSON.stringify(late)}, 'written'), ${lateMs});`,
+      'setInterval(() => {}, 1000);',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(directory, 'package.json'),
+    JSON.stringify({
+      name: 'guard-chain-stop-fixture',
+      private: true,
+      scripts: {
+        'check:slow': 'node slow.mjs',
+        'check:after': 'node -e "console.log(\'after ran\')"',
+      },
+    }),
+  );
+
+  const runner = spawn(process.execPath, [RUNNER, 'pnpm check:slow && pnpm check:after'], {
+    cwd: directory,
+    env: { ...process.env, AGI_GUARD_CONCURRENCY: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let worker;
+  t.after(() => {
+    runner.kill('SIGKILL');
+    if (worker !== undefined && isAlive(worker)) process.kill(worker, 'SIGKILL');
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  let output = '';
+  runner.stdout.on('data', (chunk) => (output += chunk));
+  runner.stderr.on('data', (chunk) => (output += chunk));
+  const exited = new Promise((resolve) => runner.once('exit', (code) => resolve(code)));
+
+  await until(() => fs.existsSync(started) && fs.readFileSync(started, 'utf8') !== '', 60_000);
+  worker = Number(fs.readFileSync(started, 'utf8'));
+  assert.ok(isAlive(worker), 'the guard should be running before the cancel');
+
+  runner.kill('SIGTERM');
+  assert.equal(await exited, 143, output);
+  await until(() => !isAlive(worker), 5000);
+  await delay(lateMs + 500);
+  assert.ok(!fs.existsSync(late), 'the guard kept working after the runner exited');
+  assert.ok(!output.includes('after ran'), output);
+  assert.match(output, /Guard chain cancelled by SIGTERM\./);
 });

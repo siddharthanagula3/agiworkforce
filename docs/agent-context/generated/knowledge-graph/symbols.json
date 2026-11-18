@@ -131810,6 +131810,9 @@
     "stopDeveloperRuntime": [
       "apps/desktop/electron/runtime/developerSessionService.ts"
     ],
+    "stopGuards": [
+      "scripts/run-guard-chain.mjs"
+    ],
     "stopHealthChecks": [
       "apps/mobile/services/companion.ts"
     ],

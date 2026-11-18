@@ -2,9 +2,10 @@
 import { Buffer } from 'node:buffer';
 import { spawn } from 'node:child_process';
 import console from 'node:console';
-import { availableParallelism } from 'node:os';
+import { availableParallelism, constants } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath } from 'node:url';
 
 export const ENTRY = /^pnpm (?:--filter @[\w.-]+\/[\w.-]+ )?[\w:.-]+$/;
@@ -24,6 +25,10 @@ export const EXCLUSIVE = new Set([
 const MAX_CONCURRENCY = 16;
 const DEFAULT_CONCURRENCY = 4;
 const OUTPUT_LIMIT = 4 * 1024 * 1024;
+const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+const STOP_GRACE_MS = 5000;
+const STOP_LIMIT_MS = 8000;
+const OWN_PROCESS_GROUP = process.platform !== 'win32';
 
 export function parseChain(text) {
   const entries = String(text ?? '')
@@ -56,13 +61,56 @@ export function concurrencyFrom(value, cores = availableParallelism()) {
 }
 
 const running = new Set();
+const NEVER = new Promise(() => {});
+let stopping;
+
+function signalTree(child, signal) {
+  if (child.pid === undefined) return;
+  try {
+    if (OWN_PROCESS_GROUP) process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error;
+  }
+}
+
+// A guard is a shell running pnpm running the check, so a signal sent to the
+// shell alone leaves the check working in a checkout its caller is about to
+// remove. Each guard gets its own process group and the whole group is
+// signalled; the runner exits only once every guard's output has closed, and
+// starts no further guard while it waits.
+export function stopGuards(signal, { graceMs = STOP_GRACE_MS, limitMs = STOP_LIMIT_MS } = {}) {
+  if (stopping) {
+    for (const child of running) signalTree(child, 'SIGKILL');
+    return stopping;
+  }
+  const closed = [...running].map((child) => new Promise((done) => child.once('close', done)));
+  for (const child of running) signalTree(child, signal);
+  const force = setTimeout(() => {
+    for (const child of running) signalTree(child, 'SIGKILL');
+  }, graceMs);
+  let limit;
+  const gaveUp = new Promise((done) => {
+    limit = setTimeout(done, limitMs);
+  });
+  stopping = Promise.race([Promise.all(closed), gaveUp]).then(() => {
+    clearTimeout(force);
+    clearTimeout(limit);
+  });
+  return stopping;
+}
 
 function runCommand(command) {
+  if (stopping) return NEVER;
   return new Promise((resolve) => {
     const started = Date.now();
     const chunks = [];
     let size = 0;
-    const child = spawn(command, { shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, {
+      shell: true,
+      detached: OWN_PROCESS_GROUP,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     running.add(child);
     const collect = (chunk) => {
       chunks.push(chunk);
@@ -171,10 +219,12 @@ async function main() {
     console.error(error.message);
     process.exit(2);
   }
-  for (const signal of ['SIGINT', 'SIGTERM']) {
+  for (const signal of STOP_SIGNALS) {
     process.on(signal, () => {
-      for (const child of running) child.kill(signal);
-      process.exit(130);
+      stopGuards(signal).then(() => {
+        console.error(`Guard chain cancelled by ${signal}.`);
+        process.exit(128 + constants.signals[signal]);
+      });
     });
   }
   console.log(`Running ${entries.length} guard(s), ${concurrency} at a time.`);
