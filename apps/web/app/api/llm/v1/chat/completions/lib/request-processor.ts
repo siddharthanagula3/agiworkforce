@@ -7142,7 +7142,8 @@ async function processAdmittedRequest(
     autoMemoryIncludeSensitiveTopics: managedMemoryPolicy.includeSensitiveTopics === true,
     promptVariants: rolloutInputs.promptVariants,
     ...(dynamicSystemBlocks.some((block) => block.layer === 'untrusted_context') ||
-    contextTrim?.droppedUntrustedToolContent === true
+    contextTrim?.droppedUntrustedToolContent === true ||
+    attachmentAssetIds.length > 0
       ? { untrustedContextPresent: true }
       : {}),
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
