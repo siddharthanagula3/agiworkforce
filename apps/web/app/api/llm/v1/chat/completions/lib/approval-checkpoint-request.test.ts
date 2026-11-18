@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { describe, expect, it } from 'vitest';
 import { getDefaultAutoRoutingProfile, getDefaultModelFor } from '@agiworkforce/types';
@@ -401,5 +404,114 @@ describe('the large-file ledger a checkpoint keeps', () => {
     expect(
       resumed({ x_large_file_turn: { ...ledger, charged: -1 } }).largeFileTurn,
     ).toBeUndefined();
+  });
+});
+
+describe('the outside-content mark a checkpoint keeps', () => {
+  const turn = { model: 'fixture-model', messages: [], stream: true } as ChatCompletionRequest;
+  const ledger = {
+    assetIds: ['11111111-1111-4111-8111-111111111111'],
+    attachmentAssetIds: ['11111111-1111-4111-8111-111111111111'],
+    limitTokens: 6_666,
+    charged: 0,
+    readingClosed: false,
+    fileToolsOffered: false,
+  };
+
+  function saved(untrustedContextPresent?: boolean) {
+    return buildApprovalCheckpointRequest(
+      turn,
+      {},
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      untrustedContextPresent,
+    );
+  }
+
+  function resumed(
+    request: Record<string, unknown>,
+    before: Partial<Pick<ProcessedRequest, 'untrustedContextPresent'>> = {},
+  ): ProcessedRequest {
+    const processed = {
+      chatRequest: { ...turn },
+      llmRequest: { messages: [] },
+      ...before,
+    } as unknown as ProcessedRequest;
+    restoreCheckpointedTurn(processed, JSON.parse(JSON.stringify({ request, messages: [] })));
+    return processed;
+  }
+
+  it('saves the mark of a paused turn and gives it back to the resumed one', () => {
+    const request = saved(true);
+
+    expect(request['x_untrusted_context_present']).toBe(true);
+    expect(resumed(request).untrustedContextPresent).toBe(true);
+    for (const isFree of [true, false]) {
+      expect(checkpointRequestForResume(request, isFree)).not.toHaveProperty(
+        'x_untrusted_context_present',
+      );
+    }
+  });
+
+  it('a turn that held no outside content saves no mark and resumes with none', () => {
+    for (const request of [saved(), saved(false)]) {
+      expect(request).not.toHaveProperty('x_untrusted_context_present');
+      expect(resumed(request)).not.toHaveProperty('untrustedContextPresent');
+    }
+  });
+
+  it('never keeps a mark the caller sent, and a saved value other than true sets nothing', () => {
+    const incoming = {
+      ...turn,
+      x_untrusted_context_present: true,
+    } as unknown as ChatCompletionRequest;
+    expect(buildApprovalCheckpointRequest(incoming)).not.toHaveProperty(
+      'x_untrusted_context_present',
+    );
+    expect(resumed({ x_untrusted_context_present: 'true' })).not.toHaveProperty(
+      'untrustedContextPresent',
+    );
+  });
+
+  it.each([
+    'app/api/llm/v1/chat/completions/route.ts',
+    'lib/workflows/start-cloud-agent-workflow.ts',
+    'lib/workflows/steps/execute-cloud-agent-invocation.ts',
+  ])('every checkpoint %s saves carries the mark of its turn', (file) => {
+    const webRoot = path.resolve(import.meta.dirname, '../../../../../../..');
+    const source = readFileSync(path.join(webRoot, file), 'utf8');
+    const built = source.split('buildApprovalCheckpointRequest(').length - 1;
+    const marked = source.split('processed.untrustedContextPresent,\n').length - 1;
+
+    expect(built).toBeGreaterThan(0);
+    expect(marked).toBe(built);
+  });
+
+  it('never clears a mark the resumed request already carries', () => {
+    expect(resumed(saved(), { untrustedContextPresent: true }).untrustedContextPresent).toBe(true);
+  });
+
+  it('marks a turn resumed from an older checkpoint that kept a file', () => {
+    const withLedger = buildApprovalCheckpointRequest(
+      turn,
+      {},
+      [],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ledger,
+    );
+    const withStagedFile = buildApprovalCheckpointRequest(turn, {}, [
+      { filename: 'notes.txt', mimeType: 'text/plain', base64: 'aGVsbG8=' },
+    ]);
+
+    expect(withLedger).not.toHaveProperty('x_untrusted_context_present');
+    expect(resumed(withLedger).untrustedContextPresent).toBe(true);
+    expect(resumed(withStagedFile).untrustedContextPresent).toBe(true);
   });
 });

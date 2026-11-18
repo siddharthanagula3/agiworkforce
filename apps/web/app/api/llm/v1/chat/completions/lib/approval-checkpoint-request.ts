@@ -30,6 +30,7 @@ const CHECKPOINT_TURN_ATTACHMENTS_KEY = 'x_turn_attachments';
 const CHECKPOINT_MODEL_SELECTION_KEY = 'x_model_selection';
 const CHECKPOINT_TURN_TOOL_PROHIBITION_KEY = 'x_turn_tool_prohibition';
 export const CHECKPOINT_LARGE_FILE_TURN_KEY = 'x_large_file_turn';
+const CHECKPOINT_UNTRUSTED_CONTEXT_KEY = 'x_untrusted_context_present';
 const CHECKPOINT_PRIVATE_KEYS: readonly string[] = [
   CONTEXT_POLICY_SNAPSHOT_KEY,
   CHECKPOINT_TURN_ATTACHMENTS_KEY,
@@ -37,6 +38,7 @@ const CHECKPOINT_PRIVATE_KEYS: readonly string[] = [
   CHECKPOINT_TURN_TOOL_PROHIBITION_KEY,
   TOOL_SCHEMA_STATE_CHECKPOINT_KEY,
   CHECKPOINT_LARGE_FILE_TURN_KEY,
+  CHECKPOINT_UNTRUSTED_CONTEXT_KEY,
 ];
 
 const CheckpointLargeFileTurnSchema = z.object({
@@ -76,6 +78,7 @@ export function buildApprovalCheckpointRequest(
   toolSchemaState?: ToolSchemaState,
   contextPolicySnapshot?: ContextPolicySnapshot,
   largeFileTurn?: LargeFileTurn,
+  untrustedContextPresent?: boolean,
 ): Record<string, unknown> {
   const {
     messages: _messages,
@@ -102,7 +105,27 @@ export function buildApprovalCheckpointRequest(
     ...(savedLargeFileTurn?.success
       ? { [CHECKPOINT_LARGE_FILE_TURN_KEY]: savedLargeFileTurn.data }
       : {}),
+    ...(untrustedContextPresent === true ? { [CHECKPOINT_UNTRUSTED_CONTEXT_KEY]: true } : {}),
   };
+}
+
+/**
+ * A resumed request is rebuilt from text messages, so nothing in it says the
+ * paused turn held outside content. The saved mark only ever sets the flag,
+ * never clears it; a checkpoint saved before the mark existed is read from the
+ * files it kept.
+ */
+function restoreUntrustedContext(
+  processed: ProcessedRequest,
+  request: Record<string, unknown>,
+): void {
+  if (
+    request[CHECKPOINT_UNTRUSTED_CONTEXT_KEY] === true ||
+    (processed.turnAttachments ?? []).length > 0 ||
+    processed.largeFileTurn !== undefined
+  ) {
+    processed.untrustedContextPresent = true;
+  }
 }
 
 /**
@@ -180,6 +203,7 @@ export function restoreCheckpointedTurn(
   processed.toolSchemaState = schemaState.success ? schemaState.data : undefined;
   processed.turnAttachments = checkpointTurnAttachments(checkpoint.request);
   processed.largeFileTurn = checkpointLargeFileTurn(checkpoint.request);
+  restoreUntrustedContext(processed, checkpoint.request);
   restoreLargeFileTools(processed);
   const renderedModel = checkpoint.request['model'];
   const selection = CheckpointModelSelectionSchema.safeParse(
