@@ -21103,6 +21103,9 @@
     "clearFeatureVersionDisable": [
       "apps/web/lib/feature-flags/flag-admin-service.ts"
     ],
+    "clearHeartbeatFailureStreak": [
+      "apps/mobile/src/features/device-registry/heartbeat.ts"
+    ],
     "clearHighlightCache": [
       "packages/ui/unified-chat/src/components/markdown/shikiHighlighter.ts"
     ],
@@ -41786,6 +41789,9 @@
     "DeviceClass": [
       "apps/mobile/scripts/screenshots/catalog.ts",
       "apps/mobile/scripts/screenshots/pipeline.ts"
+    ],
+    "deviceClearanceCopy": [
+      "apps/web/lib/device-steps/device-clearance-step.ts"
     ],
     "DeviceClearanceNotice": [
       "apps/web/lib/device-steps/device-clearance-step.ts"
@@ -99063,6 +99069,9 @@
     "PHONE_CAPABILITIES": [
       "packages/contracts/types/src/phone-steps.ts"
     ],
+    "PHONE_PRESENCE_WAIT_MS": [
+      "apps/mobile/src/features/integrations/services/phoneDeviceHost.ts"
+    ],
     "PHONE_STEP_CAPABILITY": [
       "packages/contracts/types/src/phone-steps.ts"
     ],
@@ -153974,6 +153983,9 @@
     ],
     "videoGenerationCostMicrousd": [
       "packages/contracts/types/src/model-catalog.ts"
+    ],
+    "VideoGenerationFailedError": [
+      "apps/mobile/src/features/video/services/videogen.ts"
     ],
     "VideoGenerationJob": [
       "apps/web/lib/server/video-generation-jobs.ts"
