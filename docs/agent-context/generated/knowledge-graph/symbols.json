@@ -125090,6 +125090,9 @@
       "packages/guardian/core/src/adapters/builder.ts",
       "packages/guardian/core/src/adapters/index.ts"
     ],
+    "scannerMimeType": [
+      "apps/web/lib/server/chat-file-intake/pdf-inspection.ts"
+    ],
     "ScannerOptions": [
       "services/upload-scanner/src/server.ts"
     ],
