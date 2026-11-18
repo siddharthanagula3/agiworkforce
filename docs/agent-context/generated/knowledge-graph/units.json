@@ -2551,16 +2551,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 2450,
+      "files": 2474,
       "roles": {
         "asset": 4,
         "config": 14,
         "doc": 4,
         "generated": 1,
         "other": 49,
-        "source": 1217,
+        "source": 1225,
         "style": 1,
-        "test": 1160
+        "test": 1176
       }
     },
     {
@@ -2615,17 +2615,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8540,
+      "files": 8553,
       "roles": {
         "asset": 58,
         "config": 94,
         "doc": 51,
         "generated": 2,
-        "migration": 750,
+        "migration": 752,
         "other": 37,
-        "source": 3594,
+        "source": 3597,
         "style": 37,
-        "test": 3917
+        "test": 3925
       }
     },
     {
@@ -4268,12 +4268,12 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 970,
+      "files": 972,
       "roles": {
         "config": 29,
         "generated": 629,
-        "source": 176,
-        "test": 136
+        "source": 177,
+        "test": 137
       }
     },
     {

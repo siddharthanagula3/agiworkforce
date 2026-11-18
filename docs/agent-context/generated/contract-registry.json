@@ -3,6 +3,7 @@
   "generatedFrom": "packages/contracts/types/src top-level modules (excl. generated/, __tests__) + packages/contracts/cloud-contracts/src top-level modules + packages/contracts/types/src/generated/protocol file count (ts-rs output from crates/agiworkforce-protocol)",
   "typesModules": [
     "account-eligibility",
+    "account-session-label",
     "account-usage-client",
     "account-usage-wire",
     "agent",

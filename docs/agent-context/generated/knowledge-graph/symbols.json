@@ -1580,6 +1580,9 @@
     "AccountService": [
       "apps/cli/src/app_server/account_service.rs"
     ],
+    "AccountSessionLabelFields": [
+      "packages/contracts/types/src/account-session-label.ts"
+    ],
     "AccountSessionRenewal": [
       "apps/extension-vscode/src/utils/api.ts"
     ],
@@ -2889,6 +2892,9 @@
     ],
     "age": [
       "apps/desktop/src-tauri/src/automation/computer_use/control.rs"
+    ],
+    "AGE_ENTRY_PARAMS": [
+      "apps/mobile/src/features/settings/parental-controls/entry.ts"
     ],
     "AGE_SETTING_LABEL": [
       "apps/mobile/src/features/settings/ageSettingValue.ts"
@@ -6494,6 +6500,9 @@
     "AppLockOverlay": [
       "apps/mobile/src/features/auth/components/AppLockOverlay.tsx"
     ],
+    "appLockWording": [
+      "apps/mobile/src/features/auth/services/appLockWording.ts"
+    ],
     "apply": [
       "apps/cli/src/cloud/handshake.rs",
       "apps/cli/src/cloud/memory.rs",
@@ -6952,6 +6961,9 @@
     "AppMode": [
       "apps/desktop/src/stores/appModeStore.ts",
       "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx"
+    ],
+    "AppModeAdmission": [
+      "apps/mobile/src/features/chat/store/appModeStore.ts"
     ],
     "AppModeTestGuard": [
       "apps/desktop/src-tauri/src/sys/account/app_mode.rs"
@@ -7427,6 +7439,9 @@
     ],
     "AppSession": [
       "packages/contracts/types/src/sessions/taxonomy.ts"
+    ],
+    "appSessionLabel": [
+      "packages/contracts/types/src/account-session-label.ts"
     ],
     "AppSidebar": [
       "apps/web/features/marketing/components/app-preview/AppPreviews.tsx"
@@ -8829,6 +8844,9 @@
     "ASK_FOR_CHANGES_LABEL": [
       "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx"
     ],
+    "ASK_FROM_SIRI_STILL_ON": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
+    ],
     "ASK_INTENT_KEYCHAIN_KEY": [
       "apps/mobile/src/features/siri/askIntentToken.ts"
     ],
@@ -8850,6 +8868,12 @@
     ],
     "askFromSiriSupported": [
       "apps/mobile/src/features/siri/askIntentToken.ts"
+    ],
+    "askFromSiriTokenForgotten": [
+      "apps/mobile/src/features/chat/store/cloudModeDoor.ts"
+    ],
+    "askFromSiriTurnedOff": [
+      "apps/mobile/src/features/chat/store/cloudModeDoor.ts"
     ],
     "askNativeQuestion": [
       "apps/desktop/electron/runtime/nativeQuestions.ts"
@@ -12017,6 +12041,9 @@
     ],
     "beginCloudProjectFetch": [
       "apps/mobile/stores/projects/cloudProjectStore.ts"
+    ],
+    "beginCloudProviderConsentWithdrawal": [
+      "apps/mobile/services/providerConsent.ts"
     ],
     "beginCodeSessionStart": [
       "apps/mobile/src/features/companion/remote-code/store.ts"
@@ -22611,8 +22638,20 @@
     "CLOUD_PROVIDER_CONSENT_KEY": [
       "apps/mobile/services/providerConsent.ts"
     ],
+    "CLOUD_PROVIDER_CONSENT_WITHDRAWAL_KEY": [
+      "apps/mobile/services/providerConsent.ts"
+    ],
     "CLOUD_PROVIDER_LIST_URL": [
       "apps/mobile/services/providerConsent.ts"
+    ],
+    "CLOUD_PROVIDER_SHARING_CAPTION": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
+    ],
+    "CLOUD_PROVIDER_SHARING_LABEL": [
+      "apps/mobile/services/providerConsent.ts"
+    ],
+    "CLOUD_PROVIDER_SHARING_TEST_ID": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
     ],
     "CLOUD_REMINDERS_LOAD_FAILED": [
       "apps/mobile/src/features/settings/notifications/useCloudReminders.ts"
@@ -24369,6 +24408,12 @@
       "apps/mobile/services/llmGate.ts",
       "apps/mobile/services/providerConsent.ts"
     ],
+    "cloudProviderConsentWithdrawalInProgress": [
+      "apps/mobile/services/providerConsent.ts"
+    ],
+    "CloudProviderSharingGroup": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
+    ],
     "CloudPublisher": [
       "packages/platform/artifacts/src/artifacts.ts"
     ],
@@ -24655,6 +24700,9 @@
     ],
     "cloudRunWebUrl": [
       "apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts"
+    ],
+    "CloudRunWithdrawalOptions": [
+      "apps/mobile/src/features/tasks/service.ts"
     ],
     "CloudSafeSettings": [
       "packages/contracts/cloud-contracts/src/sync.ts"
@@ -46843,6 +46891,9 @@
     "endLiveVoiceSession": [
       "apps/web/features/chat/hooks/use-voice-session.ts"
     ],
+    "endLiveVoiceSessions": [
+      "apps/mobile/src/features/voice/hooks/useLiveVoiceSession.ts"
+    ],
     "endpoint": [
       "apps/desktop/src-tauri/src/automation/browser/playwright_bridge.rs",
       "apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs"
@@ -47169,6 +47220,9 @@
       "apps/cli/src/platform/runtime/worktree.rs",
       "crates/agiworkforce-worktree/src/basic.rs",
       "crates/agiworkforce-worktree/src/lib.rs"
+    ],
+    "enterCloudMode": [
+      "apps/mobile/src/features/chat/store/cloudModeDoor.ts"
     ],
     "enterLocalDesktopShell": [
       "apps/desktop/wdio/support/desktop-shell.ts"
@@ -51360,6 +51414,9 @@
     "fetchSavedPaymentMethods": [
       "apps/web/features/billing/services/stripe-payments.ts"
     ],
+    "fetchSchedulePage": [
+      "apps/mobile/src/features/schedules/service.ts"
+    ],
     "fetchScheduleRuns": [
       "apps/mobile/src/features/schedules/index.ts",
       "apps/mobile/src/features/schedules/service.ts"
@@ -53014,6 +53071,9 @@
     "finishSidePanelTour": [
       "apps/extension/src/features/side-panel/onboarding.ts"
     ],
+    "finishUnfinishedCloudProviderConsentWithdrawal": [
+      "apps/mobile/services/providerConsent.ts"
+    ],
     "finishWorkspaceSwitch": [
       "apps/web/features/workspaces/lib/workspace-admission.ts"
     ],
@@ -53765,6 +53825,9 @@
     ],
     "forget_unchanged": [
       "apps/cli/src/agent/checkpoints.rs"
+    ],
+    "forgetAskFromSiriOnDevice": [
+      "apps/mobile/src/features/siri/askIntentToken.ts"
     ],
     "forgetBackupReplicas": [
       "apps/web/lib/server/object-backup.ts"
@@ -62194,6 +62257,9 @@
     "hasCloudAccountOwner": [
       "apps/mobile/src/features/auth/services/cloudAccountSession.ts"
     ],
+    "hasCloudProviderConsentForCurrentAccount": [
+      "apps/mobile/services/providerConsent.ts"
+    ],
     "hasCompatibleFreeErrorRecoveryModel": [
       "apps/web/features/chat/lib/free-error-model-recovery.ts"
     ],
@@ -63922,6 +63988,9 @@
     "http_json_response": [
       "apps/cli/src/features/a2a/mod.rs",
       "apps/cli/src/features/a2a/server.rs"
+    ],
+    "HTTP_LIBRARY_AGENTS": [
+      "packages/contracts/types/src/account-session-label.ts"
     ],
     "HTTP_METHODS": [
       "scripts/lib/admin-route-guards.mjs"
@@ -66348,6 +66417,9 @@
     "installCloudApiStubs": [
       "apps/desktop/wdio/helpers/cloudSession.ts"
     ],
+    "installCloudModeDoor": [
+      "apps/mobile/src/features/chat/store/cloudModeDoor.ts"
+    ],
     "installCountLabel": [
       "packages/ui/ui/src/directory/constants.ts"
     ],
@@ -68204,6 +68276,9 @@
     "isApprovingToolDecision": [
       "packages/contracts/cloud-contracts/src/tool-approval-resume.ts"
     ],
+    "isAppSession": [
+      "packages/contracts/types/src/account-session-label.ts"
+    ],
     "isArchivableState": [
       "packages/ui/unified-chat/src/components/tasks/task-display.ts"
     ],
@@ -69487,6 +69562,9 @@
     "isJobQueueName": [
       "apps/web/lib/jobs/job-queues.ts"
     ],
+    "isJsonObject": [
+      "apps/web/lib/server/jsonb-object-merge.ts"
+    ],
     "isKeepableChatMessage": [
       "apps/web/lib/chat-kept-messages.ts"
     ],
@@ -69771,6 +69849,9 @@
     ],
     "isMfaRequiredError": [
       "apps/web/lib/mfa-policy-gate.ts"
+    ],
+    "isMicPermissionRequestPending": [
+      "apps/mobile/src/features/voice/services/micPermissionRequest.ts"
     ],
     "isMinorMode": [
       "apps/mobile/src/features/auth/services/ageGate.ts"
@@ -70335,6 +70416,9 @@
     ],
     "isPurchaseAsk": [
       "apps/web/lib/services/organization-policy-evaluator.ts"
+    ],
+    "isPushPermissionRequestPending": [
+      "apps/mobile/services/pushPermissionStatus.ts"
     ],
     "isPushPreferenceGroup": [
       "apps/mobile/src/features/settings/notifications/categories.ts"
@@ -71645,6 +71729,9 @@
     "jsonAfterMarker": [
       "apps/extension/src/features/content/in-page-panel/youtubeTranscript.ts"
     ],
+    "jsonbObjectSql": [
+      "apps/web/lib/server/jsonb-object-merge.ts"
+    ],
     "jsonBodyKeys": [
       "scripts/check-cli-wire-parity.mjs"
     ],
@@ -71656,6 +71743,9 @@
     ],
     "JsonObjectFailureState": [
       "apps/web/app/api/llm/v1/chat/completions/lib/json-object-mode.ts"
+    ],
+    "jsonObjectOf": [
+      "apps/web/lib/server/jsonb-object-merge.ts"
     ],
     "JsonObjectSettlement": [
       "apps/web/app/api/llm/v1/chat/completions/lib/json-object-mode.ts"
@@ -81220,6 +81310,9 @@
     "markCloudConversationReady": [
       "apps/desktop/src/services/cloudChat.ts"
     ],
+    "markCloudProviderConsentWithdrawalStandingWorkPaused": [
+      "apps/mobile/services/providerConsent.ts"
+    ],
     "markComputerUseRunEnded": [
       "apps/extension/src/features/computer-use/runMarker.ts"
     ],
@@ -85795,6 +85888,9 @@
       "apps/web/features/work/index.ts",
       "apps/web/features/work/launch.ts"
     ],
+    "mergeJsonbObjectSql": [
+      "apps/web/lib/server/jsonb-object-merge.ts"
+    ],
     "mergeMessageSources": [
       "apps/extension/src/features/side-panel/chat-state.ts"
     ],
@@ -89136,6 +89232,9 @@
     ],
     "nativePurchaseSupportFrom": [
       "scripts/lib/rollout/store-listing.mjs"
+    ],
+    "NativePushPermission": [
+      "apps/mobile/services/pushPermissionStatus.ts"
     ],
     "nativeReconnectDelayMs": [
       "apps/extension/src/features/native-bridge/reconnect.ts"
@@ -95700,11 +95799,20 @@
       "apps/cli/src/repo/layout.rs",
       "apps/cli/src/repo/mod.rs"
     ],
+    "PARENTAL_CONTROLS_ROUTE": [
+      "apps/mobile/src/features/settings/parental-controls/entry.ts"
+    ],
+    "PARENTAL_CONTROLS_TITLE": [
+      "apps/mobile/src/features/settings/parental-controls/entry.ts"
+    ],
     "PARENTAL_PERMISSION_BELOW_AGE": [
       "packages/contracts/types/src/account-eligibility.ts"
     ],
     "ParentalControlsScreen": [
       "apps/mobile/src/features/settings/parental-controls/index.tsx"
+    ],
+    "parentalControlsTitle": [
+      "apps/mobile/src/features/settings/parental-controls/entry.ts"
     ],
     "ParityCommandResult": [
       "apps/cli/src/claude_parity.rs"
@@ -98062,6 +98170,9 @@
     ],
     "peekGroundingPool": [
       "apps/web/lib/web-search/grounding-pool.ts"
+    ],
+    "peekImageEditRetry": [
+      "apps/mobile/src/features/chat/actions/runImageGenerationTurn.ts"
     ],
     "peekPostAuthIntent": [
       "apps/mobile/src/features/auth/services/postAuthIntent.ts"
@@ -107474,7 +107585,8 @@
       "apps/cli/src/platform/runtime/git.rs"
     ],
     "PushPermissionStatus": [
-      "apps/mobile/services/notifications.ts"
+      "apps/mobile/services/notifications.ts",
+      "apps/mobile/services/pushPermissionStatus.ts"
     ],
     "PushPlan": [
       "apps/cli/src/platform/runtime/git.rs"
@@ -118984,6 +119096,9 @@
     "resolveRetryTarget": [
       "apps/extension-vscode/src/features/chat/retry.ts"
     ],
+    "resolveReturnEntry": [
+      "apps/mobile/app/(public)/age-gate.tsx"
+    ],
     "resolveReturnPath": [
       "apps/mobile/app/(public)/age-gate.tsx"
     ],
@@ -121131,6 +121246,9 @@
     ],
     "revokeEveryOtherSession": [
       "apps/web/lib/server/session-revocation.ts"
+    ],
+    "revokeForgottenAskFromSiri": [
+      "apps/mobile/src/features/siri/askIntentToken.ts"
     ],
     "revokeHarnessSessions": [
       "apps/web/e2e/qa-capability-harness.ts"
@@ -125854,6 +125972,9 @@
     "ScheduleValidationResult": [
       "apps/web/features/schedules/lib/schedule-form.ts"
     ],
+    "ScheduleWithdrawalOptions": [
+      "apps/mobile/src/features/schedules/service.ts"
+    ],
     "schema_budget": [
       "apps/desktop/src-tauri/src/core/mcp/mod.rs"
     ],
@@ -129434,6 +129555,12 @@
     "SessionDeletionPolicy": [
       "packages/contracts/types/src/sessions/taxonomy.ts"
     ],
+    "SessionDeviceFields": [
+      "apps/web/features/settings/lib/session-device-label.ts"
+    ],
+    "sessionDeviceLabel": [
+      "apps/web/features/settings/lib/session-device-label.ts"
+    ],
     "SessionDownload": [
       "apps/extension/src/types.ts"
     ],
@@ -130058,6 +130185,9 @@
     ],
     "setApiKey": [
       "apps/extension-vscode/src/utils/api.ts"
+    ],
+    "setAppModeAdmission": [
+      "apps/mobile/src/features/chat/store/appModeStore.ts"
     ],
     "setAsideUnreadableFiles": [
       "apps/mobile/storage/unreadableFiles.ts"
@@ -131615,6 +131745,12 @@
     "sharesManagedRoute": [
       "apps/web/lib/free-quota-authorization.ts"
     ],
+    "SHARING_DECLINED": [
+      "apps/mobile/src/features/image/startImageCreation.ts"
+    ],
+    "SHARING_NOT_TURNED_OFF": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
+    ],
     "SHARING_OUTCOMES": [
       "packages/contracts/types/src/lifecycle-semantics.ts"
     ],
@@ -131626,6 +131762,15 @@
     ],
     "SharingOutcome": [
       "packages/contracts/types/src/lifecycle-semantics.ts"
+    ],
+    "SharingWithdrawalScope": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
+    ],
+    "sharingWithProvidersAllowed": [
+      "apps/mobile/src/features/chat/actions/mediaGenerationConsent.ts"
+    ],
+    "sharingWithProvidersAnswer": [
+      "apps/mobile/src/features/chat/actions/mediaGenerationConsent.ts"
     ],
     "Sheet": [
       "packages/ui/ui/src/index.ts",
@@ -136130,8 +136275,20 @@
     "standardManifestToInternal": [
       "apps/web/lib/services/plugin-marketplace-service.ts"
     ],
+    "STANDING_CLOUD_WORK_AND_ASK_FROM_SIRI_NOT_STOPPED": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
+    ],
+    "STANDING_CLOUD_WORK_MAY_STILL_RUN": [
+      "apps/mobile/src/features/chat/store/cloudModeDoor.ts"
+    ],
+    "STANDING_CLOUD_WORK_NOT_STOPPED": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
+    ],
     "StandingAnswer": [
       "services/signaling-server/src/standing.ts"
+    ],
+    "standingCloudWorkPausedMessage": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
     ],
     "standingConfig": [
       "services/signaling-server/src/standing.ts"
@@ -136975,6 +137132,9 @@
     "STEP_UP_LEVELS": [
       "apps/web/lib/server/step-up/actions.ts"
     ],
+    "STEP_UP_PATH": [
+      "apps/mobile/lib/egressGuard.ts"
+    ],
     "step_up_scope": [
       "crates/agiworkforce-mcp/src/error.rs"
     ],
@@ -137218,6 +137378,9 @@
     ],
     "stopDeveloperRuntime": [
       "apps/desktop/electron/runtime/developerSessionService.ts"
+    ],
+    "stopEveryCloudStream": [
+      "apps/mobile/stores/chat/chatExecutionStore.ts"
     ],
     "stopHealthChecks": [
       "apps/mobile/services/companion.ts"
@@ -138679,6 +138842,9 @@
     ],
     "subscribeCloudHistoryLoading": [
       "apps/mobile/stores/chat/cloudHistoryLoad.ts"
+    ],
+    "subscribeCloudProviderConsentChange": [
+      "apps/mobile/services/providerConsent.ts"
     ],
     "subscribeCodeTheme": [
       "packages/ui/unified-chat/src/components/markdown/shikiHighlighter.ts"
@@ -140603,6 +140769,9 @@
     ],
     "SystemResourcesResponse": [
       "apps/desktop/src-tauri/src/sys/commands/system_resources.rs"
+    ],
+    "SystemScreenSheet": [
+      "apps/mobile/src/shared/hooks/useHardwareBackDismiss.ts"
     ],
     "SystemTts": [
       "apps/desktop/src-tauri/src/features/speech/mod.rs",
@@ -145479,6 +145648,9 @@
     "topUpUnitsForUsd": [
       "packages/contracts/types/src/billing-topups.ts"
     ],
+    "toPushPermissionStatus": [
+      "apps/mobile/services/pushPermissionStatus.ts"
+    ],
     "toQwenUpstreamError": [
       "apps/web/app/api/llm/v1/chat/completions/lib/adapter-errors.ts"
     ],
@@ -145732,6 +145904,9 @@
     "trackMeteredCapability": [
       "apps/web/lib/server/product-analytics.ts"
     ],
+    "trackMicPermissionRequest": [
+      "apps/mobile/src/features/voice/services/micPermissionRequest.ts"
+    ],
     "trackProductAnalyticsEvent": [
       "apps/web/lib/server/product-analytics.ts"
     ],
@@ -145740,6 +145915,9 @@
       "apps/extension/src/features/observability/productAnalytics.ts",
       "apps/mobile/services/productAnalytics.ts",
       "apps/web/shared/lib/product-analytics.ts"
+    ],
+    "trackPushPermissionRequest": [
+      "apps/mobile/services/pushPermissionStatus.ts"
     ],
     "trackPushRegistrationPost": [
       "apps/mobile/services/pushRegistrationPosts.ts"
@@ -150061,6 +150239,9 @@
     "useAuthCopy": [
       "apps/web/features/auth/authCopy.ts"
     ],
+    "useAuthEmailFieldReveal": [
+      "apps/mobile/src/features/auth/components/useAuthEmailFieldReveal.ts"
+    ],
     "useAuthSceneBridge": [
       "packages/ui/ui/src/auth-scene/AuthSceneContext.tsx",
       "packages/ui/ui/src/auth-scene/index.ts"
@@ -152061,6 +152242,9 @@
     ],
     "useSystemModelSession": [
       "apps/mobile/src/features/model-picker/systemModelAvailability.ts"
+    ],
+    "useSystemScreenSheet": [
+      "apps/mobile/src/shared/hooks/useHardwareBackDismiss.ts"
     ],
     "useTabletLayout": [
       "apps/mobile/src/shared/hooks/useTabletLayout.ts"
@@ -156720,6 +156904,9 @@
     "withdrawCloudAgentRunSteer": [
       "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
+    "withdrawCloudProviderConsent": [
+      "apps/mobile/services/providerConsent.ts"
+    ],
     "withdrawCloudRunSteer": [
       "apps/mobile/src/features/tasks/cloudRunSteer.ts"
     ],
@@ -156747,6 +156934,9 @@
     "withdrawPluginSubmission": [
       "apps/mobile/src/features/plugins/sourcesService.ts",
       "apps/web/features/directory/services/plugins-directory.ts"
+    ],
+    "withdrawSharingWithProviders": [
+      "apps/mobile/src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx"
     ],
     "withdrawSubmission": [
       "apps/web/lib/services/plugin-submission-service.ts"
@@ -156869,6 +157059,9 @@
     ],
     "withNativeDocuments": [
       "apps/web/app/api/llm/v1/chat/completions/lib/media-input.ts"
+    ],
+    "withObjectMessageMetadata": [
+      "apps/web/lib/server/message-metadata-repair.ts"
     ],
     "withOperationCarrier": [
       "apps/web/lib/identity/operation-identity.ts"

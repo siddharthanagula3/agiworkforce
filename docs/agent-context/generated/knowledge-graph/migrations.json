@@ -2566,6 +2566,11 @@
       "follows": "apps/web/db/neon/0422_chat_file_intakes.sql"
     },
     {
+      "path": "apps/web/db/neon/0424_message_metadata_objects.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0423_cloud_code_environments.sql"
+    },
+    {
       "path": "apps/web/db/neon/down/0097_connector_oauth_broker.down.sql",
       "tables": [],
       "follows": null
@@ -4199,6 +4204,11 @@
       "path": "apps/web/db/neon/down/0423_cloud_code_environments.down.sql",
       "tables": [],
       "follows": "apps/web/db/neon/down/0422_chat_file_intakes.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0424_message_metadata_objects.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0423_cloud_code_environments.down.sql"
     }
   ]
 }
