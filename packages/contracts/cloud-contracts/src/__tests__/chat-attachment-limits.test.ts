@@ -255,7 +255,7 @@ describe('large chat file policy', () => {
       },
       text: { maxBytes: 500 * MIB, bytesPerStep: 64 * MIB },
       html: { maxBytes: 40 * MIB },
-      notebook: { maxBytes: 50 * MIB },
+      notebook: { maxBytes: 50 * MIB, maxContainers: 1_000_000 },
     });
     expect(CHAT_LARGE_FILE_POLICY.preparation).toEqual({
       maxTextChars: 8_000_000,

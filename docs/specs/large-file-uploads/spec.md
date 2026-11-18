@@ -1452,7 +1452,7 @@ egress is free, so that is accepted.
   {maxBytes 52428800, sampleRows 200}, `delimited` {maxBytes 524288000,
   sampleRows 200, typeInferenceRows 10000, bytesPerStep 67108864}, `text`
   {maxBytes 524288000, bytesPerStep 67108864}, `html` {maxBytes 41943040},
-  `notebook` {maxBytes 52428800}}
+  `notebook` {maxBytes 52428800, maxContainers 1000000}}
 - `preparation` {maxTextChars 8000000, segmentBytes 4194304, maxIndexedChars
   2000000, maxIndexedCharsPerUser 200000000, embedChatFiles false,
   preparerVersion 1, stallMs 7200000}

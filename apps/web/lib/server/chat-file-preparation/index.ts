@@ -376,7 +376,7 @@ async function spreadsheetStep(context: StepContext): Promise<StepPlan> {
 }
 
 async function notebookStep(context: StepContext): Promise<StepPlan> {
-  const text = extractNotebookCellText(await wholeFile(context));
+  const text = extractNotebookCellText(await wholeFile(context), context.policy.kinds.notebook);
   const budget = remainingChars(context);
   const truncated = text.length > budget;
   return textPlan(context, sliceWholeCodePoints(text, budget), {

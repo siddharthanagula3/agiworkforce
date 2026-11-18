@@ -45,6 +45,7 @@ import {
   inspectUploadHead,
   scanUploadRangeForCredentials,
 } from '@/lib/security/upload-scan';
+import { extractNotebookCellText } from '@/lib/server/chat-file-preparation/text-stream';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import {
@@ -706,6 +707,33 @@ describe('the cells of a large notebook, read as preparation gives them to the m
 
     expect(outcome).toBe('accepted');
     expect(harness.seal.media).toHaveLength(1);
+  });
+
+  it('reads no cells of a notebook with more objects and arrays than its kind allows, which preparation refuses too', async () => {
+    const containers = 5 + 3 * 50;
+    const policy: ChatFileIntakeDeps['policy'] = {
+      ...CHAT_LARGE_FILE_POLICY,
+      kinds: {
+        ...CHAT_LARGE_FILE_POLICY.kinds,
+        notebook: { ...CHAT_LARGE_FILE_POLICY.kinds.notebook, maxContainers: containers - 1 },
+      },
+    };
+    const cells = Array.from({ length: 50 }, () => codeCell('["run()\\n"]'));
+    const parse = vi.spyOn(JSON, 'parse');
+    try {
+      const { outcome } = await notebookOutcome(cells, policy);
+
+      expect(outcome).toBe('accepted');
+      expect(parse.mock.calls.some(([text]) => String(text).includes('"cells"'))).toBe(false);
+    } finally {
+      parse.mockRestore();
+    }
+    expect(() => extractNotebookCellText(notebook(cells), policy.kinds.notebook)).toThrow(
+      expect.objectContaining({ reason: 'over_kind_limit' }),
+    );
+    expect(() =>
+      extractNotebookCellText(notebook(cells), { maxContainers: containers }),
+    ).not.toThrow();
   });
 
   it('seals a notebook that is not JSON, whose cells preparation cannot read either', async () => {

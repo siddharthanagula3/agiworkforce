@@ -222,6 +222,52 @@ describe('text preparation', () => {
     expect(db.rowForAsset(id)).toMatchObject({ kind: 'notebook', state: 'ready' });
   });
 
+  describe('a notebook made of more objects and arrays than its kind allows', () => {
+    const notebookBytes = Buffer.from(
+      JSON.stringify({
+        cells: [
+          { cell_type: 'markdown', source: ['say "[[{{" and \\"[{\\" and [] {}'] },
+          { cell_type: 'markdown', source: ['A'.repeat(MAX_CHAT_ATTACHMENT_BYTES + MIB)] },
+        ],
+      }),
+      'utf8',
+    );
+
+    function notebookPolicy(maxContainers: number) {
+      return {
+        ...CHAT_LARGE_FILE_POLICY,
+        kinds: {
+          ...CHAT_LARGE_FILE_POLICY.kinds,
+          notebook: { ...CHAT_LARGE_FILE_POLICY.kinds.notebook, maxContainers },
+        },
+      };
+    }
+
+    async function prepared(maxContainers: number) {
+      const db = new FakePreparationDb();
+      const storage = createCountingStorage();
+      const id = await sealed(db, storage, notebookBytes, 'deep.ipynb', 'application/x-ipynb+json');
+      const policy = notebookPolicy(maxContainers);
+      await prepareUntilDone(() => prepareChatFileStep(id, { db, storage, policy }));
+      return db.rowForAsset(id);
+    }
+
+    it('is refused before it is parsed', async () => {
+      const parse = vi.spyOn(JSON, 'parse');
+      try {
+        const row = await prepared(5);
+        expect(row).toMatchObject({ state: 'prepare_failed', error: 'over_kind_limit' });
+        expect(parse.mock.calls.some(([text]) => String(text).includes('"cells"'))).toBe(false);
+      } finally {
+        parse.mockRestore();
+      }
+    });
+
+    it('counts only the six the file holds, none of the brackets written inside its strings', async () => {
+      expect(await prepared(6)).toMatchObject({ kind: 'notebook', state: 'ready_partial' });
+    });
+  });
+
   it('splits segments between code points', () => {
     const text = '😀'.repeat(10);
     const segments = splitIntoSegments(text, 6);

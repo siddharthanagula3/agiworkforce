@@ -9,6 +9,10 @@ const BYTE_ORDER_MARK = '\uFEFF';
 const CARRIAGE_RETURN = 0x0d;
 const UTF8_CONTINUATION_MASK = 0xc0;
 const UTF8_CONTINUATION = 0x80;
+const JSON_QUOTE = 0x22;
+const JSON_BACKSLASH = 0x5c;
+const JSON_OPEN_OBJECT = 0x7b;
+const JSON_OPEN_ARRAY = 0x5b;
 
 function isHighSurrogate(code: number): boolean {
   return code >= 0xd800 && code <= 0xdbff;
@@ -139,8 +143,37 @@ function joinNotebookSource(value: unknown): string {
   return '';
 }
 
+/**
+ * Parsing allocates tens of bytes for each object or array, so a file of empty
+ * containers grows the heap about twenty times its own size, while strings and
+ * numbers stay near it. Containers are counted over the bytes before any parse.
+ */
+function holdsMoreContainersThan(data: Uint8Array, maxContainers: number): boolean {
+  let containers = 0;
+  let inString = false;
+  for (let index = 0; index < data.byteLength; index += 1) {
+    const byte = data[index]!;
+    if (inString) {
+      if (byte === JSON_BACKSLASH) index += 1;
+      else if (byte === JSON_QUOTE) inString = false;
+    } else if (byte === JSON_QUOTE) {
+      inString = true;
+    } else if (byte === JSON_OPEN_OBJECT || byte === JSON_OPEN_ARRAY) {
+      containers += 1;
+      if (containers > maxContainers) return true;
+    }
+  }
+  return false;
+}
+
 /** Cell sources and text outputs of a notebook; rendered outputs (base64 images) are dropped. */
-export function extractNotebookCellText(data: Uint8Array): string {
+export function extractNotebookCellText(
+  data: Uint8Array,
+  limits: { maxContainers: number },
+): string {
+  if (holdsMoreContainersThan(data, limits.maxContainers)) {
+    throw new PreparationRefusedError('over_kind_limit');
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(decodeStrictUtf8(data).replace(/^\uFEFF/, ''));

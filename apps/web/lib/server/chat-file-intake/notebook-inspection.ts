@@ -48,12 +48,13 @@ export function isNotebookCursor(cursor: { scan?: unknown }): cursor is Notebook
 }
 
 /**
- * A file preparation refuses as unreadable gives the model no cell text, and
- * its bytes were already scanned, so there is nothing more to read.
+ * A file preparation refuses, as unreadable or as holding more containers than
+ * its kind allows, gives the model no cell text, and its bytes were already
+ * scanned, so there is nothing more to read.
  */
-function cellText(data: Uint8Array): string | null {
+function cellText(data: Uint8Array, policy: ChatLargeFilePolicy): string | null {
   try {
-    return extractNotebookCellText(data);
+    return extractNotebookCellText(data, policy.kinds.notebook);
   } catch (error) {
     if (error instanceof PreparationRefusedError) return null;
     throw error;
@@ -70,7 +71,7 @@ export async function scanNotebookStep(input: {
   policy: ChatLargeFilePolicy;
 }): Promise<NotebookScanOutcome> {
   const { cursor } = input;
-  const text = cellText(input.data);
+  const text = cellText(input.data, input.policy);
   const bytes = text === null ? null : encoder.encode(text);
   if (bytes === null || cursor.ownedFrom >= bytes.byteLength) {
     return { kind: 'finished', findings: cursor.findings };

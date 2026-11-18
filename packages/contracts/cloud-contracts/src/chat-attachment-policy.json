@@ -94,7 +94,7 @@
     },
     "text": { "maxBytes": 524288000, "bytesPerStep": 67108864 },
     "html": { "maxBytes": 41943040 },
-    "notebook": { "maxBytes": 52428800 }
+    "notebook": { "maxBytes": 52428800, "maxContainers": 1000000 }
   },
   "preparation": {
     "maxTextChars": 8000000,
