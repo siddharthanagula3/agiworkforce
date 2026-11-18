@@ -2095,6 +2095,70 @@ mod tests {
         assert_eq!(continued.summary.session_id, "in-b");
     }
 
+    #[test]
+    fn the_latest_session_of_a_folder_is_the_newest_whether_it_has_a_root_or_only_a_metadata_folder(
+    ) {
+        use crate::runtime::session_control::ManagedSessionStore;
+
+        let (_tempdir, conn) = temp_connection();
+        let store = ManagedSessionStore::new(conn.base_dir.clone());
+        let save_with_root = |id: &str, root: &Path, at: chrono::DateTime<Utc>, archived: bool| {
+            let mut session =
+                ManagedSession::with_messages(id.to_string(), at, vec![Message::text("user", id)]);
+            session.workspace_root = Some(root.to_path_buf());
+            if archived {
+                session.archived_at = Some(at);
+            }
+            store.save(&session).unwrap();
+        };
+        let save_metadata_only = |id: &str, folder: &Path| {
+            save_session(&conn, id, "", "", &folder.to_string_lossy(), "").unwrap();
+        };
+        let now = Utc::now();
+
+        let legacy_newer = tempdir().unwrap();
+        save_with_root(
+            "rooted-older",
+            legacy_newer.path(),
+            now - chrono::Duration::hours(1),
+            false,
+        );
+        save_metadata_only("legacy-newer", legacy_newer.path());
+        save_with_root(
+            "archived-newest",
+            legacy_newer.path(),
+            now + chrono::Duration::hours(2),
+            true,
+        );
+        assert_eq!(
+            latest_session_in_folder(&conn, legacy_newer.path())
+                .unwrap()
+                .as_deref(),
+            Some("legacy-newer")
+        );
+
+        let rooted_newer = tempdir().unwrap();
+        save_metadata_only("legacy-older", rooted_newer.path());
+        save_with_root(
+            "rooted-newer",
+            rooted_newer.path(),
+            now + chrono::Duration::hours(1),
+            false,
+        );
+        save_with_root(
+            "archived-newer",
+            rooted_newer.path(),
+            now + chrono::Duration::hours(2),
+            true,
+        );
+        assert_eq!(
+            latest_session_in_folder(&conn, rooted_newer.path())
+                .unwrap()
+                .as_deref(),
+            Some("rooted-newer")
+        );
+    }
+
     fn write_legacy_conversation(dir: &Path, id: &str, turns: &[(&str, &str)]) {
         fs::create_dir_all(dir).unwrap();
         let messages: Vec<_> = turns
