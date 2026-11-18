@@ -14,6 +14,7 @@ import {
   type UploadScanFinding,
 } from '@/lib/security/upload-scan';
 import { getPrivateObjectStream } from '@/lib/server/object-storage';
+import type { NotebookInspectionCursor } from './notebook-inspection';
 import type { PackageInspectionCursor } from './package-inspection';
 import type { PdfInspectionCursor } from './pdf-inspection';
 
@@ -33,7 +34,7 @@ export interface TextInspectionCursor {
 }
 
 export type ChatFileInspectionCursor =
-  TextInspectionCursor | PackageInspectionCursor | PdfInspectionCursor;
+  TextInspectionCursor | PackageInspectionCursor | PdfInspectionCursor | NotebookInspectionCursor;
 
 /** Bytes one window answers for: with a guard either side it reads as much as the head does. */
 export const CREDENTIAL_WINDOW_OWNED_BYTES =

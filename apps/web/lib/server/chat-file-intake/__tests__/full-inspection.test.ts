@@ -583,3 +583,138 @@ describe('the steps of the scan', () => {
     );
   });
 });
+
+describe('the cells of a large notebook, read as preparation gives them to the model', () => {
+  const NOTEBOOK: Declared = { fileName: 'analysis.ipynb', mimeType: 'application/x-ipynb+json' };
+  const PROSE_CELL = JSON.stringify({ cell_type: 'markdown', source: [FILLER.repeat(8_000)] });
+  const ESCAPED_KEY = `\\u0073${LIVE_KEY.slice(1)}`;
+
+  function notebook(cells: readonly string[]): Uint8Array {
+    return encoder.encode(
+      `{"cells":[${[PROSE_CELL, ...cells].join(',')}],"metadata":{},"nbformat":4,"nbformat_minor":5}`,
+    );
+  }
+
+  function codeCell(sourceJson: string, outputsJson = '[]'): string {
+    return `{"cell_type":"code","source":${sourceJson},"outputs":${outputsJson}}`;
+  }
+
+  async function notebookOutcome(cells: readonly string[], policy?: ChatFileIntakeDeps['policy']) {
+    const inspectContent = policyInspector('block');
+    return largeOutcome(
+      notebook(cells),
+      { inspectContent, ...(policy ? { policy } : {}) },
+      NOTEBOOK,
+    );
+  }
+
+  it('refuses a key a cell holds with a JSON escape, which the file as bytes does not show', async () => {
+    const bytes = notebook([codeCell(`["client = connect('${ESCAPED_KEY}')\\n"]`)]);
+    expect(new TextDecoder().decode(bytes)).not.toContain(LIVE_KEY);
+
+    const { outcome, harness } = await notebookOutcome([
+      codeCell(`["client = connect('${ESCAPED_KEY}')\\n"]`),
+    ]);
+
+    expect(outcome).toBe('refused');
+    expect(harness.presignGet).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a stream output', `[{"output_type":"stream","text":["${ESCAPED_KEY}\\n"]}]`],
+    [
+      'a plain-text result',
+      `[{"output_type":"execute_result","data":{"text/plain":["'${ESCAPED_KEY}'"]}}]`,
+    ],
+    ['an error value', `[{"output_type":"error","ename":"KeyError","evalue":"${ESCAPED_KEY}"}]`],
+  ])('refuses an escaped key in %s', async (_where, outputsJson) => {
+    const { outcome } = await notebookOutcome([codeCell('["run()\\n"]', outputsJson)]);
+
+    expect(outcome).toBe('refused');
+  });
+
+  it('refuses a key split across two lines of a cell, which preparation joins', async () => {
+    const [first, second] = [LIVE_KEY.slice(0, 12), LIVE_KEY.slice(12)];
+
+    const { outcome } = await notebookOutcome([
+      codeCell(`["client = connect('${first}","${second}')\\n"]`),
+    ]);
+
+    expect(outcome).toBe('refused');
+  });
+
+  it('refuses a secret an ordinary notebook writer stores with an escaped quote', async () => {
+    const name = ['aws', 'secret', 'access', 'key'].join('_');
+    const cell = JSON.stringify({
+      cell_type: 'code',
+      source: [`client = boto3.client('s3', ${name}="${'Ab1Cd2Ef3G'.repeat(4)}")\n`],
+      outputs: [],
+    });
+    expect(cell).toContain(`${name}=\\"`);
+
+    const { outcome } = await notebookOutcome([cell]);
+
+    expect(outcome).toBe('refused');
+  });
+
+  it('refuses a key that lies past the first step of the cells, reading them a step at a time', async () => {
+    const late = JSON.stringify({ cell_type: 'markdown', source: [FILLER.repeat(12_000)] });
+
+    const { outcome } = await notebookOutcome(
+      [late, codeCell(`["client = connect('${ESCAPED_KEY}')\\n"]`)],
+      withStep(SMALL_STEP),
+    );
+
+    expect(outcome).toBe('refused');
+  });
+
+  const ESCAPED_TOKEN = [...UNRECOGNISED_TOKEN]
+    .map((character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`)
+    .join('');
+
+  it.each([
+    [
+      'in a part of the file the cells leave out, past the head',
+      `{"cell_type":"raw","source":["${UNRECOGNISED_TOKEN.replaceAll('"', '\\"')}"]}`,
+    ],
+    ['in a cell, where only the decoded text shows it', codeCell(`["${ESCAPED_TOKEN}\\n"]`)],
+  ])(
+    'lets the workspace policy decide over a token no detector names, found %s',
+    async (_where, cell) => {
+      const decided: Outcome[] = [];
+      for (const mode of ['block', 'warn'] as const) {
+        stubMemoryObjectStorage();
+        const { outcome } = await largeOutcome(
+          notebook([cell]),
+          { inspectContent: policyInspector(mode) },
+          NOTEBOOK,
+        );
+        decided.push(outcome);
+      }
+
+      expect(decided).toEqual(['refused', 'accepted']);
+    },
+  );
+
+  it('seals a notebook whose cells hold escapes and no credential', async () => {
+    const { outcome, harness } = await notebookOutcome([
+      codeCell(
+        '["print(\\"caf\\u00e9\\")\\n"]',
+        '[{"output_type":"stream","text":["caf\\u00e9\\n"]}]',
+      ),
+    ]);
+
+    expect(outcome).toBe('accepted');
+    expect(harness.seal.media).toHaveLength(1);
+  });
+
+  it('seals a notebook that is not JSON, whose cells preparation cannot read either', async () => {
+    const { outcome } = await largeOutcome(
+      textFile(1_500_000),
+      { inspectContent: policyInspector('block') },
+      NOTEBOOK,
+    );
+
+    expect(outcome).toBe('accepted');
+  });
+});

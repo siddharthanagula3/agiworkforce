@@ -42,6 +42,13 @@ import {
   type TextInspectionCursor,
 } from './full-inspection';
 import {
+  firstNotebookCursor,
+  isNotebookCursor,
+  notebookScanApplies,
+  scanNotebookStep,
+  type NotebookInspectionCursor,
+} from './notebook-inspection';
+import {
   firstPackageCursor,
   isPackageCursor,
   packageScanApplies,
@@ -265,6 +272,23 @@ async function concludeInspection(
   return recorded ? { next: 'submit' } : endDirective('superseded');
 }
 
+/**
+ * Where every scan of a file's bytes ends. A notebook's cells reach the model
+ * decoded, so its decision waits for a scan of the cells as preparation reads
+ * them; any other file is decided here.
+ */
+function concludeScannedBytes(
+  ctx: StepContext,
+  row: ChatFileIntakeRow,
+  etag: string,
+  head: Uint8Array,
+  findings: readonly UploadScanFinding[],
+): Promise<ChatFileIntakeDirective> | ChatFileIntakeDirective {
+  return notebookScanApplies(row)
+    ? { next: 'inspect', cursor: firstNotebookCursor(etag, findings) }
+    : concludeInspection(ctx, row, etag, head, findings);
+}
+
 function objectUnchanged(
   current: { etag?: string | undefined; contentLength?: number | undefined } | null,
   etag: string,
@@ -321,7 +345,7 @@ async function continueInspection(
     credentialScanMimeType(row),
   );
   if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
-  return concludeInspection(ctx, row, cursor.etag, head, [...inspection.findings, ...findings]);
+  return concludeScannedBytes(ctx, row, cursor.etag, head, [...inspection.findings, ...findings]);
 }
 
 /**
@@ -380,7 +404,7 @@ async function continuePackageInspection(
         credentialScanMimeType(row),
       );
       if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
-      return concludeInspection(ctx, row, cursor.etag, head, [
+      return concludeScannedBytes(ctx, row, cursor.etag, head, [
         ...inspection.findings,
         ...scanned.findings,
       ]);
@@ -437,7 +461,7 @@ function settlePdfStep(
         inspection ??
         inspectUploadHead(head, row.mimeType, row.fileName, credentialScanMimeType(row));
       if (!headInspection.ok) return refuseInspected(ctx, row, headInspection.findings);
-      return concludeInspection(
+      return concludeScannedBytes(
         ctx,
         row,
         etag,
@@ -476,11 +500,53 @@ async function continuePdfInspection(
   return settlePdfStep(ctx, row, cursor.etag, scanned, head, null);
 }
 
+/**
+ * The scan of a notebook's cells: the whole file, read once and held to the
+ * entity tag its bytes were scanned under, then at most a text step's bytes of
+ * the cells' text. The step that reaches the end decides over every finding,
+ * with the head of the same read.
+ */
+async function continueNotebookInspection(
+  ctx: StepContext,
+  cursor: NotebookInspectionCursor,
+): Promise<ChatFileIntakeDirective> {
+  const { deps } = ctx;
+  const row = await holdForInspection(ctx);
+  if (!row) return endDirective('superseded');
+  if (!objectUnchanged(await deps.objects.head(row.stagingKey), cursor.etag, row)) {
+    return refuse(ctx, row, 'changed_during_check');
+  }
+  const data = await readInspectedHead(ctx, row, row.byteCount);
+  if (!objectUnchanged(await deps.objects.head(row.stagingKey), cursor.etag, row)) {
+    return refuse(ctx, row, 'changed_during_check');
+  }
+  if (data === null) throw new ShortInspectionReadError(row.id);
+
+  const scanned = await scanNotebookStep({ data, cursor, policy: deps.policy });
+  switch (scanned.kind) {
+    case 'continue':
+      return { next: 'inspect', cursor: scanned.cursor };
+    case 'rejected':
+      return refuseInspected(ctx, row, scanned.findings);
+    case 'finished':
+      return concludeInspection(
+        ctx,
+        row,
+        cursor.etag,
+        data.subarray(0, Math.min(row.byteCount, UPLOAD_INSPECTION_BYTES)),
+        scanned.findings,
+      );
+  }
+}
+
 async function inspectStep(
   ctx: StepContext,
   directive: Extract<ChatFileIntakeDirective, { next: 'inspect' }>,
 ): Promise<ChatFileIntakeDirective> {
   if (directive.cursor) {
+    if (isNotebookCursor(directive.cursor)) {
+      return continueNotebookInspection(ctx, directive.cursor);
+    }
     if (isPackageCursor(directive.cursor)) {
       return continuePackageInspection(ctx, directive.cursor);
     }
@@ -524,7 +590,7 @@ async function inspectStep(
   if (credentialScanContinuesAfterHead(row)) {
     return { next: 'inspect', cursor: firstCursorAfterHead(before.etag) };
   }
-  return concludeInspection(ctx, row, before.etag, head, inspection.findings);
+  return concludeScannedBytes(ctx, row, before.etag, head, inspection.findings);
 }
 
 async function holdForSubmit(
