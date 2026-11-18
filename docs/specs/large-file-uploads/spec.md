@@ -442,7 +442,9 @@ timeout, unverified); giving the scanner storage credentials.
   14 s, no semaphore, no queue. Large scans cannot take capacity from it.
 - **`POST /v2/scans`**, bearer token as today. Body
   `{jobId, sourceUrl, byteCount, etag, mimeType}`; `jobId` is
-  `<intakeId>:<attempt>`, and a repeat returns the same scan.
+  `<intakeId>:<attempt>`, and a repeat returns the same scan. `mimeType` is
+  the type the file is read as: `application/pdf` for a file a reader opens as
+  a PDF, otherwise the declared type.
   - Refused before any fetch: a non-https `sourceUrl`, a host not in
     `UPLOAD_SCAN_SOURCE_HOSTS`, an IP literal, a `byteCount` over
     `MAX_SOURCE_SCAN_BYTES`.
@@ -636,7 +638,11 @@ an 8 GB VM with 4 shared CPUs, which is an owner cost decision.
   its name alone is text, delimited, HTML or notebook
   (`credentialScanMimeType`), because chat accepts a file by its name and
   preparation and the sandbox read a `.txt` as text whatever type the client
-  declared. The structural checks keep the declared type. For such a file the
+  declared. The structural checks keep the declared type, with one addition:
+  the PDF active-content check also runs for a file a reader opens as a PDF by
+  its name (`pdfScanApplies`), and such a file is submitted to the scanner as
+  `application/pdf` (`scannerMimeType`), so neither check can be switched off
+  by declaring another type. For such a file the
   credential detectors read the head and then every byte after it before
   anything is submitted
   (`apps/web/lib/server/chat-file-intake/full-inspection.ts`): one ranged read
@@ -655,6 +661,10 @@ an 8 GB VM with 4 shared CPUs, which is an owner cost decision.
 - A large Office or XLSX file is read as a package before anything is submitted
   (`apps/web/lib/server/chat-file-intake/package-inspection.ts`): the package's
   own bytes; every member inflated, a part written in UTF-16 decoded first; a
+  member holding a numeric character reference (`&#115;`, `&#x73;`) read again
+  with its references decoded exactly as `decodeXmlEntities` decodes them
+  (`apps/web/lib/server/chat-file-intake/xml-reference-decoder.ts`), so a
+  credential written in references is read as the text a model receives; a
   copy of every `.xml`, `.rels` and `.vml` part with its markup removed, so a
   credential split across runs is read whole; and the members of a package held
   inside a member, one level deep. A step reads at most
