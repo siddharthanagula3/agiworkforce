@@ -548,6 +548,54 @@ describe('Capabilities settings screen', () => {
       alert.mockRestore();
     });
 
+    it('sends a later choice only after the earlier save answers, so the account keeps the last one', async () => {
+      let answerFirst!: () => void;
+      mockPatchPreference
+        .mockReturnValueOnce(new Promise<void>((done) => (answerFirst = done)))
+        .mockResolvedValueOnce(undefined);
+
+      const { getByLabelText } = render(<CapabilitiesScreen />);
+      await settle();
+      fireEvent(getByLabelText(CODE_LABEL), 'valueChange', false);
+      fireEvent(getByLabelText(CODE_LABEL), 'valueChange', true);
+      await settle();
+
+      expect(mockPatchPreference).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        answerFirst();
+      });
+      await settle();
+
+      expect(mockPatchPreference.mock.calls.map(([, values]) => values)).toEqual([
+        { cloudCodeExecution: false },
+        { cloudCodeExecution: true },
+      ]);
+      expect(getByLabelText(CODE_LABEL).props.value).toBe(true);
+    });
+
+    it('skips a choice the user changed again while an earlier save was in flight', async () => {
+      let answerFirst!: () => void;
+      mockPatchPreference
+        .mockReturnValueOnce(new Promise<void>((done) => (answerFirst = done)))
+        .mockResolvedValue(undefined);
+
+      const { getByLabelText } = render(<CapabilitiesScreen />);
+      await settle();
+      fireEvent(getByLabelText(CODE_LABEL), 'valueChange', false);
+      fireEvent(getByLabelText(CODE_LABEL), 'valueChange', true);
+      fireEvent(getByLabelText(CODE_LABEL), 'valueChange', false);
+      await act(async () => {
+        answerFirst();
+      });
+      await settle();
+
+      expect(mockPatchPreference.mock.calls.map(([, values]) => values)).toEqual([
+        { cloudCodeExecution: false },
+        { cloudCodeExecution: false },
+      ]);
+      expect(getByLabelText(CODE_LABEL).props.value).toBe(false);
+    });
+
     it('waits without a failure note while the account session has not started, then reads once it has', async () => {
       __resetCloudAccountSessionForTests();
       mockFetchPreference.mockResolvedValue({ cloudCodeExecution: false });

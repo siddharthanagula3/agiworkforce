@@ -22,6 +22,7 @@ export function useCloudCodeExecutionPreference(active: boolean) {
   const [account, setAccount] = useState(captureCloudAccountEpoch);
   const writes = useRef(0);
   const saved = useRef<boolean | null>(null);
+  const saving = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     const unsubscribe = subscribeCloudAccountEpochChange(() => {
@@ -66,27 +67,36 @@ export function useCloudCodeExecutionPreference(active: boolean) {
     writes.current += 1;
     const write = writes.current;
     setFeature('codeExecution', next);
-    patchPreferenceNamespace(
-      CAPABILITIES_NAMESPACE,
-      { [CODE_EXECUTION_KEY]: next },
-      { accountEpoch: account },
-    ).then(
-      () => {
-        saved.current = next;
-        if (writes.current === write && isCloudAccountEpochCurrent(account)) {
-          setFeature('codeExecution', next);
-        }
-        void useTierStore.getState().refreshTier();
-      },
-      (error: unknown) => {
-        if (isStaleCloudAccountOperation(error) || writes.current !== write) return;
-        setFeature('codeExecution', saved.current ?? previous);
-        Alert.alert(
-          'Not saved',
-          'This setting could not be saved to your account. Check your connection and try again.',
-        );
-      },
-    );
+    const save = (): Promise<void> => {
+      if (writes.current !== write) return Promise.resolve();
+      return patchPreferenceNamespace(
+        CAPABILITIES_NAMESPACE,
+        { [CODE_EXECUTION_KEY]: next },
+        { accountEpoch: account },
+      ).then(
+        () => {
+          saved.current = next;
+          if (writes.current === write && isCloudAccountEpochCurrent(account)) {
+            setFeature('codeExecution', next);
+          }
+          void useTierStore.getState().refreshTier();
+        },
+        (error: unknown) => {
+          if (isStaleCloudAccountOperation(error) || writes.current !== write) return;
+          setFeature('codeExecution', saved.current ?? previous);
+          Alert.alert(
+            'Not saved',
+            'This setting could not be saved to your account. Check your connection and try again.',
+          );
+        },
+      );
+    };
+    const earlier = saving.current;
+    const current = earlier ? earlier.then(save) : save();
+    saving.current = current;
+    void current.finally(() => {
+      if (saving.current === current) saving.current = null;
+    });
   }, []);
 
   return { enabled, status, setEnabled };
