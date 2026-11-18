@@ -53138,6 +53138,9 @@
     "firstManagedMemoryContentOffset": [
       "apps/web/lib/services/managed-memory-context-service.ts"
     ],
+    "firstNotebookCursor": [
+      "apps/web/lib/server/chat-file-intake/notebook-inspection.ts"
+    ],
     "firstPackageCursor": [
       "apps/web/lib/server/chat-file-intake/package-inspection.ts"
     ],
@@ -69950,6 +69953,9 @@
     "isNonUsVendorTransport": [
       "packages/contracts/compliance/src/index.ts",
       "packages/contracts/compliance/src/transport-residency.ts"
+    ],
+    "isNotebookCursor": [
+      "apps/web/lib/server/chat-file-intake/notebook-inspection.ts"
     ],
     "isNotificationCategory": [
       "apps/web/features/notifications/lib/notification-target.ts",
@@ -91176,6 +91182,9 @@
     "NotebookFile": [
       "apps/web/features/notebook/services/notebook-api.ts"
     ],
+    "NotebookInspectionCursor": [
+      "apps/web/lib/server/chat-file-intake/notebook-inspection.ts"
+    ],
     "NotebookListFilesResult": [
       "apps/web/features/notebook/services/notebook-api.ts"
     ],
@@ -91200,6 +91209,12 @@
     ],
     "NotebookRunRecord": [
       "apps/web/app/api/code/sessions/[sessionId]/notebook/lib/notebook-runs.ts"
+    ],
+    "notebookScanApplies": [
+      "apps/web/lib/server/chat-file-intake/notebook-inspection.ts"
+    ],
+    "NotebookScanOutcome": [
+      "apps/web/lib/server/chat-file-intake/notebook-inspection.ts"
     ],
     "notebookSourceCanReindex": [
       "apps/mobile/src/features/notebook/service.ts"
@@ -125083,6 +125098,9 @@
     ],
     "scannerUnparseable": [
       "scripts/check-test-hygiene.mjs"
+    ],
+    "scanNotebookStep": [
+      "apps/web/lib/server/chat-file-intake/notebook-inspection.ts"
     ],
     "scanPackageStep": [
       "apps/web/lib/server/chat-file-intake/package-inspection.ts"
