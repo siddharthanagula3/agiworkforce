@@ -15389,6 +15389,9 @@
     "bytesToUtf8": [
       "packages/contracts/licensing/src/bytes.ts"
     ],
+    "ByteView": [
+      "apps/web/lib/server/chat-file-intake/xml-reference-decoder.ts"
+    ],
     "c2c_request_oracle": [
       "apps/desktop/src-tauri/src/core/llm/tests/mod.rs"
     ],
@@ -17445,6 +17448,9 @@
     "channelVocabularyDrift": [
       "packages/ai/routing/src/promotion/channels.ts",
       "packages/ai/routing/src/promotion/index.ts"
+    ],
+    "characterReferenceFinder": [
+      "apps/web/lib/server/chat-file-intake/xml-reference-decoder.ts"
     ],
     "CHARGE_REFUND_LEDGER_DESCRIPTION_PREFIX": [
       "apps/web/lib/server/payments/domain.ts"
@@ -159411,6 +159417,9 @@
     ],
     "xmlElements": [
       "apps/web/lib/server/office-document-text.ts"
+    ],
+    "xmlReferenceDecoder": [
+      "apps/web/lib/server/chat-file-intake/xml-reference-decoder.ts"
     ],
     "xmlStartTags": [
       "apps/web/lib/server/office-document-text.ts"
