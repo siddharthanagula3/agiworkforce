@@ -117,6 +117,13 @@ fixture was independently run against 0.37.0 and reproduced its bounds panic.
 The full maintenance scan remains tracked separately under
 `RUST-DEPENDENCY-ADVISORIES-01`.
 
+`lettre` is held at `0.11.24` or newer by the retained Tauri manifest. That
+release fixes the six advisories RustSec published against `0.11.23` on
+2026-11-17, RUSTSEC-2026-0560 to RUSTSEC-2026-0565: forged SMTP replies during
+STARTTLS, command injection through a bare line ending, a message sent to a
+different address than the quoted one, two panics and unbounded buffering of a
+server reply. No audit ignore exists for the package.
+
 ## Query parser interoperability
 
 The root override installs `decode-uri-component` 0.5.1 or newer for
