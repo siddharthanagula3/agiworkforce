@@ -134,6 +134,9 @@ patchedDependencies:
   next-themes@0.4.6:
     hash: aa80b2d9904d6ee8783988d6e279791f2c32644dc5cce3e1a4d78f3dfeb30374
     path: patches/next-themes@0.4.6.patch
+  picomatch@4.0.7:
+    hash: e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547
+    path: patches/picomatch@4.0.7.patch
   query-string@7.1.3:
     hash: c45bcf01a3c61375fbcc866a485046d0782f1ad9f22922668bc749bb5d93b3b5
     path: patches/query-string@7.1.3.patch
@@ -20822,7 +20825,7 @@ snapshots:
       node-forge: 1.4.3
       npm-package-arg: 11.0.3
       ora: 3.4.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       pretty-format: 29.7.0
       progress: 2.0.3
       prompts: 2.4.2
@@ -21018,7 +21021,7 @@ snapshots:
       hermes-parser: 0.36.1
       jsc-safe-url: 0.2.4
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       postcss: 8.5.31
       resolve-from: 5.0.0
     optionalDependencies:
@@ -23923,10 +23926,10 @@ snapshots:
       '@rollup/pluginutils': 5.4.0(rollup@4.64.7)
       commondir: 1.0.1
       estree-walker: 2.0.2
-      fdir: 6.5.0(picomatch@4.0.7)
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547))
       is-reference: 1.2.1
       magic-string: 0.30.21
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
     optionalDependencies:
       rollup: 4.64.7
 
@@ -23934,7 +23937,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
       estree-walker: 2.0.2
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
     optionalDependencies:
       rollup: 4.64.7
 
@@ -25949,7 +25952,7 @@ snapshots:
       obug: 2.2.1
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(@vitest/coverage-v8@4.1.12)(jsdom@30.1.3(@noble/hashes@2.2.0))(msw@2.15.0(@types/node@24.19.2)(typescript@5.9.3))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@30.1.3(@noble/hashes@2.2.0))(msw@2.15.0(@types/node@26.6.5)(typescript@5.9.3))(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/coverage-v8@5.1.0(vitest@5.1.0)':
     dependencies:
@@ -27038,7 +27041,7 @@ snapshots:
   anymatch@3.1.3:
     dependencies:
       normalize-path: 3.0.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
 
   app-builder-lib@26.18.1(dmg-builder@26.18.1)(electron-builder-squirrel-windows@26.18.1):
     dependencies:
@@ -30258,9 +30261,9 @@ snapshots:
     dependencies:
       walk-up-path: 4.0.0
 
-  fdir@6.5.0(picomatch@4.0.7):
+  fdir@6.5.0(picomatch@4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)):
     optionalDependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
 
   fecha@4.2.3: {}
 
@@ -31699,7 +31702,7 @@ snapshots:
       chalk: 4.1.2
       graceful-fs: 4.2.11
       jest-util: 30.5.1
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       pretty-format: 30.5.1
       slash: 3.0.0
       stack-utils: 2.0.6
@@ -31829,7 +31832,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 3.9.0
       graceful-fs: 4.2.11
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
 
   jest-util@30.5.1:
     dependencies:
@@ -31838,7 +31841,7 @@ snapshots:
       chalk: 4.1.2
       ci-info: 4.4.0
       graceful-fs: 4.2.11
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
 
   jest-validate@29.7.0:
     dependencies:
@@ -32158,7 +32161,7 @@ snapshots:
       jiti: 2.7.0
       oxc-parser: 0.155.0
       oxc-resolver: 11.24.2
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       smol-toml: 1.9.1
       strip-json-comments: 5.0.3
       tinyglobby: 0.2.17
@@ -32316,7 +32319,7 @@ snapshots:
 
   lint-staged@17.6.0:
     dependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       string-argv: 0.3.2
       tinyexec: 1.3.1
     optionalDependencies:
@@ -33321,7 +33324,7 @@ snapshots:
   micromatch@4.0.8:
     dependencies:
       braces: 3.0.3(patch_hash=f33bf759f15b8bb4b7cb6068b497e9ec88a0f997c35e5a32d7a6d7ec6eaf4f7d)
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
 
   mime-db@1.52.0: {}
 
@@ -34240,7 +34243,7 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  picomatch@4.0.7: {}
+  picomatch@4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547): {}
 
   pino-abstract-transport@3.0.0:
     dependencies:
@@ -35105,7 +35108,7 @@ snapshots:
 
   readdirp@3.6.0:
     dependencies:
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
 
   readdirp@4.1.2: {}
 
@@ -36475,8 +36478,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.7)
-      picomatch: 4.0.7
+      fdir: 6.5.0(picomatch@4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547))
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
 
   tinyrainbow@2.0.0: {}
 
@@ -36833,7 +36836,7 @@ snapshots:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       acorn: 8.19.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       webpack-virtual-modules: 0.6.2
 
   unrs-resolver@1.12.2:
@@ -37038,7 +37041,7 @@ snapshots:
   vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       postcss: 8.5.31
       rolldown: 1.2.15
       tinyglobby: 0.2.17
@@ -37054,7 +37057,7 @@ snapshots:
   vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       postcss: 8.5.31
       rolldown: 1.2.15
       tinyglobby: 0.2.17
@@ -37081,7 +37084,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.2.1
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       std-env: 4.3.0
       tinybench: 2.9.0
       tinyexec: 1.3.1
@@ -37111,7 +37114,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.2.1
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       std-env: 4.3.0
       tinybench: 2.9.0
       tinyexec: 1.3.1
@@ -37141,7 +37144,7 @@ snapshots:
       magic-string: 0.30.21
       obug: 2.2.1
       pathe: 2.0.3
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       std-env: 4.3.0
       tinybench: 2.9.0
       tinyexec: 1.3.1
@@ -37166,7 +37169,7 @@ snapshots:
       expect-type: 1.4.0
       magic-string: 1.4.3
       obug: 3.0.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       std-env: 4.3.0
       tinybench: 6.2.2
       tinyexec: 1.3.1
@@ -37191,7 +37194,7 @@ snapshots:
       expect-type: 1.4.0
       magic-string: 1.4.3
       obug: 3.0.0
-      picomatch: 4.0.7
+      picomatch: 4.0.7(patch_hash=e18591fb0e9efd0f691e12843e3c3a17fd822157f36e4427097920bd1413d547)
       std-env: 4.3.0
       tinybench: 6.2.2
       tinyexec: 1.3.1

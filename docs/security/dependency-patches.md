@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-11-13
+Last updated: 2026-11-18
 
 GitHub withdrew the http-cache-semantics advisory on 2026-10-28 and the braces
 advisory on 2026-10-23. Their audit ignores and policy exceptions are removed.
@@ -40,6 +40,48 @@ Remove a retained patch only after its maintained dependency preserves the same
 required behavior and compatibility controls. Keep other high-severity
 advisories blocking. CLI filesystem fixtures use an unexpired test policy, while
 an explicit expired-policy control still verifies the real UTC-date check.
+
+## Glob matcher repeated extglobs
+
+[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) covers
+`picomatch` through 4.0.7, the newest release, and no fixed version is
+published. A repeated extglob such as `+(*a)` compiles to a group with an
+unbounded quantifier inside another one, and a string of about forty characters
+that does not match keeps the matcher backtracking for longer than any request
+or build would wait.
+
+`patches/picomatch@4.0.7.patch` extends the check upstream already runs on
+repeated extglobs. A `+(...)` or `*(...)` whose body holds a wildcard, a
+negation extglob or another repeat, at any depth, is matched as literal text,
+which is what upstream already does with the repeats it recognises as unsafe.
+Upstream's own safe rewrites are kept, and so are its options:
+`maxExtglobRecursion: false` turns the analysis off and a number allows that many
+nested repeats. Every other glob compiles to the same expression as before.
+
+This is the one active audit exception. `.github/security-gate-policy.json`
+registers it as `picomatch-repeated-extglob-patch`, bound to the exact patch
+bytes, the manifest and lockfile entries, the packages that depend on
+`picomatch` and the workspaces that reach it. It expires on 2026-12-16. Remove
+the patch, the audit ignore, the policy entry and the test together as soon as
+an upstream release fixes the advisory.
+
+`scripts/picomatch-extglob-redos.test.cjs` runs in the blocking script-test
+chain against the installed package. It reverses the patch offline to show the
+upstream source does not finish on the advisory's patterns, then shows the
+patched source answers them and their variants at once.
+
+What this does not establish or cover:
+
+- No product source imports a glob matcher. `picomatch` is reached through
+  build, lint, test and bundling tools, whose patterns come from this
+  repository's own configuration. An attacker-accessible path to it has not
+  been established.
+- A repeat whose branches overlap without an unbounded quantifier, such as
+  `+(a?(a))`, still backtracks more than linearly, as it does upstream. That is
+  outside this advisory and this patch.
+- A copy of `picomatch` that another package ships inside its own bundle is
+  not installed through the lockfile, so neither the audit nor this patch
+  reaches it. Next.js ships one under `next/dist/compiled`.
 
 ## SQLCipher engine source
 
