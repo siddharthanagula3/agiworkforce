@@ -85,6 +85,39 @@ describe('buildMetadata', () => {
     expect(og(m).title).toBe('Start with AGI');
     expect(og(m).description).toBe('Other surfaces are coming soon.');
   });
+
+  it('publishes an article update date without inventing a publication date', () => {
+    const article = buildMetadata({
+      title: 'Pick a model',
+      description: 'Choose a model for your conversation.',
+      path: '/help/models-and-reasoning',
+      ogType: 'article',
+      updated: '2026-10-12',
+    });
+    expect(article.openGraph).toMatchObject({
+      type: 'article',
+      modifiedTime: '2026-10-12',
+    });
+    expect(article.openGraph).not.toHaveProperty('publishedTime');
+  });
+
+  it('does not attach article dates to website metadata or invent missing dates', () => {
+    const website = buildMetadata({
+      title: 'Help',
+      description: 'Browse product help.',
+      path: '/help',
+      updated: '2026-10-12',
+    });
+    expect(website.openGraph).not.toHaveProperty('modifiedTime');
+    const undated = buildMetadata({
+      title: 'Guide',
+      description: 'A guide without a verified update date.',
+      path: '/guide',
+      ogType: 'article',
+    });
+    expect(undated.openGraph).not.toHaveProperty('modifiedTime');
+    expect(undated.openGraph).not.toHaveProperty('publishedTime');
+  });
 });
 
 describe('robots', () => {

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { documentationIndex } from '@/app/docs/doc-index';
 import { ArticleFeedback } from '@/features/docs/components/ArticleFeedback';
 import { ArticleSupportCards } from '@/features/docs/components/ArticleSupportCards';
 import { CopyPageButton } from '@/features/docs/components/CopyPageButton';
@@ -27,6 +28,14 @@ import { getHelpArticle, helpArticlePath } from '@/lib/support/help-articles';
 
 type ArticleProps = { params: Promise<{ slug: string }> };
 
+export const dynamicParams = false;
+
+export function generateStaticParams() {
+  return documentationIndex().groups.flatMap((group) =>
+    group.entries.map((entry) => ({ slug: entry.docId })),
+  );
+}
+
 export async function generateMetadata({ params }: ArticleProps) {
   const { slug } = await params;
   const article = getHelpArticle(slug);
@@ -36,6 +45,7 @@ export async function generateMetadata({ params }: ArticleProps) {
     description: article.description ?? `Read the AGI help guide: ${article.title}.`,
     path: helpArticlePath(article.id),
     ogType: 'article',
+    updated: article.updated,
   });
 }
 

@@ -16,6 +16,8 @@ import { supportCollectionIndex } from '../../collections';
 
 type CollectionProps = { params: Promise<{ id: string }> };
 
+export const dynamicParams = false;
+
 export function generateStaticParams() {
   return supportCollectionIndex().collections.map((collection) => ({ id: collection.id }));
 }
