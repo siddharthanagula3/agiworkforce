@@ -243,8 +243,9 @@ test('a cancelled run stops the whole process tree of a guard and starts no othe
     path.join(directory, 'worker.mjs'),
     [
       "import fs from 'node:fs';",
-      `fs.writeFileSync(${JSON.stringify(started)}, String(process.pid));`,
-      `setTimeout(() => fs.writeFileSync(${JSON.stringify(late)}, 'written'), ${lateMs});`,
+      "fs.writeFileSync('started', String(process.pid));",
+      "const lateMs = Number(process.env['GUARD_FIXTURE_LATE_MS']);",
+      "setTimeout(() => fs.writeFileSync('late', 'written'), lateMs);",
       'setInterval(() => {}, 1000);',
     ].join('\n'),
   );
@@ -262,7 +263,7 @@ test('a cancelled run stops the whole process tree of a guard and starts no othe
 
   const runner = spawn(process.execPath, [RUNNER, 'pnpm check:slow && pnpm check:after'], {
     cwd: directory,
-    env: { ...process.env, AGI_GUARD_CONCURRENCY: '1' },
+    env: { ...process.env, AGI_GUARD_CONCURRENCY: '1', GUARD_FIXTURE_LATE_MS: String(lateMs) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let worker;
