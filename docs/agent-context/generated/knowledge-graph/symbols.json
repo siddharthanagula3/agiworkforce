@@ -108391,6 +108391,9 @@
     "RefuseAppPicker": [
       "apps/web/features/desktop-host/components/RefuseAppPicker.tsx"
     ],
+    "refuseBlockedSchedulePrompt": [
+      "apps/web/app/api/schedules/prompt-secret-policy.ts"
+    ],
     "refuseComputerRun": [
       "apps/desktop/electron/runtime/computerUseRuns.ts"
     ],
@@ -125905,6 +125908,9 @@
     ],
     "settlePublicPage": [
       "apps/web/e2e/lib/public-page-readiness.ts"
+    ],
+    "settleRefusedFreeTrial": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/settle-refused-free-trial.ts"
     ],
     "settleResearchRun": [
       "apps/mobile/src/features/chat/utils/researchRunState.ts"
