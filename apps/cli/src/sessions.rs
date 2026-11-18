@@ -766,27 +766,30 @@ pub fn list_sessions(conn: &Connection, limit: usize) -> Result<Vec<SessionSumma
     list_sessions_in(&conn.base_dir, limit)
 }
 
-/// The newest unarchived session of the project `folder` belongs to, the
-/// scope `--continue` uses. Sessions saved before the session file carried a
-/// workspace root (CLI releases before 2026-07-16) are found by the `cwd` in
-/// their metadata, so they stay reachable by folder.
+fn same_folder(left: &Path, right: &Path) -> bool {
+    let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    canonical(left) == canonical(right)
+}
+
+/// The newest unarchived session started in exactly `folder`, never one of a
+/// sibling folder of the same repository: a patch applied from it names files
+/// relative to `folder`. A session saved before the session file carried a
+/// workspace root is matched by the `cwd` in its metadata.
 pub fn latest_session_in_folder(conn: &Connection, folder: &Path) -> Result<Option<String>> {
-    if let Some(latest) =
-        crate::runtime::session_control::latest_project_session_in(&conn.base_dir, folder)?
-    {
-        return Ok(Some(latest.summary.session_id));
-    }
-    let project = crate::project_scope::resolve_project_scope(folder);
     Ok(load_all_sessions(&conn.base_dir)?
         .into_iter()
-        .filter(|(_, session, _)| session.archived_at.is_none() && session.workspace_root.is_none())
-        .find(|(_, _, metadata)| {
-            metadata
-                .as_ref()
-                .and_then(|metadata| metadata.cwd.as_deref())
-                .is_some_and(|cwd| {
-                    crate::project_scope::resolve_project_scope(Path::new(cwd)) == project
+        .filter(|(_, session, _)| session.archived_at.is_none())
+        .find(|(_, session, metadata)| {
+            session
+                .workspace_root
+                .clone()
+                .or_else(|| {
+                    metadata
+                        .as_ref()
+                        .and_then(|metadata| metadata.cwd.as_ref())
+                        .map(PathBuf::from)
                 })
+                .is_some_and(|root| same_folder(&root, folder))
         })
         .map(|(_, session, _)| session.session_id))
 }
@@ -2003,7 +2006,7 @@ mod tests {
         .expect("a session of this repository");
         assert_eq!(continued.summary.session_id, "live");
         assert_eq!(
-            latest_session_in_folder(&conn, repository.path())
+            latest_session_in_folder(&conn, &subfolder)
                 .unwrap()
                 .as_deref(),
             Some("live")
@@ -2021,7 +2024,7 @@ mod tests {
     }
 
     #[test]
-    fn a_session_saved_with_only_a_metadata_folder_is_still_found_by_its_project() {
+    fn a_session_saved_with_only_a_metadata_folder_is_still_found_in_that_folder() {
         let (_tempdir, conn) = temp_connection();
         let repository = tempdir().unwrap();
         fs::create_dir_all(repository.path().join(".git")).unwrap();
@@ -2043,16 +2046,53 @@ mod tests {
         assert!(saved.summary.workspace_root.is_none());
 
         assert_eq!(
-            latest_session_in_folder(&conn, repository.path())
+            latest_session_in_folder(&conn, &subfolder)
                 .unwrap()
                 .as_deref(),
             Some("before-roots")
+        );
+        assert_eq!(
+            latest_session_in_folder(&conn, repository.path()).unwrap(),
+            None
         );
         let elsewhere = tempdir().unwrap();
         assert_eq!(
             latest_session_in_folder(&conn, elsewhere.path()).unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn the_patch_session_of_a_folder_is_never_one_from_a_sibling_folder_of_the_repository() {
+        use crate::runtime::session_control::ManagedSessionStore;
+
+        let (_tempdir, conn) = temp_connection();
+        let repository = tempdir().unwrap();
+        fs::create_dir_all(repository.path().join(".git")).unwrap();
+        let folder_a = repository.path().join("a");
+        let folder_b = repository.path().join("b");
+        fs::create_dir_all(&folder_a).unwrap();
+        fs::create_dir_all(&folder_b).unwrap();
+        let store = ManagedSessionStore::new(conn.base_dir.clone());
+        for (id, root, minute) in [("in-a", &folder_a, 1), ("in-b", &folder_b, 2)] {
+            let at = Utc.with_ymd_and_hms(2026, 11, 18, 9, minute, 0).unwrap();
+            let mut session =
+                ManagedSession::with_messages(id.to_string(), at, vec![Message::text("user", id)]);
+            session.workspace_root = Some(root.clone());
+            store.save(&session).unwrap();
+        }
+
+        assert_eq!(
+            latest_session_in_folder(&conn, &folder_a)
+                .unwrap()
+                .as_deref(),
+            Some("in-a")
+        );
+        let continued =
+            crate::runtime::session_control::latest_project_session_in(&conn.base_dir, &folder_a)
+                .unwrap()
+                .expect("a session of this repository");
+        assert_eq!(continued.summary.session_id, "in-b");
     }
 
     fn write_legacy_conversation(dir: &Path, id: &str, turns: &[(&str, &str)]) {
