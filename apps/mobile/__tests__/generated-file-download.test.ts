@@ -30,8 +30,6 @@ jest.mock('expo-print', () => ({ printToFileAsync: jest.fn() }));
 const mockGuardedFetch = jest.fn();
 jest.mock('@/lib/egressGuard', () => ({
   guardedFetch: (...args: unknown[]) => mockGuardedFetch(...args),
-  isOurCloudHost: (host: string) =>
-    host === 'agiworkforce.com' || host.endsWith('.agiworkforce.com'),
 }));
 
 const mockGetAuthHeaders = jest.fn();
@@ -113,6 +111,19 @@ describe('downloadGeneratedFile', () => {
     await downloadGeneratedFile('https://media.example/x.pdf', 'x.pdf');
     expect(mockGetAuthHeaders).not.toHaveBeenCalled();
     expect(mockGuardedFetch).toHaveBeenCalledWith('https://media.example/x.pdf', { headers: {} });
+  });
+
+  it.each([
+    ['another site on a shared platform domain', 'https://someone-else.vercel.app/x.pdf'],
+    ['another host under the product domain', 'https://files.agiworkforce.com/x.pdf'],
+    ['the API host over plain http', 'http://agiworkforce.com/api/files/gf-1'],
+    ['the API host on another port', 'https://agiworkforce.com:8443/api/files/gf-1'],
+  ])('sends the session token only to the API origin, not to %s', async (_case, url) => {
+    await downloadGeneratedFile(url, 'x.pdf');
+    await viewerFileCopy(url, 'x.pdf');
+    expect(mockGetAuthHeaders).not.toHaveBeenCalled();
+    expect(mockGuardedFetch).toHaveBeenCalledTimes(2);
+    for (const call of mockGuardedFetch.mock.calls) expect(call).toEqual([url, { headers: {} }]);
   });
 
   it('rejects non-absolute urls (relative wire uris must be resolved upstream)', async () => {

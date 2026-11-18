@@ -60,7 +60,6 @@ jest.mock('expo-print', () => ({ printToFileAsync: jest.fn() }));
 const mockGuardedFetch = jest.fn();
 jest.mock('@/lib/egressGuard', () => ({
   guardedFetch: (...args: unknown[]) => mockGuardedFetch(...args),
-  isOurCloudHost: (host: string) => host === 'agiworkforce.com',
 }));
 jest.mock('@/services/authSession', () => ({
   getAuthHeaders: async () => ({ Authorization: 'Bearer test-jwt' }),

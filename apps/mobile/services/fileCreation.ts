@@ -18,7 +18,8 @@ import {
 } from 'expo-media-library/legacy';
 import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agiworkforce/types';
 import { codeFileFor } from '@agiworkforce/unified-chat/code-file-name';
-import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
+import { API_URL } from '@/lib/constants';
+import { guardedFetch } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
 import { ApiHttpError } from '@/services/apiErrors';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
@@ -439,13 +440,16 @@ export function downloadFailureMessage(error: unknown, fallback: string): string
 async function fetchGeneratedFileBytes(
   url: string,
 ): Promise<{ base64: string; contentType: string | null }> {
-  let host: string | undefined;
+  let origin: string;
   try {
-    host = new URL(url).hostname;
+    origin = new URL(url).origin;
   } catch {
     throw new Error(`Generated file URL is not absolute: ${url}`);
   }
-  const headers: Record<string, string> = isOurCloudHost(host) ? await getAuthHeaders() : {};
+  // Only the API's own origin gets the session token. A shared platform domain
+  // such as vercel.app also hosts other people's sites.
+  const headers: Record<string, string> =
+    origin === new URL(API_URL).origin ? await getAuthHeaders() : {};
 
   const res = await guardedFetch(url, { headers });
   if (!res.ok) throw new FileDownloadError(res.status);
