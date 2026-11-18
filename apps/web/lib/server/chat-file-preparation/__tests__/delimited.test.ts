@@ -11,7 +11,13 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
 
 import { CHAT_LARGE_FILE_POLICY, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { prepareChatFileStep, readPreparedCard, readPreparedText } from '..';
-import { MAX_DELIMITED_CURSOR_BYTES, splitDelimitedFields, valueType } from '../delimited';
+import {
+  initialDelimitedCursor,
+  MAX_DELIMITED_CURSOR_BYTES,
+  readDelimitedBatch,
+  splitDelimitedFields,
+  valueType,
+} from '../delimited';
 import {
   createCountingStorage,
   FakePreparationDb,
@@ -529,5 +535,77 @@ describe('delimited preparation', () => {
     await prepareUntilDone(() => prepareChatFileStep(id, { db, storage, policy: smallSteps }));
 
     expect(db.rowForAsset(id)).toMatchObject({ state: 'prepare_failed', error: 'row_too_long' });
+  });
+});
+
+describe('sampled rows longer than their bound', () => {
+  const CUT_NOTE = 'A value too long to show in a sample row is cut and ends with "…".';
+
+  async function profileOf(
+    table: string,
+    delimiter: ',' | '\t' = ',',
+  ): Promise<{ text: string; rows: string[] }> {
+    const storage = createCountingStorage();
+    const key = `chat-attachments/${USER}/${testUuid()}.sealed`;
+    const data = Buffer.from(table, 'utf8');
+    await storeSource(storage, key, data, 'text/csv');
+    const batch = await readDelimitedBatch({
+      storage,
+      key,
+      byteCount: data.byteLength,
+      cursor: initialDelimitedCursor(delimiter, key),
+      policy: CHAT_LARGE_FILE_POLICY,
+    });
+    const text = batch.text ?? '';
+    const from = text.indexOf('rows:\n') + 'rows:\n'.length;
+    const rows = text.slice(from).split('\n\n')[0]!.split('\n').slice(1);
+    return { text, rows };
+  }
+
+  it('cuts a long value, marks it, and keeps the values after it and the rows after it whole', async () => {
+    const note = `first, "quoted" ${'word '.repeat(420)}`;
+    const { text, rows } = await profileOf(
+      `id,note,amount\n1,"${note.replaceAll('"', '""')}",98765\n2,short,5\n`,
+    );
+
+    expect(rows).toHaveLength(2);
+    const fields = splitDelimitedFields(rows[0]!, ',');
+    expect(fields).toHaveLength(3);
+    expect(fields[0]).toBe('1');
+    expect(fields[1]!.startsWith('first, "quoted" word ')).toBe(true);
+    expect(fields[1]!.endsWith('…')).toBe(true);
+    expect(fields[2]).toBe('98765');
+    expect(Buffer.byteLength(JSON.stringify(rows[0]), 'utf8')).toBeLessThanOrEqual(2048);
+    expect(rows[1]).toBe('2,short,5');
+    expect(text).toContain(CUT_NOTE);
+  });
+
+  it('keeps every value of a long tab-separated row, cutting only the long one', async () => {
+    const { rows } = await profileOf(`id\tnote\tamount\n1\t${'x'.repeat(5_000)}\t42\n`, '\t');
+
+    const fields = rows[0]!.split('\t');
+    expect(fields).toHaveLength(3);
+    expect(fields[1]!.endsWith('…')).toBe(true);
+    expect(fields[2]).toBe('42');
+  });
+
+  it('keeps the leading values of a row with too many to show and says how many it leaves out', async () => {
+    const values = Array.from({ length: 5_000 }, (_, index) => String(index + 1));
+    const { text, rows } = await profileOf(`a,b\n${values.join(',')}\n`);
+
+    const fields = splitDelimitedFields(rows[0]!, ',');
+    expect(fields.slice(0, 3)).toEqual(['1', '2', '3']);
+    const shown = fields.length - 1;
+    expect(fields.at(-1)).toBe(`… (${5_000 - shown} more values not shown)`);
+    expect(Buffer.byteLength(JSON.stringify(rows[0]), 'utf8')).toBeLessThanOrEqual(2048);
+    expect(text).toContain(CUT_NOTE);
+  });
+
+  it('leaves a row within the bound as it was written and adds no note', async () => {
+    const quoted = '1,"a, ""b"""';
+    const { text, rows } = await profileOf(`id,note\n${quoted}\n2,plain\n`);
+
+    expect(rows).toEqual([quoted, '2,plain']);
+    expect(text).not.toContain(CUT_NOTE);
   });
 });

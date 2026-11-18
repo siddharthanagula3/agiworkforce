@@ -1227,3 +1227,22 @@ describe('workbook preparation columns beyond the profiled ones', () => {
     expect(text).toContain('1 rows after the header, 2 columns.');
   });
 });
+
+describe('workbook preparation long cells', () => {
+  it('marks a cell cut to its limit, so a shortened value is not read as the whole one', async () => {
+    const long = 'word '.repeat(60);
+    const { text } = await preparedSheet(
+      await singleSheetWorkbook({
+        sheetName: 'Notes',
+        sheetXml: sheetXml(
+          `<row><c t="inlineStr"><is><t>Note</t></is></c><c t="inlineStr"><is><t>Amount</t></is></c></row>` +
+            `<row><c t="inlineStr"><is><t>${long}</t></is></c><c><v>7</v></c></row>` +
+            `<row><c t="inlineStr"><is><t>short</t></is></c><c><v>8</v></c></row>`,
+        ),
+      }),
+    );
+
+    expect(text).toContain(`${long.slice(0, 200)}…,7`);
+    expect(text).toContain('short,8');
+  });
+});

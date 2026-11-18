@@ -32,10 +32,12 @@ import {
   type ColumnType,
 } from './delimited';
 import { PreparationRefusedError } from './progress-store';
+import { sliceWholeCodePoints } from './text-stream';
 
 const TYPE_INFERENCE_ROWS = 1_000;
 const MAX_PROFILED_COLUMNS = 256;
 const MAX_CELL_CHARS = 200;
+const CELL_CUT_MARK = '…';
 const MAX_LISTED_SHEETS = 100;
 const FORMULA_ELEMENT = /<f[\s>/]/;
 const UNCALCULATED_NOTE = `Formulas are not evaluated here: a formula cell with no stored result shows as "${XLSX_NOT_CALCULATED}".`;
@@ -105,7 +107,10 @@ function columnLetters(index: number): string {
 }
 
 function csvField(value: string): string {
-  const bounded = value.length > MAX_CELL_CHARS ? value.slice(0, MAX_CELL_CHARS) : value;
+  const bounded =
+    value.length > MAX_CELL_CHARS
+      ? `${sliceWholeCodePoints(value, MAX_CELL_CHARS)}${CELL_CUT_MARK}`
+      : value;
   return /[",\n\r]/.test(bounded) ? `"${bounded.replace(/"/g, '""')}"` : bounded;
 }
 

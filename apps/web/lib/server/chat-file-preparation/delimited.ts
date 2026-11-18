@@ -17,6 +17,10 @@ const BYTE_ORDER_MARK = [0xef, 0xbb, 0xbf] as const;
 const MAX_PROFILED_COLUMNS = 256;
 export const MAX_COLUMN_NAME_BYTES = 256;
 const MAX_SAMPLE_ROW_BYTES = 2048;
+const MAX_SAMPLE_FIELD_CHARS = 512;
+const MIN_SAMPLE_FIELD_CHARS = 16;
+const SAMPLE_CUT_MARK = '…';
+const SAMPLE_CUT_NOTE = `A value too long to show in a sample row is cut and ends with "${SAMPLE_CUT_MARK}".`;
 export const MAX_DELIMITED_CURSOR_BYTES = 1024 * 1024;
 
 const TAB_SEPARATED = documentClassById('tsv');
@@ -46,6 +50,8 @@ export interface DelimitedCursor {
   columns: ColumnCounts[];
   firstRows: string[];
   reservoir: string[];
+  /** Whether a sampled row was shortened to fit, so the text says how a cut value reads. */
+  samplesCut?: boolean;
   random: number;
 }
 
@@ -192,6 +198,51 @@ export function splitDelimitedFields(record: string, delimiter: ',' | '\t'): str
   }
   fields.push(quoted + record.slice(runStart));
   return fields;
+}
+
+function fitsSampleRow(row: string): boolean {
+  return (
+    row.length < MAX_SAMPLE_ROW_BYTES - 1 &&
+    Buffer.byteLength(JSON.stringify(row), 'utf8') <= MAX_SAMPLE_ROW_BYTES
+  );
+}
+
+function sampleField(field: string, maxChars: number, delimiter: ',' | '\t'): string {
+  const shown =
+    field.length > maxChars ? `${sliceWholeCodePoints(field, maxChars)}${SAMPLE_CUT_MARK}` : field;
+  if (delimiter === '\t' || !/[",\n\r]/.test(shown)) return shown;
+  return `"${shown.replaceAll('"', '""')}"`;
+}
+
+/**
+ * A sampled record within its byte bound, still a record a reader can split:
+ * a record that is too long has its long values cut, each marked, and is
+ * written out again field by field, so a quote is never left open and the
+ * values after a long one are kept. A record with too many values to show
+ * even then keeps its leading values and says how many it leaves out.
+ */
+function boundedSampleRow(record: string, delimiter: ',' | '\t'): { row: string; cut: boolean } {
+  const stored = storableText(record);
+  if (fitsSampleRow(stored)) return { row: stored, cut: false };
+  const fields = splitDelimitedFields(stored, delimiter);
+  for (
+    let maxChars = MAX_SAMPLE_FIELD_CHARS;
+    maxChars >= MIN_SAMPLE_FIELD_CHARS;
+    maxChars = Math.floor(maxChars / 2)
+  ) {
+    const row = fields.map((field) => sampleField(field, maxChars, delimiter)).join(delimiter);
+    if (fitsSampleRow(row)) return { row, cut: true };
+  }
+  for (let kept = Math.floor(fields.length / 2); ; kept = Math.floor(kept / 2)) {
+    const left = fields.length - kept;
+    const row = [
+      ...fields
+        .slice(0, kept)
+        .map((field) => sampleField(field, MIN_SAMPLE_FIELD_CHARS, delimiter)),
+      `${SAMPLE_CUT_MARK} (${left} more values not shown)`,
+    ].join(delimiter);
+    if (kept === 0 || fitsSampleRow(row)) return { row, cut: true };
+  }
 }
 
 const INTEGER = /^[-+]?\d+$/;
@@ -354,9 +405,10 @@ export async function readDelimitedBatch(request: {
         counts[valueType(fields[column] ?? '')] += 1;
       });
     }
-    const sample = boundedStorableText(text, MAX_SAMPLE_ROW_BYTES);
-    if (keepFirst) cursor.firstRows.push(sample);
-    if (reservoirSlot !== null) cursor.reservoir[reservoirSlot] = sample;
+    const sample = boundedSampleRow(text, cursor.delimiter);
+    if (sample.cut) cursor.samplesCut = true;
+    if (keepFirst) cursor.firstRows.push(sample.row);
+    if (reservoirSlot !== null) cursor.reservoir[reservoirSlot] = sample.row;
   };
 
   let recordStart = start;
@@ -416,5 +468,6 @@ function profileText(
       ...cursor.reservoir,
     );
   }
+  if (cursor.samplesCut) lines.push('', SAMPLE_CUT_NOTE);
   return lines.join('\n');
 }
