@@ -69708,10 +69708,16 @@
     "latest_managed_session": [
       "apps/cli/src/platform/runtime/session_control.rs"
     ],
+    "latest_managed_session_in": [
+      "apps/cli/src/platform/runtime/session_control.rs"
+    ],
     "LATEST_PAGE_CONTEXT": [
       "apps/desktop/src-tauri/src/sys/commands/extension.rs"
     ],
     "latest_project_session": [
+      "apps/cli/src/platform/runtime/session_control.rs"
+    ],
+    "latest_project_session_in": [
       "apps/cli/src/platform/runtime/session_control.rs"
     ],
     "latest_session_in_folder": [
