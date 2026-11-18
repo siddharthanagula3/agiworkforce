@@ -36,6 +36,16 @@ export interface GeneratedVideo {
   thumbnailUrl?: string;
 }
 
+export class VideoGenerationFailedError extends Error {
+  constructor(
+    message: string,
+    readonly publicMessage: string | null,
+  ) {
+    super(message);
+    this.name = 'VideoGenerationFailedError';
+  }
+}
+
 export const VIDEO_POLL_INTERVAL_MS = 5_000;
 export const VIDEO_POLL_TIMEOUT_MS = 5 * 60_000;
 
@@ -154,7 +164,11 @@ export async function generateVideo(
 
     if (status.status === 'completed') return generatedVideoFromStatus(status);
     if (status.status === 'failed' || status.status === 'timeout') {
-      throw new Error(status.error || `Video generation ${status.status}`);
+      const publicMessage = status.error?.trim() || null;
+      throw new VideoGenerationFailedError(
+        publicMessage ?? `Video generation ${status.status}`,
+        publicMessage,
+      );
     }
     if (Date.now() >= deadline) {
       throw new Error('Video generation timed out. The task may still finish; try again.');

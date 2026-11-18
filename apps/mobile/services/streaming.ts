@@ -644,7 +644,7 @@ async function attemptStream(
         })()
       : requestBody;
   const deviceHostHeaders =
-    path === FREE_QUOTA_COMPLETIONS_PATH ? {} : await phoneDeviceHostHeaders();
+    path === FREE_QUOTA_COMPLETIONS_PATH ? {} : await phoneDeviceHostHeaders(signal);
 
   assertCloudAccountEpochCurrent(account);
   if (signal.aborted) throw new AbortError('Stream cancelled before network egress');

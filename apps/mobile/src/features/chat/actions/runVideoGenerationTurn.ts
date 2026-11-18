@@ -10,6 +10,7 @@ import {
 } from './mediaGenerationError';
 import {
   generateVideo,
+  VideoGenerationFailedError,
   type GeneratedVideo,
   type VideoGenRequest,
   type VideoGenStatusResponse,
@@ -175,6 +176,11 @@ export async function runVideoGenerationTurn(
 
     if (isUsageLimitRefusal(error)) {
       input.fail(input.conversationId, assistantMessageId, MEDIA_USAGE_LIMIT_MESSAGE);
+      return { status: 'failed', assistantMessageId };
+    }
+
+    if (error instanceof VideoGenerationFailedError && error.publicMessage) {
+      input.fail(input.conversationId, assistantMessageId, error.publicMessage);
       return { status: 'failed', assistantMessageId };
     }
 

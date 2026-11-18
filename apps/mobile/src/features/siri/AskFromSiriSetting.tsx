@@ -1,10 +1,13 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { Mic } from 'lucide-react-native';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import { EgressBlockedError } from '@/lib/egressGuard';
 import { toUserMessage } from '@/services/userMessage';
 import { CloudProviderConsentRequiredError } from '@/services/llmGate';
+import { subscribeCloudProviderConsentChange } from '@/services/providerConsent';
+import { askFromSiriTokenForgotten } from '@/src/features/chat/store/cloudModeDoor';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
   askFromSiriSupported,
@@ -17,6 +20,18 @@ export function AskFromSiriSetting() {
   const [enabled, setEnabled] = useState(isAskFromSiriEnabled);
   const [saving, setSaving] = useState(false);
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
+
+  const readStored = useCallback(() => setEnabled(isAskFromSiriEnabled()), []);
+  useFocusEffect(readStored);
+  useEffect(readStored, [readStored, isCloud]);
+  useEffect(
+    () =>
+      subscribeCloudProviderConsentChange(() => {
+        readStored();
+        void askFromSiriTokenForgotten().then(readStored);
+      }),
+    [readStored],
+  );
 
   const change = useCallback(async (next: boolean) => {
     setSaving(true);

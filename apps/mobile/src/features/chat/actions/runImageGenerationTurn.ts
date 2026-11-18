@@ -112,7 +112,15 @@ export const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
 const IMAGE_GENERATION_TIMEOUT_MESSAGE =
   'Image generation timed out. Retry to run it again, or try a shorter prompt.';
 
+const IMAGE_NOT_RETURNED_MESSAGE = 'AGI Cloud did not return an image. Try again.';
+
 class ImageGenerationTimeout extends Error {}
+
+function failedJobSentence(result: ImageGenResponse): string | null {
+  if (result.status !== 'failed' || typeof result.error !== 'string') return null;
+  const sentence = result.error.trim();
+  return sentence.length > 0 ? sentence : null;
+}
 
 function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -322,7 +330,7 @@ async function executeImageGenerationTurn(
       input.fail(
         input.conversationId,
         assistantMessageId,
-        'AGI Cloud did not return an image. Try again.',
+        failedJobSentence(result) ?? IMAGE_NOT_RETURNED_MESSAGE,
       );
       return { status: 'failed', assistantMessageId };
     }

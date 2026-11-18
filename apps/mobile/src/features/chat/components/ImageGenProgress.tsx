@@ -278,7 +278,6 @@ export function ImageGenProgress({
                   lineHeight: 17,
                   color: colors.agentError,
                 }}
-                numberOfLines={3}
               >
                 {errorMessage}
               </Text>

@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getDeviceId } from '@/lib/deviceId';
 import { api } from '@/services/api';
+import { recordedCloudAccountOwnerId } from '@/src/features/auth/services/cloudAccountSession';
 
 /** First retry after a failed beat. Doubles per consecutive failure. */
 export const HEARTBEAT_RETRY_BASE_MS = 2_000;
@@ -62,6 +63,10 @@ const metrics = {
   lastFailureAtMs: null as number | null,
 };
 
+// The server keeps one presence row per account on this phone, so a beat
+// accepted for one account says nothing about the next account's row.
+const lastSuccessAtMsByOwner = new Map<string | null, number>();
+
 export function deviceStatusMetrics(): DeviceStatusMetrics {
   return { ...metrics };
 }
@@ -72,18 +77,28 @@ export function resetDeviceStatusMetrics(): void {
   metrics.consecutiveFailures = 0;
   metrics.lastSuccessAtMs = null;
   metrics.lastFailureAtMs = null;
+  lastSuccessAtMsByOwner.clear();
 }
 
-export function recordHeartbeatResult(delivered: boolean, atMs: number = Date.now()): void {
+export function recordHeartbeatResult(
+  delivered: boolean,
+  atMs: number = Date.now(),
+  ownerId: string | null = recordedCloudAccountOwnerId(),
+): void {
   metrics.sent += 1;
   if (delivered) {
     metrics.consecutiveFailures = 0;
     metrics.lastSuccessAtMs = atMs;
+    lastSuccessAtMsByOwner.set(ownerId, atMs);
     return;
   }
   metrics.failed += 1;
   metrics.consecutiveFailures += 1;
   metrics.lastFailureAtMs = atMs;
+}
+
+export function clearHeartbeatFailureStreak(): void {
+  metrics.consecutiveFailures = 0;
 }
 
 /**
@@ -103,10 +118,8 @@ export function heartbeatRetryDelayMs(consecutiveFailures: number): number {
  * has been failing to reach the relay goes stale instead of reporting online.
  */
 export function localDeviceStatus(now: number = Date.now()): DevicePresence {
-  return devicePresence(
-    metrics.lastSuccessAtMs === null ? null : new Date(metrics.lastSuccessAtMs).toISOString(),
-    now,
-  );
+  const accepted = lastSuccessAtMsByOwner.get(recordedCloudAccountOwnerId());
+  return devicePresence(accepted === undefined ? null : new Date(accepted).toISOString(), now);
 }
 
 /** Remote control refuses on anything but a device that is currently online. */
@@ -114,7 +127,19 @@ export function assertDeviceActionable(presence: DevicePresence): void {
   if (presence !== 'online') throw new Error(DEVICE_STATUS_IS_STALE);
 }
 
-export async function sendMobileHeartbeat(): Promise<boolean> {
+let beatInFlight: { ownerId: string | null; beat: Promise<boolean> } | null = null;
+
+export function sendMobileHeartbeat(): Promise<boolean> {
+  const ownerId = recordedCloudAccountOwnerId();
+  if (beatInFlight && beatInFlight.ownerId === ownerId) return beatInFlight.beat;
+  const beat = postMobileHeartbeat(ownerId).finally(() => {
+    if (beatInFlight?.beat === beat) beatInFlight = null;
+  });
+  beatInFlight = { ownerId, beat };
+  return beat;
+}
+
+async function postMobileHeartbeat(ownerId: string | null): Promise<boolean> {
   const heartbeat = buildMobileHeartbeat({
     installId: await getDeviceId(),
     platform: Platform.OS,
@@ -129,6 +154,6 @@ export async function sendMobileHeartbeat(): Promise<boolean> {
     recordHeartbeatResult(false);
     throw error;
   }
-  recordHeartbeatResult(true);
+  recordHeartbeatResult(true, Date.now(), ownerId);
   return true;
 }

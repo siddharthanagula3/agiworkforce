@@ -202,6 +202,7 @@ import { Camera } from 'expo-camera';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import PermissionsScreen from '@/src/features/settings/permissions';
 import PermissionDetailScreen from '@/src/features/settings/permissions/Detail';
+import { PERMISSION_REGISTRY } from '@/src/features/settings/permissions/registry';
 
 beforeEach(() => {
   mockPermissionParam = 'camera';
@@ -212,6 +213,18 @@ describe('PermissionsScreen, index', () => {
   it('locks the native-backed permission list card', () => {
     const { toJSON } = render(<PermissionsScreen />);
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it('lets every description wrap in full instead of ending in an ellipsis', () => {
+    const { queryAllByText } = render(<PermissionsScreen />);
+    const shown = Object.values(PERMISSION_REGISTRY).flatMap((entry) =>
+      queryAllByText(entry.description),
+    );
+
+    expect(shown.length).toBeGreaterThan(1);
+    for (const description of shown) {
+      expect(description.props.numberOfLines).toBeUndefined();
+    }
   });
 
   it('states in one line that a permission is asked only when a feature the reader started needs it', () => {

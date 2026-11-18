@@ -63,6 +63,34 @@ describe('ImageGenProgress', () => {
     expect(withoutPrompt.getByText('Failed.')).toBeTruthy();
   });
 
+  it('shows the whole reason a failed picture gives, at any text size', () => {
+    const reason =
+      'Google rejected this image request. Adjust the prompt, size or reference image and try again.';
+    const view = render(
+      <ImageGenProgress prompt="a red circle" status="failed" errorMessage={reason} />,
+    );
+
+    expect(view.getByText(reason).props.numberOfLines).toBeUndefined();
+  });
+
+  it('offers Retry only when the card is given a retry', () => {
+    const withRetry = render(
+      <ImageGenProgress
+        prompt="a red circle"
+        status="failed"
+        errorMessage="Failed."
+        onRetry={jest.fn()}
+      />,
+    );
+    expect(withRetry.queryByText('Retry')).toBeTruthy();
+    withRetry.unmount();
+
+    const withoutRetry = render(
+      <ImageGenProgress prompt="a red circle" status="failed" errorMessage="Failed." />,
+    );
+    expect(withoutRetry.queryByText('Retry')).toBeNull();
+  });
+
   it('renders the pending image generation card with active theme colors', () => {
     const { getByLabelText, getByText } = render(
       <ImageGenProgress prompt="Draw a clean AGI product mockup" progress={0} status="pending" />,

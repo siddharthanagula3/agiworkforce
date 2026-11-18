@@ -75,7 +75,6 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
             {entry.label}
           </Text>
           <Text
-            numberOfLines={2}
             style={{
               color: c.textMuted,
               fontSize: typeScale.footnote,

@@ -18,6 +18,29 @@ jest.mock('../src/features/siri/askIntentToken', () => ({
   disableAskFromSiri: () => mockDisable(),
 }));
 
+let mockFocusRead: (() => void) | null = null;
+jest.mock('expo-router', () => ({
+  useFocusEffect: (callback: () => void) => {
+    mockFocusRead = callback;
+  },
+}));
+
+let mockConsentChanged: (() => void) | null = null;
+jest.mock('@/services/providerConsent', () => ({
+  ...jest.requireActual('@/services/providerConsent'),
+  subscribeCloudProviderConsentChange: (listener: () => void) => {
+    mockConsentChanged = listener;
+    return () => {
+      mockConsentChanged = null;
+    };
+  },
+}));
+
+let mockForgotten: Promise<void> = Promise.resolve();
+jest.mock('@/src/features/chat/store/cloudModeDoor', () => ({
+  askFromSiriTokenForgotten: () => mockForgotten,
+}));
+
 jest.mock('@/services/userMessage', () => ({
   toUserMessage: (_e: unknown, fallback: string) => fallback,
 }));
@@ -57,6 +80,9 @@ import { AskFromSiriSetting } from '../src/features/siri/AskFromSiriSetting';
 describe('AskFromSiriSetting', () => {
   beforeEach(() => {
     mockAppMode = 'cloud';
+    mockFocusRead = null;
+    mockConsentChanged = null;
+    mockForgotten = Promise.resolve();
     mockIsEnabled.mockReturnValue(false);
     mockEnable.mockReset();
     mockDisable.mockReset();
@@ -137,5 +163,59 @@ describe('AskFromSiriSetting', () => {
     expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(false);
     expect(alertSpy).not.toHaveBeenCalled();
     alertSpy.mockRestore();
+  });
+
+  describe('while its screen stays mounted', () => {
+    it('reads the stored value again when the screen comes back into focus', () => {
+      mockIsEnabled.mockReturnValue(true);
+      const screen = render(<AskFromSiriSetting />);
+      expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(true);
+
+      mockIsEnabled.mockReturnValue(false);
+      act(() => mockFocusRead?.());
+
+      expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(false);
+    });
+
+    it('reads off once sharing with AI providers is withdrawn and Ask from Siri is forgotten', async () => {
+      mockIsEnabled.mockReturnValue(true);
+      let forget: () => void = () => undefined;
+      mockForgotten = new Promise<void>((resolve) => {
+        forget = resolve;
+      });
+      const screen = render(<AskFromSiriSetting />);
+
+      act(() => mockConsentChanged?.());
+      expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(true);
+
+      mockIsEnabled.mockReturnValue(false);
+      await act(async () => {
+        forget();
+        await mockForgotten;
+      });
+
+      expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(false);
+    });
+
+    it('reads the stored value again when the app mode changes', () => {
+      mockIsEnabled.mockReturnValue(true);
+      const screen = render(<AskFromSiriSetting />);
+
+      mockIsEnabled.mockReturnValue(false);
+      mockAppMode = 'local';
+      screen.rerender(<AskFromSiriSetting />);
+
+      expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(false);
+      expect(screen.getByTestId('settings-ask-from-siri').props.disabled).toBe(true);
+    });
+
+    it('stops listening for sharing changes when it unmounts', () => {
+      const screen = render(<AskFromSiriSetting />);
+      expect(mockConsentChanged).not.toBeNull();
+
+      screen.unmount();
+
+      expect(mockConsentChanged).toBeNull();
+    });
   });
 });

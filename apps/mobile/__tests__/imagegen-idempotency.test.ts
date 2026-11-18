@@ -105,6 +105,31 @@ describe('generateImage, idempotency', () => {
     jest.useRealTimers();
   });
 
+  it('hands back the sentence and the retry answer of a job the server refused', async () => {
+    jest.useFakeTimers();
+    const jobId = '0190a000-0000-4000-8000-000000000001';
+    const sentence =
+      'Your prompt was flagged by our content safety filters. Please try a different prompt.';
+    mockPost.mockResolvedValue({ success: true, job_id: jobId, status: 'queued', images: [] });
+    mockGet.mockResolvedValueOnce({
+      success: false,
+      job_id: jobId,
+      status: 'failed',
+      retryable: false,
+      images: [],
+      error: sentence,
+    });
+
+    const pending = generateImage({ prompt: 'a red circle on white' });
+    await jest.advanceTimersByTimeAsync(2_000);
+    const result = await pending;
+
+    expect(result.status).toBe('failed');
+    expect(result.error).toBe(sentence);
+    expect(result.retryable).toBe(false);
+    jest.useRealTimers();
+  });
+
   it('rejects an empty prompt before spending a key', async () => {
     await expect(generateImage({ prompt: '   ' })).rejects.toThrow(/non-empty prompt/);
     expect(mockPost).not.toHaveBeenCalled();

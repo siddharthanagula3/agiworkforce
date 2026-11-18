@@ -24,6 +24,7 @@ export interface ImageGenResponse {
   latency_ms?: number;
   persisted?: boolean;
   error?: string;
+  retryable?: boolean;
 }
 
 export interface GeneratedImage {

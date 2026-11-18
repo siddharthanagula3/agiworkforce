@@ -19,6 +19,7 @@ import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
+import type { ImageGenResponse } from '../src/features/image/services/imagegen';
 
 function createCallbacks() {
   return {
@@ -794,5 +795,99 @@ describe('runImageGenerationTurn', () => {
       );
       expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
     });
+  });
+});
+
+describe('a failed picture in the chat', () => {
+  const SAFETY_SENTENCE =
+    'Your prompt was flagged by our content safety filters. Please try a different prompt.';
+
+  function failTurn(response: ImageGenResponse) {
+    const callbacks = createCallbacks();
+    const outcome = runImageGenerationTurn(
+      {
+        conversationId: 'conversation-1',
+        displayText: '/image a red circle on white',
+        prompt: 'a red circle on white',
+        model: 'registry-image-route',
+        ownerId: 'default-test-account',
+        ...callbacks,
+      },
+      { generate: async () => response, getUri: () => null },
+    );
+    return { callbacks, outcome };
+  }
+
+  beforeEach(() => {
+    mockMmkvValues.clear();
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('default-test-account');
+    clearCloudImageGenerationState();
+  });
+
+  it('says the sentence the server wrote for a refused job', async () => {
+    const { callbacks, outcome } = failTurn({
+      success: false,
+      status: 'failed',
+      job_id: 'job-1',
+      retryable: false,
+      error: SAFETY_SENTENCE,
+    });
+
+    await expect(outcome).resolves.toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
+    expect(callbacks.fail).toHaveBeenCalledWith('conversation-1', 'assistant-1', SAFETY_SENTENCE);
+  });
+
+  it('says the server sentence for a failure another try can pass', async () => {
+    const { callbacks, outcome } = failTurn({
+      success: false,
+      status: 'failed',
+      retryable: true,
+      error: 'The image generation service is temporarily busy. Please try again in a few moments.',
+    });
+
+    await outcome;
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'The image generation service is temporarily busy. Please try again in a few moments.',
+    );
+  });
+
+  it('says the server sentence when the server says nothing about trying again', async () => {
+    const { callbacks, outcome } = failTurn({
+      success: false,
+      status: 'failed',
+      error: SAFETY_SENTENCE,
+    });
+
+    await outcome;
+    expect(callbacks.fail).toHaveBeenCalledWith('conversation-1', 'assistant-1', SAFETY_SENTENCE);
+  });
+
+  it('keeps the generic sentence when the server sends no sentence', async () => {
+    const { callbacks, outcome } = failTurn({ success: false, status: 'failed', error: '  ' });
+
+    await outcome;
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'AGI Cloud did not return an image. Try again.',
+    );
+  });
+
+  it('does not show an error string that does not come from a failed job', async () => {
+    const { callbacks, outcome } = failTurn({
+      success: false,
+      retryable: false,
+      error: 'Provider unavailable at /private/route',
+    });
+
+    await outcome;
+    expect(callbacks.fail).toHaveBeenCalledWith(
+      'conversation-1',
+      'assistant-1',
+      'AGI Cloud did not return an image. Try again.',
+    );
   });
 });
