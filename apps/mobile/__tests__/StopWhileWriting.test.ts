@@ -78,7 +78,11 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import { cancelMobileCloudAgentRun, streamChat, type StreamCallbacks } from '../services/streaming';
-import { clearCloudExecutionState, useChatExecutionStore } from '../stores/chat/chatExecutionStore';
+import {
+  clearCloudExecutionState,
+  stopEveryCloudStream,
+  useChatExecutionStore,
+} from '../stores/chat/chatExecutionStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
@@ -242,5 +246,85 @@ describe('tapping Stop before the answer starts', () => {
     expect(rows.map((row) => row.role)).toEqual(['user']);
     expect(rows[0]?.content).toBe('Write a long essay about canals.');
     expect(rows[0]?.metadata?.finishReason).toBe('stopped');
+  });
+});
+
+describe('turning off sharing with AI providers while answers are being written', () => {
+  const OTHER_CONV_ID = '0190a000-0000-7000-8000-000000000073';
+  const OTHER_RUN_ID = '0190a000-0000-7000-8000-000000000074';
+
+  function otherAnswer() {
+    return (useChatCloudMessageStore.getState().messages[OTHER_CONV_ID] ?? []).find(
+      (message) => message.role === 'assistant',
+    );
+  }
+
+  async function startWritingElsewhere(): Promise<WritingTurn> {
+    useChatCloudMessageStore.getState().addCloudConversation({
+      id: OTHER_CONV_ID,
+      title: 'Bridges',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      messageCount: 0,
+      pinned: false,
+      model: CLOUD_MODEL,
+      executionMode: 'cloud',
+    });
+    let turn!: Omit<WritingTurn, 'sent'>;
+    const writing = new Promise<void>((resolve) => {
+      mockStreamChat.mockImplementationOnce(async (_body, callbacks, signal) => {
+        turn = { callbacks, signal: signal! };
+        callbacks.onRunReference?.({
+          runId: OTHER_RUN_ID,
+          runPath: `/api/llm/v1/chat/completions/runs/${OTHER_RUN_ID}`,
+          lastSequence: -1,
+        });
+        callbacks.onDelta({ content: WRITTEN });
+        resolve();
+        await new Promise<void>((settle) =>
+          signal?.addEventListener('abort', () => settle(), { once: true }),
+        );
+      });
+    });
+    const sent = useChatExecutionStore
+      .getState()
+      .sendMessage(OTHER_CONV_ID, 'Write about bridges.', CLOUD_MODEL);
+    await writing;
+    return { ...turn, sent };
+  }
+
+  it('returns the runs of the answers it stopped, once, so the caller can pause them', async () => {
+    await startWriting();
+    await startWritingElsewhere();
+
+    expect(stopEveryCloudStream()).toEqual([RUN_ID, OTHER_RUN_ID]);
+    expect(stopEveryCloudStream()).toEqual([]);
+  });
+
+  it('stops every Cloud answer, also outside the open conversation, and pauses rather than cancels', async () => {
+    const open = await startWriting();
+    const elsewhere = await startWritingElsewhere();
+    expect(useChatExecutionStore.getState().streamingConversationIds).toEqual([
+      CONV_ID,
+      OTHER_CONV_ID,
+    ]);
+
+    stopEveryCloudStream();
+
+    expect(open.signal.aborted).toBe(true);
+    expect(elsewhere.signal.aborted).toBe(true);
+    expect(useChatExecutionStore.getState().isStreaming).toBe(false);
+    expect(useChatExecutionStore.getState().streamingConversationIds).toEqual([]);
+    for (const stopped of [answer(), otherAnswer()]) {
+      expect(stopped).toMatchObject({ content: WRITTEN, isStreaming: false });
+      expect(stopped?.metadata?.finishReason).toBe('stopped');
+    }
+    expect(mockCancelRun).not.toHaveBeenCalled();
+
+    open.callbacks.onDelta({ content: LATE });
+    await open.sent;
+    await elsewhere.sent;
+    expect(answer()).toMatchObject({ content: WRITTEN, isStreaming: false });
+    expect(otherAnswer()).toMatchObject({ content: WRITTEN, isStreaming: false });
   });
 });

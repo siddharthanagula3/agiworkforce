@@ -4,6 +4,7 @@ import { EyeOff, Fingerprint, KeyRound, Shield, Smartphone } from 'lucide-react-
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
 import { isMinorMode } from '@/src/features/auth/services/ageGate';
+import { appLockWording } from '@/src/features/auth/services/appLockWording';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -36,10 +37,7 @@ export default function SafetySecurityScreen() {
   const confirmDeviceLock = async (): Promise<boolean> => {
     const enrolledLevel = await LocalAuthentication.getEnrolledLevelAsync();
     if (enrolledLevel === LocalAuthentication.SecurityLevel.NONE) {
-      Alert.alert(
-        'Set up a device lock first',
-        'Turn on Face ID, Touch ID, or a device passcode in system settings before enabling AGI app lock.',
-      );
+      Alert.alert('Set up a device lock first', appLockWording().setupNeeded);
       return false;
     }
 
@@ -104,7 +102,7 @@ export default function SafetySecurityScreen() {
       <SettingsGroup>
         <SettingsSwitchRow
           label="App Lock"
-          description="Require Face ID, Touch ID, or passcode to open AGI."
+          description={appLockWording().settingDescription}
           icon={Fingerprint}
           value={biometricEnabled}
           onValueChange={handleBiometric}

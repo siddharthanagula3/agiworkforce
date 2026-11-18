@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, Linking, Platform } from 'react-native';
+import { AppState, View, Linking, Platform } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -38,6 +38,7 @@ import {
   type PushRegistrationIssue,
 } from '@/services/notifications';
 import { androidChannelVibrates } from '@/services/notificationChannels';
+import { isPushPermissionRequestPending } from '@/services/pushPermissionStatus';
 import { useThemeColors } from '@/src/ui/theme';
 import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
@@ -262,20 +263,30 @@ export default function NotificationPreferencesScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      void getPushDeliveryStatus().then((status) => {
-        if (!cancelled) setPushPermission(status);
-      });
-      if (Platform.OS === 'android') {
-        void Promise.all(
-          (['critical', 'high', 'normal', 'low'] as const).map((priority) =>
-            androidChannelVibrates(priority, true),
-          ),
-        ).then((states) => {
-          if (!cancelled) setChannelOverridden(states.some((vibrates) => vibrates === false));
+      let sequence = 0;
+      function readDeviceState() {
+        const current = ++sequence;
+        const isLatest = () => !cancelled && current === sequence;
+        void getPushDeliveryStatus().then((status) => {
+          if (isLatest()) setPushPermission(status);
         });
+        if (Platform.OS === 'android') {
+          void Promise.all(
+            (['critical', 'high', 'normal', 'low'] as const).map((priority) =>
+              androidChannelVibrates(priority, true),
+            ),
+          ).then((states) => {
+            if (isLatest()) setChannelOverridden(states.some((vibrates) => vibrates === false));
+          });
+        }
       }
+      readDeviceState();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active' && !isPushPermissionRequestPending()) readDeviceState();
+      });
       return () => {
         cancelled = true;
+        subscription.remove();
       };
     }, []),
   );

@@ -2,6 +2,8 @@ import type { ManagedMediaImageOperation } from '@agiworkforce/cloud-contracts';
 import type { MessageAttachment } from '@/types/chat';
 import { ApiPaywallError } from '@/services/api';
 import { ApiHttpError, CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
+import { CloudProviderConsentRequiredError } from '@/services/llmGate';
+import { sharingWithProvidersAnswer } from './mediaGenerationConsent';
 import { readReferenceImageBase64 } from '@/src/features/image/services/imageReference';
 import type { MobileImageReferenceAttachment } from './resolveMobileImageGenerationRequest';
 import {
@@ -102,6 +104,7 @@ export interface ImageGenerationTurnDependencies {
   readReferenceImage?: (uri: string) => Promise<string>;
   isStopped?: (operationId: string) => boolean;
   timeoutMs?: number;
+  sharingAllowed?: () => boolean | Promise<boolean>;
 }
 
 export const IMAGE_GENERATION_TIMEOUT_MS = 180_000;
@@ -125,7 +128,7 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 export type ImageGenerationTurnOutcome = {
-  status: 'completed' | 'failed' | 'paywall' | 'cancelled';
+  status: 'completed' | 'failed' | 'paywall' | 'cancelled' | 'declined';
   assistantMessageId: string | null;
   stopped?: true;
 };
@@ -145,12 +148,20 @@ function rememberImageEditRetry(assistantMessageId: string, input: ImageEditTurn
   }
 }
 
-export function takeImageEditRetry(
+export function peekImageEditRetry(
   assistantMessageId: string,
   ownerId: string,
 ): ImageEditTurnRequest | null {
   const request = imageEditRetries.get(assistantMessageId);
-  if (!request || request.ownerId !== ownerId) return null;
+  return request && request.ownerId === ownerId ? request : null;
+}
+
+export function takeImageEditRetry(
+  assistantMessageId: string,
+  ownerId: string,
+): ImageEditTurnRequest | null {
+  const request = peekImageEditRetry(assistantMessageId, ownerId);
+  if (!request) return null;
   imageEditRetries.delete(assistantMessageId);
   return request;
 }
@@ -166,6 +177,7 @@ const defaultDependencies: ImageGenerationTurnDependencies = {
   getUri: getGeneratedImageUri,
   getDurablePath: getDurableGeneratedImagePath,
   readReferenceImage: readReferenceImageBase64,
+  sharingAllowed: sharingWithProvidersAnswer,
 };
 
 export async function runImageGenerationTurn(
@@ -218,6 +230,18 @@ async function executeImageGenerationTurn(
   const generation = cloudImageGeneration;
   const isAccountCurrent = () =>
     generation === cloudImageGeneration && isCloudAccountEpochCurrent(accountEpoch);
+  if (dependencies.sharingAllowed) {
+    let allowed: boolean;
+    try {
+      const answer = dependencies.sharingAllowed();
+      allowed = typeof answer === 'boolean' ? answer : await answer;
+    } catch (error) {
+      input.onUnexpectedError?.(error);
+      return { status: 'failed', assistantMessageId: null };
+    }
+    if (!allowed) return { status: 'declined', assistantMessageId: null };
+    if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId: null };
+  }
   const referenceAttachment: MessageAttachment | null = input.sourceImage
     ? {
         url: input.sourceImage.uri,
@@ -322,6 +346,10 @@ async function executeImageGenerationTurn(
   } catch (error) {
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     if (isStopped()) return stoppedOutcome();
+    if (error instanceof CloudProviderConsentRequiredError) {
+      input.remove(input.conversationId, assistantMessageId);
+      return { status: 'declined', assistantMessageId: null };
+    }
     if (error instanceof ApiPaywallError) {
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);

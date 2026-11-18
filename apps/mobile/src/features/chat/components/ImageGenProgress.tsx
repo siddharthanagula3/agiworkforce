@@ -163,16 +163,18 @@ export function ImageGenProgress({
           {status === 'generating' && <LoadingIndicator accessible={false} size={16} />}
         </View>
 
-        <Text
-          style={{
-            fontSize: typeScale.caption,
-            lineHeight: 17,
-            color: colors.textSecondary,
-          }}
-          numberOfLines={2}
-        >
-          {prompt}
-        </Text>
+        {prompt.length > 0 ? (
+          <Text
+            style={{
+              fontSize: typeScale.caption,
+              lineHeight: 17,
+              color: colors.textSecondary,
+            }}
+            numberOfLines={2}
+          >
+            {prompt}
+          </Text>
+        ) : null}
 
         {isPending && (
           <Animated.View style={pulseStyle}>

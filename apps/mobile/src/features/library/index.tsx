@@ -68,6 +68,8 @@ import { MediaJobsSection } from './MediaJobsSection';
 import { LibraryFeaturePromoSheet } from './LibraryFeaturePromoSheet';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 import { generateImage } from '@/src/features/image/services/imagegen';
+import { sharingWithProvidersAllowed } from '@/src/features/chat/actions/mediaGenerationConsent';
+import { CloudProviderConsentRequiredError } from '@/services/llmGate';
 import { showToast } from '@/src/shared/components/Toast';
 import { toUserMessage } from '@/services/userMessage';
 import { useChatStore } from '@/stores/chatStore';
@@ -388,22 +390,28 @@ export function LibraryScreen({
     (edit: ImageAreaEdit) => {
       const asset = previewImage;
       if (!asset) return;
-      handleCloseImage();
-      showToast('Editing the image. The new version appears in your Library.');
-      void generateImage({
-        prompt: edit.prompt,
-        ...(asset.model ? { model: asset.model } : {}),
-        ...(asset.conversationId ? { conversation_id: asset.conversationId } : {}),
-        operation: 'inpaint',
-        source_image: { b64_json: edit.sourceBase64 },
-        mask_image: { b64_json: edit.maskBase64 },
-        size: '1024x1024',
-        n: 1,
-        quality: 'standard',
-        transparent_background: false,
-      })
-        .then(() => library.refresh())
+      const scope = previewImageScopeRef.current;
+      void sharingWithProvidersAllowed()
+        .then((allowed) => {
+          if (!allowed) return;
+          if (previewImageScopeRef.current !== scope || !isAccountScopedUiStateOwned(scope)) return;
+          handleCloseImage();
+          showToast('Editing the image. The new version appears in your Library.');
+          return generateImage({
+            prompt: edit.prompt,
+            ...(asset.model ? { model: asset.model } : {}),
+            ...(asset.conversationId ? { conversation_id: asset.conversationId } : {}),
+            operation: 'inpaint',
+            source_image: { b64_json: edit.sourceBase64 },
+            mask_image: { b64_json: edit.maskBase64 },
+            size: '1024x1024',
+            n: 1,
+            quality: 'standard',
+            transparent_background: false,
+          }).then(() => library.refresh());
+        })
         .catch((error: unknown) => {
+          if (error instanceof CloudProviderConsentRequiredError) return;
           Alert.alert('Could not edit the image', toUserMessage(error, 'Try again in a moment.'));
         });
     },

@@ -2,6 +2,7 @@
 const mockStorage = new Map<string, unknown>();
 const mockPost = jest.fn();
 const mockDelete = jest.fn();
+const mockEnsureCloudSendConsent = jest.fn();
 type MockAppModeState = { appMode: string };
 type MockAppModeListener = (next: MockAppModeState, previous: MockAppModeState) => void;
 
@@ -10,6 +11,7 @@ jest.mock('expo-secure-store', () => ({
   AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'afterFirstUnlockThisDeviceOnly',
   setItemAsync: jest.fn().mockResolvedValue(undefined),
   deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+  getItemAsync: jest.fn().mockResolvedValue(null),
 }));
 jest.mock('@/lib/mmkv', () => ({
   storage: {
@@ -26,6 +28,9 @@ jest.mock('@/lib/constants', () => ({
 }));
 jest.mock('@/services/api', () => ({ api: { post: mockPost, delete: mockDelete } }));
 jest.mock('@/services/secureFetch', () => ({ secureFetch: jest.fn() }));
+jest.mock('@/services/llmGate', () => ({
+  ensureCloudSendConsent: () => mockEnsureCloudSendConsent(),
+}));
 jest.mock('@/src/features/chat/store/appModeStore', () => {
   let state: MockAppModeState = { appMode: 'cloud' };
   const listeners = new Set<MockAppModeListener>();
@@ -84,6 +89,7 @@ function loadContext() {
     };
     jest.mocked(context.secureStore.setItemAsync).mockReset().mockResolvedValue(undefined);
     jest.mocked(context.secureStore.deleteItemAsync).mockReset().mockResolvedValue(undefined);
+    jest.mocked(context.secureStore.getItemAsync).mockReset().mockResolvedValue(null);
   });
   return context!;
 }
@@ -116,6 +122,37 @@ beforeEach(() => {
   mockStorage.clear();
   mockPost.mockReset();
   mockDelete.mockReset();
+  mockEnsureCloudSendConsent.mockReset().mockResolvedValue(undefined);
+});
+
+describe('turning on Ask from Siri', () => {
+  it('is refused without permission to share with AI providers and issues no token', async () => {
+    const siri = load();
+    const declined = new Error('declined');
+    mockEnsureCloudSendConsent.mockRejectedValueOnce(declined);
+
+    await expect(siri.enableAskFromSiri()).rejects.toBe(declined);
+
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(siri.isAskFromSiriEnabled()).toBe(false);
+  });
+
+  it('asks for that permission before a token is issued', async () => {
+    const siri = load();
+    const order: string[] = [];
+    mockEnsureCloudSendConsent.mockImplementationOnce(async () => {
+      order.push('permission');
+    });
+    mockPost.mockImplementationOnce(async () => {
+      order.push('issue');
+      return TOKEN_A;
+    });
+
+    await siri.enableAskFromSiri();
+
+    expect(order).toEqual(['permission', 'issue']);
+    expect(siri.isAskFromSiriEnabled()).toBe(true);
+  });
 });
 
 describe('Ask from Siri automatic rotation retry', () => {
@@ -262,6 +299,8 @@ describe('Ask from Siri token revocation', () => {
     await expect(siri.disableAskFromSiri()).rejects.toThrow('offline');
     expect(mockDelete).toHaveBeenCalledWith(`/api/mobile/intent-token?tokenId=${TOKEN_A.tokenId}`, {
       accountEpoch: expect.objectContaining({ ownerId: 'account-a' }),
+      timeout: 1_000,
+      withdrawalControl: true,
     });
 
     mockPost.mockResolvedValueOnce(TOKEN_B);
@@ -293,6 +332,40 @@ describe('Ask from Siri token revocation', () => {
     mockDelete.mockClear();
     await load().settleAskIntentOnLaunch();
     expect(mockDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe('Ask from Siri turned off while another revoke is still waiting', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('gives a revoke no longer than the sign-out cleanup time, so the next turn-off behind it runs', async () => {
+    const siri = load();
+    mockPost.mockResolvedValueOnce(TOKEN_A);
+    await siri.enableAskFromSiri();
+    jest.useFakeTimers();
+    mockDelete
+      .mockImplementationOnce(
+        (_path: string, options: { timeout?: number }) =>
+          new Promise((_resolve, reject) => {
+            setTimeout(() => reject(new Error('timed out')), options.timeout ?? 30_000);
+          }),
+      )
+      .mockResolvedValueOnce({ revoked: true });
+
+    const first = siri.disableAskFromSiri();
+    const second = siri.disableAskFromSiri();
+    const outcome: { statuses: string[] | null } = { statuses: null };
+    void Promise.allSettled([first, second]).then((settled) => {
+      outcome.statuses = settled.map((result) => result.status);
+    });
+    await jest.advanceTimersByTimeAsync(1_000);
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+    expect(outcome.statuses).toEqual(['rejected', 'fulfilled']);
+    expect(mockDelete).toHaveBeenCalledTimes(2);
+    expect(siri.isAskFromSiriEnabled()).toBe(false);
   });
 });
 
@@ -340,6 +413,8 @@ describe('Ask from Siri ordinary-operation ownership', () => {
     );
     expect(mockDelete).toHaveBeenCalledWith(`/api/mobile/intent-token?tokenId=${TOKEN_B.tokenId}`, {
       accountEpoch: account.captureCloudAccountEpoch(),
+      timeout: 1_000,
+      withdrawalControl: true,
     });
     expect(secureStore.setItemAsync).toHaveBeenCalledTimes(1);
     expect(secureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
@@ -368,6 +443,8 @@ describe('Ask from Siri ordinary-operation ownership', () => {
     await disable;
     expect(mockDelete).toHaveBeenCalledWith(`/api/mobile/intent-token?tokenId=${TOKEN_B.tokenId}`, {
       accountEpoch: expect.objectContaining({ ownerId: 'account-a' }),
+      timeout: 1_000,
+      withdrawalControl: true,
     });
   });
 
@@ -498,5 +575,217 @@ describe('Ask from Siri ordinary-operation ownership', () => {
     await failure;
     expect(mockStorage.get('ask-from-siri-pending-revoke-token-v1')).toBe(TOKEN_B.tokenId);
     expect(mockPost).not.toHaveBeenCalled();
+  });
+});
+
+describe('Ask from Siri when sharing with AI providers is withdrawn', () => {
+  it('leaves no token on the phone when Cloud closes while the first token is being written', async () => {
+    const { siri, mode, secureStore } = loadContext();
+    mockPost.mockResolvedValueOnce(TOKEN_A);
+    const written = deferred<void>();
+    const writing = deferred<void>();
+    jest.mocked(secureStore.setItemAsync).mockImplementationOnce(() => {
+      writing.resolve(undefined);
+      return written.promise;
+    });
+    const enable = siri.enableAskFromSiri();
+    const retired = expect(enable).rejects.toThrow('account or mode changed');
+    await writing.promise;
+
+    mode.setState({ appMode: 'local' });
+    written.resolve(undefined);
+    await retired;
+
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(
+      siri.ASK_INTENT_KEYCHAIN_KEY,
+      expect.objectContaining({ keychainService: siri.ASK_INTENT_KEYCHAIN_SERVICE }),
+    );
+    expect(jest.mocked(secureStore.deleteItemAsync).mock.invocationCallOrder[0]).toBeGreaterThan(
+      jest.mocked(secureStore.setItemAsync).mock.invocationCallOrder[0]!,
+    );
+    expect(siri.isAskFromSiriEnabled()).toBe(false);
+    expect(mockStorage.has('ask-from-siri-token-id-v1')).toBe(false);
+  });
+
+  it('keeps a revoke owed when removing a first token that lost its owner fails', async () => {
+    const { siri, mode, secureStore } = loadContext();
+    mockPost.mockResolvedValueOnce(TOKEN_A);
+    const written = deferred<void>();
+    const writing = deferred<void>();
+    jest.mocked(secureStore.setItemAsync).mockImplementationOnce(() => {
+      writing.resolve(undefined);
+      return written.promise;
+    });
+    jest.mocked(secureStore.deleteItemAsync).mockRejectedValueOnce(new Error('keychain locked'));
+    const enable = siri.enableAskFromSiri();
+    const failed = expect(enable).rejects.toThrow('keychain locked');
+    await writing.promise;
+
+    mode.setState({ appMode: 'local' });
+    written.resolve(undefined);
+    await failed;
+
+    expect(mockStorage.get('ask-from-siri-pending-revoke-token-v1')).toBe('install');
+    expect(siri.isAskFromSiriEnabled()).toBe(false);
+  });
+
+  it('removes a token the keychain still holds when Ask from Siri is marked off, and owes its revoke', async () => {
+    const { siri, secureStore, account } = loadContext();
+    jest.mocked(secureStore.getItemAsync).mockResolvedValue(TOKEN_A.token);
+    mockDelete.mockResolvedValue({ revoked: true });
+
+    await siri.forgetAskFromSiriOnDevice();
+
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
+    expect(mockStorage.get('ask-from-siri-pending-revoke-token-v1')).toBe('install');
+
+    await siri.revokeForgottenAskFromSiri();
+
+    expect(mockDelete).toHaveBeenCalledWith('/api/mobile/intent-token?installId=install-12345', {
+      accountEpoch: account.captureCloudAccountEpoch(),
+      timeout: 1_000,
+      withdrawalControl: true,
+    });
+    expect(mockStorage.has('ask-from-siri-pending-revoke-token-v1')).toBe(false);
+  });
+
+  it('owes no revoke and sends nothing when the keychain holds no token and none was recorded', async () => {
+    const { siri, secureStore } = loadContext();
+
+    await siri.forgetAskFromSiriOnDevice();
+    await siri.revokeForgottenAskFromSiri();
+
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
+    expect(mockStorage.has('ask-from-siri-pending-revoke-token-v1')).toBe(false);
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it('owes the revoke when the keychain cannot be read, since a token may be there', async () => {
+    const { siri, secureStore } = loadContext();
+    jest.mocked(secureStore.getItemAsync).mockRejectedValue(new Error('keychain locked'));
+
+    await siri.forgetAskFromSiriOnDevice();
+
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
+    expect(mockStorage.get('ask-from-siri-pending-revoke-token-v1')).toBe('install');
+  });
+
+  it('turns off from Local Mode with the withdrawal control, and clears the owed marker', async () => {
+    const { siri, mode, account } = loadContext();
+    mockPost.mockResolvedValueOnce(TOKEN_A);
+    await siri.enableAskFromSiri();
+    mode.setState({ appMode: 'local' });
+    mockDelete.mockResolvedValue({ revoked: true });
+
+    await siri.disableAskFromSiri();
+
+    expect(mockDelete).toHaveBeenCalledWith(`/api/mobile/intent-token?tokenId=${TOKEN_A.tokenId}`, {
+      accountEpoch: account.captureCloudAccountEpoch(),
+      timeout: 1_000,
+      withdrawalControl: true,
+    });
+    expect(mockStorage.has('ask-from-siri-pending-revoke-token-v1')).toBe(false);
+    expect(siri.isAskFromSiriEnabled()).toBe(false);
+  });
+
+  it('pays at a later launch a revoke an earlier launch still owed, through the withdrawal control', async () => {
+    const { siri, account } = loadContext();
+    mockStorage.set('ask-from-siri-pending-revoke-token-v1', 'install');
+    mockDelete.mockResolvedValue({ revoked: true });
+
+    await siri.revokeForgottenAskFromSiri();
+
+    expect(mockDelete).toHaveBeenCalledWith('/api/mobile/intent-token?installId=install-12345', {
+      accountEpoch: account.captureCloudAccountEpoch(),
+      timeout: 1_000,
+      withdrawalControl: true,
+    });
+    expect(mockStorage.has('ask-from-siri-pending-revoke-token-v1')).toBe(false);
+  });
+
+  it('removes the token from this device before any network call, then revokes it for the install', async () => {
+    const { siri, secureStore, account } = loadContext();
+    mockPost.mockResolvedValueOnce(TOKEN_A);
+    await siri.enableAskFromSiri();
+    mockDelete.mockResolvedValue({ revoked: true });
+
+    await siri.forgetAskFromSiriOnDevice();
+
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledWith(
+      siri.ASK_INTENT_KEYCHAIN_KEY,
+      expect.objectContaining({ keychainService: siri.ASK_INTENT_KEYCHAIN_SERVICE }),
+    );
+    expect(mockDelete).not.toHaveBeenCalled();
+    expect(siri.isAskFromSiriEnabled()).toBe(false);
+    expect(mockStorage.get('ask-from-siri-pending-revoke-token-v1')).toBe('install');
+
+    await siri.revokeForgottenAskFromSiri();
+
+    expect(mockDelete).toHaveBeenCalledWith('/api/mobile/intent-token?installId=install-12345', {
+      accountEpoch: account.captureCloudAccountEpoch(),
+      timeout: 1_000,
+      withdrawalControl: true,
+    });
+    expect(mockStorage.has('ask-from-siri-pending-revoke-token-v1')).toBe(false);
+  });
+
+  it('keeps the revoke owed when it fails, for the next launch', async () => {
+    const { siri } = loadContext();
+    mockStorage.set('ask-from-siri-enabled-v1', true);
+    mockDelete.mockRejectedValueOnce(new Error('offline'));
+
+    await siri.forgetAskFromSiriOnDevice();
+    await expect(siri.revokeForgottenAskFromSiri()).rejects.toThrow('offline');
+
+    expect(siri.isAskFromSiriEnabled()).toBe(false);
+    expect(mockStorage.get('ask-from-siri-pending-revoke-token-v1')).toBe('install');
+  });
+
+  it('still reports Ask from Siri on when the token could not be removed', async () => {
+    const { siri, secureStore } = loadContext();
+    mockStorage.set('ask-from-siri-enabled-v1', true);
+    jest.mocked(secureStore.deleteItemAsync).mockRejectedValueOnce(new Error('keychain locked'));
+
+    await expect(siri.forgetAskFromSiriOnDevice()).rejects.toThrow('keychain locked');
+
+    expect(siri.isAskFromSiriEnabled()).toBe(true);
+  });
+
+  it('removes again a token a rotation was already publishing, and never lets a waiting one publish', async () => {
+    const { siri, secureStore } = loadContext();
+    mockStorage.set('ask-from-siri-enabled-v1', true);
+    const publication = deferred<void>();
+    const started = deferred<void>();
+    mockPost.mockResolvedValue(TOKEN_B);
+    mockDelete.mockResolvedValue({ revoked: true });
+    jest.mocked(secureStore.setItemAsync).mockImplementationOnce(() => {
+      started.resolve(undefined);
+      return publication.promise;
+    });
+    const rotation = siri.settleAskIntentOnLaunch();
+    const retired = expect(rotation).rejects.toThrow('account or mode changed');
+    await started.promise;
+
+    await siri.forgetAskFromSiriOnDevice();
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledTimes(1);
+    const revoke = siri.revokeForgottenAskFromSiri();
+    publication.resolve(undefined);
+    await retired;
+    await revoke;
+
+    expect(secureStore.deleteItemAsync).toHaveBeenCalledTimes(2);
+    expect(mockStorage.has('ask-from-siri-token-id-v1')).toBe(false);
+    expect(siri.isAskFromSiriEnabled()).toBe(false);
+
+    const waiting = deferIssue();
+    mockStorage.set('ask-from-siri-enabled-v1', true);
+    const next = siri.settleAskIntentOnLaunch();
+    const nextRetired = expect(next).rejects.toThrow('account or mode changed');
+    await waiting.started;
+    await siri.forgetAskFromSiriOnDevice();
+    waiting.resolve(TOKEN_A);
+    await nextRetired;
+    expect(secureStore.setItemAsync).toHaveBeenCalledTimes(1);
   });
 });

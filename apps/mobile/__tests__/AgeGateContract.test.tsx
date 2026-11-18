@@ -38,7 +38,7 @@ let mockTimeZone = DEFAULT_TIME_ZONE;
 const realIntl = global.Intl;
 
 const mockReplace = jest.fn();
-let mockSearchParams: { returnTo?: string } = {};
+let mockSearchParams: { returnTo?: string; entry?: string } = {};
 
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router');
@@ -197,6 +197,63 @@ describe('the age screen when the answer does not work', () => {
     fireEvent.press(screen.getByLabelText('Go back'));
 
     expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
+  });
+
+  it('hands the Age entry back to parental controls when backing out of the review', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'age' };
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(app)/settings/parental-controls',
+      params: { entry: 'age' },
+    });
+  });
+
+  it('hands the Age entry back to parental controls after an adult confirms their age', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'age' };
+    render(<AgeGateScreen />);
+
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: '/(app)/settings/parental-controls',
+      params: { entry: 'age' },
+    });
+  });
+
+  it('drops an entry it does not know instead of passing it on', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls', entry: 'elsewhere' };
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
+  });
+
+  it('takes the entry only for the parental controls return path', () => {
+    clearPostAuthIntent();
+    mockSearchParams = { returnTo: '/(auth)/login', entry: 'age' };
+    render(<AgeGateScreen />);
+
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(auth)/login');
+  });
+
+  it('still refuses a return path that is not on the allow-list, entry or not', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/account-security', entry: 'age' };
+    render(<AgeGateScreen />);
+
+    expect(screen.queryByLabelText('Go back')).toBeNull();
+    fireEvent.changeText(screen.getByTestId('age-gate-input'), '30');
+    fireEvent.press(screen.getByTestId('age-gate-continue-btn'));
+
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith('/(public)/onboarding');
   });
 
   it('lets the review header grow and caps its title at the largest text size', () => {

@@ -189,7 +189,10 @@ describe('Clerk native pending-session policy', () => {
     );
     expect(source).toMatch(/const previousIsCloudRef = useRef\(isCloud\)/);
     expect(source).toMatch(/const enteredCloud = isCloud && !previousIsCloudRef\.current/);
-    expect(source).toMatch(/if \(enteredCloud && isMmkvReady\) void syncNow\(\)/);
+    expect(source).toMatch(
+      /if \(!enteredCloud\) return;[\s\S]{0,200}if \(isMmkvReady\) void syncNow\(\)/,
+    );
+    expect(source.match(/syncNow\(\)/g)).toHaveLength(1);
   });
 
   it('restarts every account-scoped root lifecycle on a direct Clerk account switch', () => {

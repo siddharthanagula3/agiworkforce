@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, Platform } from 'react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockOpenInAppBrowser = jest.fn();
@@ -60,11 +60,20 @@ jest.mock('expo-router', () => ({
 
 jest.mock('lucide-react-native', () => {
   const { View } = require('react-native');
-  const Icon = (props: Record<string, unknown>) => <View {...props} />;
+  const icons = new Map<string, unknown>();
   return new Proxy(
     {},
     {
-      get: (_target, name) => (name === '__esModule' ? true : Icon),
+      get: (_target, name) => {
+        if (name === '__esModule') return true;
+        const key = String(name);
+        if (!icons.has(key)) {
+          icons.set(key, (props: Record<string, unknown>) => (
+            <View {...props} testID={`icon-${key}`} />
+          ));
+        }
+        return icons.get(key);
+      },
     },
   );
 });
@@ -196,10 +205,12 @@ jest.mock('../src/features/settings/Common', () => {
     ),
     SettingsRow: ({
       label,
+      icon: Icon,
       value,
       onPress,
     }: {
       label: string;
+      icon?: () => React.ReactElement | null;
       value?: string;
       onPress?: () => void;
     }) => (
@@ -208,6 +219,7 @@ jest.mock('../src/features/settings/Common', () => {
         accessibilityLabel={value ? `${label}. ${value}` : label}
         onPress={onPress}
       >
+        {Icon ? <Icon /> : null}
         <Text>{label}</Text>
         {value ? <Text>{value}</Text> : null}
       </Pressable>
@@ -351,6 +363,28 @@ describe('Mobile Account Security screen', () => {
     expect(screen.queryByText('Clerk')).toBeNull();
   });
 
+  describe.each([
+    ['ios', 'iPhone', 'App Lock uses this device’s Face ID, Touch ID or passcode.'],
+    ['android', 'Android', 'App Lock uses this device’s fingerprint, face unlock or screen lock.'],
+  ] as const)('App Lock wording on %s', (os, _name, wording) => {
+    let platform: jest.ReplaceProperty<'OS', typeof Platform.OS>;
+
+    beforeEach(() => {
+      platform = jest.replaceProperty(Platform, 'OS', os);
+    });
+
+    afterEach(() => {
+      platform.restore();
+    });
+
+    it('describes App Lock with the names the platform uses', async () => {
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText(wording)).toBeTruthy());
+      if (os === 'android') expect(screen.queryByText(/Face ID|Touch ID/)).toBeNull();
+    });
+  });
+
   it('does not fetch Cloud security state while the app is in Local Mode', () => {
     mockAppMode = 'local';
     const screen = render(<AccountSecurityScreen />);
@@ -449,6 +483,155 @@ describe('Mobile Account Security screen', () => {
     expect(screen.getByLabelText('iPhone (this device). Active now').props.accessibilityRole).toBe(
       undefined,
     );
+  });
+
+  describe('naming this app in the device list', () => {
+    const { parseAccountSessions } = jest.requireActual(
+      '../src/features/settings/account-security/service',
+    ) as typeof import('../src/features/settings/account-security/service');
+
+    const laptopRow = {
+      id: 'sess_laptop',
+      device: 'Macintosh',
+      browser: 'Chrome 141',
+      os: 'macos',
+      surface: 'web',
+      location: null,
+      lastActiveAt: new Date().toISOString(),
+      isCurrent: false,
+    };
+
+    function listServerRows(...rows: Array<Record<string, unknown>>) {
+      mockFetchAccountSessions.mockResolvedValue(
+        parseAccountSessions({ sessions: [...rows, laptopRow], currentSessionKnown: true }),
+      );
+    }
+
+    it('names this app and its platform instead of the HTTP library on Android', async () => {
+      listServerRows({
+        id: 'sess_phone',
+        device: 'Mobile device',
+        browser: 'OkHttp 5.4.0',
+        os: 'android',
+        surface: 'mobile',
+        location: 'Austin',
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() =>
+        expect(screen.getByText('AGI Mobile on Android · Austin (this device)')).toBeTruthy(),
+      );
+      expect(screen.queryByText(/OkHttp/)).toBeNull();
+      expect(screen.queryByText(/Mobile device/)).toBeNull();
+    });
+
+    it('names this app alone when the platform is not recorded', async () => {
+      listServerRows({
+        id: 'sess_phone',
+        device: 'Mobile device',
+        browser: 'OkHttp 5.4.0',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText('AGI Mobile (this device)')).toBeTruthy());
+      expect(screen.queryByText(/OkHttp/)).toBeNull();
+    });
+
+    it('names this app on iOS and in the sign-out confirmation of another phone', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      listServerRows({
+        id: 'sess_ios',
+        device: 'iPhone',
+        browser: 'CFNetwork 1568.100.1',
+        os: 'ios',
+        surface: 'mobile',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText('AGI Mobile on iOS')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText('AGI Mobile on iOS. Active now'));
+
+      expect(alertSpy.mock.calls.at(-1)?.[1]).toBe(
+        'AGI Mobile on iOS will lose access to your AGI account immediately.',
+      );
+      alertSpy.mockRestore();
+    });
+
+    it('names this app when only the HTTP library identifies it', async () => {
+      listServerRows({
+        id: 'sess_phone',
+        device: 'Mobile device',
+        browser: 'okhttp/4.12.0',
+        os: 'android',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() =>
+        expect(screen.getByText('AGI Mobile on Android (this device)')).toBeTruthy(),
+      );
+    });
+
+    it('keeps a desktop client that reports a library agent reading as it did', async () => {
+      listServerRows({
+        id: 'sess_desktop',
+        device: 'Mac',
+        browser: 'CFNetwork 1568.100.1',
+        os: 'macos',
+        surface: 'desktop',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText('Mac · CFNetwork 1568.100.1')).toBeTruthy());
+      expect(screen.queryByText(/AGI Mobile/)).toBeNull();
+    });
+
+    it('draws another phone running this app with the phone icon', async () => {
+      listServerRows({
+        id: 'sess_ios',
+        device: 'iPhone',
+        browser: 'CFNetwork 1568.100.1',
+        os: 'ios',
+        surface: 'mobile',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: false,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      const row = await screen.findByLabelText('AGI Mobile on iOS. Active now');
+      expect(within(row).queryByTestId('icon-Smartphone')).toBeTruthy();
+      expect(within(row).queryByTestId('icon-Laptop')).toBeNull();
+    });
+
+    it('leaves a desktop browser session reading as it did', async () => {
+      listServerRows({
+        id: 'sess_phone',
+        device: 'Mobile device',
+        browser: 'OkHttp 5.4.0',
+        os: 'android',
+        surface: 'mobile',
+        location: null,
+        lastActiveAt: new Date().toISOString(),
+        isCurrent: true,
+      });
+      const screen = render(<AccountSecurityScreen />);
+
+      await waitFor(() => expect(screen.getByText('Macintosh · Chrome 141')).toBeTruthy());
+    });
   });
 
   it('revokes another device only after an explicit confirmation, then re-reads the list', async () => {

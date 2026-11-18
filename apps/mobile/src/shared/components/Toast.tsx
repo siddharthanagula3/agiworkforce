@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { AccessibilityInfo, View } from 'react-native';
+import { AccessibilityInfo, View, useWindowDimensions } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { create } from 'zustand';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { FLOATING_PRIMARY_ACTION_LIST_PADDING } from '@/src/shared/components/FloatingPrimaryAction';
+import { contentColumnWidth } from '@/src/shared/layout/contentColumn';
 import { elevation, motion, radii, spacing, useThemeColors, zIndex } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
@@ -13,6 +14,7 @@ import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
 const TOAST_DURATION_MS = 5_000;
 const TOAST_ACTION_DURATION_MS = 8_000;
 const TOAST_TAP_GUARD_MS = 400;
+const TOAST_MAX_WIDTH = 520;
 
 export interface ToastAction {
   label: string;
@@ -65,16 +67,21 @@ function ToastBody({
   onAction?: () => void;
 }) {
   const colors = useThemeColors();
+  const { width: windowWidth } = useWindowDimensions();
+  const maxWidth = Math.min(
+    TOAST_MAX_WIDTH,
+    contentColumnWidth('reading', windowWidth - 2 * spacing.lg),
+  );
   return (
     <View
-      testID={inert ? 'toast-tap-guard' : undefined}
+      testID={inert ? 'toast-tap-guard' : 'toast-body'}
       accessibilityElementsHidden={inert}
       importantForAccessibility={inert ? 'no-hide-descendants' : undefined}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.md,
-        maxWidth: 520,
+        maxWidth,
         minHeight: 44,
         paddingLeft: spacing.lg,
         paddingRight: entry.action ? spacing.sm : spacing.lg,
@@ -103,6 +110,7 @@ function ToastBody({
           accessibilityRole="button"
           accessibilityLabel={entry.action.label}
           style={{
+            flexShrink: 0,
             minHeight: 44,
             minWidth: 44,
             paddingHorizontal: spacing.md,

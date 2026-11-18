@@ -157,6 +157,9 @@ jest.mock('../src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: (selector: (state: { appMode: 'local' }) => unknown) =>
     selector({ appMode: 'local' }),
 }));
+jest.mock('../src/features/chat/store/cloudModeDoor', () => ({
+  installCloudModeDoor: jest.fn(),
+}));
 jest.mock('../src/features/chat/store/cloudModeFallback', () => ({
   answerCloudSession: jest.fn(),
 }));

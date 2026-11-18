@@ -121,7 +121,11 @@ export default function AboutScreen() {
 
   const openWebPage = useCallback(async (url: string) => {
     const opened = await openWebContentPage(url);
-    if (!opened) Alert.alert('Error', 'Could not open the link. Please try again.');
+    if (!opened) {
+      Alert.alert('Error', 'Could not open the link. Please try again.', undefined, {
+        cancelable: true,
+      });
+    }
   }, []);
 
   const alertNoMailApp = useNoMailAppAlert();

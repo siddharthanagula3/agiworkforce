@@ -5,6 +5,7 @@ import {
 } from '@agiworkforce/types';
 
 import { api } from '@/services/api';
+import { ensureCloudSendConsent } from '@/services/llmGate';
 import { resolveGeneratedVideoUri } from './videoUri';
 import { createManagedMediaIdempotencyKey } from '@agiworkforce/utils/managed-media-idempotency';
 import type { ManagedMediaVideoGenerationRequest } from '@agiworkforce/cloud-contracts';
@@ -80,6 +81,7 @@ export async function startVideoGeneration(
   if (!request.prompt.trim()) {
     throw new Error('Video generation requires a non-empty prompt');
   }
+  await ensureCloudSendConsent();
 
   const idempotencyKey = createManagedMediaIdempotencyKey({
     surface: 'mobile',

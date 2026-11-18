@@ -478,24 +478,28 @@ describe('Cloud Account destructive action ownership', () => {
     );
   });
 
-  it('requires an explicit mode switch before contacting AGI Cloud', async () => {
+  it('exports from Local Mode when asked, without switching to AGI Cloud', async () => {
     mockAppMode = 'local';
     render(<CloudAccountScreen />);
     await act(async () => {
       await Promise.resolve();
     });
 
+    expect(mockExportCloudUserData).not.toHaveBeenCalled();
     fireEvent.press(screen.getByLabelText('Export Cloud Data'));
 
-    expect(mockExportCloudUserData).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
+    await waitFor(() =>
+      expect(mockExportCloudUserData).toHaveBeenCalledWith({ ownerId: 'account-a', epoch: 1 }),
+    );
+    expect(mockSetAppMode).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalledWith(
       'Switch to AGI Cloud',
-      expect.stringContaining('does not upload your Local Mode chats or files'),
-      expect.any(Array),
+      expect.anything(),
+      expect.anything(),
     );
   });
 
-  it('sends no deletion status request in Local Mode and offers the switch to AGI Cloud instead', async () => {
+  it('sends no deletion status request in Local Mode until the person asks for it', async () => {
     mockAppMode = 'local';
     const screen = render(<CloudAccountScreen />);
     await act(async () => {
@@ -504,62 +508,66 @@ describe('Cloud Account destructive action ownership', () => {
 
     expect(mockGetDeletionStatus).not.toHaveBeenCalled();
     expect(screen.queryByLabelText('Delete Account')).toBeNull();
-    expect(screen.queryByLabelText(/deletion status/i)).toBeNull();
-    expect(mockSetAppMode).not.toHaveBeenCalled();
 
-    fireEvent.press(screen.getByLabelText('Deletion is managed in AGI Cloud. Switch to Cloud'));
-
-    expect(mockSetAppMode).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'Switch to AGI Cloud',
-      expect.stringContaining('Account deletion is managed in AGI Cloud.'),
-      expect.any(Array),
-    );
-  });
-
-  it('shows the Delete Account row after the Local Mode switch to AGI Cloud, without leaving the screen', async () => {
-    mockAppMode = 'local';
-    const screen = render(<CloudAccountScreen />);
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(mockGetDeletionStatus).not.toHaveBeenCalled();
-
-    fireEvent.press(screen.getByLabelText('Deletion is managed in AGI Cloud. Switch to Cloud'));
-    const alertCall = (Alert.alert as jest.Mock).mock.calls.findLast(
-      ([title]) => title === 'Switch to AGI Cloud',
-    );
-    const buttons = alertCall?.[2] as Array<{ text: string; onPress?: () => void }>;
-    expect(buttons.map((button) => button.text)).toEqual(['Cancel', 'Switch to Cloud']);
-    act(() => {
-      buttons[1]?.onPress?.();
-    });
-
-    expect(mockSetAppMode).toHaveBeenCalledWith('cloud');
-    screen.rerender(<CloudAccountScreen />);
+    fireEvent.press(screen.getByLabelText('Check deletion status'));
 
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
-    expect(screen.queryByLabelText('Deletion is managed in AGI Cloud. Switch to Cloud')).toBeNull();
     expect(mockGetDeletionStatus).toHaveBeenCalledTimes(1);
-    expect(router.push).not.toHaveBeenCalled();
+    expect(mockGetDeletionStatus).toHaveBeenCalledWith('/api/user/delete-account', {
+      accountEpoch: expect.objectContaining({ ownerId: 'account-a' }),
+    });
+    expect(mockSetAppMode).not.toHaveBeenCalled();
   });
 
-  it('does not switch to AGI Cloud when the deletion switch prompt is cancelled', async () => {
+  it('deletes the account from Local Mode without switching to AGI Cloud', async () => {
     mockAppMode = 'local';
     const screen = render(<CloudAccountScreen />);
     await act(async () => {
       await Promise.resolve();
     });
+    fireEvent.press(screen.getByLabelText('Check deletion status'));
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
 
-    fireEvent.press(screen.getByLabelText('Deletion is managed in AGI Cloud. Switch to Cloud'));
-    const alertCall = (Alert.alert as jest.Mock).mock.calls.findLast(
-      ([title]) => title === 'Switch to AGI Cloud',
-    );
-    const buttons = alertCall?.[2] as Array<{ text: string; style?: string }>;
+    fireEvent.press(screen.getByLabelText('Delete Account'));
+    await act(async () => {
+      deletionAlert().confirm();
+      await Promise.resolve();
+    });
 
-    expect(buttons[0]).toEqual({ text: 'Cancel', style: 'cancel' });
+    expect(mockDeleteAccount).toHaveBeenCalledWith('/api/user/delete-account', {
+      headers: {},
+      accountEpoch: expect.objectContaining({ ownerId: 'account-a' }),
+    });
     expect(mockSetAppMode).not.toHaveBeenCalled();
-    expect(mockGetDeletionStatus).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalledWith(
+      'Switch to AGI Cloud',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('cancels a pending deletion from Local Mode without switching to AGI Cloud', async () => {
+    mockAppMode = 'local';
+    mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
+    const screen = render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.press(screen.getByLabelText('Check deletion status'));
+    await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    await act(async () => {
+      deletionAlert('Cancel account deletion?').confirm();
+      await Promise.resolve();
+    });
+
+    expect(mockCancelDeletion).toHaveBeenCalledWith(
+      '/api/user/delete-account/cancel-schedule',
+      expect.anything(),
+      expect.objectContaining({ accountEpoch: expect.objectContaining({ ownerId: 'account-a' }) }),
+    );
+    expect(mockSetAppMode).not.toHaveBeenCalled();
   });
 
   it('prompts users to export Cloud data before account deletion', async () => {

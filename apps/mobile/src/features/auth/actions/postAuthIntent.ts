@@ -28,6 +28,7 @@ export function applyPostAuthIntentAfterSignIn(
   }
 
   useChatAppModeStore.getState().setAppMode('cloud');
+  if (useChatAppModeStore.getState().appMode !== 'cloud') return true;
   useModelStore.getState().restoreNewChatModel();
   const { selectedModel } = useModelStore.getState();
   if (!isCloudManagedModelId(selectedModel) && !isAutoMode(selectedModel)) {

@@ -1,5 +1,6 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
@@ -8,11 +9,13 @@ jest.mock('@/src/features/chat/store/appModeStore', () => ({
 }));
 
 const mockIsEnabled = jest.fn(() => false);
+const mockEnable = jest.fn();
+const mockDisable = jest.fn();
 jest.mock('../src/features/siri/askIntentToken', () => ({
   askFromSiriSupported: () => true,
   isAskFromSiriEnabled: () => mockIsEnabled(),
-  enableAskFromSiri: jest.fn(),
-  disableAskFromSiri: jest.fn(),
+  enableAskFromSiri: () => mockEnable(),
+  disableAskFromSiri: () => mockDisable(),
 }));
 
 jest.mock('@/services/userMessage', () => ({
@@ -47,12 +50,52 @@ jest.mock('@/src/features/settings/Common', () => {
   };
 });
 
+import { EgressBlockedError } from '../lib/egressGuard';
+import { CloudProviderConsentRequiredError } from '../services/llmGate';
 import { AskFromSiriSetting } from '../src/features/siri/AskFromSiriSetting';
 
 describe('AskFromSiriSetting', () => {
   beforeEach(() => {
     mockAppMode = 'cloud';
     mockIsEnabled.mockReturnValue(false);
+    mockEnable.mockReset();
+    mockDisable.mockReset();
+  });
+
+  async function turnOn(screen: ReturnType<typeof render>) {
+    await act(async () => {
+      fireEvent(screen.getByTestId('settings-ask-from-siri'), 'valueChange', true);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
+  it('stays off without an error when the person does not allow sharing with AI providers', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockEnable.mockRejectedValue(new CloudProviderConsentRequiredError());
+    const screen = render(<AskFromSiriSetting />);
+
+    await turnOn(screen);
+
+    expect(mockEnable).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(false);
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('still explains any other failure to turn on', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockEnable.mockRejectedValue(new Error('offline'));
+    const screen = render(<AskFromSiriSetting />);
+
+    await turnOn(screen);
+
+    expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(false);
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Ask from Siri was not turned on',
+      'Check your connection and try again.',
+    );
+    alertSpy.mockRestore();
   });
 
   it('can be switched on in AGI Cloud', () => {
@@ -71,5 +114,28 @@ describe('AskFromSiriSetting', () => {
 
     expect(screen.getByTestId('settings-ask-from-siri').props.disabled).toBe(true);
     expect(screen.getByText('Needs AGI Cloud. Switch to Cloud mode to turn it on.')).toBeTruthy();
+  });
+
+  it('can be turned off in Local mode while it is on, and needs no connection to AGI Cloud for it', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockAppMode = 'local';
+    mockIsEnabled.mockReturnValue(true);
+    mockDisable.mockImplementation(async () => {
+      mockIsEnabled.mockReturnValue(false);
+      throw new EgressBlockedError('agiworkforce.com');
+    });
+    const screen = render(<AskFromSiriSetting />);
+    expect(screen.getByTestId('settings-ask-from-siri').props.disabled).toBeFalsy();
+
+    await act(async () => {
+      fireEvent(screen.getByTestId('settings-ask-from-siri'), 'valueChange', false);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockDisable).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('settings-ask-from-siri').props.value).toBe(false);
+    expect(alertSpy).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
   });
 });

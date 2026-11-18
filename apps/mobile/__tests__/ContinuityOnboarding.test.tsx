@@ -83,6 +83,7 @@ import {
 } from '../src/features/continuity/continuity-onboarding';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import * as cloudModeDoor from '../src/features/chat/store/cloudModeDoor';
 import { useTierStore } from '../src/features/billing/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatStore } from '../stores/chatStore';
@@ -207,6 +208,34 @@ describe('Mobile cross-device continuity onboarding', () => {
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
     expect(useChatStore.getState().workMode).toBe('agiwork');
     expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+  });
+
+  it('chooses Work only once Cloud is entered, when the provider question is still open', () => {
+    useTierStore.setState({ tier: 'pro' });
+    useChatAppModeStore.setState({ appMode: 'local' });
+    let enterWhenAllowed: (() => void) | undefined;
+    const entry = jest
+      .spyOn(cloudModeDoor, 'enterCloudMode')
+      .mockImplementationOnce((onEntered) => {
+        enterWhenAllowed = onEntered;
+        return false;
+      });
+    try {
+      const { getByLabelText } = render(<ContinuityOnboardingScreen />);
+
+      fireEvent.press(getByLabelText('Start a Managed Cloud task'));
+
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
+      expect(useChatStore.getState().workMode).toBe('chat');
+      expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+      act(() => {
+        useChatAppModeStore.setState({ appMode: 'cloud' });
+        enterWhenAllowed?.();
+      });
+      expect(useChatStore.getState().workMode).toBe('agiwork');
+    } finally {
+      entry.mockRestore();
+    }
   });
 
   it('keeps the Chat composer while Cloud access is still locked', () => {

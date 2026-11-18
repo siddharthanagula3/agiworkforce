@@ -1,5 +1,7 @@
 import { ApiPaywallError } from '@/services/api';
 import { CLOUD_SIGN_IN_MESSAGE } from '@/services/apiErrors';
+import { CloudProviderConsentRequiredError } from '@/services/llmGate';
+import { sharingWithProvidersAnswer } from './mediaGenerationConsent';
 import {
   MediaGenerationAdmissionError,
   MEDIA_USAGE_LIMIT_MESSAGE,
@@ -64,10 +66,11 @@ export interface VideoGenerationTurnDependencies {
       shouldCancel?: () => boolean;
     },
   ) => Promise<GeneratedVideo>;
+  sharingAllowed?: () => boolean | Promise<boolean>;
 }
 
 export type VideoGenerationTurnOutcome = {
-  status: 'completed' | 'failed' | 'paywall' | 'cancelled';
+  status: 'completed' | 'failed' | 'paywall' | 'cancelled' | 'declined';
   assistantMessageId: string | null;
 };
 
@@ -79,6 +82,7 @@ export function clearCloudVideoGenerationState(): void {
 
 const defaultDependencies: VideoGenerationTurnDependencies = {
   generate: generateVideo,
+  sharingAllowed: sharingWithProvidersAnswer,
 };
 
 export async function runVideoGenerationTurn(
@@ -101,6 +105,18 @@ export async function runVideoGenerationTurn(
   const generation = cloudVideoGeneration;
   const isAccountCurrent = () =>
     generation === cloudVideoGeneration && isCloudAccountEpochCurrent(accountEpoch);
+  if (dependencies.sharingAllowed) {
+    let allowed: boolean;
+    try {
+      const answer = dependencies.sharingAllowed();
+      allowed = typeof answer === 'boolean' ? answer : await answer;
+    } catch (error) {
+      input.onUnexpectedError?.(error);
+      return { status: 'failed', assistantMessageId: null };
+    }
+    if (!allowed) return { status: 'declined', assistantMessageId: null };
+    if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId: null };
+  }
   const assistantMessageId = input.begin(
     input.conversationId,
     input.displayText,
@@ -147,6 +163,10 @@ export async function runVideoGenerationTurn(
   } catch (error) {
     if (!isAccountCurrent() || isStopRequested())
       return { status: 'cancelled', assistantMessageId };
+    if (error instanceof CloudProviderConsentRequiredError) {
+      input.remove(input.conversationId, assistantMessageId);
+      return { status: 'declined', assistantMessageId: null };
+    }
     if (error instanceof ApiPaywallError) {
       input.remove(input.conversationId, assistantMessageId);
       input.onPaywall(error);

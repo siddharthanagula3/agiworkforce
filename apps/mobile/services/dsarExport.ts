@@ -423,6 +423,9 @@ export async function exportAllUserData(
 }
 
 export async function wipeAllLocalData(options: WipeAllLocalDataOptions = {}): Promise<void> {
+  const { withdrawSharingWithProviders } =
+    await import('@/src/features/settings/cloud-privacy/CloudProviderSharingGroup');
+  await withdrawSharingWithProviders('this-device');
   const { useAuthStore } = await import('@/src/features/auth/store');
   await useAuthStore.getState().signOutAllAccounts();
 

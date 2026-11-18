@@ -88,6 +88,7 @@ jest.mock('@/src/features/chat/components/StyleSelector', () => {
 
 interface MockMessageListProps {
   onQuoteReply: (message: unknown) => void;
+  onFollowUp?: (prompt: string) => void;
 }
 let mockMessageListProps = {} as MockMessageListProps;
 jest.mock('@/src/features/chat/components/MessageList', () => {
@@ -138,6 +139,30 @@ jest.mock('@/src/features/chat/actions/resolveMobileImageGenerationRequest', () 
   };
 });
 
+let mockVideoRequest: unknown = null;
+jest.mock('@/src/features/chat/actions/resolveMobileVideoGenerationRequest', () => {
+  const actual = jest.requireActual(
+    '@/src/features/chat/actions/resolveMobileVideoGenerationRequest',
+  );
+  return {
+    ...actual,
+    resolveMobileVideoGenerationRequest: (...args: unknown[]) =>
+      mockVideoRequest ?? actual.resolveMobileVideoGenerationRequest(...args),
+  };
+});
+
+const mockRunVideoGenerationTurn = jest.fn();
+jest.mock('@/src/features/chat/actions/runVideoGenerationTurn', () => ({
+  ...jest.requireActual('@/src/features/chat/actions/runVideoGenerationTurn'),
+  runVideoGenerationTurn: (...args: unknown[]) => mockRunVideoGenerationTurn(...args),
+}));
+
+const mockEnsureCloudSendConsent = jest.fn();
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: () => mockEnsureCloudSendConsent(),
+}));
+
 const mockRunImageGenerationTurn = jest.fn();
 jest.mock('@/src/features/chat/actions/runImageGenerationTurn', () => ({
   ...jest.requireActual('@/src/features/chat/actions/runImageGenerationTurn'),
@@ -161,6 +186,23 @@ import {
   useSystemModelSession,
 } from '../src/features/model-picker/systemModelAvailability';
 import { DEFAULT_LOCAL_MODEL_ID, LOCAL_MODEL_LIST } from '../src/features/model-picker/service';
+import { CloudProviderConsentDeclinedError } from '../services/llmGate';
+import { mediaGenerationFailureMessage } from '../src/features/chat/actions/mediaGenerationError';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+  invalidateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
+import { useAuthStore } from '../src/features/auth/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { installCloudModeDoor } from '../src/features/chat/store/cloudModeDoor';
+import {
+  CLOUD_PROVIDER_CONSENT_ALLOW_LABEL,
+  CLOUD_PROVIDER_CONSENT_DECLINE_LABEL,
+  CLOUD_PROVIDER_SHARING_LABEL,
+  ensureCloudProviderConsent,
+  withdrawCloudProviderConsent,
+} from '../services/providerConsent';
 
 const SEND_FAILED = 'Message could not be sent. Please try again.';
 const INITIAL_TIER = useTierStore.getState().tier;
@@ -193,6 +235,7 @@ function seedThread(messages: unknown[] = []): void {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockEnsureCloudSendConsent.mockResolvedValue(undefined);
   mockComposerProps = {} as MockComposerProps;
   mockMessageListProps = {} as MockMessageListProps;
   useTierStore.setState({ tier: INITIAL_TIER });
@@ -527,5 +570,207 @@ describe('a message Reduce sensitive content refuses inside a chat', () => {
       expect.objectContaining({ conversationId: 'thread-1', prompt: 'A lighthouse at dawn' }),
     );
     expect(alertSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('a picture or video asked for inside a chat before sharing with AI providers is allowed', () => {
+  let alertSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockRunImageGenerationTurn.mockImplementation(async (input: { onStarted?: () => void }) => {
+      input.onStarted?.();
+      return { status: 'completed', assistantMessageId: 'answer-1' };
+    });
+    mockRunVideoGenerationTurn.mockImplementation(async (input: { onStarted?: () => void }) => {
+      input.onStarted?.();
+      return { status: 'completed', assistantMessageId: 'answer-1' };
+    });
+  });
+
+  afterEach(() => {
+    mockImageRequest = null;
+    mockVideoRequest = null;
+    alertSpy.mockRestore();
+  });
+
+  function readyImage(prompt: string) {
+    mockImageRequest = { status: 'ready', prompt, model: 'fixture-image-model', ownerId: 'user-1' };
+  }
+
+  function readyVideo(prompt: string) {
+    mockVideoRequest = { status: 'ready', prompt, model: 'fixture-video-model', ownerId: 'user-1' };
+  }
+
+  async function send(text: string): Promise<unknown> {
+    let accepted: unknown;
+    await act(async () => {
+      accepted = await mockComposerProps.onSend(text);
+    });
+    return accepted;
+  }
+
+  it.each([
+    ['picture', readyImage, mockRunImageGenerationTurn],
+    ['video', readyVideo, mockRunVideoGenerationTurn],
+  ] as const)(
+    'makes no %s, shows no failure and leaves the words in the composer when the person says Not now',
+    async (_kind, ready, run) => {
+      mockEnsureCloudSendConsent.mockRejectedValue(new CloudProviderConsentDeclinedError());
+      seedThread([QUESTION]);
+      ready('A lighthouse at dawn');
+      render(<ChatScreen />);
+
+      const accepted = await send('A lighthouse at dawn');
+
+      expect(mockEnsureCloudSendConsent).toHaveBeenCalledTimes(1);
+      expect(accepted).toBe(false);
+      expect(run).not.toHaveBeenCalled();
+      expect(useChatExecutionStore.getState().error).toBeNull();
+      expect(useChatStore.getState().messages['thread-1']).toEqual([QUESTION]);
+      expect(alertSpy).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['picture', readyImage, 'image', mockRunImageGenerationTurn],
+    ['video', readyVideo, 'video', mockRunVideoGenerationTurn],
+  ] as const)(
+    'says the %s could not be made when the sharing question fails, from the composer and from a follow-up',
+    async (_kind, ready, media, run) => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      mockEnsureCloudSendConsent.mockRejectedValue(
+        new Error('The provider list could not be opened'),
+      );
+      seedThread([QUESTION]);
+      ready('A lighthouse at dawn');
+      render(<ChatScreen />);
+
+      try {
+        const accepted = await send('A lighthouse at dawn');
+
+        expect(accepted).toBe(false);
+        expect(useChatExecutionStore.getState().error).toBe(mediaGenerationFailureMessage(media));
+
+        useChatExecutionStore.setState({ error: null, errorConversationId: null });
+        await act(async () => {
+          mockMessageListProps.onFollowUp?.('A lighthouse at dawn');
+        });
+
+        expect(useChatExecutionStore.getState().error).toBe(mediaGenerationFailureMessage(media));
+        expect(run).not.toHaveBeenCalled();
+        expect(alertSpy).not.toHaveBeenCalled();
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
+
+  it.each([
+    ['picture', readyImage, mockRunImageGenerationTurn],
+    ['video', readyVideo, mockRunVideoGenerationTurn],
+  ] as const)('makes the %s once sharing is allowed', async (_kind, ready, run) => {
+    seedThread([QUESTION]);
+    ready('A lighthouse at dawn');
+    render(<ChatScreen />);
+
+    const accepted = await send('A lighthouse at dawn');
+
+    expect(mockEnsureCloudSendConsent).toHaveBeenCalledTimes(1);
+    expect(accepted).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'thread-1', prompt: 'A lighthouse at dawn' }),
+    );
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('a send in a Cloud chat this account has not allowed to share with AI providers', () => {
+  let uninstallDoor: () => void;
+  let alert: jest.SpyInstance;
+
+  beforeEach(() => {
+    __resetCloudAccountSessionForTests();
+    activateCloudAccount('send-owner');
+    useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'send-owner' });
+    withdrawCloudProviderConsent();
+    useChatAppModeStore.setState({ appMode: 'local' });
+    uninstallDoor = installCloudModeDoor();
+    useTierStore.setState({ tier: 'pro' });
+    useChatStore.setState({
+      conversations: [
+        {
+          id: 'thread-1',
+          title: 'Quarterly plan',
+          createdAt: '2026-06-20T00:00:00.000Z',
+          updatedAt: '2026-06-20T00:00:00.000Z',
+          messageCount: 1,
+          pinned: false,
+          executionMode: 'cloud',
+        },
+      ],
+      messages: { 'thread-1': [QUESTION] },
+    } as never);
+    alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  afterEach(async () => {
+    uninstallDoor();
+    alert.mockRestore();
+    useAuthStore.setState({ isClerkSignedIn: false, clerkUserId: null });
+    useChatAppModeStore.setState({ appMode: 'local' });
+    invalidateCloudAccount();
+    __resetCloudAccountSessionForTests();
+    await ensureCloudProviderConsent();
+  });
+
+  async function settle(): Promise<void> {
+    await act(async () => {
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+  }
+
+  function sharingQuestions(): unknown[][] {
+    return alert.mock.calls.filter(([title]) => title === `${CLOUD_PROVIDER_SHARING_LABEL}?`);
+  }
+
+  async function answerLastQuestion(label: string): Promise<void> {
+    const questions = sharingQuestions();
+    const buttons = questions[questions.length - 1]?.[2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === label)?.onPress?.();
+    await settle();
+  }
+
+  async function sendFromComposer(text: string): Promise<unknown> {
+    let accepted: unknown;
+    await act(async () => {
+      accepted = await mockComposerProps.onSend(text);
+    });
+    await settle();
+    return accepted;
+  }
+
+  it('asks again on Send after Not now, keeps the draft, and sends once AGI Cloud is open', async () => {
+    const sendMessage = jest.fn().mockResolvedValue(true);
+    useChatExecutionStore.setState({ sendMessage });
+    render(<ChatScreen />);
+    await settle();
+    expect(sharingQuestions()).toHaveLength(1);
+    await answerLastQuestion(CLOUD_PROVIDER_CONSENT_DECLINE_LABEL);
+
+    expect(await sendFromComposer('Next steps?')).toBe(false);
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(sharingQuestions()).toHaveLength(2);
+
+    await answerLastQuestion(CLOUD_PROVIDER_CONSENT_ALLOW_LABEL);
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+
+    await sendFromComposer('Next steps?');
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage.mock.calls[0]?.[1]).toBe('Next steps?');
   });
 });

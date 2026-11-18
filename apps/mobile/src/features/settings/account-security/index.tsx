@@ -68,7 +68,9 @@ import {
   type SignInKey,
   type SignInMethods,
 } from './service';
+import { appSessionLabel, isAppSession } from '@agiworkforce/types';
 import { toUserMessage } from '@/services/userMessage';
+import { appLockWording } from '@/src/features/auth/services/appLockWording';
 
 const AGI_ACCOUNT_SIGN_IN = 'AGI account';
 
@@ -112,9 +114,11 @@ function formatLastActive(value: string | null): string {
 }
 
 function formatSessionLabel(row: AccountSessionRow): string {
-  const parts = [row.device, row.browser, row.location].filter((part): part is string =>
-    Boolean(part),
-  );
+  const parts = (
+    isAppSession(row)
+      ? [appSessionLabel(row), row.location]
+      : [row.device, row.browser, row.location]
+  ).filter((part): part is string => Boolean(part));
   return row.isCurrent ? `${parts.join(' · ')} (this device)` : parts.join(' · ');
 }
 
@@ -724,7 +728,7 @@ export default function AccountSecurityScreen() {
                 <SettingsRow
                   key={row.id}
                   label={formatSessionLabel(row)}
-                  icon={row.isCurrent ? Smartphone : Laptop}
+                  icon={row.isCurrent || isAppSession(row) ? Smartphone : Laptop}
                   value={
                     revokingSessionId === row.id
                       ? 'Signing out…'
@@ -766,7 +770,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Device protection"
-        body="App Lock uses this device’s Face ID, Touch ID or passcode."
+        body={appLockWording().deviceProtection}
         icon={Fingerprint}
       />
       <SettingsGroup>

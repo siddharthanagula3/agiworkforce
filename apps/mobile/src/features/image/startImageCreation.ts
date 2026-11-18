@@ -28,6 +28,7 @@ import {
   MediaGenerationAdmissionError,
   mediaGenerationFailureMessage,
 } from '@/src/features/chat/actions/mediaGenerationError';
+import { sharingWithProvidersAllowed } from '@/src/features/chat/actions/mediaGenerationConsent';
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import type { MediaMode } from '@/stores/chat/chatViewStore';
 
@@ -40,7 +41,9 @@ const CHAT_NOT_STARTED = 'Something went wrong. Please try again.';
 const CONVERSATION_TITLE_LENGTH = 40;
 
 export type ImageCreationResult =
-  { status: 'started'; conversationId: string } | { status: 'blocked'; message: string };
+  | { status: 'started'; conversationId: string }
+  | { status: 'blocked'; message: string }
+  | { status: 'declined'; message: null };
 
 export function imageConversationTitle(prompt: string): string {
   return prompt.length > CONVERSATION_TITLE_LENGTH
@@ -51,6 +54,8 @@ export function imageConversationTitle(prompt: string): string {
 function blocked(message: string): ImageCreationResult {
   return { status: 'blocked', message };
 }
+
+export const SHARING_DECLINED: ImageCreationResult = { status: 'declined', message: null };
 
 function restoreMediaMode(previous: MediaMode): void {
   const view = useChatViewStore.getState();
@@ -84,6 +89,8 @@ async function startFreeImage(
   if (!isCloudAccountEpochCurrent(account)) return blocked(ACCOUNT_CHANGED);
   if (offer.status === 'unknown') return blocked(FREE_IMAGE_OFFER_UNKNOWN_ALERT.message);
   if (offer.status !== 'offered') return blocked(IMAGE_CREATION_NOT_ON_ACCOUNT);
+  if (!(await sharingWithProvidersAllowed())) return SHARING_DECLINED;
+  if (!isCloudAccountEpochCurrent(account)) return blocked(ACCOUNT_CHANGED);
 
   const created = await createImageConversation(imageConversationTitle(offer.prompt));
   if ('message' in created) return blocked(created.message);
@@ -149,12 +156,20 @@ export async function startImageCreation({
 
   if (request.status !== 'ready') {
     const result = await refusedRequestResult(request, open);
-    if (result.status === 'blocked') restoreMediaMode(previousMode);
+    if (result.status !== 'started') restoreMediaMode(previousMode);
     return result;
   }
 
   const account = captureCloudAccountEpoch();
   if (!account || account.ownerId !== clerkUserId) {
+    restoreMediaMode(previousMode);
+    return blocked(ACCOUNT_CHANGED);
+  }
+  if (!(await sharingWithProvidersAllowed())) {
+    restoreMediaMode(previousMode);
+    return SHARING_DECLINED;
+  }
+  if (!isCloudAccountEpochCurrent(account)) {
     restoreMediaMode(previousMode);
     return blocked(ACCOUNT_CHANGED);
   }

@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
+import { ensureCloudSendConsent } from '@/services/llmGate';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
 import { isImageGenerationStopped, rememberStoppedImageGeneration } from './imageGenerationStops';
@@ -61,6 +62,7 @@ export async function generateImage(
     throw new Error('Image generation requires a non-empty prompt');
   }
 
+  await ensureCloudSendConsent();
   const operationId = options.operationId ?? Crypto.randomUUID();
   if (isImageGenerationStopped(operationId)) throw new ImageGenerationStoppedError();
   const submitted = await api.post<ImageGenResponse>(

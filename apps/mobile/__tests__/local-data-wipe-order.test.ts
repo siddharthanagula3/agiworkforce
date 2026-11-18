@@ -72,6 +72,10 @@ jest.mock('expo-file-system/legacy', () => ({
   EncodingType: { UTF8: 'utf8' },
 }));
 jest.mock('../services/dsarTemporaryFile', () => ({ withDsarTemporaryFile: jest.fn() }));
+const mockWithdrawSharing = jest.fn();
+jest.mock('../src/features/settings/cloud-privacy/CloudProviderSharingGroup', () => ({
+  withdrawSharingWithProviders: (...args: unknown[]) => mockWithdrawSharing(...args),
+}));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock('expo-constants', () => ({ __esModule: true, default: {} }));
 jest.mock('../storage/conversations', () => ({ listConversations: jest.fn() }));
@@ -203,6 +207,32 @@ describe('local wipe cleanup ordering', () => {
       );
     },
   );
+
+  it('withdraws sharing with AI providers before it ends any account', async () => {
+    await wipeAllLocalData();
+
+    expect(mockWithdrawSharing).toHaveBeenCalledTimes(1);
+    expect(mockWithdrawSharing).toHaveBeenCalledWith('this-device');
+    expect(mockWithdrawSharing.mock.invocationCallOrder[0]).toBeLessThan(
+      mockClearCloudState.mock.invocationCallOrder[0]!,
+    );
+    expect(mockWithdrawSharing.mock.invocationCallOrder[0]).toBeLessThan(
+      mockClearAuthSession.mock.invocationCallOrder[0]!,
+    );
+    expect(mockWithdrawSharing.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSecureFetch.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('deletes nothing when the withdrawal cannot be recorded', async () => {
+    mockWithdrawSharing.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    await expect(wipeAllLocalData()).rejects.toThrow('storage unavailable');
+
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockClearMmkv).not.toHaveBeenCalled();
+  });
 
   it('waits for cleanup completion before deleting persistent data', async () => {
     const response = deferred<{ ok: boolean }>();

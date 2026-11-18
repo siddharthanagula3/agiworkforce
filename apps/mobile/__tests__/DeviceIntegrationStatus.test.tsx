@@ -2,7 +2,10 @@
 import React from 'react';
 import {
   Alert,
+  AppState,
+  Platform,
   StyleSheet,
+  type AppStateStatus,
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
@@ -90,11 +93,16 @@ jest.mock('expo-notifications', () => ({
 
 const mockRequestCalendar = jest.fn();
 const mockRequestNotifications = jest.fn();
+const mockRegistryRequestNotifications = jest.fn();
 jest.mock('@/src/features/settings/permissions/registry', () => ({
   PERMISSION_REGISTRY: {
     calendar: { requestPermission: () => mockRequestCalendar() },
-    notifications: { requestPermission: () => mockRequestNotifications() },
+    notifications: { requestPermission: () => mockRegistryRequestNotifications() },
   },
+}));
+
+jest.mock('@/services/notifications', () => ({
+  enablePushNotifications: () => mockRequestNotifications(),
 }));
 
 import { TextScaleContext } from '@/components/ui/textScale';
@@ -120,6 +128,7 @@ describe('DeviceIntegrationStatus', () => {
 
     expect(mockRequestCalendar).not.toHaveBeenCalled();
     expect(mockRequestNotifications).not.toHaveBeenCalled();
+    expect(mockRegistryRequestNotifications).not.toHaveBeenCalled();
   });
 
   it('asks the system for an undetermined permission instead of pointing at Settings', async () => {
@@ -133,6 +142,7 @@ describe('DeviceIntegrationStatus', () => {
     });
 
     expect(mockRequestNotifications).toHaveBeenCalledTimes(1);
+    expect(mockRegistryRequestNotifications).not.toHaveBeenCalled();
     expect(mockRequestCalendar).not.toHaveBeenCalled();
     expect(alert).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByLabelText('Notifications: Active')).toBeTruthy());
@@ -165,6 +175,54 @@ describe('DeviceIntegrationStatus', () => {
     alert.mockRestore();
   });
 
+  describe('on Android 13 and later', () => {
+    let platform: jest.ReplaceProperty<'OS', typeof Platform.OS>;
+
+    beforeEach(() => {
+      platform = jest.replaceProperty(Platform, 'OS', 'android');
+    });
+
+    afterEach(() => {
+      platform.restore();
+    });
+
+    it('asks the system for a notification permission it has never asked, instead of pointing at Settings', async () => {
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      mockGetNotificationPermissions.mockResolvedValue({
+        status: 'denied',
+        canAskAgain: true,
+        granted: false,
+      });
+      const screen = render(<DeviceIntegrationStatus />);
+      await screen.findByText('Device Access');
+
+      await act(async () => {
+        fireEvent.press(screen.getByLabelText('Notifications: Inactive'));
+      });
+
+      expect(mockRequestNotifications).toHaveBeenCalledTimes(1);
+      expect(alert).not.toHaveBeenCalled();
+      alert.mockRestore();
+    });
+
+    it('offers Settings once the system will no longer ask', async () => {
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      mockGetNotificationPermissions.mockResolvedValue({
+        status: 'denied',
+        canAskAgain: false,
+        granted: false,
+      });
+      const screen = render(<DeviceIntegrationStatus />);
+      await screen.findByText('Device Access');
+
+      fireEvent.press(screen.getByLabelText('Notifications: Needs Permission'));
+
+      expect(mockRequestNotifications).not.toHaveBeenCalled();
+      expect(alert).toHaveBeenCalledTimes(1);
+      alert.mockRestore();
+    });
+  });
+
   it('re-reads permission state when the screen reports a change', async () => {
     const screen = render(<DeviceIntegrationStatus refreshKey="undetermined" />);
     await screen.findByText('Device Access');
@@ -174,6 +232,33 @@ describe('DeviceIntegrationStatus', () => {
     screen.rerender(<DeviceIntegrationStatus refreshKey="granted" />);
 
     await waitFor(() => expect(screen.getByLabelText(/Calendar: Active/)).toBeTruthy());
+  });
+
+  it('re-reads permission state when the app comes back from system Settings', async () => {
+    const addListener = AppState.addEventListener as unknown as jest.Mock;
+    const screen = render(<DeviceIntegrationStatus />);
+    await screen.findByText('Device Access');
+    expect(screen.getByLabelText(/Calendar: Inactive/)).toBeTruthy();
+    const emit = async (state: AppStateStatus) => {
+      await act(async () => {
+        for (const [type, listener] of addListener.mock.calls) {
+          if (type === 'change') (listener as (next: AppStateStatus) => void)(state);
+        }
+      });
+    };
+
+    mockGetCalendarStatus.mockResolvedValue('granted');
+    await emit('background');
+    expect(screen.getByLabelText(/Calendar: Inactive/)).toBeTruthy();
+    await emit('active');
+
+    await waitFor(() => expect(screen.getByLabelText(/Calendar: Active/)).toBeTruthy());
+    const subscriptions = addListener.mock.results.map(
+      (result) => result.value as { remove: jest.Mock },
+    );
+    expect(subscriptions.length).toBeGreaterThan(0);
+    screen.unmount();
+    for (const subscription of subscriptions) expect(subscription.remove).toHaveBeenCalled();
   });
 
   describe.each([1, 3.571])('at text scale %s', (scale) => {

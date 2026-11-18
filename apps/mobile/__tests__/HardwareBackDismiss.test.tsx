@@ -1,8 +1,10 @@
-import { BackHandler } from 'react-native';
+import { BackHandler, Platform } from 'react-native';
 import { act, renderHook } from '@testing-library/react-native';
+import type BottomSheet from '@gorhom/bottom-sheet';
 import {
   useBottomSheetPresence,
   useHardwareBackDismiss,
+  useSystemScreenSheet,
 } from '@/src/shared/hooks/useHardwareBackDismiss';
 
 type BackListener = () => boolean | null | undefined;
@@ -149,5 +151,172 @@ describe('useBottomSheetPresence', () => {
     rerender({});
 
     expect(result.current[1]).toBe(first);
+  });
+});
+
+describe('useSystemScreenSheet', () => {
+  const originalOS = Platform.OS;
+  function setPlatform(os: 'ios' | 'android') {
+    Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+  }
+
+  function sheetMethods(): BottomSheet {
+    return {
+      snapToIndex: jest.fn(),
+      snapToPosition: jest.fn(),
+      expand: jest.fn(),
+      collapse: jest.fn(),
+      close: jest.fn(),
+      forceClose: jest.fn(),
+    };
+  }
+
+  function renderSheetHook() {
+    const inner = sheetMethods();
+    const sheetRef: { current: BottomSheet | null } = { current: inner };
+    const forwardedRef: { current: BottomSheet | null } = { current: null };
+    const closeSheet = jest.fn();
+    const onUnmount = jest.fn();
+    const hook = renderHook(() =>
+      useSystemScreenSheet({ forwardedRef, sheetRef, closeSheet, onUnmount }),
+    );
+    return { hook, inner, sheetRef, forwardedRef, closeSheet, onUnmount };
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+  });
+
+  it('on Android unmounts the sheet without a close animation and launches a frame later', () => {
+    setPlatform('android');
+    const { hook, closeSheet, onUnmount } = renderSheetHook();
+    const launch = jest.fn();
+    expect(hook.result.current.mounted).toBe(true);
+
+    act(() => hook.result.current.launch(launch));
+
+    expect(hook.result.current.mounted).toBe(false);
+    expect(onUnmount).toHaveBeenCalledTimes(1);
+    expect(closeSheet).not.toHaveBeenCalled();
+    expect(launch).not.toHaveBeenCalled();
+
+    act(() => jest.runOnlyPendingTimers());
+    expect(launch).toHaveBeenCalledTimes(1);
+  });
+
+  it('on Android launches once for a second request in the same frame', () => {
+    setPlatform('android');
+    const { hook } = renderSheetHook();
+    const first = jest.fn();
+    const second = jest.fn();
+
+    act(() => {
+      hook.result.current.launch(first);
+      hook.result.current.launch(second);
+    });
+    act(() => jest.runOnlyPendingTimers());
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).not.toHaveBeenCalled();
+  });
+
+  it('on Android launches again after the first one ran', () => {
+    setPlatform('android');
+    const { hook, forwardedRef } = renderSheetHook();
+    const launch = jest.fn();
+
+    act(() => hook.result.current.launch(launch));
+    act(() => jest.runOnlyPendingTimers());
+    act(() => forwardedRef.current?.snapToIndex(0));
+    act(() => hook.result.current.launch(launch));
+    act(() => jest.runOnlyPendingTimers());
+
+    expect(launch).toHaveBeenCalledTimes(2);
+  });
+
+  it('mounts a fresh sheet open when it is asked to open after a launch', () => {
+    setPlatform('android');
+    const { hook, inner, sheetRef, forwardedRef } = renderSheetHook();
+    act(() => hook.result.current.launch(jest.fn()));
+    act(() => jest.runOnlyPendingTimers());
+    const unmountedGeneration = hook.result.current.generation;
+    sheetRef.current = null;
+
+    act(() => forwardedRef.current?.close());
+    act(() => forwardedRef.current?.snapToIndex(-1));
+    expect(hook.result.current.mounted).toBe(false);
+
+    act(() => forwardedRef.current?.snapToIndex(0));
+
+    expect(hook.result.current).toMatchObject({
+      mounted: true,
+      index: 0,
+      generation: unmountedGeneration,
+    });
+    expect(unmountedGeneration).toBeGreaterThan(0);
+    expect(inner.snapToIndex).not.toHaveBeenCalled();
+    expect(inner.close).not.toHaveBeenCalled();
+  });
+
+  it('keeps the sheet out while a launch waits for its frame, then opens it after', () => {
+    setPlatform('android');
+    const { hook, forwardedRef } = renderSheetHook();
+    const launch = jest.fn();
+    act(() => hook.result.current.launch(launch));
+
+    act(() => forwardedRef.current?.snapToIndex(0));
+    expect(hook.result.current.mounted).toBe(false);
+
+    act(() => jest.runOnlyPendingTimers());
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.mounted).toBe(false);
+
+    act(() => forwardedRef.current?.snapToIndex(0));
+    expect(hook.result.current).toMatchObject({ mounted: true, index: 0 });
+  });
+
+  it('passes every call to the sheet while it is mounted', () => {
+    setPlatform('android');
+    const { inner, forwardedRef } = renderSheetHook();
+
+    act(() => {
+      forwardedRef.current?.snapToIndex(0);
+      forwardedRef.current?.expand();
+      forwardedRef.current?.close();
+    });
+
+    expect(inner.snapToIndex).toHaveBeenCalledWith(0, undefined);
+    expect(inner.expand).toHaveBeenCalledTimes(1);
+    expect(inner.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a launch whose screen leaves before the frame', () => {
+    setPlatform('android');
+    const { hook } = renderSheetHook();
+    const launch = jest.fn();
+
+    act(() => hook.result.current.launch(launch));
+    hook.unmount();
+    act(() => jest.runOnlyPendingTimers());
+
+    expect(launch).not.toHaveBeenCalled();
+  });
+
+  it('on iOS closes the sheet and launches at once, keeping it mounted', () => {
+    setPlatform('ios');
+    const { hook, closeSheet, onUnmount } = renderSheetHook();
+    const launch = jest.fn();
+
+    act(() => hook.result.current.launch(launch));
+
+    expect(closeSheet).toHaveBeenCalledTimes(1);
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(onUnmount).not.toHaveBeenCalled();
+    expect(hook.result.current).toMatchObject({ mounted: true, index: -1, generation: 0 });
   });
 });

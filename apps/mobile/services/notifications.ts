@@ -24,6 +24,11 @@ import {
   postPushRegistration,
   stopPushPreferenceSync,
 } from './pushPreferenceSync';
+import {
+  toPushPermissionStatus,
+  trackPushPermissionRequest,
+  type PushPermissionStatus,
+} from './pushPermissionStatus';
 
 let _isSignedIn = false;
 export function setSignedIn(value: boolean): void {
@@ -134,7 +139,7 @@ export function setPushAccountContext(accountContext: PushNotificationAccountCon
   _accountContext = accountContext;
 }
 
-export type PushPermissionStatus = 'granted' | 'denied' | 'undetermined';
+export type { PushPermissionStatus };
 
 export type PushDeliveryStatus = PushPermissionStatus | 'unregistered';
 
@@ -143,15 +148,8 @@ export async function getPushDeliveryStatus(): Promise<PushDeliveryStatus> {
   return status === 'granted' && _registrationIssue ? 'unregistered' : status;
 }
 
-function toPushPermissionStatus(status: string): PushPermissionStatus {
-  if (status === 'granted') return 'granted';
-  if (status === 'undetermined') return 'undetermined';
-  return 'denied';
-}
-
 export async function getPushPermissionStatus(): Promise<PushPermissionStatus> {
-  const { status } = await Notifications.getPermissionsAsync();
-  return toPushPermissionStatus(status);
+  return toPushPermissionStatus(await Notifications.getPermissionsAsync());
 }
 
 // The OS prompt fires exactly once per install, so it is spent from an explicit
@@ -160,10 +158,11 @@ export async function enablePushNotifications(): Promise<PushDeliveryStatus> {
   const current = await getPushPermissionStatus();
   let status = current;
   if (status !== 'granted') {
-    const requested = await Notifications.requestPermissionsAsync({
-      ios: { allowAlert: true, allowBadge: true, allowSound: true },
-    });
-    status = toPushPermissionStatus(requested.status);
+    status = await trackPushPermissionRequest(() =>
+      Notifications.requestPermissionsAsync({
+        ios: { allowAlert: true, allowBadge: true, allowSound: true },
+      }),
+    );
   }
   if (status !== 'granted') return status;
 

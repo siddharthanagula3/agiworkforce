@@ -150,7 +150,18 @@ import { isAutoModeModelId } from '@agiworkforce/types';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
+  invalidateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
+import { useAuthStore } from '../src/features/auth/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { installCloudModeDoor } from '../src/features/chat/store/cloudModeDoor';
+import {
+  CLOUD_PROVIDER_CONSENT_DECLINE_LABEL,
+  CLOUD_PROVIDER_SHARING_LABEL,
+  ensureCloudProviderConsent,
+  recordCloudProviderConsent,
+  withdrawCloudProviderConsent,
+} from '../services/providerConsent';
 
 function refocusScreen(): void {
   act(() => {
@@ -663,6 +674,76 @@ describe('Thread header', () => {
       await settle();
 
       expect(mockReplace).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a Cloud chat this account has not allowed to share with AI providers', () => {
+    let uninstallDoor: () => void;
+    let alert: jest.SpyInstance;
+
+    beforeEach(() => {
+      __resetCloudAccountSessionForTests();
+      activateCloudAccount('header-owner');
+      useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'header-owner' });
+      withdrawCloudProviderConsent();
+      useChatAppModeStore.setState({ appMode: 'local' });
+      uninstallDoor = installCloudModeDoor();
+      useTierStore.setState({ tier: 'pro' });
+      seedThread({ executionMode: 'cloud' });
+      alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    });
+
+    afterEach(async () => {
+      uninstallDoor();
+      alert.mockRestore();
+      useAuthStore.setState({ isClerkSignedIn: false, clerkUserId: null });
+      useChatAppModeStore.setState({ appMode: 'local' });
+      invalidateCloudAccount();
+      __resetCloudAccountSessionForTests();
+      await ensureCloudProviderConsent();
+    });
+
+    async function settle(): Promise<void> {
+      await act(async () => {
+        for (let i = 0; i < 6; i += 1) await Promise.resolve();
+      });
+    }
+
+    function sharingQuestions(): unknown[] {
+      return alert.mock.calls.filter(([title]) => title === `${CLOUD_PROVIDER_SHARING_LABEL}?`);
+    }
+
+    it('asks once when opened and not again on focus or an update after Not now', async () => {
+      render(<ChatScreen />);
+      await settle();
+      expect(sharingQuestions()).toHaveLength(1);
+      const buttons = alert.mock.calls[0]?.[2] as Array<{ text: string; onPress?: () => void }>;
+      buttons.find((button) => button.text === CLOUD_PROVIDER_CONSENT_DECLINE_LABEL)?.onPress?.();
+      await settle();
+
+      blurScreen();
+      refocusScreen();
+      await settle();
+      act(() => seedThread({ executionMode: 'cloud', title: 'Quarterly plan, revised' }));
+      await settle();
+
+      expect(sharingQuestions()).toHaveLength(1);
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
+    });
+
+    it('does not ask on the way back after sharing was turned off in Settings', async () => {
+      recordCloudProviderConsent();
+      render(<ChatScreen />);
+      await settle();
+      expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+
+      blurScreen();
+      act(() => withdrawCloudProviderConsent());
+      refocusScreen();
+      await settle();
+
+      expect(sharingQuestions()).toHaveLength(0);
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
     });
   });
 });

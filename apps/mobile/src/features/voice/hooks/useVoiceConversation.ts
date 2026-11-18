@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { meteringToAmplitude } from '@agiworkforce/utils/voice';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceInput from '@/src/features/voice/services/voiceInput';
+import { isMicPermissionRequestPending } from '@/src/features/voice/services/micPermissionRequest';
 import {
   activeSpeechLanguage,
   autoListenEnabled,
@@ -57,6 +58,8 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
   const [audioLevel, setAudioLevel] = useState(0);
   const [transcriptPreview, setTranscriptPreview] = useState('');
 
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
   const activeRef = useRef(false);
   const autoListenRef = useRef(false);
   const voiceInputEnabledRef = useRef(voiceInputEnabled);
@@ -371,12 +374,22 @@ export function useVoiceConversation(options: UseVoiceConversationOptions) {
         return;
       }
       if (!optionsRef.current.enabled) return;
+      const awaitingPermission =
+        isMicPermissionRequestPending() &&
+        !captureRef.current?.capture &&
+        speechRef.current === null;
+      if (awaitingPermission) return;
+      const interrupted =
+        phaseRef.current !== 'idle' ||
+        captureRef.current !== null ||
+        turnInFlightRef.current !== null ||
+        speechRef.current !== null;
       activeRef.current = false;
       autoListenRef.current = false;
       pttHeldRef.current = false;
       setPhase('idle');
       setAudioLevel(0);
-      setTranscriptPreview('Voice paused when AGI left the foreground.');
+      if (interrupted) setTranscriptPreview('Voice paused when AGI left the foreground.');
       void endConversation();
     });
     return () => subscription.remove();

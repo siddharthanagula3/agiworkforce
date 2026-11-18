@@ -255,6 +255,7 @@ import { getDraft, setDraft } from '../src/features/chat/draftStore';
 import { useChatViewStore } from '../stores/chat/chatViewStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
+import { recordCloudProviderConsent } from '../services/providerConsent';
 
 const mockGenerateImage = generateImage as jest.Mock;
 const mockGetGeneratedImageUri = getGeneratedImageUri as jest.Mock;
@@ -267,6 +268,7 @@ describe('Chat tab new chat', () => {
     clearPostAuthIntent();
     __resetCloudAccountSessionForTests();
     activateCloudAccount('mobile-image-test-user');
+    recordCloudProviderConsent();
     mockChatInputOnSend = undefined;
     mockChatInputDraftProvenance = undefined;
     mockChatInputOnOpenCompare = undefined;
@@ -397,6 +399,24 @@ describe('Chat tab new chat', () => {
 
     const second = render(<ChatTabScreen />);
     expect(second.queryByTestId('voice-inline-bar')).toBeNull();
+  });
+
+  it('keeps voice open and shows one quiet notice instead of an alert when nothing was heard', async () => {
+    const { VoiceCaptureError } = jest.requireActual('@/src/features/voice/services/voiceInput');
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const toast = jest.spyOn(require('@/src/shared/components/Toast'), 'showToast');
+    mockStartCapture.mockRejectedValueOnce(
+      new VoiceCaptureError('recognition-error', 'No speech detected', 'no-speech'),
+    );
+    useLocalSettingsStore.setState({ startWithVoice: true });
+    const screen = render(<ChatTabScreen />);
+
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    expect(toast).toHaveBeenCalledWith("Didn't catch that. Say it again.");
+    expect(alert).not.toHaveBeenCalled();
+    expect(screen.getByTestId('voice-inline-bar')).toBeTruthy();
+    alert.mockRestore();
+    toast.mockRestore();
   });
 
   it('stays on the text composer at launch when Start with Voice is off', () => {
@@ -641,6 +661,59 @@ describe('Chat tab new chat', () => {
     });
     await waitFor(() => {
       expect(useChatAppModeStore.getState().appMode).toBe('local');
+    });
+  });
+
+  describe('a Work selection while Clerk has not answered', () => {
+    beforeEach(() => {
+      mockWorkMode = 'agiwork';
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useWaitlistStore.setState({ cloudUnlocked: false });
+      useAuthStore.setState({ isClerkLoaded: false, isClerkSignedIn: false, clerkUserId: null });
+    });
+
+    it('keeps Work through the wait and after Clerk confirms the same signed-in account', () => {
+      render(<ChatTabScreen />);
+      expect(mockSetWorkMode).not.toHaveBeenCalledWith('chat');
+
+      act(() => {
+        useWaitlistStore.setState({ cloudUnlocked: true });
+        useAuthStore.setState({
+          isClerkLoaded: true,
+          isClerkSignedIn: true,
+          clerkUserId: 'mobile-image-test-user',
+        });
+      });
+
+      expect(mockSetWorkMode).not.toHaveBeenCalledWith('chat');
+      expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    });
+
+    it('returns to Chat once Clerk answers signed out', () => {
+      render(<ChatTabScreen />);
+      expect(mockSetWorkMode).not.toHaveBeenCalledWith('chat');
+
+      act(() => {
+        useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
+      });
+
+      expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
+    });
+
+    it('returns to Chat at once in Local Mode', () => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+
+      render(<ChatTabScreen />);
+
+      expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
+    });
+
+    it('returns to Chat at once for a plan without Work', () => {
+      useTierStore.setState({ tier: 'free' });
+
+      render(<ChatTabScreen />);
+
+      expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
     });
   });
 

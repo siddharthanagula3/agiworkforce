@@ -19,7 +19,10 @@ import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
 import { LIVE_VOICES } from '@agiworkforce/types/live-voices';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAuthStore } from '@/src/features/auth/store';
-import { useHardwareBackDismiss } from '@/src/shared/hooks/useHardwareBackDismiss';
+import {
+  useHardwareBackDismiss,
+  useSystemScreenSheet,
+} from '@/src/shared/hooks/useHardwareBackDismiss';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { liveVoiceModeUnavailableReason } from '../services/liveVoiceAvailability';
 import { VOICE_PRESETS } from '../voicePresets';
@@ -131,13 +134,24 @@ export interface VoicePickerSheetProps {
   onDismiss: () => void;
 }
 
+const ignoreUnmount = (): void => undefined;
+
 export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerSheetProps) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
   const { contentWidth } = useResponsiveLayout();
   const [pageWidth, setPageWidth] = useState(() => contentColumnWidth('reading', contentWidth));
   const sheetRef = useRef<BottomSheet>(null);
-  useHardwareBackDismiss(visible, () => sheetRef.current?.close());
+  const sheetHandleRef = useRef<BottomSheet>(null);
+  const closeSheet = useCallback(() => sheetHandleRef.current?.close(), []);
+  useHardwareBackDismiss(visible, closeSheet);
+  const sheet = useSystemScreenSheet({
+    forwardedRef: sheetHandleRef,
+    sheetRef,
+    closeSheet,
+    onUnmount: ignoreUnmount,
+  });
+  const launchSystemScreen = sheet.launch;
   const [opened, setOpened] = useState(visible);
   if (visible && !opened) setOpened(true);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
@@ -180,12 +194,12 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
 
   useEffect(() => {
     if (!visible) {
-      sheetRef.current?.close();
+      sheetHandleRef.current?.close();
       return;
     }
     setIndex(initialIndex);
     listRef.current?.scrollToOffset({ offset: initialIndex * pageWidth, animated: false });
-    sheetRef.current?.snapToIndex(0);
+    sheetHandleRef.current?.snapToIndex(0);
   }, [visible, initialIndex, pageWidth]);
 
   const renderBackdrop = useCallback(
@@ -220,25 +234,37 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
   );
 
   const handleStart = useCallback(() => {
-    const choice = choices[index];
-    if (choice) {
-      if (live) setLiveVoice(choice.id);
-      else applyVoicePreset(choice.id, installedVoices);
-    }
-    if (hapticsEnabled) {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    }
-    onStart();
-  }, [choices, index, live, setLiveVoice, installedVoices, hapticsEnabled, onStart]);
+    launchSystemScreen(() => {
+      const choice = choices[index];
+      if (choice) {
+        if (live) setLiveVoice(choice.id);
+        else applyVoicePreset(choice.id, installedVoices);
+      }
+      if (hapticsEnabled) {
+        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      }
+      onStart();
+    });
+  }, [
+    launchSystemScreen,
+    choices,
+    index,
+    live,
+    setLiveVoice,
+    installedVoices,
+    hapticsEnabled,
+    onStart,
+  ]);
 
   const active = choices[index];
 
-  if (!opened) return null;
+  if (!opened || !sheet.mounted) return null;
 
   return (
     <BottomSheet
+      key={sheet.generation}
       ref={sheetRef}
-      index={-1}
+      index={sheet.index}
       accessible={false}
       style={{ marginHorizontal: contentColumnInset('reading', contentWidth) }}
       enablePanDownToClose
@@ -271,7 +297,7 @@ export function VoicePickerSheet({ visible, onStart, onDismiss }: VoicePickerShe
             Choose your voice
           </Text>
           <PressableBox
-            onPress={() => sheetRef.current?.close()}
+            onPress={closeSheet}
             accessibilityRole="button"
             accessibilityLabel="Close voice picker"
             hitSlop={12}

@@ -149,6 +149,11 @@ jest.mock('@/src/features/model-picker/installStore', () => ({
   pickReadyLocalModelId: () => null,
 }));
 
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: async () => undefined,
+}));
+
 jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {

@@ -404,6 +404,7 @@ const STREAM_ENDED_EARLY_MESSAGE = 'The response ended before completion. Please
 
 export function createMobileCloudAgentRunClient(
   account: CloudAccountEpoch | null = captureCloudAccountEpoch(),
+  control: { withdrawalControl?: boolean } = {},
 ): ManagedCloudAgentRunClient {
   const assertCurrent = () => assertCloudAccountEpochCurrent(account);
   const complete = async <T>(operation: () => Promise<T>): Promise<T> => {
@@ -435,7 +436,9 @@ export function createMobileCloudAgentRunClient(
       assertCurrent();
       const response = isDetachedResume(input)
         ? await guardedFetch(input, init, { stream: true })
-        : await guardedFetch(input, init);
+        : control.withdrawalControl
+          ? await guardedFetch(input, init, { withdrawalControl: true })
+          : await guardedFetch(input, init);
       assertCurrent();
       if (response.status === 403) await noticeRunRefusal(response, account);
       assertCurrent();

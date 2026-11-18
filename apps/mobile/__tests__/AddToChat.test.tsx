@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 let mockWindowWidth = 750;
@@ -28,6 +28,15 @@ jest.mock('@/services/connectors', () => ({
 
 jest.mock('@/src/features/library/libraryClient', () => ({ fetchLibraryPage: jest.fn() }));
 
+const mockSheetMethods = {
+  snapToIndex: jest.fn(),
+  snapToPosition: jest.fn(),
+  expand: jest.fn(),
+  collapse: jest.fn(),
+  close: jest.fn(),
+  forceClose: jest.fn(),
+};
+
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -36,36 +45,45 @@ jest.mock('@gorhom/bottom-sheet', () => {
     (
       {
         children,
+        index,
         onChange,
         onAnimate,
         onClose,
         style,
+        backdropComponent: Backdrop,
       }: {
         children: React.ReactNode;
+        index?: number;
         style?: unknown;
         onChange: (index: number) => void;
         onAnimate?: (fromIndex: number, toIndex: number) => void;
         onClose?: () => void;
+        backdropComponent?: React.ComponentType<Record<string, never>>;
       },
-      _ref: React.Ref<unknown>,
-    ) => (
-      <View
-        testID="bottom-sheet"
-        style={style as never}
-        onChange={onChange}
-        onAnimate={onAnimate}
-        onClose={onClose}
-      >
-        {children}
-      </View>
-    ),
+      ref: React.Ref<unknown>,
+    ) => {
+      React.useImperativeHandle(ref, () => mockSheetMethods);
+      return (
+        <View
+          testID="bottom-sheet"
+          index={index}
+          style={style as never}
+          onChange={onChange}
+          onAnimate={onAnimate}
+          onClose={onClose}
+        >
+          {Backdrop ? <Backdrop /> : null}
+          {children}
+        </View>
+      );
+    },
   );
   BottomSheet.displayName = 'BottomSheet';
 
   return {
     __esModule: true,
     default: BottomSheet,
-    BottomSheetBackdrop: ({ children }: { children?: React.ReactNode }) => <View>{children}</View>,
+    BottomSheetBackdrop: () => <View testID="bottom-sheet-backdrop" />,
     BottomSheetScrollView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
   };
 });
@@ -190,6 +208,7 @@ import {
   requireMobileCloudModel,
 } from '../test-utils/modelFixtures';
 import { FEATURES } from '../lib/v1FeatureFlags';
+import type BottomSheet from '@gorhom/bottom-sheet';
 
 const SEARCH_CAPABLE_MODEL_ID = requireMobileCloudModel(
   (model) => getModelMetadataById(model.id)?.capabilities.search === true,
@@ -1231,8 +1250,7 @@ describe('AddToChatSheet', () => {
       const add = jest
         .spyOn(BackHandler, 'addEventListener')
         .mockImplementation(() => ({ remove }));
-      const sheetRef = { current: { close: jest.fn() } };
-      const view = render(<AddToChatSheet {...defaultProps} ref={sheetRef as never} />);
+      const view = renderSheet();
       expect(add).not.toHaveBeenCalled();
 
       fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
@@ -1240,7 +1258,7 @@ describe('AddToChatSheet', () => {
 
       expect(add).toHaveBeenCalledWith('hardwareBackPress', expect.any(Function));
       expect(handler()).toBe(true);
-      expect(sheetRef.current.close).toHaveBeenCalledTimes(1);
+      expect(mockSheetMethods.close).toHaveBeenCalledTimes(1);
 
       fireEvent(view.getByTestId('bottom-sheet'), 'change', -1);
       expect(remove).toHaveBeenCalledTimes(1);
@@ -1253,19 +1271,166 @@ describe('AddToChatSheet', () => {
       const add = jest
         .spyOn(BackHandler, 'addEventListener')
         .mockImplementation(() => ({ remove }));
-      const sheetRef = { current: { close: jest.fn() } };
-      const view = render(<AddToChatSheet {...defaultProps} ref={sheetRef as never} />);
+      const view = renderSheet();
 
       fireEvent(view.getByTestId('bottom-sheet'), 'animate', -1, 0);
       const handler = add.mock.calls.at(-1)?.[1] as () => boolean;
 
       expect(add).toHaveBeenCalledTimes(1);
       expect(handler()).toBe(true);
-      expect(sheetRef.current.close).toHaveBeenCalledTimes(1);
+      expect(mockSheetMethods.close).toHaveBeenCalledTimes(1);
 
       fireEvent(view.getByTestId('bottom-sheet'), 'close');
       expect(remove).toHaveBeenCalledTimes(1);
       add.mockRestore();
+    });
+  });
+
+  describe('opening a system picker', () => {
+    const originalOS = Platform.OS;
+    function setPlatform(os: 'ios' | 'android') {
+      Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+    }
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+    });
+
+    function openSheet(overrides = {}) {
+      const hostRef: { current: BottomSheet | null } = { current: null };
+      const view = render(
+        <AddToChatSheet {...defaultProps} {...overrides} ref={hostRef as never} />,
+      );
+      fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
+      return { view, hostRef };
+    }
+
+    function sheetDrawn(view: ReturnType<typeof render>) {
+      return (
+        view.queryByTestId('bottom-sheet') !== null ||
+        view.queryByTestId('bottom-sheet-backdrop') !== null
+      );
+    }
+
+    it.each([
+      ['Photos', 'onPhotos'],
+      ['Camera', 'onCamera'],
+      ['File', 'onFile'],
+    ] as const)(
+      'on Android, takes the sheet and its dim layer out before %s opens',
+      (label, handlerName) => {
+        setPlatform('android');
+        if (label === 'File') {
+          activateCloudAccount('picker-owner');
+          useChatAppModeStore.setState({ appMode: 'cloud' });
+          (fetchLibraryPage as jest.Mock).mockImplementation(() => new Promise(() => {}));
+        }
+        const drawnAtLaunch: boolean[] = [];
+        let opened: ReturnType<typeof openSheet> | null = null;
+        const launch = jest.fn(() => {
+          drawnAtLaunch.push(opened ? sheetDrawn(opened.view) : true);
+        });
+        opened = openSheet({ [handlerName]: launch });
+        const { view } = opened;
+        expect(view.getByTestId('bottom-sheet-backdrop')).toBeTruthy();
+
+        fireEvent.press(view.getByText(label));
+
+        expect(sheetDrawn(view)).toBe(false);
+        expect(launch).not.toHaveBeenCalled();
+
+        act(() => jest.runOnlyPendingTimers());
+
+        expect(launch).toHaveBeenCalledTimes(1);
+        expect(drawnAtLaunch).toEqual([false]);
+        expect(mockSheetMethods.close).not.toHaveBeenCalled();
+      },
+    );
+
+    it('on Android, gives Back back to the screen once the sheet is gone', () => {
+      setPlatform('android');
+      const { BackHandler } = require('react-native');
+      const remove = jest.fn();
+      const add = jest
+        .spyOn(BackHandler, 'addEventListener')
+        .mockImplementation(() => ({ remove }));
+      const { view } = openSheet();
+      expect(add).toHaveBeenCalledTimes(1);
+
+      fireEvent.press(view.getByText('Photos'));
+
+      expect(remove).toHaveBeenCalledTimes(1);
+      act(() => jest.runOnlyPendingTimers());
+      expect(add).toHaveBeenCalledTimes(1);
+      add.mockRestore();
+    });
+
+    it('on Android, opens one picker for a double tap', () => {
+      setPlatform('android');
+      const onPhotos = jest.fn();
+      const { view } = openSheet({ onPhotos });
+      const press = ownerHandler(view.getByLabelText('Photos'), 'onPress');
+
+      act(() => {
+        press();
+        press();
+      });
+      act(() => jest.runOnlyPendingTimers());
+
+      expect(onPhotos).toHaveBeenCalledTimes(1);
+    });
+
+    it('on Android, opens a fresh sheet after the picker that closes with its X', () => {
+      setPlatform('android');
+      const onPhotos = jest.fn();
+      const { view, hostRef } = openSheet({ onPhotos });
+      fireEvent.press(view.getByText('Photos'));
+      act(() => jest.runOnlyPendingTimers());
+      act(() => hostRef.current?.close());
+      expect(sheetDrawn(view)).toBe(false);
+
+      act(() => hostRef.current?.snapToIndex(0));
+
+      const sheet = view.getByTestId('bottom-sheet');
+      expect(sheet.props.index).toBe(0);
+      expect(view.getByTestId('bottom-sheet-backdrop')).toBeTruthy();
+      fireEvent(sheet, 'change', 0);
+      fireEvent.press(view.getByLabelText('Close Add to Chat'));
+      expect(mockSheetMethods.close).toHaveBeenCalledTimes(1);
+
+      fireEvent.press(view.getByText('Photos'));
+      expect(sheetDrawn(view)).toBe(false);
+      act(() => jest.runOnlyPendingTimers());
+      expect(onPhotos).toHaveBeenCalledTimes(2);
+    });
+
+    it('on Android, drops the picker when the screen leaves before it opens', () => {
+      setPlatform('android');
+      const onPhotos = jest.fn();
+      const { view } = openSheet({ onPhotos });
+
+      fireEvent.press(view.getByText('Photos'));
+      view.unmount();
+      act(() => jest.runOnlyPendingTimers());
+
+      expect(onPhotos).not.toHaveBeenCalled();
+    });
+
+    it('on iOS, closes the sheet and opens Photos at once', () => {
+      setPlatform('ios');
+      const onPhotos = jest.fn();
+      const { view } = openSheet({ onPhotos });
+
+      fireEvent.press(view.getByText('Photos'));
+
+      expect(mockSheetMethods.close).toHaveBeenCalledTimes(1);
+      expect(onPhotos).toHaveBeenCalledTimes(1);
+      expect(view.getByTestId('bottom-sheet').props.index).toBe(-1);
     });
   });
 });

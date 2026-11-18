@@ -3,7 +3,7 @@ import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { openWebContentPage } from '@/src/platform/webContentPage';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
-import { guardedFetch } from '@/lib/egressGuard';
+import { STEP_UP_PATH, guardedFetch } from '@/lib/egressGuard';
 import {
   invalidateCloudAccount,
   assertCloudAccountEpochCurrent,
@@ -19,8 +19,11 @@ import {
 } from 'expo-file-system/legacy';
 import {
   TERMS_ACCEPTANCE_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH,
   MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH,
+  MANAGED_CLOUD_DATA_EXPORT_PATH,
   ManagedCloudChatAttachmentCompleteResponseSchema,
   ManagedCloudChatAttachmentPresignResponseSchema,
   ManagedCloudResumableUploadError,
@@ -55,6 +58,13 @@ let _refreshBackoffUntil = 0;
 let _accountGeneration = 0;
 const _activeAccountUploads = new Set<UploadTask>();
 const MAX_REFRESH_FAILURES = 3;
+const SIGNED_IN_ACCOUNT_CONTROL_PATHS: ReadonlySet<string> = new Set([
+  TERMS_ACCEPTANCE_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
+  STEP_UP_PATH,
+  MANAGED_CLOUD_DATA_EXPORT_PATH,
+]);
 const REFRESH_TIMEOUT_MS = 10_000;
 const PASSKEY_REQUIRED_CODE = 'PASSKEY_REQUIRED';
 const PASSKEY_REQUIRED_MESSAGE =
@@ -242,6 +252,8 @@ interface RequestOptions {
   auth401Recovery?: 'ambient' | 'caller-owned';
   /** A content report the user chose to send; lets that one POST through in Local mode. */
   consentedReport?: boolean;
+  /** Set only by the withdrawal helpers that stop standing Cloud work. */
+  withdrawalControl?: boolean;
   _skipAuthRetry?: boolean;
 }
 
@@ -323,8 +335,9 @@ async function sendRequest(
             : controller.signal,
       },
       {
-        authControl: path === TERMS_ACCEPTANCE_PATH && options.baseUrl === undefined,
+        authControl: SIGNED_IN_ACCOUNT_CONTROL_PATHS.has(path) && options.baseUrl === undefined,
         consentedReport: options.consentedReport === true && options.baseUrl === undefined,
+        withdrawalControl: options.withdrawalControl === true && options.baseUrl === undefined,
       },
     );
     assertApiAccountGeneration(accountGeneration);

@@ -228,7 +228,7 @@ async function createEvent(request: PhoneStepRequest): Promise<PhoneStepOutcome>
 
 async function createReminder(request: PhoneStepRequest): Promise<PhoneStepOutcome> {
   if (Platform.OS !== 'ios') {
-    return { content: 'Reminders can be added only from an iPhone or iPad.', isError: true };
+    return { content: 'Reminders are not available on this device.', isError: true };
   }
   const granted = await accessGranted(
     Calendar.getRemindersPermissionsAsync,

@@ -19,6 +19,7 @@ import { SettingsGroup, SettingsRow, SettingsScreenShell } from '@/src/features/
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { openWebContentPage } from '@/src/platform/webContentPage';
 import { CLOUD_CHAT_RETENTION } from './ChatPrivacyScreen';
+import { CloudProviderSharingGroup } from './CloudProviderSharingGroup';
 import { PrivacyApproachCards } from './PrivacyApproachCards';
 import { PrivacyArticleCards } from './PrivacyArticleCards';
 import { PrivacyCenterSection } from './PrivacyCenterSection';
@@ -134,6 +135,8 @@ export default function CloudPrivacyScreen() {
       </View>
 
       <PrivacyApproachCards items={isCloud ? PRIVACY_ITEMS : LOCAL_PRIVACY_ITEMS} />
+
+      <CloudProviderSharingGroup />
 
       <PrivacyCloudControls />
 

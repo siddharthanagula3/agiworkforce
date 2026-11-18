@@ -66,6 +66,7 @@ import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/Capabilit
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useVoiceConversation } from '@/src/features/voice/hooks/useVoiceConversation';
 import { showVoiceCaptureFailureAlert } from '@/src/features/voice/components/voicePermissionAlert';
+import { classifyVoiceFailure } from '@/src/features/voice/services/voiceFailure';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
 import type { DraftProvenance } from '@/src/features/chat/draftStore';
 import { draftIdentityKey } from '@/src/features/chat/draftIdentity';
@@ -152,6 +153,7 @@ import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { selectedSkillTools } from '@/stores/chat/skillTurnOptions';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import { sharingWithProvidersAllowed } from '@/src/features/chat/actions/mediaGenerationConsent';
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 const OFFLINE_NEW_CLOUD_CHAT_ALERT = {
@@ -163,6 +165,10 @@ type RouterHref = Parameters<ReturnType<typeof useRouter>['push']>[0];
 const HEADER_SIDE_SLOT = 44;
 const NEW_CHAT_SYMBOL_SIZE = 40;
 const GREETING_MINIMUM_FONT_SCALE = 0.6;
+
+async function sharingAllowedWhile(isStillCurrent: () => boolean): Promise<boolean> {
+  return (await sharingWithProvidersAllowed()) && isStillCurrent();
+}
 
 export default function ChatTabScreen() {
   const router = useRouter();
@@ -372,10 +378,11 @@ export default function ChatTabScreen() {
     workSwitchVisible && workMode === 'agiwork' && usageLimit.exhaustedRecovery !== null;
 
   useEffect(() => {
+    if (workSwitchVisible && !isClerkLoaded) return;
     if (workMode === 'agiwork' && (!workSwitchVisible || !cloudUnlocked || !isClerkSignedIn)) {
       setWorkMode('chat');
     }
-  }, [cloudUnlocked, isClerkSignedIn, setWorkMode, workMode, workSwitchVisible]);
+  }, [cloudUnlocked, isClerkLoaded, isClerkSignedIn, setWorkMode, workMode, workSwitchVisible]);
 
   const modelForSend = useMemo(() => {
     return resolveNewConversationModel({
@@ -485,6 +492,7 @@ export default function ChatTabScreen() {
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
       };
       const entryAccount = activeMode === 'cloud' ? captureCloudAccountEpoch() : null;
+      const entryAccountCurrent = () => !entryAccount || isCloudAccountEpochCurrent(entryAccount);
       let discardAbandoned: (() => void) | null = null;
       try {
         if (activeMode === 'cloud' && !FEATURES.cloudChat) {
@@ -522,6 +530,7 @@ export default function ChatTabScreen() {
             videoRequest.prompt.length > 40
               ? videoRequest.prompt.slice(0, 40).trim() + '...'
               : videoRequest.prompt;
+          if (!(await sharingAllowedWhile(entryAccountCurrent))) return false;
           const conversationId = await createConversation(title);
           openCreatedConversation(conversationId);
           useChatViewStore.getState().resetMediaChoice('video');
@@ -614,6 +623,7 @@ export default function ChatTabScreen() {
           }
           const title =
             offer.prompt.length > 40 ? offer.prompt.slice(0, 40).trim() + '...' : offer.prompt;
+          if (!(await sharingAllowedWhile(isRequestCurrent))) return false;
           const conversationId = await createConversation(title, projectId ?? undefined);
           if (!isRequestCurrent()) return false;
           const accepted = dispatchOptions?.awaitCompletion
@@ -637,6 +647,7 @@ export default function ChatTabScreen() {
             imageRequest.prompt.length > 40
               ? imageRequest.prompt.slice(0, 40).trim() + '...'
               : imageRequest.prompt;
+          if (!(await sharingAllowedWhile(entryAccountCurrent))) return false;
           const conversationId = await createConversation(title);
           openCreatedConversation(conversationId);
           useChatViewStore.getState().resetMediaChoice('image');
@@ -678,13 +689,16 @@ export default function ChatTabScreen() {
         const titleSource = trimmed || fallbackTitle;
         const title =
           titleSource.length > 40 ? titleSource.slice(0, 40).trim() + '...' : titleSource;
+        if (activeMode === 'cloud' && !(await sharingAllowedWhile(entryAccountCurrent))) {
+          return false;
+        }
         const needingUpload =
           activeMode === 'cloud'
             ? (attachments ?? []).filter((attachment) => !attachment.assetId)
             : [];
         if (needingUpload.length > 0) {
           if (!(await agreeToCloudUploadAhead(needingUpload))) return false;
-          if (entryAccount && !isCloudAccountEpochCurrent(entryAccount)) {
+          if (!entryAccountCurrent()) {
             takeCloudUploadAgreedAhead(needingUpload);
             return false;
           }
@@ -739,7 +753,7 @@ export default function ChatTabScreen() {
         return accepted;
       } catch (err) {
         discardAbandoned?.();
-        if (entryAccount && !isCloudAccountEpochCurrent(entryAccount)) return false;
+        if (!entryAccountCurrent()) return false;
         console.warn('[ChatTabScreen] createConversation failed:', err);
         Alert.alert(
           'Could not start the chat',
@@ -996,8 +1010,11 @@ export default function ChatTabScreen() {
       setVoiceInlineVisible(true);
       return;
     }
-    createConversation('Voice chat')
-      .then((conversationId) => {
+    const entryAccount = captureCloudAccountEpoch();
+    sharingAllowedWhile(() => !entryAccount || isCloudAccountEpochCurrent(entryAccount))
+      .then(async (allowed) => {
+        if (!allowed) return;
+        const conversationId = await createConversation('Voice chat');
         if (startedFromProject) router.setParams({ from: undefined });
         router.push(
           `/(app)/chat/${conversationId}?voice=live` as Parameters<typeof router.push>[0],
@@ -1134,7 +1151,7 @@ export default function ChatTabScreen() {
     speechOwner,
     speechOptions: speechSettings(),
     onCaptureError: (err) => {
-      setVoiceInlineVisible(false);
+      if (classifyVoiceFailure(err) !== 'no-speech') setVoiceInlineVisible(false);
       showVoiceCaptureFailureAlert(err);
     },
   });

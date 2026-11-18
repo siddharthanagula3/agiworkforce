@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Platform, Linking, Alert, type LayoutChangeEvent } from 'react-native';
+import { View, Platform, Linking, Alert, AppState, type LayoutChangeEvent } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useFocusEffect } from 'expo-router';
 import { Calendar, Bell, CheckCircle, XCircle, HelpCircle, RefreshCw } from 'lucide-react-native';
@@ -22,6 +22,11 @@ import {
 import { PERMISSION_REGISTRY } from '@/src/features/settings/permissions/registry';
 import type { MobilePermissionKind } from '@/src/features/settings/permissions/types';
 import * as Notifications from 'expo-notifications';
+import {
+  isPushPermissionRequestPending,
+  toPushPermissionStatus,
+} from '@/services/pushPermissionStatus';
+import { enablePushNotifications } from '@/services/notifications';
 
 type IntegrationStatus = 'active' | 'inactive' | 'needs-permission' | 'unavailable';
 
@@ -41,12 +46,6 @@ function permissionToStatus(p: PermissionStatus): IntegrationStatus {
     case 'undetermined':
       return 'inactive';
   }
-}
-
-function notifStatusToIntegration(s: Notifications.PermissionStatus): IntegrationStatus {
-  if (s === 'granted') return 'active';
-  if (s === 'denied') return 'needs-permission';
-  return 'inactive';
 }
 
 function statusBadgeColor(status: IntegrationStatus): 'green' | 'yellow' | 'red' | 'gray' {
@@ -257,8 +256,6 @@ export function DeviceIntegrationStatus({
       Notifications.getPermissionsAsync(),
     ]);
 
-    const notifPerm = notifResult.status as Notifications.PermissionStatus;
-
     const next: DeviceIntegration[] = [
       {
         id: 'calendar',
@@ -270,7 +267,7 @@ export function DeviceIntegrationStatus({
         id: 'notifications',
         name: 'Notifications',
         description: 'Agent alerts and approval requests delivered to this device',
-        status: notifStatusToIntegration(notifPerm),
+        status: permissionToStatus(toPushPermissionStatus(notifResult)),
       },
     ];
 
@@ -281,6 +278,10 @@ export function DeviceIntegrationStatus({
   useFocusEffect(
     useCallback(() => {
       void checkAll();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active' && !isPushPermissionRequestPending()) void checkAll();
+      });
+      return () => subscription.remove();
     }, [checkAll]),
   );
 
@@ -302,7 +303,11 @@ export function DeviceIntegrationStatus({
   const requestPermission = useCallback(
     async (kind: DeviceIntegration['id']) => {
       try {
-        await PERMISSION_REGISTRY[kind].requestPermission();
+        if (kind === 'notifications') {
+          await enablePushNotifications();
+        } else {
+          await PERMISSION_REGISTRY[kind].requestPermission();
+        }
       } catch (error) {
         console.warn(`[integrations] Could not request ${kind} permission:`, error);
       }

@@ -5,6 +5,7 @@ import {
   type ExpoSpeechRecognitionErrorEvent,
 } from 'expo-speech-recognition';
 import { audioSessionCategoryFor, type AudioRoute } from './audioRoute';
+import { trackMicPermissionRequest } from './micPermissionRequest';
 import { activeAudioRoute, deviceSpeechLocale } from './speechSettings';
 
 export type VoiceCaptureErrorCode =
@@ -201,22 +202,42 @@ export function getPlatformSTTBackend(): 'ios-speech' | 'android-speech-recogniz
   return 'expo-av';
 }
 
-export async function requestMicPermission(): Promise<boolean> {
+interface PermissionAnswer {
+  granted: boolean;
+}
+
+// Android shows its permission screen for a request even when the permission is
+// already granted, which pauses the app for nothing; only ask when it is not.
+async function ensurePermission(
+  read: () => Promise<PermissionAnswer>,
+  request: () => Promise<PermissionAnswer>,
+): Promise<boolean> {
+  const alreadyGranted = await Promise.resolve()
+    .then(read)
+    .then(
+      (answer) => answer.granted,
+      () => false,
+    );
+  if (alreadyGranted) return true;
   try {
-    const status = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-    return status.granted;
+    return (await trackMicPermissionRequest(request)).granted;
   } catch {
     return false;
   }
 }
 
-export async function requestMicrophoneOnlyPermission(): Promise<boolean> {
-  try {
-    const status = await ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync();
-    return status.granted;
-  } catch {
-    return false;
-  }
+export function requestMicPermission(): Promise<boolean> {
+  return ensurePermission(
+    () => ExpoSpeechRecognitionModule.getPermissionsAsync(),
+    () => ExpoSpeechRecognitionModule.requestPermissionsAsync(),
+  );
+}
+
+export function requestMicrophoneOnlyPermission(): Promise<boolean> {
+  return ensurePermission(
+    () => ExpoSpeechRecognitionModule.getMicrophonePermissionsAsync(),
+    () => ExpoSpeechRecognitionModule.requestMicrophonePermissionsAsync(),
+  );
 }
 
 export function isCapturing(): boolean {

@@ -68,6 +68,10 @@ import { DEVICE_INTEGRATIONS_SCREEN_TITLE } from '@/src/features/integrations/pr
 import { searchSettingsPages } from '@/src/features/search/mobileDestinations';
 import { destinationScope } from '@/src/features/shell/destinationScope';
 import { AGE_SETTING_LABEL, ageSettingValue } from '@/src/features/settings/ageSettingValue';
+import {
+  AGE_ENTRY_PARAMS,
+  PARENTAL_CONTROLS_ROUTE,
+} from '@/src/features/settings/parental-controls/entry';
 import { SettingsSearchField, SettingsSearchResults } from '@/src/features/settings/SettingsSearch';
 import { settingsSearchEntries } from '@/src/features/settings/settingsSearchEntries';
 import { useOpenCloudRoute } from '@/src/features/settings/useOpenCloudRoute';
@@ -635,7 +639,12 @@ export default function SettingsTabScreen() {
             label: AGE_SETTING_LABEL,
             icon: Cake,
             value: ageValue,
-            ...pushTo('/(app)/settings/parental-controls'),
+            route: PARENTAL_CONTROLS_ROUTE,
+            onPress: () =>
+              router.push({
+                pathname: PARENTAL_CONTROLS_ROUTE,
+                params: AGE_ENTRY_PARAMS,
+              } as Parameters<typeof router.push>[0]),
           },
           {
             key: 'account-shared-links',

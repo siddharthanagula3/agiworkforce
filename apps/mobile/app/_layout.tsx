@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { answerCloudSession } from '@/src/features/chat/store/cloudModeFallback';
+import { installCloudModeDoor } from '@/src/features/chat/store/cloudModeDoor';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -117,6 +118,7 @@ import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
 import { useLocalModelMemoryRelease } from '@/src/features/model-picker/useLocalModelMemoryRelease';
 import '../global.css';
 
+installCloudModeDoor();
 holdLaunchSplash();
 lockPhonePortrait();
 setLinkBrowserPreferenceReader(() => useLocalSettingsStore.getState().linkBrowser === 'system');
@@ -369,8 +371,12 @@ function ClerkTokenBridge() {
       }
       if (termsUserId !== userId || termsStatus !== 'accepted') {
         if (termsUserId === userId && termsStatus === 'required') answerCloudSession(null);
-        if (recordedCloudAccountOwnerId() !== userId) useRolloutStore.getState().clear();
-        if (useAuthStore.getState().isClerkSignedIn) {
+        const recordedOwnerId = recordedCloudAccountOwnerId();
+        if (recordedOwnerId !== userId) useRolloutStore.getState().clear();
+        if (
+          useAuthStore.getState().isClerkSignedIn ||
+          (recordedOwnerId !== null && recordedOwnerId !== userId)
+        ) {
           invalidateCloudAccount();
           clearLocalCloudAccountState();
         }
@@ -454,6 +460,7 @@ function ClerkTokenBridge() {
 
   useEffect(() => {
     return () => {
+      useAuthStore.getState().setClerkLoaded(false);
       clearPostAuthIntent();
       setClerkTokenMinter(null, null);
       useAuthStore.getState().setClerkUserId(null);
@@ -606,7 +613,10 @@ export default function RootLayout() {
     refreshTier().catch((err) => {
       console.warn('[RootLayout] Cloud-mode-entry tier refresh failed:', err);
     });
-    if (enteredCloud && isMmkvReady) void syncNow();
+    if (!enteredCloud) return;
+    void refreshRolloutRings();
+    void registerAppTransactionForAccount(clerkUserId);
+    if (isMmkvReady) void syncNow();
   }, [isClerkSignedIn, clerkUserId, isCloud, isMmkvReady, refreshTier]);
 
   useEffect(() => {

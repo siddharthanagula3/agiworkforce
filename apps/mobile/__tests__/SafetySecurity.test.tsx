@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const mockSetItemAsync = jest.fn();
@@ -149,6 +149,41 @@ describe('Safety & Security settings', () => {
     expect(getByText('App Lock')).toBeTruthy();
     expect(getByText('Require Face ID, Touch ID, or passcode to open AGI.')).toBeTruthy();
     expect(getByRole('switch', { name: 'App Lock. Off' })).toBeTruthy();
+  });
+
+  describe('on Android', () => {
+    let platform: jest.ReplaceProperty<'OS', typeof Platform.OS>;
+
+    beforeEach(() => {
+      platform = jest.replaceProperty(Platform, 'OS', 'android');
+    });
+
+    afterEach(() => {
+      platform.restore();
+    });
+
+    it('names the fingerprint, face unlock and screen lock instead of Face ID and Touch ID', () => {
+      const { getByText, queryByText } = render(<SafetySecurityScreen />);
+
+      expect(
+        getByText('Require your fingerprint, face unlock, or screen lock to open AGI.'),
+      ).toBeTruthy();
+      expect(queryByText(/Face ID|Touch ID|passcode/)).toBeNull();
+    });
+
+    it('asks for a screen lock without naming Face ID when none is set up', async () => {
+      mockGetEnrolledLevelAsync.mockResolvedValue(0);
+      const { getByRole } = render(<SafetySecurityScreen />);
+
+      fireEvent.press(getByRole('switch', { name: 'App Lock. Off' }));
+
+      await waitFor(() => {
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Set up a device lock first',
+          'Set up a fingerprint, face unlock, or screen lock in system settings before enabling AGI app lock.',
+        );
+      });
+    });
   });
 
   it('does not name a trusted-contact feature the app does not offer', () => {

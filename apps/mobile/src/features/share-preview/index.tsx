@@ -494,6 +494,7 @@ export default function SharePreviewScreen() {
       >
         <PressableBox
           onPress={handleDismiss}
+          accessibilityRole="button"
           style={{
             flex: 1,
             paddingVertical: 14,
@@ -516,13 +517,6 @@ export default function SharePreviewScreen() {
           }
           disabled={(!canSend && !canCheckChat) || (!hasAttachments && !rawText.trim())}
           accessibilityRole="button"
-          accessibilityLabel={
-            canCheckChat
-              ? 'Check chat'
-              : hasAttachments
-                ? 'Add shared files to chat'
-                : 'Send shared text'
-          }
           style={{
             flex: 2,
             paddingVertical: 14,

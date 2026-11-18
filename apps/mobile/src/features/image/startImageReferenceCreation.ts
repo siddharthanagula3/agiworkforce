@@ -16,6 +16,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { enterMediaMode } from '@/src/features/chat/actions/mediaMode';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { runImageGenerationTurn } from '@/src/features/chat/actions/runImageGenerationTurn';
+import { sharingWithProvidersAllowed } from '@/src/features/chat/actions/mediaGenerationConsent';
 import {
   MediaGenerationAdmissionError,
   mediaGenerationFailureMessage,
@@ -25,6 +26,7 @@ import { toUserMessage } from '@/services/userMessage';
 import type { MediaMode } from '@/stores/chat/chatViewStore';
 import {
   IMAGE_CREATION_UNAVAILABLE,
+  SHARING_DECLINED,
   imageConversationTitle,
   type ImageCreationResult,
 } from './startImageCreation';
@@ -93,6 +95,14 @@ export async function startImageReferenceCreation({
 
   const account = captureCloudAccountEpoch();
   if (!account || account.ownerId !== clerkUserId) {
+    restoreMediaMode(previousMode);
+    return blocked(ACCOUNT_CHANGED);
+  }
+  if (!(await sharingWithProvidersAllowed())) {
+    restoreMediaMode(previousMode);
+    return SHARING_DECLINED;
+  }
+  if (!isCloudAccountEpochCurrent(account)) {
     restoreMediaMode(previousMode);
     return blocked(ACCOUNT_CHANGED);
   }

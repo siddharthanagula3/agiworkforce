@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import {
+  AccessibilityInfo,
+  Alert,
   AppState,
   BackHandler,
   NativeModules,
@@ -66,6 +68,9 @@ jest.mock('expo-speech-recognition', () => {
     },
     __fireResult: (event) => {
       for (const fn of getListeners('result')) fn(event);
+    },
+    __fireError: (event) => {
+      for (const fn of getListeners('error')) fn(event);
     },
     __clearListeners: () => {
       for (const key of Object.keys(listenersByEvent)) delete listenersByEvent[key];
@@ -232,6 +237,7 @@ const speechRecognitionMock = jest.requireMock('expo-speech-recognition') as {
     results: Array<{ transcript: string; confidence: number }>;
     isFinal: boolean;
   }) => void;
+  __fireError: (event: { error: string; message: string }) => void;
   __clearListeners: () => void;
 };
 
@@ -693,6 +699,90 @@ describe('Voice conversation PTT + hands-free', () => {
     await waitFor(() => expect(getByText('Sent to chat.')).toBeTruthy());
   });
 
+  it('shows silence as a quiet line under the orb with no alert and stays ready to listen again', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { getByTestId, getByText, queryByText } = renderScreen(jest.fn());
+
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-companion-orb'));
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      speechRecognitionMock.__fireError({ error: 'no-speech', message: 'No speech detected' });
+    });
+
+    await waitFor(() => expect(getByText("Didn't catch that. Say it again.")).toBeTruthy());
+    expect(alert).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-companion-orb'));
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(2));
+    expect(queryByText("Didn't catch that. Say it again.")).toBeNull();
+    alert.mockRestore();
+  });
+
+  it('drops the silence line when the microphone is muted afterwards', async () => {
+    const { getByTestId, getByText, getByLabelText, queryByText } = renderScreen(jest.fn());
+
+    await act(async () => {
+      fireEvent.press(getByTestId('voice-companion-orb'));
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      speechRecognitionMock.__fireError({ error: 'no-speech', message: 'No speech detected' });
+    });
+    await waitFor(() => expect(getByText("Didn't catch that. Say it again.")).toBeTruthy());
+
+    await act(async () => fireEvent.press(getByLabelText('Mute microphone')));
+
+    expect(queryByText("Didn't catch that. Say it again.")).toBeNull();
+    expect(getByText('Unmute to talk')).toBeTruthy();
+  });
+
+  it.each([
+    ['ios', 1],
+    ['android', 0],
+  ])(
+    'announces the silence line by speech on %s only when the live region cannot',
+    async (os, calls) => {
+      const originalOS = Platform.OS;
+      const originalVersion = Platform.Version;
+      Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+      Object.defineProperty(Platform, 'Version', {
+        get: () => (os === 'android' ? 34 : originalVersion),
+        configurable: true,
+      });
+      const announce = jest
+        .spyOn(AccessibilityInfo, 'announceForAccessibility')
+        .mockImplementation(() => undefined);
+      try {
+        const { getByTestId, getByText } = renderScreen(jest.fn());
+        await act(async () => {
+          fireEvent.press(getByTestId('voice-companion-orb'));
+        });
+        await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+        await act(async () => {
+          speechRecognitionMock.__fireError({ error: 'no-speech', message: 'No speech detected' });
+        });
+        await waitFor(() => expect(getByText("Didn't catch that. Say it again.")).toBeTruthy());
+
+        expect(announce).toHaveBeenCalledTimes(calls);
+        expect(getByText("Didn't catch that. Say it again.").props.accessibilityLiveRegion).toBe(
+          'polite',
+        );
+      } finally {
+        announce.mockRestore();
+        Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+        Object.defineProperty(Platform, 'Version', {
+          get: () => originalVersion,
+          configurable: true,
+        });
+      }
+    },
+  );
+
   it('guards against double-processing when auto-final races the PTT release', async () => {
     useSettingsStore.setState({ voicePushToTalk: true });
     const onSendMessage = jest.fn().mockResolvedValue(null);
@@ -775,6 +865,49 @@ describe('Voice conversation PTT + hands-free', () => {
 
     unmount();
     expect(removeListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing about a pause when the app backgrounds before any voice session started', async () => {
+    let appStateListener: ((state: string) => void) | undefined;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      appStateListener = listener as (state: string) => void;
+      return { remove: jest.fn() };
+    });
+
+    const { queryByText } = renderScreen(jest.fn().mockResolvedValue(null));
+
+    await act(async () => {
+      appStateListener?.('inactive');
+    });
+    await act(async () => {
+      appStateListener?.('background');
+    });
+    await act(async () => {
+      appStateListener?.('active');
+    });
+
+    expect(queryByText('Voice paused when AGI left the foreground.')).toBeNull();
+    expect(ExpoSpeechRecognitionModule.start).not.toHaveBeenCalled();
+  });
+
+  it('says the voice session paused when the app backgrounds while a reply is awaited', async () => {
+    let appStateListener: ((state: string) => void) | undefined;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      appStateListener = listener as (state: string) => void;
+      return { remove: jest.fn() };
+    });
+    const state = chatState();
+    state.createConversation.mockResolvedValue('voice-conv-1');
+    state.sendMessage.mockImplementation(() => new Promise<boolean>(() => {}));
+    const screen = render(<VoiceScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('Type a message'), 'pending request');
+    fireEvent.press(screen.getByLabelText('Send typed message'));
+    await waitFor(() => expect(state.sendMessage).toHaveBeenCalledTimes(1));
+
+    await act(async () => appStateListener?.('background'));
+
+    expect(screen.getByText('Voice paused when AGI left the foreground.')).toBeTruthy();
   });
 });
 
@@ -1097,5 +1230,220 @@ describe.each<['light' | 'dark', ColorScheme]>([
     screen.rerender(tree());
     await settleStatusBar();
     expect(nativeBarStyle()).toBe('light-content');
+  });
+});
+
+describe('Voice route microphone permission and leaving', () => {
+  const recognizer = ExpoSpeechRecognitionModule as unknown as {
+    requestPermissionsAsync: jest.Mock;
+    getPermissionsAsync: jest.Mock;
+  };
+  const PAUSED = 'Voice paused when AGI left the foreground.';
+  let appStateListener: ((state: string) => void) | undefined;
+  let backListener: (() => boolean) | undefined;
+  const originalOS = Platform.OS;
+  const originalVersion = Platform.Version;
+  const runOn = (os: 'ios' | 'android') => {
+    Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+    Object.defineProperty(Platform, 'Version', {
+      get: () => (os === 'android' ? 34 : '18.0'),
+      configurable: true,
+    });
+  };
+
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((accept) => {
+      resolve = accept;
+    });
+    return { promise, resolve };
+  };
+
+  beforeEach(async () => {
+    await VoiceInput.cancelCapture();
+    speechRecognitionMock.__clearListeners();
+    jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
+    mockAudioUri = undefined;
+    mockCanGoBack.mockReturnValue(true);
+    mockVoiceRouteFocused = true;
+    appStateListener = undefined;
+    backListener = undefined;
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
+      appStateListener = listener as (state: string) => void;
+      return { remove: jest.fn() };
+    });
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_type, listener) => {
+      backListener = listener as () => boolean;
+      return { remove: jest.fn() };
+    });
+    recognizer.getPermissionsAsync.mockResolvedValue({ granted: true });
+    recognizer.requestPermissionsAsync.mockResolvedValue({ granted: true });
+    const state = chatState();
+    state.messages = {};
+    state.error = null;
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useSettingsStore.setState({
+      hapticsEnabled: false,
+      voiceEnabled: true,
+      voicePushToTalk: false,
+      selectedVoiceId: null,
+      speechRate: 1,
+    });
+  });
+
+  afterEach(async () => {
+    Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+    Object.defineProperty(Platform, 'Version', { get: () => originalVersion, configurable: true });
+    await VoiceInput.cancelCapture();
+    recognizer.getPermissionsAsync.mockResolvedValue({ granted: true });
+    recognizer.requestPermissionsAsync.mockResolvedValue({ granted: true });
+    jest.restoreAllMocks();
+  });
+
+  it('starts listening on an orb tap without asking again when the microphone is already allowed', async () => {
+    const screen = render(<VoiceScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('voice-companion-orb'));
+    });
+
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+    expect(recognizer.requestPermissionsAsync).not.toHaveBeenCalled();
+    expect(screen.getByText('Listening...')).toBeTruthy();
+  });
+
+  it('is not paused by the system permission screen and listens once the person allows', async () => {
+    const answer = deferred<{ granted: boolean }>();
+    recognizer.getPermissionsAsync.mockResolvedValue({ granted: false });
+    recognizer.requestPermissionsAsync.mockReturnValue(answer.promise);
+    const screen = render(<VoiceScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('voice-companion-orb'));
+    });
+    await waitFor(() => expect(recognizer.requestPermissionsAsync).toHaveBeenCalledTimes(1));
+
+    await act(async () => appStateListener?.('background'));
+    await act(async () => appStateListener?.('active'));
+    expect(screen.queryByText(PAUSED)).toBeNull();
+    expect(ExpoSpeechRecognitionModule.abort).not.toHaveBeenCalled();
+
+    await act(async () => answer.resolve({ granted: true }));
+
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(PAUSED)).toBeNull();
+    expect(screen.getByText('Listening...')).toBeTruthy();
+  });
+
+  it('still stops listening and says so when the app really leaves after a permission was granted', async () => {
+    const answer = deferred<{ granted: boolean }>();
+    recognizer.getPermissionsAsync.mockResolvedValue({ granted: false });
+    recognizer.requestPermissionsAsync.mockReturnValue(answer.promise);
+    const screen = render(<VoiceScreen />);
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('voice-companion-orb'));
+    });
+    await waitFor(() => expect(recognizer.requestPermissionsAsync).toHaveBeenCalledTimes(1));
+    await act(async () => answer.resolve({ granted: true }));
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+
+    await act(async () => appStateListener?.('background'));
+
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1));
+    expect(screen.getByText(PAUSED)).toBeTruthy();
+    expect(screen.getByText('Tap to speak')).toBeTruthy();
+  });
+
+  it('goes back when Close is pressed with a screen behind it', async () => {
+    const screen = render(<VoiceScreen />);
+
+    await act(async () => fireEvent.press(screen.getByLabelText('Close voice companion')));
+
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    expect(mockRouterReplace).not.toHaveBeenCalled();
+  });
+
+  it('opens a new chat when Close is pressed and nothing is behind the voice screen', async () => {
+    mockCanGoBack.mockReturnValue(false);
+    const screen = render(<VoiceScreen />);
+
+    await act(async () => fireEvent.press(screen.getByLabelText('Close voice companion')));
+
+    expect(mockRouterReplace).toHaveBeenCalledTimes(1);
+    expect(mockRouterReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(mockRouterBack).not.toHaveBeenCalled();
+  });
+
+  it('opens a new chat on Android Back instead of offering to exit when nothing is behind it', async () => {
+    runOn('android');
+    mockCanGoBack.mockReturnValue(false);
+    render(<VoiceScreen />);
+
+    expect(backListener).toBeDefined();
+    let handled: boolean | undefined;
+    await act(async () => {
+      handled = backListener?.();
+    });
+
+    expect(handled).toBe(true);
+    expect(mockRouterReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+  });
+
+  it('stops listening and goes back on Android Back with a screen behind it', async () => {
+    runOn('android');
+    const screen = render(<VoiceScreen />);
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('voice-companion-orb'));
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      backListener?.();
+    });
+
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the system Back alone on iPhone', () => {
+    runOn('ios');
+    render(<VoiceScreen />);
+
+    expect(backListener).toBeUndefined();
+  });
+
+  it('announces the phase to a screen reader', () => {
+    const screen = render(<VoiceScreen />);
+
+    expect(screen.getByText('Tap to speak').props.accessibilityLiveRegion).toBe('polite');
+  });
+
+  it('still stops listening when the app leaves while an earlier permission request never answered', async () => {
+    const neverAnswered = deferred<{ granted: boolean }>();
+    recognizer.getPermissionsAsync.mockResolvedValueOnce({ granted: false });
+    recognizer.requestPermissionsAsync.mockReturnValueOnce(neverAnswered.promise);
+    const first = render(<VoiceScreen />);
+    await act(async () => {
+      fireEvent.press(first.getByTestId('voice-companion-orb'));
+    });
+    await waitFor(() => expect(recognizer.requestPermissionsAsync).toHaveBeenCalledTimes(1));
+    first.unmount();
+
+    recognizer.getPermissionsAsync.mockResolvedValue({ granted: true });
+    const second = render(<VoiceScreen />);
+    await act(async () => {
+      fireEvent.press(second.getByTestId('voice-companion-orb'));
+    });
+    await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
+
+    await act(async () => appStateListener?.('background'));
+
+    try {
+      await waitFor(() => expect(ExpoSpeechRecognitionModule.abort).toHaveBeenCalledTimes(1));
+      expect(second.getByText(PAUSED)).toBeTruthy();
+    } finally {
+      await act(async () => neverAnswered.resolve({ granted: false }));
+    }
   });
 });

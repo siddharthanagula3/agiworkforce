@@ -124,6 +124,12 @@ jest.mock('@/stores/chat/imageEditAdmissions', () => ({
   },
 }));
 
+const mockEnsureCloudSendConsent = jest.fn();
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: () => mockEnsureCloudSendConsent(),
+}));
+
 const mockRunImageGenerationTurn = jest.fn();
 jest.mock('@/src/features/chat/actions/runImageGenerationTurn', () => ({
   ...jest.requireActual('@/src/features/chat/actions/runImageGenerationTurn'),
@@ -138,6 +144,7 @@ interface MockMessageListProps {
   ) => Promise<void>;
   onEditImageArea?: (message: unknown, edit: unknown) => void;
   onEditImage?: (message: unknown, edit: unknown) => void;
+  onRetryMessage?: (messageId: string) => void;
   onResearchPlanDecision?: (messageId: string, decision: unknown) => void;
   inTemporaryChat?: boolean;
   imageEditModelIds?: ReadonlySet<string>;
@@ -256,6 +263,8 @@ import {
 import { requireCatalogModel, requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
 import { IN_FLIGHT_TURN_WAITING_MESSAGE } from '../src/features/chat/inFlightTurnRecovery';
 import { ResponseRatingError } from '../stores/chat/responseRatingError';
+import { CloudProviderConsentDeclinedError } from '../services/llmGate';
+import type * as ImageGenerationTurns from '../src/features/chat/actions/runImageGenerationTurn';
 import {
   applyServerAttachmentLimits,
   clearServerAttachmentLimits,
@@ -297,6 +306,7 @@ function seedThread(messages: unknown[] = [QUESTION]): void {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockEnsureCloudSendConsent.mockResolvedValue(undefined);
   mockSearchParams = { id: 'thread-1' };
   mockTurnVerdict = 'idle';
   mockRetiredNotice = null;
@@ -991,13 +1001,13 @@ describe('editing an area of a generated image', () => {
     expect(mockImageEditOwners.every((owner) => owner === null)).toBe(true);
   });
 
-  it('runs a whole-image change as an edit of that image with the model that made it', () => {
+  it('runs a whole-image change as an edit of that image with the model that made it', async () => {
     seedCloudImage();
     mockImageEditModelIds = new Set([EDITING_IMAGE_MODEL]);
     render(<ChatScreen />);
     const image = useChatStore.getState().messages['thread-1']?.[1];
 
-    act(() => {
+    await act(async () => {
       mockMessageListProps.onEditImage?.(image, {
         operation: 'edit',
         prompt: 'Make the sky orange',
@@ -1019,13 +1029,13 @@ describe('editing an area of a generated image', () => {
     );
   });
 
-  it('runs another shape as a new image that Retry replays', () => {
+  it('runs another shape as a new image that Retry replays', async () => {
     seedCloudImage();
     mockImageEditModelIds = new Set([EDITING_IMAGE_MODEL]);
     render(<ChatScreen />);
     const image = useChatStore.getState().messages['thread-1']?.[1];
 
-    act(() => {
+    await act(async () => {
       mockMessageListProps.onEditImage?.(image, {
         operation: 'reshape',
         prompt: 'A poster of a lighthouse',
@@ -1043,13 +1053,13 @@ describe('editing an area of a generated image', () => {
     );
   });
 
-  it('runs a variation as an edit of that image with its own label', () => {
+  it('runs a variation as an edit of that image with its own label', async () => {
     seedCloudImage();
     mockImageEditModelIds = new Set([EDITING_IMAGE_MODEL]);
     render(<ChatScreen />);
     const image = useChatStore.getState().messages['thread-1']?.[1];
 
-    act(() => {
+    await act(async () => {
       mockMessageListProps.onEditImage?.(image, {
         operation: 'variation',
         prompt: 'A lighthouse at dusk',
@@ -1100,6 +1110,141 @@ describe('editing an area of a generated image', () => {
 
     expect(mockMessageListProps.onEditImage).toBeUndefined();
     expect(mockMessageListProps.inTemporaryChat).toBe(false);
+  });
+
+  describe('before sharing with AI providers is allowed', () => {
+    const AREA_EDIT = {
+      prompt: 'Add a red door',
+      sourceBase64: 'c291cmNl',
+      maskBase64: 'bWFzaw==',
+    };
+
+    it('edits nothing and shows no failure when the person says Not now', async () => {
+      mockEnsureCloudSendConsent.mockRejectedValue(new CloudProviderConsentDeclinedError());
+      seedCloudImage();
+      mockImageEditModelIds = new Set([EDITING_IMAGE_MODEL]);
+      render(<ChatScreen />);
+      const messagesBefore = useChatStore.getState().messages['thread-1'];
+      const image = messagesBefore?.[1];
+      const alert = jest
+        .spyOn(require('react-native').Alert, 'alert')
+        .mockImplementation(() => undefined);
+
+      try {
+        await act(async () => {
+          mockMessageListProps.onEditImageArea?.(image, AREA_EDIT);
+        });
+
+        expect(mockEnsureCloudSendConsent).toHaveBeenCalledTimes(1);
+        expect(mockRunImageGenerationTurn).not.toHaveBeenCalled();
+        expect(useChatExecutionStore.getState().error).toBeNull();
+        expect(useChatStore.getState().messages['thread-1']).toEqual(messagesBefore);
+        expect(alert).not.toHaveBeenCalled();
+      } finally {
+        alert.mockRestore();
+      }
+    });
+
+    it('keeps a failed area edit for Retry when the person says Not now', async () => {
+      const actualTurns = jest.requireActual<typeof ImageGenerationTurns>(
+        '@/src/features/chat/actions/runImageGenerationTurn',
+      );
+      activateCloudAccount('image-owner');
+      try {
+        await actualTurns.runImageGenerationTurn(
+          {
+            conversationId: 'thread-1',
+            displayText: AREA_EDIT.prompt,
+            prompt: AREA_EDIT.prompt,
+            model: EDITING_IMAGE_MODEL,
+            ownerId: 'image-owner',
+            operation: 'inpaint',
+            sourceImageBase64: AREA_EDIT.sourceBase64,
+            maskImageBase64: AREA_EDIT.maskBase64,
+            begin: () => 'image-2',
+            complete: jest.fn(),
+            fail: jest.fn(),
+            remove: jest.fn(),
+            onPaywall: jest.fn(),
+          },
+          {
+            generate: jest.fn().mockRejectedValue(new Error('provider unavailable')),
+            getUri: () => null,
+          },
+        );
+        seedCloudImage();
+        const thread = useChatStore.getState().messages['thread-1'] ?? [];
+        useChatStore.setState({
+          messages: {
+            'thread-1': [
+              ...thread,
+              {
+                id: 'user-2',
+                role: 'user',
+                content: AREA_EDIT.prompt,
+                createdAt: '2026-06-20T00:00:02.000Z',
+              },
+              {
+                id: 'image-2',
+                role: 'assistant',
+                content: '',
+                createdAt: '2026-06-20T00:00:03.000Z',
+                type: 'image',
+                model: EDITING_IMAGE_MODEL,
+                imageGenStatus: 'failed',
+              },
+            ],
+          },
+        } as never);
+        mockEnsureCloudSendConsent.mockRejectedValueOnce(new CloudProviderConsentDeclinedError());
+        render(<ChatScreen />);
+
+        await act(async () => {
+          mockMessageListProps.onRetryMessage?.('image-2');
+        });
+        expect(mockRunImageGenerationTurn).not.toHaveBeenCalled();
+
+        await act(async () => {
+          mockMessageListProps.onRetryMessage?.('image-2');
+        });
+        expect(mockRunImageGenerationTurn).toHaveBeenCalledTimes(1);
+        expect(mockRunImageGenerationTurn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            conversationId: 'thread-1',
+            operation: 'inpaint',
+            prompt: AREA_EDIT.prompt,
+            sourceImageBase64: AREA_EDIT.sourceBase64,
+            maskImageBase64: AREA_EDIT.maskBase64,
+          }),
+        );
+      } finally {
+        actualTurns.clearCloudImageGenerationState();
+        __resetCloudAccountSessionForTests();
+      }
+    });
+
+    it('edits the area once sharing is allowed', async () => {
+      seedCloudImage();
+      mockImageEditModelIds = new Set([EDITING_IMAGE_MODEL]);
+      render(<ChatScreen />);
+      const image = useChatStore.getState().messages['thread-1']?.[1];
+
+      await act(async () => {
+        mockMessageListProps.onEditImageArea?.(image, AREA_EDIT);
+      });
+
+      expect(mockRunImageGenerationTurn).toHaveBeenCalledTimes(1);
+      expect(mockRunImageGenerationTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'thread-1',
+          model: EDITING_IMAGE_MODEL,
+          operation: 'inpaint',
+          prompt: AREA_EDIT.prompt,
+          sourceImageBase64: AREA_EDIT.sourceBase64,
+          maskImageBase64: AREA_EDIT.maskBase64,
+        }),
+      );
+    });
   });
 });
 
@@ -1247,6 +1392,51 @@ describe('a voice capture that fails in an open chat', () => {
       'Open Settings',
     );
     alert.mockRestore();
+  });
+});
+
+describe('a voice capture that hears nothing in an open chat', () => {
+  const openVoiceMode = () => {
+    useSettingsStore.setState({ voiceEnabled: true, voiceOnboardingSeen: true });
+    mockSearchParams = { id: 'thread-1', voice: 'live' };
+    seedThread();
+    return render(<ChatScreen />);
+  };
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('shows the quiet notice once with no alert and keeps voice mode open', () => {
+    const { VoiceCaptureError } = jest.requireActual('@/src/features/voice/services/voiceInput');
+    const alert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const toast = jest.spyOn(require('@/src/shared/components/Toast'), 'showToast');
+    const screen = openVoiceMode();
+    expect(screen.getByTestId('voice-inline-bar')).toBeTruthy();
+
+    act(() => {
+      mockVoiceCaptureError?.(
+        new VoiceCaptureError('recognition-error', 'No speech detected', 'no-speech'),
+      );
+    });
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith("Didn't catch that. Say it again.");
+    expect(screen.getByTestId('voice-inline-bar')).toBeTruthy();
+  });
+
+  it('still ends voice mode and alerts for a failure that is not silence', () => {
+    const { VoiceCaptureError } = jest.requireActual('@/src/features/voice/services/voiceInput');
+    const alert = jest.spyOn(require('react-native').Alert, 'alert').mockImplementation(() => {});
+    const screen = openVoiceMode();
+
+    act(() => {
+      mockVoiceCaptureError?.(new VoiceCaptureError('already-active', 'busy'));
+    });
+
+    expect(alert).toHaveBeenCalledWith('Voice is busy', 'Voice capture is already running.');
+    expect(screen.queryByTestId('voice-inline-bar')).toBeNull();
   });
 });
 

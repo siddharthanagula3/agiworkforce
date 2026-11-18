@@ -111,6 +111,8 @@ export interface AccountSessionRow {
   id: string;
   device: string;
   browser: string | null;
+  os?: string;
+  surface?: string;
   location: string | null;
   lastActiveAt: string | null;
   isCurrent: boolean;
@@ -134,6 +136,8 @@ function parseAccountSessionRow(value: unknown): AccountSessionRow | null {
     id,
     device: typeof device === 'string' && device ? device : 'Unknown device',
     browser: optionalString(value['browser']),
+    os: optionalString(value['os']) ?? undefined,
+    surface: optionalString(value['surface']) ?? undefined,
     location: optionalString(value['location']),
     lastActiveAt: optionalString(value['lastActiveAt']),
     isCurrent: value['isCurrent'] === true,

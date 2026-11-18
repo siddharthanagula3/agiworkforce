@@ -38,6 +38,7 @@ export function useAppModeSwitch() {
       return false;
     }
     setAppMode('cloud');
+    if (useChatAppModeStore.getState().appMode !== 'cloud') return false;
     restoreNewChatModel();
     return true;
   }, [cloudUnlocked, restoreNewChatModel, router, setAppMode]);

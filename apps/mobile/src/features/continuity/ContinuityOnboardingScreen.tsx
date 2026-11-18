@@ -10,7 +10,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
-import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { enterCloudMode } from '@/src/features/chat/store/cloudModeDoor';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -46,7 +46,6 @@ export default function ContinuityOnboardingScreen() {
   const colors = useThemeColors();
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
-  const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const setWorkMode = useChatStore((state) => state.setWorkMode);
   const subscriptionTier = useTierStore((state) => state.tier);
   const planKnown = useTierStore((state) => state.lastRefreshedAt !== null);
@@ -76,10 +75,11 @@ export default function ContinuityOnboardingScreen() {
     }
 
     rememberDecision();
-    setAppMode('cloud');
-    if (cloudUnlocked && canUseBillingPlanCapability(subscriptionTier, 'agi_work')) {
-      setWorkMode('agiwork');
-    }
+    enterCloudMode(() => {
+      if (cloudUnlocked && canUseBillingPlanCapability(subscriptionTier, 'agi_work')) {
+        setWorkMode('agiwork');
+      }
+    });
     router.replace('/(app)/(tabs)/chat');
   }, [
     clerkUserId,
@@ -87,7 +87,6 @@ export default function ContinuityOnboardingScreen() {
     isClerkSignedIn,
     rememberDecision,
     router,
-    setAppMode,
     setWorkMode,
     subscriptionTier,
   ]);

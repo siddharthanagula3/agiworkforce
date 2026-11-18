@@ -28,8 +28,33 @@ let mockChatInputOnSend:
     ) => ComposerSendOutcome | Promise<ComposerSendOutcome>)
   | undefined;
 const mockCloudAccountStorage = new Map<string, string>();
+const mockEnsureCloudSendConsent = jest.fn<Promise<void>, []>();
+const mockFreeImageOfferFor = jest.fn();
+let mockChatInputOnOpenVoiceMode: (() => void) | undefined;
+let mockLiveVoiceReason: string | null | undefined;
 
 jest.mock('@clerk/expo', () => ({ useUser: () => ({ user: null }) }));
+
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: () => mockEnsureCloudSendConsent(),
+}));
+
+jest.mock('@/src/features/voice/services/liveVoiceAvailability', () => {
+  const actual = jest.requireActual('@/src/features/voice/services/liveVoiceAvailability');
+  return {
+    ...actual,
+    liveVoiceModeUnavailableReason: (input: unknown) =>
+      mockLiveVoiceReason === undefined
+        ? actual.liveVoiceModeUnavailableReason(input)
+        : mockLiveVoiceReason,
+  };
+});
+
+jest.mock('@/src/features/chat/actions/freeImageOffer', () => ({
+  ...jest.requireActual('@/src/features/chat/actions/freeImageOffer'),
+  freeImageOfferFor: (...args: unknown[]) => mockFreeImageOfferFor(...args),
+}));
 
 jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: jest.fn(() => new Promise(() => undefined)),
@@ -118,11 +143,16 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
   const { View } = require('react-native');
   return {
     ChatInput: React.forwardRef(function MockChatInput(
-      props: { onSend?: typeof mockChatInputOnSend; isOnline?: boolean },
+      props: {
+        onSend?: typeof mockChatInputOnSend;
+        isOnline?: boolean;
+        onOpenVoiceMode?: () => void;
+      },
       ref: React.Ref<unknown>,
     ) {
       React.useImperativeHandle(ref, () => ({ addAttachments: jest.fn() }));
       mockChatInputOnSend = props.onSend;
+      mockChatInputOnOpenVoiceMode = props.onOpenVoiceMode;
       mockChatInputIsOnline = props.isOnline;
       return <View testID="chat-input" />;
     }),
@@ -213,6 +243,7 @@ import {
 import { clearPostAuthIntent } from '../src/features/auth/services/postAuthIntent';
 import { useSettingsStore } from '../stores/settingsStore';
 import { REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
+import { CloudProviderConsentDeclinedError } from '../services/llmGate';
 
 const OWNER = 'mobile-new-chat-settings-user';
 
@@ -228,10 +259,14 @@ describe('Chat tab new chat Cloud send', () => {
     activateCloudAccount(OWNER);
     mockChatInputOnSend = undefined;
     mockChatInputIsOnline = undefined;
+    mockChatInputOnOpenVoiceMode = undefined;
+    mockLiveVoiceReason = undefined;
     mockIsOnline = true;
     mockResolveVideoRequest.mockReturnValue({ status: 'not_requested' });
     mockResolveImageRequest.mockReturnValue({ status: 'not_requested' });
     mockCreateConversation.mockResolvedValue('conv-1');
+    mockEnsureCloudSendConsent.mockResolvedValue(undefined);
+    mockFreeImageOfferFor.mockResolvedValue({ status: 'not_offered' });
     useChatViewStore.setState({
       mediaMode: 'chat',
       imageTransparentBackground: false,
@@ -571,6 +606,196 @@ describe('Chat tab new chat Cloud send', () => {
       expect(mockPush).toHaveBeenCalledTimes(1);
       expect(mockPush).toHaveBeenCalledWith('/(app)/chat/conv-1');
       expect(alertSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the Share with AI providers question', () => {
+    const declineSharing = () =>
+      mockEnsureCloudSendConsent.mockRejectedValue(new CloudProviderConsentDeclinedError());
+
+    const expectNothingStarted = () => {
+      expect(mockEnsureCloudSendConsent).toHaveBeenCalledTimes(1);
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
+      expect(mockRunImageGenerationTurn).not.toHaveBeenCalled();
+      expect(mockRunVideoGenerationTurn).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockDiscardUnsentConversation).not.toHaveBeenCalled();
+    };
+
+    it('creates and opens nothing for a text message when sharing is declined', async () => {
+      declineSharing();
+
+      render(<ChatTabScreen />);
+      const accepted = await mockChatInputOnSend?.('hello');
+
+      expect(accepted).toBe(false);
+      expectNothingStarted();
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
+
+    it('creates nothing for the free image offer when sharing is declined', async () => {
+      declineSharing();
+      useChatViewStore.setState({ mediaMode: 'image' });
+      mockResolveImageRequest.mockReturnValue({
+        status: 'blocked',
+        code: 'plan_required',
+        prompt: 'a red fox',
+        alert: { title: 'Images need a plan', message: 'Choose a plan.' },
+      });
+      mockFreeImageOfferFor.mockResolvedValue({
+        status: 'offered',
+        model: 'fixture-image-model',
+        prompt: 'a red fox',
+      });
+
+      render(<ChatTabScreen />);
+      const accepted = await mockChatInputOnSend?.('a red fox');
+
+      expect(accepted).toBe(false);
+      expect(mockFreeImageOfferFor).toHaveBeenCalledTimes(1);
+      expectNothingStarted();
+    });
+
+    it.each(['image', 'video'] as const)(
+      'creates nothing and sends no %s prompt when sharing is declined',
+      async (kind) => {
+        declineSharing();
+        useChatViewStore.setState({ mediaMode: kind });
+        const ready = {
+          status: 'ready',
+          prompt: 'a paper boat',
+          model: `fixture-${kind}-model`,
+          ownerId: OWNER,
+        };
+        if (kind === 'image') mockResolveImageRequest.mockReturnValue(ready);
+        else mockResolveVideoRequest.mockReturnValue({ ...ready, durationSecs: 8 });
+
+        render(<ChatTabScreen />);
+        const accepted = await mockChatInputOnSend?.('a paper boat');
+
+        expect(accepted).toBe(false);
+        expectNothingStarted();
+      },
+    );
+
+    it('asks before the chat exists and then sends once when sharing is allowed', async () => {
+      const order: string[] = [];
+      mockEnsureCloudSendConsent.mockImplementation(async () => {
+        order.push('consent');
+      });
+      mockCreateConversation.mockImplementationOnce(async () => {
+        order.push('create');
+        return 'conv-1';
+      });
+      mockSendMessage.mockImplementationOnce(
+        async (
+          _conversationId: string,
+          _text: string,
+          _model: string,
+          _attachments: unknown,
+          options?: { onAccepted?: () => void },
+        ) => {
+          order.push('send');
+          options?.onAccepted?.();
+          return true;
+        },
+      );
+
+      render(<ChatTabScreen />);
+      const outcome = await mockChatInputOnSend?.('hello');
+
+      expect(outcome).toEqual({ openedConversationId: 'conv-1' });
+      expect(order).toEqual(['consent', 'create', 'send']);
+      expect(mockCreateConversation).toHaveBeenCalledTimes(1);
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith('/(app)/chat/conv-1');
+    });
+
+    it('creates nothing when the account changes while the question is open', async () => {
+      mockEnsureCloudSendConsent.mockImplementation(async () => {
+        activateCloudAccount('another-person');
+      });
+
+      render(<ChatTabScreen />);
+      const accepted = await mockChatInputOnSend?.('hello');
+
+      expect(accepted).toBe(false);
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it('never asks for a Local Mode message', async () => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+      useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID, selectedProvider: 'local' });
+      mockSendMessage.mockResolvedValueOnce(true);
+
+      render(<ChatTabScreen />);
+      await mockChatInputOnSend?.('hello');
+
+      expect(mockEnsureCloudSendConsent).not.toHaveBeenCalled();
+      expect(mockCreateConversation).toHaveBeenCalledTimes(1);
+      expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    });
+
+    describe('when live voice starts from a new Cloud chat', () => {
+      beforeEach(() => {
+        mockLiveVoiceReason = null;
+        useSettingsStore.setState({ voiceOnboardingSeen: true });
+      });
+
+      afterEach(() => {
+        useSettingsStore.setState({ voiceOnboardingSeen: false });
+      });
+
+      const startVoice = async () => {
+        render(<ChatTabScreen />);
+        expect(mockChatInputOnOpenVoiceMode).toBeDefined();
+        mockChatInputOnOpenVoiceMode?.();
+        await waitFor(() => expect(mockEnsureCloudSendConsent).toHaveBeenCalledTimes(1));
+        await Promise.resolve();
+        await Promise.resolve();
+      };
+
+      it('creates and opens no voice chat when sharing is declined', async () => {
+        declineSharing();
+
+        await startVoice();
+
+        expect(mockCreateConversation).not.toHaveBeenCalled();
+        expect(mockPush).not.toHaveBeenCalled();
+        expect(alertSpy).not.toHaveBeenCalled();
+      });
+
+      it('asks before the voice chat exists and then opens it once when sharing is allowed', async () => {
+        const order: string[] = [];
+        mockEnsureCloudSendConsent.mockImplementation(async () => {
+          order.push('consent');
+        });
+        mockCreateConversation.mockImplementationOnce(async () => {
+          order.push('create');
+          return 'conv-1';
+        });
+
+        await startVoice();
+
+        await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+        expect(order).toEqual(['consent', 'create']);
+        expect(mockCreateConversation).toHaveBeenCalledWith('Voice chat');
+        expect(mockPush).toHaveBeenCalledWith('/(app)/chat/conv-1?voice=live');
+      });
+
+      it('creates no voice chat when the account changes while the question is open', async () => {
+        mockEnsureCloudSendConsent.mockImplementation(async () => {
+          activateCloudAccount('another-person');
+        });
+
+        await startVoice();
+
+        expect(mockCreateConversation).not.toHaveBeenCalled();
+        expect(mockPush).not.toHaveBeenCalled();
+      });
     });
   });
 

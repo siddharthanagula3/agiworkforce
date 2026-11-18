@@ -359,6 +359,7 @@ export function SettingsSwitchRow({
   testID?: string;
 }) {
   const colors = useThemeColors();
+  const stacked = useLargeTextRows();
   const resolvedIconColor = iconColor ?? colors.textSecondary;
 
   return (
@@ -366,7 +367,7 @@ export function SettingsSwitchRow({
       style={{
         minHeight: description ? 76 : 56,
         paddingHorizontal: 14,
-        paddingVertical: description ? 12 : 0,
+        paddingVertical: description ? 12 : stacked ? 8 : 0,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
@@ -390,14 +391,14 @@ export function SettingsSwitchRow({
       </View>
       <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
         <Text
-          numberOfLines={2}
+          numberOfLines={stacked ? undefined : 2}
           style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
         >
           {label}
         </Text>
         {description ? (
           <Text
-            numberOfLines={4}
+            numberOfLines={stacked ? undefined : 4}
             style={{
               color: colors.textMuted,
               fontSize: typeScale.footnote,

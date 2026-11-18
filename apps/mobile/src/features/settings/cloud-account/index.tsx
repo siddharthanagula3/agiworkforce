@@ -127,7 +127,6 @@ function SignedInCloudAccount() {
   const router = useRouter();
   const signOut = useAuthStore((s) => s.signOut);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const syncStatus = useCloudSyncStateStore((s) => s.status);
   const lastSyncAt = useCloudSyncStateStore((s) => s.lastSyncAt);
   const { user: clerkUser } = useUser();
@@ -203,7 +202,6 @@ function SignedInCloudAccount() {
   const refreshDeletionStatus = useCallback(
     async (owner: DeletionOwner, account = owner.account) => {
       if (
-        appMode !== 'cloud' ||
         !owner.active ||
         deletionOwner.current !== owner ||
         !isCloudAccountEpochCurrent(owner.account) ||
@@ -236,7 +234,7 @@ function SignedInCloudAccount() {
         if (current()) setDeletionStatusError(true);
       }
     },
-    [appMode, retireConfirmation, userId],
+    [retireConfirmation, userId],
   );
 
   useFocusEffect(
@@ -260,7 +258,7 @@ function SignedInCloudAccount() {
         setCancellingDeletion(false);
         setDeletionStatus(null);
         setDeletionStatusError(false);
-        void refreshDeletionStatus(owner, account);
+        if (appMode === 'cloud') void refreshDeletionStatus(owner, account);
       };
       renew();
       const unsubscribe = subscribeCloudAccountEpochChange(renew);
@@ -268,7 +266,7 @@ function SignedInCloudAccount() {
         retire();
         unsubscribe();
       };
-    }, [refreshDeletionStatus]),
+    }, [appMode, refreshDeletionStatus]),
   );
 
   const finishDeletionIntent = useCallback((intent: DeletionIntent) => {
@@ -453,46 +451,9 @@ function SignedInCloudAccount() {
     ]);
   }, [captureVisibleAccount, signOut]);
 
-  const confirmSwitchToCloud = useCallback(
-    (account: CloudAccountEpoch, reason: string) => {
-      Alert.alert(
-        'Switch to AGI Cloud',
-        `${reason} Switching does not upload your Local Mode chats or files.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Switch to Cloud',
-            onPress: () => {
-              if (!isCloudAccountEpochCurrent(account)) {
-                Alert.alert(
-                  'Account changed',
-                  'This mode-change confirmation is no longer valid. Open it again for the current account.',
-                );
-                return;
-              }
-              setAppMode('cloud');
-            },
-          },
-        ],
-      );
-    },
-    [setAppMode],
-  );
-
-  const handleSwitchForDeletion = useCallback(() => {
-    const account = captureVisibleAccount();
-    if (!account) return;
-    confirmSwitchToCloud(account, 'Account deletion is managed in AGI Cloud.');
-  }, [captureVisibleAccount, confirmSwitchToCloud]);
-
   const handleExportCloudData = useCallback(() => {
     const account = captureVisibleAccount();
     if (!account) return;
-
-    if (appMode !== 'cloud') {
-      confirmSwitchToCloud(account, 'Cloud export needs AGI Cloud.');
-      return;
-    }
 
     const runExport = (work: Promise<void>) => {
       setExporting(true);
@@ -547,7 +508,7 @@ function SignedInCloudAccount() {
         });
     };
     runExport(exportCloudUserData(account));
-  }, [appMode, captureVisibleAccount, confirmSwitchToCloud, router]);
+  }, [captureVisibleAccount, router]);
 
   const handleDeleteAccount = useCallback(() => {
     const intent = beginDeletionIntent('schedule');
@@ -954,7 +915,7 @@ function SignedInCloudAccount() {
         <SettingsRow
           label={exporting ? 'Exporting…' : 'Export Cloud Data'}
           icon={Download}
-          value={appMode === 'cloud' ? 'JSON' : 'Cloud mode required'}
+          value="JSON"
           onPress={exporting || deleting ? undefined : handleExportCloudData}
           isLast
         />
@@ -1001,14 +962,7 @@ function SignedInCloudAccount() {
             Danger Zone
           </Text>
         </View>
-        {appMode !== 'cloud' ? (
-          <SettingsRow
-            label="Deletion is managed in AGI Cloud. Switch to Cloud"
-            icon={Trash2}
-            onPress={handleSwitchForDeletion}
-            isLast
-          />
-        ) : deletionStatus?.ownerId !== userId ? (
+        {deletionStatus?.ownerId !== userId ? (
           <SettingsRow
             label={
               deletionStatusError

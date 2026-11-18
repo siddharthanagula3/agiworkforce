@@ -33,6 +33,12 @@ jest.mock('../src/features/chat/actions/mediaMode', () => {
   };
 });
 
+const mockEnsureCloudSendConsent = jest.fn();
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: () => mockEnsureCloudSendConsent(),
+}));
+
 const mockRunImageGenerationTurn = jest.fn();
 jest.mock('../src/features/chat/actions/runImageGenerationTurn', () => ({
   ...jest.requireActual('../src/features/chat/actions/runImageGenerationTurn'),
@@ -41,6 +47,16 @@ jest.mock('../src/features/chat/actions/runImageGenerationTurn', () => ({
     return mockRunImageGenerationTurn(...args);
   },
 }));
+
+let mockFreeOffer: unknown = null;
+jest.mock('../src/features/chat/actions/freeImageOffer', () => {
+  const actual = jest.requireActual('../src/features/chat/actions/freeImageOffer');
+  return {
+    ...actual,
+    freeImageOfferFor: (...args: unknown[]) =>
+      mockFreeOffer ? Promise.resolve(mockFreeOffer) : actual.freeImageOfferFor(...args),
+  };
+});
 
 let mockAccountCurrent = true;
 let mockAccount: { ownerId: string; epoch: number } | null = { ownerId: 'images-owner', epoch: 1 };
@@ -62,6 +78,7 @@ import {
   imageConversationTitle,
   startImageCreation,
 } from '../src/features/image/startImageCreation';
+import { CloudProviderConsentDeclinedError } from '../services/llmGate';
 
 const mockCreateConversation = jest.fn();
 const mockDiscardUnsentConversation = jest.fn();
@@ -72,6 +89,8 @@ const open = jest.fn((conversationId: string) => {
 describe('startImageCreation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEnsureCloudSendConsent.mockResolvedValue(undefined);
+    mockFreeOffer = null;
     mockCalls.length = 0;
     mockAccountCurrent = true;
     mockAccount = { ownerId: 'images-owner', epoch: 1 };
@@ -188,5 +207,49 @@ describe('startImageCreation', () => {
     });
     expect(mockCreateConversation).not.toHaveBeenCalled();
     expect(useChatViewStore.getState().mediaMode).toBe('text');
+  });
+
+  describe('before sharing with AI providers is allowed', () => {
+    it('asks once, before the chat exists, then creates one chat and starts one image', async () => {
+      mockEnsureCloudSendConsent.mockImplementation(async () => {
+        mockCalls.push('askToShare');
+      });
+
+      const result = await startImageCreation({ prompt: 'A red kite', isOnline: true, open });
+
+      expect(result).toEqual({ status: 'started', conversationId: 'image-conversation' });
+      expect(mockCalls).toEqual([
+        'enterMediaMode',
+        'askToShare',
+        'createConversation',
+        'open:image-conversation',
+        'runImageGenerationTurn',
+      ]);
+    });
+
+    it('creates no chat, opens nothing and gives no reason when the person says Not now', async () => {
+      useChatViewStore.setState({ mediaMode: 'video' });
+      mockEnsureCloudSendConsent.mockRejectedValue(new CloudProviderConsentDeclinedError());
+
+      const result = await startImageCreation({ prompt: 'A red kite', isOnline: true, open });
+
+      expect(result).toEqual({ status: 'declined', message: null });
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(open).not.toHaveBeenCalled();
+      expect(mockRunImageGenerationTurn).not.toHaveBeenCalled();
+      expect(useChatViewStore.getState().mediaMode).toBe('video');
+    });
+
+    it('creates no chat for a free image when the person says Not now', async () => {
+      useTierStore.setState({ tier: 'free', grantedCapabilities: [] } as never);
+      mockFreeOffer = { status: 'offered', model: 'fixture-image-model', prompt: 'A red kite' };
+      mockEnsureCloudSendConsent.mockRejectedValue(new CloudProviderConsentDeclinedError());
+
+      const result = await startImageCreation({ prompt: 'A red kite', isOnline: true, open });
+
+      expect(result).toEqual({ status: 'declined', message: null });
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(open).not.toHaveBeenCalled();
+    });
   });
 });

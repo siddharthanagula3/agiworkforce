@@ -71,6 +71,10 @@ jest.mock('expo-file-system/legacy', () => ({
   EncodingType: { UTF8: 'utf8' },
 }));
 jest.mock('../services/dsarTemporaryFile', () => ({ withDsarTemporaryFile: jest.fn() }));
+const mockWithdrawSharing = jest.fn();
+jest.mock('../src/features/settings/cloud-privacy/CloudProviderSharingGroup', () => ({
+  withdrawSharingWithProviders: () => mockWithdrawSharing(),
+}));
 jest.mock('expo-sharing', () => ({ isAvailableAsync: jest.fn(), shareAsync: jest.fn() }));
 jest.mock('expo-constants', () => ({ __esModule: true, default: {} }));
 jest.mock('../storage/conversations', () => ({ listConversations: jest.fn() }));

@@ -25,17 +25,27 @@ const RUN_UNAVAILABLE_MESSAGE = 'This task is no longer available';
 const RUN_UNAVAILABLE_STATUSES: ReadonlySet<number> = new Set([403, 404, 410]);
 const APPROVAL_EXPIRED_MESSAGE = 'This approval expired, so the task cannot continue from it';
 
-export interface CloudRunListOptions {
+export interface CloudRunWithdrawalOptions {
+  withdrawalControl?: boolean;
+}
+
+export interface CloudRunListOptions extends CloudRunWithdrawalOptions {
   states: AgentTaskState[];
   cursor?: string;
   query?: string;
   signal?: AbortSignal;
 }
 
+function runClient(options: CloudRunWithdrawalOptions) {
+  return options.withdrawalControl
+    ? createMobileCloudAgentRunClient(undefined, { withdrawalControl: true })
+    : createMobileCloudAgentRunClient();
+}
+
 export function listCloudRuns(
   options: CloudRunListOptions,
 ): Promise<ManagedCloudAgentRunListResult> {
-  return createMobileCloudAgentRunClient().listRuns({
+  return runClient(options).listRuns({
     states: options.states,
     limit: CLOUD_RUN_PAGE_LIMIT,
     ...(options.cursor ? { cursor: options.cursor } : {}),
@@ -68,8 +78,12 @@ export function cancelCloudRun(runId: string, signal?: AbortSignal): Promise<Clo
   return createMobileCloudAgentRunClient().cancelRun(runId, { signal });
 }
 
-export function pauseCloudRun(runId: string, signal?: AbortSignal): Promise<CloudAgentRun> {
-  return createMobileCloudAgentRunClient().pauseRun(runId, { signal });
+export function pauseCloudRun(
+  runId: string,
+  signal?: AbortSignal,
+  options: CloudRunWithdrawalOptions = {},
+): Promise<CloudAgentRun> {
+  return runClient(options).pauseRun(runId, { signal });
 }
 
 export function resumePausedCloudRun(runId: string, signal?: AbortSignal): Promise<void> {

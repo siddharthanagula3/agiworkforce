@@ -30,6 +30,12 @@ jest.mock('../src/features/chat/actions/mediaMode', () => {
   };
 });
 
+const mockEnsureCloudSendConsent = jest.fn();
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: () => mockEnsureCloudSendConsent(),
+}));
+
 const mockRunImageGenerationTurn = jest.fn();
 jest.mock('../src/features/chat/actions/runImageGenerationTurn', () => ({
   ...jest.requireActual('../src/features/chat/actions/runImageGenerationTurn'),
@@ -54,6 +60,7 @@ import type { Attachment } from '../src/features/chat/components/AttachmentPrevi
 import { IMAGE_REFERENCES_UNAVAILABLE } from '../src/features/image/imageReferenceModel';
 import { ReferenceImageTooLargeError } from '../src/features/image/services/imageReference';
 import { startImageReferenceCreation } from '../src/features/image/startImageReferenceCreation';
+import { CloudProviderConsentDeclinedError } from '../services/llmGate';
 
 const canEdit = (id: string) => supportsManagedMediaImageEdit(getModelMetadataById(id)?.provider);
 const editingModels = listMediaModels('image').filter(canEdit);
@@ -75,6 +82,7 @@ const open = jest.fn();
 describe('startImageReferenceCreation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockEnsureCloudSendConsent.mockResolvedValue(undefined);
     mockImageModels = null;
     mockRunImageGenerationTurn.mockResolvedValue({ status: 'completed', assistantMessageId: 'a' });
     mockCreateConversation.mockResolvedValue('image-conversation');
@@ -250,5 +258,51 @@ describe('startImageReferenceCreation', () => {
       'The reference image could not be read from this device.',
       undefined,
     );
+  });
+
+  describe('before sharing with AI providers is allowed', () => {
+    it('creates no chat, opens nothing and gives no reason when the person says Not now', async () => {
+      useChatViewStore.setState({
+        mediaMode: 'video',
+        selectedMediaModel: { image: editingModels[0]! },
+      });
+      mockEnsureCloudSendConsent.mockRejectedValue(new CloudProviderConsentDeclinedError());
+
+      const result = await startImageReferenceCreation({
+        prompt: 'Make it snow',
+        references: [photo('first')],
+        isOnline: true,
+        open,
+      });
+
+      expect(result).toEqual({ status: 'declined', message: null });
+      expect(mockCreateConversation).not.toHaveBeenCalled();
+      expect(open).not.toHaveBeenCalled();
+      expect(mockRunImageGenerationTurn).not.toHaveBeenCalled();
+      expect(useChatViewStore.getState().mediaMode).toBe('video');
+    });
+
+    it('asks before the chat is created and starts one image once allowed', async () => {
+      useChatViewStore.setState({ selectedMediaModel: { image: editingModels[0]! } });
+      const order: string[] = [];
+      mockEnsureCloudSendConsent.mockImplementation(async () => {
+        order.push('askToShare');
+      });
+      mockCreateConversation.mockImplementation(async () => {
+        order.push('createConversation');
+        return 'image-conversation';
+      });
+
+      const result = await startImageReferenceCreation({
+        prompt: 'Make it snow',
+        references: [photo('first')],
+        isOnline: true,
+        open,
+      });
+
+      expect(result).toEqual({ status: 'started', conversationId: 'image-conversation' });
+      expect(order).toEqual(['askToShare', 'createConversation']);
+      expect(mockRunImageGenerationTurn).toHaveBeenCalledTimes(1);
+    });
   });
 });

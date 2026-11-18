@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { BackHandler, FlatList, StyleSheet, View } from 'react-native';
+import { BackHandler, FlatList, Platform, StyleSheet, View } from 'react-native';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 
 let mockWindowWidth = 750;
@@ -291,6 +291,89 @@ describe('VoicePickerSheet', () => {
     expect(remove).toHaveBeenCalledTimes(1);
     add.mockRestore();
   });
+  describe('starting a voice, which asks for the microphone the first time', () => {
+    const originalOS = Platform.OS;
+    function setPlatform(os: 'ios' | 'android') {
+      Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
+    }
+
+    afterEach(() => {
+      jest.useRealTimers();
+      Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+    });
+
+    it('on Android takes the sheet out of the tree before the start handler runs', () => {
+      setPlatform('android');
+      jest.useFakeTimers();
+      const onStart = jest.fn();
+      const view = renderSheet({ onStart });
+      expect(view.queryByTestId('bottom-sheet')).toBeTruthy();
+
+      fireEvent.press(view.getByLabelText(`Start voice with ${VOICE_PRESETS[0]!.name}`));
+
+      expect(view.queryByTestId('bottom-sheet')).toBeNull();
+      expect(onStart).not.toHaveBeenCalled();
+      expect(mockSheetCalls.close).not.toHaveBeenCalled();
+
+      act(() => jest.runOnlyPendingTimers());
+      expect(onStart).toHaveBeenCalledTimes(1);
+    });
+
+    it('on Android commits the highlighted voice and starts once on a double tap', () => {
+      setPlatform('android');
+      jest.useFakeTimers();
+      const onStart = jest.fn();
+      const view = renderSheet({ onStart });
+      const start = view.getByLabelText(`Start voice with ${VOICE_PRESETS[0]!.name}`);
+
+      act(() => {
+        fireEvent.press(start);
+        fireEvent.press(start);
+      });
+      act(() => jest.runOnlyPendingTimers());
+
+      expect(onStart).toHaveBeenCalledTimes(1);
+      expect(useSettingsStore.getState().selectedPresetId).toBe(VOICE_PRESETS[0]!.id);
+    });
+
+    it('on Android draws a fresh open sheet the next time the picker is shown', () => {
+      setPlatform('android');
+      jest.useFakeTimers();
+      const onStart = jest.fn();
+      const view = renderSheet({ onStart });
+      fireEvent.press(view.getByLabelText(`Start voice with ${VOICE_PRESETS[0]!.name}`));
+      act(() => jest.runOnlyPendingTimers());
+      view.rerender(
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <VoicePickerSheet visible={false} onStart={onStart} onDismiss={jest.fn()} />
+        </SafeAreaProvider>,
+      );
+      expect(view.queryByTestId('bottom-sheet')).toBeNull();
+
+      view.rerender(
+        <SafeAreaProvider initialMetrics={METRICS}>
+          <VoicePickerSheet visible onStart={onStart} onDismiss={jest.fn()} />
+        </SafeAreaProvider>,
+      );
+
+      expect(view.queryByTestId('bottom-sheet')).toBeTruthy();
+      expect(mockSheetProps.current).toMatchObject({ index: 0 });
+    });
+
+    it('on iOS closes the sheet and then starts, in the same tick', () => {
+      setPlatform('ios');
+      const order: string[] = [];
+      mockSheetCalls.close.mockImplementationOnce(() => order.push('close'));
+      const onStart = jest.fn(() => order.push('start'));
+      const view = renderSheet({ onStart });
+
+      fireEvent.press(view.getByLabelText(`Start voice with ${VOICE_PRESETS[0]!.name}`));
+
+      expect(view.queryByTestId('bottom-sheet')).toBeTruthy();
+      expect(order).toEqual(['close', 'start']);
+    });
+  });
+
   describe('on a window wider than the pane beside the permanent sidebar', () => {
     const PANE = 752;
     const WINDOW = 1032;

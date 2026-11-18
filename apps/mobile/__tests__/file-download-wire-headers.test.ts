@@ -27,6 +27,9 @@ jest.mock('@react-native-community/netinfo', () => ({
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: { getState: () => ({ appMode: 'cloud' }) },
 }));
+jest.mock('@/services/providerConsent', () => ({
+  hasCurrentCloudProviderConsent: () => true,
+}));
 jest.mock('@/services/authSession', () => ({
   getAuthHeaders: jest.fn(async () => ({ Authorization: 'Bearer test-jwt' })),
 }));

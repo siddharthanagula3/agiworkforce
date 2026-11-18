@@ -1,4 +1,4 @@
-import { Alert, Share, StyleSheet } from 'react-native';
+import { Alert, Platform, Share, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPost = jest.fn();
@@ -253,7 +253,48 @@ describe('ArtifactFullScreen publish-to-link', () => {
     expect(Alert.alert).toHaveBeenCalledWith(
       'Could not open the link',
       'Copy the link and open it in Safari.',
+      undefined,
+      { cancelable: true },
     );
+  });
+
+  describe('on Android', () => {
+    const originalOS = Platform.OS;
+
+    beforeEach(() => {
+      Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
+    });
+
+    it('names the browser generically and lets Back close the failure alert', async () => {
+      const firstParty = `https://agiworkforce.com/shared-artifact/${'a'.repeat(24)}`;
+      mockPost.mockResolvedValue({ ...publishReceipt, shareUrl: firstParty });
+      mockOpenURL.mockReset().mockRejectedValue(new Error('no handler'));
+      const view = render(
+        <ArtifactFullScreen artifact={htmlArtifact} visible onClose={() => undefined} />,
+      );
+      fireEvent.press(view.getByLabelText('Publish artifact to a public link'));
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+      tapAlertButton('Publish');
+      await waitFor(() => expect(view.getByTestId('artifact-open-published')).toBeTruthy());
+
+      expect(view.getByLabelText('Open in browser')).toBeTruthy();
+      expect(view.queryByLabelText('Open in Safari')).toBeNull();
+
+      (Alert.alert as unknown as jest.Mock).mockClear();
+      await act(async () => {
+        fireEvent.press(view.getByTestId('artifact-open-published'));
+      });
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Could not open the link',
+        'Copy the link and open it in your browser.',
+        undefined,
+        { cancelable: true },
+      );
+    });
   });
 
   it('offers no Open in Safari for a link outside the first-party hosts', async () => {

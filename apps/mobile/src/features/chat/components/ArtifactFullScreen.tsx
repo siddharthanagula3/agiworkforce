@@ -4,6 +4,7 @@ import {
   Modal,
   Share,
   Alert,
+  Platform,
   TextInput,
   KeyboardAvoidingView,
   type LayoutChangeEvent,
@@ -267,6 +268,14 @@ export function publishableKindFor(artifact: Artifact): string | null {
     return lang === 'txt' || lang === 'text' ? 'text' : 'markdown';
   }
   return null;
+}
+
+function openInBrowserLabel(): string {
+  return Platform.OS === 'ios' ? 'Open in Safari' : 'Open in browser';
+}
+
+function openLinkFailureMessage(): string {
+  return `Copy the link and open it in ${Platform.OS === 'ios' ? 'Safari' : 'your browser'}.`;
 }
 
 function canPublish(artifact: Artifact, content: string): boolean {
@@ -1135,7 +1144,11 @@ export function ArtifactFullScreen({
   const handleOpenPublished = useCallback(() => {
     if (!publishedUrl) return;
     void openExternalUrl(publishedUrl).then((opened) => {
-      if (!opened) Alert.alert('Could not open the link', 'Copy the link and open it in Safari.');
+      if (!opened) {
+        Alert.alert('Could not open the link', openLinkFailureMessage(), undefined, {
+          cancelable: true,
+        });
+      }
     });
   }, [publishedUrl]);
 
@@ -1606,7 +1619,7 @@ export function ArtifactFullScreen({
                 {isAllowedExternalUrl(publishedUrl) ? (
                   <PressableBox
                     onPress={handleOpenPublished}
-                    accessibilityLabel="Open in Safari"
+                    accessibilityLabel={openInBrowserLabel()}
                     accessibilityRole="button"
                     style={ICON_TARGET}
                     testID="artifact-open-published"

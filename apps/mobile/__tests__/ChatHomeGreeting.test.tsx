@@ -129,6 +129,11 @@ jest.mock('@/src/features/model-picker/installStore', () => ({
   pickReadyLocalModelId: () => null,
 }));
 
+jest.mock('@/services/llmGate', () => ({
+  ...jest.requireActual('@/services/llmGate'),
+  ensureCloudSendConsent: async () => undefined,
+}));
+
 jest.mock('@/lib/mmkv', () => {
   const values = new Map<string, string>();
   return {

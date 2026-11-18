@@ -6,6 +6,10 @@ import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { Platform } from 'react-native';
 import { Camera } from 'expo-camera';
 import {
+  toPushPermissionStatus,
+  trackPushPermissionRequest,
+} from '@/services/pushPermissionStatus';
+import {
   Mic,
   AudioLines,
   ScanFace,
@@ -86,14 +90,16 @@ async function requestPhotos(): Promise<OsPermissionStatus> {
 
 async function getNotificationsStatus(): Promise<OsPermissionStatus> {
   const result = await Notifications.getPermissionsAsync();
-  return toOsStatus(result.status);
+  return toOsStatus(toPushPermissionStatus(result));
 }
 
 async function requestNotifications(): Promise<OsPermissionStatus> {
-  const result = await Notifications.requestPermissionsAsync({
-    ios: { allowAlert: true, allowBadge: true, allowSound: true },
-  });
-  return toOsStatus(result.status);
+  const status = await trackPushPermissionRequest(() =>
+    Notifications.requestPermissionsAsync({
+      ios: { allowAlert: true, allowBadge: true, allowSound: true },
+    }),
+  );
+  return toOsStatus(status);
 }
 
 async function getCalendarStatus(): Promise<OsPermissionStatus> {
@@ -196,6 +202,9 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
       description: 'Used for local model, download, and reminder alerts.',
       icon: Bell,
       applicableLevels: ['denied', 'allow_always'],
+      get statusHeadlines() {
+        return Platform.OS === 'android' ? { undetermined: 'Not Allowed Yet' } : undefined;
+      },
       getStatus: getNotificationsStatus,
       requestPermission: requestNotifications,
     },

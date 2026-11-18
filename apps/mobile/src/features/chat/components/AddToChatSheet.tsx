@@ -100,6 +100,7 @@ import { useCapability } from '@/src/lib/Capabilities';
 import {
   useBottomSheetPresence,
   useHardwareBackDismiss,
+  useSystemScreenSheet,
 } from '@/src/shared/hooks/useHardwareBackDismiss';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStore';
@@ -108,10 +109,10 @@ import type { Attachment } from './AttachmentPreview';
 
 interface AddToChatSheetProps {
   destinationKey: string;
-  onCamera: () => void;
-  onPhotos: () => void;
+  onCamera: () => void | Promise<void>;
+  onPhotos: () => void | Promise<void>;
   onPasteImage?: () => void;
-  onFile: () => void;
+  onFile: () => void | Promise<void>;
   onOpenCloudAccess: () => void;
   onOpenStyleSelector: () => void;
   onOpenProjectPicker: () => void;
@@ -452,26 +453,46 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     }
   }, [hapticsEnabled]);
 
+  // Handing off to another sheet keeps this one on screen while it animates
+  // out, so without this the tapped row sat inert for the whole handoff and
+  // read as a dead control.
+  const [handoff, setHandoff] = useState<'style' | 'project' | null>(null);
+  const [expanded, setExpanded] = useState<'file' | 'connectors' | null>(null);
+
+  const sheetRef = useRef<BottomSheet>(null);
   const closeSheet = useCallback(() => {
     libraryRequest.current += 1;
-    if (ref && 'current' in ref && ref.current) {
-      ref.current.close();
-    }
-  }, [ref]);
+    sheetRef.current?.close();
+  }, []);
   const [presented, sheetPresence] = useBottomSheetPresence();
   useHardwareBackDismiss(presented, closeSheet);
+  const handleSheetClosed = useCallback(() => {
+    libraryRequest.current += 1;
+    setHandoff(null);
+    setExpanded(null);
+  }, []);
+  const handleSheetUnmount = useCallback(() => {
+    sheetPresence.onClose();
+    setIsOpen(false);
+    handleSheetClosed();
+  }, [handleSheetClosed, sheetPresence]);
+  const sheet = useSystemScreenSheet({
+    forwardedRef: ref,
+    sheetRef,
+    closeSheet,
+    onUnmount: handleSheetUnmount,
+  });
+  const launchSystemScreen = sheet.launch;
 
   const handleCamera = useCallback(() => {
     haptic();
-    closeSheet();
-    onCamera();
-  }, [haptic, closeSheet, onCamera]);
+    launchSystemScreen(onCamera);
+  }, [haptic, launchSystemScreen, onCamera]);
 
   const handlePhotos = useCallback(() => {
     haptic();
-    closeSheet();
-    onPhotos();
-  }, [haptic, closeSheet, onPhotos]);
+    launchSystemScreen(onPhotos);
+  }, [haptic, launchSystemScreen, onPhotos]);
 
   const [clipboardImage, setClipboardImage] = useState(false);
   useEffect(() => {
@@ -493,9 +514,8 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const handleFile = useCallback(() => {
     haptic();
-    closeSheet();
-    onFile();
-  }, [haptic, closeSheet, onFile]);
+    launchSystemScreen(onFile);
+  }, [haptic, launchSystemScreen, onFile]);
 
   const handleAttachFromLibrary = useCallback(
     (pick: LibraryPick, request?: number) => {
@@ -508,11 +528,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [appMode, closeSheet, haptic, onAttachFromLibrary, pickerScope],
   );
 
-  // Handing off to another sheet keeps this one on screen while it animates
-  // out, so without this the tapped row sat inert for the whole handoff and
-  // read as a dead control.
-  const [handoff, setHandoff] = useState<'style' | 'project' | null>(null);
-  const [expanded, setExpanded] = useState<'file' | 'connectors' | null>(null);
   const toggleExpanded = useCallback(
     (section: 'file' | 'connectors') => {
       haptic();
@@ -593,10 +608,12 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const cardBg = themeColors.neutralSurface;
   const dividerColor = themeColors.borderLight;
+  if (!sheet.mounted) return null;
   return (
     <BottomSheet
-      ref={ref}
-      index={-1}
+      key={sheet.generation}
+      ref={sheetRef}
+      index={sheet.index}
       accessible={false}
       style={{ marginHorizontal: contentColumnInset('reading', contentWidth) }}
       onAnimate={sheetPresence.onAnimate}
@@ -605,9 +622,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         sheetPresence.onChange(index);
         setIsOpen(index >= 0);
         if (index < 0) {
-          libraryRequest.current += 1;
-          setHandoff(null);
-          setExpanded(null);
+          handleSheetClosed();
           return;
         }
         if (onPasteImage) void clipboardHasImage().then(setClipboardImage);

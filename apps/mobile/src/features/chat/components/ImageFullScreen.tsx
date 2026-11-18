@@ -52,6 +52,7 @@ import {
   type ViewerImageAction,
 } from '@/src/features/image/services/viewerImageActions';
 import { toUserMessage } from '@/services/userMessage';
+import { sharingWithProvidersAnswer } from '@/src/features/chat/actions/mediaGenerationConsent';
 import {
   isPhotosPermissionDenied,
   showPhotosPermissionAlert,
@@ -269,6 +270,7 @@ function ImageFullScreenOwner({
   const [editKind, setEditKind] = useState<'area' | 'change'>('area');
   const editSessionRef = useRef<number | null>(null);
   const editSequenceRef = useRef(0);
+  const askingSessionRef = useRef<number | null>(null);
   const lifetimeRef = useRef<symbol | null>(null);
   const operationRef = useRef<symbol | null>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -535,24 +537,47 @@ function ImageFullScreenOwner({
     setEditSession(null);
   }, [editSession]);
 
-  const handleSubmitEdit = useCallback(
-    (edit: ImageAreaEdit) => {
+  const submitAfterSharingQuestion = useCallback(
+    (send: () => void) => {
       if (!lifetimeRef.current || !editSession || editSessionRef.current !== editSession) return;
-      editSessionRef.current = null;
-      setEditSession(null);
-      onEditArea?.(edit);
+      if (askingSessionRef.current === editSession) return;
+      const submit = () => {
+        if (!lifetimeRef.current || editSessionRef.current !== editSession) return;
+        editSessionRef.current = null;
+        setEditSession(null);
+        send();
+      };
+      const answer = sharingWithProvidersAnswer();
+      if (answer === true) {
+        submit();
+        return;
+      }
+      askingSessionRef.current = editSession;
+      const settle = () => {
+        if (askingSessionRef.current === editSession) askingSessionRef.current = null;
+      };
+      void answer.then(
+        (allowed) => {
+          settle();
+          if (allowed) submit();
+        },
+        () => {
+          settle();
+          submit();
+        },
+      );
     },
-    [editSession, onEditArea],
+    [editSession],
+  );
+
+  const handleSubmitEdit = useCallback(
+    (edit: ImageAreaEdit) => submitAfterSharingQuestion(() => onEditArea?.(edit)),
+    [onEditArea, submitAfterSharingQuestion],
   );
 
   const handleSubmitChange = useCallback(
-    (edit: ImageWholeEdit) => {
-      if (!lifetimeRef.current || !editSession || editSessionRef.current !== editSession) return;
-      editSessionRef.current = null;
-      setEditSession(null);
-      onEditImage?.(edit);
-    },
-    [editSession, onEditImage],
+    (edit: ImageWholeEdit) => submitAfterSharingQuestion(() => onEditImage?.(edit)),
+    [onEditImage, submitAfterSharingQuestion],
   );
 
   const handleRetry = useCallback(() => {

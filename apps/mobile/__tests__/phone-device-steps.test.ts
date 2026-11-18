@@ -5,6 +5,7 @@ const mockGetCalendars = jest.fn();
 const mockGetEvents = jest.fn();
 const mockCalendarPermission = jest.fn();
 const mockGetDefaultCalendar = jest.fn();
+const mockCreateReminder = jest.fn();
 
 jest.mock('expo-calendar/legacy', () => ({
   EntityTypes: { EVENT: 'event' },
@@ -15,6 +16,9 @@ jest.mock('expo-calendar/legacy', () => ({
   getCalendarsAsync: () => mockGetCalendars(),
   getEventsAsync: (...args: unknown[]) => mockGetEvents(...args),
   getDefaultCalendarAsync: () => mockGetDefaultCalendar(),
+  getRemindersPermissionsAsync: () => mockCalendarPermission(),
+  requestRemindersPermissionsAsync: () => mockCalendarPermission(),
+  createReminderAsync: (...args: unknown[]) => mockCreateReminder(...args),
 }));
 
 jest.mock('@/lib/deviceId', () => ({ getDeviceId: async () => 'this-phone' }));
@@ -122,7 +126,7 @@ describe('phone step outcomes name the device neutrally', () => {
     });
   });
 
-  it('names both Apple devices that can add reminders', async () => {
+  it('says reminders are not available on an Android phone without naming an Apple device', async () => {
     Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
 
     const outcome = await runPhoneDeviceStep({
@@ -133,9 +137,23 @@ describe('phone step outcomes name the device neutrally', () => {
     });
 
     expect(outcome).toEqual({
-      content: 'Reminders can be added only from an iPhone or iPad.',
+      content: 'Reminders are not available on this device.',
       isError: true,
     });
+    expect(outcome.content).not.toMatch(/iPhone|iPad|iOS|Siri|iCloud/);
+  });
+
+  it('adds the reminder on iOS instead of refusing it', async () => {
+    Object.defineProperty(Platform, 'OS', { get: () => 'ios', configurable: true });
+
+    const outcome = await runPhoneDeviceStep({
+      toolCallId: 'call-5',
+      name: 'device_reminder_create',
+      deviceId: 'this-phone',
+      input: { title: 'Call back' },
+    });
+
+    expect(outcome).toEqual({ content: 'Added the reminder "Call back".', isError: false });
   });
 });
 

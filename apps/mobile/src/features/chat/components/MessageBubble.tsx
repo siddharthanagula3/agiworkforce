@@ -2082,6 +2082,11 @@ export const MessageBubble = memo(function MessageBubble({
     },
     [message.id, revealInChat],
   );
+  const failureShownOnImageCard =
+    isAssistant &&
+    message.imageGenStatus === 'failed' &&
+    typeof message.imageGenError === 'string' &&
+    message.imageGenError.trim().length > 0;
   const contentElements = useMemo(() => {
     if (isUser) {
       return bodyContent
@@ -2096,6 +2101,7 @@ export const MessageBubble = memo(function MessageBubble({
           ]
         : [];
     }
+    if (failureShownOnImageCard) return [];
     const answerMarkdown =
       artifactCardSources.size > 0 || streamingArtifactCardShown
         ? withoutFencesShownAsCards(
@@ -2118,6 +2124,7 @@ export const MessageBubble = memo(function MessageBubble({
   }, [
     isUser,
     bodyContent,
+    failureShownOnImageCard,
     preparedAnswer.markdown,
     themeColors,
     isStreamingRow,
@@ -2505,7 +2512,11 @@ export const MessageBubble = memo(function MessageBubble({
 
             {isAssistant && (message.isGeneratingImage || message.imageGenStatus === 'failed') && (
               <ImageGenProgress
-                prompt={message.imageGenPrompt ?? message.content ?? 'Generating image…'}
+                prompt={
+                  message.imageGenPrompt ??
+                  (failureShownOnImageCard ? '' : message.content) ??
+                  'Generating image…'
+                }
                 progress={message.imageGenProgress}
                 status={message.imageGenStatus ?? 'generating'}
                 errorMessage={message.imageGenError}

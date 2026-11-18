@@ -44,6 +44,25 @@ import { ImageGenProgress } from '../src/features/chat/components/ImageGenProgre
 import { lightColors } from '../src/ui/theme';
 
 describe('ImageGenProgress', () => {
+  it('draws no prompt line when there is no prompt', () => {
+    const withPrompt = render(
+      <ImageGenProgress
+        prompt="a red circle"
+        progress={0}
+        status="failed"
+        errorMessage="Failed."
+      />,
+    );
+    expect(withPrompt.UNSAFE_queryAllByProps({ numberOfLines: 2 })).not.toHaveLength(0);
+    withPrompt.unmount();
+
+    const withoutPrompt = render(
+      <ImageGenProgress prompt="" progress={0} status="failed" errorMessage="Failed." />,
+    );
+    expect(withoutPrompt.UNSAFE_queryAllByProps({ numberOfLines: 2 })).toHaveLength(0);
+    expect(withoutPrompt.getByText('Failed.')).toBeTruthy();
+  });
+
   it('renders the pending image generation card with active theme colors', () => {
     const { getByLabelText, getByText } = render(
       <ImageGenProgress prompt="Draw a clean AGI product mockup" progress={0} status="pending" />,

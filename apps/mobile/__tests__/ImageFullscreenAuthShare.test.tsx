@@ -22,6 +22,10 @@ jest.mock('../src/features/image/components/ImageChangeSheet', () => ({
   },
 }));
 const mockUseGeneratedImageSource = jest.fn();
+const mockSharingAnswer = jest.fn((): true | Promise<boolean> => true);
+jest.mock('@/src/features/chat/actions/mediaGenerationConsent', () => ({
+  sharingWithProvidersAnswer: () => mockSharingAnswer(),
+}));
 
 jest.mock('expo-image', () => ({
   Image: (props: Record<string, unknown>) => {
@@ -1248,5 +1252,155 @@ describe('viewerImageActions for vector and untyped pictures', () => {
 
   it('still offers nothing for an address it cannot read', () => {
     expect(viewerImageActions('ftp://example.com/a.png').size).toBe(0);
+  });
+});
+
+describe('ImageFullScreen edit before sharing with AI providers is allowed', () => {
+  const durable = '/api/files/22222222-2222-4222-8222-222222222222';
+  const areaEdit = { prompt: 'Add a red door', sourceBase64: 'c291cmNl', maskBase64: 'bWFzaw==' };
+  const wholeEdit = { operation: 'variation', prompt: 'A harbour', sourceBase64: 'c291cmNl' };
+
+  function settle(answer: Promise<boolean>) {
+    return act(async () => {
+      await answer.catch(() => undefined);
+    });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSharingAnswer.mockReset();
+    mockSharingAnswer.mockReturnValue(true);
+    mockUseGeneratedImageSource.mockReturnValue({ status: 'invalid', source: null });
+  });
+
+  function openArea(onEditArea: jest.Mock) {
+    const view = render(
+      <ImageFullScreen imageUrl={durable} visible onClose={jest.fn()} onEditArea={onEditArea} />,
+    );
+    fireEvent.press(view.getByLabelText('Edit an area of this image'));
+    return mockImageAreaEditor.mock.calls.at(-1)![0];
+  }
+
+  function openChange(onEditImage: jest.Mock) {
+    const view = render(
+      <ImageFullScreen imageUrl={durable} visible onClose={jest.fn()} onEditImage={onEditImage} />,
+    );
+    fireEvent.press(view.getByLabelText('Change this image'));
+    return mockImageChangeSheet.mock.calls.at(-1)![0];
+  }
+
+  it('keeps the area editor open and sends nothing when the person says Not now', async () => {
+    let answer!: (allowed: boolean) => void;
+    const question = new Promise<boolean>((resolve) => (answer = resolve));
+    mockSharingAnswer.mockReturnValue(question);
+    const onEditArea = jest.fn();
+    const editor = openArea(onEditArea);
+    const rendersBefore = mockImageAreaEditor.mock.calls.length;
+
+    act(() => editor.onSubmit(areaEdit));
+    answer(false);
+    await settle(question);
+
+    expect(onEditArea).not.toHaveBeenCalled();
+    expect(mockImageAreaEditor.mock.calls.length).toBe(rendersBefore);
+    act(() => editor.onSubmit(areaEdit));
+    expect(mockSharingAnswer).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the change sheet open and sends nothing when the person says Not now', async () => {
+    const question = Promise.resolve(false);
+    mockSharingAnswer.mockReturnValue(question);
+    const onEditImage = jest.fn();
+    const sheet = openChange(onEditImage);
+    const rendersBefore = mockImageChangeSheet.mock.calls.length;
+
+    act(() => sheet.onSubmit(wholeEdit));
+    await settle(question);
+
+    expect(onEditImage).not.toHaveBeenCalled();
+    expect(mockImageChangeSheet.mock.calls.length).toBe(rendersBefore);
+    act(() => sheet.onSubmit(wholeEdit));
+    expect(mockSharingAnswer).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes the area editor and sends the edit once after Allow, however often it is tapped', async () => {
+    let answer!: (allowed: boolean) => void;
+    const question = new Promise<boolean>((resolve) => (answer = resolve));
+    mockSharingAnswer.mockReturnValue(question);
+    const onEditArea = jest.fn();
+    const editor = openArea(onEditArea);
+
+    act(() => editor.onSubmit(areaEdit));
+    act(() => editor.onSubmit(areaEdit));
+    expect(mockSharingAnswer).toHaveBeenCalledTimes(1);
+    expect(onEditArea).not.toHaveBeenCalled();
+
+    answer(true);
+    await settle(question);
+
+    expect(onEditArea).toHaveBeenCalledTimes(1);
+    expect(onEditArea).toHaveBeenCalledWith(areaEdit);
+    act(() => editor.onSubmit(areaEdit));
+    expect(onEditArea).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends the change once after Allow', async () => {
+    const question = Promise.resolve(true);
+    mockSharingAnswer.mockReturnValue(question);
+    const onEditImage = jest.fn();
+    const sheet = openChange(onEditImage);
+
+    act(() => sheet.onSubmit(wholeEdit));
+    act(() => sheet.onSubmit(wholeEdit));
+    await settle(question);
+
+    expect(onEditImage).toHaveBeenCalledTimes(1);
+    expect(onEditImage).toHaveBeenCalledWith(wholeEdit);
+  });
+
+  it('sends at once, without a wait, when sharing was already allowed', () => {
+    const onEditArea = jest.fn();
+    const onEditImage = jest.fn();
+    const editor = openArea(onEditArea);
+    act(() => editor.onSubmit(areaEdit));
+    expect(onEditArea).toHaveBeenCalledTimes(1);
+
+    const sheet = openChange(onEditImage);
+    act(() => sheet.onSubmit(wholeEdit));
+    expect(onEditImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops an answer that arrives after the editor was cancelled', async () => {
+    const question = Promise.resolve(true);
+    mockSharingAnswer.mockReturnValue(question);
+    const onEditArea = jest.fn();
+    const editor = openArea(onEditArea);
+
+    act(() => editor.onSubmit(areaEdit));
+    act(() => editor.onCancel());
+    await settle(question);
+
+    expect(onEditArea).not.toHaveBeenCalled();
+  });
+
+  it('sends anyway when the question fails, so the caller reports the failure', async () => {
+    const question = Promise.reject(new Error('offline'));
+    question.catch(() => undefined);
+    mockSharingAnswer.mockReturnValue(question);
+    const onEditArea = jest.fn();
+    const editor = openArea(onEditArea);
+
+    act(() => editor.onSubmit(areaEdit));
+    await settle(question);
+
+    expect(onEditArea).toHaveBeenCalledTimes(1);
+    expect(onEditArea).toHaveBeenCalledWith(areaEdit);
+  });
+
+  it('never asks where no edit handler is given', () => {
+    const view = render(<ImageFullScreen imageUrl={durable} visible onClose={jest.fn()} />);
+    expect(view.queryByLabelText('Edit an area of this image')).toBeNull();
+    expect(view.queryByLabelText('Change this image')).toBeNull();
+    expect(mockSharingAnswer).not.toHaveBeenCalled();
   });
 });

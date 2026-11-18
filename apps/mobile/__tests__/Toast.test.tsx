@@ -1,12 +1,12 @@
 import React from 'react';
-import { AccessibilityInfo, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-import { colors, lightColors } from '../src/ui/theme/tokens';
+import { colors, lightColors, spacing } from '../src/ui/theme/tokens';
 import { ToastHost, showToast } from '../src/shared/components/Toast';
 import { FLOATING_PRIMARY_ACTION_LIST_PADDING } from '../src/shared/components/FloatingPrimaryAction';
 
@@ -203,5 +203,51 @@ describe('ToastHost timing', () => {
       expect(guardOf(view)).toBeNull();
       expect(view.queryByText('Copied')).toBeTruthy();
     });
+  });
+});
+
+describe('ToastHost width', () => {
+  const MESSAGE = 'Cloud changes haven’t synced.';
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => undefined);
+    jest.spyOn(AccessibilityInfo, 'getRecommendedTimeoutMillis').mockResolvedValue(ACTION_MS);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  function showAtWindowWidth(width: number) {
+    const window = { width, height: 800, scale: 3, fontScale: 2 };
+    jest.spyOn(Dimensions, 'get').mockReturnValue(window);
+    const view = render(<ToastHost />);
+    act(() => showToast(MESSAGE, { label: 'Retry', onPress: jest.fn() }));
+    return view;
+  }
+
+  it('stays inside the screen on a phone, whatever the text size', () => {
+    const view = showAtWindowWidth(360);
+
+    const body = StyleSheet.flatten(view.getByTestId('toast-body').props.style);
+    expect(body.maxWidth).toBe(360 - 2 * spacing.lg);
+  });
+
+  it('keeps its own width on a tablet instead of spanning the window', () => {
+    const view = showAtWindowWidth(1024);
+
+    const body = StyleSheet.flatten(view.getByTestId('toast-body').props.style);
+    expect(body.maxWidth).toBe(520);
+  });
+
+  it('keeps the action a full 44 point target while the message wraps', () => {
+    const view = showAtWindowWidth(360);
+
+    const action = StyleSheet.flatten(view.getByLabelText('Retry').props.style);
+    expect(action.minHeight).toBe(44);
+    expect(action.minWidth).toBe(44);
+    expect(action.flexShrink).toBe(0);
   });
 });

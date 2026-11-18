@@ -7,7 +7,7 @@ import { enablePushNotifications, getPushDeliveryStatus } from '@/services/notif
 import { ACCOUNT_PUSH_PREFERENCE_GROUP } from '@/src/features/settings/notifications/categories';
 import { useNotificationPrefsStore } from '@/stores/notificationPrefsStore';
 
-export type UsageResetReminderOutcome = 'set' | 'blocked' | 'unreachable';
+export type UsageResetReminderOutcome = 'set' | 'blocked' | 'unreachable' | 'not_allowed';
 
 function deliverResetRemindersOnDevice(): void {
   const prefs = useNotificationPrefsStore.getState();
@@ -23,6 +23,7 @@ export async function requestUsageResetReminder(
   if (device === 'undetermined') device = await enablePushNotifications();
   if (device === 'denied') return 'blocked';
   if (device === 'unregistered') return 'unreachable';
+  if (device !== 'granted') return 'not_allowed';
   await api.post(USAGE_RESET_REMINDER_PATH, { resetAt } satisfies UsageResetReminderRequest);
   deliverResetRemindersOnDevice();
   return 'set';

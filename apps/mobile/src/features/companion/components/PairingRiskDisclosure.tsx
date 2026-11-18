@@ -23,7 +23,9 @@ export function PairingRiskDisclosure({ className }: { className?: string }) {
   const handleOpenSafetyGuide = useCallback(async () => {
     const opened = await openWebContentPage(DISPATCH_SAFETY_URL);
     if (!opened) {
-      Alert.alert('Error', 'Could not open the link. Please try again.');
+      Alert.alert('Error', 'Could not open the link. Please try again.', undefined, {
+        cancelable: true,
+      });
     }
   }, []);
 

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Linking, View } from 'react-native';
+import { AppState, Linking, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Bell, BellOff, Mail } from 'lucide-react-native';
 
@@ -20,6 +20,7 @@ import {
   getPushDeliveryStatus,
   type PushDeliveryStatus,
 } from '@/services/notifications';
+import { isPushPermissionRequestPending } from '@/services/pushPermissionStatus';
 import { PUSH_PREFERENCE_GROUP_COPY, resolvePushPreferenceGroup } from './categories';
 
 function pushDescription(): string {
@@ -52,11 +53,20 @@ export default function NotificationCategoryDetailScreen({
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      void getPushDeliveryStatus().then((status) => {
-        if (!cancelled) setDeviceStatus(status);
+      let sequence = 0;
+      function readDeviceStatus() {
+        const current = ++sequence;
+        void getPushDeliveryStatus().then((status) => {
+          if (!cancelled && current === sequence) setDeviceStatus(status);
+        });
+      }
+      readDeviceStatus();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active' && !isPushPermissionRequestPending()) readDeviceStatus();
       });
       return () => {
         cancelled = true;
+        subscription.remove();
       };
     }, []),
   );

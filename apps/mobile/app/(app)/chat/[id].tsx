@@ -101,6 +101,7 @@ import {
 } from '@agiworkforce/client-runtime';
 import { useVoiceConversation } from '@/src/features/voice/hooks/useVoiceConversation';
 import { showVoiceCaptureFailureAlert } from '@/src/features/voice/components/voicePermissionAlert';
+import { classifyVoiceFailure } from '@/src/features/voice/services/voiceFailure';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
 import type { DraftProvenance } from '@/src/features/chat/draftStore';
 import { draftIdentityKey } from '@/src/features/chat/draftIdentity';
@@ -179,8 +180,10 @@ import {
 } from '@/src/features/chat/services/cloudMessageMutations';
 import {
   captureCloudAccountEpoch,
+  hasCloudAccountOwner,
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
+import { hasCurrentCloudProviderConsent } from '@/services/providerConsent';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
@@ -193,11 +196,13 @@ import { getMessageStreamErrorMessage } from '@/src/features/chat/utils/messageS
 import { refuseFilteredSend } from '@/src/features/chat/utils/refuseFilteredSend';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import {
+  peekImageEditRetry,
   runImageGenerationTurn,
   takeImageEditRetry,
   type ImageEditTurnRequest,
 } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
+import { sharingWithProvidersAllowed } from '@/src/features/chat/actions/mediaGenerationConsent';
 import { resolveImageRetryFallback } from '@/src/features/chat/actions/imageRetryFallback';
 import {
   MediaGenerationAdmissionError,
@@ -604,6 +609,14 @@ export default function ChatScreen() {
         );
         return false;
       }
+      if (
+        conversationExecutionMode === 'cloud' &&
+        hasCloudAccountOwner() &&
+        useChatAppModeStore.getState().appMode !== 'cloud'
+      ) {
+        setAppMode('cloud');
+        if (useChatAppModeStore.getState().appMode !== 'cloud') return false;
+      }
 
       let finalText = text;
       const currentQuote =
@@ -646,47 +659,57 @@ export default function ChatScreen() {
         return false;
       }
       if (videoRequest.status === 'ready') {
-        let started = false;
-        const videoTurn = runVideoGenerationTurn({
-          conversationId: id,
-          displayText: finalText,
-          prompt: videoRequest.prompt,
-          model: videoRequest.model,
-          aspectRatio: videoRequest.aspectRatio,
-          resolution: videoRequest.resolution,
-          durationSecs: videoRequest.durationSecs,
-          ownerId: videoRequest.ownerId,
-          onStarted: () => {
-            started = true;
-            useChatViewStore.getState().resetMediaChoice('video');
-            clearError();
-            quotedMessageScopeRef.current = null;
-            setQuotedMessage(null);
-          },
-          begin: beginVideoGeneration,
-          taskCreated: recordVideoGenerationTask,
-          isCancelRequested: isVideoGenerationCancelRequested,
-          progress: updateVideoGenerationProgress,
-          complete: completeVideoGeneration,
-          fail: failVideoGeneration,
-          remove: deleteMessage,
-          onPaywall: (error) => {
-            setPaywallError(paywallErrorStateFromApiError(error));
-          },
-          onUnexpectedError: (error) => {
+        const action = captureConversationAction();
+        return sharingWithProvidersAllowed()
+          .then((allowed) => {
+            if (!allowed || (action && !isConversationActionCurrent(action))) return false;
+            let started = false;
+            const videoTurn = runVideoGenerationTurn({
+              conversationId: id,
+              displayText: finalText,
+              prompt: videoRequest.prompt,
+              model: videoRequest.model,
+              aspectRatio: videoRequest.aspectRatio,
+              resolution: videoRequest.resolution,
+              durationSecs: videoRequest.durationSecs,
+              ownerId: videoRequest.ownerId,
+              onStarted: () => {
+                started = true;
+                useChatViewStore.getState().resetMediaChoice('video');
+                clearError();
+                quotedMessageScopeRef.current = null;
+                setQuotedMessage(null);
+              },
+              begin: beginVideoGeneration,
+              taskCreated: recordVideoGenerationTask,
+              isCancelRequested: isVideoGenerationCancelRequested,
+              progress: updateVideoGenerationProgress,
+              complete: completeVideoGeneration,
+              fail: failVideoGeneration,
+              remove: deleteMessage,
+              onPaywall: (error) => {
+                setPaywallError(paywallErrorStateFromApiError(error));
+              },
+              onUnexpectedError: (error) => {
+                console.warn('[ChatScreen] Video generation failed:', error);
+                setSendError(
+                  !started && error instanceof MediaGenerationAdmissionError
+                    ? error.userMessage
+                    : mediaGenerationFailureMessage('video'),
+                );
+              },
+            });
+            if (dispatchOptions?.awaitCompletion) {
+              return videoTurn.then((outcome) => outcome.assistantMessageId !== null);
+            }
+            void videoTurn;
+            return started;
+          })
+          .catch((error: unknown) => {
             console.warn('[ChatScreen] Video generation failed:', error);
-            setSendError(
-              !started && error instanceof MediaGenerationAdmissionError
-                ? error.userMessage
-                : mediaGenerationFailureMessage('video'),
-            );
-          },
-        });
-        if (dispatchOptions?.awaitCompletion) {
-          return videoTurn.then((outcome) => outcome.assistantMessageId !== null);
-        }
-        void videoTurn;
-        return started;
+            setSendError(mediaGenerationFailureMessage('video'));
+            return false;
+          });
       }
 
       const imageRequest = resolveMobileImageGenerationRequest({
@@ -765,47 +788,57 @@ export default function ChatScreen() {
         });
       }
       if (imageRequest.status === 'ready') {
-        let started = false;
-        const imageTurn = runImageGenerationTurn({
-          conversationId: id,
-          displayText: finalText,
-          prompt: imageRequest.prompt,
-          model: imageRequest.model,
-          aspectRatio: imageRequest.aspectRatio,
-          transparentBackground: imageRequest.transparentBackground,
-          operation: imageRequest.operation,
-          sourceImage: imageRequest.sourceImage,
-          referenceImages: imageRequest.referenceImages,
-          ownerId: imageRequest.ownerId,
-          onStarted: () => {
-            started = true;
-            useChatViewStore.getState().resetMediaChoice('image');
-            clearError();
-            quotedMessageScopeRef.current = null;
-            setQuotedMessage(null);
-            dispatchOptions?.onAccepted?.();
-          },
-          begin: beginImageGeneration,
-          complete: completeImageGeneration,
-          fail: failImageGeneration,
-          remove: deleteMessage,
-          onPaywall: (error) => {
-            setPaywallError(paywallErrorStateFromApiError(error));
-          },
-          onUnexpectedError: (error) => {
+        const action = captureConversationAction();
+        return sharingWithProvidersAllowed()
+          .then((allowed) => {
+            if (!allowed || (action && !isConversationActionCurrent(action))) return false;
+            let started = false;
+            const imageTurn = runImageGenerationTurn({
+              conversationId: id,
+              displayText: finalText,
+              prompt: imageRequest.prompt,
+              model: imageRequest.model,
+              aspectRatio: imageRequest.aspectRatio,
+              transparentBackground: imageRequest.transparentBackground,
+              operation: imageRequest.operation,
+              sourceImage: imageRequest.sourceImage,
+              referenceImages: imageRequest.referenceImages,
+              ownerId: imageRequest.ownerId,
+              onStarted: () => {
+                started = true;
+                useChatViewStore.getState().resetMediaChoice('image');
+                clearError();
+                quotedMessageScopeRef.current = null;
+                setQuotedMessage(null);
+                dispatchOptions?.onAccepted?.();
+              },
+              begin: beginImageGeneration,
+              complete: completeImageGeneration,
+              fail: failImageGeneration,
+              remove: deleteMessage,
+              onPaywall: (error) => {
+                setPaywallError(paywallErrorStateFromApiError(error));
+              },
+              onUnexpectedError: (error) => {
+                console.warn('[ChatScreen] Image generation failed:', error);
+                setSendError(
+                  !started && error instanceof MediaGenerationAdmissionError
+                    ? error.userMessage
+                    : mediaGenerationFailureMessage('image'),
+                );
+              },
+            });
+            if (dispatchOptions?.awaitCompletion) {
+              return imageTurn.then((outcome) => outcome.assistantMessageId !== null);
+            }
+            void imageTurn;
+            return started;
+          })
+          .catch((error: unknown) => {
             console.warn('[ChatScreen] Image generation failed:', error);
-            setSendError(
-              !started && error instanceof MediaGenerationAdmissionError
-                ? error.userMessage
-                : mediaGenerationFailureMessage('image'),
-            );
-          },
-        });
-        if (dispatchOptions?.awaitCompletion) {
-          return imageTurn.then((outcome) => outcome.assistantMessageId !== null);
-        }
-        void imageTurn;
-        return started;
+            setSendError(mediaGenerationFailureMessage('image'));
+            return false;
+          });
       }
 
       const skillNameForTurn =
@@ -928,6 +961,7 @@ export default function ChatScreen() {
       imageAspectRatio,
       videoAspectRatio,
       videoResolution,
+      setAppMode,
     ],
   );
 
@@ -1045,10 +1079,17 @@ export default function ChatScreen() {
   }, [clerkUserId, conversationExecutionMode, id, isClerkSignedIn]);
 
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const cloudModeWrittenFor = useRef<string | null>(null);
 
   useEffect(() => {
     if (!conversation || !screenFocused) return;
-    setAppMode(conversationExecutionMode);
+    // A Cloud write without the permission asks the person, so it is made once
+    // per conversation, never again on each focus after they said Not now.
+    const asksForCloud = conversationExecutionMode === 'cloud' && !hasCurrentCloudProviderConsent();
+    if (!asksForCloud || cloudModeWrittenFor.current !== conversation.id) {
+      setAppMode(conversationExecutionMode);
+    }
+    cloudModeWrittenFor.current = conversationExecutionMode === 'cloud' ? conversation.id : null;
     const currentModel = useModelStore.getState().selectedModel;
     const fitsConversation = (modelId: string | null | undefined): modelId is string =>
       Boolean(modelId) &&
@@ -1750,22 +1791,31 @@ export default function ChatScreen() {
   );
 
   const runImageEditTurn = useCallback(
-    (request: ImageEditTurnRequest) => {
-      void runImageGenerationTurn({
-        ...request,
-        begin: beginImageGeneration,
-        complete: completeImageGeneration,
-        fail: failImageGeneration,
-        remove: deleteMessage,
-        onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
-        onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
-      });
+    (request: ImageEditTurnRequest, retryOfMessageId?: string) => {
+      const action = captureConversationAction();
+      void sharingWithProvidersAllowed()
+        .then((allowed) => {
+          if (!allowed || (action && !isConversationActionCurrent(action))) return;
+          if (retryOfMessageId && !takeImageEditRetry(retryOfMessageId, request.ownerId)) return;
+          void runImageGenerationTurn({
+            ...request,
+            begin: beginImageGeneration,
+            complete: completeImageGeneration,
+            fail: failImageGeneration,
+            remove: deleteMessage,
+            onPaywall: (error) => setPaywallError(paywallErrorStateFromApiError(error)),
+            onUnexpectedError: () => setSendError(mediaGenerationFailureMessage('image')),
+          });
+        })
+        .catch(() => setSendError(mediaGenerationFailureMessage('image')));
     },
     [
       beginImageGeneration,
+      captureConversationAction,
       completeImageGeneration,
       deleteMessage,
       failImageGeneration,
+      isConversationActionCurrent,
       setPaywallError,
       setSendError,
     ],
@@ -1831,9 +1881,9 @@ export default function ChatScreen() {
       target?.role === 'assistant' &&
       (target.type === 'image' || target.imageGenStatus === 'failed')
     ) {
-      const edit = clerkUserId ? takeImageEditRetry(messageId, clerkUserId) : null;
+      const edit = clerkUserId ? peekImageEditRetry(messageId, clerkUserId) : null;
       if (edit) {
-        runImageEditTurn(edit);
+        runImageEditTurn(edit, messageId);
         return;
       }
       const original = conversationMessages[messageIndex - 1];
@@ -2111,7 +2161,7 @@ export default function ChatScreen() {
     speechOwner,
     speechOptions: speechSettings(),
     onCaptureError: (err) => {
-      setVoiceInlineVisible(false);
+      if (classifyVoiceFailure(err) !== 'no-speech') setVoiceInlineVisible(false);
       showVoiceCaptureFailureAlert(err);
     },
   });

@@ -1,4 +1,5 @@
 import { getClerkInstance } from '@clerk/expo';
+import { STEP_UP_PATH } from '@/lib/egressGuard';
 import { api, apiFetch } from '@/services/api';
 import { ApiHttpError, parseJsonBody } from '@/services/apiErrors';
 import { CLERK_PUBLISHABLE_KEY } from '@/src/integrations/clerk';
@@ -10,7 +11,6 @@ import {
 
 export const STEP_UP_TOKEN_HEADER = 'x-step-up-token';
 
-const STEP_UP_ENDPOINT = '/api/auth/step-up';
 const STEP_UP_REQUIRED = 'STEP_UP_REQUIRED';
 const STEP_UP_VERIFICATION_REQUIRED = 'STEP_UP_VERIFICATION_REQUIRED';
 const STEP_UP_LEVELS = ['second_factor', 'first_factor'] as const;
@@ -82,7 +82,7 @@ export async function requestStepUpGrant(
   options: StepUpRequestOptions,
 ): Promise<StepUpGrant> {
   const response = await apiFetch(
-    STEP_UP_ENDPOINT,
+    STEP_UP_PATH,
     {
       method: 'POST',
       body: JSON.stringify({ action, ...(resourceId ? { resourceId } : {}) }),
@@ -154,7 +154,7 @@ export async function readStepUpConsequence(
   options: StepUpRequestOptions,
 ): Promise<string> {
   const readiness = await api.get<{ actions?: Record<string, { consequence?: unknown }> }>(
-    STEP_UP_ENDPOINT,
+    STEP_UP_PATH,
     options,
   );
   const consequence = readiness.actions?.[action]?.consequence;

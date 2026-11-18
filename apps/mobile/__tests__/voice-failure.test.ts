@@ -1,5 +1,6 @@
 import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
 import {
+  VOICE_BUSY_MESSAGE,
   VOICE_INPUT_DISABLED_MESSAGE,
   VOICE_NO_SPEECH_MESSAGE,
   VOICE_PERMISSION_MESSAGE,
@@ -11,8 +12,15 @@ import {
 import { voiceCaptureErrorMessage } from '@/src/features/voice/hooks/useVoiceConversation';
 import { showVoiceCaptureFailureAlert } from '@/src/features/voice/components/voicePermissionAlert';
 import { Alert } from 'react-native';
+import { showToast } from '@/src/shared/components/Toast';
+
+jest.mock('@/src/shared/components/Toast', () => ({ showToast: jest.fn() }));
 
 describe('voice failure wording', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('never shows the engine text for a recogniser that cannot start', () => {
     const err = new VoiceCaptureError('recognition-error', 'Failed to initialize recognizer');
 
@@ -89,6 +97,59 @@ describe('voice failure wording', () => {
       VOICE_PERMISSION_MESSAGE,
       expect.arrayContaining([expect.objectContaining({ text: 'Open Settings' })]),
     );
+    alert.mockRestore();
+  });
+
+  it('shows silence as one quiet notice and never as an alert', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const silence = new VoiceCaptureError('recognition-error', 'No speech detected', 'no-speech');
+    const timeout = new VoiceCaptureError('recognition-error', 'timed out', 'speech-timeout');
+    const quiet = jest.fn();
+
+    showVoiceCaptureFailureAlert(silence, quiet);
+    showVoiceCaptureFailureAlert(timeout);
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(quiet).toHaveBeenCalledTimes(1);
+    expect(quiet).toHaveBeenCalledWith(VOICE_NO_SPEECH_MESSAGE);
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith(VOICE_NO_SPEECH_MESSAGE);
+    alert.mockRestore();
+  });
+
+  it('shows nothing at all for a capture that was deliberately aborted', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const quiet = jest.fn();
+
+    showVoiceCaptureFailureAlert(new VoiceCaptureError('aborted', 'Voice session closed'), quiet);
+
+    expect(alert).not.toHaveBeenCalled();
+    expect(quiet).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('keeps an alert for the other failures with a title that fits each message', () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const cases: [VoiceCaptureError | Error, string, string][] = [
+      [new VoiceCaptureError('already-active', 'busy'), 'Voice is busy', VOICE_BUSY_MESSAGE],
+      [
+        new VoiceCaptureError('max-duration-reached', 'Listening stopped after a minute.'),
+        'Listening stopped',
+        'Listening stopped after a minute.',
+      ],
+      [
+        new VoiceCaptureError('voice-input-disabled', 'x'),
+        'Voice Input is off',
+        VOICE_INPUT_DISABLED_MESSAGE,
+      ],
+      [new Error('boom'), 'Voice input stopped', VOICE_STOPPED_MESSAGE],
+    ];
+
+    for (const [err] of cases) showVoiceCaptureFailureAlert(err);
+
+    expect(alert.mock.calls).toEqual(cases.map(([, title, message]) => [title, message]));
+    expect(showToast).not.toHaveBeenCalled();
     alert.mockRestore();
   });
 });

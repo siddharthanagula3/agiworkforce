@@ -180,7 +180,7 @@ describe('Settings home Age', () => {
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
   });
 
-  it('puts Age after Subscription in the Cloud Account section and opens Parental Controls', () => {
+  it('puts Age after Subscription in the Cloud Account section and opens the screen titled Age', () => {
     mockAgeRecord = record({ threshold: 13 });
     signInToCloud();
     const { getByLabelText, getAllByTestId } = render(<SettingsTabScreen />);
@@ -191,7 +191,10 @@ describe('Settings home Age', () => {
     );
     fireEvent.press(getByLabelText('Age. 13 or older'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/parental-controls');
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(app)/settings/parental-controls',
+      params: { entry: 'age' },
+    });
   });
 
   it('reads the threshold from the stored record instead of assuming 18', () => {
@@ -591,7 +594,12 @@ describe('Settings home Help Center', () => {
     fireEvent.press(screen.getByText('Help Center'));
 
     await waitFor(() =>
-      expect(alert).toHaveBeenCalledWith('Error', 'Could not open the link. Please try again.'),
+      expect(alert).toHaveBeenCalledWith(
+        'Error',
+        'Could not open the link. Please try again.',
+        undefined,
+        { cancelable: true },
+      ),
     );
     expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
     alert.mockRestore();

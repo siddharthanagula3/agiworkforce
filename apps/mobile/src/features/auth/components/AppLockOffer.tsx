@@ -7,6 +7,7 @@ import { usePathname } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
 import { useAuthStore } from '@/src/features/auth/store';
+import { appLockWording } from '@/src/features/auth/services/appLockWording';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -147,7 +148,7 @@ export function AppLockOffer() {
             Protect AGI with App Lock
           </Text>
           <Text style={{ color: colors.textSecondary, textAlign: 'center', lineHeight: 21 }}>
-            Use Face ID, Touch ID, or your device passcode when opening AGI.
+            {appLockWording().offer}
           </Text>
           <PressableBox
             accessibilityRole="button"

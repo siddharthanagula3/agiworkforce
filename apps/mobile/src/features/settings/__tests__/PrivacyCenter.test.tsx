@@ -219,7 +219,12 @@ describe('the Privacy page', () => {
     await screen.findByText('Helpful resources');
     await Promise.resolve();
 
-    expect(alert).toHaveBeenCalledWith('Error', 'Could not open the link. Please try again.');
+    expect(alert).toHaveBeenCalledWith(
+      'Error',
+      'Could not open the link. Please try again.',
+      undefined,
+      { cancelable: true },
+    );
     alert.mockRestore();
   });
 

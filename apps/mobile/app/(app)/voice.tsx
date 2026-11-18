@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
+  AccessibilityInfo,
   BackHandler,
   View,
   useWindowDimensions,
@@ -59,6 +60,7 @@ const VOICE_GLOW_HEIGHT = 320;
 const COMPOSER_SIDE_MARGIN = 20;
 
 const REPORT_THIS_RESPONSE = 'Report this response';
+const NEW_CHAT_ROUTE = '/(app)/(tabs)/chat';
 
 const PHASE_LABEL: Record<Phase, string> = {
   idle: 'Tap to speak',
@@ -164,7 +166,7 @@ function LeaveVoiceWithoutOnDeviceRecognizer() {
     useCallback(() => {
       if (!sentToChatRef.current) {
         sentToChatRef.current = true;
-        router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+        router.replace(NEW_CHAT_ROUTE as Parameters<typeof router.replace>[0]);
         return;
       }
       // The drawer keeps this route in its Back history, so a later focus is a Back press that must pass through.
@@ -233,6 +235,7 @@ function VoiceCompanion() {
   const [sendingTyped, setSendingTyped] = useState(false);
   const [typedError, setTypedError] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [captureNotice, setCaptureNotice] = useState<string | null>(null);
 
   const conversationPromiseRef = useRef<Promise<string> | null>(null);
   const transcribedUriRef = useRef<string | null>(null);
@@ -282,6 +285,11 @@ function VoiceCompanion() {
     latestSendVoiceMessage.current = sendVoiceMessage;
   }, [sendVoiceMessage]);
 
+  const showCaptureNotice = useCallback((message: string) => {
+    setCaptureNotice(message);
+    if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(message);
+  }, []);
+
   const {
     phase,
     muted,
@@ -300,9 +308,12 @@ function VoiceCompanion() {
     sendMessage: sendVoiceMessage,
     speechOwner,
     speechOptions: speechSettings(),
-    onCaptureError: showVoiceCaptureFailureAlert,
+    onCaptureError: (err) => showVoiceCaptureFailureAlert(err, showCaptureNotice),
     onSttComplete: (ms) => setLastResponseMs(ms),
   });
+  useEffect(() => {
+    if (phase !== 'idle' || transcriptPreview || muted) setCaptureNotice(null);
+  }, [phase, transcriptPreview, muted]);
   const currentPreview = transcriptPreview || fileTranscription;
   const showCurrentPreview =
     currentPreview &&
@@ -410,7 +421,23 @@ function VoiceCompanion() {
       return;
     }
     if (router.canGoBack()) router.back();
+    else router.replace(NEW_CHAT_ROUTE as Parameters<typeof router.replace>[0]);
   }, [hapticsEnabled, abortImport, endConversation, params.returnTo, router]);
+
+  const handleCloseRef = useRef(handleClose);
+  useEffect(() => {
+    handleCloseRef.current = handleClose;
+  });
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'android') return;
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        handleCloseRef.current();
+        return true;
+      });
+      return () => subscription.remove();
+    }, []),
+  );
 
   const isCloudModel = appMode === 'cloud';
   const localModelReady =
@@ -454,7 +481,12 @@ function VoiceCompanion() {
         behavior={keyboardAvoidingBehavior('screen')}
       >
         <View style={styles.content}>
-          <Text style={styles.sublabel}>{phaseSublabel(phase, pttMode, isCloudModel, muted)}</Text>
+          <Text
+            accessibilityLiveRegion={captureNotice ? 'polite' : undefined}
+            style={styles.sublabel}
+          >
+            {captureNotice ?? phaseSublabel(phase, pttMode, isCloudModel, muted)}
+          </Text>
 
           {!isTyping ? (
             <CompanionOrb
@@ -476,7 +508,10 @@ function VoiceCompanion() {
             />
           ) : null}
 
-          <Text style={[styles.phaseLabel, { color: PHASE_LABEL_COLOR }]}>
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[styles.phaseLabel, { color: PHASE_LABEL_COLOR }]}
+          >
             {voiceInputEnabled ? phaseLabel(phase, pttMode, muted) : 'Voice Input is off'}
           </Text>
 

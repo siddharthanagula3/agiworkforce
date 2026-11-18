@@ -636,6 +636,52 @@ describe('what MessageBubble mounts for other renderers', () => {
     expect(mockGeneratedImage.mock.calls.at(-1)?.[0].inTemporaryChat).toBe(false);
   });
 
+  it('says a failed image once, on the card, instead of also writing it as a line above', () => {
+    const reason = 'AGI Cloud did not return an image. Try again.';
+    const view = render(
+      <MessageBubble
+        message={answer({
+          content: `Image generation failed: ${reason}`,
+          imageGenStatus: 'failed',
+          imageGenError: reason,
+          imageGenPrompt: 'a red circle on white',
+        })}
+        onRetryMessage={jest.fn()}
+      />,
+    );
+
+    expect(mockImageProgress.mock.calls.at(-1)?.[0].errorMessage).toBe(reason);
+    expect(screen.queryByText(/did not return an image/)).toBeNull();
+    view.unmount();
+
+    render(
+      <MessageBubble
+        message={answer({
+          content: 'Image generation failed: Provider unavailable',
+          imageGenStatus: 'failed',
+        })}
+      />,
+    );
+    expect(screen.getByText(/Provider unavailable/)).toBeTruthy();
+  });
+
+  it('does not repeat the failure as the card prompt when an older failed turn has no prompt', () => {
+    const reason = 'AGI Cloud did not return an image. Try again.';
+    render(
+      <MessageBubble
+        message={answer({
+          content: `Image generation failed: ${reason}`,
+          imageGenStatus: 'failed',
+          imageGenError: reason,
+        })}
+        onRetryMessage={jest.fn()}
+      />,
+    );
+
+    expect(mockImageProgress.mock.calls.at(-1)?.[0].prompt).toBe('');
+    expect(mockImageProgress.mock.calls.at(-1)?.[0].errorMessage).toBe(reason);
+  });
+
   it('counts image generation time from when the answer was created, and waits for a retry time', () => {
     const view = render(
       <MessageBubble

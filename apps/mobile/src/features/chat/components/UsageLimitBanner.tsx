@@ -71,6 +71,7 @@ const USAGE_RESET_REMINDER_REFUSED: Readonly<
 > = {
   blocked: 'Notifications are blocked for this app in Settings.',
   unreachable: 'This device cannot receive notifications right now. Try again in a minute.',
+  not_allowed: 'Notifications are not allowed yet. Tap again to be asked.',
 };
 
 export function usageResumesAt(snapshot: UsageSnapshot, now: number = Date.now()): string | null {

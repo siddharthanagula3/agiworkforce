@@ -42,6 +42,7 @@ import {
   type RememberedAccountMethod,
 } from '@/src/features/auth/services/rememberedAccount';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import { useAuthEmailFieldReveal } from './useAuthEmailFieldReveal';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -392,6 +393,8 @@ export function MobileSignIn({
       setStep('email');
     });
 
+  const emailReveal = useAuthEmailFieldReveal();
+
   const button = (label: string, onPress: () => void, disabled: boolean, testID: string) => (
     <Pressable
       testID={testID}
@@ -425,6 +428,7 @@ export function MobileSignIn({
       testID="mobile-custom-sign-in"
     >
       <ScrollView
+        ref={emailReveal.scrollRef}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           flexGrow: 1,
@@ -433,6 +437,7 @@ export function MobileSignIn({
           paddingTop: 42,
           paddingBottom: 32,
         }}
+        {...emailReveal.scrollProps}
       >
         <View style={{ width: '100%', maxWidth: 340, alignSelf: 'center' }}>
           <Text
@@ -580,46 +585,49 @@ export function MobileSignIn({
                   <View style={{ height: 1, flex: 1, backgroundColor: colors.border }} />
                 </View>
               ) : null}
-              <Text
-                style={{
-                  color: colors.textPrimary,
-                  fontSize: typeScale.subhead,
-                  fontWeight: '600',
-                  textAlign: 'center',
-                  marginBottom: 10,
-                }}
-              >
-                Email address
-              </Text>
-              <TextInput
-                testID="mobile-sign-in-email"
-                accessibilityLabel="Email address"
-                value={email}
-                onChangeText={(value) => {
-                  setEmail(value);
-                  setAccountMissing(false);
-                  setError(null);
-                }}
-                keyboardType="email-address"
-                textContentType="emailAddress"
-                autoComplete="email"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="go"
-                onSubmitEditing={startEmail}
-                style={{
-                  minHeight: 52,
-                  borderRadius: 26,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surfaceElevated,
-                  fontSize: typeScale.callout,
-                  textAlign: 'center',
-                  paddingHorizontal: 20,
-                }}
-              />
-              {button('Continue', startEmail, busy || !email.trim(), 'mobile-sign-in-continue')}
+              <View {...emailReveal.blockProps}>
+                <Text
+                  style={{
+                    color: colors.textPrimary,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                    textAlign: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  Email address
+                </Text>
+                <TextInput
+                  {...emailReveal.inputProps}
+                  testID="mobile-sign-in-email"
+                  accessibilityLabel="Email address"
+                  value={email}
+                  onChangeText={(value) => {
+                    setEmail(value);
+                    setAccountMissing(false);
+                    setError(null);
+                  }}
+                  keyboardType="email-address"
+                  textContentType="emailAddress"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={startEmail}
+                  style={{
+                    minHeight: 52,
+                    borderRadius: 26,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    color: colors.textPrimary,
+                    backgroundColor: colors.surfaceElevated,
+                    fontSize: typeScale.callout,
+                    textAlign: 'center',
+                    paddingHorizontal: 20,
+                  }}
+                />
+                {button('Continue', startEmail, busy || !email.trim(), 'mobile-sign-in-continue')}
+              </View>
             </>
           ) : (
             <>

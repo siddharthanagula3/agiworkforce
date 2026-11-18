@@ -991,6 +991,44 @@ export function clearCloudExecutionState(): void {
   });
 }
 
+export function stopEveryCloudStream(): string[] {
+  const completedAtMs = Date.now();
+  const stoppedRunIds: string[] = [];
+  for (const conversationId of Array.from(cloudStreamingConversations)) {
+    cloudStreamingConversations.delete(conversationId);
+    streamingConversations.delete(conversationId);
+    const run = activeCloudRuns.get(conversationId);
+    if (run) stoppedRunIds.push(run.runId);
+    activeCloudRuns.delete(conversationId);
+    deferredSends.delete(conversationId);
+    thinkingStartTimes.delete(conversationId);
+    thinkingEndTimes.delete(conversationId);
+    lastDeltaTimes.delete(conversationId);
+    const controller = abortControllers.get(conversationId);
+    abortControllers.delete(conversationId);
+    controller?.abort();
+    getConversationMessageStore(conversationId).setState((state) => {
+      const rows = state.messages[conversationId];
+      if (!rows?.some((message) => message.isStreaming)) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [conversationId]: rows.map((message) =>
+            message.isStreaming
+              ? settleMessageTurnState(stoppedByUser(message), 'cancelled', completedAtMs)
+              : message,
+          ),
+        },
+      };
+    });
+  }
+  useChatExecutionStore.setState({
+    ...streamingFlags(),
+    ...(streamingConversations.size === 0 ? { streamingContent: '', streamingReasoning: '' } : {}),
+  });
+  return stoppedRunIds;
+}
+
 const FAILURE_FIELDS = [
   'error',
   'failureCode',

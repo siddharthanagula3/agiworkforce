@@ -29,6 +29,7 @@ import {
   SettingsSwitchRow,
 } from '@/src/features/settings/Common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { toUserMessage } from '@/services/userMessage';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
 import { ApprovalPolicySummary } from './ApprovalPolicySummary';
@@ -828,11 +829,7 @@ export default function CloudConnectorsScreen({
 
   return (
     <View style={{ flex: 1 }}>
-      <SettingsScreenShell
-        title="Connectors"
-        backHref={backHref}
-        help={{ docId: 'connectors-and-mcp', label: 'How connectors work' }}
-      >
+      <SettingsScreenShell title="Connectors" backHref={backHref}>
         <SettingsInfo
           title="Connect your tools to AGI Cloud"
           body="Open a connector to see what it can do before you connect it."
@@ -1193,10 +1190,13 @@ export default function CloudConnectorsScreen({
                 </Text>
               </PressableBox>
             ) : null}
-
-            <View style={{ height: bottomSearchSpace }} />
           </>
         )}
+
+        <HelpArticleLink docId="connectors-and-mcp" label="How connectors work" />
+        {directoryVisible ? (
+          <View testID="connectors-bottom-space" style={{ height: bottomSearchSpace }} />
+        ) : null}
 
         <AddCustomConnectorModal
           visible={addCustomVisible}

@@ -189,6 +189,33 @@ describe('notify me when the usage limit resets', () => {
     expect(screen.getByText('Notifications are blocked for this app in Settings.')).toBeTruthy();
   });
 
+  it('sends nothing and says so when the person closes the notification prompt', async () => {
+    act(() => {
+      useNotificationPrefsStore.setState({
+        categoryEnabled: {
+          ...useNotificationPrefsStore.getState().categoryEnabled,
+          usage_resets: false,
+        },
+      });
+    });
+    mockGetPushDeliveryStatus.mockResolvedValueOnce('undetermined');
+    mockEnablePushNotifications.mockResolvedValueOnce('undetermined');
+    const screen = renderBanner(snapshot());
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText(USAGE_RESET_REMINDER_ACTION));
+    });
+
+    expect(mockPost).not.toHaveBeenCalled();
+    expect(useNotificationPrefsStore.getState().categoryEnabled.usage_resets).toBe(false);
+    expect(mockEnablePushNotifications).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText('Notifications are not allowed yet. Tap again to be asked.'),
+    ).toBeTruthy();
+    expect(screen.queryByText(USAGE_RESET_REMINDER_SET)).toBeNull();
+    expect(screen.getByLabelText(USAGE_RESET_REMINDER_ACTION)).toBeTruthy();
+  });
+
   it('sends nothing when this device has no push registration', async () => {
     mockGetPushDeliveryStatus.mockResolvedValueOnce('unregistered');
     const screen = renderBanner(snapshot());
