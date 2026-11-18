@@ -28,6 +28,7 @@ vi.mock('@/lib/security/archive-bounds', async (importOriginal) => {
 });
 
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { XLSX_NOT_CALCULATED } from '@agiworkforce/unified-chat/tabular';
 import { MAX_CELL_FORMATS } from '@agiworkforce/unified-chat/workbook-cell-formats';
 import { CHAT_LARGE_FILE_POLICY, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import { extractOfficeDocumentText } from '@/lib/server/office-document-text';
@@ -1012,5 +1013,148 @@ describe('workbook preparation cell positions', () => {
 
     expect(profile.columns).toHaveLength(28);
     expect(profile.columns?.slice(25).map((column) => column.name)).toEqual(['H26', 'H27', 'H28']);
+  });
+});
+
+describe('workbook preparation formulas without a stored result', () => {
+  const NOTE = `Formulas are not evaluated here: a formula cell with no stored result shows as "${XLSX_NOT_CALCULATED}".`;
+  const inline = (text: string) => `<c t="inlineStr"><is><t>${text}</t></is></c>`;
+
+  async function profiled(rows: string[]): Promise<{ profile: SheetProfile; text: string }> {
+    return preparedSheet(
+      await singleSheetWorkbook({ sheetName: 'Formulas', sheetXml: sheetXml(rows.join('')) }),
+    );
+  }
+
+  it('keeps a row that holds only a formula the file stores no result for and says it was not calculated', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Total')}</row>`,
+      '<row><c r="A2"><f>SUM(B2:C2)</f><v></v></c></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 1 });
+    expect(columnTypes(profile)).toEqual(['Total: empty']);
+    expect(text).toContain('1 rows after the header, 1 columns.');
+    expect(text).toContain(`First 1 rows:\nTotal\n${XLSX_NOT_CALCULATED}`);
+    expect(text).toContain(NOTE);
+  });
+
+  it('marks a formula with an empty, self-closing or missing value element, and a shared formula that has none', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('A')}${inline('B')}${inline('C')}${inline('D')}${inline('E')}</row>`,
+      '<row><c><f>A1</f><v></v></c><c><f>A1</f><v/></c><c><f>A1</f></c><c><f t="shared" si="0"/></c><c><v>7</v></c></row>',
+    ]);
+    const marker = XLSX_NOT_CALCULATED;
+
+    expect(profile).toMatchObject({ rowCount: 1 });
+    expect(columnTypes(profile)).toEqual([
+      'A: empty',
+      'B: empty',
+      'C: empty',
+      'D: empty',
+      'E: integer',
+    ]);
+    expect(text).toContain(`A,B,C,D,E\n${marker},${marker},${marker},${marker},7`);
+  });
+
+  it('reads the stored result of a calculated formula and adds no note', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Total')}${inline('Label')}</row>`,
+      '<row><c><f>SUM(B2:C2)</f><v>12</v></c><c t="str"><f>CONCAT("a","b")</f><v>ab</v></c></row>',
+    ]);
+
+    expect(columnTypes(profile)).toEqual(['Total: integer', 'Label: text']);
+    expect(text).toContain('First 1 rows:\nTotal,Label\n12,ab');
+    expect(text).not.toContain(XLSX_NOT_CALCULATED);
+  });
+
+  it('leaves a cell with no formula empty, including one whose text spells a formula element', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Code')}${inline('Note')}</row>`,
+      `<row><c><v></v></c>${inline('&lt;f&gt;SUM(A1)&lt;/f&gt;')}</row>`,
+      '<row><c><v></v></c><c/></row>',
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 1 });
+    expect(text).toContain('First 1 rows:\nCode,Note\n,<f>SUM(A1)</f>');
+    expect(text).not.toContain(XLSX_NOT_CALCULATED);
+  });
+
+  it('leaves a calculated formula whose result is an empty string empty, drops a row holding only such cells and adds no note', async () => {
+    const blank = '<c t="str"><f>IF(A2="","",A2)</f><v></v></c>';
+    const { profile, text } = await profiled([
+      `<row>${inline('Code')}${inline('Label')}</row>`,
+      `<row><c><v>4</v></c>${blank}</row>`,
+      `<row><c/>${blank}</row>`,
+      `<row><c/><c t="str"><f>IF(A4="","",A4)</f></c></row>`,
+    ]);
+
+    expect(profile).toMatchObject({ rowCount: 1 });
+    expect(text).toContain('1 rows after the header, 2 columns.');
+    expect(text).toContain('First 1 rows:\nCode,Label\n4,');
+    expect(text).not.toContain(XLSX_NOT_CALCULATED);
+  });
+
+  it('reads a stored result whose value element carries an attribute', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Label')}${inline('Amount')}</row>`,
+      '<row><c t="str"><f>A1&amp;" "</f><v xml:space="preserve">hello </v></c><c><f>1+1</f><v xml:space="preserve">2</v></c></row>',
+    ]);
+
+    expect(columnTypes(profile)).toEqual(['Label: text', 'Amount: integer']);
+    expect(text).toContain('First 1 rows:\nLabel,Amount\nhello ,2');
+    expect(text).not.toContain(XLSX_NOT_CALCULATED);
+  });
+
+  it('keeps the text of an inline string cell that also holds a formula, and of a rich string whose font names a family', async () => {
+    const { text } = await profiled([
+      `<row>${inline('Result')}${inline('Rich')}${inline('Bare')}</row>`,
+      '<row><c t="inlineStr"><f>A1</f><is><t>kept</t></is></c><c t="inlineStr"><is><r><rPr><family val="2"/></rPr><t>styled</t></r></is></c><c t="inlineStr"><f>A1</f><is><t></t></is></c></row>',
+    ]);
+
+    expect(text).toContain(`First 1 rows:\nResult,Rich,Bare\nkept,styled,${XLSX_NOT_CALCULATED}`);
+    expect(text).toContain(NOTE);
+  });
+
+  it('adds the note only to the sheet that holds such a cell', async () => {
+    const zip = new JSZip();
+    zip.file(
+      'xl/workbook.xml',
+      `<?xml version="1.0"?><workbook xmlns:r="${RELATIONSHIP_NS}"><sheets><sheet name="Plain" sheetId="1" r:id="rId1"/><sheet name="Pending" sheetId="2" r:id="rId2"/></sheets></workbook>`,
+    );
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      '<?xml version="1.0"?><Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Target="worksheets/sheet2.xml"/></Relationships>',
+    );
+    zip.file(
+      'xl/worksheets/sheet1.xml',
+      sheetXml(`<row>${inline('A')}</row><row><c><v>1</v></c></row>`),
+    );
+    zip.file(
+      'xl/worksheets/sheet2.xml',
+      sheetXml(`<row>${inline('B')}</row><row><c><f>A1</f></c></row>`),
+    );
+    zip.file('xl/media/chart-cache.bin', Buffer.alloc(MAX_CHAT_ATTACHMENT_BYTES + MIB, 0x5a), {
+      compression: 'STORE',
+    });
+    const db = new FakePreparationDb();
+    const storage = createCountingStorage();
+    const id = await sealed(
+      db,
+      storage,
+      await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }),
+    );
+
+    await prepareUntilDone(() => prepareChatFileStep(id, { db, storage }));
+    const text = (await readPreparedText(
+      id,
+      { startChar: 0, maxChars: 100_000 },
+      { userId: USER, db, storage },
+    ))!.text;
+    const [plain, pending] = text.split('## Sheet: Pending');
+
+    expect(plain).toContain('## Sheet: Plain');
+    expect(plain).not.toContain(NOTE);
+    expect(pending).toContain(NOTE);
   });
 });

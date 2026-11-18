@@ -14,6 +14,7 @@ import PptxGenJS from 'pptxgenjs';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { XLSX_NOT_CALCULATED } from '@agiworkforce/unified-chat/tabular';
 import { MAX_CELL_FORMATS } from '@agiworkforce/unified-chat/workbook-cell-formats';
 import { displayCellNumber } from '@agiworkforce/unified-chat/workbook-number-formats';
 import { MAX_DECOMPRESSION_RATIO, declaredMemberSize } from '@/lib/security/archive-bounds';
@@ -619,6 +620,24 @@ describe('inline workbook cell positions', () => {
     );
 
     expect(text).toBe(['## Sheet: Ledger', 'Row 1: A: Name | E: 7'].join('\n'));
+  });
+
+  it('says a formula with neither text nor a stored result was not calculated instead of dropping it', async () => {
+    const text = await sheetText(
+      await styledXlsx({
+        sheetXml:
+          '<row r="1"><c r="A1"><v>2</v></c><c r="B1"><f>A1*2</f></c><c r="C1"><f t="shared" si="0"/></c><c r="D1" t="str"><f t="shared" si="1"/><v></v></c></row>' +
+          '<row r="2"><c r="A2"><f t="shared" si="0"/></c></row>',
+      }),
+    );
+
+    expect(text).toBe(
+      [
+        '## Sheet: Ledger',
+        `Row 1: A: 2 | B: =A1*2 | C: ${XLSX_NOT_CALCULATED}`,
+        `Row 2: A: ${XLSX_NOT_CALCULATED}`,
+      ].join('\n'),
+    );
   });
 });
 

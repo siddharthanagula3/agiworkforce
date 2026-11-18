@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { XLSX_NOT_CALCULATED } from '@agiworkforce/unified-chat/tabular';
 import { styleIndex } from '@agiworkforce/unified-chat/workbook-cell-formats';
 import {
   displayCellNumber,
@@ -36,6 +37,8 @@ const TYPE_INFERENCE_ROWS = 1_000;
 const MAX_PROFILED_COLUMNS = 256;
 const MAX_CELL_CHARS = 200;
 const MAX_LISTED_SHEETS = 100;
+const FORMULA_ELEMENT = /<f[\s>/]/;
+const UNCALCULATED_NOTE = `Formulas are not evaluated here: a formula cell with no stored result shows as "${XLSX_NOT_CALCULATED}".`;
 export const MAX_SHEET_PROFILES_BYTES = 256 * 1024;
 
 export interface SheetProfile {
@@ -70,10 +73,14 @@ interface CellStyles {
   date1904: boolean;
 }
 
-/** `typed` is what the column type is inferred from: the stored number unless a date format showed it. */
+/**
+ * `typed` is what the column type is inferred from: the stored number unless a
+ * date format showed it, and nothing for a formula the file holds no result for.
+ */
 interface SheetCell {
   text: string;
   typed: string;
+  uncalculated?: true;
 }
 
 function textRuns(xml: string): string {
@@ -170,6 +177,27 @@ async function cellStyles(bounded: BoundedZip, layout: WorkbookLayout): Promise<
   }
 }
 
+function storedValue(body: string): string {
+  const start = body.indexOf('<v>');
+  if (start !== -1) {
+    const end = body.indexOf('</v>', start + 3);
+    return end === -1 ? '' : body.slice(start + 3, end);
+  }
+  if (!body.includes('<v')) return '';
+  const element = xmlElements(body, 'v').next();
+  return element.done ? '' : element.value.body;
+}
+
+/**
+ * A formula typed `str` with an empty value was calculated and gave an empty
+ * string, so it stays an empty cell; only a formula the file holds no result
+ * for is marked.
+ */
+function isUncalculatedFormula(type: string, raw: string, body: string): boolean {
+  if (raw !== '' || type === 'str' || !FORMULA_ELEMENT.test(body)) return false;
+  return type !== 'inlineStr' || textRuns(body) === '';
+}
+
 function cellValue(
   attributes: string,
   body: string,
@@ -177,9 +205,10 @@ function cellValue(
   styles: CellStyles,
 ): SheetCell {
   const type = /t="([^"]+)"/.exec(attributes)?.[1] ?? 'n';
-  const valueStart = body.indexOf('<v>');
-  const valueEnd = valueStart === -1 ? -1 : body.indexOf('</v>', valueStart + 3);
-  const raw = valueEnd === -1 ? '' : body.slice(valueStart + 3, valueEnd);
+  const raw = storedValue(body);
+  if (isUncalculatedFormula(type, raw, body)) {
+    return { text: XLSX_NOT_CALCULATED, typed: '', uncalculated: true };
+  }
   let text: string;
   if (type === 's') text = raw === '' ? '' : (sharedStrings[Number(raw)] ?? '');
   else if (type === 'inlineStr') text = textRuns(body);
@@ -208,6 +237,7 @@ function profileSheet(
 ): { profile: SheetProfile; text: string } {
   const rows: Map<string, SheetCell>[] = [];
   let rowCount = 0;
+  let uncalculated = false;
   for (const row of xmlElements(xml, 'row')) {
     const cells = new Map<string, SheetCell>();
     let position = 0;
@@ -216,6 +246,7 @@ function profileSheet(
       position = declared === undefined ? position + 1 : columnIndex(declared);
       const value = cellValue(cell.attributes, cell.body, sharedStrings, styles);
       if (value.text) cells.set(columnLetters(position), value);
+      if (value.uncalculated) uncalculated = true;
     }
     if (cells.size === 0) continue;
     rowCount += 1;
@@ -245,6 +276,7 @@ function profileSheet(
     `## Sheet: ${ref.name}${dimension ? ` (${dimension})` : ''}`,
     `${dataRowCount.toLocaleString('en-US')} rows after the header, ${columns.length} columns.`,
     ...profileColumns.map((column) => `- ${column.name}: ${column.type}`),
+    ...(uncalculated ? [UNCALCULATED_NOTE] : []),
   ];
   if (header) lines.push('', `First ${shown.length} rows:`, csv(header), ...shown.map(csv));
   return {

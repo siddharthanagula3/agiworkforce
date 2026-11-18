@@ -680,4 +680,20 @@ describe('readWorkbookSheets number formats', () => {
       { name: 'Sheet1', csv: '2024-01-01,50%,"1,234",7' },
     ]);
   });
+
+  it('keeps a calculated formula whose result is an empty string blank, and marks only a formula with no stored result', () => {
+    const csv = sheetCsv(
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1" t="str"><f>IF(A1="","",A1)</f><v></v></c><c r="C1" t="str"><f>IF(A1="","",A1)</f></c><c r="D1"><f>SUM(A1:A1)</f><v></v></c><c r="E1"><f>SUM(A1:A1)</f></c><c r="F1"><v>2</v></c></row>',
+    );
+
+    expect(csv).toBe(`1,,,${XLSX_NOT_CALCULATED},${XLSX_NOT_CALCULATED},2`);
+  });
+
+  it('keeps the text of an inline string cell that also holds a formula', () => {
+    const csv = sheetCsv(
+      '<row r="1"><c r="A1" t="inlineStr"><f>B1</f><is><t>kept</t></is></c><c r="B1" t="inlineStr"><f>C1</f><is><t></t></is></c><c r="C1"><v>3</v></c></row>',
+    );
+
+    expect(csv).toBe(`kept,${XLSX_NOT_CALCULATED},3`);
+  });
 });

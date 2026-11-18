@@ -406,6 +406,21 @@ function escapedCellLength(parts: readonly string[], remaining: number): number 
   return length;
 }
 
+/**
+ * A formula typed `str` with an empty value was calculated and gave an empty
+ * string, so it stays a blank cell; only a formula the file holds no result
+ * for is uncalculated.
+ */
+function isUncalculatedFormula(cell: {
+  type: string | undefined;
+  formula: boolean;
+  value: string | undefined;
+  inline: readonly string[];
+}): boolean {
+  if (!cell.formula || cell.type === 'str' || (cell.value ?? '') !== '') return false;
+  return cell.type !== 'inlineStr' || cell.inline.join('') === '';
+}
+
 function parseSheet(
   archive: WorkbookArchive,
   entry: { name: string; path: string },
@@ -487,7 +502,7 @@ function parseSheet(
         const done = cell;
         cell = null;
         let value: CellValue;
-        if (done.formula && (done.value === undefined || done.value === '')) {
+        if (isUncalculatedFormula(done)) {
           value = [XLSX_NOT_CALCULATED];
         } else if (done.type === 's') {
           const shared = done.value?.trim() ? Number(done.value) : Number.NaN;

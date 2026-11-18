@@ -4,6 +4,7 @@ import JSZip from 'jszip';
 import mammoth from 'mammoth';
 
 import { MAX_FILE_TEXT_CHARS } from '@agiworkforce/types';
+import { XLSX_NOT_CALCULATED } from '@agiworkforce/unified-chat/tabular';
 import { CellFormatTable, styleIndex } from '@agiworkforce/unified-chat/workbook-cell-formats';
 import {
   displayCellNumber,
@@ -573,6 +574,9 @@ async function readXlsxSheets(
               sheetStyles.date1904,
             );
           }
+        }
+        if (!formulaElement.done && !formula && !value && type !== 'str') {
+          value = XLSX_NOT_CALCULATED;
         }
         if (formula || value) {
           cells.push({
