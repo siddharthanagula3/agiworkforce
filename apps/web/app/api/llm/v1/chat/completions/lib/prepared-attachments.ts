@@ -160,6 +160,17 @@ function profileColumns(columns: unknown): string {
     .join(', ');
 }
 
+/** Stated before the column list, which is the first thing cut when the card is fitted to its budget. */
+function columnTotal(columnCount: unknown): string {
+  return typeof columnCount === 'number' ? `, ${wholeNumber(columnCount)} columns` : '';
+}
+
+function unlistedColumns(columnCount: unknown, columns: unknown): string {
+  if (typeof columnCount !== 'number' || !Array.isArray(columns) || columns.length === 0) return '';
+  const more = columnCount - columns.length;
+  return more > 0 ? `, and ${wholeNumber(more)} more not listed` : '';
+}
+
 function detailText(card: PreparedFileCard): string {
   const lines: string[] = [];
   const outline = card.outline.slice(0, MAX_OUTLINE_ANCHORS);
@@ -176,23 +187,30 @@ function detailText(card: PreparedFileCard): string {
   if (Array.isArray(sheets)) {
     for (const sheet of sheets) {
       if (!sheet || typeof sheet !== 'object') continue;
-      const { name, rowCount, columns } = sheet as {
+      const { name, rowCount, columnCount, columns } = sheet as {
         name?: unknown;
         rowCount?: unknown;
+        columnCount?: unknown;
         columns?: unknown;
       };
       if (typeof name !== 'string') continue;
       const rows = typeof rowCount === 'number' ? `, ${wholeNumber(rowCount)} rows` : '';
       const cols = profileColumns(columns);
-      lines.push(`Sheet ${name}${rows}${cols ? `; columns: ${cols}` : ''}`);
+      lines.push(
+        `Sheet ${name}${rows}${columnTotal(columnCount)}${cols ? `; columns: ${cols}${unlistedColumns(columnCount, columns)}` : ''}`,
+      );
     }
   }
   const table = card.coverage['table'];
   if (table && typeof table === 'object') {
-    const { rowCount, columns } = table as { rowCount?: unknown; columns?: unknown };
+    const { rowCount, columnCount, columns } = table as {
+      rowCount?: unknown;
+      columnCount?: unknown;
+      columns?: unknown;
+    };
     const cols = profileColumns(columns);
     lines.push(
-      `Table${typeof rowCount === 'number' ? ` of ${wholeNumber(rowCount)} rows` : ''}${cols ? `; columns: ${cols}` : ''}`,
+      `Table${typeof rowCount === 'number' ? ` of ${wholeNumber(rowCount)} rows` : ''}${columnTotal(columnCount)}${cols ? `; columns: ${cols}${unlistedColumns(columnCount, columns)}` : ''}`,
     );
   }
   return lines.join('\n');

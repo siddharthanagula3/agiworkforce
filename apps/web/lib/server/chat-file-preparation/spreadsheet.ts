@@ -46,6 +46,7 @@ export interface SheetProfile {
   profiled: boolean;
   dimension?: string;
   rowCount?: number;
+  columnCount?: number;
   columns?: { name: string; type: ColumnType }[];
   columnsOmitted?: boolean;
 }
@@ -238,6 +239,7 @@ function profileSheet(
   const rows: Map<string, SheetCell>[] = [];
   let rowCount = 0;
   let uncalculated = false;
+  const populatedColumns = new Set<string>();
   for (const row of xmlElements(xml, 'row')) {
     const cells = new Map<string, SheetCell>();
     let position = 0;
@@ -245,7 +247,11 @@ function profileSheet(
       const declared = /\sr="([A-Z]{1,3})\d+"/.exec(cell.attributes)?.[1];
       position = declared === undefined ? position + 1 : columnIndex(declared);
       const value = cellValue(cell.attributes, cell.body, sharedStrings, styles);
-      if (value.text) cells.set(columnLetters(position), value);
+      if (value.text) {
+        const column = columnLetters(position);
+        cells.set(column, value);
+        populatedColumns.add(column);
+      }
       if (value.uncalculated) uncalculated = true;
     }
     if (cells.size === 0) continue;
@@ -269,13 +275,18 @@ function profileSheet(
   }));
   const dimension = sheetDimension(xml);
   const dataRowCount = Math.max(rowCount - 1, 0);
+  const columnCount = populatedColumns.size;
+  const notProfiled = columnCount - columns.length;
   const csv = (row: Map<string, SheetCell>) =>
     columns.map((column) => csvField(row.get(column)?.text ?? '')).join(',');
   const shown = dataRows.slice(0, sampleRows);
   const lines = [
     `## Sheet: ${ref.name}${dimension ? ` (${dimension})` : ''}`,
-    `${dataRowCount.toLocaleString('en-US')} rows after the header, ${columns.length} columns.`,
+    `${dataRowCount.toLocaleString('en-US')} rows after the header, ${columnCount.toLocaleString('en-US')} columns.`,
     ...profileColumns.map((column) => `- ${column.name}: ${column.type}`),
+    ...(notProfiled > 0
+      ? [`- and ${notProfiled.toLocaleString('en-US')} more columns not profiled`]
+      : []),
     ...(uncalculated ? [UNCALCULATED_NOTE] : []),
   ];
   if (header) lines.push('', `First ${shown.length} rows:`, csv(header), ...shown.map(csv));
@@ -285,6 +296,7 @@ function profileSheet(
       profiled: true,
       ...(dimension ? { dimension } : {}),
       rowCount: dataRowCount,
+      columnCount,
       columns: profileColumns,
     },
     text: lines.join('\n'),

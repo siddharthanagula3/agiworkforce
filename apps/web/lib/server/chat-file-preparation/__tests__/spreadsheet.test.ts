@@ -203,6 +203,7 @@ describe('workbook preparation', () => {
         profiled: true,
         dimension: `A1:D${LEDGER_ROWS + 1}`,
         rowCount: LEDGER_ROWS,
+        columnCount: 4,
         columns: [
           { name: 'Entry', type: 'integer' },
           { name: 'Amount', type: 'number' },
@@ -264,6 +265,7 @@ describe('workbook preparation', () => {
         name: 'Parts',
         profiled: true,
         rowCount: 3,
+        columnCount: 2,
         columns: [
           { name: 'Code', type: 'text' },
           { name: 'Amount', type: 'integer' },
@@ -301,6 +303,7 @@ describe('workbook preparation', () => {
         name: 'Ledger',
         profiled: true,
         rowCount: 1,
+        columnCount: 2,
         columns: [
           { name: 'Amount', type: 'integer' },
           { name: 'Note�', type: 'text' },
@@ -353,6 +356,7 @@ describe('workbook preparation', () => {
           name: 'Ragged',
           profiled: true,
           rowCount: 2,
+          columnCount: 1,
           columns: [{ name: 'Code', type: 'integer' }],
         },
       ]);
@@ -381,7 +385,13 @@ describe('workbook preparation', () => {
       const elapsed = performance.now() - started;
 
       expect(db.rowForAsset(id)!.coverage['sheets']).toEqual([
-        { name: 'Codes', profiled: true, rowCount: 1, columns: [{ name: 'Code', type: 'text' }] },
+        {
+          name: 'Codes',
+          profiled: true,
+          rowCount: 1,
+          columnCount: 1,
+          columns: [{ name: 'Code', type: 'text' }],
+        },
       ]);
       expect(elapsed).toBeLessThan(5_000);
     },
@@ -457,6 +467,7 @@ describe('workbook preparation', () => {
       name: `S${sheets}`,
       profiled: true,
       rowCount: 1,
+      columnCount: columns,
       columnsOmitted: true,
     });
     const text = (await readPreparedText(
@@ -1156,5 +1167,63 @@ describe('workbook preparation formulas without a stored result', () => {
     expect(plain).toContain('## Sheet: Plain');
     expect(plain).not.toContain(NOTE);
     expect(pending).toContain(NOTE);
+  });
+});
+
+describe('workbook preparation columns beyond the profiled ones', () => {
+  const inline = (text: string) => `<c t="inlineStr"><is><t>${text}</t></is></c>`;
+
+  async function profiled(rows: string[]): Promise<{ profile: SheetProfile; text: string }> {
+    return preparedSheet(
+      await singleSheetWorkbook({ sheetName: 'Wide', sheetXml: sheetXml(rows.join('')) }),
+    );
+  }
+
+  it('gives the true column count and says how many columns were not profiled', async () => {
+    const header = Array.from({ length: 300 }, (_, index) => inline(`H${index + 1}`)).join('');
+    const values = Array.from({ length: 300 }, (_, index) => `<c><v>${index + 1}</v></c>`).join('');
+    const { profile, text } = await profiled([`<row>${header}</row>`, `<row>${values}</row>`]);
+
+    expect(profile.columnCount).toBe(300);
+    expect(profile.columns).toHaveLength(256);
+    expect(text).toContain('1 rows after the header, 300 columns.');
+    expect(text).toContain('- H256: integer\n- and 44 more columns not profiled');
+    expect(text).not.toContain('H257');
+  });
+
+  it('counts a column that first holds a value after the sampled rows', async () => {
+    const rows = [`<row>${inline('Code')}${inline('Amount')}</row>`];
+    for (let index = 0; index < SAMPLE_ROWS + 3; index += 1) {
+      rows.push(`<row><c><v>${index}</v></c><c><v>${index * 2}</v></c></row>`);
+    }
+    rows.push('<row><c><v>1</v></c><c><v>2</v></c><c><v>3</v></c></row>');
+    const { profile, text } = await profiled(rows);
+
+    expect(profile.columnCount).toBe(3);
+    expect(columnTypes(profile)).toEqual(['Code: integer', 'Amount: integer']);
+    expect(text).toContain(', 3 columns.');
+    expect(text).toContain('- and 1 more columns not profiled');
+  });
+
+  it('adds no omission line when every populated column is profiled', async () => {
+    const { profile, text } = await profiled([
+      `<row>${inline('Code')}${inline('Amount')}</row>`,
+      '<row><c><v>1</v></c><c><v>2</v></c></row>',
+    ]);
+
+    expect(profile.columnCount).toBe(2);
+    expect(text).toContain('1 rows after the header, 2 columns.');
+    expect(text).not.toContain('not profiled');
+  });
+
+  it('counts the columns that hold a value, not the span between the first and the last', async () => {
+    const { profile, text } = await profiled([
+      `<row><c r="A1" t="inlineStr"><is><t>First</t></is></c><c r="ZZ1" t="inlineStr"><is><t>Last</t></is></c></row>`,
+      '<row><c r="A2"><v>1</v></c><c r="ZZ2"><v>2</v></c></row>',
+    ]);
+
+    expect(profile.columnCount).toBe(2);
+    expect(columnTypes(profile)).toEqual(['First: integer', 'Last: integer']);
+    expect(text).toContain('1 rows after the header, 2 columns.');
   });
 });

@@ -446,6 +446,102 @@ describe('createPreparedAttachmentResolver', () => {
     expect(detailText).toContain('Section 1: regional revenue');
   });
 
+  it('a profile that lists only some of the columns says how many it leaves out', async () => {
+    const prep = new FakePreparationDb();
+    const storage = createCountingStorage();
+    largeAsset(LARGE_ID, 'wide.xlsx');
+    await seedPreparation(prep, storage, LARGE_ID, { text: 'Sheet text.' });
+    const row = prep.rows.get(`row-${LARGE_ID}`)!;
+    row.coverage = {
+      ...row.coverage,
+      sheets: [
+        {
+          name: 'Wide',
+          profiled: true,
+          rowCount: 2,
+          columnCount: 300,
+          columns: [
+            { name: 'A', type: 'integer' },
+            { name: 'B', type: 'text' },
+          ],
+        },
+        { name: 'Bare', profiled: true, rowCount: 5, columnCount: 40, columnsOmitted: true },
+        {
+          name: 'Whole',
+          profiled: true,
+          rowCount: 1,
+          columnCount: 1,
+          columns: [{ name: 'Only', type: 'text' }],
+        },
+        { name: 'Earlier', profiled: true, rowCount: 3, columns: [{ name: 'Old', type: 'text' }] },
+      ],
+      table: {
+        rowCount: 9,
+        columnCount: 1000,
+        columns: [{ name: 'x', type: 'integer' }],
+        columnsTruncated: true,
+      },
+    };
+    const messages: Message[] = [{ role: 'user', content: [fileRef(LARGE_ID)] }];
+
+    await hydrate(messages, resolverFor(prep, storage));
+
+    const detail = partsOf(messages[0]).find(
+      (part) => part[LARGE_FILE_CARD_DETAIL_KEY] !== undefined,
+    );
+    const detailText = (detail as unknown as { [LARGE_FILE_CARD_DETAIL_KEY]: { text: string } })[
+      LARGE_FILE_CARD_DETAIL_KEY
+    ].text;
+    expect(detailText.split('\n').slice(2, -1)).toEqual([
+      'Sheet Wide, 2 rows, 300 columns; columns: A (integer), B (text), and 298 more not listed',
+      'Sheet Bare, 5 rows, 40 columns',
+      'Sheet Whole, 1 rows, 1 columns; columns: Only (text)',
+      'Sheet Earlier, 3 rows; columns: Old (text)',
+      'Table of 9 rows, 1,000 columns; columns: x (integer), and 999 more not listed',
+    ]);
+  });
+
+  it('a column list too long for the card is cut after the total, so the count still reaches the model', async () => {
+    const prep = new FakePreparationDb();
+    const storage = createCountingStorage();
+    largeAsset(LARGE_ID, 'wide.xlsx');
+    await seedPreparation(prep, storage, LARGE_ID, { text: 'Sheet text.' });
+    const row = prep.rows.get(`row-${LARGE_ID}`)!;
+    row.coverage = {
+      ...row.coverage,
+      sheets: [
+        {
+          name: 'Wide',
+          profiled: true,
+          rowCount: 2,
+          columnCount: 300,
+          columns: Array.from({ length: 256 }, (_, index) => ({
+            name: `customer_account_identifier_${index + 1}`,
+            type: 'integer',
+          })),
+        },
+      ],
+    };
+    const messages: Message[] = [{ role: 'user', content: [fileRef(LARGE_ID)] }];
+
+    await hydrate(messages, resolverFor(prep, storage));
+
+    const parts = partsOf(messages[0]);
+    const detail = parts.find((part) => part[LARGE_FILE_CARD_DETAIL_KEY] !== undefined);
+    const detailText = (detail as unknown as { [LARGE_FILE_CARD_DETAIL_KEY]: { text: string } })[
+      LARGE_FILE_CARD_DETAIL_KEY
+    ].text;
+    expect(detailText).toContain('Sheet Wide, 2 rows, 300 columns; columns: ');
+    expect(detailText).not.toContain('customer_account_identifier_256');
+    const fullestCard = renderLargeFileCard(
+      { ...cardMarkerOf(parts[0])!, partial: true },
+      { oneLine: false, fileToolsOffered: true },
+    );
+    expect(
+      estimateAttachmentTokens(fullestCard) + attachmentPartTokens(detail),
+    ).toBeLessThanOrEqual(CHAT_LARGE_FILE_POLICY.turnBudget.cardMaxTokens);
+  });
+
   it('a file attached in an earlier turn and again in this one sends one text, never more than it charges', async () => {
     const prep = new FakePreparationDb();
     const storage = createCountingStorage();
