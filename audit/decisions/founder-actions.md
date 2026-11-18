@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-16
+Last updated: 2026-11-18
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -74,9 +74,9 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
   minimum age, the first iOS credentials, the review account, export compliance and the sales check:
   1. Merge pull request 602 once its checks pass. The work is committed there,
      not on `main`, and the tagged release builds the store binaries from `main`.
-  2. Deploy the web app, and apply migrations 0422 and 0423 to production with it. What the phone
-     needs from that deploy is listed in section 4.2 of the runbook; nothing on the pull request is
-     deployed, and account deletion does not complete without 0423.
+  2. Deploy the web app, and apply migrations 0422, 0423 and 0424 to production with it. What the
+     phone needs from that deploy is listed in section 4.2 of the runbook; nothing on the pull request
+     is deployed, and account deletion does not complete without 0423.
   3. Run the first store build and check that `apps/mobile/native/ios/AGIFoundationModels.swift`
      compiles on the store image `macos-tahoe-26.5-xcode-26.6` (`apps/mobile/eas.json`). Every build
      so far was a simulator build made with Xcode 27.1.
@@ -93,6 +93,67 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
   (`a8e278c62e`) is no longer served.
 - `codex/mobile-store-release` (2026-10-17) is not needed for this: its free-first idea was
   reimplemented on current code. Whether to keep or delete that branch is yours.
+
+## [Search] Queue again the documents indexing failed on since 2026-11-09
+
+**Why founder assistance is required**
+It changes production rows, which only the founder does. From 2026-11-09 until the fix in pull
+request 602, every changed or new retrieval document failed to index and was dropped after five
+attempts (`WEB-RETRIEVAL-INDEX-BACKLOG-SINCE-2026-11-09-01` in `audit/registers/known-flaws.md`).
+**Exact action** After the deploy that carries pull request 602, run as the database owner role
+(it bypasses row-level security). Step 1 only reads; step 2 queues 25 documents per 10-minute sweep
+so new documents keep half of each sweep's 50. The SQL ran on a local Postgres on 2026-11-18, not
+on production.
+
+```sql
+-- 1. Preview: how many are stuck, by kind.
+select source_kind,
+       count(*)                              as stuck,
+       count(*) filter (where attempts >= 5) as never_retried_again,
+       min(updated_at)                       as first_failure,
+       max(updated_at)                       as last_failure
+  from public.retrieval_documents
+ where status = 'failed'
+   and last_error = 'This source could not be indexed. Retry indexing to try again.'
+   and updated_at >= timestamptz '2026-11-09 00:00:00+00'
+ group by source_kind
+ order by stuck desc;
+
+-- 2. Queue them again.
+begin;
+with stuck as (
+  select id, row_number() over (order by updated_at, id) as n
+    from public.retrieval_documents
+   where status = 'failed'
+     and last_error = 'This source could not be indexed. Retry indexing to try again.'
+     and updated_at >= timestamptz '2026-11-09 00:00:00+00'
+), queued as (
+  update public.retrieval_documents d
+     set status = 'pending',
+         attempts = 0,
+         last_error = null,
+         lease_expires_at = null,
+         workflow_run_id = null,
+         next_attempt_at = now() + make_interval(mins => (10 * ((s.n - 1) / 25))::int),
+         updated_at = now()
+    from stuck s
+   where d.id = s.id
+     and d.status = 'failed'
+  returning d.next_attempt_at
+)
+select count(*) as queued, min(next_attempt_at) as first_run, max(next_attempt_at) as last_run
+  from queued;
+-- Check the count against step 1, then commit; (or rollback;)
+```
+
+**Where** The production database, after the web deploy.
+**Needed input** Run it, and decide whether to credit the embedding charges of the failed attempts.
+**How to verify completion** Step 1 run again later returns no rows, and a file from that window is
+found by search.
+**What remains after founder action** Nothing in code; the register row closes once search finds
+the requeued documents.
+**Impact** NON-BLOCKING (search misses documents from that window until this runs)
+**Status** FOUNDER ACTION REQUIRED after the deploy
 
 ## [Legal] Register a DMCA designated agent (decision 32)
 
