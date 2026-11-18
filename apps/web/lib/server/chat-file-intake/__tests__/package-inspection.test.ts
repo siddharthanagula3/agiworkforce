@@ -56,7 +56,7 @@ import {
   scanUploadRangeForCredentials,
 } from '@/lib/security/upload-scan';
 import { getKeyValueStore } from '@/lib/server/key-value';
-import { extractOfficeDocumentText } from '@/lib/server/office-document-text';
+import { decodeXmlEntities, extractOfficeDocumentText } from '@/lib/server/office-document-text';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { type ChatFileInspectionCursor } from '../full-inspection';
 import { createChatFileIntakeDeps, runChatFileIntakeStep, type ChatFileIntakeDeps } from '../steps';
@@ -509,6 +509,63 @@ describe('a credential the package splits where the extracted text joins it', ()
     });
 
     expect(outcome).toBe('refused');
+  });
+});
+
+describe('a credential spelled with character references, which every reader decodes', () => {
+  const spelled = RECOGNISED_SECRET.replace('sk_live_EXAMPLE', 'sk_live_E&#88;&#38;#x41;MPLE');
+
+  async function workbookWith(sharedString: string, sheetName = 'Ledger'): Promise<Uint8Array> {
+    const zip = await workbookArchive([['Opening balance'], ['Closing balance']]);
+    zip.file(
+      'xl/sharedStrings.xml',
+      `<?xml version="1.0"?><sst><si><t>Label</t></si><si><t>Opening balance</t></si><si>${sharedString}</si></sst>`,
+    );
+    zip.file(
+      'xl/workbook.xml',
+      `<?xml version="1.0"?><workbook xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    );
+    return withLeadingMedia(
+      await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' }),
+    );
+  }
+
+  async function expectRefused(bytes: Uint8Array, member: string) {
+    expect(await memberText(bytes, member)).not.toContain(LIVE_KEY);
+    const { outcome, refusalCode } = await packageOutcome(bytes, XLSX, {
+      inspectContent: policyInspector('warn'),
+    });
+    expect(outcome).toBe('refused');
+    expect(refusalCode).toBe('dlp_blocked');
+  }
+
+  it('is spelled the way preparation decodes it', () => {
+    expect(spelled).not.toContain(LIVE_KEY);
+    expect(decodeXmlEntities(spelled)).toBe(RECOGNISED_SECRET);
+  });
+
+  it('is found in a shared string', async () => {
+    await expectRefused(await workbookWith(`<t>${spelled}</t>`), 'xl/sharedStrings.xml');
+  });
+
+  it('is found when it is also split across the runs of a shared string', async () => {
+    const at = spelled.indexOf('&#88;');
+    await expectRefused(
+      await workbookWith(`<r><t>${spelled.slice(0, at)}</t></r><r><t>${spelled.slice(at)}</t></r>`),
+      'xl/sharedStrings.xml',
+    );
+  });
+
+  it('is found in a sheet name, which preparation decodes from its attribute', async () => {
+    await expectRefused(await workbookWith('<t>Closing balance</t>', spelled), 'xl/workbook.xml');
+  });
+
+  it('seals a workbook whose references spell no credential', async () => {
+    const bytes = await workbookWith('<t>Caf&#xE9; &#8364;12 &amp; more</t>', 'Q&#x31; ledger');
+    const { outcome } = await packageOutcome(bytes, XLSX, {
+      inspectContent: policyInspector('block'),
+    });
+    expect(outcome).toBe('accepted');
   });
 });
 

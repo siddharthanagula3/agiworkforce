@@ -30,6 +30,7 @@ import {
   scanCredentialRange,
   type OpenObjectRange,
 } from './full-inspection';
+import { characterReferenceFinder, xmlReferenceDecoder } from './xml-reference-decoder';
 
 /**
  * How far the credential scan of an Office package has got. It holds part
@@ -49,6 +50,10 @@ export interface PackageInspectionCursor {
   nested?: number;
   /** Set while the scan reads that member's text with its markup removed. */
   view?: 'unmarked';
+  /** Set while the scan reads that member again with its references decoded, as its readers decode them. */
+  decoded?: true;
+  /** Set once measuring the member found a numeric character reference in it, which it is read again decoded for. */
+  references?: true;
   /** The first byte of that part whose detections the next step answers for. */
   ownedFrom: number;
   /** The length of that part as the scan reads it, once a step has measured it and stopped inside it. */
@@ -326,8 +331,51 @@ function unmarkedView(): MemberView {
   };
 }
 
-function memberView(view: PackageInspectionCursor['view']): MemberView {
-  return view === 'unmarked' ? unmarkedView() : textView();
+/** How the scan reads a member: as written, with its markup removed, and either with its references decoded. */
+interface MemberReading {
+  view: PackageInspectionCursor['view'];
+  decoded: PackageInspectionCursor['decoded'];
+}
+
+/**
+ * A reader decodes character references, so `ghp_&#x61;…` reaches the model
+ * as a token neither the member as written nor its markup-free view holds.
+ * Markup is removed before decoding, since a decoded `&lt;` is not a tag.
+ */
+function decodedView(view: MemberView): MemberView {
+  const decoder = xmlReferenceDecoder();
+  return {
+    push: (chunk) => decoder.push(view.push(chunk)),
+    end: () => joined(decoder.push(view.end()), decoder.end()),
+  };
+}
+
+function memberView(reading: MemberReading): MemberView {
+  const view = reading.view === 'unmarked' ? unmarkedView() : textView();
+  return reading.decoded ? decodedView(view) : view;
+}
+
+/**
+ * The reading after this one: a text part read as written is read again with
+ * its markup removed, and a member holding a numeric character reference is
+ * read both ways again with its references decoded.
+ */
+function nextReading(
+  name: string,
+  current: MemberReading,
+  references: boolean,
+): MemberReading | null {
+  if (current.view === undefined && hasUnmarkedView(name)) {
+    return { view: 'unmarked', decoded: current.decoded };
+  }
+  if (!current.decoded && references) return { view: undefined, decoded: true };
+  return null;
+}
+
+interface MemberMeasure {
+  inflated: number;
+  length: number;
+  references: boolean;
 }
 
 /**
@@ -337,16 +385,21 @@ function memberView(view: PackageInspectionCursor['view']): MemberView {
  */
 function measureMember(
   entry: JSZip.JSZipObject,
-  view: PackageInspectionCursor['view'],
+  reading: MemberReading,
   remaining: number,
-): Promise<{ inflated: number; length: number } | null> {
+): Promise<MemberMeasure | null> {
   return new Promise((resolve, reject) => {
     const stream = entry.nodeStream('nodebuffer');
-    const transform = memberView(view);
+    const transform = memberView(reading);
+    const references = characterReferenceFinder();
     let inflated = 0;
     let length = 0;
     let settled = false;
-    const finish = (outcome: { inflated: number; length: number } | null | Error): void => {
+    const read = (bytes: Uint8Array): void => {
+      length += bytes.byteLength;
+      references.push(bytes);
+    };
+    const finish = (outcome: MemberMeasure | null | Error): void => {
       if (settled) return;
       settled = true;
       stream.pause();
@@ -360,13 +413,13 @@ function measureMember(
         finish(null);
         return;
       }
-      length += transform.push(chunk).byteLength;
+      read(transform.push(chunk));
     });
     stream.on('error', () => finish(new InflatedMemberError('damaged')));
     stream.on('end', () => {
       if (settled) return;
-      length += transform.end().byteLength;
-      finish({ inflated, length });
+      read(transform.end());
+      finish({ inflated, length, references: references.found });
     });
   });
 }
@@ -424,12 +477,12 @@ function memberStartsWith(entry: JSZip.JSZipObject, signature: Uint8Array): Prom
 /** The member's bytes from `start` to `end` as the view reads them, as a stream the range scanner reads. */
 function memberRange(
   entry: JSZip.JSZipObject,
-  view: PackageInspectionCursor['view'],
+  reading: MemberReading,
   start: number,
   end: number,
 ): ReadableStream<Uint8Array> {
   const source = entry.nodeStream('nodebuffer');
-  const transform = memberView(view);
+  const transform = memberView(reading);
   let position = 0;
   let done = false;
   return new ReadableStream<Uint8Array>({
@@ -612,13 +665,15 @@ async function scanText(
  * One step of the credential scan of an Office package, over the whole file
  * read once under the entity tag. The package's own bytes, then every member
  * inflated, a UTF-16 one decoded, then each text part again with its markup
- * removed, then the members of any package a member holds, are read at most a
- * text step's bytes, and at most an archive's members, per step. Only the
- * detectors that name a credential format answer over any of it, since
- * Office's own numbers and identifiers trip the others. Members may inflate to
- * no more than the malware scan reads, and no more than the archive ratio
- * allows. No reader of the sealed file runs here: every text part a reader
- * would extract from has been read with its markup removed.
+ * removed, then a member holding a numeric character reference both ways again
+ * with its references decoded, then the members of any package a member holds,
+ * are read at most a text step's bytes, and at most an archive's members, per
+ * step. Only the detectors that name a credential format answer over any of
+ * it, since Office's own numbers and identifiers trip the others. Members may
+ * inflate to no more than the malware scan reads, and no more than the archive
+ * ratio allows. No reader of the sealed file runs here: every text part a
+ * reader would extract from has been read with its markup removed and with its
+ * references decoded.
  */
 export async function scanPackageStep(input: {
   data: Uint8Array;
@@ -636,7 +691,8 @@ export async function scanPackageStep(input: {
   if (!admitsMembers(budget, members.length)) return TOO_MANY_MEMBERS;
 
   const stepBytes = policy.kinds.text.bytesPerStep;
-  let { part, nested, view, ownedFrom, partBytes, inflatedBytes, findings } = cursor;
+  let { part, nested, view, decoded, references, ownedFrom, partBytes, inflatedBytes, findings } =
+    cursor;
   if (inflatedBytes > budget.ceiling) return OVER_BUDGET;
   let held: { part: number; members: JSZip.JSZipObject[] } | null = null;
   let spent = 0;
@@ -649,6 +705,8 @@ export async function scanPackageStep(input: {
       part,
       ...(nested === undefined ? {} : { nested }),
       ...(view === undefined ? {} : { view }),
+      ...(decoded ? { decoded } : {}),
+      ...(references ? { references } : {}),
       ownedFrom,
       ...(partBytes === undefined ? {} : { partBytes }),
       inflatedBytes,
@@ -673,13 +731,18 @@ export async function scanPackageStep(input: {
       if (partBytes === undefined) {
         if (!member) {
           partBytes = data.byteLength;
-        } else if (view === undefined) {
-          const measured = await measureMember(member, view, budget.ceiling - inflatedBytes);
+        } else if (view === undefined && !decoded) {
+          const measured = await measureMember(
+            member,
+            { view, decoded },
+            budget.ceiling - inflatedBytes,
+          );
           if (measured === null) return OVER_BUDGET;
           inflatedBytes += measured.inflated;
           partBytes = measured.length;
+          references = measured.references ? true : undefined;
         } else {
-          const measured = await measureMember(member, view, Number.MAX_SAFE_INTEGER);
+          const measured = await measureMember(member, { view, decoded }, Number.MAX_SAFE_INTEGER);
           partBytes = measured?.length ?? 0;
         }
       }
@@ -687,17 +750,17 @@ export async function scanPackageStep(input: {
       if (partBytes > ownedFrom) {
         const ownedTo = Math.min(partBytes, ownedFrom + stepBytes - spent);
         const reading = member;
-        const readingView = view;
+        const memberReading: MemberReading = { view, decoded };
         const scanned = await scanText(
           reading?.name ?? 'package',
           partBytes,
           ownedFrom,
           ownedTo,
           reading
-            ? async (_key, start, end) => memberRange(reading, readingView, start, end)
+            ? async (_key, start, end) => memberRange(reading, memberReading, start, end)
             : openBytesRange(data),
         );
-        const answering = readingOf(reading, readingView, declaredAsText);
+        const answering = readingOf(reading, memberReading.view, declaredAsText);
         findings = mergeInspectionFindings(
           findings,
           scanned.findings.filter((finding) => findingAnswers(finding, answering)),
@@ -712,10 +775,14 @@ export async function scanPackageStep(input: {
 
       ownedFrom = 0;
       partBytes = undefined;
-      if (member && view === undefined && hasUnmarkedView(member.name)) {
-        view = 'unmarked';
+      const next = member ? nextReading(member.name, { view, decoded }, references === true) : null;
+      if (next) {
+        view = next.view;
+        decoded = next.decoded;
       } else {
         view = undefined;
+        decoded = undefined;
+        references = undefined;
         visited += 1;
         if (!outer) {
           part += 1;
