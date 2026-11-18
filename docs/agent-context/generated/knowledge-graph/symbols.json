@@ -35548,6 +35548,9 @@
     "dailyBriefScheduleInput": [
       "apps/mobile/src/features/settings/notifications/dailyBrief.ts"
     ],
+    "DailyBriefScope": [
+      "apps/mobile/src/features/settings/notifications/dailyBrief.ts"
+    ],
     "DailyBriefState": [
       "apps/mobile/src/features/settings/notifications/dailyBrief.ts"
     ],
@@ -77641,6 +77644,9 @@
     ],
     "locate": [
       "apps/desktop/src-tauri/src/automation/action_router/dom.rs"
+    ],
+    "locateDailyBriefElsewhere": [
+      "apps/mobile/src/features/settings/notifications/dailyBrief.ts"
     ],
     "locateEvidence": [
       "apps/web/features/security-scan/server/findings.ts"
