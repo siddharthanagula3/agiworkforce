@@ -608,4 +608,19 @@ describe('sampled rows longer than their bound', () => {
     expect(rows).toEqual([quoted, '2,plain']);
     expect(text).not.toContain(CUT_NOTE);
   });
+
+  it('writes quoted column names back quoted above both samples, so the header splits into as many names as the rows', async () => {
+    const header = 'Account,"Revenue, USD","Note ""raw""","Line\nbreak"';
+    const body = Array.from({ length: 250 }, (_, index) => `a${index},${index},n,l`).join('\n');
+    const { text } = await profileOf(`${header}\n${body}\n`);
+
+    expect(text.split(`\n${header}\n`)).toHaveLength(3);
+    expect(splitDelimitedFields(header, ',')).toEqual([
+      'Account',
+      'Revenue, USD',
+      'Note "raw"',
+      'Line\nbreak',
+    ]);
+    expect(text).not.toContain('Account,Revenue, USD');
+  });
 });

@@ -207,11 +207,16 @@ function fitsSampleRow(row: string): boolean {
   );
 }
 
+function delimitedField(value: string, delimiter: ',' | '\t'): string {
+  if (delimiter === '\t' || !/[",\n\r]/.test(value)) return value;
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
 function sampleField(field: string, maxChars: number, delimiter: ',' | '\t'): string {
-  const shown =
-    field.length > maxChars ? `${sliceWholeCodePoints(field, maxChars)}${SAMPLE_CUT_MARK}` : field;
-  if (delimiter === '\t' || !/[",\n\r]/.test(shown)) return shown;
-  return `"${shown.replaceAll('"', '""')}"`;
+  return delimitedField(
+    field.length > maxChars ? `${sliceWholeCodePoints(field, maxChars)}${SAMPLE_CUT_MARK}` : field,
+    delimiter,
+  );
 }
 
 /**
@@ -447,7 +452,9 @@ function profileText(
   sampleRows: number,
 ): string {
   const separator = profile.delimiter === 'tab' ? 'tab-separated' : 'comma-separated';
-  const headerLine = (cursor.header ?? []).join(cursor.delimiter);
+  const headerLine = (cursor.header ?? [])
+    .map((name) => delimitedField(name, cursor.delimiter))
+    .join(cursor.delimiter);
   const lines = [
     `Table (${separator}): ${profile.rowCount.toLocaleString('en-US')} rows after the header, ${profile.columnCount.toLocaleString('en-US')} columns.`,
     '',
