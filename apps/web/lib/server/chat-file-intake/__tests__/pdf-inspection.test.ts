@@ -67,7 +67,7 @@ import { openPrivateObjectRange, type ChatFileInspectionCursor } from '../full-i
 import { createChatFileIntakeDeps, runChatFileIntakeStep, type ChatFileIntakeDeps } from '../steps';
 import type { ChatFileIntakeRow } from '../store';
 import type { ChatFileIntakeDirective, IntakeObjects } from '../transitions';
-import { createFakeScanner } from './fake-scanner';
+import { createFakeScanner, type FakeScanner } from './fake-scanner';
 import {
   createIntakeHarness,
   putStagedFile,
@@ -213,7 +213,12 @@ async function stagedPdf(
   bytes: Uint8Array,
   overrides: Partial<ChatFileIntakeDeps> = {},
   declared: Declared = PDF,
-): Promise<{ row: ChatFileIntakeRow; harness: IntakeHarness; readHead: ReadHeadSpy }> {
+): Promise<{
+  row: ChatFileIntakeRow;
+  harness: IntakeHarness;
+  readHead: ReadHeadSpy;
+  scanner: FakeScanner;
+}> {
   const base = pdfRow(bytes, declared);
   const staged = await putStagedFile(base, bytes);
   const row = { ...base, declaredSha256: staged.sha256 };
@@ -227,7 +232,7 @@ async function stagedPdf(
   const harness = createIntakeHarness({ scanner, rows: [row], overrides });
   const readHead = vi.fn(harness.deps.objects.readHead);
   harness.deps.objects = { ...harness.deps.objects, readHead };
-  return { row, harness, readHead };
+  return { row, harness, readHead, scanner };
 }
 
 type Outcome = 'refused' | 'accepted';
@@ -241,8 +246,9 @@ async function pdfOutcome(
   refusalCode: ChatFileIntakeRefusalCode | null;
   harness: IntakeHarness;
   directives: ChatFileIntakeDirective[];
+  scanner: FakeScanner;
 }> {
-  const { row, harness } = await stagedPdf(bytes, overrides, declared);
+  const { row, harness, scanner } = await stagedPdf(bytes, overrides, declared);
   const run = await runInline(harness, { intakeId: row.id, runId: 'run-1' });
   const ended = harness.store.row(row.id);
   if (ended.state === 'rejected') {
@@ -253,10 +259,17 @@ async function pdfOutcome(
       refusalCode: ended.refusalCode,
       harness,
       directives: run.directives,
+      scanner,
     };
   }
   expect(ended.state).toBe('sealed');
-  return { outcome: 'accepted', refusalCode: null, harness, directives: run.directives };
+  return {
+    outcome: 'accepted',
+    refusalCode: null,
+    harness,
+    directives: run.directives,
+    scanner,
+  };
 }
 
 function policyInspector(mode: SecretHandlingMode): ChatFileIntakeDeps['inspectContent'] {
@@ -829,6 +842,7 @@ describe('a file whose name and declared type disagree', () => {
 
     expect(result.outcome).toBe('accepted');
     expect(cursorsOf(result.directives).map((cursor) => cursor.scan)).toEqual(['package']);
+    expect(result.scanner.submits().map((call) => call.body?.['mimeType'])).toEqual([DOCX_TYPE]);
   });
 
   it('reads a package declared as a PDF as a package and then as a PDF, and refuses it when pdf.js cannot open it', async () => {
@@ -847,5 +861,46 @@ describe('a file whose name and declared type disagree', () => {
 
     expect(result).toMatchObject({ outcome: 'refused', refusalCode: 'type_mismatch' });
     expect(cursorsOf(result.directives).map((cursor) => cursor.scan)).toEqual(['package', 'pdf']);
+  });
+});
+
+describe('a PDF a reader opens by its name under another declared type', () => {
+  const BY_NAME: Declared = { fileName: 'report.pdf', mimeType: 'text/plain' };
+
+  /** One byte ahead of the header, so no check that reads the first bytes sees a PDF. */
+  function behindOneByte(pdf: Uint8Array): Uint8Array {
+    return new Uint8Array(Buffer.concat([Buffer.from('\n'), pdf]));
+  }
+
+  function scriptedPdf(): Uint8Array {
+    const doc = new jsPDF({ compress: false });
+    doc.text('Quarterly review', 10, 12);
+    doc.addJS('app.alert(1)');
+    return behindOneByte(new Uint8Array(doc.output('arraybuffer')));
+  }
+
+  it.each([
+    ['read as a PDF by its name', BY_NAME],
+    ['declared a PDF', PDF],
+  ])('is refused for the script it runs on opening when %s', async (_label, declared) => {
+    const bytes = scriptedPdf();
+    expect(Buffer.from(bytes).includes('/JavaScript')).toBe(true);
+    expect(inspectUploadHead(bytes, BY_NAME.mimeType, BY_NAME.fileName).ok).toBe(true);
+
+    const result = await pdfOutcome(bytes, {}, declared);
+
+    expect(result).toMatchObject({ outcome: 'refused', refusalCode: 'active_pdf' });
+    expect(result.scanner.submits()).toEqual([]);
+  });
+
+  it('is submitted to the scanner as a PDF, so the scanner checks it for active content too', async () => {
+    const bytes = behindOneByte(pdfDocument({ pages: [['Quarterly review']], compress: false }));
+
+    const result = await pdfOutcome(bytes, {}, BY_NAME);
+
+    expect(result.outcome).toBe('accepted');
+    expect(result.scanner.submits().map((call) => call.body?.['mimeType'])).toEqual([
+      'application/pdf',
+    ]);
   });
 });

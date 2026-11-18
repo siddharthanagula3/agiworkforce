@@ -208,6 +208,30 @@ describe('inspectUploadBytes, PDF active content', () => {
   });
 });
 
+describe('a PDF a reader opens by its name under another declared type', () => {
+  const SCRIPTED = utf8('\n%PDF-1.7\n/OpenAction << /S /JavaScript /JS (app.alert(1)) >>');
+
+  it('passes the active-content check when only the declared type is read', () => {
+    expect(inspectUploadBytes(SCRIPTED, 'text/plain').ok).toBe(true);
+    expect(inspectUploadHead(SCRIPTED, 'text/plain', 'report.pdf').ok).toBe(true);
+  });
+
+  it('is checked for active content when the caller says a reader opens it as a PDF', () => {
+    const result = inspectUploadBytes(SCRIPTED, 'text/plain', true);
+    expect(result.ok).toBe(false);
+    expect(result.findings.map((finding) => finding.code)).toEqual(['active_content_pdf']);
+
+    const head = inspectUploadHead(SCRIPTED, 'text/plain', 'report.pdf', 'text/plain', true);
+    expect(head.ok).toBe(false);
+    expect(head.findings.some((finding) => finding.code === 'active_content_pdf')).toBe(true);
+  });
+
+  it('leaves a clean file read as a PDF alone', () => {
+    const clean = utf8('\n%PDF-1.7\nharmless document body');
+    expect(inspectUploadBytes(clean, 'text/plain', true).ok).toBe(true);
+  });
+});
+
 describe('inspectUploadBytes, reporting', () => {
   it('reports every distinct problem rather than stopping at the first', () => {
     const result = inspectUploadBytes(utf8('#!/bin/sh\necho hi'), 'image/png');

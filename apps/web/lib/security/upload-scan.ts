@@ -339,7 +339,11 @@ export function uploadFindingRejects(finding: UploadScanFinding): boolean {
   return isHighConfidenceSecretName(credentialFindingName(finding));
 }
 
-export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): UploadScanResult {
+export function inspectUploadBytes(
+  bytes: Uint8Array,
+  declaredMime: string,
+  readAsPdf = false,
+): UploadScanResult {
   const mime = essenceOf(declaredMime);
   const findings: UploadScanFinding[] = [];
 
@@ -386,7 +390,7 @@ export function inspectUploadBytes(bytes: Uint8Array, declaredMime: string): Upl
   }
 
   if (mime === 'image/svg+xml') findings.push(...scanSvg(bytes));
-  if (mime === 'application/pdf') findings.push(...scanPdf(bytes));
+  if (mime === 'application/pdf' || readAsPdf) findings.push(...scanPdf(bytes));
 
   return { ok: findings.length === 0, findings };
 }
@@ -575,17 +579,20 @@ function verdictOf(
  * `credentialMime` is the type the credential detectors read the bytes as.
  * Where the product reads a file as text whatever type the client declared, it
  * passes a text type here, so the declared type cannot switch the detectors off.
+ * `readAsPdf` does the same for the PDF active-content check: where a reader
+ * opens the file as a PDF by its name, the check runs whatever type was declared.
  */
 export function inspectUploadHead(
   bytes: Uint8Array,
   declaredMime: string,
   filename: string,
   credentialMime: string = declaredMime,
+  readAsPdf = false,
 ): UploadScanResult {
   const head = bytes.subarray(0, UPLOAD_INSPECTION_BYTES);
   return verdictOf(
     declaredMime,
-    inspectUploadBytes(head, declaredMime).findings,
+    inspectUploadBytes(head, declaredMime, readAsPdf).findings,
     scanUploadForCredentials(head, credentialMime, filename),
     NO_EXTERNAL_FINDINGS,
   );

@@ -87,6 +87,15 @@ export function pdfScanApplies(row: { fileName: string; mimeType: string }): boo
 }
 
 /**
+ * The type the malware scanner is told. Its PDF active-content check follows
+ * this type, so a file a reader opens as a PDF is submitted as one whatever
+ * type was declared.
+ */
+export function scannerMimeType(row: { fileName: string; mimeType: string }): string {
+  return pdfScanApplies(row) ? PDF_MEDIA_TYPE : row.mimeType;
+}
+
+/**
  * The share of the inspecting lease one pages step may spend before it hands
  * on from the page it reached. pdf.js extracts a page without yielding to a
  * timer, so a page cannot be cut short, only the next one not started.

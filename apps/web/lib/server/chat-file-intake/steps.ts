@@ -59,6 +59,7 @@ import {
   firstPdfCursor,
   isPdfCursor,
   pdfScanApplies,
+  scannerMimeType,
   scanPdfStep,
   type PdfInspectionCursor,
   type PdfScanOutcome,
@@ -173,6 +174,16 @@ function reportedUploadFindings(findings: readonly UploadScanFinding[]): Outboun
 
 function mimeEssence(value: string | undefined): string | undefined {
   return value?.split(';', 1)[0]?.trim().toLowerCase();
+}
+
+function inspectHead(row: ChatFileIntakeRow, head: Uint8Array): UploadScanResult {
+  return inspectUploadHead(
+    head,
+    row.mimeType,
+    row.fileName,
+    credentialScanMimeType(row),
+    pdfScanApplies(row),
+  );
 }
 
 function scanGiveUpReached(deps: ChatFileIntakeDeps, row: ChatFileIntakeRow): boolean {
@@ -338,12 +349,7 @@ async function continueInspection(
   const findings = mergeInspectionFindings(cursor.findings, scanned.findings);
   if (!finished) return { next: 'inspect', cursor: { ...cursor, ownedFrom: ownedTo, findings } };
   if (head === null) throw new ShortInspectionReadError(row.id);
-  const inspection = inspectUploadHead(
-    head,
-    row.mimeType,
-    row.fileName,
-    credentialScanMimeType(row),
-  );
+  const inspection = inspectHead(row, head);
   if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
   return concludeScannedBytes(ctx, row, cursor.etag, head, [...inspection.findings, ...findings]);
 }
@@ -397,12 +403,7 @@ async function continuePackageInspection(
         };
       }
       const head = data.subarray(0, Math.min(row.byteCount, UPLOAD_INSPECTION_BYTES));
-      const inspection = inspectUploadHead(
-        head,
-        row.mimeType,
-        row.fileName,
-        credentialScanMimeType(row),
-      );
+      const inspection = inspectHead(row, head);
       if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
       return concludeScannedBytes(ctx, row, cursor.etag, head, [
         ...inspection.findings,
@@ -457,9 +458,7 @@ function settlePdfStep(
       return refuseInspected(ctx, row, scanned.findings);
     case 'finished': {
       if (head === null) throw new ShortInspectionReadError(row.id);
-      const headInspection =
-        inspection ??
-        inspectUploadHead(head, row.mimeType, row.fileName, credentialScanMimeType(row));
+      const headInspection = inspection ?? inspectHead(row, head);
       if (!headInspection.ok) return refuseInspected(ctx, row, headInspection.findings);
       return concludeScannedBytes(
         ctx,
@@ -578,12 +577,7 @@ async function inspectStep(
   }
   if (head === null) throw new ShortInspectionReadError(row.id);
 
-  const inspection = inspectUploadHead(
-    head,
-    row.mimeType,
-    row.fileName,
-    credentialScanMimeType(row),
-  );
+  const inspection = inspectHead(row, head);
   if (!inspection.ok) return refuseInspected(ctx, row, inspection.findings);
   if (packageScanApplies(row)) return { next: 'inspect', cursor: firstPackageCursor(before.etag) };
   if (pdfScan) return settlePdfStep(ctx, row, before.etag, pdfScan, head, inspection);
@@ -687,7 +681,13 @@ async function submitStep(
     return failedAttempt(ctx, row);
   }
   const answer = await submitSourceScan(
-    { jobId, sourceUrl, byteCount: row.byteCount, etag: row.etag, mimeType: row.mimeType },
+    {
+      jobId,
+      sourceUrl,
+      byteCount: row.byteCount,
+      etag: row.etag,
+      mimeType: scannerMimeType(row),
+    },
     deps.scanner,
   );
   switch (answer.kind) {
