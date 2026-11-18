@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-11-15
+Last updated: 2026-11-17
 Applies to: `com.agiworkforce.app`, version 0.0.1 (`app.config.js` → `version`,
 `android.package`)
 
@@ -25,9 +25,9 @@ Local Mode works without an account. AGI Cloud needs the sign-in above; no one-t
 1. Finish onboarding, then tap Cloud in the Local/Cloud switch (side menu or Settings).
 2. Age step: share the age signal if Android asks, or enter an age of 18 or more.
 3. Sign in with the email and password above, and accept the Terms if asked.
-4. Before the first Cloud message, tap Allow on "Share with AI providers?".
+4. Before AGI Cloud opens, the app asks "Share with AI providers?": tap Allow. Not now keeps Local Mode, and tapping Cloud asks again. To withdraw: Settings > Privacy > Share with AI providers, off.
 Nothing is sold on any platform before 1 January 2027: the app has no purchase, upgrade or price, and no plan or credit can be bought on the web either. The review account's plan was granted for this review without a purchase.
-Report: three-dot menu under any answer. Delete Account: Settings > Email > Danger Zone.
+Report: three-dot menu under any answer. Delete Account: Settings > Email > Danger Zone; in Local Mode, Settings > Data Controls > Delete account, then Check deletion status.
 ```
 
 Every statement below is checked against shipped code in `apps/mobile` (and, for
@@ -64,10 +64,17 @@ memory and model records use a local SQLite database encrypted with SQLCipher
 
 Local Mode does not merely _avoid_ our servers, it is prevented from reaching
 them: `lib/egressGuard.ts` throws `EgressBlockedError` on any outbound request to
-an AGI managed-cloud host while Local Mode is active, with two exceptions the
-person starts: a content report they choose to send with its own **Send** tap
-(`consentedReport`, see **Reporting AI-generated content**), and the Terms
-check of an account that is already signed in.
+an AGI managed-cloud host while Local Mode is active. The exceptions are a
+content report the person chooses to send with its own **Send** tap
+(`consentedReport`, see **Reporting AI-generated content**) and, for an account
+that is already signed in, two kinds of control that carry no chat content: the
+account controls (Terms, account deletion and its status and cancellation, the
+identity check for deletion, and the data export), because deletion and export
+must not depend on sharing with AI providers; and the controls that pause the
+account's scheduled and running tasks when the person turns off sharing with AI
+providers. AGI Cloud itself is
+open only while the signed-in account allows sharing with AI providers
+(`services/providerConsent.ts`, `src/features/chat/store/cloudModeDoor.ts`).
 
 **AGI Cloud (optional, requires sign-in).** Signing in enables server-side chat
 and web search on the Free plan, which is open to anyone who signs in
@@ -92,6 +99,28 @@ access instructions; do not put credentials in this repository. The Cloud entry 
 includes age confirmation, and a signed-in account must accept the current
 Terms before Cloud unlocks. The review account needs no purchase setup: this
 version has no in-app products.
+
+**Consent before AGI Cloud opens.** After sign-in and the Terms, and whenever a
+signed-in person taps **Cloud** in Local Mode, the app asks **Share with AI
+providers?**, names each provider, and offers **Details**, **Not now** and
+**Allow**. Without **Allow** the app cannot be in AGI Cloud: **Not now** keeps
+it in Local Mode, signed in, and tapping **Cloud** asks again. The Back key on
+the question counts as **Not now**. The permission belongs to the account that
+gave it; another account on the same device is asked itself. Messages,
+attachments, picture and video requests, the image editor and live voice check
+it again before they send (`services/llmGate.ts`,
+`src/features/chat/actions/mediaGenerationConsent.ts`,
+`src/features/voice/services/liveVoiceSession.ts`).
+
+**Withdrawing it.** Settings → **Privacy** → **Share with AI providers**,
+captioned "AGI Cloud needs this. Off keeps Local Mode." The switch shows in AGI
+Cloud, and in Local Mode while the account's permission is on. Turning it off
+withdraws the permission at once: the app returns to Local Mode and stays
+there, live voice and answers being written stop, and the account's active
+schedules and running tasks are paused, never cancelled. When there was
+something to pause, one line says what was paused or what could not be.
+Turning it on asks the same question
+(`src/features/settings/cloud-privacy/CloudProviderSharingGroup.tsx`).
 
 ## Age gate and minor-safe mode
 
@@ -354,7 +383,9 @@ Security practices, each verifiable:
 `lib/egressGuard.ts`, which blocks managed-cloud hosts while Local Mode is
 active, verified in `__tests__/egress-guard.test.ts`. The one thing Local Mode
 sends to AGI without a sign-in is a content report, and only after the person
-taps **Send** on it. The update check to Expo and ML Kit's diagnostics to Google
+taps **Send** on it. Signed in, Local Mode also sends the account and
+withdrawal controls described under **What the app does**, none of which
+carries chat content. The update check to Expo and ML Kit's diagnostics to Google
 still run in Local Mode, as declared above.
 
 ## Billing: please read
@@ -552,9 +583,13 @@ In Cloud mode: Settings → **Email** (under Account) → **Danger Zone** →
 **Delete Account** → confirmation alert → identity check →
 `DELETE /api/user/delete-account`. From either mode, Settings → **Data
 Controls** → **Delete account** opens the same screen (after sign-in, if
-signed out); in Local Mode it shows **Deletion is managed in AGI Cloud. Switch
-to Cloud**, which asks for confirmation, switches to Cloud and then shows
-**Delete Account**. The request schedules deletion of the AGI
+signed out; if the app then asks **Share with AI providers?**, either answer
+leads to the same screen). In Local Mode the **Danger Zone** shows **Check
+deletion status**; tapping it asks AGI Cloud for the account's deletion status
+without switching modes or asking about AI providers, and then shows **Delete
+Account**, or **Cancel Account Deletion** when a deletion is scheduled.
+Deletion, its cancellation and **Export Cloud Data** never need the permission
+to share with AI providers (`lib/egressGuard.ts`). The request schedules deletion of the AGI
 Cloud account and its cloud data (chats, projects, memory, artifacts) and
 returns a cancellation deadline 24 hours later; the app shows it and signs out,
 and signing back in before the deadline lets the person cancel. After the
