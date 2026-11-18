@@ -46,6 +46,7 @@ const CHUNK_INSERT_BATCH = 50;
 const INDEX_LEASE_MINUTES = 10;
 const DISPATCH_HOLD_MINUTES = 15;
 const RETRY_BASE_MINUTES = 5;
+const MAX_RETRY_MINUTES = 24 * 60;
 const UNAVAILABLE_RETRY_HOURS = 6;
 const SEGMENT_SEPARATOR = '\n\n';
 
@@ -449,7 +450,7 @@ export function toVectorLiteral(vector: readonly number[]): string {
 }
 
 function nextRetryMinutes(attempts: number): number {
-  return RETRY_BASE_MINUTES * 2 ** Math.max(0, attempts - 1);
+  return Math.min(RETRY_BASE_MINUTES * 2 ** Math.max(0, attempts - 1), MAX_RETRY_MINUTES);
 }
 
 async function claimRetrievalDocument(
@@ -515,51 +516,50 @@ async function embedChunks(
   return { vectors, model, failure: null };
 }
 
+/** Runs on the transaction that settles the document: the adapters refuse a transaction opened inside one. */
 async function writeChunks(
-  db: DatabaseAdapter,
+  tx: DatabaseAdapter,
   document: RetrievalDocumentRow,
   source: RetrievalSourceText,
   chunks: readonly PreparedChunk[],
   vectors: ReadonlyArray<number[] | null>,
   chunkVersion: number,
 ): Promise<void> {
-  await db.transaction(async (tx) => {
-    await tx.execute(`delete from retrieval_chunks where document_id = $1 and user_id = $2`, [
-      document.id,
-      document.user_id,
-    ]);
-    for (let offset = 0; offset < chunks.length; offset += CHUNK_INSERT_BATCH) {
-      const batch = chunks.slice(offset, offset + CHUNK_INSERT_BATCH);
-      await tx.execute(
-        `insert into retrieval_chunks
-           (document_id, user_id, organization_id, source_kind, source_id, chunk_version,
-            chunk_index, start_offset, end_offset, title, content, metadata, embedding)
-         select $1, $2, $3::uuid, $4, $5::uuid, $6,
-                c.chunk_index, c.start_offset, c.end_offset, $7, c.content, c.metadata::jsonb,
-                c.embedding::vector
-           from unnest($8::int[], $9::int[], $10::int[], $11::text[], $12::text[], $13::text[])
-             as c(chunk_index, start_offset, end_offset, content, metadata, embedding)`,
-        [
-          document.id,
-          document.user_id,
-          document.organization_id,
-          document.source_kind,
-          document.source_id,
-          chunkVersion,
-          source.title.slice(0, 500),
-          batch.map((chunk) => chunk.index),
-          batch.map((chunk) => chunk.start),
-          batch.map((chunk) => chunk.end),
-          batch.map((chunk) => chunk.text),
-          batch.map((chunk) => JSON.stringify(chunk.metadata)),
-          batch.map((chunk) => {
-            const vector = vectors[chunk.index];
-            return vector ? toVectorLiteral(vector) : null;
-          }),
-        ],
-      );
-    }
-  });
+  await tx.execute(`delete from retrieval_chunks where document_id = $1 and user_id = $2`, [
+    document.id,
+    document.user_id,
+  ]);
+  for (let offset = 0; offset < chunks.length; offset += CHUNK_INSERT_BATCH) {
+    const batch = chunks.slice(offset, offset + CHUNK_INSERT_BATCH);
+    await tx.execute(
+      `insert into retrieval_chunks
+         (document_id, user_id, organization_id, source_kind, source_id, chunk_version,
+          chunk_index, start_offset, end_offset, title, content, metadata, embedding)
+       select $1, $2, $3::uuid, $4, $5::uuid, $6,
+              c.chunk_index, c.start_offset, c.end_offset, $7, c.content, c.metadata::jsonb,
+              c.embedding::vector
+         from unnest($8::int[], $9::int[], $10::int[], $11::text[], $12::text[], $13::text[])
+           as c(chunk_index, start_offset, end_offset, content, metadata, embedding)`,
+      [
+        document.id,
+        document.user_id,
+        document.organization_id,
+        document.source_kind,
+        document.source_id,
+        chunkVersion,
+        source.title.slice(0, 500),
+        batch.map((chunk) => chunk.index),
+        batch.map((chunk) => chunk.start),
+        batch.map((chunk) => chunk.end),
+        batch.map((chunk) => chunk.text),
+        batch.map((chunk) => JSON.stringify(chunk.metadata)),
+        batch.map((chunk) => {
+          const vector = vectors[chunk.index];
+          return vector ? toVectorLiteral(vector) : null;
+        }),
+      ],
+    );
+  }
 }
 
 export type RetrievalIndexOutcome =
@@ -627,8 +627,9 @@ async function settleDocument(
 }
 
 /**
- * Runs after the chunk write and outside it, so a record that fails is
- * repaired by the next run of the document, unchanged digest included.
+ * Runs after the chunk write and outside it. A record that fails is repaired
+ * only when the document is next queued: a document that settled as indexed is
+ * not run again until then.
  */
 async function recordIndexedChars(
   db: DatabaseAdapter,

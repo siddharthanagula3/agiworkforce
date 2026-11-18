@@ -90,11 +90,20 @@ interface FakeOptions {
   failChunkInsert?: boolean;
 }
 
+/** The real adapters refuse a transaction opened inside another; a fake that allowed it hid one. */
+function insideTransaction(db: object): DatabaseAdapter {
+  return {
+    ...db,
+    transaction: async () => {
+      throw new Error('A transaction cannot be opened inside another transaction.');
+    },
+  } as unknown as DatabaseAdapter;
+}
+
 function fakeDb(options: FakeOptions = {}) {
   const statements: Array<{ sql: string; params: unknown[]; transaction: boolean }> = [];
-  let depth = 0;
-  const run = async (sql: string, params: unknown[] = []) => {
-    statements.push({ sql, params, transaction: depth > 0 });
+  const run = async (sql: string, params: unknown[] = [], transaction = false) => {
+    statements.push({ sql, params, transaction });
     if (options.failChunkInsert && sql.includes('insert into retrieval_chunks')) {
       throw new Error('insert failed');
     }
@@ -120,20 +129,18 @@ function fakeDb(options: FakeOptions = {}) {
     }
     return [];
   };
-  const db = {
-    query: vi.fn(run),
+  const statementsOn = (transaction: boolean) => ({
+    query: vi.fn((sql: string, params?: unknown[]) => run(sql, params, transaction)),
     execute: vi.fn(async (sql: string, params: unknown[] = []) => {
-      await run(sql, params);
+      await run(sql, params, transaction);
       return sql.includes('update retrieval_documents') ? (options.settledRows ?? 1) : 1;
     }),
-    transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) => {
-      depth += 1;
-      try {
-        return await callback(db as unknown as DatabaseAdapter);
-      } finally {
-        depth -= 1;
-      }
-    }),
+  });
+  const db = {
+    ...statementsOn(false),
+    transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
+      callback(insideTransaction({ ...db, ...statementsOn(true) })),
+    ),
     withUser: vi.fn(),
     withOrg: vi.fn(),
     dispose: vi.fn(),
@@ -341,6 +348,18 @@ describe('indexRetrievalDocument', () => {
     expect(failure?.params[2]).toBeNull();
   });
 
+  it('keeps the retry delay of a much-retried document within a day, a value the interval can hold', async () => {
+    const { db, statements } = fakeDb({
+      claimed: { ...DOCUMENT, attempts: 40 },
+      failChunkInsert: true,
+    });
+
+    await indexRetrievalDocument(db, DOCUMENT.id, 'run-1');
+
+    const failure = statements.filter((entry) => entry.sql.includes("then 'indexed'")).at(-1);
+    expect(failure?.params[10]).toBe(24 * 60);
+  });
+
   it('skips a document another run holds', async () => {
     const { db } = fakeDb({ claimed: null });
     expect(await indexRetrievalDocument(db, DOCUMENT.id, 'run-2')).toEqual({ kind: 'skipped' });
@@ -377,7 +396,7 @@ describe('developer session documents', () => {
         return 1;
       }),
       transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
-        callback(db as unknown as DatabaseAdapter),
+        callback(insideTransaction(db)),
       ),
       withUser: vi.fn(),
       withOrg: vi.fn(),
@@ -485,7 +504,7 @@ describe('Google provenance at actual embedding dispatch', () => {
           query,
           execute: vi.fn(async () => 1),
           transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
-            callback(db as unknown as DatabaseAdapter),
+            callback(insideTransaction(db)),
           ),
         };
         await expect(
@@ -617,7 +636,7 @@ describe('library_file documents of large chat files', () => {
         return 1;
       }),
       transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
-        callback(delegate as unknown as DatabaseAdapter),
+        callback(insideTransaction(delegate)),
       ),
       withUser: vi.fn(),
       withOrg: vi.fn(),
@@ -859,7 +878,9 @@ describe('library_file documents of large chat files', () => {
       execute: vi.fn(
         async (sql: string, params: unknown[] = []) => (await run(sql, params)).length,
       ),
-      transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) => callback(db)),
+      transaction: vi.fn(async <T>(callback: (tx: DatabaseAdapter) => Promise<T>) =>
+        callback(insideTransaction(adapter)),
+      ),
       withUser: vi.fn(),
       withOrg: vi.fn(),
       dispose: vi.fn(),
