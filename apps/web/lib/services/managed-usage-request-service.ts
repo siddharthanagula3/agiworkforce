@@ -1274,19 +1274,15 @@ export async function finalizeManagedUsageRequest(
     (operationResult === 'already_finalized' && requestStatus === 'outcome_unknown');
 
   if (settledTaskOutcome !== null && recordsProviderCost) {
+    const providerEstimatedMicrousd =
+      providerSuppliedMicrousd === undefined ? settledCostMicrousd : providerCostMicrousd;
     await recordSettledProviderCost({
       userId: input.userId,
       provider: servedRoute?.provider ?? input.provider ?? 'unknown',
       model: servedRoute?.model ?? input.model ?? null,
       routeId: servedRoute?.routeId ?? input.routeId ?? buildRouteId(input.provider, input.model),
-      actualCostCents: ledgerCentsFromMicrousd(
-        providerSuppliedMicrousd === undefined ? settledCostMicrousd : providerCostMicrousd,
-      ),
-      // The customer side goes over in microUSD, which is the unit it is now
-      // settled in. The provider side stays in cents: CostEventAttribution
-      // declares no microUSD field for it, and providerReportedCostCents is
-      // not it either, that column means the provider itself reported a
-      // figure and setting it would mark an estimate as reconciled.
+      actualCostCents: ledgerCentsFromMicrousd(providerEstimatedMicrousd),
+      providerEstimatedCostMicrousd: providerEstimatedMicrousd,
       customerCanonicalMicrousd: settledCostMicrousd,
       sourceRef: `managed_usage:${input.userId}:${input.idempotencyKey}:${input.requestHash}`,
       taskOutcome: settledTaskOutcome,

@@ -81,6 +81,27 @@ describe('the free model data notice', () => {
     expect(screen.queryByTestId('free-plan-training-notice')).toBeNull();
   });
 
+  it('is shown to a lapsed paid plan the server treats as Free', () => {
+    useBillingStore.setState({
+      user: ACCOUNT,
+      subscription: {
+        tier: 'free',
+        billing_tier: 'pro',
+        display_name: 'Pro',
+        status: 'past_due',
+        current_period_end: null,
+        plan_name: 'Pro',
+      },
+      initialized: true,
+      isLoading: false,
+      unauthenticated: false,
+      error: null,
+    });
+    render(<FreePlanTrainingNotice />);
+
+    expect(screen.getByTestId('free-plan-training-notice')).toBeTruthy();
+  });
+
   it('waits rather than guessing while the plan has not resolved', () => {
     useBillingStore.setState({
       user: ACCOUNT,

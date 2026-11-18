@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { classifyTaskLocally, estimateTokens } from '@agiworkforce/routing';
 import { getSlotForModel, isFlagshipRoutingSlot } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { accountAccessDecision } from '@/lib/auth/account-status';
 import { orderInstructionBlocks } from '@/lib/prompts/instruction-precedence';
 import { readAccountStatus } from '@/lib/auth/account-lifecycle';
@@ -36,6 +37,8 @@ const TITLE_MAX_CHARS = 60;
 const SAVE_ATTEMPTS = 2;
 const NO_TRAINING_ANSWER =
   'No model on your plan keeps your chats out of training right now, so AGI could not answer. Try again later in the app.';
+const SECRET_REFUSAL =
+  'That question includes a secret, so AGI did not send it. Remove it and ask again.';
 const ASK_DIRECTIVE =
   'The person asked this through Siri and will hear the answer spoken. Answer in plain sentences without markdown, lists, tables, links or code, in at most a few short paragraphs.';
 
@@ -128,6 +131,11 @@ export async function answerMobileIntentAsk(input: {
   if (!moderation.allowed) {
     throw new MobileIntentRefusal(400, 'content_policy_violation', moderation.refusal);
   }
+  const secrets = await applySecretHandlingToTexts(owner.userId, [prompt]);
+  if (secrets.action === 'blocked') {
+    throw new MobileIntentRefusal(400, 'secret_handling_blocked', SECRET_REFUSAL);
+  }
+  const providerPrompt = secrets.texts[0] ?? prompt;
 
   const db = createClaimedUserScopedDb(getNeonDb(), {
     userId: owner.userId,
@@ -176,7 +184,7 @@ export async function answerMobileIntentAsk(input: {
       role: 'system' as const,
       content: text,
     })),
-    { role: 'user' as const, content: prompt },
+    { role: 'user' as const, content: providerPrompt },
   ];
   const estimatedCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
     route.provider,

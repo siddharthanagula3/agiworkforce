@@ -120388,6 +120388,9 @@
     "ScheduledExecutionCancellation": [
       "apps/web/lib/services/schedule-service.ts"
     ],
+    "ScheduledExecutionRefusalReason": [
+      "apps/web/lib/services/schedule-service.ts"
+    ],
     "ScheduledExecutionResult": [
       "apps/web/lib/services/schedule-service.ts"
     ],

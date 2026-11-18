@@ -20,6 +20,7 @@ import {
   ScheduleNotFoundError,
   ScheduleValidationError,
   claimDueScheduleRuns,
+  claimScheduleRunApproval,
   countSchedules,
   createSchedule as createScheduleWithPlan,
   createManualScheduleRun,
@@ -1562,5 +1563,139 @@ describe('schedule creation cancellation', () => {
       }),
     ).resolves.toMatchObject({ id: taskRow.id });
     expect(query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('editing a schedule that is waiting for approval', () => {
+  const requestedAt = new Date('2026-07-15T12:00:05.000Z');
+  const approval = {
+    checkpoint: {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      nextEventSequence: 3,
+      completedSteps: 1,
+      messages: [],
+      pendingToolCalls: [
+        { id: 'call-1', qualifiedName: 'send_email', args: {}, approvalScopes: [] },
+      ],
+      route: {
+        provider: 'provider',
+        providerModelId: 'provider-model',
+        modelKey: 'model-key',
+        routeId: 'route-1',
+      },
+      sensitiveContextPresent: false,
+    },
+    toolCalls: [{ id: 'call-1', name: 'send_email', summary: 'Send the briefing', input: null }],
+  } as unknown as NonNullable<ScheduledExecutionResult['approval']>;
+
+  function approvalDatabase() {
+    const task: Record<string, unknown> = { ...taskRow, next_execution_at: null };
+    const run: Record<string, unknown> = { ...runRow('success'), status: 'running' };
+    const query = async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('for update of task')) return [{ ...task, credits_used_microusd: '0' }];
+      if (sql.includes('from scheduled_tasks where id = $1')) return [task];
+      if (sql.includes('from scheduled_task_runs where id = $1')) return [run];
+      if (sql.includes("set status = 'awaiting_approval'")) {
+        Object.assign(run, {
+          status: 'awaiting_approval',
+          result: JSON.parse(params[2] as string),
+          approval_checkpoint: JSON.parse(params[3] as string),
+          approval_request: JSON.parse(params[4] as string),
+          approval_requested_at: params[5],
+          approval_expires_at: params[6],
+          lease_expires_at: null,
+        });
+        return [run];
+      }
+      if (sql.includes("set status = 'running'")) {
+        Object.assign(run, { status: 'running', approval_checkpoint: null });
+        return [run];
+      }
+      if (sql.includes('update scheduled_tasks') && sql.includes('set name = $3')) {
+        Object.assign(task, {
+          name: params[2],
+          is_enabled: params[9],
+          status: params[14],
+          paused_reason: params[27],
+        });
+        return [task];
+      }
+      if (sql.includes("set status = 'active', is_enabled = true")) {
+        if (task['paused_reason'] !== 'approval_required') return [];
+        Object.assign(task, { status: 'active', is_enabled: true, paused_reason: null });
+        return [task];
+      }
+      return [];
+    };
+    const execute = vi.fn(async (sql: string) => {
+      if (sql.includes("paused_reason = 'approval_required'")) {
+        Object.assign(task, {
+          status: 'paused',
+          is_enabled: false,
+          paused_reason: 'approval_required',
+        });
+      }
+      return 1;
+    });
+    return { db: database(query, execute), task };
+  }
+
+  async function parkForApproval(db: DatabaseAdapter) {
+    await processClaimedScheduleRun(
+      db,
+      claim,
+      vi.fn(async () => ({ text: 'Waiting', model: 'auto-balanced', approval })),
+      { timeoutMs: 1_000, now: () => requestedAt },
+    );
+  }
+
+  it('keeps the schedule resumable when it is renamed while waiting for approval', async () => {
+    const { db, task } = approvalDatabase();
+    await parkForApproval(db);
+    expect(task).toMatchObject({ status: 'paused', paused_reason: 'approval_required' });
+
+    const renamed = await updateSchedule(
+      db,
+      'user-1',
+      'task-1',
+      { name: 'Weekly briefing' },
+      { now: requestedAt },
+    );
+    expect(renamed).toMatchObject({
+      name: 'Weekly briefing',
+      status: 'paused',
+      pausedReason: 'approval_required',
+    });
+
+    const resumed = await claimScheduleRunApproval(db, {
+      userId: 'user-1',
+      taskId: 'task-1',
+      runId: 'run-1',
+      approval: { decision: 'approved', toolCallIds: ['call-1'] },
+      now: requestedAt,
+    });
+
+    expect(resumed.claim.task).toMatchObject({
+      name: 'Weekly briefing',
+      status: 'active',
+      isEnabled: true,
+      pausedReason: null,
+    });
+  });
+
+  it('lifts the pause when the owner re-enables the schedule in the same edit', async () => {
+    const { db } = approvalDatabase();
+    await parkForApproval(db);
+
+    const enabled = await updateSchedule(
+      db,
+      'user-1',
+      'task-1',
+      { isActive: true },
+      { now: requestedAt },
+    );
+
+    expect(enabled).toMatchObject({ status: 'active', isEnabled: true, pausedReason: null });
   });
 });

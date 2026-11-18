@@ -1475,6 +1475,61 @@ describe('useChatStream', () => {
       expect(useChatStore.getState().isLoading).toBe(false);
     });
 
+    it.each(['partial', 'timed_out'] as const)(
+      'keeps %s as the stored state of the run reference when the run ends in it',
+      async (endState) => {
+        const base = {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: TEMP_CONVERSATION.id,
+          turnId: `turn-${endState}`,
+        };
+        const frame = (sequence: number, event: Record<string, unknown>) =>
+          `data: ${JSON.stringify({
+            choices: [
+              {
+                delta: {
+                  content: sequence === 0 ? 'Stopped early.' : '',
+                  x_agent_event: { ...base, sequence, emittedAtMs: 1_000 + sequence, event },
+                },
+              },
+            ],
+          })}\n\n`;
+        const body =
+          frame(0, {
+            type: 'task-state-changed',
+            taskId: base.turnId,
+            state: endState,
+            previousState: 'running',
+            summary: 'Stopped before finishing.',
+          }) +
+          frame(1, { type: 'stop', reason: 'end-turn' }) +
+          'data: [DONE]\n\n';
+        const encoder = new TextEncoder();
+        vi.mocked(fetch).mockResolvedValueOnce(
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(encoder.encode(body));
+                controller.close();
+              },
+            }),
+            { status: 200, headers: managedRunHeaders() },
+          ),
+        );
+
+        const { result } = renderHook(() => useChatStream());
+        await act(async () => {
+          await result.current.sendMessage('finish this', {
+            conversationId: TEMP_CONVERSATION.id,
+            workMode: 'agiwork',
+          });
+        });
+
+        const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+        expect(assistant?.metadata?.cloudAgentRun?.state).toBe(endState);
+      },
+    );
+
     it('replays only missing journal events when the initial SSE connection drops', async () => {
       const base = {
         schemaVersion: AGENT_EVENT_SCHEMA_VERSION,

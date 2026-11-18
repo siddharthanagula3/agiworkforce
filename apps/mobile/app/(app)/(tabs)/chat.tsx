@@ -167,7 +167,9 @@ export default function ChatTabScreen() {
   const mediaMode = useChatViewStore((s) => s.mediaMode);
   const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
   const videoResolution = useChatViewStore((s) => s.videoResolution);
+  const videoDurationSecs = useChatViewStore((s) => s.videoDurationSecs);
   const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
+  const imageTransparentBackground = useChatViewStore((s) => s.imageTransparentBackground);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const clearError = useChatStore((s) => s.clearError);
@@ -414,6 +416,7 @@ export default function ChatTabScreen() {
               mediaMode,
               aspectRatio: videoAspectRatio,
               resolution: videoResolution,
+              durationSecs: videoDurationSecs,
               subscriptionTier,
               isClerkSignedIn,
               ownerId: clerkUserId,
@@ -439,6 +442,7 @@ export default function ChatTabScreen() {
             model: videoRequest.model,
             aspectRatio: videoRequest.aspectRatio,
             resolution: videoRequest.resolution,
+            durationSecs: videoRequest.durationSecs,
             ownerId: videoRequest.ownerId,
             begin: beginVideoGeneration,
             taskCreated: recordVideoGenerationTask,
@@ -475,6 +479,7 @@ export default function ChatTabScreen() {
               grantedCapabilities,
               isOnline,
               aspectRatio: imageAspectRatio,
+              transparentBackground: imageTransparentBackground,
             });
 
         if (imageRequest.status === 'blocked') {
@@ -631,7 +636,9 @@ export default function ChatTabScreen() {
       mediaMode,
       videoAspectRatio,
       videoResolution,
+      videoDurationSecs,
       imageAspectRatio,
+      imageTransparentBackground,
       selectedModel,
       deleteMessage,
       setPaywallError,

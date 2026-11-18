@@ -111,7 +111,7 @@ function scopedQuery(sql: string) {
   if (sql.includes('beta_redemptions')) return [{ granted: state.redeemed }];
   if (sql.includes('from public.organization_members')) {
     return state.role
-      ? [{ organization_id: ORGANIZATION, user_id: 'caller-1', role: state.role }]
+      ? [{ organization_id: ORGANIZATION, user_id: 'caller-1', role: state.role, status: 'active' }]
       : [];
   }
   return [];

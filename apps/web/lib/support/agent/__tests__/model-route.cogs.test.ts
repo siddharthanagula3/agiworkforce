@@ -35,6 +35,7 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordCacheHitCostEvent: (...args: unknown[]) => recordCacheHitCostEventMock(...args),
 }));
 
+import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { callSupportModel } from '../answer/model-route';
 
 const originalEnabled = process.env['SUPPORT_AGENT_ENABLED'];
@@ -79,6 +80,19 @@ describe('support agent COGS recording', () => {
         sourceRef: expect.stringContaining('support:'),
       }),
     );
+    const [event] = recordSettledProviderCostMock.mock.calls[0] as [
+      { providerEstimatedCostMicrousd: number },
+    ];
+    const exactMicrousd = LLMCostCalculator.calculateCostMicrousd(
+      SELECTED_ROUTE.provider,
+      SELECTED_ROUTE.modelKey,
+      { promptTokens: 120, completionTokens: 40, totalTokens: 160 },
+      undefined,
+      SELECTED_ROUTE.routeId,
+    );
+    expect(exactMicrousd).toBeGreaterThan(0);
+    expect(exactMicrousd).toBeLessThan(10_000);
+    expect(event.providerEstimatedCostMicrousd).toBe(exactMicrousd);
   });
 
   it('records a zero-charge COGS event for an anonymous caller', async () => {

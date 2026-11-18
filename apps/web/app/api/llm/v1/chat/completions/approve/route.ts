@@ -35,6 +35,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { runAuthGate, type AuthGateSuccess } from '../lib/auth-gate';
 import { withManagedTurnSlot, type ManagedTurnSlotHold } from '../lib/turn-slot';
 import { processRequest, type ProcessedRequest } from '../lib/request-processor';
+import { settleRefusedFreeTrial } from '../lib/settle-refused-free-trial';
 import { loadMcpToolDefs } from '../lib/tool-loop';
 import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
 import { loadUserConnectorToolDefs } from '@/lib/user-connector-tools';
@@ -339,6 +340,7 @@ async function handleToolApproval(
             );
           });
         }
+        await settleRefusedFreeTrial(processed, 'tool_discovery_failed');
         await releaseClaim(db, userId, claim);
         throw error;
       }
@@ -364,6 +366,7 @@ async function handleToolApproval(
         actualCostCents: 0,
         usage: { reason: 'scoped_tool_permission_refused' },
       }).catch(() => undefined);
+    await settleRefusedFreeTrial(processed, 'scoped_tool_permission_refused');
     await releaseClaim(db, userId, claim);
     return jsonError(message, status, 'tool_approval_scope_refused');
   }
@@ -593,6 +596,7 @@ async function handleToolApproval(
         usage: { reason: 'workflow_start_failed' },
       }).catch(() => undefined);
     }
+    await settleRefusedFreeTrial(processed, 'workflow_start_failed');
     await releaseClaim(db, userId, claim);
     // Reaching here means both transports refused: `onDurableUnavailable:
     // 'inline'` already absorbed a Workflow-platform failure. The lease is released so the approval stays claimable and the user

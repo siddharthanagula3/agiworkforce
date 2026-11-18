@@ -1701,8 +1701,12 @@
       "id": "encrypted-columns-and-their-keys",
       "section": "What is encrypted, and with which key",
       "kind": "rows",
-      "rows": 6,
-      "implementation": ["apps/web/lib/crypto/envelope.ts"],
+      "rows": 13,
+      "implementation": [
+        "apps/web/lib/crypto/envelope.ts",
+        "apps/web/lib/crypto/connector-secret-reseal.ts",
+        "scripts/reencrypt.mjs"
+      ],
       "proof": [
         {
           "kind": "test",
@@ -1713,6 +1717,68 @@
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.test.ts",
           "name": "migration 0104_key_version"
+        },
+        {
+          "kind": "test",
+          "file": "scripts/reencrypt.test.mjs",
+          "name": "every connector secret column has a rotation sweep target or a recorded reason it has none"
+        }
+      ]
+    },
+    {
+      "id": "derived-connector-stores-are-not-swept",
+      "section": "What is encrypted, and with which key",
+      "kind": "prose",
+      "sentence": "The two HKDF rows are sealed under a ring derived from the connector key per user or per workspace, and re-sealing one needs that derived ring and the row's associated data, which the sweep does not build; `runOrganizationKeyRewrap` covers a workspace only once it has brought its own key.",
+      "implementation": [
+        "apps/web/lib/server/organization-encryption-keys.ts",
+        "apps/web/lib/services/developer-webhook-service.ts",
+        "apps/web/lib/services/audit-streaming-service.ts",
+        "scripts/reencrypt.mjs"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.properties.test.ts",
+          "name": "envelope · a ciphertext belongs to one tenant and one key version"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/cmek.test.ts",
+          "name": "which ring an organization gets"
+        }
+      ]
+    },
+    {
+      "id": "unswept-connector-rows-need-the-retired-key",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "The rows marked \"not swept\" in the first table are still sealed under the old version, and dropping it leaves every one of them unreadable, so users would have to reconnect Slack, bank accounts, MCP clients and OAuth connectors and re-create webhook and audit destination secrets.",
+      "implementation": ["scripts/reencrypt.mjs", "apps/web/lib/crypto/envelope.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/reencrypt.test.mjs",
+          "name": "every connector secret column has a rotation sweep target or a recorded reason it has none"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.test.ts",
+          "name": "key ring"
+        }
+      ]
+    },
+    {
+      "id": "connector-key-rotation-keeps-the-exposed-key",
+      "section": "Rotating a key",
+      "kind": "prose",
+      "sentence": "A rotation of this key on suspected exposure therefore does not yet take the exposed key out of service.",
+      "implementation": ["scripts/reencrypt.mjs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "scripts/reencrypt.test.mjs",
+          "name": "every connector secret column has a rotation sweep target or a recorded reason it has none"
         }
       ]
     },
@@ -1734,17 +1800,24 @@
       "id": "ring-aware-readers",
       "section": "Which readers understand the ring",
       "kind": "rows",
-      "rows": 4,
+      "rows": 7,
       "implementation": [
         "apps/web/lib/custom-connector-crypto.ts",
         "apps/web/lib/github-app.ts",
-        "apps/web/lib/crypto/totp-envelope.ts"
+        "apps/web/lib/crypto/totp-envelope.ts",
+        "apps/web/lib/services/developer-webhook-service.ts",
+        "apps/web/lib/services/audit-streaming-service.ts"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/lib/crypto/envelope.test.ts",
           "name": "production readers survive a rotation"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/crypto/envelope.properties.test.ts",
+          "name": "envelope · a ciphertext belongs to one tenant and one key version"
         }
       ]
     },

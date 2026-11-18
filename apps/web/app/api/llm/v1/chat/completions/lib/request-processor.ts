@@ -171,7 +171,11 @@ import {
   hasExplicitWebSearchRequestOptOut as hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
-import { MEMORY_COMMAND_KINDS, extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
+import {
+  MEMORY_COMMAND_KINDS,
+  extractCandidateMemoryFacts,
+  parseExplicitMemoryCommand,
+} from '@agiworkforce/agent-core';
 import {
   MEMORY_COMMAND_CLIENT_SURFACES,
   MEMORY_COMMAND_TURN_STATUSES,
@@ -1094,6 +1098,13 @@ const AMBIENT_TOOL_SURFACES: ReadonlySet<CloudChatSurface> = new Set<CloudChatSu
   'chrome',
 ]);
 
+const MEMORY_RECALL_OR_UPDATE_RE =
+  /\b(?:(?:do|did)\s+you\s+remember|what\s+(?:do\s+)?you\s+remember|(?:can|could)\s+you\s+recall|(?:my|your|saved)\s+memor(?:y|ies))\b/i;
+
+function asksForMemory(message: string): boolean {
+  return parseExplicitMemoryCommand(message) !== null || MEMORY_RECALL_OR_UPDATE_RE.test(message);
+}
+
 export function applyMemoryToolCapability(
   request: ChatCompletionRequest,
   params: {
@@ -1102,6 +1113,7 @@ export function applyMemoryToolCapability(
     memoryEnabled: boolean;
     isTemporary: boolean;
     ambientToolsAllowed: boolean;
+    userMessage: string;
   },
 ): void {
   if (
@@ -1113,7 +1125,8 @@ export function applyMemoryToolCapability(
     request.memory_enabled === false ||
     request.personalization === false ||
     request.memory_command !== undefined ||
-    !AMBIENT_TOOL_SURFACES.has(params.surface)
+    !AMBIENT_TOOL_SURFACES.has(params.surface) ||
+    !asksForMemory(params.userMessage)
   ) {
     return;
   }
@@ -5674,6 +5687,7 @@ async function processAdmittedRequest(
     memoryEnabled: managedMemoryPolicy.enabled,
     isTemporary: conversationIsTemporary,
     ambientToolsAllowed,
+    userMessage: lastUserText,
   });
 
   applyFileSearchToolCapability(chatRequest, {

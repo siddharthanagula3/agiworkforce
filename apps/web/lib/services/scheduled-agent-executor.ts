@@ -34,6 +34,7 @@ import {
   ADAPTER_PROVIDERS,
   resolveWireMode,
 } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
+import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { extractAssistantTextDelta } from '@/app/api/llm/v1/chat/completions/lib/assistant-turn-persistence';
 import {
@@ -165,6 +166,10 @@ const SCHEDULED_TASK_DIRECTIVE =
   'No one is watching this run, so never ask a question or wait for input: use the tools ' +
   'you have, and if a step is impossible say so in the result. ' +
   'Do not claim to have performed external actions unless a tool result proves it.';
+
+const SECRET_REFUSAL_CODE = 'secret_handling_blocked';
+const SECRET_REFUSAL =
+  'The prompt appears to contain a secret, such as an API key or access token, and the workspace blocks secrets. Remove it and run the task again.';
 
 export class ScheduledAgentUnavailableError extends Error {
   override readonly name = 'ScheduledAgentUnavailableError';
@@ -859,11 +864,27 @@ async function runScheduledAgent(
   resume: Parameters<ScheduledTaskExecutor>[4],
   options: ScheduledAgentRunOptions,
 ): Promise<ScheduledExecutionResult> {
-  const prompt = validateAgentTask(task);
+  const storedPrompt = validateAgentTask(task);
   if (task.userId !== scope.userId) {
     throw new Error('Scheduled execution scope does not match the task owner');
   }
   signal.throwIfAborted();
+
+  const secrets = await applySecretHandlingToTexts(scope.userId, [storedPrompt]);
+  if (secrets.action === 'blocked') {
+    logger.info({ taskId: task.id, runId }, 'Scheduled execution refused by secret handling');
+    return {
+      text: `Scheduled execution skipped: ${SECRET_REFUSAL}`,
+      model: task.model ?? 'auto',
+      billingStatus: SECRET_REFUSAL_CODE,
+      cancellation: {
+        reason: 'secret_handling_blocked',
+        code: SECRET_REFUSAL_CODE,
+        message: SECRET_REFUSAL,
+      },
+    };
+  }
+  const prompt = secrets.texts[0] ?? storedPrompt;
 
   const entitlement = await resolveEntitlementBundle(scope.db, scope.userId);
   const subscriptionTier = entitlement.plan;

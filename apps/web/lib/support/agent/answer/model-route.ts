@@ -209,6 +209,13 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
         undefined,
         route.routeId,
       ),
+      providerEstimatedCostMicrousd: LLMCostCalculator.calculateCostMicrousd(
+        route.provider,
+        route.modelKey,
+        usage,
+        undefined,
+        route.routeId,
+      ),
       sourceRef: `support:${randomUUID()}`,
       taskOutcome: 'delivered',
       surface: input.surface,

@@ -211,6 +211,16 @@ function clearLocalCloudAccountStateNow({ keepUnsentWork }: ClearCloudAccountOpt
     useChatViewStore.getState().clearCloudSearchState();
   });
 
+  runTeardownStep('Cloud conversation style and connectors', () => {
+    const { useChatViewStore } = require('@/stores/chat/chatViewStore');
+    useChatViewStore.getState().clearCloudConversationState(cloudConversationIds);
+  });
+
+  runTeardownStep('library cache', () => {
+    const { useLibraryCacheStore } = require('@/src/features/library/libraryCacheStore');
+    useLibraryCacheStore.getState().clearLibraryCache();
+  });
+
   runTeardownStep('Managed Cloud access', () => {
     const { useWaitlistStore } = require('@/src/features/waitlist/store');
     useWaitlistStore.getState().clear();

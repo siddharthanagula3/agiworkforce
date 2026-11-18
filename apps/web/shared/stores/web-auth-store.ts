@@ -33,6 +33,7 @@ export interface User {
 
 export interface SubscriptionPlan {
   tier: BillingPlanTier;
+  billing_tier?: BillingPlanTier;
   display_name: string;
   status: string;
   current_period_end: number | null;
@@ -107,9 +108,10 @@ export const useBillingStore = create<AuthState>()((set) => ({
         }
 
         const data = parseMeResponse(await response.json());
-        const tier = normalizeBillingPlanTier(data.plan.tier);
+        const billingTier = normalizeBillingPlanTier(data.plan.tier);
         const plan: SubscriptionPlan = {
-          tier,
+          tier: normalizeBillingPlanTier(data.plan.effective_tier ?? data.plan.tier),
+          billing_tier: billingTier,
           display_name: data.plan.display_name,
           status: data.plan.status,
           current_period_end: data.plan.current_period_end,

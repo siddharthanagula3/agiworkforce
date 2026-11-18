@@ -96,6 +96,7 @@ interface ViewState {
   setImageTransparentBackground: (enabled: boolean) => void;
   setVideoDurationSecs: (durationSecs: number) => void;
   clearCloudSearchState: () => void;
+  clearCloudConversationState: (conversationIds: readonly string[]) => void;
 }
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -448,6 +449,21 @@ export const useChatViewStore = create<ViewState>()(
           searchDebounceTimer = undefined;
         }
         set({ searchQuery: '', searchResults: [], ...EMPTY_REMOTE_MATCHES, isSearching: false });
+      },
+      clearCloudConversationState: (conversationIds) => {
+        const cloudIds = new Set(conversationIds);
+        const withoutCloud = <T>(byConversation: Record<string, T>): Record<string, T> =>
+          Object.fromEntries(Object.entries(byConversation).filter(([id]) => !cloudIds.has(id)));
+        set((state) => ({
+          chatStyleByConversation: withoutCloud(state.chatStyleByConversation),
+          disabledConnectorIdsByConversation: withoutCloud(
+            state.disabledConnectorIdsByConversation,
+          ),
+          runCodeByConversation: withoutCloud(state.runCodeByConversation),
+          ...(state.styleConversationId !== null && cloudIds.has(state.styleConversationId)
+            ? { styleConversationId: null, chatStyle: DEFAULT_CHAT_STYLE }
+            : {}),
+        }));
       },
     }),
     {

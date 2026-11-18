@@ -28,6 +28,7 @@ import {
   inspectStreamSequence,
   isStreamEnvelope,
   messageKindForAgentEvent,
+  TERMINAL_AGENT_TASK_STATES,
   type InteractiveCard,
   type InteractiveCardClientCapability,
   type AnswerUiValue,
@@ -2331,16 +2332,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ cloudAgentRun: { ...currentCloudAgentRun } });
   };
 
-  const CLOUD_RUN_TERMINAL_STATES: AgentTaskState[] = [
-    'ready_for_review',
-    'completed',
-    'failed',
-    'cancelled',
-    'archived',
-  ];
   const finalCloudRunState = (fallback: AgentTaskState): AgentTaskState => {
     const observed = currentAgentActivity?.taskState;
-    return observed && CLOUD_RUN_TERMINAL_STATES.includes(observed) ? observed : fallback;
+    return observed && TERMINAL_AGENT_TASK_STATES.has(observed) ? observed : fallback;
   };
 
   let thinkingContent = seedMetadata?.thinkingContent ?? '';

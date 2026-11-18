@@ -3067,6 +3067,7 @@ export function isToolOffered(
   if (isScheduleTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (isPluginDraftTool(qualifiedName)) return availableTools.has(qualifiedName);
   if (isDeviceStepTool(qualifiedName)) return availableTools.has(qualifiedName);
+  if (isImageChatToolName(qualifiedName)) return availableTools.has(qualifiedName);
   if (
     isExecutionTool(qualifiedName) ||
     isUrlFetchTool(qualifiedName) ||

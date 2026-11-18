@@ -672,7 +672,7 @@
 {"path":"scripts/r2-apply-cors.mjs","unit":"scripts","role":"source","exports":["ALLOWED_ORIGINS","CORS_RULES","matchesExpected"],"imports":["spec:node:fs","spec:node:path","spec:node:url"]}
 {"path":"scripts/r2-apply-cors.test.mjs","unit":"scripts","role":"test","imports":["scripts/r2-apply-cors.mjs","spec:node:assert/strict","spec:node:fs","spec:node:test","spec:node:url"]}
 {"path":"scripts/reencrypt.mjs","unit":"scripts","role":"source","exports":["assertFormatSupported","recordKeyRotationAudit","REENCRYPT_TARGETS","reencryptTarget","resolveOperator"],"imports":["apps/web/lib/crypto/envelope.ts","spec:@neondatabase/serverless","spec:node:process","spec:node:url"]}
-{"path":"scripts/reencrypt.test.mjs","unit":"scripts","role":"test","imports":["scripts/reencrypt.mjs","spec:node:assert/strict","spec:node:test"]}
+{"path":"scripts/reencrypt.test.mjs","unit":"scripts","role":"test","imports":["apps/web/lib/crypto/envelope.ts","scripts/reencrypt.mjs","spec:node:assert/strict","spec:node:fs","spec:node:path","spec:node:test","spec:node:url"]}
 {"path":"scripts/release.sh","unit":"scripts","role":"other","lanes":["release-ci"],"unparsed":"notCode"}
 {"path":"scripts/release/archive-cli-windows.ps1","unit":"scripts","role":"other","unparsed":"notCode"}
 {"path":"scripts/release/build-desktop-mac-local.sh","unit":"scripts","role":"other","unparsed":"notCode"}
