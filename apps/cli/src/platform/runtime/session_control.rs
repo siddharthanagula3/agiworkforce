@@ -157,7 +157,11 @@ impl ManagedSessionStore {
     }
 
     pub fn unarchive(&self, reference: ManagedSessionReference) -> Result<()> {
-        let resolved = self.resolve(reference)?;
+        let resolved = match reference {
+            ManagedSessionReference::Latest => newest_managed_session_in(&self.base_dir, true)?
+                .ok_or_else(|| anyhow::anyhow!("No archived sessions are available"))?,
+            reference => self.resolve(reference)?,
+        };
         let mut session = load_session_from_path(&resolved.path)?;
         if session.archived_at.is_some() {
             session.archived_at = None;
@@ -390,14 +394,23 @@ fn list_managed_sessions_in(base_dir: &Path) -> Result<Vec<ManagedSessionSummary
     Ok(sessions)
 }
 
-fn latest_managed_session_in(base_dir: &Path) -> Result<Option<ResolvedManagedSessionReference>> {
+fn newest_managed_session_in(
+    base_dir: &Path,
+    archived: bool,
+) -> Result<Option<ResolvedManagedSessionReference>> {
     Ok(list_managed_sessions_in(base_dir)?
         .into_iter()
-        .next()
+        .find(|summary| summary.archived_at.is_some() == archived)
         .map(reference_from_summary))
 }
 
-fn latest_project_session_in(
+pub(crate) fn latest_managed_session_in(
+    base_dir: &Path,
+) -> Result<Option<ResolvedManagedSessionReference>> {
+    newest_managed_session_in(base_dir, false)
+}
+
+pub(crate) fn latest_project_session_in(
     base_dir: &Path,
     project_dir: &Path,
 ) -> Result<Option<ResolvedManagedSessionReference>> {
@@ -629,7 +642,7 @@ pub fn list_active_managed_sessions() -> Result<Vec<ManagedSessionSummary>> {
     ManagedSessionStore::user_config()?.list_active()
 }
 
-/// Return the newest managed session, if one exists.
+/// Return the newest managed session that is not archived, if one exists.
 pub fn latest_managed_session() -> Result<Option<ResolvedManagedSessionReference>> {
     latest_managed_session_in(&CliConfig::config_dir()?)
 }
@@ -674,7 +687,8 @@ pub fn archive_managed_session(reference: impl AsRef<str>) -> Result<()> {
     ManagedSessionStore::user_config()?.archive(reference)
 }
 
-/// Unarchive a managed session by id, path, or the `latest` alias. Idempotent.
+/// Unarchive a managed session by id, path, or the `latest` alias, which here
+/// names the newest archived session. Idempotent.
 pub fn unarchive_managed_session(reference: impl AsRef<str>) -> Result<()> {
     let reference = ManagedSessionReference::parse(reference)?;
     ManagedSessionStore::user_config()?.unarchive(reference)

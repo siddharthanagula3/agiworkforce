@@ -894,9 +894,9 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
 pub fn managed_plan_needed(model_id: &str) -> Option<&'static str> {
     let in_slot = |slot: &str| tier_allowed_models(slot).iter().any(|id| id == model_id);
     if in_slot("flagship_additions") {
-        Some("Max")
+        Some(crate::tier_cache::UserTier::Max.label())
     } else if in_slot("pro_additions") || in_slot("economy") {
-        Some("Pro")
+        Some(crate::tier_cache::UserTier::Pro.label())
     } else {
         None
     }
@@ -2332,5 +2332,25 @@ mod tests {
         let ds_src = include_str!("design_system.rs");
         let production_src = ds_src.split("#[cfg(test)]").next().unwrap_or(ds_src);
         assert_source_has_no_catalog_model_literals("design_system.rs", production_src);
+    }
+
+    #[test]
+    fn a_locked_model_names_the_plan_by_the_tier_label_the_cli_shows() {
+        use crate::tier_cache::UserTier;
+        let flagship = tier_allowed_models("flagship_additions");
+        let premium_model = ["pro_additions", "economy"]
+            .into_iter()
+            .flat_map(tier_allowed_models)
+            .find(|id| !flagship.contains(id))
+            .expect("catalog must list a model below the flagship slot");
+        let max_model = flagship
+            .first()
+            .expect("catalog must list a flagship model");
+        assert_eq!(
+            managed_plan_needed(&premium_model),
+            Some(UserTier::Pro.label())
+        );
+        assert_eq!(managed_plan_needed(max_model), Some(UserTier::Max.label()));
+        assert_eq!(managed_plan_needed("a-model-nobody-ships"), None);
     }
 }

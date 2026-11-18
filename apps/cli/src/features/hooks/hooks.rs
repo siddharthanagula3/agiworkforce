@@ -38,7 +38,8 @@ pub struct Hook {
     pub timeout: u64,
 
     /// Whether this hook's failure stops the hooks after it, and whether the
-    /// action is blocked when the hook cannot be started (default: true).
+    /// action is blocked when the hook cannot be started or runs out of time
+    /// (default: true).
     /// Every hook is waited for either way.
     #[serde(default = "default_blocking")]
     pub blocking: bool,
@@ -1618,10 +1619,9 @@ fn report_hook_failure_once(command: &str, reason: &str) {
 /// What a hook's failure decides. Exit code 2 blocks, with stderr as the
 /// reason; any other non-zero exit is an error that is shown and does not
 /// block. A blocking hook that could not run at all (refused by the sandbox
-/// or not spawned) blocks: a guard that did not run must not read as a guard
-/// that allowed. One that ran out of time did run, so, as in Claude Code, it
-/// is an error that is shown and does not block. Every failure is shown once
-/// a session.
+/// or not spawned) or ran out of time blocks: a guard that did not finish
+/// must not read as a guard that allowed. Every failure is shown once a
+/// session.
 fn settle_failure(
     hook: &Hook,
     mut result: HookResult,
@@ -1642,9 +1642,20 @@ fn settle_failure(
         );
         return result;
     }
+    if timed_out && hook.blocking {
+        let reason = format!(
+            "hook `{}` timed out after {}s, so the action was stopped",
+            hook.display_command(),
+            hook.timeout
+        );
+        report_hook_failure_once(&hook.display_command(), &reason);
+        result.blocked = true;
+        result.reason = Some(reason);
+        return result;
+    }
     let reason = hook_failure_reason(hook, &result.stderr, ran || timed_out, sandboxed);
     report_hook_failure_once(&hook.display_command(), &reason);
-    if !ran && !timed_out && hook.blocking {
+    if !ran && hook.blocking {
         result.blocked = true;
         result.reason = Some(reason);
     }
@@ -3052,8 +3063,50 @@ mod tests {
     }
 
     #[test]
-    fn a_blocking_hook_that_timed_out_is_shown_and_does_not_block() {
+    fn a_blocking_hook_that_timed_out_blocks_and_says_it_timed_out() {
         let hook = failing_hook("npx guard", true);
+        let result = settle_failure(
+            &hook,
+            not_run("Hook timed out after 5s"),
+            false,
+            true,
+            None,
+            true,
+        );
+        assert!(
+            result.blocked,
+            "a guard that did not finish must not read as allowed"
+        );
+        let reason = result.reason.clone().expect("a reason");
+        assert_eq!(
+            reason,
+            "hook `npx guard` timed out after 5s, so the action was stopped"
+        );
+        assert_eq!(
+            aggregate_results(&[result]),
+            HookAggregateOutcome::Blocked {
+                reasons: vec![reason]
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn a_blocking_hook_that_runs_out_of_time_blocks() {
+        let mut hook = failing_hook("sleep 10", true);
+        hook.timeout = 1;
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let result = run_single_hook(&hook, "{}", false).await;
+        assert!(!result.success);
+        assert!(result.blocked);
+        assert!(result.stderr.contains("timed out"), "{}", result.stderr);
+        let reason = result.reason.expect("a reason");
+        assert!(reason.contains("timed out after 1s"), "{reason}");
+        assert!(reason.contains("the action was stopped"), "{reason}");
+    }
+
+    #[test]
+    fn a_non_blocking_hook_that_timed_out_does_not_block() {
+        let hook = failing_hook("npx lint", false);
         let result = settle_failure(
             &hook,
             not_run("Hook timed out after 5s"),
@@ -3065,20 +3118,6 @@ mod tests {
         assert!(!result.blocked);
         assert!(result.reason.is_none());
         assert_eq!(aggregate_results(&[result]), HookAggregateOutcome::Continue);
-    }
-
-    #[tokio::test]
-    async fn a_blocking_hook_that_runs_out_of_time_does_not_block() {
-        let mut hook = failing_hook("sleep 10", true);
-        hook.timeout = 1;
-        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
-        let result = run_single_hook(&hook, "{}", false).await;
-        assert!(!result.success);
-        assert!(
-            !result.blocked,
-            "a timeout is a shown error, as in Claude Code"
-        );
-        assert!(result.stderr.contains("timed out"), "{}", result.stderr);
     }
 
     #[tokio::test]
