@@ -52,6 +52,9 @@ const LEDGER_ROWS = 600;
 const SAMPLE_ROWS = CHAT_LARGE_FILE_POLICY.kinds.spreadsheet.sampleRows;
 const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
+/** Each workbook here carries a stored member above the inline limit, so a test builds tens of megabytes. */
+vi.setConfig({ testTimeout: 30_000 });
+
 beforeEach(() => {
   inflated.length = 0;
   exhaustsBudget.clear();
