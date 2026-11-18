@@ -37,6 +37,9 @@ jobs:
           # insufficient for multi-commit pull requests and silently degrade
           # affected selection to a full or incorrect graph.
           fetch-depth: 0
+          # Lane selection reads changed paths, which needs every commit and
+          # tree but not the content of every historical file.
+          filter: blob:none
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -207,10 +210,123 @@ jobs:
           pnpm db:rls-probe -- --target ci
           pnpm db:lease-probe -- --target ci
 
-  js-verify:
-    name: JS lint, typecheck, test, build
+  js-lint:
+    name: JS lint
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Turborepo --affected needs the actual merge base. Two commits are
+          # insufficient for multi-commit pull requests and silently degrade
+          # affected selection to a full or incorrect graph.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Prepare memory for private-repository checks
+        if: github.event.repository.private == true
+        uses: ./.github/actions/prepare-runner-memory
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        # H24: --max-warnings=0 enforced via package.json lint script.
+        # Wave 1.5 prevention layer: ESLint `no-restricted-syntax` rule
+        # (eslint.config.mjs §"PREVENTION LAYER") flags hardcoded model
+        # IDs + direct cloud database clients across TS/JS.
+        run: pnpm exec turbo run lint --affected
+
+  js-typecheck:
+    name: JS typecheck
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Turborepo --affected needs the actual merge base. Two commits are
+          # insufficient for multi-commit pull requests and silently degrade
+          # affected selection to a full or incorrect graph.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Prepare memory for private-repository checks
+        if: github.event.repository.private == true
+        uses: ./.github/actions/prepare-runner-memory
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        # @agiworkforce/web's `tsc --noEmit` aborts with SIGABRT (exit 134).
+        # "Ineffective mark-compacts near heap limit", under Node's default
+        # old-space cap on a standard runner. It is not intermittent: every run
+        # that actually schedules web's typecheck has died here, and the runs
+        # that looked green simply had web outside `--affected`, so the biggest
+        # package never got checked. That made any commit touching apps/web
+        # unable to pass CI, and therefore unable to deploy.
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: pnpm exec turbo run typecheck --affected
+
+      - name: VS Code extension project-reference DAG check
+        # `turbo run typecheck --affected` runs each package's own
+        # `tsc --noEmit`, which resolves @agiworkforce/types and
+        # @agiworkforce/client-runtime against their already-built dist/.
+        # it does not rebuild the composite project-reference graph from
+        # source. check:refs (`tsc -b tsconfig.build.json`) is the only thing
+        # that does, and is the only thing that would catch a broken
+        # `references` path, a dependency missing `composite: true`, or (as
+        # found while wiring this in) a consumer left out of sync with an
+        # in-flight change to @agiworkforce/types' exports.
+        run: pnpm --filter agi-workforce check:refs
+
+  js-verify:
+    name: JS tests (${{ matrix.label }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # One package's suite per runner. The web suite is the largest by an
+      # order of magnitude, so it is cut into `shards` equal parts; the three
+      # web entries must stay exactly 1..shards or part of the suite never
+      # runs, which scripts/ci-infrastructure.test.mjs holds.
+      matrix:
+        include:
+          - lane: web
+            label: web 1 of 3
+            shard: 1
+            shards: 3
+          - lane: web
+            label: web 2 of 3
+            shard: 2
+            shards: 3
+          - lane: web
+            label: web 3 of 3
+            shard: 3
+            shards: 3
+          - lane: mobile
+            label: mobile
+            shard: 1
+            shards: 1
+          - lane: rest
+            label: shared packages and other apps
+            shard: 1
+            shards: 1
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -260,6 +376,7 @@ jobs:
         run: pnpm db:migrate -- apply --target ci
 
       - name: Verify both database driver contracts
+        if: matrix.lane == 'rest'
         env:
           AGI_DATABASE_CONTRACT_TEST_URL: postgres://postgres:postgres@127.0.0.1:5432/agiworkforce_test?sslmode=disable
           AGI_DATABASE_WS_PROXY: 127.0.0.1:5433
@@ -302,37 +419,6 @@ jobs:
         # test step needs one even though this job is not the E2E job.
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Lint
-        # H24: --max-warnings=0 enforced via package.json lint script.
-        # Wave 1.5 prevention layer: ESLint `no-restricted-syntax` rule
-        # (eslint.config.mjs §"PREVENTION LAYER") flags hardcoded model
-        # IDs + direct cloud database clients across TS/JS.
-        run: pnpm exec turbo run lint --affected
-
-      - name: Type check
-        # @agiworkforce/web's `tsc --noEmit` aborts with SIGABRT (exit 134).
-        # "Ineffective mark-compacts near heap limit", under Node's default
-        # old-space cap on a standard runner. It is not intermittent: every run
-        # that actually schedules web's typecheck has died here, and the runs
-        # that looked green simply had web outside `--affected`, so the biggest
-        # package never got checked. That made any commit touching apps/web
-        # unable to pass CI, and therefore unable to deploy.
-        env:
-          NODE_OPTIONS: --max-old-space-size=8192
-        run: pnpm exec turbo run typecheck --affected
-
-      - name: VS Code extension project-reference DAG check
-        # `turbo run typecheck --affected` runs each package's own
-        # `tsc --noEmit`, which resolves @agiworkforce/types and
-        # @agiworkforce/client-runtime against their already-built dist/.
-        # it does not rebuild the composite project-reference graph from
-        # source. check:refs (`tsc -b tsconfig.build.json`) is the only thing
-        # that does, and is the only thing that would catch a broken
-        # `references` path, a dependency missing `composite: true`, or (as
-        # found while wiring this in) a consumer left out of sync with an
-        # in-flight change to @agiworkforce/types' exports.
-        run: pnpm --filter agi-workforce check:refs
-
       - name: Prepare the mobile privacy parser
         run: pnpm --filter @agiworkforce/mobile setup:privacy-parser
 
@@ -344,18 +430,97 @@ jobs:
         # The draft-revision live test runs against the migrated Postgres
         # above inside a transaction it rolls back. turbo.json's test env
         # lists both names, or strict env mode drops them.
+        #
+        # Every lane is the same affected run narrowed to its packages, so a
+        # lane whose packages did not change schedules nothing and exits. The
+        # web lane has the runner to itself and takes three of its four cores;
+        # an unknown lane fails rather than passing over an empty selection.
         env:
           AGI_LIVE_DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
           AGI_TEST_LIVE_CONVERSATION_DRAFTS: '1'
           NODE_OPTIONS: --max-old-space-size=8192
           TURBO_LOG_ORDER: stream
-        run: pnpm test:affected
+          TEST_LANE: ${{ matrix.lane }}
+          TEST_SHARD: ${{ matrix.shard }}
+          TEST_SHARDS: ${{ matrix.shards }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$TEST_LANE" in
+            web)
+              AGI_VITEST_MAX_WORKERS=3 pnpm test:affected --filter=@agiworkforce/web -- --shard="$TEST_SHARD/$TEST_SHARDS"
+              ;;
+            mobile)
+              pnpm test:affected --filter=@agiworkforce/mobile
+              ;;
+            rest)
+              pnpm test:affected --filter='!@agiworkforce/web' --filter='!@agiworkforce/mobile'
+              ;;
+            *)
+              echo "::error::Unknown test lane $TEST_LANE"
+              exit 1
+              ;;
+          esac
 
       - name: Test (webview HTML rendering, jsdom)
+        if: matrix.lane == 'rest'
         # F-01 regression gate: parses the rendered webview <script> bodies
         # in jsdom and fails if any contain syntax errors. Catches the class
         # of bug where TypeScript syntax leaks into a JS template literal.
         run: pnpm --filter agi-workforce test:webview
+
+  js-build:
+    name: JS build and release packaging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: agiworkforce_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Turborepo --affected needs the actual merge base. Two commits are
+          # insufficient for multi-commit pull requests and silently degrade
+          # affected selection to a full or incorrect graph.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Prepare memory for private-repository checks
+        if: github.event.repository.private == true
+        uses: ./.github/actions/prepare-runner-memory
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup test environment
+        run: |
+          {
+            echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
+            echo "NEON_DATABASE_URL=postgres://postgres:postgres@localhost:5432/agiworkforce_test"
+            echo "CLERK_SECRET_KEY=test-clerk-secret-key"
+            echo "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_Y2xlcmsuZXhhbXBsZS50ZXN0JA"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare the test database
+        run: pnpm db:migrate -- apply --target ci
 
       # CRIT-018. This step scanned NOTHING for an unknown but long period, and
       # reported success while doing it.
@@ -575,6 +740,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
           toolchain: '1.99.1'
+          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # The registry crate depends only on serde, serde_json and thiserror, so
       # it needs no system libraries and costs a fraction of the native lane.
@@ -619,13 +785,18 @@ jobs:
         with:
           toolchain: '1.99.1'
           components: clippy, rustfmt
+          cache: false
 
+      # One cache owner, pointed at the directory cargo writes. The Cargo
+      # workspace root is the repository root, so build output lands in
+      # ./target; a cache of apps/desktop/src-tauri/target held nothing.
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: 'apps/desktop/src-tauri -> target'
+          workspaces: '. -> target'
           cache-on-failure: true
           cache-directories: ~/.cargo/bin
+          key: desktop-cli
 
       - name: Ensure clippy is available
         run: rustup component add clippy --toolchain 1.99.1
@@ -930,11 +1101,16 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
           toolchain: '1.99.1'
+          cache: false
 
+      # This lane runs on pull requests. A pull request can restore the cache
+      # main saved but cannot share its own, so saving one per pull request
+      # only spends the repository's cache allowance and evicts the others.
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install extension-host dependencies
         run: |
@@ -1145,11 +1321,17 @@ jobs:
           fi
 
   web-a11y:
-    name: Web E2E and accessibility audit
+    name: Web E2E and accessibility audit (${{ matrix.shard }} of ${{ strategy.job-total }})
     runs-on: ubuntu-24.04
     needs: scope
     if: needs.scope.outputs.web_changed == 'true'
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      # The browser flows are split across runners. The step below takes its
+      # shard total from the size of this list, so the two cannot disagree.
+      matrix:
+        shard: [1, 2]
     # DATABASE_URL below points at a Postgres this job never started, so every
     # page answered 500 from the health check. The env-validation crash used to
     # kill the server first and hide it.
@@ -1293,6 +1475,7 @@ jobs:
         env:
           PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
           QA_PRODUCTION_SERVER: '1'
+          PLAYWRIGHT_SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
         run: |
           pnpm exec playwright test \
             auth-accessibility.spec.ts \
@@ -1360,7 +1543,8 @@ jobs:
             support-only.spec.ts \
             trial-cancel.spec.ts \
             trust-surface-layout.spec.ts \
-            --project=chromium --workers=2 --retries=1 --global-timeout=2100000
+            --project=chromium --workers=2 --retries=1 --global-timeout=2100000 \
+            --shard="$PLAYWRIGHT_SHARD"
 
       - name: Print Web app log on failure
         if: failure()
@@ -1370,7 +1554,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: web-playwright-report
+          name: web-playwright-report-${{ matrix.shard }}
           path: |
             apps/web/playwright-report
             apps/web/test-results
@@ -1380,7 +1564,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: web-accessibility-report
+          name: web-accessibility-report-${{ matrix.shard }}
           path: apps/web/reports/a11y-report.json
           retention-days: 14
 
@@ -1420,11 +1604,12 @@ jobs:
         with:
           toolchain: '1.99.1'
           components: clippy, rustfmt
+          cache: false
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: 'apps/desktop/src-tauri -> target'
+          workspaces: '. -> target'
           cache-on-failure: true
           # Use separate cache key for all-features build
           key: all-features
@@ -1504,11 +1689,12 @@ jobs:
         with:
           toolchain: '1.99.1'
           components: clippy
+          cache: false
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: 'apps/desktop/src-tauri -> target'
+          workspaces: '. -> target'
           cache-on-failure: true
           key: macos-smoke
 
@@ -1601,7 +1787,10 @@ jobs:
       - scope
       - repo-guards
       - database
+      - js-lint
+      - js-typecheck
       - js-verify
+      - js-build
       - security
       - contracts
       - rust-desktop-cli

@@ -26885,6 +26885,9 @@
     "concise": [
       "apps/cli/src/output_styles.rs"
     ],
+    "concurrencyFrom": [
+      "scripts/run-guard-chain.mjs"
+    ],
     "conditionsMatch": [
       "apps/web/lib/feature-flags/evaluate-flags.ts"
     ],
@@ -45385,6 +45388,9 @@
     "Entry": [
       "apps/cli/src/app_server/attachment_recovery/store.rs"
     ],
+    "ENTRY": [
+      "scripts/run-guard-chain.mjs"
+    ],
     "entry_for": [
       "apps/cli/src/project_registry.rs"
     ],
@@ -46524,6 +46530,9 @@
     "ExclusionClass": [
       "apps/cli/src/repo/index_policy.rs",
       "apps/cli/src/repo/mod.rs"
+    ],
+    "EXCLUSIVE": [
+      "scripts/run-guard-chain.mjs"
     ],
     "exec": [
       "apps/cli/src/features/mod.rs"
@@ -92476,6 +92485,9 @@
     "parseCasesCsv": [
       "apps/web/features/developers/lib/cases-csv.ts"
     ],
+    "parseChain": [
+      "scripts/run-guard-chain.mjs"
+    ],
     "parseChallengeParam": [
       "apps/web/lib/connectors/oauth-challenge.ts"
     ],
@@ -117838,7 +117850,8 @@
       "apps/desktop/electron/browser/browserSteps.ts"
     ],
     "runChain": [
-      "scripts/run-cross-surface-chain.mjs"
+      "scripts/run-cross-surface-chain.mjs",
+      "scripts/run-guard-chain.mjs"
     ],
     "runChecked": [
       "apps/extension/e2e/extension-harness.mjs"
@@ -133430,6 +133443,9 @@
     "SummarizationOutcome": [
       "apps/desktop/src-tauri/src/core/agi/conversation_summarizer.rs",
       "apps/desktop/src-tauri/src/core/agi/mod.rs"
+    ],
+    "summarize": [
+      "scripts/run-guard-chain.mjs"
     ],
     "summarizeActivity": [
       "apps/desktop/src/features/settings/UsageDashboard.tsx"
