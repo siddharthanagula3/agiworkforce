@@ -16,6 +16,7 @@ import {
   refuseUnsafeUpload,
   scanUploadBytes,
   scanUploadForCredentials,
+  scanUploadRangeForCredentials,
   uploadFindingRejects,
   uploadRefusalMessage,
   uploadScannerStatus,
@@ -767,5 +768,62 @@ describe('uploadRefusalMessage, the copy for the large file refusals', () => {
     ]) {
       expect(copy).not.toContain(String.fromCharCode(0x2014));
     }
+  });
+});
+
+describe('text whose credential only exists once its null characters are gone', () => {
+  const KEY = `sk_live_${'EXAMPLE'.repeat(4)}`;
+  const utf16 = (text: string) => new Uint8Array(Buffer.from(text, 'utf16le'));
+  const credentials = (findings: readonly UploadScanFinding[]) =>
+    findings.filter((finding) => finding.code === 'credential_material');
+
+  it('finds a key written as UTF-16 with no byte-order mark, which reads as UTF-8 with a null after each character', () => {
+    const findings = credentials(
+      scanUploadForCredentials(utf16(`notes\nkey ${KEY}\n`), 'text/plain', 'notes.txt'),
+    );
+
+    expect(findings).toHaveLength(1);
+    expect(uploadFindingRejects(findings[0]!)).toBe(true);
+  });
+
+  it('finds a key with one null inside it, and reports a key readable either way once', () => {
+    const broken = `${KEY.slice(0, 12)}\u0000${KEY.slice(12)}`;
+
+    expect(credentials(scanUploadForCredentials(utf8(broken), 'text/plain'))).toHaveLength(1);
+    expect(
+      credentials(scanUploadForCredentials(utf8(`${KEY}\n\u0000trailing`), 'text/plain')),
+    ).toHaveLength(1);
+  });
+
+  it('reports such a key from the window that owns its start and from no other', () => {
+    const filler = utf16('the quick brown fox jumps over the lazy dog\n'.repeat(40));
+    const key = utf16(`${KEY}\n`);
+    const bytes = new Uint8Array(filler.byteLength * 2 + key.byteLength);
+    bytes.set(filler, 0);
+    bytes.set(key, filler.byteLength);
+    bytes.set(filler, filler.byteLength + key.byteLength);
+    const scan = (ownedStart: number, ownedEnd: number) =>
+      credentials(
+        scanUploadRangeForCredentials(bytes, 'text/plain', { bytesStart: 0, ownedStart, ownedEnd }),
+      );
+
+    expect(scan(0, filler.byteLength)).toEqual([]);
+    expect(scan(filler.byteLength, filler.byteLength + key.byteLength)).toHaveLength(1);
+    expect(scan(filler.byteLength + key.byteLength, bytes.byteLength)).toEqual([]);
+  });
+
+  it('reads text with no null character exactly as before', () => {
+    const plain = utf8(`key ${KEY}\n`);
+
+    expect(credentials(scanUploadForCredentials(plain, 'text/plain'))).toHaveLength(1);
+    expect(
+      credentials(
+        scanUploadRangeForCredentials(plain, 'text/plain', {
+          bytesStart: 0,
+          ownedStart: 0,
+          ownedEnd: plain.byteLength,
+        }),
+      ),
+    ).toHaveLength(1);
   });
 });

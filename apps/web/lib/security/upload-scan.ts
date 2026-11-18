@@ -221,13 +221,33 @@ export function scanUploadForCredentials(
 
   if (!isTextualMime(declaredMime)) return findings;
 
-  for (const detection of scanForSecrets(textPrefix(bytes, CREDENTIAL_SCAN_BYTES), {
-    includeHighEntropy: true,
-  })) {
+  const text = textPrefix(bytes, CREDENTIAL_SCAN_BYTES);
+  const names = new Set<string>();
+  for (const detection of scanForSecrets(text, { includeHighEntropy: true })) {
+    names.add(detection.name);
     findings.push(credentialFinding(detection.name, detection.position));
+  }
+  if (text.includes(NULL_CHARACTER)) {
+    for (const detection of scanForSecrets(withoutNulls(text), { includeHighEntropy: true })) {
+      if (names.has(detection.name)) continue;
+      names.add(detection.name);
+      findings.push(credentialFinding(detection.name, detection.position));
+    }
   }
 
   return findings;
+}
+
+const NULL_CHARACTER = '\u0000';
+
+/**
+ * A reader that stores or sends a file's text drops its null characters, so
+ * the detectors read the text without them as well as with them: a credential
+ * that only exists once they are gone, as in a UTF-16 file read as UTF-8, is
+ * text the product produces.
+ */
+function withoutNulls(text: string): string {
+  return text.replaceAll(NULL_CHARACTER, '');
 }
 
 const CREDENTIAL_POSITION_SEPARATOR = ' at byte ';
@@ -288,12 +308,27 @@ export function scanUploadRangeForCredentials(
   const lead = decoder.decode(bytes.subarray(0, before), { stream: true });
   const middle = decoder.decode(bytes.subarray(before, before + owned), { stream: true });
   const tail = decoder.decode(bytes.subarray(before + owned));
-  const from = lead.length;
-  const to = from + middle.length;
   const findings: UploadScanFinding[] = [];
-  for (const detection of scanForSecrets(lead + middle + tail, { includeHighEntropy: true })) {
-    if (detection.position < from || detection.position >= to) continue;
-    findings.push(credentialFinding(detection.name, range.ownedStart + detection.position - from));
+  const names = new Set<string>();
+  const report = (parts: readonly [string, string, string], unseenOnly: boolean) => {
+    const from = parts[0].length;
+    const to = from + parts[1].length;
+    for (const detection of scanForSecrets(parts.join(''), { includeHighEntropy: true })) {
+      if (detection.position < from || detection.position >= to) continue;
+      if (unseenOnly && names.has(detection.name)) continue;
+      names.add(detection.name);
+      findings.push(
+        credentialFinding(detection.name, range.ownedStart + detection.position - from),
+      );
+    }
+  };
+  report([lead, middle, tail], false);
+  if (
+    lead.includes(NULL_CHARACTER) ||
+    middle.includes(NULL_CHARACTER) ||
+    tail.includes(NULL_CHARACTER)
+  ) {
+    report([withoutNulls(lead), withoutNulls(middle), withoutNulls(tail)], true);
   }
   return findings;
 }
