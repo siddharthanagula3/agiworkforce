@@ -2694,11 +2694,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 246,
+      "files": 247,
       "roles": {
         "asset": 1,
         "config": 21,
-        "doc": 178,
+        "doc": 179,
         "generated": 45,
         "other": 1
       }
