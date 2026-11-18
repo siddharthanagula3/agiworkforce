@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Desktop surface maintainers
-Last updated: 2026-11-09
+Last updated: 2026-11-14
 
 The existing desktop applications build from this directory and show different
 renderers. The repository-wide map is in `ARCHITECTURE.md`; the rules that govern changing any
@@ -82,6 +82,19 @@ close asks before discarding it. The account-only connection has no file access;
 opening a file does not attach it to model context. Protected, linked, binary and
 oversized files are refused by the host. File creation/rename/delete, automatic
 save, durable editor drafts and the complete Git/worktree interface remain in development.
+
+Coding sessions can be searched, renamed, archived, restored and deleted through
+the CLI thread methods. Delete keeps worktree archives until a separate confirmed
+discard. New coding sessions take their model, effort and permission mode from
+the CLI settings owner. A saved default cannot disable every approval. These
+controls do not change Cloud conversations. Files in the consented folder can
+be created, renamed, and deleted through the host file authority. Delete and a
+replacing rename ask first and name the path. Unsent Code composer text is
+restored from a private store for that folder and thread, separate from Cloud
+drafts. MCP servers can be enabled or disabled without running a tool.
+Account-wide Cloud new-chat defaults are unavailable here and nothing is saved
+for them. Native screen-reader, IME and
+release acceptance remain open.
 
 On Unix, Terminal opens up to four reviewed interactive shells through the coding
 host. Launch review shows the actual shell, folder, sandbox and network policy.

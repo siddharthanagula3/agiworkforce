@@ -82,6 +82,16 @@ fn export_typescript_bindings() {
     agiworkforce_protocol::workspace_files::WorkspaceFileResponse::export_all_to(dir)
         .expect("file response");
     agiworkforce_protocol::workspace_files::WorkspaceFileWriteParams::export_all_to(dir)
+        .expect("workspace file write");
+    agiworkforce_protocol::workspace_files::WorkspaceFileCreateParams::export_all_to(dir)
+        .expect("workspace file create");
+    agiworkforce_protocol::workspace_files::WorkspaceFileRenameParams::export_all_to(dir)
+        .expect("workspace file rename");
+    agiworkforce_protocol::workspace_files::WorkspaceFileDeleteParams::export_all_to(dir)
+        .expect("workspace file delete");
+    agiworkforce_protocol::code_drafts::CodeDraftParams::export_all_to(dir)
+        .expect("code draft read");
+    agiworkforce_protocol::code_drafts::CodeDraftWriteParams::export_all_to(dir)
         .expect("file write params");
     agiworkforce_protocol::workspace_files::WorkspaceFileWriteResponse::export_all_to(dir)
         .expect("file write response");

@@ -9,6 +9,9 @@ pub mod cloud_history;
 #[cfg(feature = "native-ui")]
 pub mod cloud_model_select;
 pub mod cloud_models;
+pub mod cloud_new_chat_defaults;
+pub mod code_composer_drafts;
+pub mod code_sessions;
 pub mod code_settings;
 pub mod code_worktree_apply;
 pub mod code_worktrees;
@@ -22,6 +25,9 @@ pub mod draft_controls;
 pub mod drafts;
 pub mod editor;
 pub mod editor_recovery;
+pub mod file_changes;
+pub mod host_defaults;
+pub mod mcp_servers;
 #[cfg(feature = "native-ui")]
 pub mod native_controls;
 #[cfg(feature = "native-ui")]

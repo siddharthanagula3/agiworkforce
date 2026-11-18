@@ -71,6 +71,11 @@ pub mod method {
     pub const WORKSPACE_FILES_LIST: &str = "workspace/files/list";
     pub const WORKSPACE_FILE_READ: &str = "workspace/file/read";
     pub const WORKSPACE_FILE_WRITE: &str = "workspace/file/write";
+    pub const WORKSPACE_FILE_CREATE: &str = "workspace/file/create";
+    pub const WORKSPACE_FILE_RENAME: &str = "workspace/file/rename";
+    pub const WORKSPACE_FILE_DELETE: &str = "workspace/file/delete";
+    pub const CODE_DRAFT_READ: &str = "code/draft/read";
+    pub const CODE_DRAFT_WRITE: &str = "code/draft/write";
     pub const WORKSPACE_FILE_RECOVERY_READ: &str = "workspace/file/recovery/read";
     pub const WORKSPACE_FILE_RECOVERY_WRITE: &str = "workspace/file/recovery/write";
     pub const WORKSPACE_FILE_RECOVERY_LIST: &str = "workspace/file/recovery/list";
@@ -445,6 +450,8 @@ pub struct AppServerCapabilities {
     pub workspace_files: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub workspace_file_recovery: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub code_drafts: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub workspace_file_recovery_browser: bool,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -1347,6 +1354,18 @@ pub struct ThreadRenameParams {
     pub thread_id: String,
     pub title: String,
 }
+
+/// Longest session title the host will store. Empty titles are refused.
+pub const THREAD_TITLE_MAX_CHARS: usize = 200;
+
+/// Longest `thread/search` query. Empty queries are refused.
+pub const THREAD_SEARCH_QUERY_MAX_CHARS: usize = 200;
+
+/// `thread/search` page size when the client omits `limit`.
+pub const THREAD_SEARCH_DEFAULT_LIMIT: u32 = 20;
+
+/// Largest `limit` `thread/search` honors. A larger value is clamped.
+pub const THREAD_SEARCH_MAX_LIMIT: u32 = 50;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]

@@ -1,0 +1,176 @@
+use agiworkforce_desktop_gpui::code_sessions::{
+    accept_delete, accept_rename, accept_search, delete_params, discard_params, remove_thread,
+    rename_params, replace_thread, search_params, KeptArchives,
+};
+use agiworkforce_protocol::developer_session::{
+    AcknowledgedResponse, DeveloperSessionSource, DeveloperSessionTrustMode, ThreadDeleteResponse,
+    ThreadRenameResponse, ThreadSearchHit, ThreadSearchMatch, ThreadSearchResponse, ThreadStatus,
+    ThreadSummary, THREAD_SEARCH_DEFAULT_LIMIT, THREAD_SEARCH_MAX_LIMIT,
+    THREAD_SEARCH_QUERY_MAX_CHARS, THREAD_TITLE_MAX_CHARS,
+};
+
+fn thread(id: &str, title: &str) -> ThreadSummary {
+    ThreadSummary {
+        id: id.into(),
+        title: title.into(),
+        model: None,
+        cwd: None,
+        provider: None,
+        trust_mode: DeveloperSessionTrustMode::Local,
+        created_at: "2026-11-14T00:00:00Z".into(),
+        updated_at: "2026-11-14T00:00:00Z".into(),
+        created_by: DeveloperSessionSource::Desktop,
+        status: ThreadStatus::Idle,
+        git_branch: None,
+        worktree_root: None,
+        client: None,
+        repository: None,
+        writer: None,
+        location: None,
+    }
+}
+
+#[test]
+fn search_rejects_empty_nul_and_overlong_queries_and_bounds_the_page() {
+    assert!(search_params("  ", false).is_err());
+    assert!(search_params("bad\0query", false).is_err());
+    assert!(search_params(&"x".repeat(THREAD_SEARCH_QUERY_MAX_CHARS + 1), true).is_err());
+    let params = search_params("  Tokyo session  ", true).unwrap();
+    assert_eq!(params.query, "Tokyo session");
+    assert_eq!(params.limit, Some(THREAD_SEARCH_DEFAULT_LIMIT));
+    assert!(params.include_archived);
+}
+
+#[test]
+fn search_hits_need_a_session_and_a_real_match() {
+    let hit = ThreadSearchHit {
+        thread: thread("session", "Tokyo"),
+        title_matched: false,
+        matches: vec![ThreadSearchMatch {
+            message_index: 1,
+            role: "user".into(),
+            snippet: "Tokyo plan".into(),
+        }],
+    };
+    let accepted = accept_search(ThreadSearchResponse {
+        hits: vec![hit.clone()],
+    })
+    .unwrap();
+    assert_eq!(accepted, vec![hit]);
+    assert!(accept_search(ThreadSearchResponse {
+        hits: vec![ThreadSearchHit {
+            thread: thread("", "Tokyo"),
+            title_matched: true,
+            matches: Vec::new(),
+        }],
+    })
+    .is_err());
+    assert!(accept_search(ThreadSearchResponse {
+        hits: vec![ThreadSearchHit {
+            thread: thread("session", "Tokyo"),
+            title_matched: false,
+            matches: vec![ThreadSearchMatch {
+                message_index: 0,
+                role: "user".into(),
+                snippet: String::new(),
+            }],
+        }],
+    })
+    .is_err());
+    let too_many = vec![
+        ThreadSearchHit {
+            thread: thread("session", "Tokyo"),
+            title_matched: true,
+            matches: Vec::new(),
+        };
+        THREAD_SEARCH_MAX_LIMIT as usize + 1
+    ];
+    assert!(accept_search(ThreadSearchResponse { hits: too_many }).is_err());
+}
+
+#[test]
+fn rename_sends_the_trimmed_title_and_requires_the_same_session_back() {
+    assert!(rename_params("session", "   ").is_err());
+    assert!(rename_params("session", &"x".repeat(THREAD_TITLE_MAX_CHARS + 1)).is_err());
+    let request = rename_params("session", "  Better name  ").unwrap();
+    assert_eq!(request.title, "Better name");
+    let mut response = ThreadRenameResponse {
+        thread: thread("session", "Better name"),
+    };
+    accept_rename(&request, &response).unwrap();
+    response.thread.id = "other".into();
+    assert!(accept_rename(&request, &response).is_err());
+    let mut threads = vec![thread("session", "First name")];
+    assert!(replace_thread(
+        &mut threads,
+        thread("session", "Better name")
+    ));
+    assert_eq!(threads[0].title, "Better name");
+    assert!(!replace_thread(
+        &mut threads,
+        thread("missing", "Better name")
+    ));
+}
+
+#[test]
+fn delete_keeps_archives_until_a_separate_reviewed_discard() {
+    let request = delete_params("session").unwrap();
+    assert!(!request.discard_worktree_archives);
+    let kept = accept_delete(
+        &request,
+        &ThreadDeleteResponse {
+            acknowledged: true,
+            kept_worktree_archives: vec!["refs/archives/session".into()],
+            removed_worktree_archives: Vec::new(),
+            released_worktrees: Vec::new(),
+        },
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(kept.thread_id, "session");
+    let discard = discard_params(&kept).unwrap();
+    assert!(discard.discard_worktree_archives);
+    assert!(accept_delete(
+        &discard,
+        &ThreadDeleteResponse {
+            acknowledged: true,
+            kept_worktree_archives: Vec::new(),
+            removed_worktree_archives: kept.refs,
+            released_worktrees: Vec::new(),
+        },
+    )
+    .unwrap()
+    .is_none());
+    assert!(accept_delete(
+        &request,
+        &ThreadDeleteResponse {
+            acknowledged: true,
+            kept_worktree_archives: Vec::new(),
+            removed_worktree_archives: vec!["refs/archives/session".into()],
+            released_worktrees: Vec::new(),
+        },
+    )
+    .is_err());
+    assert!(discard_params(&KeptArchives {
+        thread_id: "session".into(),
+        refs: Vec::new(),
+    })
+    .is_err());
+    let mut threads = vec![thread("session", "Name"), thread("other", "Other")];
+    assert!(remove_thread(&mut threads, "session"));
+    assert_eq!(threads.len(), 1);
+}
+
+#[test]
+fn archive_requires_acknowledgement() {
+    assert!(
+        agiworkforce_desktop_gpui::code_sessions::accept_archive(&AcknowledgedResponse {
+            acknowledged: false,
+        })
+        .is_err()
+    );
+    agiworkforce_desktop_gpui::code_sessions::accept_archive(&AcknowledgedResponse {
+        acknowledged: true,
+    })
+    .unwrap();
+}

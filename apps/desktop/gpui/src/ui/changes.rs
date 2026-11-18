@@ -36,6 +36,8 @@ impl Desktop {
             ..Default::default()
         };
         self.code_settings.visible = false;
+        self.host_defaults.visible = false;
+        self.mcp.visible = false;
         self.code_worktrees.visible = false;
         let operation = self.changes.begin();
         let generation = self.generation;

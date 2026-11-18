@@ -16,7 +16,7 @@ pub mod code_teleport;
 pub mod connectors;
 #[cfg(test)]
 mod contract_fixtures;
-mod conversation_contract;
+pub(crate) mod conversation_contract;
 pub mod data_export;
 pub mod devices;
 pub mod drafts;

@@ -1211,7 +1211,7 @@ async fn real_cli_lists_an_empty_consented_workspace_and_shuts_down() {
     )
     .await
     .unwrap();
-    let listed = session.list_sessions(None).await.unwrap();
+    let listed = session.list_sessions(None, false).await.unwrap();
     assert!(listed.threads.is_empty());
     assert!(listed.next_cursor.is_none());
     assert!(session.capabilities().account);
@@ -1257,7 +1257,7 @@ async fn real_account_connection_starts_without_workspace_consent_and_refuses_co
     assert!(!session.capabilities().threads);
     assert!(!session.capabilities().tools);
     assert!(session
-        .list_sessions(None)
+        .list_sessions(None, false)
         .await
         .unwrap_err()
         .to_string()

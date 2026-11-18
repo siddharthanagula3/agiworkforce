@@ -58,6 +58,8 @@ impl Desktop {
         }
         self.save_draft(cx);
         self.code_settings.visible = false;
+        self.host_defaults.visible = false;
+        self.mcp.visible = false;
         self.code_worktrees.visible = false;
         self.editor.visible = false;
         self.terminal.visible = false;
@@ -258,6 +260,28 @@ impl Desktop {
                         cx,
                     ));
                 }
+                if self.capabilities.as_ref().is_some_and(|caps| caps.mcp) {
+                    sidebar = sidebar.child(self.nav_button(
+                        "mcp-servers",
+                        "MCP servers",
+                        UiAction::McpServers,
+                        self.mcp.visible && !self.editor.visible && !self.terminal.visible,
+                        palette,
+                        cx,
+                    ));
+                }
+                if self.capabilities.as_ref().is_some_and(|caps| caps.settings) {
+                    sidebar = sidebar.child(self.nav_button(
+                        "host-defaults",
+                        "New session defaults",
+                        UiAction::HostDefaults,
+                        self.host_defaults.visible
+                            && !self.editor.visible
+                            && !self.terminal.visible,
+                        palette,
+                        cx,
+                    ));
+                }
                 if self
                     .capabilities
                     .as_ref()
@@ -337,15 +361,84 @@ impl Desktop {
             .flex_col()
             .gap_1();
         if mode == Surface::Code {
-            for thread in &self.threads {
+            if self
+                .capabilities
+                .as_ref()
+                .is_some_and(|caps| caps.thread_search)
+                && !self.loading
+            {
+                recent = recent.child(
+                    Input::new(&self.code_query)
+                        .aria_label("Search coding sessions")
+                        .disabled(self.code_sessions.operation.is_some()),
+                );
+                if self.code_sessions.operation.is_none() && !self.code_busy() {
+                    recent = recent
+                        .child(self.nav_button(
+                            "search-code-sessions",
+                            "Search",
+                            UiAction::SearchCode,
+                            false,
+                            palette,
+                            cx,
+                        ))
+                        .child(self.nav_button(
+                            "toggle-archived-sessions",
+                            if self.code_sessions.include_archived {
+                                "Hide archived"
+                            } else {
+                                "Show archived"
+                            },
+                            UiAction::ToggleArchivedSessions,
+                            false,
+                            palette,
+                            cx,
+                        ));
+                    if self.code_sessions.showing_search {
+                        recent = recent.child(self.nav_button(
+                            "clear-code-search",
+                            "Clear search",
+                            UiAction::ClearCodeSearch,
+                            false,
+                            palette,
+                            cx,
+                        ));
+                    }
+                }
+            }
+            let sessions = if self.code_sessions.showing_search {
+                self.code_sessions
+                    .hits
+                    .iter()
+                    .map(|hit| hit.thread.clone())
+                    .collect::<Vec<_>>()
+            } else {
+                self.threads.clone()
+            };
+            if self.code_sessions.showing_search && sessions.is_empty() && !self.loading {
+                recent = recent.child(self.nav_label(
+                    SharedString::from("code-search-empty"),
+                    "No matching sessions".into(),
+                    false,
+                    palette,
+                ));
+            }
+            for thread in &sessions {
                 let current = self
                     .conversation
                     .as_ref()
                     .is_some_and(|conversation| conversation.transcript.thread.id == thread.id);
+                let title = if thread.status
+                    == agiworkforce_protocol::developer_session::ThreadStatus::Archived
+                {
+                    format!("Archived: {}", thread.title)
+                } else {
+                    thread.title.clone()
+                };
                 if !self.loading && !self.code_busy() {
                     recent = recent.child(self.nav_button(
                         SharedString::from(format!("session:{}", thread.id)),
-                        thread.title.clone(),
+                        title.clone(),
                         UiAction::ReadSession(thread.id.clone()),
                         current,
                         palette,
@@ -354,13 +447,13 @@ impl Desktop {
                 } else {
                     recent = recent.child(self.nav_label(
                         SharedString::from(format!("session-label:{}", thread.id)),
-                        thread.title.clone(),
+                        title,
                         current,
                         palette,
                     ));
                 }
             }
-            if self.next_cursor.is_some() && !self.loading {
+            if self.next_cursor.is_some() && !self.loading && !self.code_sessions.showing_search {
                 recent = recent.child(self.nav_button(
                     "load-more",
                     "Load more",
@@ -497,6 +590,10 @@ impl Desktop {
             "Account".into()
         } else if self.code_worktrees.visible {
             "Worktrees".into()
+        } else if self.mcp.visible {
+            "MCP servers".into()
+        } else if self.host_defaults.visible {
+            "New session defaults".into()
         } else if self.code_settings.visible {
             "Code settings".into()
         } else if self.changes.visible {
@@ -584,7 +681,12 @@ impl Desktop {
         if self.terminal.visible || self.editor.visible || self.account.visible {
             return None;
         }
-        if (self.code_settings.visible || self.code_worktrees.visible) && !self.cloud.visible {
+        if (self.code_settings.visible
+            || self.host_defaults.visible
+            || self.mcp.visible
+            || self.code_worktrees.visible)
+            && !self.cloud.visible
+        {
             return None;
         }
         if self.cloud.visible {

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + desktop lead
-Last updated: 2026-11-10
+Last updated: 2026-11-14
 
 The public AGI Desktop product is the Electron application under
 `apps/desktop/electron`. The Rust/Tauri implementation in
@@ -55,10 +55,25 @@ CLI owner, with explicit profile/folder scope and a per-file revision. Native
 saves change one file, retain conflicting editor text and require confirmation.
 Empty native saves leave an empty instruction file; the older settings method
 retains its explicit empty-string deletion contract through the same anchored
-writer. The native panel reports configured defaults read-only and can request
-the context engine's discovered source list. Other instruction sources and the
-host's context budget continue to apply. These are Host Developer settings;
-account Cloud preferences remain a separate owner.
+writer. The instruction panel reports configured defaults read-only and can request
+the context engine's discovered source list. A separate new-session defaults
+panel writes one field at a time through `settings/read` and `settings/write`:
+the default model must be a single host-listed model with a known trust mode,
+and a saved permission mode cannot be bypass. Automatic approval asks before it
+is stored. Other instruction sources and the host's context budget continue to
+apply. Coding sessions also search, rename, archive, restore and delete through
+the existing thread methods. Delete keeps worktree archives until a second
+confirmed discard. These are Host Developer settings;
+account Cloud preferences remain a separate owner. The native Cloud surface
+does not write account-wide new-chat defaults, because the developer-session
+protocol has no method for that preference. It shows that they are unavailable
+and stores nothing of its own.
+
+Coding files can be created, renamed, and deleted through the host file
+authority. Delete and a rename that replaces an existing file ask first and
+name the path. Unsent Code composer text is kept in a private folder-scoped
+store, separate from Cloud drafts and from editor recovery. Admitted MCP
+servers can be enabled or disabled through the host without invoking a tool.
 
 Native Code worktree controls use the CLI's managed-worktree owner for creation,
 listing, pinning and archival. Opening a checkout, or returning to its original

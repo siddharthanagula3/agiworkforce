@@ -23,6 +23,7 @@ mod attachment_recovery;
 mod cloud_projects;
 mod cloud_threads;
 mod cloud_turns;
+mod code_drafts;
 mod developer_host;
 mod instruction_settings;
 mod project_downloads;
